@@ -205,6 +205,7 @@ fn build_channel_search_request(
     };
     let highlight = Highlight::new()
         .require_field_match(true)
+        .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
         .field("content", em_field().number_of_fragments(1));
     request_builder.highlight(highlight);
 
@@ -247,6 +248,7 @@ pub(crate) async fn search_channel(
             details: e.to_string(),
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
+    result.warn_on_shard_failures("search_channel");
 
     let total = result.hits.total.value;
 

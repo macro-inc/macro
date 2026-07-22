@@ -1,6 +1,11 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { TabsInset } from '@core/component/TabsInset';
-import { type CrmCompanyEntity, ListEntity, ListLayoutProvider } from '@entity';
+import {
+  type CrmCompanyEntity,
+  ListEntity,
+  ListEntityMetadataQueryProvider,
+  ListLayoutProvider,
+} from '@entity';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   type EmailSignalView,
@@ -75,21 +80,23 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
           }
         >
           <div class="max-h-96 overflow-y-auto">
-            <ListLayoutProvider ref={listRef}>
-              <div ref={setListRef} class="flex flex-col">
-                <For each={emails()}>
-                  {(entity) => (
-                    <ListEntity
-                      entity={entity}
-                      timestamp={entity.updatedAt}
-                      onClick={() =>
-                        openEntityInSplitFromUnifiedList(entity, {})
-                      }
-                    />
-                  )}
-                </For>
-              </div>
-            </ListLayoutProvider>
+            <ListEntityMetadataQueryProvider>
+              <ListLayoutProvider ref={listRef}>
+                <div ref={setListRef} class="flex flex-col">
+                  <For each={emails()}>
+                    {(entity) => (
+                      <ListEntity
+                        entity={entity}
+                        timestamp={entity.updatedAt}
+                        onClick={() =>
+                          openEntityInSplitFromUnifiedList(entity, {})
+                        }
+                      />
+                    )}
+                  </For>
+                </div>
+              </ListLayoutProvider>
+            </ListEntityMetadataQueryProvider>
             <Show when={emailsQuery.hasNextPage}>
               <div ref={setSentinelRef} class="h-px" />
             </Show>

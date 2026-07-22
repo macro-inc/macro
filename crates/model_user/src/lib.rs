@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[cfg(feature = "axum")]
-pub mod axum_extractor;
-
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct UserPermission {
     /// The role the permission is for

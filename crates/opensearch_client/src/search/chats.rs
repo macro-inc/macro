@@ -189,6 +189,7 @@ impl ChatQueryBuilder {
 fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "require_field_match": true,
+        "max_analyzer_offset": super::HIGHLIGHT_MAX_ANALYZER_OFFSET,
         "pre_tags": ["<macro_em>"],
         "post_tags": ["</macro_em>"],
         "fields": {

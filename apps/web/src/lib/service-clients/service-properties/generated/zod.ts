@@ -507,7 +507,7 @@ export const getBulkEntityPropertiesBody = zod
       .array(
         zod
           .object({
-            entity_id: zod.string(),
+            entity_id: zod.string().describe('Entity identifier.'),
             entity_type: zod
               .enum([
                 'CALL_RECORD',
@@ -516,21 +516,14 @@ export const getBulkEntityPropertiesBody = zod
                 'COMPANY',
                 'DOCUMENT',
                 'PROJECT',
-                'TASK',
                 'THREAD',
                 'USER',
               ])
               .describe(
-                'Type of entity that can be referenced by entity properties.'
-              ),
-            specific_message_id: zod
-              .uuid()
-              .nullish()
-              .describe(
-                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                'Canonical type of an entity receiving properties.\n\nTasks are documents at API boundaries. `Task` intentionally does not exist\nhere; task classification is resolved by the properties domain from the\ndocument subtype.'
               ),
           })
-          .describe('Entity reference for entity-type property values.')
+          .describe('Canonical reference to an entity receiving properties.')
       )
       .describe('Array of entity references (entity_id and entity_type pairs)'),
     property_ids: zod
@@ -842,11 +835,10 @@ export const getEntityPropertiesParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
 });
 
@@ -1141,6 +1133,84 @@ export const getEntityPropertiesResponse = zod
   .describe('Response for document\/entity properties endpoint.');
 
 /**
+ * Each property change is expressed as an option delta and applied to the
+current stored value under a per-row lock inside a single transaction, so the
+selection persists atomically and composes with concurrent edits instead of
+clobbering them. Returns the reconciled final option ids per property for
+cache reconciliation.
+ * @summary Apply a complete tag-picker selection across an entity's multi-select
+properties in one request.
+ */
+export const bulkUpdateEntityPropertyOptionsParams = zod.object({
+  entity_type: zod
+    .enum([
+      'CALL_RECORD',
+      'CHANNEL',
+      'CHAT',
+      'COMPANY',
+      'DOCUMENT',
+      'PROJECT',
+      'THREAD',
+      'USER',
+    ])
+    .describe('Canonical entity type; tasks use DOCUMENT'),
+  entity_id: zod.string().describe('Entity ID'),
+});
+
+export const bulkUpdateEntityPropertyOptionsBody = zod
+  .object({
+    properties: zod
+      .array(
+        zod
+          .object({
+            add_option_ids: zod
+              .array(zod.uuid())
+              .optional()
+              .describe('Options to add (deduped against the current value).'),
+            property_id: zod
+              .uuid()
+              .describe('The multi-select property definition being changed.'),
+            remove_option_ids: zod
+              .array(zod.uuid())
+              .optional()
+              .describe('Options to remove (a no-op if not present).'),
+          })
+          .describe(
+            "One property's option changes in a bulk selection update. The change is a\ndelta (options to add \/ remove) so it composes with concurrent edits rather\nthan replacing the whole value."
+          )
+      )
+      .describe('The per-property option changes to apply.'),
+  })
+  .describe(
+    "Request to apply option deltas across one or more of an entity's multi-select\nproperties in a single transaction."
+  );
+
+export const bulkUpdateEntityPropertyOptionsResponse = zod
+  .object({
+    properties: zod
+      .array(
+        zod
+          .object({
+            option_ids: zod
+              .array(zod.uuid())
+              .describe(
+                'The final option ids the server persisted, in stored order.'
+              ),
+            property_id: zod
+              .uuid()
+              .describe('The property definition the options belong to.'),
+          })
+          .describe(
+            'The reconciled final option ids stored for one property after a bulk update.'
+          )
+      )
+      .describe('The final option ids per updated property.'),
+  })
+  .describe(
+    "Response for a bulk option update: each property's reconciled final ids."
+  );
+
+/**
  * @summary Set or update a property value for an entity, or attach a property without a value
  */
 export const setEntityPropertyParams = zod.object({
@@ -1152,11 +1222,10 @@ export const setEntityPropertyParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
   property_id: zod.uuid().describe('Property ID'),
 });
@@ -1315,11 +1384,10 @@ export const addEntityPropertyOptionParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
   property_id: zod.uuid().describe('Property ID'),
   option_id: zod.uuid().describe('Option ID to add'),
@@ -1340,11 +1408,10 @@ export const removeEntityPropertyOptionParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
   property_id: zod.uuid().describe('Property ID'),
   option_id: zod.uuid().describe('Option ID to remove'),

@@ -37,7 +37,9 @@ export const createDragInsertStore = () => {
  * @param onDragLeave - Called when a drag leave occurs.
  * @param onDragEnd - Called when a drag end occurs.
  * @param collisionPadding - The amount of padding to add to the elements when
- *     calculating the insertion point.
+ *     calculating the insertion point. Defaults to 8, matching the padding
+ *     used by the drop-position helpers in utils/fileUploadUtils.ts and
+ *     utils/dragInsertUtils.ts so the preview agrees with the insertion.
  * @param setState - A DragInsertState store to recive the state of the
  *     dragging. Can be passed to the DragInsertIndicator component.
  * @param dragListenerRef - A ref to a div that will listen for drag events.
@@ -58,6 +60,8 @@ type DragInsertPluginProps = {
 };
 
 export type InsertionMarker = 'before' | 'after';
+
+const DEFAULT_COLLISION_PADDING = 8;
 
 export const SET_SELECTION_AT_INSERTION: LexicalCommand<
   [NodeKey, InsertionMarker]
@@ -101,6 +105,9 @@ export function calculateInsertPoint(
 
     const root = $getRoot();
     const children = root.getChildren();
+    if (children.length === 0) {
+      return { key: null, position: null, domRect: null };
+    }
 
     const firstRect = elementKeyToDomRect(editor, children[0].getKey());
     if (firstRect && event.clientY < firstRect.top) {
@@ -161,15 +168,23 @@ function registerDragInsert(
   editor: LexicalEditor,
   props: DragInsertPluginProps
 ) {
+  const collisionPadding = props.collisionPadding ?? DEFAULT_COLLISION_PADDING;
+
   const handleDragOver = (event: DragEvent) => {
     event.preventDefault();
     const { key, position } = calculateInsertPoint(
       editor,
       event,
-      props.collisionPadding
+      collisionPadding
     );
 
     if (!key || !position) {
+      // No insert point under the cursor (e.g. a gap between blocks): hide the
+      // preview instead of leaving it frozen at the last valid position, which
+      // no longer matches where a drop would insert.
+      if (props.setState) {
+        props.setState({ visible: false });
+      }
       return;
     }
 
@@ -184,17 +199,21 @@ function registerDragInsert(
 
   const handleDrop = (event: DragEvent) => {
     event.preventDefault();
+    // Always hide the preview, even when the drop point resolves to no valid
+    // insert position. Drags that originate outside this editor (OS files,
+    // images dragged from other components) never fire dragend/dragleave here
+    // after the drop, so this is the last chance to clear the indicator.
+    if (props.setState) {
+      props.setState({ visible: false });
+    }
+
     const { key, position } = calculateInsertPoint(
       editor,
       event,
-      props.collisionPadding
+      collisionPadding
     );
     if (!key || !position) {
       return;
-    }
-
-    if (props.setState) {
-      props.setState({ visible: false });
     }
 
     if (props.onDrop) {

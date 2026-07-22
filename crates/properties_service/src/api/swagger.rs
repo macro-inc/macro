@@ -2,8 +2,10 @@ use models_properties::api;
 use properties::inbound::axum_router::{
     definitions::{ListPropertiesQuery, PropertyDefinitionResponse},
     entities::{
-        BulkEntityPropertiesRequest, EntityPropertiesResponse, EntityQueryParams,
-        SetEntityPropertyRequest,
+        BulkEntityPropertiesRequest, BulkUpdateEntityPropertyOptionsRequest,
+        BulkUpdateEntityPropertyOptionsResponse, EntityPropertiesResponse,
+        EntityPropertyOptionSelectionResponse, EntityPropertyOptionUpdateRequest,
+        EntityQueryParams, SetEntityPropertyRequest,
     },
     tags::{EnsureTagSetRequest, TagScope, TagSetResponse},
 };
@@ -32,6 +34,7 @@ use utoipa::OpenApi;
         properties::inbound::axum_router::entities::set_entity_property,
         properties::inbound::axum_router::entities::add_entity_property_option,
         properties::inbound::axum_router::entities::remove_entity_property_option,
+        properties::inbound::axum_router::entities::bulk_update_entity_property_options,
         properties::inbound::axum_router::entities::delete_entity_property,
     ),
     components(
@@ -48,6 +51,10 @@ use utoipa::OpenApi;
             SetEntityPropertyRequest,
             EntityQueryParams,
             BulkEntityPropertiesRequest,
+            BulkUpdateEntityPropertyOptionsRequest,
+            BulkUpdateEntityPropertyOptionsResponse,
+            EntityPropertyOptionUpdateRequest,
+            EntityPropertyOptionSelectionResponse,
             api::SetPropertyValue,
             models_properties::EntityReference,
             api::AddPropertyOptionRequest,

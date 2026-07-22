@@ -3,11 +3,15 @@ import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { groupedCacheVersion } from '@queries/soup/cache';
-import { makeGraphqlGroupedSoupContinuationInput } from '@queries/soup/graphql-ast';
+import {
+  makeGraphqlGroupedSoupContinuationInput,
+  makeGraphqlGroupedSoupInput,
+} from '@queries/soup/graphql-ast';
 import {
   parseGroupMeta,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
+import { registerGroupedSoupContinuation } from '@queries/soup/grouped/graphql-operation-registry';
 import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import type {
   SoupApiItemFilter,
@@ -149,13 +153,20 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
           }
 
           if (args.transport() === 'graphql') {
-            const response = await fetchGraphqlGroupedSoup(
-              makeGraphqlGroupedSoupContinuationInput({
+            const continuationInput = makeGraphqlGroupedSoupContinuationInput({
+              groupBy: field,
+              groupKey: group.key,
+              cursor: ctx.pageParam,
+            });
+            registerGroupedSoupContinuation(
+              makeGraphqlGroupedSoupInput({
+                params: args.soupParams(),
+                body: args.soupBody(),
                 groupBy: field,
-                groupKey: group.key,
-                cursor: ctx.pageParam,
-              })
+              }),
+              continuationInput
             );
+            const response = await fetchGraphqlGroupedSoup(continuationInput);
             const nextGroup = response.groups.find(
               (candidate) => candidate.key === group.key
             );

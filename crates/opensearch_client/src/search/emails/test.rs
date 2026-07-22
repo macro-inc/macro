@@ -35,6 +35,12 @@ fn test_build_keyword_query_string_mixed_single_and_multi_word() {
 }
 
 #[test]
+fn test_build_keyword_query_string_dotted_term_uses_phrase() {
+    let result = build_keyword_query_string(&["example.com".to_string()]);
+    assert_eq!(result, "\"example.com\"");
+}
+
+#[test]
 fn test_build_keyword_query_string_email_term_uses_phrase() {
     let result = build_keyword_query_string(&["alice@example.com".to_string()]);
     assert_eq!(result, "\"alice@example.com\"");
@@ -187,6 +193,11 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     assert!(keyword_fields.contains(&serde_json::json!("recipients")));
     assert!(keyword_fields.contains(&serde_json::json!("cc")));
     assert!(keyword_fields.contains(&serde_json::json!("bcc")));
+    assert!(keyword_fields.contains(&serde_json::json!("sender.parts")));
+    assert!(keyword_fields.contains(&serde_json::json!("reply_to.parts")));
+    assert!(keyword_fields.contains(&serde_json::json!("recipients.parts")));
+    assert!(keyword_fields.contains(&serde_json::json!("cc.parts")));
+    assert!(keyword_fields.contains(&serde_json::json!("bcc.parts")));
     assert!(!keyword_fields.contains(&serde_json::json!("subject")));
 
     let text_sqs = should
@@ -206,6 +217,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     assert!(text_fields.contains(&serde_json::json!("sender_name")));
     assert!(text_fields.contains(&serde_json::json!("recipient_names")));
     assert!(!text_fields.contains(&serde_json::json!("sender")));
+    assert!(!text_fields.contains(&serde_json::json!("sender.parts")));
 
     Ok(())
 }
@@ -282,7 +294,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                             {
                                 "simple_query_string": {
                                     "default_operator": "AND",
-                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
                                     "query": "(test | test@*)"
                                 }
                             },

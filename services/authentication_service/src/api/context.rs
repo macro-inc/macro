@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
@@ -12,9 +13,13 @@ use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
 use loops_client::LoopsClient;
 use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
+use macro_authorization::{
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+};
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
 use notification::outbound::queue::SqsQueue;
 use notification::{
@@ -33,18 +38,26 @@ use sqlx::PgPool;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
+pub(crate) type ChannelServiceType = channels::domain::service::ChannelServiceImpl<
+    channels::outbound::pg_channels_repo::PgChannelsRepo,
+>;
+
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
-    teams::outbound::team_channels_repo::TeamChannelsRepositoryImpl,
+    ChannelServiceType,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
     teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl,
     teams::outbound::team_analytics::AnalyticsClientTeamAnalytics,
+    teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<
+        SqsContactsIngress<SqsContactsQueue>,
+    >,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
-type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
+pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 
 pub(crate) type ReferralServiceType = ReferralServiceImpl<
     PgReferralRepo,
@@ -61,6 +74,8 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -76,12 +91,14 @@ pub(crate) struct ApiContext {
     pub sqs_client: Arc<sqs_client::SQS>,
     pub environment: Environment,
     pub jwt_args: JwtValidationArgs,
+    pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub token_context: MacroApiTokenContext,
     pub internal_api_key: InternalApiKey,
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub channel_service: Arc<ChannelServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,

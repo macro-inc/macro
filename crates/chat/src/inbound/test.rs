@@ -1,19 +1,25 @@
 use axum::Extension;
 use axum::Router;
 use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::{Request, StatusCode, header};
 use http_body_util::BodyExt;
+use macro_authorization::{
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
 use model::response::StringIDResponse;
-use model_user::UserContext;
+use model::user::UserContext;
+use rootcause::Report;
+use std::sync::Arc;
 use tower::util::ServiceExt;
 
 use crate::domain::models::{
     ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
 };
 use crate::domain::ports::ChatService;
-use crate::inbound::http::router::{ChatRouterState, chat_id_router};
+use crate::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotId, EditAccessLevel, EntityAccessReceipt, EntityPermission,
@@ -453,13 +459,109 @@ impl EntityAccessService for MockAccessService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+/// Fake authorization service accepting the `valid` bearer token as the test
+/// user.
+#[derive(Clone)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(
+        &self,
+        jwt: &str,
+    ) -> std::result::Result<UserContext, Report<MacroAuthorizationError>> {
+        if jwt != "valid" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(UserContext {
+            user_id: "macro|test@example.com".to_string(),
+            fusion_user_id: "1234".to_string(),
+            permissions: None,
+            organization_id: None,
+        })
+    }
+
+    async fn authorize_internal(
+        &self,
+        _provided_key: &str,
+        _claims: InternalIdentityClaims,
+    ) -> std::result::Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+}
+
+fn authorization_state() -> MacroAuthorizationState<FakeAuthorizationService> {
+    MacroAuthorizationState::new(Arc::new(FakeAuthorizationService))
+}
+
+/// Fake roles-and-permissions service granting no permissions (free tier).
+#[derive(Clone)]
+struct FakeUserPermissionsService;
+
+impl roles_and_permissions::domain::port::UserRolesAndPermissionsService
+    for FakeUserPermissionsService
+{
+    async fn get_user_roles(
+        &self,
+        _user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> std::result::Result<
+        std::collections::HashSet<roles_and_permissions::domain::model::RoleId>,
+        roles_and_permissions::domain::model::UserRolesAndPermissionsError,
+    > {
+        Ok(std::collections::HashSet::new())
+    }
+
+    async fn get_user_permissions(
+        &self,
+        _user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> std::result::Result<
+        std::collections::HashSet<roles_and_permissions::domain::model::PermissionId>,
+        roles_and_permissions::domain::model::UserRolesAndPermissionsError,
+    > {
+        Ok(std::collections::HashSet::new())
+    }
+
+    async fn update_user_roles_and_permissions_for_subscription(
+        &self,
+        _email: macro_user_id::email::Email<macro_user_id::lowercased::Lowercase<'_>>,
+        _subscription_status: roles_and_permissions::domain::model::SubscriptionStatus,
+        _product_tier: roles_and_permissions::domain::model::ProductTier,
+    ) -> std::result::Result<(), roles_and_permissions::domain::model::UserRolesAndPermissionsError>
+    {
+        unimplemented!("not used by chat handlers")
+    }
+
+    async fn dangerous_upsert_roles_for_user(
+        &self,
+        _user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _role_ids: non_empty::NonEmpty<&[roles_and_permissions::domain::model::RoleId]>,
+    ) -> std::result::Result<(), roles_and_permissions::domain::model::UserRolesAndPermissionsError>
+    {
+        unimplemented!("not used by chat handlers")
+    }
+
+    async fn dangerous_remove_roles_from_user(
+        &self,
+        _user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _role_ids: &non_empty::NonEmpty<&[roles_and_permissions::domain::model::RoleId]>,
+    ) -> std::result::Result<(), roles_and_permissions::domain::model::UserRolesAndPermissionsError>
+    {
+        unimplemented!("not used by chat handlers")
+    }
+}
+
+fn permissions_service() -> Arc<FakeUserPermissionsService> {
+    Arc::new(FakeUserPermissionsService)
+}
+
+/// Attaches the test user's bearer token to every request, mirroring the
+/// credentials a real client would send.
+async fn attach_bearer(mut req: Request<Body>) -> Request<Body> {
+    req.headers_mut().insert(
+        header::AUTHORIZATION,
+        "Bearer valid".parse().expect("header should be valid"),
+    );
+    req
 }
 
 fn chat_basic_extension() -> Extension<ChatBasic> {
@@ -476,21 +578,65 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 }
 
 fn mock_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(MockService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(ChatRouterState::new(
+        MockService,
+        MockAccessService,
+        authorization_state(),
+        permissions_service(),
+    ))
+    .layer(chat_basic_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn error_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(ErrorService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(ChatRouterState::new(
+        ErrorService,
+        MockAccessService,
+        authorization_state(),
+        permissions_service(),
+    ))
+    .layer(chat_basic_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn not_found_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(NotFoundService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(ChatRouterState::new(
+        NotFoundService,
+        MockAccessService,
+        authorization_state(),
+        permissions_service(),
+    ))
+    .layer(chat_basic_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
+}
+
+fn mock_create_router() -> Router {
+    chat_create_router(ChatRouterState::new(
+        MockService,
+        MockAccessService,
+        authorization_state(),
+        permissions_service(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer))
+}
+
+// -- create_chat tests --
+
+#[tokio::test]
+async fn create_chat_returns_id() {
+    let req = Request::builder()
+        .method("POST")
+        .uri("/")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"name": "My Chat"}"#))
+        .unwrap();
+
+    let res = mock_create_router().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let response: StringIDResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(response.id, "test-chat-id");
 }
 
 // -- get_chat tests --

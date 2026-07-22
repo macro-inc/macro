@@ -98,6 +98,14 @@ impl InfraEnv {
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
+        // In-network services resolve the gateway through the OVERRIDE_ var;
+        // without it the resolver's Environment::Local default
+        // (http://localhost:8082) points at the calling container itself and
+        // every realtime push silently fails.
+        env.insert(
+            "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
+            "http://connection-gateway:8080".into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -232,9 +240,10 @@ impl ServiceAuthEnv {
 }
 
 /// FusionAuth identity — all fixed UUIDs/secrets shared with the deterministic
-/// kickstart (see [`identity`]). The OAuth redirect is the only per-instance bit.
+/// kickstart (see [`identity`]). Browser-facing URLs are instance-specific.
 struct FusionAuthEnv {
     oauth_redirect_uri: String,
+    public_url: String,
     /// The auth service's own public origin (`BASE_URL`): OAuth callbacks and
     /// email verification links are built on it. Same host-port convention as
     /// [`identity::oauth_redirect_uri`]. Doppler supplies it for dev; the
@@ -247,6 +256,7 @@ impl FusionAuthEnv {
     fn for_instance(instance: &Instance) -> Self {
         FusionAuthEnv {
             oauth_redirect_uri: identity::oauth_redirect_uri(instance.port(Port::Auth)),
+            public_url: format!("http://localhost:{}", instance.port(Port::FusionAuth)),
             base_url: format!("http://localhost:{}", instance.port(Port::Auth)),
         }
     }
@@ -257,6 +267,7 @@ impl FusionAuthEnv {
             "FUSIONAUTH_BASE_URL".into(),
             "http://fusionauth:9011".into(),
         );
+        env.insert("FUSIONAUTH_PUBLIC_URL".into(), self.public_url.clone());
         env.insert(
             "FUSIONAUTH_API_KEY".into(),
             identity::FUSIONAUTH_API_KEY.into(),

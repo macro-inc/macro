@@ -8,19 +8,18 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
 import { createTauriCacheHost } from './tauri-host';
 
-type OpsAffectedPayload = { opIds: string[]; keys: string[] };
-type EventCallback = (event: { payload: OpsAffectedPayload }) => void;
+type EventCallback = (event: { payload: Record<string, unknown> }) => void;
 
 describe('createTauriCacheHost', () => {
-  let eventCallback: EventCallback | undefined;
+  let eventCallbacks: Map<string, EventCallback>;
   const unlisten = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    eventCallback = undefined;
+    eventCallbacks = new Map();
     invokeMock.mockResolvedValue(null);
-    listenMock.mockImplementation((_event: string, cb: EventCallback) => {
-      eventCallback = cb;
+    listenMock.mockImplementation((event: string, cb: EventCallback) => {
+      eventCallbacks.set(event, cb);
       return Promise.resolve(unlisten);
     });
   });
@@ -45,6 +44,52 @@ describe('createTauriCacheHost', () => {
       query: '{ x }',
       operationName: undefined,
       variables: undefined,
+    });
+  });
+
+  it('reports asynchronous native initialization failures', async () => {
+    const onInitializationError = vi.fn();
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init'
+        ? Promise.reject(new Error('init failed'))
+        : Promise.resolve(null)
+    );
+
+    const host = createTauriCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+
+    await vi.waitFor(() =>
+      expect(onInitializationError).toHaveBeenCalledOnce()
+    );
+    expect(onInitializationError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'init failed' })
+    );
+    host.dispose();
+  });
+
+  it('reads selected records with fragment and cursor arguments', async () => {
+    const page = { records: [], nextCursor: null };
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(command === 'graphql_cache_read_records' ? page : null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const cursor = 'cursor-1';
+
+    await expect(
+      host.readRecords({
+        document: 'fragment Item on GraphqlSoupItem { id }',
+        fragmentName: 'Item',
+        cursor,
+        limit: 25,
+      })
+    ).resolves.toEqual(page);
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read_records', {
+      document: 'fragment Item on GraphqlSoupItem { id }',
+      fragmentName: 'Item',
+      cursor,
+      limit: 25,
     });
   });
 
@@ -93,11 +138,27 @@ describe('createTauriCacheHost', () => {
       return Promise.resolve(null);
     });
 
+    const patch = {
+      query: 'query { user { groupSoup { bins { items { id } } } } }',
+      variablesJson: '{}',
+      path: [
+        { field: 'user' },
+        { field: 'groupSoup' },
+        { field: 'bins' },
+        { field: 'items' },
+      ],
+      operation: { kind: 'remove' as const, entityKey: 'Thing:1' },
+    };
     const begun = await host.beginOptimisticWrite({
       query: 'mutation { m }',
       data: { m: 1 },
+      linkPatches: [patch],
     });
     expect(begun).toEqual(optimistic);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_begin_optimistic_write',
+      expect.objectContaining({ linkPatches: [patch] })
+    );
 
     const claim = { owner: 'runner', generation: '2' };
     await host.commitOptimisticWrite('1', claim, {
@@ -114,14 +175,42 @@ describe('createTauriCacheHost', () => {
       })
     );
 
-    await host.rollbackOptimisticWrite('1', claim);
+    await host.rollbackOptimisticWrite('1', claim, 'invalid property');
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_rollback_optimistic_write',
       {
         transactionId: '1',
         leaseOwner: 'runner',
         leaseGeneration: '2',
+        error: 'invalid property',
       }
+    );
+  });
+
+  it('inspects generated query variants through the native command', async () => {
+    const instances = [
+      {
+        variables: { input: { initial: { limit: 20 } } },
+        value: { bins: [] },
+      },
+    ];
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(
+        command === 'graphql_cache_inspect_query' ? instances : null
+      )
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const request = {
+      query:
+        'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
+      operationName: 'Views',
+      path: [{ field: 'user' }, { field: 'groupSoup' }],
+    };
+
+    await expect(host.inspectQuery(request)).resolves.toEqual(instances);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_inspect_query',
+      request
     );
   });
 
@@ -136,7 +225,7 @@ describe('createTauriCacheHost', () => {
       expect.any(Function)
     );
 
-    eventCallback?.({
+    eventCallbacks.get('graphql-cache://ops-affected')?.({
       payload: {
         opIds: [`${host.clientId}:5`, 'other-client:9', `${host.clientId}:8`],
         keys: ['A:1'],
@@ -145,10 +234,38 @@ describe('createTauriCacheHost', () => {
     expect(seen).toEqual([[5, 8]]);
 
     // No delivery when nothing matches this client.
-    eventCallback?.({
+    eventCallbacks.get('graphql-cache://ops-affected')?.({
       payload: { opIds: ['other-client:9'], keys: ['A:1'] },
     });
     expect(seen).toEqual([[5, 8]]);
+  });
+
+  it('delivers cache change notifications', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    let calls = 0;
+    host.onCacheChanged(() => calls++);
+    await Promise.resolve();
+
+    eventCallbacks.get('graphql-cache://cache-changed')?.({ payload: {} });
+    expect(calls).toBe(1);
+  });
+
+  it('delivers queued mutation settlements from the broadcast event', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const seen: unknown[] = [];
+    host.onMutationSettled((settlement) => seen.push(settlement));
+    await Promise.resolve();
+
+    const settlement = {
+      transactionId: '12',
+      status: 'permanently-failed' as const,
+      error: 'invalid property',
+    };
+    eventCallbacks.get('graphql-cache://mutation-settled')?.({
+      payload: settlement,
+    });
+
+    expect(seen).toEqual([settlement]);
   });
 
   it('normalizes string command errors to Error rejections', async () => {

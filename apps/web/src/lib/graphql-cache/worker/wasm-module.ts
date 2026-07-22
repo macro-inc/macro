@@ -9,9 +9,14 @@
  */
 
 import type {
+  CachedQueryInstanceWire,
   ClaimedMutation,
+  OptimisticLinkPatchWire,
   OptimisticWriteResult,
+  QueryRevalidationWire,
   ReadResult,
+  RecordCursor,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -22,6 +27,12 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined
   ): Promise<ReadResult>;
+  readRecords(
+    document: string,
+    fragmentName: string,
+    cursor: RecordCursor | undefined,
+    limit: number
+  ): Promise<SelectedRecordPageWire>;
   writeQuery(
     originOpId: string | undefined,
     query: string,
@@ -36,8 +47,15 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown,
+    linkPatches: OptimisticLinkPatchWire[] | undefined,
+    revalidations: QueryRevalidationWire[] | undefined,
     createdAtMs: number
   ): Promise<OptimisticWriteResult>;
+  inspectQuery(
+    query: string,
+    operationName: string | undefined,
+    path: Array<{ field: string }>
+  ): Promise<CachedQueryInstanceWire[]>;
   claimNextMutation(
     owner: string,
     nowMs: number,

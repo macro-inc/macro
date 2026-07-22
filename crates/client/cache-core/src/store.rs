@@ -38,6 +38,15 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Scans normalized records of the requested concrete types in ascending
+    /// entity-key order. `after` is exclusive.
+    fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<(EntityKey, Record)>, Self::Error>> + MaybeSend;
+
     /// Atomically appends a mutation and its optimistic layer to the queue.
     fn enqueue_mutation(
         &mut self,
@@ -90,7 +99,7 @@ pub trait Storage: MaybeSend {
 }
 
 /// Hash-map storage for tests and as the Phase 1 default.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct InMemoryStorage {
     records: HashMap<EntityKey, Record>,
     mutations: BTreeMap<
@@ -136,6 +145,33 @@ impl Storage for InMemoryStorage {
             self.records.remove(k);
         }
         Ok(())
+    }
+
+    async fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+        if limit == 0 || type_names.is_empty() {
+            return Ok(Vec::new());
+        }
+        let type_names: std::collections::HashSet<_> =
+            type_names.iter().map(String::as_str).collect();
+        let mut records: Vec<_> = self
+            .records
+            .iter()
+            .filter(|(key, _)| after.is_none_or(|after| *key > after))
+            .filter(|(key, _)| {
+                key.0
+                    .split_once(':')
+                    .is_some_and(|(type_name, _)| type_names.contains(type_name))
+            })
+            .map(|(key, record)| (key.clone(), record.clone()))
+            .collect();
+        records.sort_by(|(left, _), (right, _)| left.cmp(right));
+        records.truncate(limit);
+        Ok(records)
     }
 
     async fn enqueue_mutation(

@@ -124,9 +124,9 @@ function normalizeLimit(limit?: number): number {
 
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
-function userNotificationsQueryOptions(limit: number) {
+function userNotificationsQueryOptions(limit: number, done?: boolean) {
   return {
-    queryKey: notificationKeys.user({ limit }).queryKey,
+    queryKey: notificationKeys.user({ limit, done }).queryKey,
     queryFn: async ({
       pageParam,
     }: {
@@ -137,6 +137,7 @@ function userNotificationsQueryOptions(limit: number) {
           await notificationServiceClient.userNotifications({
             limit: pageParam.limit,
             cursor: pageParam.cursor,
+            done,
           })
       );
     },
@@ -148,12 +149,22 @@ function userNotificationsQueryOptions(limit: number) {
   };
 }
 
-/** Paginated query for all notifications for the current user. */
-export function useUserNotificationsQuery(args?: { limit?: number }) {
+/**
+ * Paginated query for all notifications for the current user.
+ *
+ * `done` filters by done status. Omitted, the server returns only active
+ * (not-done) notifications; `done: true` pages through the done ones —
+ * surfaces that need the complete stream (e.g. the activity timeline) run
+ * one query per done state and merge.
+ */
+export function useUserNotificationsQuery(args?: {
+  limit?: number;
+  done?: boolean;
+}) {
   const limit = normalizeLimit(args?.limit);
 
   return useInfiniteQuery(() => ({
-    ...userNotificationsQueryOptions(limit),
+    ...userNotificationsQueryOptions(limit, args?.done),
     select: (
       data: InfiniteData<
         GetAllUserNotificationsResponse,
@@ -300,6 +311,36 @@ export async function bulkMarkNotificationsAsUndone(
         notificationIds,
       })
   );
+}
+
+/**
+ * Fetch the ids of the given event items' DONE notifications from the server.
+ * The live user-notifications stream only carries not-done notifications, so
+ * a done thread's ids age out of the local cache — mark-not-done resolves
+ * them server-side to restore reliably. Throws on failure.
+ */
+export async function fetchDoneNotificationIdsByEventItemIds(
+  eventItemIds: string[]
+): Promise<string[]> {
+  if (eventItemIds.length === 0) return [];
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await throwOnErr(
+      async () =>
+        await notificationServiceClient.bulkGetUserNotificationsByEventItemId({
+          eventItemIds,
+          // Server max page size; bulk selections can span many threads, so
+          // follow the cursor through every page rather than capping.
+          limit: 500,
+          done: true,
+          cursor,
+        })
+    );
+    ids.push(...response.items.map((n) => n.id));
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+  return ids;
 }
 
 export function invalidateEntityNotifications(eventItemId: string) {

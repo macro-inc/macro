@@ -1,6 +1,6 @@
 import type { Listen } from '@solid-primitives/event-bus';
 import type { VersionVector } from 'loro-crdt';
-import type { ResultAsync } from 'neverthrow';
+import { okAsync, type ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import type { RawUpdate } from './shared';
 
@@ -82,3 +82,23 @@ export type LiveSyncSource = {
   reconnect: () => void;
   cleanup: () => void;
 };
+
+/**
+ * A {@link LiveSyncSource} that acks everything and forwards nothing. For
+ * callers that want to skip live propagation without threading a boolean
+ * through every method that would otherwise push to the server.
+ */
+export function createNoopLiveSyncSource(documentId: string): LiveSyncSource {
+  return {
+    documentId,
+    listen: () => () => {},
+    pushUpdate: async () => true,
+    pushAwareness: () => {},
+    registerPeerId: () => {},
+    status: () => SyncSourceStatus.Connected,
+    requestUpdatesSince: () => okAsync(new Uint8Array()),
+    requestSnapshot: () => okAsync(new Uint8Array()),
+    reconnect: () => {},
+    cleanup: () => {},
+  };
+}

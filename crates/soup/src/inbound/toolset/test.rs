@@ -1,4 +1,4 @@
-use super::list_entities::build_summary;
+use super::list_entities::{build_summary, retain_excluding_self_chat};
 #[allow(unused_imports)]
 use super::*;
 use ai_toolset::schema::generate_validated_input_schema;
@@ -445,6 +445,60 @@ fn test_from_soup_item_resolves_tags_via_caller_map() {
         }
         other => panic!("expected document item, got {other:?}"),
     }
+}
+
+#[test]
+fn test_retain_excluding_self_chat_drops_only_the_current_chat() {
+    let self_chat_id = Uuid::new_v4();
+    let other_chat_id = Uuid::new_v4();
+    let mut items = vec![
+        EntityItem::AiChat {
+            id: self_chat_id,
+            name: "Current chat".to_string(),
+            tags: vec![],
+        },
+        EntityItem::AiChat {
+            id: other_chat_id,
+            name: "Other chat".to_string(),
+            tags: vec![],
+        },
+        EntityItem::Document {
+            id: Uuid::new_v4(),
+            name: "doc.md".to_string(),
+            file_type: None,
+            sub_type: None,
+            tags: vec![],
+        },
+    ];
+
+    retain_excluding_self_chat(&mut items, Some(self_chat_id));
+
+    assert_eq!(items.len(), 2, "the current chat should be dropped");
+    assert!(
+        items
+            .iter()
+            .any(|item| matches!(item, EntityItem::AiChat { id, .. } if *id == other_chat_id)),
+        "unrelated chats should be kept"
+    );
+    assert!(
+        items
+            .iter()
+            .any(|item| matches!(item, EntityItem::Document { .. })),
+        "non-chat items should be kept"
+    );
+}
+
+#[test]
+fn test_retain_excluding_self_chat_is_noop_without_a_running_chat() {
+    let mut items = vec![EntityItem::AiChat {
+        id: Uuid::new_v4(),
+        name: "Some chat".to_string(),
+        tags: vec![],
+    }];
+
+    retain_excluding_self_chat(&mut items, None);
+
+    assert_eq!(items.len(), 1, "nothing to exclude outside a chat session");
 }
 
 // run `cargo test -p soup inbound::toolset::test::print_input_schema -- --nocapture --include-ignored`

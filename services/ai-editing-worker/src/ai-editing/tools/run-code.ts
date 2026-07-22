@@ -33,7 +33,7 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
         .record(z.string(), z.string())
         .optional()
         .describe(
-          'all text content your code inserts: key -> exact content. reference each as `snippets.KEY` in `code` instead of embedding it as a string literal (avoids escaping errors).'
+          'all text content your code relies on. referenced as `snippets.KEY` in code rather than embedded in code. No escaping is necessary for snippet definitions, just use raw loose text.'
         ),
     }),
     execute: async ({ code, snippets }) => {

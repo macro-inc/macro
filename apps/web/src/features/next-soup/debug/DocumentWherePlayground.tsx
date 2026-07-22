@@ -6,7 +6,11 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { throwOnErr } from '@core/util/result';
-import { ListEntity, ListLayoutProvider } from '@entity';
+import {
+  ListEntity,
+  ListEntityMetadataQueryProvider,
+  ListLayoutProvider,
+} from '@entity';
 import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
@@ -666,19 +670,21 @@ export default function DocumentWherePlayground() {
               </div>
             </Show>
 
-            <ListLayoutProvider ref={resultsRef}>
-              <div class="space-y-1">
-                <For each={entities()}>
-                  {(entity) => (
-                    <ListEntity
-                      entity={entity}
-                      hideCheckbox
-                      onClick={() => console.log('Soup entity:', entity)}
-                    />
-                  )}
-                </For>
-              </div>
-            </ListLayoutProvider>
+            <ListEntityMetadataQueryProvider>
+              <ListLayoutProvider ref={resultsRef}>
+                <div class="space-y-1">
+                  <For each={entities()}>
+                    {(entity) => (
+                      <ListEntity
+                        entity={entity}
+                        hideCheckbox
+                        onClick={() => console.log('Soup entity:', entity)}
+                      />
+                    )}
+                  </For>
+                </div>
+              </ListLayoutProvider>
+            </ListEntityMetadataQueryProvider>
           </section>
         </main>
       </div>

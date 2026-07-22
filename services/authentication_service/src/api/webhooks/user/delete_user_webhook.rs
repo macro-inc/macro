@@ -7,7 +7,7 @@ use comms_db_client::{
     channels::get_channels::get_org_channels,
     participants::remove_participant::{RemoveParticipantOptions, remove_participant},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithMacroUserId};
 use notification::domain::ports::NotificationRepository;
@@ -16,14 +16,14 @@ use sqlx::{Pool, Postgres};
 use stripe::CustomerId;
 use tracing::Instrument;
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use sqs_client::email::LinkManagerMessage;
 
 /// Delete user webhook
-#[tracing::instrument(skip(ctx, req, _internal_access), fields(event_id=req.event.id, email=req.event.user.email,fusionauth_user_id=req.event.user.id))]
+#[tracing::instrument(skip(ctx, req, _internal_authorization), fields(event_id=req.event.id, email=req.event.user.email,fusionauth_user_id=req.event.user.id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<FusionAuthUserWebhook>,
 ) -> Result<Response, Response> {
     tracing::info!("delete user webhook");

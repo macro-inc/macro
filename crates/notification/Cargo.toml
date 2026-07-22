@@ -9,6 +9,7 @@ version = "0.1.0"
 ai_tool = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 axum = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:model-error-response",
   "dep:model_user",
   "models_pagination/axum",
@@ -29,21 +30,22 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 cowlike = { path = "../cowlike" }
-decode_jwt = { path = "../decode_jwt" }
 either = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
-macro_auth = { path = "../macro_auth" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
 macro_env = { path = "../macro_env" }
 macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
+model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
 rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [
@@ -69,7 +71,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
-macro_auth = { path = "../macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rate_limit = { path = "../rate_limit", features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

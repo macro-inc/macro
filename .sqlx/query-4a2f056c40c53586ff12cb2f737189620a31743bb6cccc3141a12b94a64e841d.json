@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"User\" (id, email, \"stripeCustomerId\", macro_user_id, \"tutorialComplete\", \"hasOnboardingDocuments\")\n               VALUES ($1, $2, $3, $4, true, true)\n               ON CONFLICT (id) DO UPDATE SET\n                 macro_user_id = EXCLUDED.macro_user_id,\n                 \"tutorialComplete\" = true,\n                 \"hasOnboardingDocuments\" = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a2f056c40c53586ff12cb2f737189620a31743bb6cccc3141a12b94a64e841d"
+}

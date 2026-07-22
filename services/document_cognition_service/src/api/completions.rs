@@ -1,4 +1,6 @@
+use crate::api::context::DcsAuthorizationService;
 use axum::{extract, response::IntoResponse};
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_env_var::maybe_env_vars;
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
@@ -8,8 +10,9 @@ maybe_env_vars! {
 }
 
 /// A non-streaming proxy to the chatgpt api
-#[tracing::instrument(err(Debug), skip(body))]
+#[tracing::instrument(err(Debug), skip(_user, body))]
 pub async fn handler(
+    _user: MacroAuthorizationExtractor<DcsAuthorizationService>,
     extract::Json(mut body): extract::Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(obj) = body.as_object_mut() {

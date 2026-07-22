@@ -8,8 +8,8 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
-const BASE_ITEM_SIZE: number = 64;
-const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
+const BASE_ITEM_SIZE = 96;
+const BASE_BUFFER_SIZE = 500;
 
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
@@ -45,6 +45,12 @@ export type ThreadListNavigation = {
   navigatePrevious: () => boolean;
   navigateNext: () => boolean;
   isNearBottom: () => boolean;
+  /** Position a descendant using Virtua's measured coordinate space. */
+  scrollToElementInItem: (
+    id: string,
+    itemElement: HTMLElement,
+    targetElement: HTMLElement
+  ) => boolean;
   /**
    * Signal that a user-initiated navigation is about to cause a
    * programmatic scroll. Call this before `scrollToId` etc. from
@@ -77,9 +83,13 @@ export type FullFrameThreadListScrollInsets = {
 };
 
 type ThreadListProps = {
+  /** Identifies the channel scroll surface when multiple splits are mounted. */
+  channelId?: string;
   keys: Accessor<string[]>;
   children: (item: { id: string }) => JSX.Element;
   initialScrollTarget?: ThreadListScrollTarget;
+  /** A kept-mounted descendant owns the targeted initial viewport movement. */
+  initialScrollHandledByTargetElement?: boolean;
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
@@ -88,6 +98,8 @@ type ThreadListProps = {
   onScrollSnapshotChange?: (snapshot: ThreadListScrollSnapshot) => void;
   shift?: Accessor<boolean>;
   prepend?: Accessor<boolean>;
+  /** Item indexes that must remain mounted during nested-message navigation. */
+  keepMounted?: Accessor<readonly number[]>;
   /**
    * For full-frame insets where the scroll surface spans the whole screen and content
    * scrolls behind the floating chrome. Rendered as scroll-content padding and fed to
@@ -326,9 +338,20 @@ export function ThreadList(props: ThreadListProps) {
 
     let rafId = 0;
     const start = performance.now();
+    const virtualContent = Array.from(el.children).find(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.style.contain.includes('size')
+    );
+    const resizeObserver = virtualContent
+      ? new ResizeObserver(() => {
+          if (getDistanceFromBottom(handle) > 1) el.scrollTop = el.scrollHeight;
+        })
+      : undefined;
+    if (virtualContent) resizeObserver?.observe(virtualContent);
 
     const stop = () => {
       if (rafId) cancelAnimationFrame(rafId);
+      resizeObserver?.disconnect();
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('pointerdown', onPointerDown);
       if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
@@ -401,6 +424,35 @@ export function ThreadList(props: ThreadListProps) {
 
     isNearBottom,
 
+    scrollToElementInItem: (id, itemElement, targetElement) => {
+      const index = props.keys().indexOf(id);
+      if (index === -1) return false;
+
+      cancelPinToBottom?.();
+      const itemRect = itemElement.getBoundingClientRect();
+      const targetRect = targetElement.getBoundingClientRect();
+      const targetCenter =
+        handle.getItemOffset(index) +
+        (targetRect.top - itemRect.top) +
+        targetRect.height / 2;
+      const { start, end } = insets();
+      const usableViewportCenter =
+        start + (handle.viewportSize - start - end) / 2;
+      // The DOM scroll range includes the full-frame inset spacers; Virtua's
+      // scrollSize only covers its own items.
+      const maxScrollOffset = scrollRef
+        ? scrollRef.scrollHeight - scrollRef.clientHeight
+        : handle.scrollSize - handle.viewportSize;
+      handle.scrollTo(
+        clamp(
+          targetCenter - usableViewportCenter,
+          0,
+          Math.max(0, maxScrollOffset)
+        )
+      );
+      return true;
+    },
+
     markUserIntent: scrollIntent.markUserIntent,
   });
 
@@ -418,7 +470,10 @@ export function ThreadList(props: ThreadListProps) {
       viewportSize: handle.viewportSize,
     });
 
-    const didScroll = scrollToInitialTarget(handle, target);
+    const didScroll =
+      target.tag === 'bottom'
+        ? pinToBottom(handle)
+        : scrollToInitialTarget(handle, target);
 
     if (!didScroll) {
       // Empty list or target not found — nothing to verify.
@@ -462,26 +517,37 @@ export function ThreadList(props: ThreadListProps) {
     );
   }
 
+  const getInitialScrollTarget = (): InitialScrollTarget => {
+    const snapshot = props.initialScrollSnapshot;
+    if (snapshot) {
+      return snapshot.isNearBottom
+        ? DEFAULT_INITIAL_SCROLL_TARGET
+        : { tag: 'offset', scrollOffset: snapshot.scrollOffset };
+    }
+
+    return props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+  };
+
+  // Virtua publishes its handle before ResizeObserver has populated
+  // `viewportSize`. Waiting for that measurement before doing anything leaves
+  // an overflowing channel visibly parked at scrollTop=0 for one or more
+  // frames. A bottom target is safe to issue immediately: with a zero viewport
+  // Virtua overshoots the final offset and the browser clamps it to the DOM's
+  // current maximum, putting the first painted frame at the bottom. The normal
+  // measured pass below still corrects the exact end alignment afterwards.
+  const prepositionInitialBottom = (handle: VirtualizerHandle) => {
+    const target = getInitialScrollTarget();
+    if (target.tag === 'bottom') pinToBottom(handle);
+  };
+
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
-
-    const snapshot = props.initialScrollSnapshot;
-    if (snapshot) {
-      if (snapshot.isNearBottom) {
-        beginInitialTargetScroll(handle, DEFAULT_INITIAL_SCROLL_TARGET);
-      } else {
-        beginInitialTargetScroll(handle, {
-          tag: 'offset',
-          scrollOffset: snapshot.scrollOffset,
-        });
-      }
-
+    if (props.initialScrollHandledByTargetElement) {
+      completeInitialScroll(handle);
       return;
     }
-
-    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-    beginInitialTargetScroll(handle, target);
+    beginInitialTargetScroll(handle, getInitialScrollTarget());
   }
 
   const handleScrollEnd = () => {
@@ -510,10 +576,10 @@ export function ThreadList(props: ThreadListProps) {
       });
       requestAnimationFrame(() => {
         const offsetBeforeRetry = handle.scrollOffset;
-        const retryScrolled = scrollToInitialTarget(
-          handle,
-          initialScrollTarget
-        );
+        const retryScrolled =
+          initialScrollTarget.tag === 'bottom'
+            ? pinToBottom(handle)
+            : scrollToInitialTarget(handle, initialScrollTarget);
         if (!retryScrolled) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
@@ -623,6 +689,9 @@ export function ThreadList(props: ThreadListProps) {
           setScrollEl(el);
         }}
         data-channel-scroll
+        data-channel-id={props.channelId}
+        data-channel-scroll-inset-start={insets().start}
+        data-channel-scroll-inset-end={insets().end}
         class="scrollbar-hidden"
         {...scrollIntent.handlers}
         style={{
@@ -649,12 +718,14 @@ export function ThreadList(props: ThreadListProps) {
               props.onNavigationReady(createNavigation(ref));
             }
             resetInitialScroll();
+            prepositionInitialBottom(ref);
             scrollOnMountWhenMeasured(ref);
           }}
           scrollRef={scrollRef}
           startMargin={insets().start}
           itemSize={BASE_ITEM_SIZE}
           bufferSize={BASE_BUFFER_SIZE}
+          keepMounted={props.keepMounted?.()}
           data={props.keys()}
           onScroll={handleScroll}
           onScrollEnd={handleScrollEnd}

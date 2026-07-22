@@ -66,6 +66,15 @@ unsafe_images=
 while read -r expected_id tag registry_ref; do
   current_id=$(docker image inspect -f '{{.Id}}' "$tag" 2>/dev/null || true)
   [ "$current_id" = "$expected_id" ] && continue
+  # Mirrored images never match by .Id (the manifest carries the runner's
+  # source-registry digest; this store holds the mirror's) — same mismatch
+  # the entrypoint's pull loop handles. Honor the boot pull receipt before
+  # classifying an image as changed, or every hot update sees all 12 infra
+  # images as "non-hot-updatable drift" and needlessly rehydrates.
+  if [ -n "$current_id" ] \
+      && grep -qxF "$expected_id $tag" "$STATE_DIR/pulled.txt" 2>/dev/null; then
+    continue
+  fi
   case "$tag" in
     *-ai_editing_worker|*-lexical_service|*-sync_service|*-websocket_service)
       log "refreshing auxiliary image $tag"
@@ -108,6 +117,11 @@ install -m 0755 "$staging/xtask" /srv/macro/bin/xtask.next
 mv -f /srv/macro/bin/xtask.next /srv/macro/bin/xtask
 install -m 0644 "$staging/deployment.json" "$STATE_FILE.next"
 mv -f "$STATE_FILE.next" "$STATE_FILE"
+# The aux refreshes above satisfied the carrier manifest, so record it in the
+# boot pull receipt — otherwise the next real boot re-pulls what this update
+# already delivered (see the receipt logic in entrypoint.sh).
+awk '{print $1, $2}' "$staging/manifest.txt" > "$STATE_DIR/pulled.txt.next" \
+  && mv "$STATE_DIR/pulled.txt.next" "$STATE_DIR/pulled.txt"
 
 # Retain the current carrier's layers for the next incremental pull, but remove
 # older carrier tags and their now-unreferenced layers from the persistent store.

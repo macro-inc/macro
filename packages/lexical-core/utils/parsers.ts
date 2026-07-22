@@ -228,16 +228,22 @@ function snapshotToEmbeddingText(encoded: string): string {
  * `\n`; any tags nested in cells are handled by the leaf passes afterwards.
  */
 function flattenTables(text: string): string {
-  return text.replace(/<m-table>(.*?)<\/m-table>/gs, (_, table: string) =>
-    [...table.matchAll(/<m-table-row>(.*?)<\/m-table-row>/gs)]
-      .map((row) =>
-        [...row[1].matchAll(/<m-table-cell>(.*?)<\/m-table-cell>/gs)]
-          .map((cell) =>
-            cell[1].replace(/\\n/g, ' ').replaceAll('<br>', ' ').trim()
-          )
-          .join(' | ')
-      )
-      .join('\n')
+  return text.replace(
+    /<m-table(?:\s[^>]*)?>(.*?)<\/m-table>/gs,
+    (_, table: string) =>
+      [...table.matchAll(/<m-table-row(?:\s[^>]*)?>(.*?)<\/m-table-row>/gs)]
+        .map((row) =>
+          [
+            ...row[1].matchAll(
+              /<m-table-cell(?:\s[^>]*)?>(.*?)<\/m-table-cell>/gs
+            ),
+          ]
+            .map((cell) =>
+              cell[1].replace(/\\n/g, ' ').replaceAll('<br>', ' ').trim()
+            )
+            .join(' | ')
+        )
+        .join('\n')
   );
 }
 

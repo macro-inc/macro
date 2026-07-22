@@ -724,6 +724,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     };
     let highlight = Highlight::new()
         .require_field_match(true)
+        .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
         .field("content", em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
         .field("name", em_field().number_of_fragments(0))
@@ -823,6 +824,8 @@ pub(crate) async fn search_unified(
             details: e.to_string(),
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
+
+    result.warn_on_shard_failures("search_unified");
 
     tracing::info!(
         response_body_bytes = bytes.len(),

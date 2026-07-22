@@ -45,7 +45,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "internal-api-key": []
+          }
+        ]
       }
     },
     "/message/send/{entity_type}/{entity_id}": {
@@ -123,7 +128,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "internal-api-key": []
+          }
+        ]
       }
     },
     "/track/{entity_type}/{entity_id}": {
@@ -184,7 +194,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "internal-api-key": []
+          }
+        ]
       }
     }
   },
@@ -561,6 +576,13 @@
             }
           }
         ]
+      }
+    },
+    "securitySchemes": {
+      "internal-api-key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-internal-auth-key"
       }
     }
   },

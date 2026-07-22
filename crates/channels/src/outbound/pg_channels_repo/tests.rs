@@ -1,7 +1,7 @@
 use crate::domain::models::{
-    AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters,
-    CreateEntityMentionOptions, GetThreadReplyRowsRequest, MessagePageDirection,
-    NotificationFilters, ParticipantRole,
+    AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
+    CreateChannelRequest, CreateEntityMentionOptions, GetThreadReplyRowsRequest,
+    MessagePageDirection, NotificationFilters, ParticipantRole,
 };
 use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -11,7 +11,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Cursor, CursorVal, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
 const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
@@ -28,6 +28,11 @@ const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
+const TEAM_A: Uuid = Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
+const TEAM_A_AUTO_ACTIVE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c11);
+const TEAM_A_AUTO_LEFT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c12);
+const TEAM_A_MANUAL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c13);
+const TEAM_B_AUTO: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c21);
 const MSG1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
 const MSG2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
 const MSG3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
@@ -76,6 +81,296 @@ fn thread_filter(literal: ChannelThreadLiteral) -> LiteralTree<ChannelThreadLite
 
 fn report_err(e: rootcause::Report) -> anyhow::Error {
     anyhow::anyhow!("{e:?}")
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn create_channel_persists_auto_join_team(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+
+    let enabled_channel_id = repo
+        .create_channel(
+            macro_user_id(USER_A),
+            None,
+            CreateChannelRequest {
+                name: Some("enabled".to_string()),
+                channel_type: ChannelType::Team,
+                team_id: Some(TEAM_A),
+                auto_join_team: true,
+                participants: HashSet::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let disabled_channel_id = repo
+        .create_channel(
+            macro_user_id(USER_A),
+            None,
+            CreateChannelRequest {
+                name: Some("disabled".to_string()),
+                channel_type: ChannelType::Team,
+                team_id: Some(TEAM_A),
+                auto_join_team: false,
+                participants: HashSet::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let enabled = sqlx::query_scalar!(
+        "SELECT auto_join_team FROM comms_channels WHERE id = $1",
+        enabled_channel_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let disabled = sqlx::query_scalar!(
+        "SELECT auto_join_team FROM comms_channels WHERE id = $1",
+        disabled_channel_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(enabled);
+    assert!(!disabled);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn auto_join_is_enabled_team_scoped_and_idempotent(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let user_id = macro_user_id(NON_MEMBER);
+
+    repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+    repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+
+    let channel_ids = sqlx::query_scalar!(
+        r#"
+        SELECT channel_id
+        FROM comms_channel_participants
+        WHERE user_id = $1
+        ORDER BY channel_id
+        "#,
+        user_id.as_ref(),
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(channel_ids, vec![TEAM_A_AUTO_ACTIVE, TEAM_A_AUTO_LEFT]);
+    assert!(!channel_ids.contains(&TEAM_A_MANUAL));
+    assert!(!channel_ids.contains(&TEAM_B_AUTO));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn auto_join_reactivates_left_members_without_changing_active_memberships(
+    pool: Pool<Postgres>,
+) {
+    let repo = repo(pool.clone());
+    let user_id = macro_user_id(LEFT_USER);
+    let active_before = sqlx::query!(
+        r#"
+        SELECT role AS "role: ParticipantRole", joined_at
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_ACTIVE,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let left_before = sqlx::query!(
+        r#"
+        SELECT joined_at
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_LEFT,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+
+    let active_after = sqlx::query!(
+        r#"
+        SELECT role AS "role: ParticipantRole", joined_at, left_at::timestamptz AS "left_at?"
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_ACTIVE,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let reactivated = sqlx::query!(
+        r#"
+        SELECT role AS "role: ParticipantRole", joined_at, left_at::timestamptz AS "left_at?"
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_LEFT,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(active_after.role, active_before.role);
+    assert_eq!(active_after.joined_at, active_before.joined_at);
+    assert!(active_after.left_at.is_none());
+    assert_eq!(reactivated.role, ParticipantRole::Member);
+    assert!(reactivated.joined_at > left_before.joined_at);
+    assert!(reactivated.left_at.is_none());
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn leave_soft_leaves_all_team_channels_and_returns_only_changes(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let user_id = macro_user_id(LEFT_USER);
+    let original_left_at = sqlx::query_scalar!(
+        r#"
+        SELECT left_at::timestamptz
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_LEFT,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let mut changed = repo.leave_by_team_id(&TEAM_A, &user_id).await.unwrap();
+    changed.sort_unstable();
+
+    assert_eq!(changed, vec![TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL]);
+    assert!(
+        repo.leave_by_team_id(&TEAM_A, &user_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    let team_a_active_count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM comms_channel_participants cp
+        JOIN comms_channels cc ON cc.id = cp.channel_id
+        WHERE cc.team_id = $1 AND cp.user_id = $2 AND cp.left_at IS NULL
+        "#,
+        TEAM_A,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let unchanged_left_at = sqlx::query_scalar!(
+        r#"
+        SELECT left_at::timestamptz
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_LEFT,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let other_team_left_at = sqlx::query_scalar!(
+        r#"
+        SELECT left_at::timestamptz
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_B_AUTO,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(team_a_active_count, 0);
+    assert_eq!(unchanged_left_at, original_left_at);
+    assert!(other_team_left_at.is_none());
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn rollback_restores_exact_channels_without_changing_role_or_joined_at(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let user_id = macro_user_id(LEFT_USER);
+    let before = sqlx::query!(
+        r#"
+        SELECT channel_id, role AS "role: ParticipantRole", joined_at
+        FROM comms_channel_participants
+        WHERE user_id = $1 AND channel_id = ANY($2)
+        ORDER BY channel_id
+        "#,
+        user_id.as_ref(),
+        &[TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL],
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let changed = repo.leave_by_team_id(&TEAM_A, &user_id).await.unwrap();
+
+    repo.restore_by_channel_ids(&user_id, &changed)
+        .await
+        .unwrap();
+
+    let restored = sqlx::query!(
+        r#"
+        SELECT channel_id, role AS "role: ParticipantRole", joined_at,
+               left_at::timestamptz AS "left_at?"
+        FROM comms_channel_participants
+        WHERE user_id = $1 AND channel_id = ANY($2)
+        ORDER BY channel_id
+        "#,
+        user_id.as_ref(),
+        &[TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL],
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let previously_left = sqlx::query_scalar!(
+        r#"
+        SELECT left_at::timestamptz
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        TEAM_A_AUTO_LEFT,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(restored.len(), before.len());
+    for (restored, before) in restored.iter().zip(before) {
+        assert_eq!(restored.channel_id, before.channel_id);
+        assert_eq!(restored.role, before.role);
+        assert_eq!(restored.joined_at, before.joined_at);
+        assert!(restored.left_at.is_none());
+    }
+    assert!(previously_left.is_some());
 }
 
 #[sqlx::test(

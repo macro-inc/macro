@@ -150,6 +150,12 @@ fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
             format!("term_{idx}"),
             "inner_hits name should be term_<idx>"
         );
+        assert_eq!(
+            inner["highlight"]["max_analyzer_offset"],
+            serde_json::json!(super::super::HIGHLIGHT_MAX_ANALYZER_OFFSET),
+            "inner_hits highlight must cap analyzed offset so an oversized \
+             chunk can't fail the shard fetch: {inner:?}"
+        );
     }
     Ok(())
 }

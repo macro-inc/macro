@@ -66,16 +66,25 @@ pub enum OperationKind {
     Mutation,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Operation {
     pub name: Option<String>,
     pub kind: OperationKind,
     pub selection_set: Vec<Selection>,
 }
 
-#[derive(Debug)]
+/// Named fragment definition retained for fragment-rooted record reads.
+#[derive(Debug, Clone)]
+pub struct Fragment {
+    pub name: String,
+    pub type_condition: String,
+    pub selection_set: Vec<Selection>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Document {
     pub operations: Vec<Operation>,
+    pub fragments: Vec<Fragment>,
 }
 
 impl Document {
@@ -115,7 +124,7 @@ impl Document {
                 }
             }
         }
-        if operations_cst.is_empty() {
+        if operations_cst.is_empty() && fragments.is_empty() {
             return Err(DocumentError::NoOperation);
         }
 
@@ -144,12 +153,43 @@ impl Document {
                 selection_set,
             });
         }
-        Ok(Document { operations })
+
+        let mut fragment_names: Vec<_> = fragments.keys().cloned().collect();
+        fragment_names.sort();
+        let mut converted_fragments = Vec::with_capacity(fragment_names.len());
+        for name in fragment_names {
+            let definition = &fragments[&name];
+            let type_condition = definition
+                .type_condition()
+                .and_then(|condition| condition.named_type())
+                .and_then(|named| named.name())
+                .ok_or(DocumentError::Malformed("fragment without type condition"))?
+                .text()
+                .to_string();
+            let selection_set = convert_selection_set(
+                definition
+                    .selection_set()
+                    .ok_or(DocumentError::Malformed("fragment without selections"))?,
+                &fragments,
+                0,
+            )?;
+            converted_fragments.push(Fragment {
+                name,
+                type_condition,
+                selection_set,
+            });
+        }
+
+        Ok(Document {
+            operations,
+            fragments: converted_fragments,
+        })
     }
 
     /// Selects an operation by name (or the only one when unnamed).
     pub fn operation(&self, name: Option<&str>) -> Result<&Operation, DocumentError> {
         match name {
+            None if self.operations.is_empty() => Err(DocumentError::NoOperation),
             None => {
                 if self.operations.len() == 1 {
                     Ok(&self.operations[0])
@@ -165,6 +205,14 @@ impl Document {
                 .find(|o| o.name.as_deref() == Some(n))
                 .ok_or_else(|| DocumentError::UnknownOperation(n.to_string())),
         }
+    }
+
+    /// Selects a named fragment from this document.
+    pub fn fragment(&self, name: &str) -> Result<&Fragment, DocumentError> {
+        self.fragments
+            .iter()
+            .find(|fragment| fragment.name == name)
+            .ok_or_else(|| DocumentError::UnknownFragment(name.to_string()))
     }
 }
 

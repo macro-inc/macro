@@ -10,7 +10,8 @@ use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
         CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact,
-        CrmDomain, CrmDomainStatus, CrmError, CrmScopePrecheck, DomainMetadata,
+        CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings,
+        CrmTeamSettingsPatch, DomainMetadata,
     },
 };
 use chrono::{DateTime, Utc};
@@ -1848,6 +1849,109 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             (None, Some(company_id)) => Some((CrmCommentEntityType::CrmCompany, company_id)),
             (None, None) => None,
         }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_settings(&self, team_id: &Uuid) -> Result<CrmTeamSettings, CrmError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT edit_stages_role AS "edit_stages_role: CrmPermissionRole",
+                   move_closed_deals_role AS "move_closed_deals_role: CrmPermissionRole",
+                   delete_records_role AS "delete_records_role: CrmPermissionRole",
+                   closed_stage_ids,
+                   team_views,
+                   default_team_view_id
+            FROM team_crm_settings
+            WHERE team_id = $1
+            "#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(row
+            .map(|r| CrmTeamSettings {
+                edit_stages_role: r.edit_stages_role,
+                move_closed_deals_role: r.move_closed_deals_role,
+                delete_records_role: r.delete_records_role,
+                closed_stage_ids: r.closed_stage_ids,
+                team_views: r.team_views,
+                default_team_view_id: r.default_team_view_id,
+            })
+            .unwrap_or_default())
+    }
+
+    #[tracing::instrument(skip(self, patch), err)]
+    async fn update_team_settings(
+        &self,
+        team_id: &Uuid,
+        patch: &CrmTeamSettingsPatch,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        // Roles bind as text and cast in SQL; NULL = keep current value.
+        let edit_stages = patch.edit_stages_role.map(|r| r.as_db_str());
+        let move_closed = patch.move_closed_deals_role.map(|r| r.as_db_str());
+        let delete_records = patch.delete_records_role.map(|r| r.as_db_str());
+        // The two nullable columns need a separate "provided" flag: NULL
+        // is a meaningful new value, so COALESCE can't express "keep".
+        let closed_provided = patch.closed_stage_ids.is_some();
+        let closed_value: Option<Vec<Uuid>> = patch.closed_stage_ids.clone().flatten();
+        let default_provided = patch.default_team_view_id.is_some();
+        let default_value: Option<String> = patch.default_team_view_id.clone().flatten();
+
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO team_crm_settings (
+                team_id, edit_stages_role, move_closed_deals_role, delete_records_role,
+                closed_stage_ids, team_views, default_team_view_id
+            )
+            VALUES (
+                $1,
+                COALESCE($2::text::team_role, 'admin'),
+                COALESCE($3::text::team_role, 'admin'),
+                COALESCE($4::text::team_role, 'admin'),
+                CASE WHEN $5 THEN $6::uuid[] END,
+                COALESCE($7, '[]'::jsonb),
+                CASE WHEN $8 THEN $9 END
+            )
+            ON CONFLICT (team_id) DO UPDATE SET
+                edit_stages_role       = COALESCE($2::text::team_role, team_crm_settings.edit_stages_role),
+                move_closed_deals_role = COALESCE($3::text::team_role, team_crm_settings.move_closed_deals_role),
+                delete_records_role    = COALESCE($4::text::team_role, team_crm_settings.delete_records_role),
+                closed_stage_ids       = CASE WHEN $5 THEN $6::uuid[] ELSE team_crm_settings.closed_stage_ids END,
+                team_views             = COALESCE($7, team_crm_settings.team_views),
+                default_team_view_id   = CASE WHEN $8 THEN $9 ELSE team_crm_settings.default_team_view_id END,
+                updated_at             = now()
+            RETURNING
+                edit_stages_role AS "edit_stages_role!: CrmPermissionRole",
+                move_closed_deals_role AS "move_closed_deals_role!: CrmPermissionRole",
+                delete_records_role AS "delete_records_role!: CrmPermissionRole",
+                closed_stage_ids,
+                team_views AS "team_views!",
+                default_team_view_id
+            "#,
+            team_id,
+            edit_stages as Option<&str>,
+            move_closed as Option<&str>,
+            delete_records as Option<&str>,
+            closed_provided,
+            closed_value.as_deref(),
+            patch.team_views.as_ref(),
+            default_provided,
+            default_value.as_deref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(CrmTeamSettings {
+            edit_stages_role: row.edit_stages_role,
+            move_closed_deals_role: row.move_closed_deals_role,
+            delete_records_role: row.delete_records_role,
+            closed_stage_ids: row.closed_stage_ids,
+            team_views: row.team_views,
+            default_team_view_id: row.default_team_view_id,
+        })
     }
 }
 

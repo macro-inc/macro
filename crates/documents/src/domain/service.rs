@@ -19,7 +19,8 @@ use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel,
+    ViewAccessLevel,
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -152,6 +153,31 @@ fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
         .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
     Ok(macro_uuid::ShortUuidConverter::default().from_uuid(&uuid))
+}
+
+fn invalid_team_task_slug() -> DocumentError {
+    DocumentError::BadRequest("invalid team task slug".to_string())
+}
+
+fn team_task_number_from_slug(slug: &str) -> Result<i32, DocumentError> {
+    let (prefix, number) = slug.rsplit_once('-').ok_or_else(invalid_team_task_slug)?;
+
+    let has_malformed_separator = prefix.split('-').any(str::is_empty);
+    if has_malformed_separator
+        || number.is_empty()
+        || !number.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(invalid_team_task_slug());
+    }
+
+    let task_num = number
+        .parse::<i32>()
+        .map_err(|_| invalid_team_task_slug())?;
+    if task_num <= 0 {
+        return Err(invalid_team_task_slug());
+    }
+
+    Ok(task_num)
 }
 
 fn foreign_entity_matches_source_id(foreign_entity: &ForeignEntity, source_id: &SourceId) -> bool {
@@ -593,6 +619,44 @@ impl<
     B: MacroEventBroker,
 > DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
 {
+    #[tracing::instrument(err, skip(self, team_receipt))]
+    async fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> Result<String, DocumentError> {
+        if team_receipt.entity().entity_type != EntityType::Team {
+            return Err(DocumentError::BadRequest(
+                "access receipt must be for a team".to_string(),
+            ));
+        }
+
+        let team_id = uuid::Uuid::parse_str(&team_receipt.entity().entity_id)
+            .map_err(|_| DocumentError::BadRequest("invalid team id".to_string()))?;
+        let task_num = team_task_number_from_slug(slug)?;
+        let document_id = self
+            .repo
+            .get_document_id_by_team_task_number(&team_id, task_num)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?
+            .ok_or_else(|| DocumentError::NotFound(slug.to_string()))?;
+        let document = self
+            .repo
+            .get_basic_document(&document_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+
+        let is_owner = matches!(
+            team_receipt.auth(),
+            EntityAccessAuth::Authenticated(user_id) if document.owner == *user_id
+        );
+        if document.deleted_at.is_some() && !is_owner {
+            return Err(DocumentError::Unauthorized);
+        }
+
+        Ok(document_id)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,

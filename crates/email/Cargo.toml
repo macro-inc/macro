@@ -28,10 +28,9 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
-  "model_user/axum",
   "models_pagination/axum",
 ]
 gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
@@ -64,6 +63,7 @@ item_filters = { path = "../item_filters" }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 email_db_client = { path = "../email_db_client", optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
@@ -71,7 +71,6 @@ macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }

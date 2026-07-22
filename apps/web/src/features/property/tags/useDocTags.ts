@@ -1,6 +1,6 @@
 import {
-  useAddEntityPropertyOptionMutation,
-  useRemoveEntityPropertyOptionMutation,
+  useBulkUpdateEntityPropertyOptionsMutation,
+  useInFlightEntityPropertyOptions,
 } from '@queries/properties/entity';
 import {
   useEnsureTagSetMutation,
@@ -12,22 +12,13 @@ import type { PropertyOptionResponse } from '@service-properties/generated/schem
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { useEntityProperties } from '../hooks';
 import type { PropertyDefinitionDomain } from '../types';
+import { useTagSets } from './tag-sets-context';
+import type { ResolvedTag } from './useSoupResolvedTags';
 
-export type ResolvedTag = {
-  optionId: string;
-  propertyDefinitionId: string;
-  scope: TagScope;
-  label: string;
-  color?: string;
-};
+export type { ResolvedTag } from './useSoupResolvedTags';
 
 function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
@@ -45,7 +36,7 @@ function definitionDomain(
   return {
     id: definition.id,
     displayName: definition.displayName,
-    valueType: 'SELECT_STRING',
+    valueType: 'TAG',
     isMultiSelect: true,
     isMetadata: definition.isMetadata,
     isSystem: definition.isSystem,
@@ -55,24 +46,54 @@ function definitionDomain(
   };
 }
 
+type TagSelectionUpdate = {
+  definition: PropertyDefinitionDetailResponse;
+  currentOptionIds: string[];
+  nextOptionIds: string[];
+};
+
+type PersistTagSelection = (
+  updates: TagSelectionUpdate[]
+) => Promise<void> | void;
+
 type SetTagOptionIdsForDefinition = (
   definition: PropertyDefinitionDetailResponse,
   optionIds: string[]
 ) => Promise<void> | void;
 
+function usePersistTagSelection(
+  entityId: string,
+  entityType: EntityType
+): PersistTagSelection {
+  const mutation = useBulkUpdateEntityPropertyOptionsMutation(entityId);
+
+  return async (updates) => {
+    await mutation.mutateAsync({
+      entityId,
+      entityType,
+      properties: updates.map((update) => ({
+        property: definitionDomain(update.definition),
+        currentOptionIds: update.currentOptionIds,
+        nextOptionIds: update.nextOptionIds,
+      })),
+    });
+  };
+}
+
 function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
-  setTagOptionIdsForDefinition: SetTagOptionIdsForDefinition
+  persistTagSelection: PersistTagSelection,
+  tagSets: Accessor<TagSetResponse[]>,
+  // Optimistic overlay for query-backed sources (undefined for soup/local,
+  // whose sources update optimistically on their own).
+  inFlightOptionIdsForDefinition?: (
+    definitionId: string
+  ) => string[] | undefined
 ) {
-  const tagsQuery = useTagsQuery();
   const ensureTagSet = useEnsureTagSetMutation();
-  const [pendingOptionIdsByDefinition, setPendingOptionIdsByDefinition] =
-    createSignal<Map<string, string[]>>(new Map());
   const [displayOptionOrder, setDisplayOptionOrder] = createSignal<string[]>(
     []
   );
-
-  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
 
   const definitionByScope = createMemo(() => {
     const map = new Map<TagScope, PropertyDefinitionDetailResponse>();
@@ -99,7 +120,7 @@ function createDocTags(
   });
 
   const visibleOptionIdsForDefinition = (definitionId: string): string[] =>
-    pendingOptionIdsByDefinition().get(definitionId) ??
+    inFlightOptionIdsForDefinition?.(definitionId) ??
     appliedOptionIdsForDefinition(definitionId);
 
   const visibleTags = createMemo((): ResolvedTag[] => {
@@ -134,25 +155,6 @@ function createDocTags(
   const isApplied = (optionId: string): boolean =>
     appliedTags().some((tag) => tag.optionId === optionId);
 
-  createEffect(() => {
-    const pending = pendingOptionIdsByDefinition();
-    if (pending.size === 0) return;
-
-    let changed = false;
-    const next = new Map(pending);
-    for (const [definitionId, pendingIds] of pending) {
-      const sourceIds = appliedOptionIdsForDefinition(definitionId);
-      if (sameOptionIds(sourceIds, pendingIds)) {
-        next.delete(definitionId);
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      setPendingOptionIdsByDefinition(next);
-    }
-  });
-
   const resolveDefinition = async (
     scope: TagScope
   ): Promise<PropertyDefinitionDetailResponse> => {
@@ -165,22 +167,56 @@ function createDocTags(
     return provisioned.definition;
   };
 
+  // Optimism and rollback live in the persistence layer: the soup/local sources
+  // update optimistically, and the query source reads the in-flight overlay
+  // above. A failed commit persists nothing and leaves no in-flight state, so
+  // there is nothing to unwind here.
+  const commitTagSelection = async (updates: TagSelectionUpdate[]) => {
+    if (updates.length === 0) return;
+    await persistTagSelection(updates);
+  };
+
   const applyTag = async (scope: TagScope, optionId: string) => {
     const definition = await resolveDefinition(scope);
-    const current = appliedOptionIdsForDefinition(definition.id);
-    if (current.includes(optionId)) return;
-    await setTagOptionIdsForDefinition(definition, [...current, optionId]);
+    const currentOptionIds = visibleOptionIdsForDefinition(definition.id);
+    if (currentOptionIds.includes(optionId)) return;
+    await commitTagSelection([
+      {
+        definition,
+        currentOptionIds,
+        nextOptionIds: [...currentOptionIds, optionId],
+      },
+    ]);
   };
 
   const removeTag = async (scope: TagScope, optionId: string) => {
     const definition = definitionByScope().get(scope);
     if (!definition) return;
-    const current = appliedOptionIdsForDefinition(definition.id);
-    if (!current.includes(optionId)) return;
-    await setTagOptionIdsForDefinition(
-      definition,
-      current.filter((id) => id !== optionId)
-    );
+    const currentOptionIds = visibleOptionIdsForDefinition(definition.id);
+    if (!currentOptionIds.includes(optionId)) return;
+    await commitTagSelection([
+      {
+        definition,
+        currentOptionIds,
+        nextOptionIds: currentOptionIds.filter((id) => id !== optionId),
+      },
+    ]);
+  };
+
+  const setTagSelection = async (selectedOptionIds: ReadonlySet<string>) => {
+    const options = optionById();
+    const updates = [...definitionByScope().values()].flatMap((definition) => {
+      const currentOptionIds = visibleOptionIdsForDefinition(definition.id);
+      const nextOptionIds = [...selectedOptionIds].filter(
+        (optionId) =>
+          options.get(optionId)?.propertyDefinitionId === definition.id
+      );
+
+      return sameOptionIds(currentOptionIds, nextOptionIds)
+        ? []
+        : [{ definition, currentOptionIds, nextOptionIds }];
+    });
+    await commitTagSelection(updates);
   };
 
   const toggleTag = async (scope: TagScope, optionId: string) => {
@@ -198,56 +234,25 @@ function createDocTags(
   ) => {
     if (currentTag.optionId === nextOptionId) return;
 
-    const currentDefinition = definitionByScope().get(currentTag.scope);
-    const nextDefinition = await resolveDefinition(nextScope);
-    if (!currentDefinition) return;
-
-    const previousOverrides = pendingOptionIdsByDefinition();
+    await resolveDefinition(nextScope);
     const previousDisplayOrder = displayOptionOrder();
-    const currentIds = visibleOptionIdsForDefinition(currentDefinition.id);
-    const nextIds = visibleOptionIdsForDefinition(nextDefinition.id);
-
-    setDisplayOptionOrder(
+    const nextSelection = new Set(
       appliedTags().map((tag) =>
         tag.optionId === currentTag.optionId ? nextOptionId : tag.optionId
       )
     );
 
-    setPendingOptionIdsByDefinition((prev) => {
-      const next = new Map(prev);
-      next.set(
-        currentDefinition.id,
-        currentIds.filter((id) => id !== currentTag.optionId)
-      );
-      if (currentDefinition.id === nextDefinition.id) {
-        next.set(
-          currentDefinition.id,
-          currentIds.map((id) =>
-            id === currentTag.optionId ? nextOptionId : id
-          )
-        );
-      } else if (!nextIds.includes(nextOptionId)) {
-        next.set(nextDefinition.id, [...nextIds, nextOptionId]);
-      }
-      return next;
-    });
+    setDisplayOptionOrder([...nextSelection]);
 
     try {
-      await removeTag(currentTag.scope, currentTag.optionId);
-      if (
-        !appliedOptionIdsForDefinition(nextDefinition.id).includes(nextOptionId)
-      ) {
-        await applyTag(nextScope, nextOptionId);
-      }
+      await setTagSelection(nextSelection);
     } catch (error) {
-      setPendingOptionIdsByDefinition(previousOverrides);
       setDisplayOptionOrder(previousDisplayOrder);
       throw error;
     }
   };
 
   return {
-    tagsQuery,
     tagSets,
     appliedTags,
     optionById,
@@ -255,57 +260,35 @@ function createDocTags(
     applyTag,
     removeTag,
     replaceTag,
+    setTagSelection,
     toggleTag,
   };
 }
 
 export function useDocTags(entityId: string, entityType: EntityType) {
   const { properties } = useEntityProperties(entityId, entityType, false);
-  const addOption = useAddEntityPropertyOptionMutation();
-  const removeOption = useRemoveEntityPropertyOptionMutation();
+  const appliedOptionIdsForDefinition = (definitionId: string) => {
+    const property = properties().find(
+      (prop) => prop.propertyDefinitionId === definitionId
+    );
+    if (!property) return [];
+    return property.valueType === 'SELECT_STRING' && property.value
+      ? property.value
+      : [];
+  };
+  const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const tagsQuery = useTagsQuery();
+  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+  // The properties query isn't optimistically written, so surface in-flight
+  // bulk updates as the optimistic value until the refetch lands.
+  const inFlightOptionIdsForDefinition =
+    useInFlightEntityPropertyOptions(entityId);
 
   return createDocTags(
-    (definitionId) => {
-      const property = properties().find(
-        (prop) => prop.propertyDefinitionId === definitionId
-      );
-      if (!property) return [];
-      return property.valueType === 'SELECT_STRING' && property.value
-        ? property.value
-        : [];
-    },
-    async (definition, optionIds) => {
-      const property = definitionDomain(definition);
-      const current = (() => {
-        const source = properties().find(
-          (prop) => prop.propertyDefinitionId === definition.id
-        );
-        return source?.valueType === 'SELECT_STRING' && source.value
-          ? source.value
-          : [];
-      })();
-      const added = optionIds.find((id) => !current.includes(id));
-      if (added) {
-        await addOption.mutateAsync({
-          entityId,
-          entityType,
-          property,
-          optionId: added,
-          optimisticOptionIds: optionIds,
-        });
-        return;
-      }
-      const removed = current.find((id) => !optionIds.includes(id));
-      if (removed) {
-        await removeOption.mutateAsync({
-          entityId,
-          entityType,
-          property,
-          optionId: removed,
-          optimisticOptionIds: optionIds,
-        });
-      }
-    }
+    appliedOptionIdsForDefinition,
+    persistTagSelection,
+    tagSets,
+    inFlightOptionIdsForDefinition
   );
 }
 
@@ -319,46 +302,20 @@ export function useSoupDocTags(
   entityType: EntityType,
   properties: Accessor<SoupProperty[] | undefined>
 ) {
-  const addOption = useAddEntityPropertyOptionMutation();
-  const removeOption = useRemoveEntityPropertyOptionMutation();
+  const appliedOptionIdsForDefinition = (definitionId: string) => {
+    const property = properties()?.find(
+      (prop) => prop.definition.id === definitionId
+    );
+    const value = property?.value;
+    return value?.type === 'SelectOption' ? value.value : [];
+  };
+  const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const tagSets = useTagSets();
 
   return createDocTags(
-    (definitionId) => {
-      const property = properties()?.find(
-        (prop) => prop.definition.id === definitionId
-      );
-      const value = property?.value;
-      return value?.type === 'SelectOption' ? value.value : [];
-    },
-    async (definition, optionIds) => {
-      const property = definitionDomain(definition);
-      const source = properties()?.find(
-        (prop) => prop.definition.id === definition.id
-      );
-      const current =
-        source?.value?.type === 'SelectOption' ? source.value.value : [];
-      const added = optionIds.find((id) => !current.includes(id));
-      if (added) {
-        await addOption.mutateAsync({
-          entityId,
-          entityType,
-          property,
-          optionId: added,
-          optimisticOptionIds: optionIds,
-        });
-        return;
-      }
-      const removed = current.find((id) => !optionIds.includes(id));
-      if (removed) {
-        await removeOption.mutateAsync({
-          entityId,
-          entityType,
-          property,
-          optionId: removed,
-          optimisticOptionIds: optionIds,
-        });
-      }
-    }
+    appliedOptionIdsForDefinition,
+    persistTagSelection,
+    tagSets
   );
 }
 
@@ -366,8 +323,18 @@ export function useLocalDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   setTagOptionIdsForDefinition: SetTagOptionIdsForDefinition
 ) {
+  const tagsQuery = useTagsQuery();
+  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+
   return createDocTags(
     appliedOptionIdsForDefinition,
-    setTagOptionIdsForDefinition
+    async (updates) => {
+      await Promise.all(
+        updates.map((update) =>
+          setTagOptionIdsForDefinition(update.definition, update.nextOptionIds)
+        )
+      );
+    },
+    tagSets
   );
 }

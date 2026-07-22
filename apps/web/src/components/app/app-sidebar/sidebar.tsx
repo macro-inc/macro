@@ -43,6 +43,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  ENABLE_ACTIVITY,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
@@ -61,7 +62,9 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
+import { tryMacroId, useDisplayName } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedActivityIcon } from '@icon/wide-activity';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
@@ -81,8 +84,14 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useJoinTeamMutation,
+  useRejectInvitationMutation,
+  useUserInvitesQuery,
+} from '@queries/team/invitations';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { authServiceClient } from '@service-auth/client';
+import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
@@ -943,17 +952,35 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+const ACTIVITY_LINK: SidebarItem = {
+  id: 'activity',
+  label: 'Activity',
+  href: '/activity',
+  icon: AnimatedActivityIcon,
+  hotkey: 'y',
+  hotkeyToken: TOKENS.sidebar.goTo.activity,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Calls and CRM entries in their correct positions. Shared by the
- * rendered sidebar (`AppSidebar.visibleLinks`) and the always-mounted
- * `GoToHotkeys` registrar so their link sets can't drift. Call from a reactive
- * context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`. Rendered sections
- * additionally drop `hiddenFromSidebar` entries, which have hotkeys but no
- * sidebar row.
+ * flag-gated Activity, Calls, and CRM entries in their correct positions.
+ * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
+ * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
+ * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
+ * Rendered sections additionally drop `hiddenFromSidebar` entries, which have
+ * hotkeys but no sidebar row.
  */
 const buildSidebarLinks = (): SidebarItem[] => {
   let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
+
+  if (ENABLE_ACTIVITY) {
+    const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [
+      ...links.slice(0, idx + 1),
+      ACTIVITY_LINK,
+      ...links.slice(idx + 1),
+    ];
+  }
 
   if (ENABLE_CALLS()) {
     const idx = links.findIndex((l) => l.id === 'channels');
@@ -974,10 +1001,39 @@ const buildSidebarLinks = (): SidebarItem[] => {
   return links;
 };
 
+const TeamInviteSidebarPromo = (props: { invite: TeamInviteDetails }) => {
+  const [inviterName] = useDisplayName(tryMacroId(props.invite.invited_by));
+  const joinTeamMutation = useJoinTeamMutation();
+  const rejectInvitationMutation = useRejectInvitationMutation();
+  const mutationPending = () =>
+    joinTeamMutation.isPending || rejectInvitationMutation.isPending;
+
+  return (
+    <SidebarPromoCard
+      label="Team invitation"
+      description={`${inviterName() || 'A teammate'} invited you to join a team as ${props.invite.team_role}.`}
+      primaryAction={{
+        label: 'Accept',
+        disabled: mutationPending(),
+        onClick: () =>
+          joinTeamMutation.mutate({ teamInviteId: props.invite.id }),
+      }}
+      secondaryAction={{
+        label: 'Decline',
+        disabled: mutationPending(),
+        onClick: () =>
+          rejectInvitationMutation.mutate({ teamInviteId: props.invite.id }),
+      }}
+    />
+  );
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const currentTeamQuery = useCurrentTeamQuery();
+  const userInvitesQuery = useUserInvitesQuery();
+  const firstTeamInvite = () => userInvitesQuery.data?.invites.at(0);
   const [sectionVisibility, setSectionVisibility] = makePersisted(
     createSignal<SidebarSectionVisibility>(DEFAULT_SECTION_VISIBILITY),
     { name: 'sidebar-section-visibility' }
@@ -1143,7 +1199,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox']
+    ['home', 'inbox', 'activity']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
   );
@@ -1421,10 +1477,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <InCallPanel isSlim={() => false} />
           </div>
         </Show>
+        <Show keyed when={isExpandedView() ? firstTeamInvite() : undefined}>
+          {(invite) => <TeamInviteSidebarPromo invite={invite} />}
+        </Show>
         <Show
           when={
             !hasPaidAccess() &&
             isExpandedView() &&
+            !userInvitesQuery.isLoading &&
+            !firstTeamInvite() &&
             !premiumCardDismissed() &&
             newPricingFF().enabled
           }
@@ -1453,6 +1514,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
           when={
             !hasPaidAccess() &&
             isExpandedView() &&
+            !userInvitesQuery.isLoading &&
+            !firstTeamInvite() &&
             premiumHintVisible() &&
             premiumCardDismissed() &&
             newPricingFF().enabled

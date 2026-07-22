@@ -2673,8 +2673,10 @@ impl ChannelRepo for PgChannelsRepo {
         let mut transaction = self.pool.begin().await?;
         sqlx::query!(
             r#"
-            INSERT INTO comms_channels (id, name, owner_id, org_id, team_id, channel_type)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO comms_channels (
+                id, name, owner_id, org_id, team_id, channel_type, auto_join_team
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             channel_id,
             req.name.as_deref(),
@@ -2682,6 +2684,7 @@ impl ChannelRepo for PgChannelsRepo {
             None::<i64>,
             req.team_id,
             req.channel_type as ChannelType,
+            req.auto_join_team,
         )
         .execute(&mut *transaction)
         .await
@@ -2727,6 +2730,78 @@ impl ChannelRepo for PgChannelsRepo {
             .await
             .context("unable to commit transaction")?;
         Ok(channel_id)
+    }
+
+    async fn auto_join_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, user_id, role)
+            SELECT id, $2, 'member'::comms_participant_role
+            FROM comms_channels
+            WHERE team_id = $1 AND auto_join_team = TRUE
+            ON CONFLICT (channel_id, user_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                joined_at = NOW(),
+                left_at = NULL
+            WHERE comms_channel_participants.left_at IS NOT NULL
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("unable to auto-join team channels")?;
+        Ok(())
+    }
+
+    async fn leave_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            UPDATE comms_channel_participants AS cp
+            SET left_at = NOW()
+            FROM comms_channels AS cc
+            WHERE cp.channel_id = cc.id
+              AND cc.team_id = $1
+              AND cp.user_id = $2
+              AND cp.left_at IS NULL
+            RETURNING cp.channel_id
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("unable to leave team channels")
+    }
+
+    async fn restore_by_channel_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        channel_ids: &[Uuid],
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE comms_channel_participants
+            SET left_at = NULL
+            WHERE user_id = $1
+              AND channel_id = ANY($2)
+              AND left_at IS NOT NULL
+            "#,
+            user_id.as_ref(),
+            channel_ids,
+        )
+        .execute(&self.pool)
+        .await
+        .context("unable to restore channel memberships")?;
+        Ok(())
     }
 
     async fn maybe_get_dm(

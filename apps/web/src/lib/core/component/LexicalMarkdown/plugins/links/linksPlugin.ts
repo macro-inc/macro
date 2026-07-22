@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { openExternalUrl } from '@core/util/url';
 import {
   $createAutoLinkNode,
   $createLinkNode,
@@ -401,11 +402,13 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     const el = e.target as HTMLElement;
     const link = getLinkFromDom(el);
     if (link === null) return;
-    if (e.metaKey || e.ctrlKey) {
-      window.open(link.url);
-    }
 
     if (editor.isEditable()) {
+      // Editable doc: a plain click edits the link; a modifier-click also opens
+      // it (in a new tab / in-app).
+      if (e.metaKey || e.ctrlKey) {
+        openExternalUrl(link.url);
+      }
       onClickLink({
         linkRef: el,
         selection: window.getSelection() || undefined,
@@ -417,7 +420,7 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
 
     e.preventDefault();
     e.stopPropagation();
-    window.open(link.url, '_blank');
+    openExternalUrl(link.url);
   };
 
   const handlePointerMove = (e: MouseEvent) => {

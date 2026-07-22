@@ -8,7 +8,6 @@ version = "0.1.0"
 anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 axum = { workspace = true }
-axum-extra = { workspace = true }
 email = { path = "../email", default-features = false, features = [
   "axum",
   "inbound",
@@ -22,8 +21,11 @@ graphql_email = { path = "../graphql_email" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_soup = { path = "../graphql_soup" }
+macro_authorization = { path = "../macro_authorization", features = [
+  "axum",
+  "outbound",
+] }
 model-entity = { path = "../model-entity" }
-model_user = { path = "../model_user", features = ["axum"] }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -31,9 +33,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 apollo-compiler = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
+rootcause = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

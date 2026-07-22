@@ -5,17 +5,19 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_middleware::tracking::ClientIp;
-use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
 use crate::api::{
-    context::ApiContext, link::github::REAUTHENTICATION_REQUIRED_MESSAGE, oauth2::OAuthState,
+    context::{ApiContext, AuthorizationService},
+    link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
+    oauth2::OAuthState,
+    permissions_extractor::DbPermissionsExtractor,
 };
 
 #[cfg(test)]
@@ -96,26 +98,28 @@ pub(crate) struct InitGmailLinkQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context, permissions), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, db_permissions), fields(client_ip=%ip_context, user_id=%db_permissions.authorization.user_context.user_id, fusion_user_id=%db_permissions.authorization.user_context.fusion_user_id), err)]
 pub async fn init_gmail_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGmailLinkQueryParams>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
-    PermissionsExtractor(permissions): PermissionsExtractor,
+    db_permissions: DbPermissionsExtractor,
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams { original_url }) = query;
+    let authorization = &db_permissions.authorization;
 
     enforce_inbox_paywall(
-        permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()),
-        || count_accessible_email_inboxes(&ctx.db, &user_context.macro_user_id),
+        db_permissions
+            .permissions
+            .contains(&PermissionId::ReadProfessionalFeatures.to_string()),
+        || count_accessible_email_inboxes(&ctx.db, &authorization.macro_user_id),
     )
     .await?;
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &user_context.user_context.fusion_user_id,
+            &authorization.user_context.fusion_user_id,
         )
         .await?;
 
@@ -125,7 +129,7 @@ pub async fn init_gmail_link_handler(
 
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
         &ctx.db,
-        &user_context.user_context.fusion_user_id,
+        &authorization.user_context.fusion_user_id,
     )
     .await?;
 
@@ -240,20 +244,20 @@ impl IntoResponse for GmailLinkStatusError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.macro_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.macro_user_id), err)]
 pub async fn check_gmail_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Json<GmailLinkStatusResponse>, GmailLinkStatusError> {
     // Check if the user has an email link in db
-    if macro_db_client::email::check_user_email_link(&ctx.db, &user_context.macro_user_id)
+    if macro_db_client::email::check_user_email_link(&ctx.db, &authorization.macro_user_id)
         .await
         .map_err(GmailLinkStatusError::Internal)?
     {
         let links = ctx
             .auth_client
-            .get_links(&user_context.user_context.fusion_user_id, None)
+            .get_links(&authorization.user_context.fusion_user_id, None)
             .await
             .map_err(|e| GmailLinkStatusError::Internal(e.into()))?;
 

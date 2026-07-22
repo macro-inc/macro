@@ -29,6 +29,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use std::{future::Future, sync::Arc};
@@ -63,26 +64,28 @@ where
 }
 
 /// State for the channel bot webhook router.
-pub struct ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc> {
+pub struct ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth> {
     bot_service: Arc<BotSvc>,
     channel_poster: Arc<ChannelPoster>,
     access_service: Arc<AccessSvc>,
+    authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc> Clone
-    for ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>
+impl<BotSvc, ChannelPoster, AccessSvc, Auth> Clone
+    for ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>
 {
     fn clone(&self) -> Self {
         Self {
             bot_service: self.bot_service.clone(),
             channel_poster: self.channel_poster.clone(),
             access_service: self.access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc>
-    ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>
+impl<BotSvc, ChannelPoster, AccessSvc, Auth>
+    ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>
 where
     BotSvc: BotService,
     ChannelPoster: ChannelMessagePoster,
@@ -93,20 +96,36 @@ where
         bot_service: BotSvc,
         channel_poster: ChannelPoster,
         access_service: AccessSvc,
+        authorization_state: MacroAuthorizationState<Auth>,
     ) -> Self {
         Self {
             bot_service: Arc::new(bot_service),
             channel_poster: Arc::new(channel_poster),
             access_service: Arc::new(access_service),
+            authorization_state,
         }
     }
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc>
-    FromRef<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>> for Arc<AccessSvc>
+impl<BotSvc, ChannelPoster, AccessSvc, Auth>
+    FromRef<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>
+    for Arc<AccessSvc>
 {
-    fn from_ref(state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>) -> Self {
+    fn from_ref(
+        state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
+    ) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<BotSvc, ChannelPoster, AccessSvc, Auth>
+    FromRef<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(
+        state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
+    ) -> Self {
+        state.authorization_state.clone()
     }
 }
 
@@ -118,37 +137,39 @@ pub struct ChannelPath {
 }
 
 /// Create the authenticated channel-scoped bot creation router.
-pub fn channel_scoped_bot_router<BotSvc, ChannelPoster, AccessSvc, T>(
-    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>,
+pub fn channel_scoped_bot_router<BotSvc, ChannelPoster, AccessSvc, Auth, T>(
+    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
 ) -> Router<T>
 where
     BotSvc: BotService,
     ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     T: Send + Sync,
 {
     Router::new()
         .route(
             "/channels/{channel_id}/bots/scoped",
-            post(create_channel_scoped_bot_handler::<BotSvc, ChannelPoster, AccessSvc>),
+            post(create_channel_scoped_bot_handler::<BotSvc, ChannelPoster, AccessSvc, Auth>),
         )
         .with_state(state)
 }
 
 /// Create the unauthenticated channel bot webhook router.
-pub fn channel_bot_webhook_router<BotSvc, ChannelPoster, AccessSvc, T>(
-    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>,
+pub fn channel_bot_webhook_router<BotSvc, ChannelPoster, AccessSvc, Auth, T>(
+    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
 ) -> Router<T>
 where
     BotSvc: BotService,
     ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     T: Send + Sync,
 {
     Router::new()
         .route(
             "/channels/{channel_id}/webhook",
-            post(post_channel_webhook_handler::<BotSvc, ChannelPoster, AccessSvc>),
+            post(post_channel_webhook_handler::<BotSvc, ChannelPoster, AccessSvc, Auth>),
         )
         .with_state(state)
 }
@@ -181,9 +202,9 @@ fn caller_from_receipt(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn create_channel_scoped_bot_handler<BotSvc, ChannelPoster, AccessSvc>(
-    State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>>,
-    access: ChannelAccessLevelExtractor<AdminParticipantRole, AccessSvc>,
+pub async fn create_channel_scoped_bot_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
+    State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
+    access: ChannelAccessLevelExtractor<AdminParticipantRole, AccessSvc, Auth>,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>
@@ -191,6 +212,7 @@ where
     BotSvc: BotService,
     ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     let caller = caller_from_receipt(&access.entity_access_receipt)?;
     let response = state
@@ -220,8 +242,8 @@ where
     )
 )]
 #[tracing::instrument(err, skip_all, fields(channel_id = tracing::field::Empty))]
-pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc>(
-    State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>>,
+pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
+    State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
     Path(path): Path<ChannelPath>,
     headers: HeaderMap,
     body: Bytes,
@@ -230,6 +252,7 @@ where
     BotSvc: BotService,
     ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 

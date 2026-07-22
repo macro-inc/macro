@@ -7,6 +7,9 @@
 //! knows nothing about CRM models, so the CRM-typed extractors and the
 //! receipts they produce are the trusted seam that lives here.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -23,7 +26,9 @@ use entity_access::{
     },
     inbound::axum_extractors::ExtractorError,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -37,6 +42,8 @@ use crate::{
 
 /// Validates that the user satisfies the required permission for a CRM
 /// company and mints a [`CrmCompanyReceipt`] for downstream service calls.
+/// The acting user is authenticated through the authorization service in
+/// router state, supporting direct credentials and internal service callers.
 ///
 /// Access derives from the caller's role on the owning team: team owners
 /// get `Owner`, admins get `Edit`, members get `View`. Hidden companies are
@@ -48,17 +55,19 @@ use crate::{
 /// receipt, so the service scopes its queries by the entity's team rather
 /// than the caller's default team.
 #[derive(Debug)]
-pub struct CrmCompanyAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct CrmCompanyAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// Capability token authorizing CRM company service calls.
     pub receipt: CrmCompanyReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for CrmCompanyAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for CrmCompanyAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    MacroAuthorizationState<Auth>: FromRef<S>,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -73,10 +82,10 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing company_id path parameter"))?;
         let company_id = extract_company_id(&path_params)?.to_string();
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let MacroAuthorizationExtractor { macro_user_id, .. } =
+            MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -109,6 +118,8 @@ where
 
 /// Validates that the user satisfies the required permission for a CRM
 /// contact and mints a [`CrmContactReceipt`] for downstream service calls.
+/// The acting user is authenticated through the authorization service in
+/// router state, supporting direct credentials and internal service callers.
 ///
 /// Access derives from the caller's role on the team that owns the
 /// contact's parent company, with the same role-to-level mapping as
@@ -119,17 +130,19 @@ where
 /// owning `team_id` (its parent company's team) from the same ownership row
 /// and bundles it into the receipt.
 #[derive(Debug)]
-pub struct CrmContactAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct CrmContactAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// Capability token authorizing CRM contact service calls.
     pub receipt: CrmContactReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for CrmContactAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for CrmContactAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    MacroAuthorizationState<Auth>: FromRef<S>,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -144,10 +157,10 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing contact_id path parameter"))?;
         let contact_id = extract_contact_id(&path_params)?.to_string();
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let MacroAuthorizationExtractor { macro_user_id, .. } =
+            MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -181,26 +194,30 @@ where
 /// Validates that the user satisfies the required permission for the CRM
 /// entity (company or contact) a given comment belongs to and mints a
 /// [`CrmCommentReceipt`]. Reads `comment_id` from the path and resolves
-/// the owning entity via `CrmService::get_comment_entity`. The same
-/// role-to-AccessLevel mapping as the company / contact extractors
-/// applies; hidden parents are invisible to plain members.
+/// the owning entity via `CrmService::get_comment_entity`. The acting user
+/// is authenticated through the authorization service in router state for
+/// both direct credentials and internal service access. The same
+/// role-to-AccessLevel mapping as the company / contact extractors applies;
+/// hidden parents are invisible to plain members.
 ///
 /// Returns `NotFound` when the comment doesn't exist or is soft-deleted,
 /// so cross-team callers can't probe for comment existence.
 #[derive(Debug)]
-pub struct CrmCommentAccessLevelExtractor<T: RequiredPermission, C, Eas> {
+pub struct CrmCommentAccessLevelExtractor<T: RequiredPermission, C, Eas, Auth> {
     /// Capability token authorizing CRM comment service calls.
     pub receipt: CrmCommentReceipt<T>,
-    _marker: PhantomData<(T, C, Eas)>,
+    _marker: PhantomData<(T, C, Eas, Auth)>,
 }
 
-impl<T, S, C, Eas> FromRequestParts<S> for CrmCommentAccessLevelExtractor<T, C, Eas>
+impl<T, S, C, Eas, Auth> FromRequestParts<S> for CrmCommentAccessLevelExtractor<T, C, Eas, Auth>
 where
     T: RequiredPermission,
     CrmServiceRef<C>: FromRef<S>,
     Arc<Eas>: FromRef<S>,
+    MacroAuthorizationState<Auth>: FromRef<S>,
     C: CrmService,
     Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -216,10 +233,10 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing comment_id path parameter"))?;
         let comment_id = extract_comment_id(&path_params)?;
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let MacroAuthorizationExtractor { macro_user_id, .. } =
+            MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
 
         let (crm_entity_type, entity_id) = crm_service
             .get_comment_entity(&comment_id)

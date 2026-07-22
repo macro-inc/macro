@@ -45,6 +45,7 @@ import type { Team } from './generated/schemas/team';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
+import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -755,6 +756,22 @@ export const authServiceClient = {
           };
         },
       })
+    ).map((result) => result);
+  },
+
+  /**
+   * Toggles whether non-admin members may invite users to the caller's
+   * team. Teams start with this on (any member can invite); turning it
+   * off restricts inviting to team admins and owners. Admin/Owner only.
+   */
+  async toggleTeamNonAdminInvites() {
+    return (
+      await fetchWithAuth<ToggleNonAdminInvitesResponse>(
+        `${authHost}/team/non-admin-invites/toggle`,
+        {
+          method: 'POST',
+        }
+      )
     ).map((result) => result);
   },
 

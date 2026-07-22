@@ -65,6 +65,9 @@ pub enum FavoritesError {
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),
+    /// The receipt does not belong to an authenticated user.
+    #[error("you do not have access to this entity")]
+    Unauthorized,
     /// Any other internal error.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),

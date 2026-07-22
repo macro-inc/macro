@@ -3,7 +3,9 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use channels::{domain::service::ChannelServiceImpl, outbound::pg_channels_repo::PgChannelsRepo};
 use config::{Config, Environment};
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use foreign_entity::{
@@ -19,7 +21,9 @@ use github::{
 };
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::AppServiceUrl;
 use macro_service_urls::DocumentStorageServiceUrl;
 use macro_service_urls::EmailServiceUrl;
@@ -40,8 +44,8 @@ use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
-        customer_repo::CustomerRepositoryImpl, team_analytics::AnalyticsClientTeamAnalytics,
-        team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
+        contacts_enqueuer::ContactsIngressEnqueuer, customer_repo::CustomerRepositoryImpl,
+        team_analytics::AnalyticsClientTeamAnalytics, team_repo::TeamRepositoryImpl,
     },
 };
 
@@ -51,8 +55,8 @@ use referral::{
 };
 
 use crate::api::context::{
-    ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
-    MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+    ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
+    MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
 use std::sync::Arc;
 
@@ -143,6 +147,11 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let fusionauth_public_url = config
+        .fusionauth_public_url
+        .value()
+        .unwrap_or(config.fusionauth_base_url.as_ref())
+        .to_owned();
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id.to_string(),
         fusionauth_api_key,
@@ -152,7 +161,8 @@ async fn main() -> anyhow::Result<()> {
         config.fusionauth_oauth_redirect_uri.to_string().clone(),
         config.google_client_id.to_string().clone(),
         google_client_secret,
-    );
+    )
+    .with_public_url(fusionauth_public_url);
     tracing::trace!("initialized auth client");
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
@@ -182,6 +192,13 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args.clone()),
+        InternalAuthConfig {
+            api_key: internal_api_key.to_string(),
+            default_user_id: None,
+        },
+    )));
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
         .context("failed to create redis client")?;
@@ -272,25 +289,38 @@ async fn main() -> anyhow::Result<()> {
         stripe_client.clone(),
         config.stripe_price_id.to_string().clone(),
     );
-    let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
+    let channel_service = ChannelServiceImpl::new(PgChannelsRepo::new(db.clone()));
     let team_crm_settings_repo_impl =
         teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl::new(db.clone());
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
+    let contacts_ingress = Arc::new(SqsContactsIngress {
+        queue: SqsContactsQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            macro_queues::ContactsQueue::new().to_string(),
+        ),
+    });
+    let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress);
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,
         customer_repo_impl,
-        team_channels_repo_impl,
+        channel_service.clone(),
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,
         team_crm_settings_repo_impl,
         team_analytics,
-    );
+    )
+    .with_contacts_enqueuer(contacts_enqueuer)
+    .with_event_broker(macro_event_broker);
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
@@ -339,6 +369,7 @@ async fn main() -> anyhow::Result<()> {
             environment: config.environment,
             rate_limit_service: rate_limit,
             jwt_args,
+            authorization_state,
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,
                 macro_api_token_private_key,
@@ -351,6 +382,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            channel_service: Arc::new(channel_service),
             entity_access_service: Arc::new(entity_access_service_impl),
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {

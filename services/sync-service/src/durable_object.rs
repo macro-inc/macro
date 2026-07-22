@@ -388,7 +388,7 @@ impl DocumentSyncSession {
                                 .url()?
                                 .query_pairs()
                                 .find(|(k, _)| k == "include_ai")
-                                .map_or(true, |(_, v)| !matches!(v.as_ref(), "false" | "0"));
+                                .is_none_or(|(_, v)| !matches!(v.as_ref(), "false" | "0"));
                             return self.active_peer_ids_handler(include_ai).await;
                         }
                         path::INITIALIZE => {
@@ -1070,17 +1070,16 @@ impl DurableObject for DocumentSyncSession {
             .context("failed to broadcast awareness")?;
         }
 
-        if self.state.get_websockets().len() == 1 {
-            if let Ok(document_id) = self.document_id().await
-                && let Ok(state) = self.document_state().await
-                && let Ok(snapshot) = state.export_shallow_snapshot()
-            {
-                let env = self.env.clone();
-                self.state.wait_until(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env).await;
-                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
-                });
-            }
+        if self.state.get_websockets().len() == 1
+            && let Ok(document_id) = self.document_id().await
+            && let Ok(state) = self.document_state().await
+            && let Ok(snapshot) = state.export_shallow_snapshot()
+        {
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                report_new_doc_state(&document_id, &snapshot, &env).await;
+                report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
+            });
         }
         Ok(())
     }
@@ -1140,7 +1139,11 @@ pub fn is_origin_allowed(origin: &str) -> bool {
     if ALLOWED_ORIGINS.contains(&origin) {
         return true;
     }
-    if let Some(port) = origin.strip_prefix("http://localhost:")
+    // `localhost` and `*.localhost` (loopback-reserved; local dev uses
+    // per-persona hostnames so each seeded user gets its own cookie jar).
+    if let Some(rest) = origin.strip_prefix("http://")
+        && let Some((host, port)) = rest.rsplit_once(':')
+        && (host == "localhost" || host.ends_with(".localhost"))
         && let Ok(port) = port.parse::<u16>()
     {
         return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);

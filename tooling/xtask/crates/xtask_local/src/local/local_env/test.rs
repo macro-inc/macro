@@ -1,6 +1,6 @@
 use super::*;
 use crate::local::Mode;
-use crate::local::instance::Instance;
+use crate::local::instance::{Instance, Port};
 
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");
@@ -28,6 +28,7 @@ fn emits_required_keys() {
         "SMTP_HOST",
         "INTERNAL_API_SECRET_KEY",
         "FUSIONAUTH_API_KEY_SECRET_KEY",
+        "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
         "JWT_SECRET_KEY",
     ] {
@@ -95,5 +96,23 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
         a.get("FUSIONAUTH_API_KEY_SECRET_KEY"),
         b.get("FUSIONAUTH_API_KEY_SECRET_KEY"),
         "the fixed FusionAuth identity should be constant across instances"
+    );
+}
+
+#[test]
+fn fusionauth_public_url_uses_the_instance_host_port() {
+    let default = Instance::derive(None, None).unwrap();
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let default_env = LocalEnv::for_instance(Mode::Local, &default).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named).to_env();
+    let named_public_url = format!("http://localhost:{}", named.port(Port::FusionAuth));
+
+    assert_eq!(
+        default_env.get("FUSIONAUTH_PUBLIC_URL").map(String::as_str),
+        Some("http://localhost:9011")
+    );
+    assert_eq!(
+        named_env.get("FUSIONAUTH_PUBLIC_URL").map(String::as_str),
+        Some(named_public_url.as_str())
     );
 }

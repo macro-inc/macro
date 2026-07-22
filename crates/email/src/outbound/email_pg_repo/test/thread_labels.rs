@@ -349,6 +349,63 @@ async fn test_update_message_read_status_batch_empty(pool: Pool<Postgres>) -> an
     Ok(())
 }
 
+// ── update_thread_read_status ───────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
+)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
+async fn test_update_thread_read_status_mark_read(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    // Thread starts as unread (is_read=false in fixture)
+    repo.update_thread_read_status(thread1, link_id, true)
+        .await?;
+
+    let is_read: bool = sqlx::query_scalar("SELECT is_read FROM email_threads WHERE id = $1")
+        .bind(thread1)
+        .fetch_one(&pool)
+        .await?;
+    assert!(is_read, "Thread should be marked as read");
+
+    repo.update_thread_read_status(thread1, link_id, false)
+        .await?;
+
+    let is_read: bool = sqlx::query_scalar("SELECT is_read FROM email_threads WHERE id = $1")
+        .bind(thread1)
+        .fetch_one(&pool)
+        .await?;
+    assert!(!is_read, "Thread should be marked as unread");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
+)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
+async fn test_update_thread_read_status_wrong_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let wrong_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
+    let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    // Should not update — thread belongs to a different link
+    repo.update_thread_read_status(thread1, wrong_link_id, true)
+        .await?;
+
+    let is_read: bool = sqlx::query_scalar("SELECT is_read FROM email_threads WHERE id = $1")
+        .bind(thread1)
+        .fetch_one(&pool)
+        .await?;
+    assert!(!is_read, "Thread should remain unread (wrong link_id)");
+
+    Ok(())
+}
+
 // ── update_message_starred_status_batch ─────────────────────────────
 
 #[sqlx::test(

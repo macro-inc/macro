@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
@@ -66,8 +67,7 @@ pub trait FavoritesService: Send + Sync + 'static {
     /// Add an entity to the user's favorites (idempotent).
     fn add_favorite(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        receipt: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
     /// List the user's favorites in manual order.

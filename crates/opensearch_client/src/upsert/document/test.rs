@@ -201,3 +201,37 @@ fn parent_body_omits_sub_type_when_none_so_index_clears_it() {
     let doc = parent_doc_body(&args("doc1", "n1"));
     assert!(doc.get("sub_type").is_none());
 }
+
+#[test]
+fn child_body_keeps_content_under_cap_intact() {
+    let mut a = args("doc1", "n1");
+    a.content = "x".repeat(MAX_CHUNK_CONTENT_CHARS);
+    let doc = child_doc_body(&a);
+    assert_eq!(
+        doc["content"].as_str().unwrap().chars().count(),
+        MAX_CHUNK_CONTENT_CHARS
+    );
+}
+
+#[test]
+fn child_body_truncates_oversized_content() {
+    let mut a = args("doc1", "n1");
+    a.content = "x".repeat(MAX_CHUNK_CONTENT_CHARS + 10);
+    let doc = child_doc_body(&a);
+    assert_eq!(
+        doc["content"].as_str().unwrap().chars().count(),
+        MAX_CHUNK_CONTENT_CHARS
+    );
+}
+
+#[test]
+fn child_body_truncates_on_char_boundary() {
+    let mut a = args("doc1", "n1");
+    // é is 2 bytes per char, so a byte-index split would panic mid-char.
+    a.content = "é".repeat(MAX_CHUNK_CONTENT_CHARS + 5);
+    let doc = child_doc_body(&a);
+    assert_eq!(
+        doc["content"].as_str().unwrap().chars().count(),
+        MAX_CHUNK_CONTENT_CHARS
+    );
+}

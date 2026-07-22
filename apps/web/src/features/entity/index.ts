@@ -8,6 +8,11 @@ export {
   ListLayoutProvider,
   MaybeEntityRow,
 } from './composed/ListEntity';
+export {
+  ListEntityMetadataProvider,
+  ListEntityMetadataQueryProvider,
+  ListEntityNoopMetadataProvider,
+} from './composed/list-entity/list-entity-metadata-provider';
 export { Entity } from './entity';
 export { EntityIcon as EntityRowIcon } from './extractors/entity-icon';
 export { EntityTitle as EntityRowTitle } from './extractors/entity-title';
@@ -30,7 +35,7 @@ export {
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export { createUpdateFileTypeMutation } from './queries/file-type';
-export { queryKeys } from './queries/key';
+export { emailQueryKeyExcludesDone, queryKeys } from './queries/key';
 export {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,

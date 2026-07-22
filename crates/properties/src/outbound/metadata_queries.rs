@@ -3,11 +3,44 @@
 //! These read tables owned by other domains; the properties domain surfaces
 //! them as read-only metadata properties.
 
+use document_sub_type::DocumentSubType;
 use models_properties::service::document_metadata::DocumentMetadata;
 use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::thread_metadata::ThreadMetadata;
 use sqlx::{Pool, Postgres};
+use std::collections::HashMap;
 use uuid::Uuid;
+
+/// Resolve document subtypes for a batch of canonical document IDs.
+#[tracing::instrument(skip(pool, document_ids), fields(document_count = document_ids.len()), err)]
+pub async fn get_document_sub_types(
+    pool: &Pool<Postgres>,
+    document_ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, DocumentSubType>> {
+    if document_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    // Document ids are stored as text in MacroDB. Keep the port strongly
+    // typed and convert only in this outbound adapter.
+    let document_ids = document_ids.iter().map(Uuid::to_string).collect::<Vec<_>>();
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            document_id,
+            sub_type as "sub_type: DocumentSubType"
+        FROM document_sub_type
+        WHERE document_id = ANY($1)
+        "#,
+        &document_ids
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| Ok((Uuid::parse_str(&row.document_id)?, row.sub_type)))
+        .collect()
+}
 
 /// Get document metadata by document ID from macrodb
 #[tracing::instrument(skip(pool), err)]

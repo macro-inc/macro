@@ -1,4 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import InfoIcon from '@phosphor/info.svg';
 import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -49,6 +50,8 @@ export function SignaturePreview(props: {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
     }
+    // Raw mailto: anchors open the in-app composer instead of the OS mail client
+    interceptMailtoLinks(root);
   });
 
   return (

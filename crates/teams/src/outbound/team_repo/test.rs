@@ -170,7 +170,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
     let result = team_repo
-        .create_team(&user_id, "team1", &"sub_test".parse().unwrap())
+        .create_team(&user_id, "team1", Some(&"sub_test".parse().unwrap()))
         .await?;
 
     assert!(!result.id.to_string().is_empty());
@@ -181,7 +181,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", &"sub_test".parse().unwrap())
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", Some(&"sub_test".parse().unwrap()))
         .await
         .err()
         .unwrap();
@@ -220,7 +220,11 @@ async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
     .await?;
 
     let team = team_repo
-        .create_team(&user_id, "GitHub Owner Team", &"sub_test".parse().unwrap())
+        .create_team(
+            &user_id,
+            "GitHub Owner Team",
+            Some(&"sub_test".parse().unwrap()),
+        )
         .await?;
     let team_id = team.id().to_string();
 
@@ -337,7 +341,11 @@ async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
     .await?;
 
     let team = team_repo
-        .create_team(&user_id, "GitHub Owner Team", &"sub_test".parse().unwrap())
+        .create_team(
+            &user_id,
+            "GitHub Owner Team",
+            Some(&"sub_test".parse().unwrap()),
+        )
         .await?;
 
     team_repo
@@ -1722,6 +1730,41 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let seat_count = team_repo.get_team_seat_count(&team_id).await?;
     assert_eq!(seat_count, seat_count_before + 1);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_allow_non_admin_invites_defaults_true_and_toggles(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    // Teams default to allowing non-admin invites.
+    assert!(team_repo.get_team_allow_non_admin_invites(&team_id).await?);
+
+    // Toggling flips it off, and the getter agrees.
+    assert!(!team_repo.toggle_allow_non_admin_invites(&team_id).await?);
+    assert!(!team_repo.get_team_allow_non_admin_invites(&team_id).await?);
+
+    // Toggling again flips it back on.
+    assert!(team_repo.toggle_allow_non_admin_invites(&team_id).await?);
+    assert!(team_repo.get_team_allow_non_admin_invites(&team_id).await?);
+
+    // Missing teams surface TeamDoesNotExist from both methods.
+    let missing = uuid::Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
+    assert!(matches!(
+        team_repo.get_team_allow_non_admin_invites(&missing).await,
+        Err(TeamError::TeamDoesNotExist)
+    ));
+    assert!(matches!(
+        team_repo.toggle_allow_non_admin_invites(&missing).await,
+        Err(TeamError::TeamDoesNotExist)
+    ));
 
     Ok(())
 }

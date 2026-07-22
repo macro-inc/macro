@@ -164,8 +164,8 @@ export function TagsMenu(props: {
   const itemCount = () => items().length + (showCreateRow() ? 1 : 0);
   const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
-    { scope: 'user', label: 'Personal' },
     { scope: 'team', label: `Shared with ${teamName()}` },
+    { scope: 'user', label: 'Personal' },
   ]);
   const createStepCount = () =>
     createStep() === 'color' ? TAG_COLOR_OPTIONS.length : scopeOptions().length;

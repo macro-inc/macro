@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE descendants AS (\n            SELECT id FROM \"Project\" WHERE \"parentId\" = $1 AND \"deletedAt\" IS NULL\n            UNION ALL\n            SELECT child.id\n            FROM \"Project\" child\n            JOIN descendants parent ON child.\"parentId\" = parent.id\n            WHERE child.\"deletedAt\" IS NULL\n        )\n        SELECT ($1 = $2) OR EXISTS(SELECT 1 FROM descendants WHERE id = $2) AS \"exists!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c56a4fa16649606f0b9e2af23270eafcc09a741455c4845cc0004408f272031a"
+}

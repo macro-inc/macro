@@ -15,20 +15,24 @@ use axum::{
 };
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
-use models_properties::api::SetPropertyValue;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use models_properties::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::{EntityReference, EntityType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
-use super::extract::{mint_authenticated_receipt, mint_view_receipt};
+use super::extract::{mint_authenticated_receipt, mint_view_receipt, target_entity_type};
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
+use crate::domain::model::EntityPropertyOptionUpdate;
+use crate::domain::model::PropertyAccessReceiptExt;
 use crate::domain::service::PropertiesService;
+
+#[cfg(test)]
+mod test;
 
 // Re-export EntityQueryParams from models_properties for convenience
 pub use models_properties::api::EntityQueryParams;
@@ -52,7 +56,7 @@ pub struct SetEntityPropertyRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct BulkEntityPropertiesRequest {
     /// Array of entity references (entity_id and entity_type pairs)
-    pub entities: Vec<EntityReference>,
+    pub entities: Vec<PropertyTargetReference>,
     /// Optional: only return properties with these definition IDs. If empty, returns all.
     #[serde(default)]
     pub property_ids: Vec<Uuid>,
@@ -97,7 +101,7 @@ impl IntoResponse for GetEntityPropertiesErr {
     get,
     path = "/properties/entities/{entity_type}/{entity_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("include_metadata" = Option<bool>, Query, description = "Whether to include property metadata (default: false)")
     ),
@@ -111,9 +115,13 @@ impl IntoResponse for GetEntityPropertiesErr {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type(), include_metadata = query.include_metadata), err)]
-pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>(
+pub async fn get_entity_properties<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Query(query): Query<EntityQueryParams>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     // Anonymous access is allowed for publicly shared entities; the extractor
     // minted a view receipt either way.
     access: ViewReceiptExtractor,
@@ -236,12 +244,16 @@ fn validate_bulk_request_size(
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, request, user), fields(entity_count = request.entities.len()), err)]
-pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+pub async fn get_bulk_entity_properties<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: MacroAuthorizationExtractor<Auth>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
     // The public endpoint requires explicit property IDs. An empty property_ids
@@ -259,7 +271,7 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
             state.entity_access_service.as_ref(),
             Some(&user),
             &entity_ref.entity_id,
-            entity_ref.entity_type,
+            target_entity_type(entity_ref.entity_type),
         )
         .await
         {
@@ -337,7 +349,7 @@ impl IntoResponse for SetEntityPropertyErr {
     put,
     path = "/properties/entities/{entity_type}/{entity_id}/{property_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("property_id" = Uuid, Path, description = "Property ID")
     ),
@@ -352,9 +364,13 @@ impl IntoResponse for SetEntityPropertyErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, entity_type = ?access.0.entity_type(), has_value = request.value.is_some()), err)]
-pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
-    Path((_entity_type, _entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
-    State(state): State<PropertiesRouterState<S, A>>,
+pub async fn set_entity_property<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    Path((_entity_type, _entity_id, property_uuid)): Path<(PropertyTargetEntityType, String, Uuid)>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
     Json(request): Json<SetEntityPropertyRequest>,
 ) -> Result<StatusCode, SetEntityPropertyErr> {
@@ -404,7 +420,7 @@ impl IntoResponse for EntityPropertyOptionErr {
     post,
     path = "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("property_id" = Uuid, Path, description = "Property ID"),
         ("option_id" = Uuid, Path, description = "Option ID to add")
@@ -418,14 +434,18 @@ impl IntoResponse for EntityPropertyOptionErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
-pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn add_entity_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
-        EntityType,
+        PropertyTargetEntityType,
         String,
         Uuid,
         Uuid,
     )>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("adding entity property option");
@@ -447,7 +467,7 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
     delete,
     path = "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("property_id" = Uuid, Path, description = "Property ID"),
         ("option_id" = Uuid, Path, description = "Option ID to remove")
@@ -460,14 +480,18 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
-pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn remove_entity_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
-        EntityType,
+        PropertyTargetEntityType,
         String,
         Uuid,
         Uuid,
     )>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("removing entity property option");
@@ -478,6 +502,169 @@ pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccess
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// One property's option changes in a bulk selection update. The change is a
+/// delta (options to add / remove) so it composes with concurrent edits rather
+/// than replacing the whole value.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct EntityPropertyOptionUpdateRequest {
+    /// The multi-select property definition being changed.
+    pub property_id: Uuid,
+    /// Options to add (deduped against the current value).
+    #[serde(default)]
+    pub add_option_ids: Vec<Uuid>,
+    /// Options to remove (a no-op if not present).
+    #[serde(default)]
+    pub remove_option_ids: Vec<Uuid>,
+}
+
+/// Request to apply option deltas across one or more of an entity's multi-select
+/// properties in a single transaction.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct BulkUpdateEntityPropertyOptionsRequest {
+    /// The per-property option changes to apply.
+    pub properties: Vec<EntityPropertyOptionUpdateRequest>,
+}
+
+/// The reconciled final option ids stored for one property after a bulk update.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct EntityPropertyOptionSelectionResponse {
+    /// The property definition the options belong to.
+    pub property_id: Uuid,
+    /// The final option ids the server persisted, in stored order.
+    pub option_ids: Vec<Uuid>,
+}
+
+/// Response for a bulk option update: each property's reconciled final ids.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct BulkUpdateEntityPropertyOptionsResponse {
+    /// The final option ids per updated property.
+    pub properties: Vec<EntityPropertyOptionSelectionResponse>,
+}
+
+/// Maximum properties changeable in one bulk option request.
+const MAX_BULK_OPTION_PROPERTIES: usize = 100;
+/// Maximum option ids (added plus removed) per property in one bulk request.
+const MAX_OPTION_IDS_PER_PROPERTY: usize = 500;
+
+#[derive(Debug, Error)]
+pub enum BulkUpdateEntityPropertyOptionsErr {
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
+    #[error("Duplicate property id in request")]
+    DuplicateProperty,
+    #[error("Cannot update more than {MAX_BULK_OPTION_PROPERTIES} properties at once")]
+    TooManyProperties,
+    #[error("Cannot change more than {MAX_OPTION_IDS_PER_PROPERTY} options for a property at once")]
+    TooManyOptions,
+}
+
+impl IntoResponse for BulkUpdateEntityPropertyOptionsErr {
+    fn into_response(self) -> Response {
+        let status_code = match &self {
+            BulkUpdateEntityPropertyOptionsErr::Properties(e) => properties_err_status(e),
+            BulkUpdateEntityPropertyOptionsErr::DuplicateProperty
+            | BulkUpdateEntityPropertyOptionsErr::TooManyProperties
+            | BulkUpdateEntityPropertyOptionsErr::TooManyOptions => StatusCode::BAD_REQUEST,
+        };
+
+        if status_code.is_server_error() {
+            tracing::error!(
+                error = ?self,
+                error_type = "BulkUpdateEntityPropertyOptionsErr",
+                "Internal server error"
+            );
+        }
+
+        (status_code, self.to_string()).into_response()
+    }
+}
+
+/// Reject oversized or duplicate-property requests before any database work, so
+/// one authenticated call can't force unbounded query and lock work.
+fn validate_bulk_option_request(
+    request: &BulkUpdateEntityPropertyOptionsRequest,
+) -> Result<(), BulkUpdateEntityPropertyOptionsErr> {
+    if request.properties.len() > MAX_BULK_OPTION_PROPERTIES {
+        return Err(BulkUpdateEntityPropertyOptionsErr::TooManyProperties);
+    }
+    let mut seen = std::collections::HashSet::with_capacity(request.properties.len());
+    for property in &request.properties {
+        if !seen.insert(property.property_id) {
+            return Err(BulkUpdateEntityPropertyOptionsErr::DuplicateProperty);
+        }
+        if property.add_option_ids.len() + property.remove_option_ids.len()
+            > MAX_OPTION_IDS_PER_PROPERTY
+        {
+            return Err(BulkUpdateEntityPropertyOptionsErr::TooManyOptions);
+        }
+    }
+    Ok(())
+}
+
+/// Apply a complete tag-picker selection across an entity's multi-select
+/// properties in one request.
+///
+/// Each property change is expressed as an option delta and applied to the
+/// current stored value under a per-row lock inside a single transaction, so the
+/// selection persists atomically and composes with concurrent edits instead of
+/// clobbering them. Returns the reconciled final option ids per property for
+/// cache reconciliation.
+#[utoipa::path(
+    post,
+    path = "/properties/entities/{entity_type}/{entity_id}/options/bulk",
+    params(
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
+        ("entity_id" = String, Path, description = "Entity ID")
+    ),
+    request_body = BulkUpdateEntityPropertyOptionsRequest,
+    responses(
+        (status = 200, description = "Options updated; returns final ids per property", body = BulkUpdateEntityPropertyOptionsResponse),
+        (status = 400, description = "Invalid request, a property is not multi-select, or an option does not belong to its property"),
+        (status = 403, description = "No edit access to the entity"),
+        (status = 500, description = "Internal server error")
+    ),
+    tags = ["Properties"]
+)]
+#[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type(), property_count = request.properties.len()), err)]
+pub async fn bulk_update_entity_property_options<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    access: EditReceiptExtractor,
+    Json(request): Json<BulkUpdateEntityPropertyOptionsRequest>,
+) -> Result<Json<BulkUpdateEntityPropertyOptionsResponse>, BulkUpdateEntityPropertyOptionsErr> {
+    tracing::info!("bulk updating entity property options");
+
+    validate_bulk_option_request(&request)?;
+
+    let updates = request
+        .properties
+        .into_iter()
+        .map(|property| EntityPropertyOptionUpdate {
+            property_definition_id: property.property_id,
+            add_option_ids: property.add_option_ids,
+            remove_option_ids: property.remove_option_ids,
+        })
+        .collect();
+
+    let selections = state
+        .properties_service
+        .bulk_update_entity_property_options(&access.0, updates)
+        .await?;
+
+    Ok(Json(BulkUpdateEntityPropertyOptionsResponse {
+        properties: selections
+            .into_iter()
+            .map(|selection| EntityPropertyOptionSelectionResponse {
+                property_id: selection.property_definition_id,
+                option_ids: selection.option_ids,
+            })
+            .collect(),
+    }))
 }
 
 #[derive(Debug, Error)]
@@ -520,13 +707,17 @@ impl IntoResponse for DeleteEntityPropertyErr {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user), fields(entity_property_id = %entity_property_uuid), err)]
-pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService>(
+pub async fn delete_entity_property<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path(entity_property_uuid): Path<Uuid>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: MacroAuthorizationExtractor<Auth>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 

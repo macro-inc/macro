@@ -2,6 +2,7 @@ import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useUnfurl } from '@core/signal/unfurl';
+import { openExternalUrl } from '@core/util/url';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
@@ -32,6 +33,14 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
         href={props.url}
         target="_blank"
         class={cn(props.class)}
+        onClick={(e) => {
+          // Modified/middle clicks keep native anchor behavior (background
+          // tab etc.); plain clicks go through openExternalUrl so macro
+          // links open in-app under Tauri.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          openExternalUrl(props.url);
+        }}
         onMouseEnter={() => {
           if (isTouchDevice()) return;
           debouncedSetPreviewOpen(true);

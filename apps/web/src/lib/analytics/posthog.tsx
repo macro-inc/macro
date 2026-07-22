@@ -50,7 +50,9 @@ export function useFeatureFlag<T extends JsonType>(
 
       const flag = posthog.instance.getFeatureFlagResult(key);
 
-      const enabled = flag?.enabled || (enabledOverride ?? false);
+      // A defined override wins in both directions: an explicit `false`
+      // disables even when PostHog reports the flag on.
+      const enabled = enabledOverride ?? flag?.enabled ?? false;
       const payload = (flag?.payload as T) ?? fallbackPayload;
 
       return { enabled, payload };

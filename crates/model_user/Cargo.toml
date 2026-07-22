@@ -4,14 +4,9 @@ name = "model_user"
 publish = false
 version = "0.1.0"
 
-[features]
-axum = ["dep:axum", "dep:thiserror"]
-
 [dependencies]
-axum = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
 serde = { workspace = true }
-thiserror = { workspace = true, optional = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

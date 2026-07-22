@@ -1,7 +1,9 @@
-import type {
-  OptimisticWriteResult,
-  ReadResult,
-  WriteResult,
+import {
+  type OptimisticWriteResult,
+  type ReadRecordsArgs,
+  type ReadResult,
+  validateRecordSelectionLimit,
+  type WriteResult,
 } from '../protocol';
 import type { CacheHost } from './types';
 
@@ -25,11 +27,18 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
+    async readRecords(args: ReadRecordsArgs) {
+      validateRecordSelectionLimit(args.limit);
+      return { records: [], nextCursor: null };
+    },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
     },
     async beginOptimisticWrite(): Promise<OptimisticWriteResult> {
       throw new Error('normalized GraphQL cache is unavailable');
+    },
+    async inspectQuery() {
+      return [];
     },
     async claimNextMutation() {
       return undefined;
@@ -47,6 +56,12 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async teardown(): Promise<void> {},
     async clear(): Promise<void> {},
     onOpsAffected() {
+      return () => undefined;
+    },
+    onCacheChanged() {
+      return () => undefined;
+    },
+    onMutationSettled() {
       return () => undefined;
     },
     dispose() {},

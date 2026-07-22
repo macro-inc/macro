@@ -22,6 +22,7 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import { invalidateAllSoup } from '../soup/normalized-cache';
+import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
@@ -47,7 +48,7 @@ type UseThreadQueryOptions = Omit<
 /**
  * Shared infinite query options for thread fetching.
  */
-function threadQueryOptions(threadId: string) {
+export function threadQueryOptions(threadId: string) {
   return {
     queryKey: emailKeys.threadMessages(threadId).queryKey,
     queryFn: async ({ pageParam }: { pageParam: number }) => {
@@ -199,6 +200,75 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
+type MarkThreadAsUnreadParams = {
+  threadId: string;
+  /** The inbox (email_links row) the thread belongs to; selects that inbox's
+   *  UNREAD label for multi-inbox users. */
+  linkId?: string;
+};
+
+/**
+ * Resolve an inbox's UNREAD system label from the cached labels list (the
+ * endpoint returns every inbox's labels; mirrors trashEmails' TRASH lookup).
+ */
+async function fetchUnreadLabelId(linkId?: string): Promise<string> {
+  const labelsData = await queryClient.fetchQuery({
+    queryKey: emailKeys.labels.queryKey,
+    queryFn: async () =>
+      throwOnErr(async () => await emailClient.getUserLabels()),
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = labelsData?.labels ?? [];
+  const unreadLabel =
+    (linkId
+      ? labels.find(
+          (l) => l.providerLabelId === 'UNREAD' && l.linkId === linkId
+        )
+      : undefined) ?? labels.find((l) => l.providerLabelId === 'UNREAD');
+  if (!unreadLabel) {
+    throw new Error('UNREAD label not found');
+  }
+  return unreadLabel.id;
+}
+
+/**
+ * Optimistically flip the soup row to unread. The thread messages cache is
+ * intentionally left alone for the same Suspense/scroll-reset reason as
+ * threadSeenOnMutate.
+ */
+function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
+  optimisticUpdateSoupEntity({
+    tag: 'emailThread',
+    data: { id: params.threadId, isRead: false },
+    frecency_score: 0,
+  });
+}
+
+/**
+ * Mutation to mark a thread as unread: adds the UNREAD label to all its
+ * messages — the backend also flips the thread-level flag and syncs Gmail.
+ */
+export function useMarkThreadAsUnreadMutation(
+  callbacks?: MutationCallbacks<void, Error, MarkThreadAsUnreadParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (params: MarkThreadAsUnreadParams) => {
+      const labelId = await fetchUnreadLabelId(params.linkId);
+      await throwOnErr(() =>
+        emailClient.updateThreadLabel({
+          thread_id: params.threadId,
+          label_id: labelId,
+          value: true,
+        })
+      );
+    },
+    ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
+      { onMutate: threadUnreadOnMutate },
+      callbacks
+    ),
+  }));
+}
+
 type ArchiveThreadParams = {
   threadId: string;
   archive: boolean;
@@ -235,20 +305,92 @@ async function threadArchiveOnMutate(params: ArchiveThreadParams) {
 }
 
 /**
- * Mutation to archive or unarchive a thread.
- * Uses optimistic updates to immediately reflect the change in UI.
+ * Cache bookkeeping for an archive/unarchive performed by another mutation
+ * (e.g. the mark-done and mark-not-done actions, which issue their own
+ * /archived requests): optimistically flips `inbox_visible`, rolls back if
+ * the request fails, and invalidates the thread + preview queries once it
+ * settles. Mirrors useUndoableArchiveThreadMutation's cache handling without
+ * firing a second request or pushing an undo entry.
  */
-export function useArchiveThreadMutation(
-  callbacks?: MutationCallbacks<
+export async function trackExternalThreadArchive(
+  threadId: string,
+  archived: Promise<unknown>,
+  archive = true
+): Promise<void> {
+  const { previousData } = await threadArchiveOnMutate({
+    threadId,
+    archive,
+  });
+  try {
+    await archived;
+  } catch {
+    if (previousData) {
+      queryClient.setQueryData(
+        emailKeys.threadMessages(threadId).queryKey,
+        previousData
+      );
+    }
+  } finally {
+    queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadId).queryKey,
+    });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+  }
+}
+
+/**
+ * One archive/unarchive cycle for undo/redo replays: optimistic flip, API
+ * call, rollback on failure, invalidate on settle. Mirrors what
+ * `useUndoableArchiveThreadMutation` does through its mutation callbacks.
+ */
+async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
+  const { previousData } = await threadArchiveOnMutate(params);
+  try {
+    await throwOnErr(
+      async () =>
+        await emailClient.flagArchived(
+          { id: params.threadId, value: params.archive },
+          params.linkId
+        )
+    );
+  } catch (err) {
+    if (previousData) {
+      queryClient.setQueryData(
+        emailKeys.threadMessages(params.threadId).queryKey,
+        previousData
+      );
+    }
+    throw err;
+  } finally {
+    queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+    });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+  }
+}
+
+/**
+ * Mutation to archive or unarchive a thread, with optimistic `inbox_visible`
+ * handling. Each successful archive or unarchive is pushed onto the mutation
+ * undo stack, and undo/redo replays the opposite call with the same
+ * optimistic cache handling. Must be used inside a MutationUndoProvider.
+ */
+export function useUndoableArchiveThreadMutation(options: {
+  /** Bind side effects (e.g. an undo toast) to the pushed undo entry. */
+  onPushed?: (
+    handle: UndoHandle,
+    params: ArchiveThreadParams
+  ) => { onUndone?: () => void; onRedone?: () => void } | void;
+  onError?: (params: ArchiveThreadParams) => void;
+}) {
+  return useUndoableMutation<
     void,
     Error,
     ArchiveThreadParams,
     ArchiveThreadContext
-  >
-) {
-  return useMutation(() => ({
-    mutationFn: async (params: ArchiveThreadParams) =>
-      void throwOnErr(
+  >(() => ({
+    mutationFn: async (params: ArchiveThreadParams) => {
+      await throwOnErr(
         async () =>
           await emailClient.flagArchived(
             {
@@ -257,27 +399,29 @@ export function useArchiveThreadMutation(
             },
             params.linkId
           )
-      ),
-    ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
-      {
-        onMutate: async (params) => await threadArchiveOnMutate(params),
-        onError: (_err, params, context) => {
-          if (context?.previousData) {
-            queryClient.setQueryData(
-              emailKeys.threadMessages(params.threadId).queryKey,
-              context.previousData
-            );
-          }
-        },
-        onSettled: (_data, _error, params) => {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.threadMessages(params.threadId).queryKey,
-          });
-          queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
-        },
-      },
-      callbacks
-    ),
+      );
+    },
+    onMutate: async (params) => await threadArchiveOnMutate(params),
+    onError: (_err, params, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          emailKeys.threadMessages(params.threadId).queryKey,
+          context.previousData
+        );
+      }
+      options.onError?.(params);
+    },
+    onSettled: (_data, _error, params) => {
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+      });
+      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    },
+    undoFn: async (params) =>
+      replayThreadArchive({ ...params, archive: !params.archive }),
+    redoFn: async (params) => replayThreadArchive(params),
+    undoLabel: (params) => (params.archive ? 'Mark Done' : 'Mark Not Done'),
+    onPushed: (handle, params) => options.onPushed?.(handle, params),
   }));
 }
 

@@ -6,6 +6,7 @@ import type { SoupPropertyFieldsFragment } from './graphql/generated/graphql';
 import {
   setEntityProperty,
   toGraphqlPropertyEntityType,
+  toGraphqlPropertyTargetEntityType,
   toGraphqlSetPropertyValue,
 } from './graphql-properties';
 import { getGraphqlSoupClient } from './graphql-soup';
@@ -29,7 +30,11 @@ const restSetEntityProperty = vi.mocked(
 );
 const flag = vi.mocked(ENABLE_GRAPHQL_SOUP);
 
-type MutationResult = { data?: unknown; error?: unknown };
+type MutationResult = {
+  data?: unknown;
+  error?: unknown;
+  extensions?: Record<string, unknown>;
+};
 
 function mockGraphqlClient(result: MutationResult) {
   const mutation = vi.fn(() => ({
@@ -97,12 +102,17 @@ describe('toGraphqlSetPropertyValue', () => {
   });
 });
 
-describe('toGraphqlPropertyEntityType', () => {
-  it('maps every REST entity type', () => {
-    expect(toGraphqlPropertyEntityType('DOCUMENT')).toBe('DOCUMENT');
+describe('property entity type conversion', () => {
+  it('keeps TASK for referenced property values', () => {
     expect(toGraphqlPropertyEntityType('TASK')).toBe('TASK');
-    expect(toGraphqlPropertyEntityType('COMPANY')).toBe('COMPANY');
-    expect(toGraphqlPropertyEntityType('CALL_RECORD')).toBe('CALL_RECORD');
+  });
+
+  it('maps canonical property targets without TASK', () => {
+    expect(toGraphqlPropertyTargetEntityType('DOCUMENT')).toBe('DOCUMENT');
+    expect(toGraphqlPropertyTargetEntityType('COMPANY')).toBe('COMPANY');
+    expect(toGraphqlPropertyTargetEntityType('CALL_RECORD')).toBe(
+      'CALL_RECORD'
+    );
   });
 });
 
@@ -123,7 +133,9 @@ describe('setEntityProperty', () => {
     restSetEntityProperty.mockResolvedValue(okRestResult);
     const mutation = mockGraphqlClient({ data: undefined });
 
-    await setEntityProperty(args);
+    await expect(setEntityProperty(args)).resolves.toEqual({
+      kind: 'committed',
+    });
 
     expect(restSetEntityProperty).toHaveBeenCalledWith({
       entity_type: 'DOCUMENT',
@@ -134,13 +146,18 @@ describe('setEntityProperty', () => {
     expect(mutation).not.toHaveBeenCalled();
   });
 
-  it('propagates REST errors as throws', async () => {
+  it('returns permanently-failed for REST errors', async () => {
     restSetEntityProperty.mockResolvedValue({
       isErr: () => true,
       error: [{ code: 'boom', message: 'boom' }],
     } as never);
 
-    await expect(setEntityProperty(args)).rejects.toThrow();
+    const result = await setEntityProperty(args);
+
+    expect(result.kind).toBe('permanently-failed');
+    if (result.kind === 'permanently-failed') {
+      expect(result.error).toBeInstanceOf(Error);
+    }
   });
 
   it('executes the GraphQL mutation when the flag is enabled', async () => {
@@ -148,6 +165,9 @@ describe('setEntityProperty', () => {
     const property = { id: 'prop-1' } as SoupPropertyFieldsFragment;
     const mutation = mockGraphqlClient({
       data: { setEntityProperty: property },
+      extensions: {
+        normalizedCacheMutationDisposition: { kind: 'committed' },
+      },
     });
 
     const result = await setEntityProperty(args);
@@ -168,7 +188,7 @@ describe('setEntityProperty', () => {
       },
     });
     expect(context).toBeUndefined();
-    expect(result).toBe(property);
+    expect(result).toEqual({ kind: 'committed', property });
   });
 
   it('attaches the optimistic response to the mutation context', async () => {
@@ -188,14 +208,58 @@ describe('setEntityProperty', () => {
     expect(context).toEqual({
       normalizedCacheOptimistic: {
         optimisticResponse: { setEntityProperty: optimistic },
+        linkPatches: [],
+        revalidations: [],
       },
     });
   });
 
-  it('throws on GraphQL errors', async () => {
+  it('returns queued when the durable exchange retains the mutation', async () => {
     flag.mockReturnValue(true);
-    mockGraphqlClient({ error: new Error('mutation failed') });
+    const optimistic = { id: 'prop-1' } as SoupPropertyFieldsFragment;
+    mockGraphqlClient({
+      data: { setEntityProperty: optimistic },
+      error: new Error('offline'),
+      extensions: {
+        normalizedCacheMutationDisposition: {
+          kind: 'queued',
+          transactionId: 'txn-1',
+        },
+      },
+    });
 
-    await expect(setEntityProperty(args)).rejects.toThrow('mutation failed');
+    await expect(
+      setEntityProperty({ ...args, optimisticProperty: optimistic })
+    ).resolves.toEqual({ kind: 'queued', transactionId: 'txn-1' });
+  });
+
+  it('returns permanently-failed after the durable exchange rolls back', async () => {
+    flag.mockReturnValue(true);
+    const error = new Error('mutation failed');
+    mockGraphqlClient({
+      error,
+      extensions: {
+        normalizedCacheMutationDisposition: {
+          kind: 'permanently-failed',
+          transactionId: 'txn-1',
+        },
+      },
+    });
+
+    await expect(setEntityProperty(args)).resolves.toEqual({
+      kind: 'permanently-failed',
+      error,
+    });
+  });
+
+  it('returns permanently-failed for non-durable GraphQL errors', async () => {
+    flag.mockReturnValue(true);
+    const error = new Error('mutation failed');
+    mockGraphqlClient({ error });
+
+    await expect(setEntityProperty(args)).resolves.toEqual({
+      kind: 'permanently-failed',
+      error,
+    });
   });
 });

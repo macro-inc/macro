@@ -5,9 +5,8 @@ use crate::domain::models::{
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
-    Extension,
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header},
 };
 use entity_access::domain::{
     models::{
@@ -17,15 +16,23 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use macro_authorization::{
+    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState, ValidatedIdentity,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model_user::UserContext;
+use rootcause::Report;
 use sqlx::{PgPool, Row};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
+
+const DEFAULT_BEARER_TOKEN: &str = "macro|bot-admin@example.com";
+const INVALID_BEARER_TOKEN: &str = "invalid";
 
 #[derive(Clone, Copy)]
 enum TestBotMode {
@@ -293,32 +300,79 @@ impl EntityAccessService for TestAccessService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|bot-admin@example.com".to_string(),
-        fusion_user_id: "fusion-user".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+#[derive(Clone, Default)]
+struct FakeJwtValidator;
+
+impl JwtValidator for FakeJwtValidator {
+    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+        if jwt == INVALID_BEARER_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(ValidatedIdentity {
+            user_id: jwt.to_string(),
+            fusion_user_id: "fusion-user".to_string(),
+            organization_id: None,
+            permissions: None,
+        })
+    }
+}
+
+type TestAuthorizationService = MacroAuthorizationServiceImpl<FakeJwtValidator>;
+
+fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".to_string(),
+            default_user_id: None,
+        },
+    );
+    MacroAuthorizationState::new(Arc::new(service))
+}
+
+async fn attach_default_bearer(mut request: Request<Body>) -> Request<Body> {
+    request.headers_mut().insert(
+        header::AUTHORIZATION,
+        format!("Bearer {DEFAULT_BEARER_TOKEN}").parse().unwrap(),
+    );
+    request
+}
+
+fn router_without_credentials(service: TestBotService, role: EntityParticipantRole) -> Router {
+    bots_router(BotsRouterState::new(
+        service,
+        TestAccessService::new(role),
+        authorization_state(),
+    ))
 }
 
 fn router(service: TestBotService, role: EntityParticipantRole) -> Router {
-    bots_router(BotsRouterState::new(service, TestAccessService::new(role))).layer(user_extension())
-}
-
-fn user_context(user_id: &str) -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: user_id.to_string(),
-        fusion_user_id: "fusion-user".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+    router_without_credentials(service, role)
+        .layer(axum::middleware::map_request(attach_default_bearer))
 }
 
 fn real_router(pool: PgPool, user_id: &str) -> Router {
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()));
+    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
     let access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool));
-    bots_router(BotsRouterState::new(bot_service, access_service)).layer(user_context(user_id))
+    let bearer_token = user_id.to_string();
+    bots_router(BotsRouterState::new(
+        bot_service,
+        access_service,
+        authorization_state(),
+    ))
+    .layer(axum::middleware::from_fn(
+        move |mut request: Request<Body>, next: axum::middleware::Next| {
+            let bearer_token = bearer_token.clone();
+            async move {
+                request.headers_mut().insert(
+                    header::AUTHORIZATION,
+                    format!("Bearer {bearer_token}").parse().unwrap(),
+                );
+                next.run(request).await
+            }
+        },
+    ))
 }
 
 async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
@@ -430,6 +484,25 @@ async fn bot_owner_can_list_bot_channels_via_http() {
     assert_eq!(channels[0].name.as_deref(), Some("alarms"));
     assert_eq!(channels[0].channel_type, BotChannelType::Private);
     assert_eq!(service.list_bot_channels_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn bot_route_requires_credentials_without_invoking_service() {
+    let service = TestBotService::new(TestBotMode::Ok);
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/{bot_id}/channels"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router_without_credentials(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.list_bot_channels_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -589,7 +662,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     insert_user(&pool, CHANNEL_ADMIN_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, CHANNEL_ADMIN_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()));
+    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
     let bot = bot_service
         .create_bot(
             macro_user_id(BOT_OWNER_ID),
@@ -675,7 +748,7 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
     insert_user(&pool, ADMIN_USER_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, ADMIN_USER_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()));
+    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
     let bot = bot_service
         .create_bot(
             macro_user_id(ADMIN_USER_ID),

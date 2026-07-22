@@ -23,18 +23,18 @@ import { ActionMenu } from '@core/component/LexicalMarkdown/component/menu/Actio
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
 import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
+import { FloatingTableMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingTableMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
-import TableActionMenu, {
-  anchorElemRefSignal,
-  menuButtonRefSignal,
-  tableCellNodeKeySignal,
-} from '@core/component/LexicalMarkdown/component/menu/TableActionMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
+import { TableDeleteButtons } from '@core/component/LexicalMarkdown/component/misc/TableDeleteButtons';
+import { TableInsertButton } from '@core/component/LexicalMarkdown/component/misc/TableInsertButton';
+import { TableMoveHandle } from '@core/component/LexicalMarkdown/component/misc/TableMoveHandle';
+import { TableSelectionActionBar } from '@core/component/LexicalMarkdown/component/misc/TableSelectionActionBar';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -59,14 +59,15 @@ import {
   generatePlugin,
   horizontalRulePlugin,
   keyboardShortcutsPlugin,
+  listToTablePlugin,
   markdownPastePlugin,
   mentionsPlugin,
   pinnedPropertiesPlugin,
   selectionDataPlugin,
   tabIndentationPlugin,
-  tableActionMenuPlugin,
   tableCellResizerPlugin,
   tablePlugin,
+  tableTouchSelectionPlugin,
   tagsPlugin,
   textPastePlugin,
   wordcountPlugin,
@@ -143,6 +144,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockFileSignal,
@@ -308,6 +310,7 @@ export function MarkdownEditor(props: {
   const [state, setState] = createSignal<EditorState>(editor.getEditorState());
 
   setMdStore('editor', editor);
+  setMdStore('mapping', lexicalWrapper.mapping);
   setMdStore('plugins', plugins);
 
   const [editorFocus, setEditorFocus] = createSignal(false);
@@ -423,6 +426,9 @@ export function MarkdownEditor(props: {
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {
+    // dndDragMove is a trailing throttle, so a callback scheduled just before
+    // the drop would otherwise fire after it and could re-show the indicator.
+    dndDragMove.clear();
     // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
     if (event.draggable?.data.dragType !== 'entity') return;
     dndDragEnd(event);
@@ -508,16 +514,6 @@ export function MarkdownEditor(props: {
     }
   });
 
-  const tableActionsMenuPluginProps = {
-    menuButtonRef: menuButtonRefSignal.get,
-    anchorElem: anchorElemRefSignal.get,
-
-    tableCellNodeKey: tableCellNodeKeySignal.get,
-    setTableCellNodeKey: (cellNodeKey: string | null) => {
-      tableCellNodeKeySignal.set(cellNodeKey ?? undefined);
-    },
-  };
-
   const peerIdValidator: Accessor<PeerIdValidator> = () => {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
@@ -582,7 +578,7 @@ export function MarkdownEditor(props: {
       })
     )
     .use(tableCellResizerPlugin())
-    .use(tableActionMenuPlugin(tableActionsMenuPluginProps))
+    .use(tableTouchSelectionPlugin())
     .use(
       filePastePlugin({
         onPasteFilesAndDirs: (fileEntries, directories) =>
@@ -688,6 +684,7 @@ export function MarkdownEditor(props: {
       setAccessories: setAccessoryStore,
     })
   );
+  plugins.use(listToTablePlugin());
 
   const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
@@ -1112,6 +1109,7 @@ export function MarkdownEditor(props: {
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
           <FloatingEquationMenu />
+          <FloatingTableMenu />
           <MarkdownPopup
             highlightLayerRef={highlightLayerRef() ?? editorContainerRef}
             lexicalMapping={lexicalWrapper.mapping}
@@ -1135,8 +1133,17 @@ export function MarkdownEditor(props: {
         </Show>
 
         <Show when={canEdit()}>
+          {/* On touch devices the hover-driven controls are unusable */}
+          {isTouchDevice() ? (
+            <TableSelectionActionBar />
+          ) : (
+            <>
+              <TableInsertButton />
+              <TableDeleteButtons />
+            </>
+          )}
           <TableCellResizer />
-          <TableActionMenu anchorElem={editorContainerRef} cellMerge={true} />
+          <TableMoveHandle />
         </Show>
 
         <Show when={ENABLE_MARKDOWN_AI_GENERATE}>

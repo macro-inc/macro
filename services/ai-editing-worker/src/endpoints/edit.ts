@@ -7,9 +7,10 @@ import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
 import * as z from 'zod';
 import { type Bindings, getEnv } from '../env';
-import { type Model, runEditSession } from '../run-edit';
+import { type Model, type ResolvedModels, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
+import { createWorkerSyncSource } from '../sources';
 import { renderTraceMarkdown } from '../trace-log';
 import { insertEditTrace } from '../traces-db';
 
@@ -51,7 +52,42 @@ const EditBody = z.object({
   unwatchedSpeed: z.number().min(1).default(2.0),
   interpret: z.boolean().default(true),
   debug: z.boolean().default(false),
+  /**
+   * Commit edits to the shared Loro doc (default true). Set false to have the
+   * worker compute ops without committing them. This gives you the flexibility
+   * to apply them on your own.
+   */
+  propagate: z.boolean().default(true),
 });
+
+/** Resolve each role's model list into a live model (single) or a fallback
+ *  chain (multiple, advancing on provider errors/rate limits). */
+function buildModels(
+  env: ReturnType<typeof getEnv>,
+  models: EditModels
+): ResolvedModels {
+  const resolveOne = ({ provider, model }: Model) => {
+    const apiKey = env[PROVIDERS[provider].key];
+    return PROVIDERS[provider].create({ apiKey })(model);
+  };
+  const resolveModel = (specs: Model[]): LanguageModel => {
+    const resolved = specs.map(resolveOne);
+    if (resolved.length === 1) return resolved[0];
+    return createFallback({
+      models: resolved,
+      onError: (error, modelId) =>
+        console.error(`edit model ${modelId} failed, falling back:`, error),
+    });
+  };
+  return {
+    supervisor: resolveModel(models.supervisor),
+    interpret: resolveModel(models.interpret),
+    // Fresh fallback per coder — see ResolvedModels.coding.
+    coding: () => resolveModel(models.coding),
+  };
+}
+
+type EditModels = z.infer<typeof EditBody>['models'];
 
 const edit = new Hono<{ Bindings: Bindings }>();
 
@@ -66,24 +102,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     unwatchedSpeed,
     interpret,
     debug,
+    propagate,
   } = c.req.valid('json');
-
-  const resolveOne = ({ provider, model }: Model) => {
-    const apiKey = env[PROVIDERS[provider].key];
-    return PROVIDERS[provider].create({ apiKey })(model);
-  };
-
-  // A single model resolves directly; multiple wrap in a fallback that advances
-  // to the next model on provider errors/rate limits.
-  const resolveModel = (specs: Model[]): LanguageModel => {
-    const resolved = specs.map(resolveOne);
-    if (resolved.length === 1) return resolved[0];
-    return createFallback({
-      models: resolved,
-      onError: (error, modelId) =>
-        console.error(`edit model ${modelId} failed, falling back:`, error),
-    });
-  };
 
   // FYI cancellation only works on live cloudflare not workerd. And it requires enable_request_signal.
   const signal = c.req.raw.signal;
@@ -93,6 +113,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
 
   try {
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${documentToken}`;
+    const source = createWorkerSyncSource(wsUrl, documentId, signal);
 
     // Animations play at 1x while a human is watching and speed up to
     // `unwatchedSpeed` when nobody is, so unseen edits finish faster without
@@ -111,19 +132,15 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       );
 
     const { usage, ops, session, clarification } = await runEditSession({
-      wsUrl,
+      source,
       documentId,
       prompt,
-      models: {
-        supervisor: resolveModel(models.supervisor),
-        interpret: resolveModel(models.interpret),
-        // Fresh fallback per coder — see ResolvedModels.coding.
-        coding: () => resolveModel(models.coding),
-      },
+      models: buildModels(env, models),
       typingAnimations,
       sleep,
       interpret,
       debug,
+      propagate,
       runner: runInSandbox,
       signal,
     }).finally(presence.stop);

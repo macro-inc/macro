@@ -1,4 +1,4 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use entity_access::{
     domain::models::EntityPermission,
@@ -32,7 +32,10 @@ pub enum EntityPermissionResponse {
     )
 )]
 pub async fn handler(
-    result: Result<EntityPermissionExtractor<EntityAccessService>, ExtractorError>,
+    result: Result<
+        EntityPermissionExtractor<EntityAccessService, AuthorizationService>,
+        ExtractorError,
+    >,
 ) -> impl IntoResponse {
     match result {
         Ok(ext) => (

@@ -117,7 +117,7 @@ fn queue_and_optimistic_layer_survive_reopen() {
 }
 
 #[test]
-fn engine_hydrates_optimistic_layer_after_restart() {
+fn restart_hydration_preserves_legacy_json_with_envelope_keys() {
     use cache_core::engine::{Engine, ReadResult};
     use serde_json::json;
 
@@ -143,10 +143,14 @@ fn engine_hydrates_optimistic_layer_after_restart() {
             }}],
             "hasMore": false
         }}});
-        let optimistic = json!({"setEntityProperty": {
-            "id": "prop-1",
-            "displayName": "Stage"
-        }});
+        let optimistic = json!({
+            "version": 2,
+            "mutationData": {"colliding": true},
+            "setEntityProperty": {
+                "id": "prop-1",
+                "displayName": "Stage"
+            }
+        });
 
         let mut engine = Engine::new(SqliteStorage::open(&path, "scope-1").unwrap());
         engine
@@ -160,18 +164,28 @@ fn engine_hydrates_optimistic_layer_after_restart() {
             )
             .await
             .unwrap();
-        engine
-            .begin_optimistic_write(
-                None,
-                CACHE_MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars,
-                &optimistic,
-                10,
-            )
+        drop(engine);
+
+        let mut storage = SqliteStorage::open(&path, "scope-1").unwrap();
+        storage
+            .enqueue_mutation(NewQueuedMutation {
+                mutation: StoredMutation::new(
+                    MutationRequest {
+                        query: CACHE_MUTATION.to_string(),
+                        operation_name: Some("SetEntityProperty".to_string()),
+                        variables_json: serde_json::to_string(&mutation_vars).unwrap(),
+                        identity: Some("user-1".to_string()),
+                    },
+                    10,
+                ),
+                optimistic: PersistedOptimisticLayer {
+                    optimistic_data_json: serde_json::to_string(&optimistic).unwrap(),
+                    normalized_updates: Default::default(),
+                },
+            })
             .await
             .unwrap();
-        drop(engine);
+        drop(storage);
 
         let mut reopened = Engine::new(SqliteStorage::open(&path, "scope-1").unwrap());
         let ReadResult::Hit { data } = reopened

@@ -1,5 +1,6 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use axum_extra::extract::Cached;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -44,13 +45,15 @@ impl From<EmailErr> for ListLabelsError {
 }
 
 /// Create the list labels router with a `GET /` handler.
-pub fn list_labels_router<S, T>() -> Router<S>
+pub fn list_labels_router<S, T, Auth>() -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
     T: EmailService,
+    Auth: MacroAuthorizationService,
     EmailRouterState<T>: axum::extract::FromRef<S>,
+    MacroAuthorizationState<Auth>: axum::extract::FromRef<S>,
 {
-    Router::new().route("/", get(list_labels_handler::<T>))
+    Router::new().route("/", get(list_labels_handler::<T, Auth>))
 }
 
 /// List all labels for the user's email link.
@@ -66,9 +69,9 @@ where
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn list_labels_handler<T: EmailService>(
+pub async fn list_labels_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T>>,
+    Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T, Auth>>,
 ) -> Result<Json<ListLabelsResponse>, ListLabelsError> {
     let mut labels = Vec::new();
     for link in &links {

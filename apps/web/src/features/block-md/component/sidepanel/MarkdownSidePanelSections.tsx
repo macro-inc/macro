@@ -165,55 +165,66 @@ function HistorySectionContent() {
   });
 
   return (
-    <Show
-      when={
-        !history.loading.sessions() && totalEdits() > 1 && history.sessions()
-      }
-      fallback={<p class="text-xs text-ink-muted">No history yet</p>}
-    >
-      {(sessions) => (
-        <div class="hidden min-w-0 overflow-hidden md:block">
-          <HistoryScrubber compact />
-          <Show when={sessions().length > 0}>
-            <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
-              <button
-                type="button"
-                aria-expanded={isShowingSessions()}
-                class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                onClick={() => {
-                  history.enter();
-                  setShowSessions(true);
-                }}
-              >
-                <CaretRightIcon
-                  class={cn(
-                    'size-3 shrink-0 transition-transform duration-90',
-                    isShowingSessions() && 'rotate-90'
-                  )}
-                />
-                <span>
-                  {isShowingSessions() ? 'Activity' : 'Show activity'}
-                </span>
-              </button>
-              <Show when={isShowingSessions()}>
-                <HistorySessionList
-                  sessions={sessions()}
-                  selectedAt={history.selectedAt}
-                  onSelect={history.enter}
-                  onViewSessionDiff={(session) => {
-                    if (history.diff.session()?.startMs === session.startMs) {
-                      history.diff.clear();
-                    } else {
-                      history.diff.view(session);
-                    }
+    <Show when={!history.loading.sessions()} fallback={<HistorySkeleton />}>
+      <Show
+        when={totalEdits() > 1 && history.sessions()}
+        fallback={<p class="text-xs text-ink-muted">No history yet</p>}
+      >
+        {(sessions) => (
+          <div class="hidden min-w-0 overflow-hidden md:block">
+            <HistoryScrubber compact />
+            <Show when={sessions().length > 0}>
+              <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
+                <button
+                  type="button"
+                  aria-expanded={isShowingSessions()}
+                  class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  onClick={() => {
+                    history.enter();
+                    setShowSessions(true);
                   }}
-                />
-              </Show>
-            </div>
-          </Show>
-        </div>
-      )}
+                >
+                  <CaretRightIcon
+                    class={cn(
+                      'size-3 shrink-0 transition-transform duration-90',
+                      isShowingSessions() && 'rotate-90'
+                    )}
+                  />
+                  <span>
+                    {isShowingSessions() ? 'Activity' : 'Show activity'}
+                  </span>
+                </button>
+                <Show when={isShowingSessions()}>
+                  <HistorySessionList
+                    sessions={sessions()}
+                    selectedAt={history.selectedAt}
+                    onSelect={history.enter}
+                    onViewSessionDiff={(session) => {
+                      if (history.diff.session()?.startMs === session.startMs) {
+                        history.diff.clear();
+                      } else {
+                        history.diff.view(session);
+                      }
+                    }}
+                  />
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </Show>
     </Show>
+  );
+}
+
+function HistorySkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
+    >
+      <div class="skeleton-shimmer h-12 w-full rounded-md bg-ink/3" />
+    </div>
   );
 }
 

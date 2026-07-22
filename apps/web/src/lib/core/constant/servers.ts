@@ -58,8 +58,23 @@ const rawLocalBackendOrigin: string | undefined = import.meta.env
 const proxyOrigin: string | undefined =
   rawLocalBackendOrigin === 'same-origin'
     ? globalThis.location?.origin
-    : rawLocalBackendOrigin;
+    : resolveProxyOrigin(rawLocalBackendOrigin);
 const wsProxyOrigin = proxyOrigin?.replace(/^http/, 'ws');
+
+// Follow the page's hostname (keeping the proxy's port) so the app works from
+// any `*.localhost` alias. Hostnames get separate cookie jars while ports
+// share them, so opening tabs like alice.localhost:3000 / carol.localhost:3000
+// gives each seeded persona an isolated login session against the one backend.
+function resolveProxyOrigin(configured: string | undefined) {
+  if (!configured || typeof window === 'undefined') return configured;
+  try {
+    const url = new URL(configured);
+    url.hostname = window.location.hostname;
+    return url.origin;
+  } catch {
+    return configured;
+  }
+}
 
 export const SERVER_HOSTS: Servers =
   import.meta.env.MODE === 'development'

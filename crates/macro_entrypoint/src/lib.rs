@@ -4,6 +4,9 @@
 
 mod datadog_fmt;
 
+#[cfg(test)]
+mod test;
+
 use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use opentelemetry::trace::TracerProvider as _;
@@ -44,11 +47,13 @@ fn rust_log_env_filter() -> EnvFilter {
 /// and a global filter would drop them before the otel layer sees them. Defaults to `info` when
 /// `OTEL_TRACE_FILTER` is unset or contains no valid directives.
 fn otel_env_filter() -> EnvFilter {
-    let builder = EnvFilter::builder().with_default_directive(LevelFilter::INFO.into());
-    match OtelTraceFilter::new() {
-        Some(value) => builder.parse_lossy(value),
-        None => builder.parse_lossy(""),
-    }
+    otel_trace_filter(OtelTraceFilter::new().as_deref())
+}
+
+fn otel_trace_filter(value: Option<&str>) -> EnvFilter {
+    EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse_lossy(value.unwrap_or(""))
 }
 
 /// unit struct which defines the behaviour for instantiation

@@ -11,6 +11,75 @@
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Opaque exclusive cursor for deterministic normalized-record scans. */
+export type RecordCursor = string;
+
+/** Untyped wire page returned by cache hosts. */
+export type SelectedRecordPageWire = {
+  records: unknown[];
+  nextCursor: RecordCursor | null;
+};
+
+export type ReadRecordsArgs = {
+  /** Serialized generated fragment document. */
+  document: string;
+  /** Root fragment to apply to matching normalized records. */
+  fragmentName: string;
+  cursor?: RecordCursor;
+  limit: number;
+};
+
+export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+
+/** Validates a record-selection page size before crossing a host boundary. */
+export function validateRecordSelectionLimit(limit: number): number {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > MAX_RECORD_SELECTION_PAGE_SIZE
+  ) {
+    throw new RangeError(
+      `record selection limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+    );
+  }
+  return limit;
+}
+
+export type QueryRevalidationWire = {
+  query: string;
+  operationName?: string;
+  /** Canonical JSON object, kept as text in the durable queue. */
+  variablesJson: string;
+};
+
+export type EmbeddedLinkPathSegment =
+  | { field: string }
+  | {
+      listItem: {
+        whereField: string;
+        equals: string | number | boolean | null;
+      };
+    };
+
+export type OptimisticLinkPatchWire = {
+  /** Generated GraphQL operation used as the typed graph entrypoint. */
+  query: string;
+  operationName?: string;
+  /** Variables for the entrypoint operation. */
+  variablesJson: string;
+  /** Response-key path beginning at the query root. */
+  path: EmbeddedLinkPathSegment[];
+  operation:
+    | { kind: 'remove'; entityKey: string }
+    | { kind: 'prependUnique'; entityKey: string };
+};
+
+export type CachedQueryInstanceWire = {
+  variables: Record<string, unknown>;
+  /** Selected value; omitted when the reconstructed query is a cache miss. */
+  value?: unknown;
+};
+
 export type WriteResult = {
   /** Entity keys whose records changed. */
   changed: string[];
@@ -22,6 +91,8 @@ export type WriteResult = {
    * then contains every registered operation except the origin.
    */
   reset: boolean;
+  /** Present on successful optimistic settlement; empty otherwise. */
+  revalidations?: QueryRevalidationWire[];
 };
 
 /**
@@ -51,6 +122,15 @@ export type MutationClaim = {
   owner: string;
   generation: string;
 };
+
+/** Final settlement of a previously queued optimistic mutation. */
+export type MutationSettlement =
+  | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'permanently-failed';
+      error: string;
+    };
 
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
@@ -83,6 +163,8 @@ export type CacheRequest = { id: number } & (
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
+      linkPatches?: OptimisticLinkPatchWire[];
+      revalidations?: QueryRevalidationWire[];
       createdAtMs: number;
     }
   | {
@@ -116,6 +198,21 @@ export type CacheRequest = { id: number } & (
       transactionId: string;
       leaseOwner: string;
       leaseGeneration: string;
+      error: string;
+    }
+  | {
+      kind: 'read-records';
+      document: string;
+      fragmentName: string;
+      cursor?: RecordCursor;
+      limit: number;
+    }
+  | {
+      kind: 'inspect-query';
+      query: string;
+      operationName?: string;
+      /** Response-key field path from the query root. */
+      path: Array<{ field: string }>;
     }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
@@ -146,15 +243,18 @@ export function isCacheNotice(
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush = {
-  kind: 'ops-affected';
-  opIds: string[];
-  /** Changed entity keys, for diagnostics/advanced consumers. */
-  keys: string[];
-};
+export type CachePush =
+  | {
+      kind: 'ops-affected';
+      opIds: string[];
+      /** Changed entity keys, for diagnostics/advanced consumers. */
+      keys: string[];
+    }
+  | { kind: 'cache-changed' }
+  | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
 
 export function isCachePush(msg: WorkerMessage): msg is CachePush {
-  return 'kind' in msg && msg.kind === 'ops-affected';
+  return 'kind' in msg;
 }

@@ -26,6 +26,10 @@ import {
 } from '@app/features/next-soup/filters/filter-store/query-store';
 import { createGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
+import {
+  createTagFilter,
+  type TagFilter,
+} from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import {
   INBOX_FILTER_ENTRY_KEY,
@@ -140,6 +144,8 @@ interface SoupViewContextValues {
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
   queryFilters: QueryStore;
+  tagFilter: TagFilter;
+  filterByTag: (optionId: string) => void;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   ownerFilter: Accessor<string[]>;
@@ -313,6 +319,8 @@ export const SoupViewContextProvider: FlowComponent<
       store.remove(query);
     },
   };
+  const tagFilter = createTagFilter(queryFilters);
+  const filterByTag = (optionId: string) => tagFilter.onChange([optionId]);
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
@@ -1171,6 +1179,8 @@ export const SoupViewContextProvider: FlowComponent<
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,
+    tagFilter,
+    filterByTag,
     assigneeFilter,
     setAssigneeFilter,
     ownerFilter,

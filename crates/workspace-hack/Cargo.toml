@@ -82,6 +82,8 @@ num-bigint = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
+opentelemetry = { version = "0.31", features = ["testing"] }
+opentelemetry_sdk = { version = "0.31", features = ["testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
@@ -122,7 +124,7 @@ time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
-tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
@@ -204,6 +206,8 @@ num-bigint = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
+opentelemetry = { version = "0.31", features = ["testing"] }
+opentelemetry_sdk = { version = "0.31", features = ["testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
@@ -249,7 +253,7 @@ time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
-tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }

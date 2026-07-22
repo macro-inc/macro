@@ -1,5 +1,6 @@
 import { Popover } from '@kobalte/core/popover';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
@@ -9,6 +10,7 @@ import {
 } from '@property/editors/selectors/PropertyOptionSelector';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
+  type CreateTagResult,
   invalidateTags,
   useEnsureTagSetMutation,
 } from '@queries/properties/tags';
@@ -28,7 +30,12 @@ import {
   untrack,
 } from 'solid-js';
 import { TagDot } from './TagDot';
-import { DEFAULT_TAG_COLOR, type TAG_COLORS } from './tagColors';
+import {
+  type EditableTag,
+  TagEditorDialog,
+  type TagEditorDialogMode,
+} from './TagEditorDialog';
+import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from './tagColors';
 import type { ResolvedTag, useDocTags } from './useDocTags';
 
 type DocTags = ReturnType<typeof useDocTags>;
@@ -39,24 +46,9 @@ type TagOptionItem = {
 };
 
 type CreateStep = 'color' | 'scope';
-
-const TAG_COLOR_OPTIONS = [
-  { color: '#E5484D', name: 'Red' },
-  { color: '#E54D2E', name: 'Tomato' },
-  { color: '#F76B15', name: 'Orange' },
-  { color: '#FFB224', name: 'Amber' },
-  { color: '#F5D90A', name: 'Yellow' },
-  { color: '#46A758', name: 'Green' },
-  { color: '#12A594', name: 'Teal' },
-  { color: '#0091FF', name: 'Blue' },
-  { color: '#3E63DD', name: 'Indigo' },
-  { color: '#8E4EC6', name: 'Purple' },
-  { color: '#E93D82', name: 'Pink' },
-  { color: '#889096', name: 'Gray' },
-] as const satisfies readonly {
-  color: (typeof TAG_COLORS)[number];
-  name: string;
-}[];
+type CreateTagSuccessHandler = (
+  result: CreateTagResult
+) => void | Promise<void>;
 
 function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
@@ -70,15 +62,24 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 
 const MAX_LIST_HEIGHT = 192;
 
-export function TagPicker(props: {
-  docTags: DocTags;
+type TagPickerProps = {
   replaceTag?: ResolvedTag;
   triggerClass?: string;
   triggerLabel: string;
   children: JSX.Element;
   onOpenChange?: (open: boolean) => void;
-}) {
+} & (
+  | { docTags: DocTags; createDocTags?: never }
+  | { docTags?: never; createDocTags: () => DocTags }
+);
+
+export function TagPicker(props: TagPickerProps) {
   const [open, setOpen] = createSignal(false);
+  const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
+    null
+  );
+  const [createSuccessHandler, setCreateSuccessHandler] =
+    createSignal<CreateTagSuccessHandler>();
   let saveAndClose: (() => Promise<void>) | undefined;
 
   const setOpenState = (value: boolean) => {
@@ -113,16 +114,83 @@ export function TagPicker(props: {
       >
         {props.children}
       </Popover.Trigger>
-      <Show when={open()}>
-        <TagPickerBody
+      <Show when={open() || editorMode() !== null}>
+        <TagPickerBodyOwner
           docTags={props.docTags}
+          createDocTags={props.createDocTags}
+          open={open}
+          editorMode={editorMode}
           onClose={() => setOpenState(false)}
+          onOpenCreateEditor={(mode, onCreateSuccess) => {
+            setCreateSuccessHandler(() => onCreateSuccess);
+            setEditorMode(mode);
+            setOpenState(false);
+          }}
+          onOpenEditEditor={(mode) => {
+            setEditorMode(mode);
+            setOpenState(false);
+          }}
           registerSave={(handler) => {
             saveAndClose = handler;
+          }}
+          createSuccessHandler={createSuccessHandler}
+          onEditorClose={() => {
+            setEditorMode(null);
+            setCreateSuccessHandler(undefined);
           }}
         />
       </Show>
     </Popover>
+  );
+}
+
+function TagPickerBodyOwner(props: {
+  docTags?: DocTags;
+  createDocTags?: () => DocTags;
+  open: () => boolean;
+  editorMode: () => TagEditorDialogMode | null;
+  onClose: () => void;
+  onOpenCreateEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'create' }>,
+    onCreateSuccess?: CreateTagSuccessHandler
+  ) => void;
+  onOpenEditEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'edit' }>
+  ) => void;
+  registerSave: (handler: (() => Promise<void>) | undefined) => void;
+  createSuccessHandler: () => CreateTagSuccessHandler | undefined;
+  onEditorClose: () => void;
+}) {
+  // The factory is invoked under this conditionally-mounted component owner,
+  // so row-level query/mutation hooks do not exist until the picker opens.
+  const docTags = props.docTags ?? props.createDocTags?.();
+  if (!docTags) throw new Error('TagPicker requires a doc-tags source');
+  const currentTeamQuery = useCurrentTeamQuery();
+
+  return (
+    <>
+      <Show when={props.open()}>
+        <TagPickerBody
+          docTags={docTags}
+          onClose={props.onClose}
+          onOpenCreateEditor={props.onOpenCreateEditor}
+          onOpenEditEditor={props.onOpenEditEditor}
+          registerSave={props.registerSave}
+          suppressInitialOutsideEvents={false}
+        />
+      </Show>
+      <Show when={props.editorMode()}>
+        <TagEditorDialog
+          open
+          mode={props.editorMode()}
+          teamAvailable={Boolean(currentTeamQuery.data?.team)}
+          onCreateSuccess={async (result) => {
+            await props.createSuccessHandler()?.(result);
+          }}
+          onClose={props.onEditorClose}
+        />
+      </Show>
+    </>
   );
 }
 
@@ -136,6 +204,12 @@ export function TagPickerPopover(props: {
   onOpenChange: (open: boolean) => void;
   getAnchorRect: () => { x: number; y: number } | undefined;
 }) {
+  const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
+    null
+  );
+  const [createSuccessHandler, setCreateSuccessHandler] =
+    createSignal<CreateTagSuccessHandler>();
+  const currentTeamQuery = useCurrentTeamQuery();
   let saveAndClose: (() => Promise<void>) | undefined;
 
   const handleOpenChange = (value: boolean) => {
@@ -152,30 +226,62 @@ export function TagPickerPopover(props: {
   };
 
   return (
-    <Popover
-      open={props.open}
-      onOpenChange={handleOpenChange}
-      getAnchorRect={props.getAnchorRect}
-      placement="bottom-start"
-      gutter={4}
-    >
-      <Show when={props.open}>
-        <TagPickerBody
-          docTags={props.docTags}
-          onClose={() => props.onOpenChange(false)}
-          registerSave={(handler) => {
-            saveAndClose = handler;
-          }}
-        />
-      </Show>
-    </Popover>
+    <>
+      <Popover
+        open={props.open}
+        onOpenChange={handleOpenChange}
+        getAnchorRect={props.getAnchorRect}
+        placement="bottom-start"
+        gutter={4}
+      >
+        <Show when={props.open}>
+          <TagPickerBody
+            docTags={props.docTags}
+            onClose={() => props.onOpenChange(false)}
+            onOpenCreateEditor={(mode, onCreateSuccess) => {
+              setCreateSuccessHandler(() => onCreateSuccess);
+              setEditorMode(mode);
+              props.onOpenChange(false);
+            }}
+            onOpenEditEditor={(mode) => {
+              setEditorMode(mode);
+              props.onOpenChange(false);
+            }}
+            registerSave={(handler) => {
+              saveAndClose = handler;
+            }}
+            suppressInitialOutsideEvents
+          />
+        </Show>
+      </Popover>
+      <TagEditorDialog
+        open={editorMode() !== null}
+        mode={editorMode()}
+        teamAvailable={Boolean(currentTeamQuery.data?.team)}
+        onCreateSuccess={async (result) => {
+          await createSuccessHandler()?.(result);
+        }}
+        onClose={() => {
+          setEditorMode(null);
+          setCreateSuccessHandler(undefined);
+        }}
+      />
+    </>
   );
 }
 
 function TagPickerBody(props: {
   docTags: DocTags;
   onClose: () => void;
+  onOpenCreateEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'create' }>,
+    onCreateSuccess?: CreateTagSuccessHandler
+  ) => void;
+  onOpenEditEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'edit' }>
+  ) => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
+  suppressInitialOutsideEvents: boolean;
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -190,6 +296,10 @@ function TagPickerBody(props: {
   const addOption = useAddPropertyOptionMutation();
   const ensureTagSet = useEnsureTagSetMutation();
   let scrollContainerRef: HTMLDivElement | undefined;
+  const [initialOutsideEventGuard, setInitialOutsideEventGuard] =
+    createSignal(true);
+  const shouldIgnoreOutsideEvent = () =>
+    props.suppressInitialOutsideEvents && initialOutsideEventGuard();
 
   const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
   const initialAppliedIds = createMemo(
@@ -249,26 +359,12 @@ function TagPickerBody(props: {
     });
   };
 
-  const optionScope = (optionId: string): TagScope | undefined =>
-    initialTagState().optionScopes.get(optionId);
-
   const persistSelection = async () => {
     if (saved()) return true;
     setSaved(true);
 
     try {
-      const nextSelectedIds = selectedIds();
-      for (const tag of initialAppliedTags()) {
-        if (!nextSelectedIds.has(tag.optionId)) {
-          await props.docTags.removeTag(tag.scope, tag.optionId);
-        }
-      }
-
-      for (const optionId of nextSelectedIds) {
-        if (initialAppliedIds().has(optionId)) continue;
-        const scope = optionScope(optionId);
-        if (scope) await props.docTags.applyTag(scope, optionId);
-      }
+      await props.docTags.setTagSelection(selectedIds());
       return true;
     } catch (error) {
       setSaved(false);
@@ -282,7 +378,9 @@ function TagPickerBody(props: {
   };
 
   const saveAndClose = async () => {
-    if (await save()) props.onClose();
+    const savePromise = save();
+    props.onClose();
+    await savePromise;
   };
 
   const filteredItems = createMemo(() => {
@@ -332,17 +430,17 @@ function TagPickerBody(props: {
     );
   };
   const showCreateRow = () =>
-    createLabel().length >= 2 && !exactTagMatchExists();
+    createLabel().length > 0 && !exactTagMatchExists();
   const showClearAllRow = () =>
     selectedIds().size > 0 && !search().trim() && !createStep();
   const itemIndex = (item: TagOptionItem) => filteredItems().indexOf(item);
-  const createRowIndex = () => filteredItems().length;
-  const clearAllRowIndex = () =>
-    filteredItems().length + (showCreateRow() ? 1 : 0);
+  const clearAllRowIndex = () => filteredItems().length;
+  const createRowIndex = () =>
+    filteredItems().length + (showClearAllRow() ? 1 : 0);
   const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
-    { scope: 'user', label: 'Personal' },
     { scope: 'team', label: `Shared with ${teamName()}` },
+    { scope: 'user', label: 'Personal' },
   ]);
   const selectedColor = () =>
     TAG_COLOR_OPTIONS[selectedColorIndex()]?.color ?? DEFAULT_TAG_COLOR;
@@ -356,6 +454,20 @@ function TagPickerBody(props: {
     setSelectedColorIndex(0);
     setSelectedScopeIndex(0);
     setCreateStep('color');
+  };
+
+  const editableTagForItem = (item: TagOptionItem): EditableTag => ({
+    scope: item.scope,
+    propertyDefinitionId: item.option.propertyDefinitionId,
+    option: item.option,
+  });
+
+  const beginEdit = async (item: TagOptionItem) => {
+    if (!(await persistSelection())) return;
+    props.onOpenEditEditor({
+      type: 'edit',
+      tag: editableTagForItem(item),
+    });
   };
 
   const createTag = async (scope: TagScope) => {
@@ -436,8 +548,8 @@ function TagPickerBody(props: {
   const dropdown = useDropdownSearch({
     itemCount: () =>
       filteredItems().length +
-      (showCreateRow() ? 1 : 0) +
-      (showClearAllRow() ? 1 : 0),
+      (showClearAllRow() ? 1 : 0) +
+      (showCreateRow() ? 1 : 0),
     onSelect: (index, event) => {
       if (showCreateRow() && index === createRowIndex()) {
         beginCreate();
@@ -491,6 +603,10 @@ function TagPickerBody(props: {
   onMount(() => {
     props.registerSave(saveAndClose);
     document.addEventListener('keydown', handleKeyDown);
+    const timeout = setTimeout(() => {
+      setInitialOutsideEventGuard(false);
+    }, 100);
+    onCleanup(() => clearTimeout(timeout));
   });
 
   onCleanup(() => {
@@ -504,6 +620,12 @@ function TagPickerBody(props: {
         <Popover.Content
           class="z-modal w-64 rounded-xl bg-surface text-sm shadow-menu ring ring-edge-muted menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
+          onFocusOutside={(event) => {
+            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+          }}
         >
           <Show
             when={createStep()}
@@ -511,7 +633,7 @@ function TagPickerBody(props: {
               <>
                 <DropdownSearchInput
                   value={search()}
-                  placeholder="Change or Add tags"
+                  placeholder="Change or add tags"
                   onInput={(value) => {
                     setSearch(value);
                     dropdown.setSearchQuery(value);
@@ -551,6 +673,7 @@ function TagPickerBody(props: {
                               toggleSelected(item.option.id);
                               if (!event.shiftKey) saveAndClose();
                             }}
+                            onEdit={() => void beginEdit(item)}
                             onMouseEnter={() => {
                               if (!dropdown.keyboardMode()) {
                                 dropdown.setSelectedIndex(itemIndex(item));
@@ -584,6 +707,7 @@ function TagPickerBody(props: {
                                   toggleSelected(item.option.id);
                                   if (!event.shiftKey) saveAndClose();
                                 }}
+                                onEdit={() => void beginEdit(item)}
                                 onMouseEnter={() => {
                                   if (!dropdown.keyboardMode()) {
                                     dropdown.setSelectedIndex(itemIndex(item));
@@ -594,21 +718,6 @@ function TagPickerBody(props: {
                           </For>
                         )}
                       </For>
-                      <Show when={showCreateRow()}>
-                        <CreateTagRow
-                          index={createRowIndex()}
-                          label={createLabel()}
-                          selected={
-                            dropdown.selectedIndex() === createRowIndex()
-                          }
-                          onClick={beginCreate}
-                          onMouseEnter={() => {
-                            if (!dropdown.keyboardMode()) {
-                              dropdown.setSelectedIndex(createRowIndex());
-                            }
-                          }}
-                        />
-                      </Show>
                       <Show when={showClearAllRow()}>
                         <div class="my-1 border-t border-edge-muted" />
                         <div data-tag-index={clearAllRowIndex()}>
@@ -637,6 +746,21 @@ function TagPickerBody(props: {
                       </Show>
                     </Show>
                   </div>
+                  <Show when={showCreateRow()}>
+                    <div class="mt-1 border-t border-edge-muted pt-1">
+                      <CreateTagRow
+                        index={createRowIndex()}
+                        label={createLabel()}
+                        selected={dropdown.selectedIndex() === createRowIndex()}
+                        onClick={beginCreate}
+                        onMouseEnter={() => {
+                          if (!dropdown.keyboardMode()) {
+                            dropdown.setSelectedIndex(createRowIndex());
+                          }
+                        }}
+                      />
+                    </div>
+                  </Show>
                 </div>
               </>
             }
@@ -673,6 +797,7 @@ function TagPickerRow(props: {
   checked: boolean;
   selected: boolean;
   onSelect: (event: MouseEvent) => void;
+  onEdit: () => void;
   onMouseEnter: () => void;
 }) {
   return (
@@ -690,6 +815,22 @@ function TagPickerRow(props: {
             {props.teamName}
           </span>
         </Show>
+        <button
+          type="button"
+          aria-label={`Edit ${optionLabel(props.item.option)}`}
+          class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted opacity-0 outline-none hover:bg-hover hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onEdit();
+          }}
+        >
+          <PencilIcon class="size-3.5" />
+        </button>
       </DropdownSelectableRow>
     </div>
   );
@@ -715,7 +856,9 @@ function CreateTagRow(props: {
       <div class="size-3 shrink-0 text-ink-muted">
         <PlusIcon class="size-3" />
       </div>
-      <span class="min-w-0 flex-1 truncate">Create tag "{props.label}"</span>
+      <span class="min-w-0 flex-1 truncate">
+        Create new tag "{props.label}"
+      </span>
     </div>
   );
 }

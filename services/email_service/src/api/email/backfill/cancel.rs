@@ -1,12 +1,12 @@
-use crate::api::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     Extension,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
-use model::user::UserContext;
 use models_email::email::service::backfill::BackfillJobStatus;
 use models_email::email::service::link::Link;
 use sqlx::types::Uuid;
@@ -31,10 +31,10 @@ pub struct CancelBackfillParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     link: Extension<Link>,
     Json(req_body): Json<CancelBackfillParams>,
 ) -> Result<Response, Response> {

@@ -1,7 +1,9 @@
+use crate::api::context::AuthorizationService;
 use axum::Json;
 use axum::extract::State;
 use axum::response::Response;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::GenericErrorResponse;
 use sqlx::PgPool;
 
@@ -25,9 +27,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, _auth))]
 pub async fn handler(
     State(db): State<PgPool>,
+    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
     let users =

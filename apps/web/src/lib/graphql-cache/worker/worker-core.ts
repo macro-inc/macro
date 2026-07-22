@@ -3,12 +3,14 @@
  * protocol to page ports, and fans out invalidations.
  */
 
+import { match } from 'ts-pattern';
 import type {
   CachePush,
   CacheRequest,
   CacheResponse,
   OptimisticWriteResult,
   ReadResult,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 import { type CacheEngine, loadCacheWasm } from './wasm-module';
@@ -54,12 +56,12 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
-    switch (request.kind) {
-      case 'init': {
+    return await match(request)
+      .with({ kind: 'init' }, async (request) => {
         await this.init(request.scope, request.hotCapacity);
         return null;
-      }
-      case 'read': {
+      })
+      .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
         const result: ReadResult = await engine.readQuery(
           request.opId,
@@ -68,8 +70,18 @@ export class CacheWorkerCore {
           request.variables
         );
         return result;
-      }
-      case 'write': {
+      })
+      .with({ kind: 'read-records' }, async (request) => {
+        const engine = this.requireEngine();
+        const result: SelectedRecordPageWire = await engine.readRecords(
+          request.document,
+          request.fragmentName,
+          request.cursor,
+          request.limit
+        );
+        return result;
+      })
+      .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
           request.originOpId,
@@ -79,10 +91,10 @@ export class CacheWorkerCore {
           request.data,
           request.identity
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
-      }
-      case 'begin-optimistic-write': {
+      })
+      .with({ kind: 'begin-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
         const result: OptimisticWriteResult = await engine.beginOptimisticWrite(
           request.originOpId,
@@ -90,20 +102,29 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
+          request.linkPatches,
+          request.revalidations,
           request.createdAtMs
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
-      }
-      case 'claim-next-mutation': {
+      })
+      .with({ kind: 'inspect-query' }, async (request) => {
+        return await this.requireEngine().inspectQuery(
+          request.query,
+          request.operationName,
+          request.path
+        );
+      })
+      .with({ kind: 'claim-next-mutation' }, async (request) => {
         const engine = this.requireEngine();
         return await engine.claimNextMutation(
           request.owner,
           request.nowMs,
           request.leaseExpiresAtMs
         );
-      }
-      case 'defer-optimistic-write': {
+      })
+      .with({ kind: 'defer-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
         await engine.deferOptimisticWrite(
           request.transactionId,
@@ -113,8 +134,8 @@ export class CacheWorkerCore {
           request.error
         );
         return null;
-      }
-      case 'commit-optimistic-write': {
+      })
+      .with({ kind: 'commit-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
         // Committing can flush settled layers into durable storage.
         const result = await engine.commitOptimisticWrite(
@@ -126,38 +147,58 @@ export class CacheWorkerCore {
           request.variables,
           request.data
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
+        this.push({
+          kind: 'mutation-settled',
+          settlement: {
+            transactionId: request.transactionId,
+            status: 'committed',
+          },
+        });
         return result;
-      }
-      case 'rollback-optimistic-write': {
+      })
+      .with({ kind: 'rollback-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.rollbackOptimisticWrite(
           request.transactionId,
           request.leaseOwner,
           request.leaseGeneration
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
+        this.push({
+          kind: 'mutation-settled',
+          settlement: {
+            transactionId: request.transactionId,
+            status: 'permanently-failed',
+            error: request.error,
+          },
+        });
         return result;
-      }
-      case 'invalidate': {
+      })
+      .with({ kind: 'invalidate' }, async (request) => {
         const engine = this.requireEngine();
         const affectedOps = await engine.invalidateKeys(request.keys);
-        this.fanOut({ changed: request.keys, affectedOps, reset: false });
+        this.fanOut(
+          {
+            changed: request.keys,
+            affectedOps,
+            reset: false,
+            revalidations: [],
+          },
+          true
+        );
         return affectedOps;
-      }
-      case 'teardown': {
+      })
+      .with({ kind: 'teardown' }, async (request) => {
         await this.requireEngine().teardownOperation(request.opId);
         return null;
-      }
-      case 'clear': {
+      })
+      .with({ kind: 'clear' }, async () => {
         await this.requireEngine().clear();
+        this.push({ kind: 'cache-changed' });
         return null;
-      }
-      default: {
-        // Compile-time exhaustiveness: a new request kind fails here.
-        return request satisfies never;
-      }
-    }
+      })
+      .exhaustive();
   }
 
   private async init(scope: string, hotCapacity?: number): Promise<void> {
@@ -180,7 +221,7 @@ export class CacheWorkerCore {
   }
 
   /** Notifies every page connected to this shared engine. */
-  private fanOut(result: WriteResult): void {
+  private fanOut(result: WriteResult, cacheChanged: boolean): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -188,10 +229,12 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
+    if (cacheChanged) {
+      this.push({ kind: 'cache-changed' });
+    }
   }
 
   private push(msg: CachePush): void {
-    if (msg.opIds.length === 0) return;
     for (const port of this.ports) {
       port.postMessage(msg);
     }

@@ -11,8 +11,9 @@ use crate::domain::ports::{
     ChannelService,
 };
 use axum::{
-    Extension, Router,
-    http::{Request, StatusCode},
+    Router,
+    body::Body,
+    http::{Request, StatusCode, header},
 };
 use entity_access::domain::{
     models::{
@@ -23,13 +24,30 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use http_body_util::BodyExt;
+#[allow(deprecated)]
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
+    InternalAuthConfig, JwtValidator, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
+    LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationError,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, ValidatedIdentity,
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model_user::UserContext;
 use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
-use std::sync::{Arc, Mutex};
+use rootcause::Report;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use tower::util::ServiceExt;
+
+const TEST_USER_ID: &str = "macro|test@example.com";
+const INTERNAL_USER_ID: &str = "macro|internal@example.com";
+const VALID_BEARER_TOKEN: &str = "valid";
+const ORGANIZATION_BEARER_TOKEN: &str = "valid-with-organization";
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
+const TEST_ORGANIZATION_ID: i32 = 42;
 
 // --- Access service implementations for tests ---
 
@@ -40,28 +58,51 @@ enum AccessMode {
     NotFound,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PermissionCall {
+    user_id: Option<String>,
+    entity_id: String,
+    entity_type: EntityType,
+    organization_id: Option<i64>,
+}
+
 #[derive(Clone)]
 struct TestAccessService {
     mode: AccessMode,
+    channel_view_only: bool,
+    permission_calls: Arc<Mutex<Vec<PermissionCall>>>,
 }
 
 impl TestAccessService {
-    const fn allow() -> Self {
+    fn allow() -> Self {
+        Self::new(AccessMode::Allow)
+    }
+
+    fn channel_view_only() -> Self {
         Self {
-            mode: AccessMode::Allow,
+            channel_view_only: true,
+            ..Self::allow()
         }
     }
 
-    const fn deny() -> Self {
+    fn deny() -> Self {
+        Self::new(AccessMode::Deny)
+    }
+
+    fn not_found() -> Self {
+        Self::new(AccessMode::NotFound)
+    }
+
+    fn new(mode: AccessMode) -> Self {
         Self {
-            mode: AccessMode::Deny,
+            mode,
+            channel_view_only: false,
+            permission_calls: Arc::default(),
         }
     }
 
-    const fn not_found() -> Self {
-        Self {
-            mode: AccessMode::NotFound,
-        }
+    fn permission_calls(&self) -> Vec<PermissionCall> {
+        self.permission_calls.lock().unwrap().clone()
     }
 
     fn access_err(&self) -> AccessError {
@@ -142,11 +183,22 @@ impl EntityAccessService for TestAccessService {
 
     async fn get_entity_permission(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
         entity_type: EntityType,
-        _user_org_id: Option<i64>,
+        user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
+        self.permission_calls.lock().unwrap().push(PermissionCall {
+            user_id: user_id.map(|user_id| user_id.as_ref().to_string()),
+            entity_id: entity_id.to_string(),
+            entity_type,
+            organization_id: user_org_id,
+        });
+
+        if self.channel_view_only && entity_type == EntityType::Channel {
+            return Ok(EntityPermission::ChannelViewOnly);
+        }
+
         match self.mode {
             AccessMode::Allow => match entity_type {
                 EntityType::Channel => Ok(EntityPermission::ChannelRole {
@@ -603,6 +655,7 @@ impl ChannelService for JoinLinkService {
 
 #[derive(Clone, Default)]
 struct RecordingMutationService {
+    joins: Arc<Mutex<Vec<(Sender, Uuid)>>>,
     posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
 }
 
@@ -788,9 +841,10 @@ impl ChannelService for RecordingMutationService {
 
     async fn join_channel(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        actor: Sender,
+        channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
+        self.joins.lock().unwrap().push((actor, channel_id));
         Ok(())
     }
 
@@ -812,45 +866,282 @@ impl ChannelService for RecordingMutationService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+#[derive(Clone, Default)]
+struct FakeJwtValidator {
+    validation_count: Arc<AtomicUsize>,
+}
+
+impl FakeJwtValidator {
+    fn validation_count(&self) -> usize {
+        self.validation_count.load(Ordering::SeqCst)
+    }
+}
+
+impl JwtValidator for FakeJwtValidator {
+    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+        self.validation_count.fetch_add(1, Ordering::SeqCst);
+
+        let organization_id = match jwt {
+            VALID_BEARER_TOKEN => None,
+            ORGANIZATION_BEARER_TOKEN => Some(TEST_ORGANIZATION_ID),
+            "expired" => return Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        };
+
+        Ok(ValidatedIdentity {
+            user_id: TEST_USER_ID.to_string(),
+            fusion_user_id: "test-fusion-user".to_string(),
+            organization_id,
+            permissions: None,
+        })
+    }
+}
+
+type TestAuthorizationService = MacroAuthorizationServiceImpl<FakeJwtValidator>;
+
+fn authorization_state_with_default(
+    default_user_id: Option<&str>,
+) -> (
+    MacroAuthorizationState<TestAuthorizationService>,
+    FakeJwtValidator,
+) {
+    let validator = FakeJwtValidator::default();
+    let service = MacroAuthorizationServiceImpl::new(
+        validator.clone(),
+        InternalAuthConfig {
+            api_key: VALID_INTERNAL_KEY.to_string(),
+            default_user_id: default_user_id.map(str::to_string),
+        },
+    );
+    (MacroAuthorizationState::new(Arc::new(service)), validator)
+}
+
+fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
+    authorization_state_with_default(None).0
+}
+
+async fn attach_bearer(mut request: Request<Body>) -> Request<Body> {
+    request.headers_mut().insert(
+        header::AUTHORIZATION,
+        format!("Bearer {VALID_BEARER_TOKEN}").parse().unwrap(),
+    );
+    request
 }
 
 fn mock_router() -> Router {
     channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn error_router() -> Router {
     channels_router(ChannelsRouterState::new(
         ErrorService,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn denied_router() -> Router {
     channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::deny(),
+        authorization_state(),
     ))
-    .layer(user_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn not_found_router() -> Router {
     channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::not_found(),
+        authorization_state(),
     ))
-    .layer(user_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
+}
+
+fn join_by_code_router(
+    default_user_id: Option<&str>,
+) -> (Router, Uuid, Arc<Mutex<Vec<Sender>>>, FakeJwtValidator) {
+    let join_code = Uuid::new_v4();
+    let service = JoinLinkService::new(Uuid::new_v4(), join_code, vec![]);
+    let joined_users = service.joined_users.clone();
+    let (authorization_state, validator) = authorization_state_with_default(default_user_id);
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::deny(),
+        authorization_state,
+    ));
+    (router, join_code, joined_users, validator)
+}
+
+fn join_by_code_request(join_code: Uuid) -> axum::http::request::Builder {
+    Request::post(format!("/join/{join_code}"))
+}
+
+#[tokio::test]
+async fn valid_bearer_authenticates_user() {
+    let (router, join_code, joined_users, validator) = join_by_code_router(None);
+    let request = join_by_code_request(join_code)
+        .header(
+            header::AUTHORIZATION,
+            format!("Bearer {VALID_BEARER_TOKEN}"),
+        )
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(validator.validation_count(), 1);
+    let joined_users = joined_users.lock().unwrap();
+    assert_eq!(joined_users.len(), 1);
+    assert_eq!(joined_users[0].as_ref(), TEST_USER_ID);
+}
+
+#[tokio::test]
+async fn missing_credentials_are_rejected_before_service_invocation() {
+    let (router, join_code, joined_users, validator) = join_by_code_router(None);
+    let request = join_by_code_request(join_code).body(Body::empty()).unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(validator.validation_count(), 0);
+    assert!(joined_users.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invalid_credentials_are_rejected_before_service_invocation() {
+    let (router, join_code, joined_users, validator) = join_by_code_router(None);
+    let request = join_by_code_request(join_code)
+        .header(header::AUTHORIZATION, "Bearer invalid")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(validator.validation_count(), 1);
+    assert!(joined_users.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn expired_credentials_are_rejected_before_service_invocation() {
+    let (router, join_code, joined_users, validator) = join_by_code_router(None);
+    let request = join_by_code_request(join_code)
+        .header(header::AUTHORIZATION, "Bearer expired")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(validator.validation_count(), 1);
+    assert!(joined_users.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn standard_internal_headers_propagate_organization_to_entity_access() {
+    let channel_id = Uuid::new_v4();
+    let access_service = TestAccessService::allow();
+    let router = channels_router(ChannelsRouterState::new(
+        MockService,
+        access_service.clone(),
+        authorization_state(),
+    ));
+    let request = Request::get(format!("/{channel_id}/messages"))
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, INTERNAL_USER_ID)
+        .header(INTERNAL_MACRO_ORGANIZATION_ID_HEADER, "73")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        access_service.permission_calls(),
+        [PermissionCall {
+            user_id: Some(INTERNAL_USER_ID.to_string()),
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+            organization_id: Some(73),
+        }]
+    );
+}
+
+#[allow(deprecated)]
+#[tokio::test]
+async fn legacy_internal_headers_authenticate_acting_user() {
+    let (router, join_code, joined_users, validator) = join_by_code_router(None);
+    let request = join_by_code_request(join_code)
+        .header(LEGACY_DSS_INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, INTERNAL_USER_ID)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(validator.validation_count(), 0);
+    let joined_users = joined_users.lock().unwrap();
+    assert_eq!(joined_users.len(), 1);
+    assert_eq!(joined_users[0].as_ref(), INTERNAL_USER_ID);
+}
+
+#[tokio::test]
+async fn internal_headers_use_dss_style_default_identity() {
+    let (router, join_code, joined_users, validator) = join_by_code_router(Some(TEST_USER_ID));
+    let request = join_by_code_request(join_code)
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(validator.validation_count(), 0);
+    let joined_users = joined_users.lock().unwrap();
+    assert_eq!(joined_users.len(), 1);
+    assert_eq!(joined_users[0].as_ref(), TEST_USER_ID);
+}
+
+#[tokio::test]
+async fn bearer_organization_is_propagated_to_entity_access() {
+    let channel_id = Uuid::new_v4();
+    let access_service = TestAccessService::allow();
+    let (authorization_state, validator) = authorization_state_with_default(None);
+    let router = channels_router(ChannelsRouterState::new(
+        MockService,
+        access_service.clone(),
+        authorization_state,
+    ));
+    let request = Request::get(format!("/{channel_id}/messages"))
+        .header(
+            header::AUTHORIZATION,
+            format!("Bearer {ORGANIZATION_BEARER_TOKEN}"),
+        )
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(validator.validation_count(), 1);
+    assert_eq!(
+        access_service.permission_calls(),
+        [PermissionCall {
+            user_id: Some(TEST_USER_ID.to_string()),
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+            organization_id: Some(i64::from(TEST_ORGANIZATION_ID)),
+        }]
+    );
 }
 
 #[tokio::test]
@@ -862,8 +1153,9 @@ async fn active_participant_can_get_persisted_channel_join_code() {
     let router = channels_router(ChannelsRouterState::new(
         service,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let response = router
         .oneshot(
@@ -889,8 +1181,12 @@ async fn non_participant_cannot_get_channel_join_code() {
     let channel_id = Uuid::new_v4();
     let service = JoinLinkService::new(channel_id, Uuid::new_v4(), vec![]);
     let requested_channel_ids = service.requested_channel_ids.clone();
-    let router = channels_router(ChannelsRouterState::new(service, TestAccessService::deny()))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::deny(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let response = router
         .oneshot(
@@ -921,8 +1217,9 @@ async fn non_private_channels_cannot_get_join_codes() {
     let router = channels_router(ChannelsRouterState::new(
         service,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     for (channel_type, channel_id) in non_private_channels {
         let response = router
@@ -946,8 +1243,12 @@ async fn non_private_channels_cannot_get_join_codes() {
 #[tokio::test]
 async fn join_channel_by_code_handles_malformed_and_unknown_codes() {
     let service = JoinLinkService::new(Uuid::new_v4(), Uuid::new_v4(), vec![]);
-    let router = channels_router(ChannelsRouterState::new(service, TestAccessService::deny()))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::deny(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let malformed_response = router
         .clone()
@@ -980,8 +1281,12 @@ async fn authenticated_user_can_join_by_code_without_channel_access() {
     let join_code = Uuid::new_v4();
     let service = JoinLinkService::new(Uuid::new_v4(), join_code, vec![]);
     let joined_users = service.joined_users.clone();
-    let router = channels_router(ChannelsRouterState::new(service, TestAccessService::deny()))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::deny(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let response = router
         .oneshot(
@@ -1011,14 +1316,112 @@ async fn authenticated_user_can_join_by_code_without_channel_access() {
 }
 
 #[tokio::test]
+async fn channel_view_only_user_can_join_channel_by_id() {
+    let channel_id = Uuid::new_v4();
+    let mutation_service = RecordingMutationService::default();
+    let joins = mutation_service.joins.clone();
+    let access_service = TestAccessService::channel_view_only();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        access_service.clone(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let response = router
+        .oneshot(
+            Request::post(format!("/{channel_id}/join"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        access_service.permission_calls(),
+        [PermissionCall {
+            user_id: Some(TEST_USER_ID.to_string()),
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+            organization_id: None,
+        }]
+    );
+    let joins = joins.lock().unwrap();
+    assert_eq!(joins.len(), 1);
+    assert_eq!(joins[0].0.as_ref(), TEST_USER_ID);
+    assert_eq!(joins[0].1, channel_id);
+}
+
+#[tokio::test]
+async fn user_without_channel_access_cannot_join_channel_by_id() {
+    let channel_id = Uuid::new_v4();
+    let mutation_service = RecordingMutationService::default();
+    let joins = mutation_service.joins.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        TestAccessService::deny(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let response = router
+        .oneshot(
+            Request::post(format!("/{channel_id}/join"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(joins.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn malformed_channel_id_does_not_invoke_join_service() {
+    let mutation_service = RecordingMutationService::default();
+    let joins = mutation_service.joins.clone();
+    let access_service = TestAccessService::channel_view_only();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        access_service.clone(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let response = router
+        .oneshot(
+            Request::post("/not-a-uuid/join")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        access_service.permission_calls(),
+        [PermissionCall {
+            user_id: Some(TEST_USER_ID.to_string()),
+            entity_id: "not-a-uuid".to_string(),
+            entity_type: EntityType::Channel,
+            organization_id: None,
+        }]
+    );
+    assert!(joins.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn post_message_route_uses_entity_access_and_mutation_service() {
     let mutation_service = RecordingMutationService::default();
     let posts = mutation_service.posts.clone();
     let router = channels_router(ChannelsRouterState::new(
         mutation_service,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .method("POST")
@@ -1192,8 +1595,9 @@ async fn participants_returns_data_with_correct_shape() {
     let router = channels_router(ChannelsRouterState::new(
         ParticipantsService,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .uri(format!("/{channel_id}/participants"))
@@ -1427,8 +1831,9 @@ async fn messages_around_omits_previous_cursor_when_no_newer_page() {
             has_more_newer: false,
         },
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1454,8 +1859,9 @@ async fn messages_around_returns_previous_cursor_when_newer_page_exists() {
             has_more_newer: true,
         },
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1479,8 +1885,9 @@ async fn messages_around_returns_404_when_not_found() {
     let router = channels_router(ChannelsRouterState::new(
         NotFoundService,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1598,8 +2005,9 @@ async fn post_messages_empty_body_uses_default_filters() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1625,8 +2033,9 @@ async fn post_messages_forwards_message_ids_filter() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let channel_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
@@ -1653,8 +2062,9 @@ async fn post_messages_forwards_last_activity_filter() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let channel_id = Uuid::new_v4();
     let body = serde_json::json!({ "last_activity": "2024-06-01T12:00:00Z" }).to_string();
@@ -1686,8 +2096,9 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let channel_id = Uuid::new_v4();
     let body = serde_json::json!({
@@ -1725,8 +2136,9 @@ async fn post_messages_rejects_oversized_filter_list() {
     let router = channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
 
     let channel_id = Uuid::new_v4();
     let ids: Vec<Uuid> = (0..101).map(|_| Uuid::new_v4()).collect();
@@ -1770,8 +2182,9 @@ async fn thread_replies_returns_404_when_not_found() {
     let router = channels_router(ChannelsRouterState::new(
         NotFoundService,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -2042,8 +2455,9 @@ async fn get_activity_returns_user_activities() {
     let router = channels_router(ChannelsRouterState::new(
         ActivityService::default(),
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let request = Request::builder()
         .uri("/activity")
         .body(axum::body::Body::empty())
@@ -2064,8 +2478,9 @@ async fn post_activity_records_and_returns_activity() {
     let router = channels_router(ChannelsRouterState::new(
         service,
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .method("POST")
@@ -2098,8 +2513,9 @@ async fn post_activity_rejects_invalid_channel_id() {
     let router = channels_router(ChannelsRouterState::new(
         ActivityService::default(),
         TestAccessService::allow(),
+        authorization_state(),
     ))
-    .layer(user_extension());
+    .layer(axum::middleware::map_request(attach_bearer));
     let request = Request::builder()
         .method("POST")
         .uri("/activity")

@@ -669,15 +669,26 @@ export function createSplitLayout(
     };
   }
 
+  /**
+   * `deliverParams` marks a fresh forward navigation, which delivers the
+   * one-shot `content.params` to the new mount. History-driven reattaches
+   * (back/forward, removeFromHistory, reset) leave it unset so re-visiting an
+   * entry doesn't re-fire its params (e.g. re-target a channel message).
+   */
   function reattach(
     split: SplitState,
     next: SplitContent,
     referredFrom?: ReferredFrom,
-    cause: NavigationCause = 'fresh'
+    cause: NavigationCause = 'fresh',
+    deliverParams = false
   ) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
     let content = attachAliasContext(next);
-    if (!content.preserveParams && content.params !== undefined) {
+    if (
+      !deliverParams &&
+      !content.preserveParams &&
+      content.params !== undefined
+    ) {
       content = { ...content, params: undefined };
     }
     if (isDuplicateSplit(otherSplits, next)) return;
@@ -830,7 +841,8 @@ export function createSplitLayout(
         split,
         content,
         referredFrom,
-        mergeHistory ? 'replace' : 'fresh'
+        mergeHistory ? 'replace' : 'fresh',
+        true
       );
     });
   }

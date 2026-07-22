@@ -240,6 +240,88 @@ pub struct CrmAddressStatus {
     pub email_sync: bool,
 }
 
+/// Minimum team role required for a CRM capability. Members are
+/// view-only at the platform level, so the configurable range is
+/// admin (default) vs owner. Maps to the `team_role` Postgres enum;
+/// `member` is deliberately not representable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "team_role", rename_all = "lowercase")
+)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub enum CrmPermissionRole {
+    /// Team admins and owners.
+    Admin,
+    /// Team owners only.
+    Owner,
+}
+
+impl CrmPermissionRole {
+    /// The `team_role` enum literal for SQL binds (queries bind text and
+    /// cast with `::team_role`).
+    pub fn as_db_str(&self) -> &'static str {
+        match self {
+            CrmPermissionRole::Admin => "admin",
+            CrmPermissionRole::Owner => "owner",
+        }
+    }
+}
+
+/// Team-level CRM configuration stored on `team_crm_settings`
+/// (everything except the `crm_enabled` killswitch, which stays owned
+/// by the teams crate).
+#[derive(Debug, Clone)]
+pub struct CrmTeamSettings {
+    /// Who can change the deal stage set in CRM settings.
+    pub edit_stages_role: CrmPermissionRole,
+    /// Who can move deals out of a closed stage.
+    pub move_closed_deals_role: CrmPermissionRole,
+    /// Who can delete (hide) CRM records.
+    pub delete_records_role: CrmPermissionRole,
+    /// Stage option ids counting as closed deals; `None` = the client
+    /// falls back to its label heuristic.
+    pub closed_stage_ids: Option<Vec<uuid::Uuid>>,
+    /// Team saved views — an opaque JSON array owned by the frontend.
+    pub team_views: Value,
+    /// Team view applied by default when a member opens the CRM view.
+    pub default_team_view_id: Option<String>,
+}
+
+impl Default for CrmTeamSettings {
+    fn default() -> Self {
+        Self {
+            edit_stages_role: CrmPermissionRole::Admin,
+            move_closed_deals_role: CrmPermissionRole::Admin,
+            delete_records_role: CrmPermissionRole::Admin,
+            closed_stage_ids: None,
+            team_views: Value::Array(Vec::new()),
+            default_team_view_id: None,
+        }
+    }
+}
+
+/// Field-wise partial update of [`CrmTeamSettings`]. Outer `None` =
+/// leave the column unchanged; for the two nullable columns the inner
+/// `None` clears the value. `team_views` is replaced whole (last-wins).
+#[derive(Debug, Clone, Default)]
+pub struct CrmTeamSettingsPatch {
+    /// New `edit_stages_role`, if provided.
+    pub edit_stages_role: Option<CrmPermissionRole>,
+    /// New `move_closed_deals_role`, if provided.
+    pub move_closed_deals_role: Option<CrmPermissionRole>,
+    /// New `delete_records_role`, if provided.
+    pub delete_records_role: Option<CrmPermissionRole>,
+    /// New `closed_stage_ids`; `Some(None)` clears to the heuristic.
+    pub closed_stage_ids: Option<Option<Vec<uuid::Uuid>>>,
+    /// Replacement `team_views` array.
+    pub team_views: Option<Value>,
+    /// New `default_team_view_id`; `Some(None)` clears it.
+    pub default_team_view_id: Option<Option<String>>,
+}
+
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
@@ -270,6 +352,11 @@ pub enum CrmError {
     /// below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     AdminRoleRequired,
+    /// The request changes governance fields of the team CRM settings
+    /// (permission thresholds, closed stages) but the caller's team role
+    /// is below admin/owner.
+    #[error("changing crm permission or stage settings requires admin/owner team role")]
+    SettingsAdminRequired,
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

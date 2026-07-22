@@ -8,6 +8,7 @@ import {
   isAskAiItem,
   isCommandItem,
   isEntityItem,
+  type PaginationControls,
   useCommandItems,
 } from '@app/features/command/useCommandItems';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
@@ -28,6 +29,7 @@ import {
   type WithSearch,
 } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
+import WideStar from '@icon/wide-star.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
@@ -40,8 +42,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { VList } from 'virtua/solid';
+import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SearchState } from './mobileSearchState';
+
+const LOAD_MORE_THRESHOLD = 120;
 
 const CATEGORIES: PillTabItem<CategoryFilter>[] = [
   { value: 'all', label: 'All' },
@@ -66,9 +70,10 @@ function MobileSearchInner() {
 
   const query = debouncedDependent(SearchState.query, 60);
 
-  const filteredItems = useCommandItems(query, SearchState.categoryFilter, {
+  const commandItems = useCommandItems(query, SearchState.categoryFilter, {
     showSearchRow: false,
     commandScopeCommands: SearchState.commandScopeCommands,
+    searchActive: SearchState.isOpen,
   });
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);
@@ -157,6 +162,14 @@ function MobileSearchInner() {
     SearchState.close();
   }
 
+  function handleAskAi(query: string) {
+    // Opens a new chat split and sends the query immediately — same wiring as
+    // the desktop command menu's "Ask AI about" row.
+    openChatWithMessage(query);
+    SearchState.close();
+    SearchState.setQuery('');
+  }
+
   const handleBack = () => {
     if (SearchState.isInCommandScope()) {
       SearchState.clearCommandScopeCommands();
@@ -176,7 +189,8 @@ function MobileSearchInner() {
       <Layer depth={0}>
         <div class="fixed inset-0 z-mobile-search flex flex-col bg-surface pt-(--safe-top) pr-(--safe-right) pb-[calc(var(--virtual-keyboard-height)+var(--mobile-content-inset-bottom))] pl-(--safe-left)">
           <ResultsContainer
-            nameMatchItems={filteredItems()}
+            nameMatchItems={commandItems.items()}
+            pagination={commandItems.pagination}
             fullTextItems={fullTextResults()}
             onSelectNameMatch={(item, openInNewSplit) =>
               handleItemAction(item, openInNewSplit)
@@ -186,6 +200,7 @@ function MobileSearchInner() {
               SearchState.isFullTextMode() && isFullTextLoading()
             }
             onFullTextSearch={() => SearchState.enableFullTextMode()}
+            onAskAi={handleAskAi}
             query={SearchState.query}
           />
         </div>
@@ -195,7 +210,7 @@ function MobileSearchInner() {
       <Show when={showTabs()}>
         <FloatRegion
           region="accessory"
-          priority={20}
+          priority={100}
           active={() => SearchState.isOpen()}
         >
           <CategoryFilterTabs />
@@ -206,7 +221,7 @@ function MobileSearchInner() {
           while search is open, regardless of keyboard visibility. */}
       <FloatRegion
         region="dock"
-        priority={20}
+        priority={100}
         active={() => SearchState.isOpen()}
       >
         <SearchInputBar onBack={handleBack} />
@@ -257,11 +272,13 @@ function SearchInputBar(props: { onBack: () => void }) {
 
 function ResultsContainer(props: {
   nameMatchItems: CommandMenuItem[];
+  pagination: PaginationControls;
   fullTextItems: WithSearch<EntityData>[];
   onSelectNameMatch: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onSelectFullText: (entity: WithSearch<EntityData>) => void;
   isLoading?: () => boolean;
   onFullTextSearch: () => void;
+  onAskAi: (query: string) => void;
   query: () => string;
 }) {
   let ref: HTMLDivElement | undefined;
@@ -279,15 +296,30 @@ function ResultsContainer(props: {
 
   const [rowHeight, setRowHeight] = createSignal(0);
   const heightOfNameMatchList = () => props.nameMatchItems.length * rowHeight();
-  const showFullTextSearchButton = () => {
-    if (SearchState.isFullTextMode()) return false;
-    // In a command scope the input filters nested commands, not search.
-    if (SearchState.isInCommandScope()) return false;
-    // Always show when there are no name matches (rowHeight stays 0 since list isn't rendered)
+
+  // In full-text mode or a command scope the input drives search/command
+  // filtering, so neither action row applies.
+  const actionsApply = () =>
+    !SearchState.isFullTextMode() && !SearchState.isInCommandScope();
+  // "Ask AI about" needs something to ask about.
+  const wantAskAiButton = () =>
+    actionsApply() && props.query().trim().length > 0;
+  const actionButtonCount = () =>
+    (actionsApply() ? 1 : 0) + (wantAskAiButton() ? 1 : 0);
+
+  // There's room for the action rows when the name-match list doesn't fill the
+  // frame (with no matches the list isn't rendered, so there's always room).
+  const hasRoomForActions = () => {
     if (props.nameMatchItems.length === 0) return true;
     const rh = rowHeight();
-    return rh > 0 && availableHeight() - heightOfNameMatchList() > rh;
+    return (
+      rh > 0 &&
+      availableHeight() - heightOfNameMatchList() > rh * actionButtonCount()
+    );
   };
+
+  const showFullTextSearchButton = () => actionsApply() && hasRoomForActions();
+  const showAskAiButton = () => wantAskAiButton() && hasRoomForActions();
 
   return (
     <div class="flex-1 min-h-0 bg-surface" ref={ref}>
@@ -336,6 +368,7 @@ function ResultsContainer(props: {
               items={props.nameMatchItems}
               onSelect={props.onSelectNameMatch}
               onRowHeightMeasured={setRowHeight}
+              pagination={props.pagination}
             />
           </div>
         </Match>
@@ -349,10 +382,22 @@ function ResultsContainer(props: {
       <Show when={showFullTextSearchButton()}>
         <button
           onClick={props.onFullTextSearch}
-          class="flex items-center px-2 text-sm gap-2 h-10"
+          class="flex w-full min-w-0 items-center px-2 text-sm gap-2 h-10"
         >
-          <SearchIcon class="size-5 p-0.5" />
-          {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
+          <SearchIcon class="size-5 p-0.5 shrink-0" />
+          <span class="truncate">
+            {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
+          </span>
+        </button>
+      </Show>
+
+      <Show when={showAskAiButton()}>
+        <button
+          onClick={() => props.onAskAi(props.query())}
+          class="flex w-full min-w-0 items-center px-2 text-sm gap-2 h-10"
+        >
+          <WideStar class="size-5 p-0.5 shrink-0" />
+          <span class="truncate">{`Ask AI about "${props.query()}"`}</span>
         </button>
       </Show>
     </div>
@@ -364,12 +409,32 @@ function VirtualizedCommandList(props: {
   items: CommandMenuItem[];
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onRowHeightMeasured?: (height: number) => void;
+  pagination: PaginationControls;
 }) {
+  let virtualizerHandle: VirtualizerHandle | undefined;
+  const loadMoreNearEnd = () => {
+    if (
+      !virtualizerHandle ||
+      !props.pagination.hasMore() ||
+      props.pagination.isLoadingMore()
+    )
+      return;
+    const remaining =
+      virtualizerHandle.scrollSize -
+      virtualizerHandle.scrollOffset -
+      virtualizerHandle.viewportSize;
+    if (remaining <= LOAD_MORE_THRESHOLD) void props.pagination.loadMore();
+  };
+
   return (
     <VList
+      ref={(handle) => {
+        virtualizerHandle = handle;
+      }}
       data={props.items}
       style={{ height: '100%' }}
       class="scrollbar-hidden overscroll-none"
+      onScroll={loadMoreNearEnd}
     >
       {(item, index) => (
         <div

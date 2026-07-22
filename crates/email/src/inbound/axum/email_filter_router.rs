@@ -7,6 +7,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use chrono::{DateTime, Utc};
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 use uuid::Uuid;
@@ -116,16 +117,18 @@ impl From<EmailErr> for EmailFilterError {
 // ── Router ───────────────────────────────────────────────────────────
 
 /// Create the email filter router with `PUT /`, `DELETE /{id}`, and `GET /` handlers.
-pub fn email_filter_router<S, T>() -> Router<S>
+pub fn email_filter_router<S, T, Auth>() -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
     T: EmailService,
+    Auth: MacroAuthorizationService,
     EmailRouterState<T>: axum::extract::FromRef<S>,
+    MacroAuthorizationState<Auth>: axum::extract::FromRef<S>,
 {
     Router::new()
-        .route("/", put(upsert_email_filter_handler::<T>))
-        .route("/", get(list_email_filters_handler::<T>))
-        .route("/{id}", delete(delete_email_filter_handler::<T>))
+        .route("/", put(upsert_email_filter_handler::<T, Auth>))
+        .route("/", get(list_email_filters_handler::<T, Auth>))
+        .route("/{id}", delete(delete_email_filter_handler::<T, Auth>))
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────
@@ -145,9 +148,9 @@ where
     )
 )]
 #[tracing::instrument(err, skip(state, link, body))]
-pub async fn upsert_email_filter_handler<T: EmailService>(
+pub async fn upsert_email_filter_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
     Json(body): Json<UpsertEmailFilterRequest>,
 ) -> Result<Json<UpsertEmailFilterResponse>, EmailFilterError> {
     let input = UpsertEmailFilterInput {
@@ -180,9 +183,9 @@ pub async fn upsert_email_filter_handler<T: EmailService>(
     )
 )]
 #[tracing::instrument(err, skip(state, link))]
-pub async fn delete_email_filter_handler<T: EmailService>(
+pub async fn delete_email_filter_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
     Path(filter_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, EmailFilterError> {
     let deleted = state.inner.delete_email_filter(&link, filter_id).await?;
@@ -209,9 +212,9 @@ pub async fn delete_email_filter_handler<T: EmailService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn list_email_filters_handler<T: EmailService>(
+pub async fn list_email_filters_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
 ) -> Result<Json<ListEmailFiltersResponse>, EmailFilterError> {
     let filters = state.inner.list_email_filters(&link).await?;
 

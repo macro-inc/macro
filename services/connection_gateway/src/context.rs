@@ -6,10 +6,14 @@ use frecency::{
     outbound::postgres::FrecencyPgStorage,
 };
 use last_online_tracker::inbound::LastOnlineWorker;
-use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
+use macro_authorization::{
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+};
 use redis::{RedisError, aio::MultiplexedConnection};
 use std::sync::Arc;
 use stream::domain::StreamManager;
+
+pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
@@ -31,8 +35,7 @@ impl ApiContext {
 pub struct AppState {
     pub context: ApiContext,
     pub config: Arc<Config>,
-    pub jwt_args: JwtValidationArgs,
-    pub internal_api_key: InternalApiKey,
+    pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub frecency_worker: Arc<FrecencyAggregatorWorkerHandle>,
 }
 

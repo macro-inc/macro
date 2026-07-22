@@ -95,6 +95,10 @@ export async function uploadInputAttachments(options: {
     });
 
     try {
+      const dimensionsPromise = resolveMediaDimensions(
+        uploadSource,
+        pendingKind
+      );
       const result = await options.uploadFile(file);
 
       if (result.failed) {
@@ -103,6 +107,7 @@ export async function uploadInputAttachments(options: {
         continue;
       }
 
+      const dimensions = await dimensionsPromise;
       const uploaded = buildUploadedAttachment(file, pendingKind, result);
       if (!uploaded) {
         options.tracker.removeAttachment(pendingId);
@@ -113,21 +118,12 @@ export async function uploadInputAttachments(options: {
       if (previewSrc && uploaded.kind !== 'document') {
         uploaded.previewSrc = previewSrc;
       }
+      if (dimensions) {
+        uploaded.width = dimensions.width;
+        uploaded.height = dimensions.height;
+      }
 
       replacePendingAttachment(options.tracker, pendingId, uploaded);
-
-      void resolveMediaDimensions(uploadSource, pendingKind).then((dims) => {
-        if (!dims) return;
-        options.tracker.setAttachments(
-          options.tracker
-            .attachments()
-            .map((attachment) =>
-              attachment.id === uploaded.id
-                ? { ...attachment, width: dims.width, height: dims.height }
-                : attachment
-            )
-        );
-      });
     } catch (error) {
       console.error('failed to upload attachment', error);
       options.tracker.removeAttachment(pendingId);

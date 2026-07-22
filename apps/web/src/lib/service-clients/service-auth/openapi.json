@@ -888,7 +888,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
+                  "$ref": "#/components/schemas/PasswordlessStartedResponse"
                 }
               }
             }
@@ -2290,6 +2290,65 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/non-admin-invites/toggle": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::toggle_non_admin_invites"],
+        "summary": "Toggles whether non-admin members may invite users to the team. Teams\nstart with this on (any member can invite); turning it off restricts\ninviting to team admins and owners. Requires the caller to be an Admin\nor Owner of the team.",
+        "operationId": "toggle_team_non_admin_invites",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToggleNonAdminInvitesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -4032,6 +4091,15 @@
           }
         }
       },
+      "PasswordlessStartedResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": ["string", "null"],
+            "description": "The one-time login code, returned only by local environments so dev\ntooling can complete the flow without reading the email."
+          }
+        }
+      },
       "PatchTeamCrmSettingsRequest": {
         "type": "object",
         "description": "Request body for `PATCH /team/crm`.",
@@ -4287,9 +4355,14 @@
           "slug",
           "owner_id",
           "crm_enabled",
-          "enterprise"
+          "enterprise",
+          "allow_non_admin_invites"
         ],
         "properties": {
+          "allow_non_admin_invites": {
+            "type": "boolean",
+            "description": "Whether non-admin members may invite users to the team. Defaults to\ntrue; admins can turn it off so only admins/owners may invite."
+          },
           "auto_join_domain": {
             "type": ["string", "null"],
             "description": "The email domain new users are automatically joined to this team\nwith, when automatic domain joining is enabled (None otherwise)."
@@ -4433,6 +4506,17 @@
           "auto_join_domain": {
             "type": ["string", "null"],
             "description": "The team's auto-join domain after the toggle (null when it was\nunset by this call)."
+          }
+        }
+      },
+      "ToggleNonAdminInvitesResponse": {
+        "type": "object",
+        "description": "Response for the toggle non-admin invites endpoint.",
+        "required": ["allow_non_admin_invites"],
+        "properties": {
+          "allow_non_admin_invites": {
+            "type": "boolean",
+            "description": "Whether non-admin members may invite users to the team after the\ntoggle."
           }
         }
       },

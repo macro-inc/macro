@@ -1,9 +1,10 @@
-use crate::api::ApiContext;
+use crate::api::{ApiContext, context::AuthorizationService};
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
@@ -32,6 +33,7 @@ pub struct LinkJobPair {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
     Json(req_body): Json<BackfillParams>,
 ) -> Result<Response, Response> {
     let mut link_job_pairs: Vec<LinkJobPair> = Vec::new();

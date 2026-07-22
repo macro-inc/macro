@@ -6,10 +6,16 @@
  */
 
 import type {
+  CachedQueryInstanceWire,
   ClaimedMutation,
   MutationClaim,
+  MutationSettlement,
+  OptimisticLinkPatchWire,
   OptimisticWriteResult,
+  QueryRevalidationWire,
+  ReadRecordsArgs,
   ReadResult,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -21,10 +27,23 @@ export interface CacheReadArgs {
   variables?: Record<string, unknown>;
 }
 
+export interface InspectQueryArgs {
+  query: string;
+  operationName?: string;
+  /** Response-key field path from the query root. */
+  path: Array<{ field: string }>;
+}
+
 export interface CacheWriteArgs extends CacheReadArgs {
   data: unknown;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+}
+
+export interface BeginOptimisticWriteArgs extends CacheWriteArgs {
+  linkPatches?: OptimisticLinkPatchWire[];
+  /** Revalidations for relevant cached fields that could not be patched. */
+  revalidations?: QueryRevalidationWire[];
 }
 
 export interface CacheHost {
@@ -34,9 +53,15 @@ export interface CacheHost {
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
+  /** Projects normalized records through a named GraphQL fragment. */
+  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
-  beginOptimisticWrite(args: CacheWriteArgs): Promise<OptimisticWriteResult>;
+  beginOptimisticWrite(
+    args: BeginOptimisticWriteArgs
+  ): Promise<OptimisticWriteResult>;
+  /** Enumerates cached variants of one generated query field selection. */
+  inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(
     owner: string,
@@ -59,7 +84,8 @@ export interface CacheHost {
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
     transactionId: string,
-    claim: MutationClaim
+    claim: MutationClaim,
+    error: string
   ): Promise<WriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<string[]>;
@@ -74,6 +100,12 @@ export interface CacheHost {
    * Only keys belonging to this client are delivered. Returns unsubscribe.
    */
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
+
+  /** Subscribes whenever the effective normalized-cache view changes. */
+  onCacheChanged(cb: () => void): () => void;
+
+  /** Subscribes to final commit/rollback events for queued mutations. */
+  onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;
 
   dispose(): void;
 }

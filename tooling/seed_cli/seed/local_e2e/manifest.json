@@ -12,7 +12,44 @@
     "general": {
       "id": "00000000-0000-0000-0000-000000000001",
       "name": "general",
-      "message": "Welcome to the general channel everyone!"
+      "message": "Welcome to the general channel everyone!",
+      "navigationLauncherMessageId": "00000000-0000-0000-0003-000000000020",
+      "deepThread": {
+        "parentMessageId": "00000000-0000-0000-0003-000000000001",
+        "firstReplyId": "00000000-0000-0000-0003-000000000002",
+        "targetReplyId": "00000000-0000-0000-0003-000000000006",
+        "targetReplyText": "Deep thread target reply",
+        "oversizedReplyId": "00000000-0000-0000-0003-000000000007",
+        "oversizedReplyText": "Oversized target reply"
+      },
+      "alternateDeepThread": {
+        "parentMessageId": "00000000-0000-0000-0003-000000000010",
+        "targetReplyId": "00000000-0000-0000-0003-000000000014",
+        "targetReplyText": "Alternate deep thread target reply"
+      }
     }
+  },
+  "navigation": {
+    "genericChannelMention": {
+      "sourceChannelId": "00000000-0000-0000-0000-000000000002",
+      "sourceChannelName": "announcements",
+      "sourceMessageId": "00000000-0000-0000-0003-000000000030"
+    },
+    "targetedMessageMention": {
+      "sourceChannelId": "00000000-0000-0000-0000-000000000003",
+      "sourceChannelName": "random",
+      "sourceMessageId": "00000000-0000-0000-0003-000000000031"
+    },
+    "unreadMessageNavigation": {
+      "sourceChannelId": "00000000-0000-0000-0000-000000000003",
+      "sourceChannelName": "random",
+      "sourceMessageId": "00000000-0000-0000-0003-000000000032",
+      "parentMessageId": "00000000-0000-0000-0003-000000000040",
+      "cacheWarmerReplyId": "00000000-0000-0000-0003-000000000044",
+      "cacheWarmerReplyText": "Unread cache warmer reply",
+      "targetReplyId": "00000000-0000-0000-0003-000000000045",
+      "targetReplyText": "Unread oversized target reply"
+    },
+    "unreadNotificationId": "00000000-0000-0000-0004-000000000001"
   }
 }
