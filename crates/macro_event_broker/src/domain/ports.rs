@@ -44,10 +44,10 @@ pub trait MacroEventCollection: Sized {
 /// Broker message fields needed to decode a [`MacroEvent`].
 pub trait MessageParts {
     /// Returns the broker message key.
-    fn key(&self) -> &str;
+    fn key(&self) -> Option<&str>;
 
     /// Returns the serialized event payload.
-    fn payload(&self) -> &[u8];
+    fn payload(&self) -> Option<&[u8]>;
 
     /// Returns the broker topic name.
     fn topic(&self) -> &str;

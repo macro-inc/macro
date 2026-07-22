@@ -11,9 +11,11 @@ use std::time::Duration;
 
 use macro_env::Environment;
 use macro_event_topics::Topic;
-use rdkafka::ClientConfig;
+use rdkafka::message::BorrowedMessage;
 use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::{ClientConfig, Message};
 
+use crate::MessageParts;
 use crate::domain::models::EventBrokerError;
 use crate::domain::ports::EventPublisher;
 use crate::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
@@ -95,5 +97,26 @@ impl EventPublisher for KafkaEventPublisher {
         .map_err(|(e, _)| EventBrokerError::Publish(e.to_string()))?;
 
         Ok(())
+    }
+}
+
+impl<T> MessageParts for T
+where
+    T: Message,
+{
+    fn key(&self) -> Option<&str> {
+        Message::key(self)
+            .map(std::str::from_utf8)
+            .transpose()
+            .ok()
+            .flatten()
+    }
+
+    fn payload(&self) -> Option<&[u8]> {
+        Message::payload(self)
+    }
+
+    fn topic(&self) -> &str {
+        Message::topic(self)
     }
 }
