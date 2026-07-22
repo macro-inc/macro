@@ -62,6 +62,22 @@ impl OnboardingRepo for PgOnboardingRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_row(&self, user: &MacroUserIdStr<'static>) -> Result<Option<OnboardingRow>> {
+        let row = sqlx::query_as!(
+            OnboardingDbRow,
+            r#"
+            SELECT status, skipped, started_at, completed_at
+            FROM user_onboarding
+            WHERE user_id = $1
+            "#,
+            user.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(TryInto::try_into).transpose()
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn complete(
         &self,
         user: &MacroUserIdStr<'static>,

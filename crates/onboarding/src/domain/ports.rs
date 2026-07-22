@@ -30,6 +30,13 @@ pub trait OnboardingRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<OnboardingRow>> + Send;
 
+    /// Fetch the user's onboarding row without creating one. `None` means
+    /// the user never entered the flow.
+    fn get_row(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<OnboardingRow>>> + Send;
+
     /// Mark the flow completed (idempotent; keeps the earliest completion).
     fn complete(
         &self,

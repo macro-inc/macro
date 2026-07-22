@@ -29,11 +29,14 @@ pub trait OnboardingService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<OnboardingState>> + Send;
 
     /// An explicit reconcile tick, for host hooks that observed a real state
-    /// change (e.g. an MCP OAuth completion).
+    /// change (e.g. an MCP OAuth completion). A no-op for users who never
+    /// entered the flow or already finished it — connecting an MCP server
+    /// outside onboarding must not start gathers.
     fn reconcile(&self, user: MacroUserIdStr<'static>) -> impl Future<Output = Result<()>> + Send;
 
     /// Finish the flow (`skipped` records how). Leftover onboarding-staged
-    /// import candidates are discarded.
+    /// import candidates are deleted — never reviewed is not declined, so
+    /// they stay re-stageable by later gathers or chat.
     fn complete(
         &self,
         user: MacroUserIdStr<'static>,
@@ -123,7 +126,12 @@ where
 
     #[tracing::instrument(skip(self), err)]
     async fn reconcile(&self, user: MacroUserIdStr<'static>) -> Result<()> {
-        let row = self.repo.ensure_row(&user).await?;
+        // get_row, NOT ensure_row: this runs from the generic MCP post-auth
+        // hook, and a user connecting a server outside onboarding must not
+        // be pulled into the flow (or have gathers started).
+        let Some(row) = self.repo.get_row(&user).await? else {
+            return Ok(());
+        };
         if row.status != OnboardingStatus::Active {
             return Ok(());
         }
@@ -139,10 +147,14 @@ where
         skipped: bool,
     ) -> Result<OnboardingRow> {
         let row = self.repo.complete(&user, skipped).await?;
-        // Candidates the user never acted on are declined, not left dangling;
-        // chat-staged rows are untouched.
+        // Candidates the user never acted on are removed from the ledger,
+        // not discarded: discard means "the user said no" and blocks
+        // re-staging forever, which is wrong for items they never looked at
+        // ("Set up later" skips the whole review). Explicit declines (a
+        // section toggled off) were already discarded by run_import.
+        // Chat-staged rows are untouched.
         self.import
-            .discard_staged_by_initiator(user, Initiator::Onboarding)
+            .delete_staged_by_initiator(user, Initiator::Onboarding)
             .await?;
         Ok(row)
     }

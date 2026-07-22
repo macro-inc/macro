@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM import_entity\n            WHERE user_id = $1 AND initiator = $2 AND status = 'staged'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d5a9632d0330f2dfc6dc0c6f6817f2ffce500a7f816bb5af32d46d74baeb793e"
+}

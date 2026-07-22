@@ -299,7 +299,15 @@ function NewOnboardingRedirect() {
       return;
     }
     if (AUTH_URLS.includes(location.pathname)) return;
-    navigate('/setup', { replace: true });
+    // Preserve the deep link the user arrived on (a shared doc, an invite):
+    // /setup carries it as ?next and its finish() returns there instead of
+    // home. Base-relative so navigate() can resolve it against the router.
+    const target =
+      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
+    navigate(
+      target === '/' ? '/setup' : `/setup?next=${encodeURIComponent(target)}`,
+      { replace: true }
+    );
   });
 
   return null;

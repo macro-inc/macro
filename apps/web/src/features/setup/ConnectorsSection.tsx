@@ -115,7 +115,13 @@ function ConnectorRow(props: {
  * the right.
  */
 export function ConnectorsSection() {
-  const serversQuery = useMcpServersQuery();
+  // Poll: OAuth completes in a popup, and if this window never blurs (or
+  // regains focus) no focus-refetch would ever flip the card. neverSuspend
+  // keeps the polling query from re-suspending the page's boundary.
+  const serversQuery = useMcpServersQuery({
+    refetchInterval: 4_000,
+    neverSuspend: true,
+  });
 
   const featured = SETUP_CONNECTOR_NAMES.flatMap(
     (name) =>

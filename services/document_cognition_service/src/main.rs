@@ -461,12 +461,9 @@ async fn main() -> anyhow::Result<()> {
         .with_notifier(import_notify),
     );
 
-    // Import jobs are in-process tasks: any row still `importing` at boot
-    // was orphaned by the previous process and must become retryable again.
-    if let Err(e) = import_service.recover_interrupted_imports().await {
-        tracing::warn!(error = ?e, "failed to recover interrupted imports");
-    }
-
+    // No boot-time recovery: running batches heartbeat their rows, and the
+    // read path reaps rows whose heartbeat stopped — safe with multiple
+    // replicas, where a boot-time sweep would clobber other instances' jobs.
     tracing::info!("initialized import service");
 
     let tool_service_context = ai_tools::ToolServiceContext {

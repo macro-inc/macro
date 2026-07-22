@@ -118,21 +118,23 @@ pub trait ImportRepo: Send + Sync + 'static {
         error: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
-    /// CAS the user's `importing` rows untouched for longer than
-    /// `older_than_secs` back to `staged`. Import jobs are in-process tasks:
-    /// a service restart mid-job orphans its rows, and nothing else can move
-    /// them again. Returns how many were reaped.
+    /// Bump `updated_at` on the user's still-`importing` rows in `ids` — the
+    /// running batch's heartbeat, proving a live process still owns them.
+    fn touch_importing(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// CAS the user's `importing` rows whose heartbeat stopped more than
+    /// `older_than_secs` ago back to `staged`. Import jobs are in-process
+    /// tasks: a crash or restart mid-job orphans its rows, and nothing else
+    /// can move them again. Returns how many were reaped.
     fn fail_stale_importing(
         &self,
         user: &MacroUserIdStr<'static>,
         older_than_secs: i64,
     ) -> impl Future<Output = Result<u64>> + Send;
-
-    /// CAS every `importing` row (all users) back to `staged` — the
-    /// jobs-restarted recovery the host runs once at boot, when any
-    /// `importing` row is definitionally orphaned. Returns how many were
-    /// reaped.
-    fn fail_all_importing(&self) -> impl Future<Output = Result<u64>> + Send;
 
     /// CAS one of the user's own `staged` rows to `discarded`. Returns
     /// whether it happened.
@@ -143,8 +145,19 @@ pub trait ImportRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Discard all of the user's remaining `staged` rows with the given
-    /// initiator (onboarding completion cleanup). Returns how many flipped.
+    /// initiator (an explicit "no" — `stage()` refuses to re-stage them).
+    /// Returns how many flipped.
     fn discard_staged_by_initiator(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        initiator: Initiator,
+    ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// DELETE all of the user's remaining `staged` rows with the given
+    /// initiator (onboarding completion cleanup: candidates the user never
+    /// acted on vanish from the ledger and stay re-stageable later, unlike
+    /// discarded rows). Returns how many were removed.
+    fn delete_staged_by_initiator(
         &self,
         user: &MacroUserIdStr<'static>,
         initiator: Initiator,

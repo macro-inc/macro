@@ -410,16 +410,16 @@ impl ImportRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self), err)]
-    async fn fail_all_importing(&self) -> Result<u64> {
+    #[tracing::instrument(skip(self, ids), fields(rows = ids.len()), err)]
+    async fn touch_importing(&self, user: &MacroUserIdStr<'static>, ids: &[Uuid]) -> Result<u64> {
         let result = sqlx::query!(
             r#"
             UPDATE import_entity
-            SET status = 'staged',
-                last_error = 'the import was interrupted — select it again to retry',
-                updated_at = NOW()
-            WHERE status = 'importing'
+            SET updated_at = NOW()
+            WHERE user_id = $1 AND id = ANY($2) AND status = 'importing'
             "#,
+            user.as_ref(),
+            ids,
         )
         .execute(&self.pool)
         .await?;
@@ -452,6 +452,25 @@ impl ImportRepo for PgImportRepo {
             r#"
             UPDATE import_entity
             SET status = 'discarded', updated_at = NOW()
+            WHERE user_id = $1 AND initiator = $2 AND status = 'staged'
+            "#,
+            user.as_ref(),
+            initiator.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_staged_by_initiator(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        initiator: Initiator,
+    ) -> Result<u64> {
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM import_entity
             WHERE user_id = $1 AND initiator = $2 AND status = 'staged'
             "#,
             user.as_ref(),

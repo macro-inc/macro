@@ -1,7 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import LogoIcon from '@icon/macro-logo.svg';
+import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import { queryClient } from '@queries/client';
 import { usePrimaryEmailLinkId } from '@queries/email/link';
 import {
   type ImportSource,
@@ -13,7 +15,7 @@ import {
   useOnboardingQuery,
 } from '@queries/onboarding';
 import { importClient } from '@service-cognition/import';
-import { useNavigate } from '@solidjs/router';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Layer } from '@ui';
 import { createEffect, createSignal, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -79,6 +81,18 @@ function SetupPageContent() {
     Partial<Record<ImportSource, boolean>>
   >({});
 
+  // Where to land after setup: the deep link the redirect preserved
+  // (?next=/md/…), or home. Same-app relative paths only.
+  const [searchParams] = useSearchParams();
+  const afterSetupTarget = () => {
+    const next = searchParams.next;
+    return typeof next === 'string' &&
+      next.startsWith('/') &&
+      !next.startsWith('//')
+      ? next
+      : '/';
+  };
+
   // Redirect out when there is nothing to set up (unauthenticated, or the
   // flow was already completed elsewhere).
   createEffect(() => {
@@ -87,7 +101,7 @@ function SetupPageContent() {
       return;
     }
     if (onboardingQuery.data?.row.status === 'completed') {
-      navigate('/', { replace: true });
+      navigate(afterSetupTarget(), { replace: true });
     }
   });
 
@@ -128,7 +142,7 @@ function SetupPageContent() {
   };
 
   // Finishing: import whatever is still selected (holding while the pills
-  // land), then mark the flow completed server-side (which discards leftover
+  // land), then mark the flow completed server-side (which removes leftover
   // onboarding-staged candidates) and the legacy tutorial done (suppressing
   // the old modal), then land in the app.
   const [finishing, setFinishing] = createSignal(false);
@@ -146,8 +160,20 @@ function SetupPageContent() {
         completeOnboarding.mutateAsync({ skipped }),
         completeTutorial.mutateAsync(),
       ]);
+      // NewOnboardingRedirect keys off userInfo.tutorialComplete: navigating
+      // before the cache reflects the PATCH would bounce straight back here.
+      // Refetch and verify — if the PATCH failed (allSettled hides it) or
+      // the refetch missed, stay put and let the user retry.
+      await queryClient
+        .refetchQueries({ queryKey: authKeys.userInfo.queryKey })
+        .catch(() => {});
+      if (userInfoQuery.data?.tutorialComplete !== true) {
+        toast.failure("Couldn't finish setup — please try again");
+        return;
+      }
+      navigate(afterSetupTarget(), { replace: true });
     } finally {
-      navigate('/', { replace: true });
+      setFinishing(false);
     }
   };
 

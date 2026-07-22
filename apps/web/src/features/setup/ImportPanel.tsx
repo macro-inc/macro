@@ -165,12 +165,11 @@ export function ImportPanel(props: {
                     }
                     status={
                       <Switch>
-                        <Match
-                          when={
-                            run()?.status === 'failed' &&
-                            entities().length === 0
-                          }
-                        >
+                        {/* A failed gather always surfaces with a retry,
+                            even when earlier/teammate imports left entities
+                            in the section — otherwise the failure is
+                            silent and looks like a thin result. */}
+                        <Match when={run()?.status === 'failed'}>
                           <FailureNote
                             message={`we couldn't look through your ${serverName}.`}
                             onRetry={() => retryGather.mutate(source)}

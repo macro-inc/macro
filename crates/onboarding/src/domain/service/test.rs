@@ -21,6 +21,8 @@ fn active_row() -> OnboardingRow {
 
 struct MockRepo {
     status: OnboardingStatus,
+    /// Whether a row exists at all (get_row returns None when false).
+    exists: bool,
     completions: Mutex<Vec<bool>>,
 }
 
@@ -28,7 +30,15 @@ impl MockRepo {
     fn new(status: OnboardingStatus) -> Self {
         Self {
             status,
+            exists: true,
             completions: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn missing() -> Self {
+        Self {
+            exists: false,
+            ..Self::new(OnboardingStatus::Active)
         }
     }
 }
@@ -39,6 +49,13 @@ impl OnboardingRepo for MockRepo {
             status: self.status,
             ..active_row()
         })
+    }
+
+    async fn get_row(&self, _user: &MacroUserIdStr<'static>) -> Result<Option<OnboardingRow>> {
+        Ok(self.exists.then(|| OnboardingRow {
+            status: self.status,
+            ..active_row()
+        }))
     }
 
     async fn complete(
@@ -95,6 +112,7 @@ impl McpServerStore for MockStore {
 struct MockImport {
     gathers: Mutex<Vec<ImportSource>>,
     discards: Mutex<Vec<Initiator>>,
+    deletions: Mutex<Vec<Initiator>>,
 }
 
 impl ImportService for MockImport {
@@ -148,6 +166,15 @@ impl ImportService for MockImport {
         initiator: Initiator,
     ) -> ImportResult<u64> {
         self.discards.lock().unwrap().push(initiator);
+        Ok(1)
+    }
+
+    async fn delete_staged_by_initiator(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        initiator: Initiator,
+    ) -> ImportResult<u64> {
+        self.deletions.lock().unwrap().push(initiator);
         Ok(1)
     }
 }
@@ -213,14 +240,35 @@ async fn completed_flow_never_starts_gathers() {
 }
 
 #[tokio::test]
-async fn completing_discards_leftover_onboarding_staged_rows() {
+async fn completing_deletes_leftover_onboarding_staged_rows() {
     let (service, import) = service(OnboardingStatus::Active, Vec::new());
 
     let row = service.complete(user(), true).await.expect("complete");
     assert_eq!(row.status, OnboardingStatus::Completed);
     assert!(row.skipped);
+    // Deleted, not discarded — never-reviewed candidates must stay
+    // re-stageable by later gathers or chat.
     assert_eq!(
-        import.discards.lock().unwrap().as_slice(),
+        import.deletions.lock().unwrap().as_slice(),
         &[Initiator::Onboarding]
     );
+    assert!(import.discards.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reconcile_ignores_users_who_never_entered_the_flow() {
+    // The MCP post-auth hook reconciles every OAuth completion; a user
+    // connecting a server outside onboarding must not get gathers (or an
+    // onboarding row) out of it.
+    let import = Arc::new(MockImport::default());
+    let service = OnboardingServiceImpl::new(
+        MockRepo::missing(),
+        Arc::new(MockStore {
+            records: vec![record("https://mcp.linear.app/mcp", true)],
+        }),
+        import.clone(),
+    );
+
+    service.reconcile(user()).await.expect("reconcile");
+    assert!(import.gathers.lock().unwrap().is_empty());
 }

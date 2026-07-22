@@ -56,10 +56,17 @@ const NOTION_PAGE_IMPORT_TIMEOUT: Duration = Duration::from_secs(120);
 /// enough to stay polite to Notion's MCP.
 const NOTION_IMPORT_CONCURRENCY: usize = 4;
 
-/// How long an `importing` row may sit untouched before the read path
-/// declares its job dead and sends it back to `staged` (longest legitimate
-/// job plus a generous margin for queueing behind the concurrency cap).
-const STALE_IMPORT_AFTER: Duration = Duration::from_secs(NOTION_PAGE_IMPORT_TIMEOUT.as_secs() * 5);
+/// How often a running import batch touches its rows' `updated_at`. The
+/// heartbeat covers every row the batch owns — queued AND in-flight — so a
+/// fresh `updated_at` means "a live process is still responsible for this
+/// row", independent of how long the row waits behind the concurrency cap.
+const IMPORT_HEARTBEAT: Duration = Duration::from_secs(30);
+
+/// How long an `importing` row may go without a heartbeat before the read
+/// path declares its job dead (process crashed or restarted) and sends it
+/// back to `staged`. Several missed beats, so a slow DB or a paused runtime
+/// never reaps a live batch.
+const STALE_IMPORT_AFTER: Duration = Duration::from_secs(IMPORT_HEARTBEAT.as_secs() * 6);
 
 /// Turn cap for a Notion import session: fetch + finalize per page, plus
 /// slack for retries.
@@ -153,9 +160,20 @@ pub trait ImportService: Send + Sync + 'static {
         discard_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<RunImportOutcome>> + Send;
 
-    /// Discard all remaining staged rows with `initiator` (onboarding
-    /// completion cleanup). Returns how many were discarded.
+    /// Discard all remaining staged rows with `initiator` — an explicit
+    /// decline; `stage()` refuses to re-stage discarded items. Returns how
+    /// many were discarded.
     fn discard_staged_by_initiator(
+        &self,
+        user: MacroUserIdStr<'static>,
+        initiator: Initiator,
+    ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// Delete all remaining staged rows with `initiator` (onboarding
+    /// completion cleanup). Unlike discarding, deleted candidates were
+    /// never reviewed and stay re-stageable by later gathers or chat.
+    /// Returns how many were removed.
+    fn delete_staged_by_initiator(
         &self,
         user: MacroUserIdStr<'static>,
         initiator: Initiator,
@@ -276,18 +294,6 @@ where
     S: McpServerStore,
     C: EntityCreator,
 {
-    /// Make every `importing` row retryable again. Import jobs are
-    /// in-process tasks, so after a restart every `importing` row is
-    /// orphaned; hosts call this once at boot. (The read path additionally
-    /// reaps stale rows, for hosts that never call this.)
-    pub async fn recover_interrupted_imports(&self) -> Result<u64> {
-        let reaped = self.repo.fail_all_importing().await?;
-        if reaped > 0 {
-            tracing::warn!(reaped, "recovered importing rows orphaned by a restart");
-        }
-        Ok(reaped)
-    }
-
     /// Spawn the gather session for one source; finishes the run row either
     /// way and nudges the client.
     fn spawn_gather(&self, user: MacroUserIdStr<'static>, source: ImportSource) {
@@ -687,6 +693,28 @@ where
             let service = self.clone();
             let user = user.clone();
             tokio::spawn(async move {
+                // Heartbeat every row this batch owns (queued and in-flight)
+                // for as long as the batch runs, so the read path's stale
+                // reaper only ever fires on rows whose process actually
+                // died. Dropped (aborted) on every exit path of this task.
+                let _heartbeat = AbortOnDrop(tokio::spawn({
+                    let service = service.clone();
+                    let user = user.clone();
+                    let ids: Vec<Uuid> = direct_rows
+                        .iter()
+                        .chain(notion_rows.iter())
+                        .map(|row| row.id)
+                        .collect();
+                    async move {
+                        loop {
+                            tokio::time::sleep(IMPORT_HEARTBEAT).await;
+                            if let Err(e) = service.repo.touch_importing(&user, &ids).await {
+                                tracing::warn!(%user, error = ?e, "import heartbeat failed");
+                            }
+                        }
+                    }
+                }));
+
                 for row in &direct_rows {
                     service.import_deterministic(&user, row).await;
                 }
@@ -780,6 +808,22 @@ where
             self.notify(&user).await;
         }
         Ok(discarded)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_staged_by_initiator(
+        &self,
+        user: MacroUserIdStr<'static>,
+        initiator: Initiator,
+    ) -> Result<u64> {
+        let removed = self
+            .repo
+            .delete_staged_by_initiator(&user, initiator)
+            .await?;
+        if removed > 0 {
+            self.notify(&user).await;
+        }
+        Ok(removed)
     }
 }
 
@@ -1104,6 +1148,17 @@ pub fn linear_task_content(meta: &LinearIssueMeta) -> (String, String) {
     .collect::<Vec<_>>()
     .join("\n\n");
     (name, markdown)
+}
+
+/// Aborts the wrapped task when dropped — ties a background task (e.g. the
+/// import heartbeat) to the lifetime of the scope that spawned it, whatever
+/// path that scope exits through.
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 /// A toolset combining an in-process collection with the user's connector

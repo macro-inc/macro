@@ -287,8 +287,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let search_service_client = Arc::new(search_service_client);
 
     // Build properties tool context
-    let properties_tool_context =
-        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+    let properties_tool_context = ai_tools::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(
@@ -377,6 +379,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
             channel_service: tool_service_context.channel_tool_context.service.clone(),
+            task_properties: ai_tools::build_task_properties_adapter(
+                pool.clone(),
+                properties_service.clone(),
+                entity_access_service.clone(),
+            ),
+            team_repository: ai_tools::build_team_repository(pool.clone()),
         };
         let import_service = Arc::new(import::domain::service::ImportServiceImpl::new(
             import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
