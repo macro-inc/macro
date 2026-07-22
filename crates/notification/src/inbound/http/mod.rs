@@ -13,8 +13,7 @@ use axum::{
 };
 use hmac::Hmac;
 use macro_authorization::{
-    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -36,14 +35,6 @@ use crate::domain::{
     },
     service::NotificationReader,
 };
-
-fn required_macro_user_id(authorization: &MacroAuthorization) -> MacroUserIdStr<'static> {
-    authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user")
-        .macro_user_id
-        .clone()
-}
 
 /// Path parameter for a single event item ID.
 #[derive(Deserialize)]
@@ -232,7 +223,7 @@ pub async fn bulk_get_by_event_item_ids<
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(Params { limit, done, seen }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
     Json(req): Json<BulkGetByEventItemIdsRequest>,
@@ -240,7 +231,7 @@ pub async fn bulk_get_by_event_item_ids<
     let result = service
         .inner
         .get_user_notifications_by_event_item_ids::<T>(GetNotificationsByEventItemIdsRequest {
-            user_id: required_macro_user_id(&user.authorization),
+            user_id: user.authorization.user.macro_user_id,
             event_item_ids: &req.event_item_ids,
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
@@ -291,12 +282,12 @@ pub struct NotificationBulkRequest {
 )]
 pub async fn bulk_mark_seen<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     bulk_update(
         &service,
-        required_macro_user_id(&user.authorization),
+        user.authorization.user.macro_user_id,
         &req,
         NotificationStatus::Seen,
     )
@@ -318,12 +309,12 @@ pub async fn bulk_mark_seen<S: NotificationReader, Auth: MacroAuthorizationServi
 )]
 pub async fn bulk_mark_done<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     bulk_update(
         &service,
-        required_macro_user_id(&user.authorization),
+        user.authorization.user.macro_user_id,
         &req,
         NotificationStatus::Done(true),
     )
@@ -345,12 +336,12 @@ pub async fn bulk_mark_done<S: NotificationReader, Auth: MacroAuthorizationServi
 )]
 pub async fn bulk_mark_undone<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     bulk_update(
         &service,
-        required_macro_user_id(&user.authorization),
+        user.authorization.user.macro_user_id,
         &req,
         NotificationStatus::Done(false),
     )
@@ -409,7 +400,7 @@ pub async fn get_by_event_item_id<
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
     Query(Params { limit, done, seen }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
@@ -417,7 +408,7 @@ pub async fn get_by_event_item_id<
     let result = service
         .inner
         .get_user_notifications_by_event_item_ids::<T>(GetNotificationsByEventItemIdsRequest {
-            user_id: required_macro_user_id(&user.authorization),
+            user_id: user.authorization.user.macro_user_id,
             event_item_ids: &[event_item_id],
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
@@ -467,15 +458,12 @@ pub async fn get_notification_by_id<
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(NotificationIdPath { notification_id }): Path<NotificationIdPath>,
 ) -> Result<Json<UserNotificationRow<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
         .inner
-        .get_user_notification_by_id::<T>(
-            required_macro_user_id(&user.authorization),
-            notification_id,
-        )
+        .get_user_notification_by_id::<T>(user.authorization.user.macro_user_id, notification_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get user notification by id");
@@ -516,12 +504,12 @@ pub async fn get_notification_by_id<
 )]
 pub async fn delete_notification<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(NotificationIdPath { notification_id }): Path<NotificationIdPath>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     service
         .inner
-        .delete_user_notification(required_macro_user_id(&user.authorization), notification_id)
+        .delete_user_notification(user.authorization.user.macro_user_id, notification_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to delete user notification");
@@ -551,13 +539,13 @@ pub async fn delete_notification<S: NotificationReader, Auth: MacroAuthorization
 )]
 pub async fn bulk_delete_notifications<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(service): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     service
         .inner
         .bulk_delete_user_notifications(
-            required_macro_user_id(&user.authorization),
+            user.authorization.user.macro_user_id,
             &req.notification_ids,
         )
         .await

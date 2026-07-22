@@ -5,13 +5,13 @@ use axum::{
     extract::State,
     routing::{delete, post},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model_error_response::ErrorResponse;
 use reqwest::StatusCode;
 
 use crate::domain::models::device::DeviceRequest;
 use crate::domain::service::NotificationReader;
-use crate::inbound::http::{NotificationRouterState, required_macro_user_id};
+use crate::inbound::http::NotificationRouterState;
 
 /// Construct the device registration router.
 pub fn device_router<S, Auth>() -> Router<NotificationRouterState<S, Auth>>
@@ -28,13 +28,13 @@ where
 #[tracing::instrument(skip(state, user, req))]
 async fn register_device<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(state): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
         .register_device(
-            required_macro_user_id(&user.authorization),
+            user.authorization.user.macro_user_id,
             &req.token,
             &req.device_type,
         )
@@ -56,7 +56,7 @@ async fn register_device<S: NotificationReader, Auth: MacroAuthorizationService>
 #[tracing::instrument(skip(state, _macro_user, req))]
 async fn unregister_device<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(state): State<NotificationRouterState<S, Auth>>,
-    _macro_user: MacroAuthorizationExtractor<Auth>,
+    _macro_user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
