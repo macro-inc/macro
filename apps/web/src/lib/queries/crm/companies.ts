@@ -199,13 +199,18 @@ export function useSetCompanyNameMutation() {
           name,
         });
       }
-      return { previous };
+      return { previous, optimisticName: name };
     },
+    // Roll back only if the cache still holds this mutation's optimistic
+    // name — a stale failure must not clobber a newer rename's update.
     onError: (_err, { companyId }, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(
+        queryClient.setQueryData<CrmCompanyResponse>(
           crmKeys.company(companyId).queryKey,
-          context.previous
+          (current) =>
+            current?.name === context.optimisticName
+              ? context.previous
+              : current
         );
       }
     },
