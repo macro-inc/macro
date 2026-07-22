@@ -161,6 +161,12 @@ input GraphqlChannelLiteral @oneOf {
 	"""
 	importance: Boolean
 	"""
+	The is participant option. Filters by whether the requesting user is an
+	active participant; its presence widens the candidate set to team channels
+	of the user's teams they have not joined.
+	"""
+	isParticipant: Boolean
+	"""
 	The notification done option.
 	"""
 	notificationDone: Boolean
@@ -1509,6 +1515,10 @@ type GraphqlSoupChannel {
 	The interacted timestamp in RFC 3339 format.
 	"""
 	interactedAt: String
+	"""
+	Whether the requesting user is an active participant of the channel.
+	"""
+	isParticipant: Boolean!
 	"""
 	The participant count.
 	"""

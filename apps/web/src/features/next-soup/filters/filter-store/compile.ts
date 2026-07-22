@@ -106,6 +106,7 @@ const FIELD_CONFIG: Record<
   channelSeen: { target: 'chanf', field: 'NotificationSeen' },
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
+  channelIsParticipant: { target: 'chanf', field: 'IsParticipant' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
   channelMessageThreadId: { target: 'chanf', field: 'ThreadId' },
   channelThreadId: { target: 'cthf', field: 'ThreadId' },

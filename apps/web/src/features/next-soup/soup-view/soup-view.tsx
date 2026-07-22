@@ -21,6 +21,7 @@ import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inb
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
+import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/next-soup/soup-view/SoupEntityActionDrawerManager';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
@@ -102,6 +103,7 @@ import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import {
   type EntityData,
+  isNonMemberChannelEntity,
   ListEntity,
   ListLayoutProvider,
   type ProjectEntity,
@@ -866,8 +868,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
-  const { paneVisible, previewVisible, previewOpen, selectedEntity } =
-    usePreviewPaneVisiblity();
+  const {
+    paneVisible,
+    previewVisible,
+    previewOpen,
+    selectedEntity,
+    nonMemberChannelEntity,
+  } = usePreviewPaneVisiblity();
 
   const focusFirstEntity = () => {
     const allRows = rows();
@@ -1041,6 +1048,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     const entity = (
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
+
+    // Channels the viewer hasn't joined can't be read: no preview, no
+    // navigation — the row's Join button is the only affordance.
+    if (isNonMemberChannelEntity(entity)) return;
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
@@ -1671,16 +1682,25 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Show
                   when={selectedEntity()}
                   fallback={
-                    <EmptyStatePanel
-                      graphic={EmptyStatePreviewIcon}
-                      title="Nothing selected"
-                      description={
-                        isNewInboxEnabled()
-                          ? 'Select an item from your inbox to preview it here.'
-                          : 'Select an item from the list to preview it here'
+                    <Show
+                      when={nonMemberChannelEntity()}
+                      fallback={
+                        <EmptyStatePanel
+                          graphic={EmptyStatePreviewIcon}
+                          title="Nothing selected"
+                          description={
+                            isNewInboxEnabled()
+                              ? 'Select an item from your inbox to preview it here.'
+                              : 'Select an item from the list to preview it here'
+                          }
+                          centered
+                        />
                       }
-                      centered
-                    />
+                    >
+                      {(channel) => (
+                        <NonMemberChannelPreview entity={channel()} />
+                      )}
+                    </Show>
                   }
                 >
                   {(entity) => (

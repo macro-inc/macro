@@ -222,6 +222,8 @@ pub struct ChannelWithParticipants {
     pub channel: Channel,
     /// Active participants.
     pub participants: Vec<ChannelParticipant>,
+    /// Whether the requesting user is an active participant of the channel.
+    pub is_participant: bool,
 }
 
 /// Channel list response item.
@@ -246,6 +248,7 @@ impl ApiChannelWithLatest {
         Self {
             channel: ChannelWithParticipants {
                 channel: Channel::new_from_domain(value.channel.channel),
+                is_participant: value.channel.is_participant,
                 participants: value
                     .channel
                     .participants

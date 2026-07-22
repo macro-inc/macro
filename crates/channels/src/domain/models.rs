@@ -1256,6 +1256,10 @@ pub struct ChannelWithParticipants {
     pub channel: ChannelListItem,
     /// Active channel participants.
     pub participants: Vec<ChannelParticipant>,
+    /// Whether the requesting user is an active participant of the channel
+    /// (has a `comms_channel_participants` row with `left_at IS NULL`).
+    /// False for team channels of the user's teams they have not joined.
+    pub is_participant: bool,
 }
 
 /// Channel list item.

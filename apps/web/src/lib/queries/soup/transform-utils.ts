@@ -725,6 +725,7 @@ export const mapApiSoupItemToEntity = (
         updatedAt: item.data.channel.updated_at,
         createdAt: item.data.channel.created_at,
         participantIds: item.data.participants.map((p) => p.user_id),
+        isParticipant: item.data.is_participant ?? true,
         viewedAt: item.data.viewed_at ?? item.data.interacted_at,
         interactedAt: item.data.interacted_at,
         latestMessage: latestMessage

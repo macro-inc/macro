@@ -8317,6 +8317,12 @@ export const getItemsSoupResponse = zod
                         .describe('Update timestamp.'),
                     })
                     .describe('Channel metadata in soup payloads.'),
+                  is_participant: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                    ),
                   participants: zod
                     .array(
                       zod
@@ -9371,6 +9377,12 @@ export const postItemsSoupBody = zod
           .nullish()
           .describe(
             'Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
+        is_participant: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
           ),
         mentions: zod
           .array(zod.string())
@@ -11182,6 +11194,12 @@ export const postItemsSoupResponse = zod
                         .describe('Update timestamp.'),
                     })
                     .describe('Channel metadata in soup payloads.'),
+                  is_participant: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                    ),
                   participants: zod
                     .array(
                       zod
@@ -13575,6 +13593,12 @@ export const postItemsSoupAstResponse = zod
                         .describe('Update timestamp.'),
                     })
                     .describe('Channel metadata in soup payloads.'),
+                  is_participant: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                    ),
                   participants: zod
                     .array(
                       zod
@@ -16262,6 +16286,12 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Update timestamp.'),
                           })
                           .describe('Channel metadata in soup payloads.'),
+                        is_participant: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                          ),
                         participants: zod
                           .array(
                             zod
@@ -18663,6 +18693,12 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Update timestamp.'),
                           })
                           .describe('Channel metadata in soup payloads.'),
+                        is_participant: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                          ),
                         participants: zod
                           .array(
                             zod

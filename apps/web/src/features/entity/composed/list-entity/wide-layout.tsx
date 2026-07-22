@@ -31,7 +31,11 @@ import {
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
-import { ChannelMessageWideContent, ChannelWideContent } from './channel';
+import {
+  ChannelJoinButton,
+  ChannelMessageWideContent,
+  ChannelWideContent,
+} from './channel';
 import { EmailWideContent, useOwningInboxForEntity } from './email';
 import {
   GithubPullRequestChecksIndicator,
@@ -278,6 +282,15 @@ export function WideLayout(props: LayoutProps) {
               />
             </span>
           )}
+        </Show>
+        <Show
+          when={
+            isChannelEntity(props.entity) &&
+            props.entity.isParticipant === false &&
+            props.entity
+          }
+        >
+          {(entity) => <ChannelJoinButton entity={entity()} />}
         </Show>
       </Entity.Slot>
       <Entity.Slot

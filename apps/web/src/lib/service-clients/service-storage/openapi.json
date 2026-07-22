@@ -11797,6 +11797,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "is_participant": {
+            "type": ["boolean", "null"],
+            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -12132,6 +12136,10 @@
           "channel": {
             "$ref": "#/components/schemas/Channel",
             "description": "Channel metadata."
+          },
+          "is_participant": {
+            "type": "boolean",
+            "description": "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
           },
           "participants": {
             "type": "array",

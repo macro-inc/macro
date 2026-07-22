@@ -181,6 +181,7 @@ export * from './callTokenResponse';
 export * from './channel';
 export * from './channelFilters';
 export * from './channelFiltersImportance';
+export * from './channelFiltersIsParticipant';
 export * from './channelFiltersOrgId';
 export * from './channelFiltersTeamId';
 export * from './channelJoinCodeResponse';

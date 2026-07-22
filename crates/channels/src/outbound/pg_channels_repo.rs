@@ -675,6 +675,34 @@ static CHANNEL_LIST_PREFIX: &str = r#"
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
 "#;
 
+/// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]:
+/// channels the user actively participates in, plus team channels of their teams
+/// they have not joined (so `IsParticipant(false)` has rows to match).
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
+    WITH user_channels AS (
+        SELECT DISTINCT c.*
+        FROM comms_channels c
+        WHERE (
+            EXISTS (
+                SELECT 1
+                FROM comms_channel_participants cp
+                WHERE cp.channel_id = c.id
+                  AND cp.user_id = $1
+                  AND cp.left_at IS NULL
+            )
+            OR (
+                c.channel_type = 'team'
+                AND EXISTS (
+                    SELECT 1
+                    FROM team_user tu
+                    WHERE tu.team_id = c.team_id
+                      AND tu.user_id = $1
+                )
+            )
+        )
+"#;
+
 #[cfg(feature = "list")]
 static CHANNEL_LIST_SELECT: &str = r#"
     ),
@@ -704,7 +732,14 @@ static CHANNEL_LIST_SELECT: &str = r#"
         uc.created_at as "created_at",
         uc.updated_at as "updated_at",
         uc.owner_id as "owner_id",
-        cpj.participants as "participants_json"
+        cpj.participants as "participants_json",
+        EXISTS (
+            SELECT 1
+            FROM comms_channel_participants cp_active
+            WHERE cp_active.channel_id = uc.id
+              AND cp_active.user_id = $1
+              AND cp_active.left_at IS NULL
+        ) as "is_participant"
     FROM user_channels uc
     LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id
     WHERE
@@ -775,6 +810,18 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
         | filter_ast::ExprFrame::Literal(ChannelLiteral::Sender(_))
         | filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(true)) => String::new(),
         filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(false)) => "1=0".to_string(),
+        filter_ast::ExprFrame::Literal(ChannelLiteral::IsParticipant(is_participant)) => {
+            let negation = if is_participant { "" } else { "NOT " };
+            format!(
+                r#"({negation}EXISTS (
+                    SELECT 1
+                    FROM comms_channel_participants fcp
+                    WHERE fcp.channel_id = c.id
+                      AND fcp.user_id = $1
+                      AND fcp.left_at IS NULL
+                ))"#
+            )
+        }
         filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationDone(done)) => {
             build_channel_notification_exists_clause(
                 "c.id",
@@ -805,11 +852,30 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
     }
 }
 
+/// Whether the filter mentions [`ChannelLiteral::IsParticipant`] anywhere in the AST.
+#[cfg(feature = "list")]
+fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(ChannelLiteral::IsParticipant(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 #[cfg(feature = "list")]
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
 ) -> QueryBuilder<'_, Postgres> {
-    let mut builder = QueryBuilder::new(CHANNEL_LIST_PREFIX);
+    let prefix = if filter_ast
+        .as_deref()
+        .is_some_and(channel_filter_mentions_participation)
+    {
+        CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS
+    } else {
+        CHANNEL_LIST_PREFIX
+    };
+    let mut builder = QueryBuilder::new(prefix);
     builder.push(build_channel_list_filter(filter_ast.as_deref()));
     builder.push(CHANNEL_LIST_SELECT);
     builder
@@ -1058,6 +1124,7 @@ struct ChannelListRow {
     updated_at: DateTime<Utc>,
     owner_id: String,
     participants_json: Option<Vec<serde_json::Value>>,
+    is_participant: bool,
 }
 
 #[cfg(feature = "list")]
@@ -1091,6 +1158,7 @@ impl ChannelListRow {
         Ok(ChannelWithParticipants {
             channel,
             participants,
+            is_participant: self.is_participant,
         })
     }
 }
@@ -1126,6 +1194,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     updated_at: row.try_get("updated_at")?,
                     owner_id: row.try_get("owner_id")?,
                     participants_json: row.try_get("participants_json")?,
+                    is_participant: row.try_get("is_participant")?,
                 }
                 .into_channel_with_participants()
             })

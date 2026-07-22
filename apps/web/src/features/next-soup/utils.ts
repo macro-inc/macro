@@ -33,6 +33,7 @@ import {
   isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
+  isNonMemberChannelEntity,
   isSearchEntity,
   isWithNotification,
   queryKeys,
@@ -498,6 +499,10 @@ export const openEntityInSplitFromUnifiedList = async (
     console.error('No split manager found');
     return;
   }
+
+  // Channels the viewer hasn't joined can't be read; the row's Join button is
+  // the only affordance.
+  if (isNonMemberChannelEntity(entity)) return;
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {

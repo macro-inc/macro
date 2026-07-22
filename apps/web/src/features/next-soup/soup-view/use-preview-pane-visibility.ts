@@ -7,6 +7,7 @@ import {
   ENABLE_NEW_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { type ChannelEntity, isNonMemberChannelEntity } from '@entity';
 import { createMemo } from 'solid-js';
 
 export const WIDE_SPLIT_PANEL_BREAKPOINT = 640;
@@ -40,10 +41,25 @@ export function usePreviewPaneVisiblity() {
 
   // Group headers and load-more rows carry a representative entity, but they
   // are navigation controls rather than user-selectable preview items.
-  const selectedEntity = createMemo(() => {
+  const focusedRowEntity = createMemo(() => {
     const row = soup.focus.row();
     if (!row || row.getIsGrouped() || row.getIsLoadMore()) return;
     return row.original;
+  });
+
+  // Channels the viewer hasn't joined can't be read — instead of the entity
+  // block, the pane renders a join prompt for these.
+  const nonMemberChannelEntity = createMemo(() => {
+    const entity = focusedRowEntity();
+    return entity && isNonMemberChannelEntity(entity)
+      ? (entity as ChannelEntity)
+      : undefined;
+  });
+
+  const selectedEntity = createMemo(() => {
+    const entity = focusedRowEntity();
+    if (!entity || isNonMemberChannelEntity(entity)) return;
+    return entity;
   });
 
   const paneVisible = createMemo(
@@ -57,6 +73,7 @@ export function usePreviewPaneVisiblity() {
     previewVisible,
     previewOpen,
     selectedEntity,
+    nonMemberChannelEntity,
     isWideSplitPanel,
   };
 }
