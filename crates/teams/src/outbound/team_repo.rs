@@ -147,13 +147,14 @@ impl TeamRepositoryImpl {
         let team = sqlx::query!(
             r#"
             INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, 1, $4, TRUE)
+            VALUES ($1, $2, $3, 1, $4, $5)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites
             "#,
             id,
             team_name,
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
+            subscription_id.is_some(),
         )
         .try_map(|row| {
             Ok(Team {
