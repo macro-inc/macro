@@ -88,7 +88,7 @@ async fn publishes_user_keyed_full_message_to_realtime_topic() {
     let mut records = records.lock().expect("records lock");
     let record = records.pop().expect("one record");
     assert!(records.is_empty());
-    assert_eq!(record.topic, "macro.soup-realtime");
+    assert_eq!(record.topic, "macro.soup");
     assert_eq!(record.key, "macro|recipient@example.com");
 
     let json: serde_json::Value = serde_json::from_slice(&record.payload).expect("payload is JSON");

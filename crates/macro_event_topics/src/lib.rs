@@ -54,7 +54,7 @@ topics! {
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
     /// User-scoped full Soup items produced from entity updates.
-    MacroSoupRealtimeTopic => "macro.soup-realtime",
+    MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
     MacroProjectsTopic => "macro.projects",
     /// Team lifecycle, invite, and membership events.
