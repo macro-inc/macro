@@ -8,7 +8,7 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use futures::StreamExt;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
@@ -166,7 +166,7 @@ pub struct ProxyParams {
     fields(actor = %user.acting_entity())
 )]
 pub async fn proxy_request_handler(
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Query(params): Query<ProxyParams>,
     State(http_client): State<reqwest::Client>,
     _ip: ClientIp,
