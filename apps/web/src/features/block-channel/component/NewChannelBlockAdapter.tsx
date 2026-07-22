@@ -36,7 +36,10 @@ import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipant
 import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
@@ -187,6 +190,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
   const isPreview = !!useMaybePreviewPanel();
   const splitPanel = useSplitPanelOrThrow();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
@@ -449,7 +453,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               <NewChannel
                 channelId={channelId}
                 onHandleReady={onChannelReady}
-                autofocus={!isPreview && !navigatedFromJK()}
+                autofocus={
+                  !isPreview && canAutofocusSplitContent && !navigatedFromJK()
+                }
                 initialMessagesStateSnapshot={initialMessagesStateSnapshot()}
                 {...convertTargetMessage(initialTargetMessageParams())}
               />

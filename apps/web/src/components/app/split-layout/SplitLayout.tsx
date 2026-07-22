@@ -155,46 +155,6 @@ function createSplitFocusTracker(props: {
     return nextSplitId;
   };
 
-  /**
-   * Focus may only enter a Preview Pair's Viewer through a deliberate user
-   * action: a pointer gesture inside it, or a programmatic activation (e.g.
-   * the cmd+enter hand-off, which activates the viewer before focusing it).
-   * Blocks mounted inside the viewer autofocus themselves at arbitrary times
-   * (a channel composer focuses after its messages load), which would
-   * otherwise silently pull the keyboard out of the controller. Track pointer
-   * gestures so the focusin veto below can tell theft from intent.
-   */
-  let lastPointerDownAt = 0;
-  let lastPointerDownSplitId: SplitId | null = null;
-  const onPointerDown = (event: PointerEvent) => {
-    lastPointerDownAt = Date.now();
-    lastPointerDownSplitId = getParentSplitId(event.target as Element);
-  };
-  window.addEventListener('pointerdown', onPointerDown, { capture: true });
-  onCleanup(() =>
-    window.removeEventListener('pointerdown', onPointerDown, { capture: true })
-  );
-
-  /**
-   * Returns true (and restores focus to the controller) when `element`
-   * receiving focus inside a Viewer constitutes theft: the Viewer's
-   * controller is the active split and no recent pointer gesture targeted the
-   * viewer.
-   */
-  const vetoStolenViewerFocus = (element: Element): boolean => {
-    const splitId = getParentSplitId(element);
-    if (!splitId) return false;
-    const controllerId = props.splitManager.controllerOf(splitId);
-    if (!controllerId) return false;
-    if (props.splitManager.activeSplitId() !== controllerId) return false;
-    const recentPointerInViewer =
-      lastPointerDownSplitId === splitId &&
-      Date.now() - lastPointerDownAt < 1000;
-    if (recentPointerInViewer) return false;
-    focusSplitById(controllerId);
-    return true;
-  };
-
   const focusFromEvent = (event: SplitEventWithType) => {
     switch (event.type) {
       case SplitEvent.Insert: {
@@ -256,10 +216,6 @@ function createSplitFocusTracker(props: {
         clearTimeout(activateTimeout);
       }
       if (!element) return;
-
-      // Stolen focus never activates the viewer nor records itself as the
-      // viewer's last-focused child; it is bounced straight back.
-      if (vetoStolenViewerFocus(element)) return;
 
       const parentId = getParentSplitId(element);
       if (

@@ -5,6 +5,7 @@ import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
@@ -149,6 +150,7 @@ function ChatInner(props: {
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
   const isPreview = !!useMaybePreviewPanel();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
   const [markdownText, setMarkdownText] = createSignal(
@@ -304,10 +306,12 @@ function ChatInner(props: {
     hotkeyToken: TOKENS.chat.stop,
   });
 
-  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  // J/K navigation focuses the block once it mounts, except when that block is
+  // passive content in a Preview Pair Viewer.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
+    if (!canAutofocusSplitContent) return;
     if (!blockElement()) return;
     if (!navigatedFromJK()) return;
     blockElement()?.focus();
@@ -368,7 +372,9 @@ function ChatInner(props: {
                 chatId={chat.chatId()}
                 onSend={onSend}
                 onStop={onStop}
-                autoFocusOnMount={!isPreview && !navigatedFromJK()}
+                autoFocusOnMount={
+                  !isPreview && canAutofocusSplitContent && !navigatedFromJK()
+                }
               />
             </div>
           </div>

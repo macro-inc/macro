@@ -6,7 +6,10 @@ import {
 } from '@block-email/component/EmailContext';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useEmail, useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -82,6 +85,7 @@ function EmailContent(props: EmailViewProps) {
 
   const context = useEmailContext();
   const splitPanel = useSplitPanel();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { isLoading: isUserLoading } = useUserContext();
   const userEmail = useEmail();
 
@@ -443,10 +447,11 @@ function EmailContent(props: EmailViewProps) {
   const navigateToPreviousMessage = () => navigateMessage('prev');
   const navigateToNextMessage = () => navigateMessage('next');
 
-  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  // Wait for the block element before claiming focus on initial mount.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
+    if (!canAutofocusSplitContent) return;
     // Focus the email block on mount
     if (isTouchDevice()) return;
     if (!blockElement()) return;
