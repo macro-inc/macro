@@ -1,82 +1,77 @@
-import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import { cn, Layer } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
+import { StatusDot } from '../settings/integration-ui';
 
 /*
- * Building blocks for the /setup import panel. The left rail reuses the
- * settings primitives directly; these cover what settings has no equivalent
- * for — quiet sections whose content is rows of narrow, content-fit pills
- * rather than full-width rows.
+ * Building blocks for the /setup import panel: one bordered card per
+ * connected source, whose body is a cloud of narrow, content-fit pills.
+ * Selection happens per-card (a section-level toggle), never per-pill.
  */
 
 /**
- * One titled section of the import panel, headed by the same bar the soup's
- * group-by headers use (SoupSectionHeader): collapse chevron, title, count
- * badge, an optional provenance note ("from Linear"), and right-aligned
- * quiet actions. The chevron collapses the section body.
+ * One source's card: a connector-first header (icon, name, count badge,
+ * right-aligned actions), a recessed status well underneath — the same
+ * inset treatment as the soup's active-filters bar — carrying the green
+ * "Connected" dot and a blurb saying what Macro found, and the pill cloud
+ * as the body.
  */
-export function BuilderSection(props: {
+export function ImportCard(props: {
+  /** The connector's brand icon. */
+  icon?: JSX.Element;
+  /** The connector's name ("Notion") — the card leads with the tool. */
   title: string;
-  /** Item count shown in the soup-style rounded badge. */
+  /** Item count shown in a rounded badge beside the title. */
   count?: number;
-  /** Provenance / status note rendered after the title. */
-  meta?: JSX.Element;
-  /** Right-aligned quiet controls (selection count, dismiss…). */
+  /** Lead the status well with the green dot + "Connected —". */
+  connected?: boolean;
+  /** Right-aligned header controls (the section import toggle). */
   actions?: JSX.Element;
-  children: JSX.Element;
+  /**
+   * Status blurb rendered in the well after the "Connected —" lead-in, so
+   * it should start lowercase ("here are 10 issues…").
+   */
+  status: JSX.Element;
+  children?: JSX.Element;
 }) {
-  const [expanded, setExpanded] = createSignal(true);
   return (
-    <section class="flex flex-col gap-2.5">
-      <SoupSectionHeader class="mx-0 my-0 w-full">
-        {/* The header itself stays a div (actions are buttons), so the
-            chevron carries the collapse behavior — same box the soup
-            group headers render. */}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          class="cursor-default"
-        >
-          <Layer depth={3}>
-            <div class="flex size-4.5 items-center justify-center rounded-xs hover:bg-ink/5">
-              <ChevronRightIcon
-                class={cn('size-2.5', expanded() && 'rotate-90')}
-              />
-            </div>
-          </Layer>
-        </button>
-        <span class="truncate">{props.title}</span>
-        <Show when={props.count !== undefined}>
-          <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
-            {props.count}
-          </span>
-        </Show>
-        <Show when={props.meta}>{props.meta}</Show>
-        <Show when={props.actions}>
-          <span class="ml-auto flex shrink-0 items-center gap-2 font-normal">
-            {props.actions}
-          </span>
-        </Show>
-      </SoupSectionHeader>
-      <Show when={expanded()}>{props.children}</Show>
-    </section>
-  );
-}
-
-/** "from <icon> Linear" provenance note beside a section title. */
-export function ProviderMeta(props: { icon?: JSX.Element; label: string }) {
-  return (
-    <span class="flex items-center gap-1 text-xs text-ink-extra-muted">
-      from
-      <Show when={props.icon}>
-        <span class="flex size-3.5 items-center justify-center [&_svg]:size-3.5">
-          {props.icon}
-        </span>
-      </Show>
-      {props.label}
-    </span>
+    <Layer depth={2}>
+      <section class="flex flex-col gap-3 rounded-xl border border-ink/[0.05] bg-surface p-5">
+        <div class="flex items-center gap-2">
+          <Show when={props.icon}>
+            <span class="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4">
+              {props.icon}
+            </span>
+          </Show>
+          <h3 class="min-w-0 truncate text-sm font-semibold text-ink">
+            {props.title}
+          </h3>
+          <Show when={props.count !== undefined}>
+            <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
+              {props.count}
+            </span>
+          </Show>
+          <Show when={props.actions}>
+            <span class="ml-auto flex shrink-0 items-center gap-2">
+              {props.actions}
+            </span>
+          </Show>
+        </div>
+        {/* Recessed status well (Layer depth 0 drops bg-surface to the
+            darkest level, same as the soup active-filters bar). */}
+        <Layer depth={0}>
+          <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-edge-muted bg-surface px-3 py-2.5 text-[13px] text-ink-muted">
+            <Show when={props.connected}>
+              <StatusDot state="connected" />
+              <span class="font-medium text-ink">Connected</span>
+              <span>—</span>
+            </Show>
+            {props.status}
+          </div>
+        </Layer>
+        <Show when={props.children}>{props.children}</Show>
+      </section>
+    </Layer>
   );
 }
 
@@ -88,11 +83,11 @@ export function PillGrid(props: { children: JSX.Element }) {
 /**
  * A narrow, content-fit pill for one importable item, whose content reads
  * like an inline @ mention: entity icon, optional muted identifier, the name
- * with the mention underline, then trailing status icons. Width hugs the
- * content (name truncated past a cap) so a section reads as a compact cloud
- * instead of a full-width list. When `onToggle` is set the pill is
- * selectable; selected pills read as quietly active, deselected ones as
- * dimmed.
+ * with the mention underline, then trailing status. Width hugs the content
+ * (name truncated past a cap) so a section reads as a compact cloud instead
+ * of a full-width list. Pills are display-only — whether they import is
+ * decided by the card's section toggle — except imported ones, which open
+ * the entity they became.
  */
 export function ItemPill(props: {
   icon?: JSX.Element;
@@ -103,52 +98,20 @@ export function ItemPill(props: {
   status?: JSX.Element;
   /** Hover detail (subtitle/description); falls back to the label. */
   title?: string;
-  selected?: boolean;
-  onToggle?: () => void;
   /**
    * The Macro entity this item already became (imported by the user or a
    * teammate). Renders as a quiet "already in your workspace" pill that
-   * opens the existing entity instead of a selectable import candidate.
+   * opens the existing entity.
    */
   importedHref?: string;
 }) {
-  const imported = () => props.importedHref !== undefined;
-  const selectable = () => !imported() && props.onToggle !== undefined;
-  const handleClick = () => {
-    if (props.importedHref) {
-      window.open(props.importedHref, '_blank');
-    } else {
-      props.onToggle?.();
-    }
-  };
-  return (
-    <button
-      type="button"
-      title={
-        imported()
-          ? 'Already in your workspace — click to open'
-          : (props.title ?? props.label)
-      }
-      tabIndex={selectable() || imported() ? 0 : -1}
-      onClick={handleClick}
-      class={cn(
-        'inline-flex h-7 max-w-72 items-center gap-1.5 rounded-lg border px-2.5 text-[13px]',
-        'cursor-default transition-colors outline-none focus-visible:ring-1 focus-visible:ring-accent/50',
-        !selectable() && !imported() && 'pointer-events-auto',
-        imported()
-          ? 'border-ink/5 bg-ink/[0.03] text-ink-extra-muted hover:text-ink-muted'
-          : props.selected || !selectable()
-            ? 'border-ink/10 bg-surface text-ink'
-            : 'border-ink/5 bg-transparent text-ink-extra-muted hover:border-ink/10 hover:text-ink-muted'
-      )}
-    >
+  const content = (
+    <>
       <Show when={props.icon}>
         <span
           class={cn(
             'flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5',
-            !imported() && (props.selected || !selectable())
-              ? 'opacity-90'
-              : 'opacity-50'
+            props.importedHref !== undefined ? 'opacity-50' : 'opacity-90'
           )}
         >
           {props.icon}
@@ -165,69 +128,86 @@ export function ItemPill(props: {
       <Show when={props.status}>
         <span class="flex shrink-0 items-center gap-1">{props.status}</span>
       </Show>
-      <Show when={imported()}>
-        <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
-          <CheckIcon class="size-3 shrink-0" />
-          in Macro
+    </>
+  );
+  const base =
+    'inline-flex h-7 max-w-72 items-center gap-1.5 rounded-lg border px-2.5 text-[13px]';
+
+  return (
+    <Show
+      when={props.importedHref}
+      fallback={
+        <span
+          title={props.title ?? props.label}
+          class={cn(base, 'border-ink/10 bg-surface text-ink')}
+        >
+          {content}
         </span>
-      </Show>
-      <Show when={selectable() && props.selected}>
-        <CheckIcon class="size-3 shrink-0 text-success" />
-      </Show>
-    </button>
+      }
+    >
+      {(href) => (
+        <button
+          type="button"
+          title="Already in your workspace — click to open"
+          onClick={() => window.open(href(), '_blank')}
+          class={cn(
+            base,
+            'cursor-default border-ink/5 bg-ink/[0.03] text-ink-extra-muted outline-none',
+            'transition-colors hover:text-ink-muted focus-visible:ring-1 focus-visible:ring-accent/50'
+          )}
+        >
+          {content}
+          <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
+            <CheckIcon class="size-3 shrink-0" />
+            in Macro
+          </span>
+        </button>
+      )}
+    </Show>
   );
 }
 
 const SKELETON_WIDTHS = [88, 128, 72, 148, 104, 80, 136, 96];
 
-/** Shimmering placeholder pills while a gather job runs. */
+/**
+ * Shimmering placeholder pills while a gather job runs: ghost outlines of
+ * the real pills (icon dot + text bar) pulsing on a slight stagger. Renders
+ * bare spans so it can sit inside a `PillGrid` after the pills that already
+ * landed.
+ */
 export function SkeletonPills(props: { count?: number }) {
   return (
-    <div class="flex flex-wrap gap-1.5">
-      <For each={SKELETON_WIDTHS.slice(0, props.count ?? 6)}>
-        {(width) => (
-          <span
-            class="h-7 animate-pulse rounded-lg bg-ink/5"
-            style={{ width: `${width}px` }}
-          />
-        )}
-      </For>
-    </div>
+    <For each={SKELETON_WIDTHS.slice(0, props.count ?? 6)}>
+      {(width, index) => (
+        <span
+          class="flex h-7 w-(--pill-width) animate-pulse items-center gap-1.5 rounded-lg border border-ink/5 px-2.5 [animation-delay:var(--pill-delay)]"
+          style={{
+            '--pill-width': `${width}px`,
+            '--pill-delay': `${index() * 150}ms`,
+          }}
+        >
+          <span class="size-3.5 shrink-0 rounded-full bg-ink/10" />
+          <span class="h-2 min-w-0 flex-1 rounded-full bg-ink/10" />
+        </span>
+      )}
+    </For>
   );
 }
 
 /** Inline failure note with a retry affordance. */
 export function FailureNote(props: { message?: string; onRetry: () => void }) {
   return (
-    <div class="flex items-center gap-3 text-sm">
-      <span class="min-w-0 truncate text-ink-muted">
+    <span class="flex items-center gap-3">
+      <span class="min-w-0 truncate">
         {props.message ?? "Something went wrong — this one's on us."}
       </span>
       <button
         type="button"
-        class="shrink-0 font-medium text-ink-muted hover:text-ink"
+        class="shrink-0 font-medium text-ink-muted transition-colors hover:text-ink"
         onClick={() => props.onRetry()}
       >
         Retry
       </button>
-    </div>
-  );
-}
-
-/** Quiet text button used for section-level actions (import, select all). */
-export function QuietAction(props: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={props.disabled}
-      class="text-xs text-ink-extra-muted transition-colors hover:text-ink-muted disabled:opacity-50"
-      onClick={() => props.onClick()}
-    >
-      {props.label}
-    </button>
+    </span>
   );
 }

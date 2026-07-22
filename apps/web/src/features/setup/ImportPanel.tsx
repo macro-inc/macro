@@ -11,28 +11,27 @@ import {
   type ImportSource,
   useImportQuery,
   useRetryGatherMutation,
-  useRunImportMutation,
 } from '@queries/import';
+import { ToggleSwitch } from '@ui';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
-  BuilderSection,
   FailureNote,
+  ImportCard,
   ItemPill,
   PillGrid,
-  ProviderMeta,
-  QuietAction,
   SkeletonPills,
 } from './primitives';
 
-/** Display order + connector identity per import source. */
+/** Display order, connector identity, and item noun per import source. */
 const SOURCE_SECTIONS: {
   source: ImportSource;
-  title: string;
   serverName: string;
+  /** What the items are called in blurbs ("we found 16 documents…"). */
+  noun: string;
 }[] = [
-  { source: 'linear', title: 'Issues', serverName: 'Linear' },
-  { source: 'notion', title: 'Documents', serverName: 'Notion' },
-  { source: 'slack', title: 'Channels', serverName: 'Slack' },
+  { source: 'linear', serverName: 'Linear', noun: 'issues' },
+  { source: 'notion', serverName: 'Notion', noun: 'documents' },
+  { source: 'slack', serverName: 'Slack', noun: 'channels' },
 ];
 
 function featuredServer(name: string): FeaturedMcpServer | undefined {
@@ -41,45 +40,44 @@ function featuredServer(name: string): FeaturedMcpServer | undefined {
 
 /**
  * Split the user's staged rows into accept/decline id lists from the
- * deselection set (pills start selected). What "Continue to Macro" and the
- * per-section import actions both send to `POST /import/run`.
+ * per-source skip set (sections import by default; toggling a section off
+ * skips everything in it). What "Continue to Macro" sends to
+ * `POST /import/run`.
  */
 export function stagedSelection(
   entities: ImportEntity[] | undefined,
-  deselected: Record<string, boolean>,
-  source?: ImportSource
+  skippedSources: Partial<Record<ImportSource, boolean>>
 ): { importIds: string[]; discardIds: string[] } {
   const staged = (entities ?? []).filter(
-    (entity) =>
-      entity.status === 'staged' &&
-      (source === undefined || entity.source === source)
+    (entity) => entity.status === 'staged'
   );
   return {
     importIds: staged
-      .filter((entity) => !deselected[entity.id])
+      .filter((entity) => !skippedSources[entity.source])
       .map((entity) => entity.id),
     discardIds: staged
-      .filter((entity) => deselected[entity.id])
+      .filter((entity) => skippedSources[entity.source])
       .map((entity) => entity.id),
   };
 }
 
 /**
- * The import side of `/setup`: one section per connected source, rendered
- * from `(gather run, ledger rows)`. A running gather shimmers; staged rows
- * are selectable pills (selected by default); importing rows spin; imported
- * rows — the user's own or a teammate's team-shared — link to what they
- * became; a failed run offers a retry.
+ * The import side of `/setup`: one card per connected source, rendered from
+ * `(gather run, ledger rows)`. Each card leads with the connector and a
+ * status blurb — looking through the tool (pills stream in behind shimmer
+ * placeholders), what was found, importing progress, or a retry on failure.
+ * Whether a section imports is a single toggle on the card; individual
+ * pills are display-only. Imported rows — the user's own or a teammate's
+ * team-shared — link to what they became.
  *
- * Selection state lives in the page (SetupPage): the footer's "Continue to
- * Macro" imports the same selection the per-section actions do.
+ * Skip state lives in the page (SetupPage): the footer's "Continue to
+ * Macro" imports every section that is still toggled on.
  */
 export function ImportPanel(props: {
-  deselected: Record<string, boolean>;
-  onToggle: (id: string, deselected: boolean) => void;
+  skipped: Partial<Record<ImportSource, boolean>>;
+  onToggleSource: (source: ImportSource, skipped: boolean) => void;
 }) {
   const importQuery = useImportQuery();
-  const runImport = useRunImportMutation();
   const retryGather = useRetryGatherMutation();
 
   const bySource = createMemo(() => {
@@ -106,24 +104,10 @@ export function ImportPanel(props: {
     })
   );
 
-  const importSelected = (source: ImportSource) => {
-    const { importIds, discardIds } = stagedSelection(
-      importQuery.data?.entities,
-      props.deselected,
-      source
-    );
-    if (importIds.length === 0 && discardIds.length === 0) return;
-    runImport.mutate({ importIds, discardIds });
-  };
-
   return (
-    <div class="flex flex-col gap-8 overflow-y-auto p-8">
+    <div class="flex flex-1 flex-col gap-7 overflow-y-auto p-8">
       <header>
-        <h2 class="text-lg font-semibold">Bring your work into Macro</h2>
-        <p class="mt-1 text-sm text-ink-muted">
-          Macro finds what's worth bringing over from each tool you connect.
-          Pick what you want — everything else is left behind.
-        </p>
+        <h2 class="text-lg font-semibold">Workspace setup</h2>
       </header>
 
       <Show
@@ -134,98 +118,128 @@ export function ImportPanel(props: {
           </p>
         }
       >
-        <For each={SOURCE_SECTIONS}>
-          {({ source, title, serverName }) => {
-            const section = () => bySource().get(source);
-            const run = () => section()?.run;
-            const entities = () => section()?.entities ?? [];
-            const staged = () =>
-              entities().filter((entity) => entity.status === 'staged');
-            const selectedCount = () =>
-              staged().filter((entity) => !props.deselected[entity.id]).length;
-            const server = featuredServer(serverName);
-            const visible = () => run() !== undefined || entities().length > 0;
+        <div class="flex flex-col gap-4">
+          <For each={SOURCE_SECTIONS}>
+            {({ source, serverName, noun }) => {
+              const section = () => bySource().get(source);
+              const run = () => section()?.run;
+              const entities = () => section()?.entities ?? [];
+              const staged = () =>
+                entities().filter((entity) => entity.status === 'staged');
+              const importing = () =>
+                entities().filter((entity) => entity.status === 'importing');
+              const imported = () =>
+                entities().filter((entity) => entity.status === 'imported');
+              const gathering = () => run()?.status === 'running';
+              const skipped = () => props.skipped[source] === true;
+              // Skipping a section collapses its staged pills entirely;
+              // importing/imported rows stay visible regardless.
+              const visiblePills = () =>
+                skipped()
+                  ? entities().filter((entity) => entity.status !== 'staged')
+                  : entities();
+              const server = featuredServer(serverName);
+              const visible = () =>
+                run() !== undefined || entities().length > 0;
 
-            return (
-              <Show when={visible()}>
-                <BuilderSection
-                  title={title}
-                  count={entities().length || undefined}
-                  meta={
-                    <ProviderMeta
-                      icon={server ? <server.icon /> : undefined}
-                      label={serverName}
-                    />
-                  }
-                  actions={
-                    <Show when={staged().length > 0}>
-                      <QuietAction
-                        label={
-                          runImport.isPending
-                            ? 'Importing…'
-                            : `Import ${selectedCount()} selected`
-                        }
-                        disabled={runImport.isPending || selectedCount() === 0}
-                        onClick={() => importSelected(source)}
-                      />
-                    </Show>
-                  }
-                >
-                  <Switch>
-                    <Match
-                      when={
-                        run()?.status === 'running' && entities().length === 0
-                      }
-                    >
-                      <SkeletonPills />
-                    </Match>
-                    <Match
-                      when={
-                        run()?.status === 'failed' && entities().length === 0
-                      }
-                    >
-                      <FailureNote
-                        message="Couldn't look through this tool."
-                        onRetry={() => retryGather.mutate(source)}
-                      />
-                    </Match>
-                    <Match when={true}>
+              return (
+                <Show when={visible()}>
+                  <ImportCard
+                    icon={server ? <server.icon /> : undefined}
+                    title={serverName}
+                    count={entities().length || undefined}
+                    connected
+                    actions={
+                      <Show when={staged().length > 0}>
+                        <ToggleSwitch
+                          size="sm"
+                          class="flex-row-reverse"
+                          checked={!skipped()}
+                          onChange={(checked) =>
+                            props.onToggleSource(source, !checked)
+                          }
+                          label={skipped() ? 'Skipped' : 'Import all'}
+                          labelClass="text-xs text-ink-muted select-none"
+                        />
+                      </Show>
+                    }
+                    status={
+                      <Switch>
+                        <Match
+                          when={
+                            run()?.status === 'failed' &&
+                            entities().length === 0
+                          }
+                        >
+                          <FailureNote
+                            message={`we couldn't look through your ${serverName}.`}
+                            onRetry={() => retryGather.mutate(source)}
+                          />
+                        </Match>
+                        <Match when={gathering()}>
+                          <span class="flex items-center gap-1.5">
+                            looking through your {serverName} for {noun} worth
+                            importing…
+                            <SpinnerIcon class="size-3 shrink-0 animate-spin" />
+                          </span>
+                        </Match>
+                        <Match when={importing().length > 0}>
+                          <span class="flex items-center gap-1.5">
+                            importing {importing().length} {noun} into your
+                            workspace…
+                            <SpinnerIcon class="size-3 shrink-0 animate-spin" />
+                          </span>
+                        </Match>
+                        <Match when={staged().length > 0}>
+                          <span>
+                            <Show
+                              when={!skipped()}
+                              fallback={<>suggested imports skipped for now.</>}
+                            >
+                              here are some{' '}
+                              <span class="font-medium text-ink">{noun}</span>{' '}
+                              we pulled in to start your workspace. You can
+                              always ask Macro AI to bring in more later.
+                            </Show>
+                          </span>
+                        </Match>
+                        <Match when={true}>
+                          {imported().length} {noun} from {serverName} are in
+                          your workspace.
+                        </Match>
+                      </Switch>
+                    }
+                  >
+                    <Show when={visiblePills().length > 0 || gathering()}>
                       <PillGrid>
-                        <For each={entities()}>
+                        <For each={visiblePills()}>
                           {(entity) => (
                             <ImportEntityPill
                               entity={entity}
                               icon={server ? <server.icon /> : undefined}
-                              selected={!props.deselected[entity.id]}
-                              onToggle={() =>
-                                props.onToggle(
-                                  entity.id,
-                                  !props.deselected[entity.id]
-                                )
-                              }
                             />
                           )}
                         </For>
+                        <Show when={gathering()}>
+                          <SkeletonPills
+                            count={visiblePills().length > 0 ? 3 : 6}
+                          />
+                        </Show>
                       </PillGrid>
-                    </Match>
-                  </Switch>
-                </BuilderSection>
-              </Show>
-            );
-          }}
-        </For>
+                    </Show>
+                  </ImportCard>
+                </Show>
+              );
+            }}
+          </For>
+        </div>
       </Show>
     </div>
   );
 }
 
 /** One ledger row as a pill, styled by its status. */
-function ImportEntityPill(props: {
-  entity: ImportEntity;
-  icon?: JSX.Element;
-  selected: boolean;
-  onToggle: () => void;
-}) {
+function ImportEntityPill(props: { entity: ImportEntity; icon?: JSX.Element }) {
   const code = () => {
     const identifier = props.entity.metadata.identifier;
     return typeof identifier === 'string' ? identifier : undefined;
@@ -270,8 +284,6 @@ function ImportEntityPill(props: {
           code={code()}
           label={entityLabel(props.entity)}
           title={hoverDetail()}
-          selected={props.selected}
-          onToggle={props.onToggle}
         />
       </Match>
     </Switch>

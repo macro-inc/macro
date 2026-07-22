@@ -291,6 +291,9 @@ async fn main() -> anyhow::Result<()> {
         properties_service.clone(),
         entity_access_service.clone(),
     );
+    // The import pipeline sets the same task system properties on imported
+    // Linear issues (status, priority, due date, assignee).
+    let task_properties_for_import = task_properties_service.clone();
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -433,31 +436,20 @@ async fn main() -> anyhow::Result<()> {
 
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
-    // poll. Same free-form gateway message pattern as ai_projections.
-    let import_gateway = Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-        internal_api_key.clone(),
-        ConnectionGatewayUrl::new()?.to_string(),
+    // poll (see import::outbound::gateway_notifier).
+    let import_notify = import::outbound::gateway_notifier::gateway_import_notify(Arc::new(
+        connection_gateway_client::ConnectionGatewayClient::new(
+            internal_api_key.clone(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        ),
     ));
-    let import_notify: import::domain::service::ImportNotify = Arc::new(
-        move |user: macro_user_id::user_id::MacroUserIdStr<'static>| {
-            let gateway = import_gateway.clone();
-            Box::pin(async move {
-                let entity = model_entity::EntityType::User.with_entity_str(user.as_ref());
-                let payload = serde_json::json!({ "type": "import_updated" });
-                if let Err(e) = gateway
-                    .send_message(entity, "import_updated".to_string(), payload)
-                    .await
-                {
-                    tracing::warn!(%user, error = ?e, "failed to push import update");
-                }
-            })
-        },
-    );
 
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),
+        task_properties: task_properties_for_import,
+        team_repository: ai_tools::build_team_repository(db.clone()),
     };
     let import_service = Arc::new(
         import::domain::service::ImportServiceImpl::new(

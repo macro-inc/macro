@@ -33,7 +33,7 @@ use properties::inbound::toolset::PropertiesToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 use system_properties::{
-    PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
+    PgSystemPropertiesRepository, PriorityOption, StatusOption, SystemPropertiesService as _,
     SystemPropertiesServiceImpl,
 };
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
@@ -171,6 +171,12 @@ pub type ToolTeamService = TeamRepositoryImpl;
 
 /// Type alias for the team AI tool context.
 pub type ToolTeamToolContext = TeamToolContext<ToolTeamService, ToolEntityAccessService>;
+
+/// Build the team repository used for roster lookups (e.g. resolving
+/// imported items' emails to teammates).
+pub fn build_team_repository(pool: sqlx::PgPool) -> Arc<ToolTeamService> {
+    Arc::new(TeamRepositoryImpl::new(pool))
+}
 
 /// Build the team AI tool context from a Postgres pool.
 pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
@@ -657,7 +663,10 @@ pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccess
 
 /// Creates the Macro entities the import pipeline's fixed mapping calls for
 /// (linear → task, notion → md, slack → channel), reusing the same document
-/// creator and channel service the other AI tools run on.
+/// creator and channel service the other AI tools run on. Task system
+/// properties (status, priority, due date, assignee) and channel teammate
+/// invites are applied best-effort — an enrichment that fails never fails
+/// the import itself.
 #[derive(Clone)]
 pub struct ToolEntityCreator {
     /// Backend-owned document creation use case (shared with document tools).
@@ -667,6 +676,10 @@ pub struct ToolEntityCreator {
     pub entity_access_service: Arc<ToolEntityAccessService>,
     /// Channel creation service.
     pub channel_service: Arc<ToolChannelMessagesService>,
+    /// Task system-property writes (status / priority / due date / assignees).
+    pub task_properties: TaskPropertiesAdapter,
+    /// Team roster lookups, to resolve source-tool emails to teammates.
+    pub team_repository: Arc<ToolTeamService>,
 }
 
 impl ToolEntityCreator {
@@ -698,6 +711,141 @@ impl ToolEntityCreator {
             .document_id
             .to_string())
     }
+
+    /// The user's team id (when they have one) and its member ids.
+    async fn team_roster(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> (Option<uuid::Uuid>, Vec<MacroUserIdStr<'static>>) {
+        use teams::domain::team_repo::TeamRepository as _;
+        let team_id = match self.entity_access_service.get_user_team(user).await {
+            Ok(team) => team.map(|team| team.team_id),
+            Err(e) => {
+                tracing::warn!(%user, error = ?e, "failed to get user's team");
+                None
+            }
+        };
+        let Some(team_id) = team_id else {
+            return (None, Vec::new());
+        };
+        match self.team_repository.get_team_members(&team_id).await {
+            Ok(members) => (
+                Some(team_id),
+                members
+                    .into_iter()
+                    .map(|member| macro_user_id::cowlike::CowLike::into_owned(member.user_id))
+                    .collect(),
+            ),
+            Err(e) => {
+                tracing::warn!(%user, %team_id, error = ?e, "failed to list team members");
+                (Some(team_id), Vec::new())
+            }
+        }
+    }
+
+    /// Apply imported task properties best-effort: each one logs and is
+    /// skipped on failure so a bad label or unknown assignee never sinks
+    /// the import.
+    async fn apply_task_properties(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_id: &str,
+        properties: &import::domain::ports::ImportedTaskProperties,
+        roster: &[MacroUserIdStr<'static>],
+    ) {
+        use models_properties::api::requests::SetPropertyValue;
+        use system_properties::SystemPropertyKey;
+
+        if let Some(status) = properties.status.as_deref()
+            && let Err(e) = self
+                .task_properties
+                .update_task_status(task_id, status)
+                .await
+        {
+            tracing::warn!(task_id, status, error = ?e, "failed to set imported task status");
+        }
+
+        if let Some(priority) = properties.priority.as_deref() {
+            let option = match priority {
+                "Low" => Some(PriorityOption::Low),
+                "Medium" => Some(PriorityOption::Medium),
+                "High" => Some(PriorityOption::High),
+                "Urgent" => Some(PriorityOption::Urgent),
+                _ => None,
+            };
+            match option {
+                Some(option) => {
+                    if let Err(e) = self
+                        .task_properties
+                        .set_entity_property(
+                            user.as_ref(),
+                            task_id,
+                            SystemPropertyKey::Priority.uuid(),
+                            Some(SetPropertyValue::SelectOption {
+                                option_id: option.uuid(),
+                            }),
+                        )
+                        .await
+                    {
+                        tracing::warn!(task_id, priority, error = ?e, "failed to set imported task priority");
+                    }
+                }
+                None => tracing::warn!(task_id, priority, "unknown imported task priority label"),
+            }
+        }
+
+        if let Some(due_date) = properties.due_date.as_deref() {
+            match chrono::NaiveDate::parse_from_str(due_date, "%Y-%m-%d") {
+                Ok(date) => {
+                    let value = date.and_time(chrono::NaiveTime::MIN).and_utc();
+                    if let Err(e) = self
+                        .task_properties
+                        .set_entity_property(
+                            user.as_ref(),
+                            task_id,
+                            SystemPropertyKey::DueDate.uuid(),
+                            Some(SetPropertyValue::Date { value }),
+                        )
+                        .await
+                    {
+                        tracing::warn!(task_id, due_date, error = ?e, "failed to set imported task due date");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(task_id, due_date, error = ?e, "unparseable imported task due date");
+                }
+            }
+        }
+
+        if let Some(email) = properties.assignee_email.as_deref() {
+            // Only assign teammates — an email with no roster match (an
+            // external collaborator, a bot) is silently skipped.
+            let Some(assignee) = roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+            else {
+                return;
+            };
+            let reference = models_properties::EntityReference::new(
+                assignee.as_ref().to_string(),
+                models_properties::EntityType::User,
+            );
+            if let Err(e) = self
+                .task_properties
+                .set_entity_property(
+                    user.as_ref(),
+                    task_id,
+                    SystemPropertyKey::Assignees.uuid(),
+                    Some(SetPropertyValue::MultiEntityReference {
+                        references: vec![reference],
+                    }),
+                )
+                .await
+            {
+                tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
+            }
+        }
+    }
 }
 
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
@@ -706,16 +854,16 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
+        properties: &import::domain::ports::ImportedTaskProperties,
     ) -> anyhow::Result<String> {
         // Same team resolution as the CreateDocument tool, so imported tasks
-        // number correctly within the user's team.
-        let team_id = self
-            .entity_access_service
-            .get_user_team(user)
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to get user's team: {e:?}"))?
-            .map(|team| team.team_id);
-        self.create_doc(user, name, markdown, true, team_id).await
+        // number correctly within the user's team; the roster doubles as the
+        // assignee-email lookup.
+        let (team_id, roster) = self.team_roster(user).await;
+        let task_id = self.create_doc(user, name, markdown, true, team_id).await?;
+        self.apply_task_properties(user, &task_id, properties, &roster)
+            .await;
+        Ok(task_id)
     }
 
     async fn create_markdown_doc(
@@ -732,8 +880,22 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         team_id: Option<uuid::Uuid>,
+        participant_emails: &[String],
     ) -> anyhow::Result<String> {
         use channels::domain::ports::ChannelService as _;
+        // Teammates who were in the source channel join the Macro one; emails
+        // with no roster match (external collaborators, bots) are skipped.
+        let (_, roster) = self.team_roster(user).await;
+        let mut participants: std::collections::HashSet<MacroUserIdStr<'static>> =
+            std::iter::once(user.clone()).collect();
+        for email in participant_emails {
+            if let Some(member) = roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+            {
+                participants.insert(member.clone());
+            }
+        }
         let request = channels::domain::models::CreateChannelRequest {
             name: Some(name.to_string()),
             channel_type: if team_id.is_some() {
@@ -742,10 +904,10 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
                 channels::domain::models::ChannelType::Public
             },
             team_id,
-            // The creator is the only known member; the service requires a
-            // non-empty participant list and the repo filters out the owner,
-            // so this creates an owner-only channel.
-            participants: std::iter::once(user.clone()).collect(),
+            // The creator is always included (the service requires a
+            // non-empty participant list and the repo filters out the
+            // owner), plus any teammates matched by email above.
+            participants,
         };
         let response = self
             .channel_service

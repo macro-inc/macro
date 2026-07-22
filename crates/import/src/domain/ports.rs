@@ -192,17 +192,34 @@ pub trait ImportRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
+/// System properties to set on an imported task, already normalized to
+/// Macro's vocabulary by the import service (the creator applies them
+/// best-effort — a property that fails to apply never fails the import).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ImportedTaskProperties {
+    /// Macro status display label (`Not Started` … `Canceled`).
+    pub status: Option<String>,
+    /// Macro priority display label (`Low` … `Urgent`).
+    pub priority: Option<String>,
+    /// Due date as an ISO date (`YYYY-MM-DD`).
+    pub due_date: Option<String>,
+    /// Assignee email, resolved against the user's team roster.
+    pub assignee_email: Option<String>,
+}
+
 /// Creates the Macro entities imports become. Implemented by the host
 /// service against its real document/channel services; the fixed
 /// source → entity-type mapping is enforced by the import service, which
 /// only ever calls the creator matching the row's source.
 pub trait EntityCreator: Send + Sync + 'static {
-    /// Create a task document. Returns the new entity id.
+    /// Create a task document, applying `properties` best-effort once the
+    /// task exists. Returns the new entity id.
     fn create_task(
         &self,
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
+        properties: &ImportedTaskProperties,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create a markdown document. Returns the new entity id.
@@ -214,11 +231,14 @@ pub trait EntityCreator: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create a channel, shared with `team_id` when given (public
-    /// otherwise). Returns the new entity id.
+    /// otherwise). `participant_emails` are matched against the team roster
+    /// best-effort; matches join the channel alongside the creator. Returns
+    /// the new entity id.
     fn create_channel(
         &self,
         user: &MacroUserIdStr<'static>,
         name: &str,
         team_id: Option<Uuid>,
+        participant_emails: &[String],
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 }

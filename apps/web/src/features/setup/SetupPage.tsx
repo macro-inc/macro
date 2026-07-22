@@ -2,7 +2,12 @@ import { toast } from '@core/component/Toast/Toast';
 import LogoIcon from '@icon/macro-logo.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
-import { useImportQuery, useRunImportMutation } from '@queries/import';
+import { usePrimaryEmailLinkId } from '@queries/email/link';
+import {
+  type ImportSource,
+  useImportQuery,
+  useRunImportMutation,
+} from '@queries/import';
 import {
   useCompleteOnboardingMutation,
   useOnboardingQuery,
@@ -62,12 +67,17 @@ function SetupPageContent() {
   const onboardingQuery = useOnboardingQuery();
   const importQuery = useImportQuery();
   const runImport = useRunImportMutation();
+  // The user's own primary inbox link — present once email is connected
+  // (drives the welcome copy: inbox processing vs plain setup).
+  const emailConnected = usePrimaryEmailLinkId();
 
-  // Deselection set for staged pills (pills start selected; clicking
-  // toggles). Lives here so the footer's "Continue to Macro" imports the
-  // same selection the per-section actions do. Keyed by row id so
-  // re-gathers and refetches keep the user's picks.
-  const [deselected, setDeselected] = createStore<Record<string, boolean>>({});
+  // Per-source skip set (sections import by default; each card's toggle
+  // flips its whole source off). Lives here so the footer's "Continue to
+  // Macro" imports exactly the sections still toggled on. Keyed by source
+  // so re-gathers and refetches keep the user's picks.
+  const [skippedSources, setSkippedSources] = createStore<
+    Partial<Record<ImportSource, boolean>>
+  >({});
 
   // Redirect out when there is nothing to set up (unauthenticated, or the
   // flow was already completed elsewhere).
@@ -91,7 +101,7 @@ function SetupPageContent() {
   const runSelectedImports = async (): Promise<number> => {
     const { importIds, discardIds } = stagedSelection(
       importQuery.data?.entities,
-      deselected
+      skippedSources
     );
     if (importIds.length === 0 && discardIds.length === 0) return 0;
     await runImport.mutateAsync({ importIds, discardIds });
@@ -142,7 +152,8 @@ function SetupPageContent() {
   };
 
   const selectedCount = () =>
-    stagedSelection(importQuery.data?.entities, deselected).importIds.length;
+    stagedSelection(importQuery.data?.entities, skippedSources).importIds
+      .length;
 
   return (
     // Same chrome as fullscreen settings: the left rail sits directly on the
@@ -156,7 +167,9 @@ function SetupPageContent() {
             <LogoIcon class="size-8 text-accent" />
             <h1 class="mt-6 text-2xl/tight font-semibold">Welcome to Macro</h1>
             <p class="mt-1.5 text-sm text-ink-muted">
-              Connect your work — Macro builds your workspace around it.
+              {emailConnected()
+                ? "While we process your inbox, let's bring in your tasks, documents, contacts, and channels, and set up your team."
+                : 'Set up Macro by bringing in your tasks, documents, and channels, then invite your team.'}
             </p>
           </header>
 
@@ -194,7 +207,12 @@ function SetupPageContent() {
       <div class="min-w-0 flex-1 py-2 pr-2 pl-0">
         <Layer depth={1}>
           <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu">
-            <ImportPanel deselected={deselected} onToggle={setDeselected} />
+            <ImportPanel
+              skipped={skippedSources}
+              onToggleSource={(source, skipped) =>
+                setSkippedSources(source, skipped)
+              }
+            />
           </div>
         </Layer>
       </div>

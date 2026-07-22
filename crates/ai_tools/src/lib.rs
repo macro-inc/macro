@@ -50,13 +50,13 @@ pub use tool_context::{
     ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
     ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolImportService, ToolImportToolContext,
-    ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
-    ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
-    ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,
-    build_channel_tool_context_with_dispatcher, build_crm_tool_context, build_properties_service,
-    build_properties_tool_context, build_task_properties_adapter, build_team_tool_context,
+    ToolForeignEntityService, ToolFrecencyService, ToolImportService, ToolImportToolContext,
+    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    ToolSystemPropertiesService, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
+    build_channel_tool_context, build_channel_tool_context_with_dispatcher, build_crm_tool_context,
+    build_properties_service, build_properties_tool_context, build_task_properties_adapter,
+    build_team_repository, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 

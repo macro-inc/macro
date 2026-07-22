@@ -16,7 +16,7 @@ pub fn gather_system(source: ImportSource) -> String {
             "the Linear issue identifier (e.g. `ENG-142`); fall back to the issue URL only when \
              no identifier exists",
             "identifier, title, description (short markdown), status, priority, assignee, \
-             assignee_email, url",
+             assignee_email, due_date (ISO date, when set), url",
         ),
         ImportSource::Notion => (
             "the user's most recently updated, substantive Notion pages",

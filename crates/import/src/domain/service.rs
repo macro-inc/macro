@@ -12,7 +12,7 @@
 //! content through `FinalizeImport` when the direct path can't cope.
 
 use super::models::*;
-use super::ports::{EntityCreator, ImportError, ImportRepo, Result};
+use super::ports::{EntityCreator, ImportError, ImportRepo, ImportedTaskProperties, Result};
 use crate::inbound::toolset::{
     ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
 };
@@ -507,8 +507,9 @@ where
                 match serde_json::from_value::<LinearIssueMeta>(row.metadata.clone()) {
                     Ok(meta) => {
                         let (name, markdown) = linear_task_content(&meta);
+                        let properties = linear_task_properties(&meta);
                         self.creator
-                            .create_task(user, &name, &markdown)
+                            .create_task(user, &name, &markdown, &properties)
                             .await
                             .map(|id| (id, None))
                     }
@@ -521,11 +522,19 @@ where
                         // Channels always associate with the user's team when
                         // they have one — that is what makes team dedup work.
                         match self.repo.user_team_id(user).await {
-                            Ok(team_id) => self
-                                .creator
-                                .create_channel(user, &meta.name, team_id)
-                                .await
-                                .map(|id| (id, team_id)),
+                            Ok(team_id) => {
+                                // Teammates who were in the Slack channel join
+                                // the Macro one (matched by email downstream).
+                                let emails: Vec<String> = meta
+                                    .participants
+                                    .iter()
+                                    .filter_map(|p| p.email.clone())
+                                    .collect();
+                                self.creator
+                                    .create_channel(user, &meta.name, team_id, &emails)
+                                    .await
+                                    .map(|id| (id, team_id))
+                            }
                             Err(e) => Err(anyhow::anyhow!("team lookup failed: {e}")),
                         }
                     }
@@ -944,7 +953,16 @@ where
         }
 
         let entity_id = match row.source {
-            ImportSource::Linear => self.creator.create_task(user, name, content_markdown).await,
+            ImportSource::Linear => {
+                // Agent-finalized Linear rows still carry staged metadata —
+                // apply the same property mapping as the deterministic path.
+                let properties = serde_json::from_value::<LinearIssueMeta>(row.metadata.clone())
+                    .map(|meta| linear_task_properties(&meta))
+                    .unwrap_or_default();
+                self.creator
+                    .create_task(user, name, content_markdown, &properties)
+                    .await
+            }
             ImportSource::Notion => {
                 self.creator
                     .create_markdown_doc(user, name, content_markdown)
@@ -997,16 +1015,74 @@ fn parse_notion_fetch_text(text: &str) -> (Option<String>, String) {
     (None, text.to_string())
 }
 
+/// Map a Linear workflow status name onto Macro's task status label.
+/// Returns `None` for anything unrecognized (the raw label then stays in
+/// the task body's footer instead).
+pub fn map_linear_status(status: &str) -> Option<&'static str> {
+    match status.trim().to_ascii_lowercase().as_str() {
+        "backlog" | "todo" | "to do" | "triage" | "unstarted" | "not started" | "planned" => {
+            Some("Not Started")
+        }
+        "in progress" | "started" | "doing" => Some("In Progress"),
+        "in review" | "review" | "code review" => Some("In Review"),
+        "done" | "completed" | "closed" | "merged" => Some("Completed"),
+        "canceled" | "cancelled" | "duplicate" | "won't do" | "wont do" => Some("Canceled"),
+        _ => None,
+    }
+}
+
+/// Map a Linear priority label onto Macro's task priority label. `None` for
+/// unrecognized labels and for Linear's explicit "No priority".
+pub fn map_linear_priority(priority: &str) -> Option<&'static str> {
+    match priority.trim().to_ascii_lowercase().as_str() {
+        "urgent" => Some("Urgent"),
+        "high" => Some("High"),
+        "medium" | "normal" => Some("Medium"),
+        "low" => Some("Low"),
+        _ => None,
+    }
+}
+
+/// The system properties an imported Linear issue should carry, normalized
+/// to Macro's vocabulary. Unmappable status/priority labels are dropped
+/// here and surface in the body footer instead.
+pub fn linear_task_properties(meta: &LinearIssueMeta) -> ImportedTaskProperties {
+    ImportedTaskProperties {
+        status: meta
+            .status
+            .as_deref()
+            .and_then(map_linear_status)
+            .map(String::from),
+        priority: meta
+            .priority
+            .as_deref()
+            .and_then(map_linear_priority)
+            .map(String::from),
+        due_date: meta.due_date.clone(),
+        assignee_email: meta.assignee_email.clone(),
+    }
+}
+
 /// Compose the task-document name and body for one Linear issue, from its
-/// staged metadata alone.
+/// staged metadata alone. Status/priority appear in the footer only when
+/// they could NOT be mapped onto real task properties — mapped values live
+/// on the task itself and would be noise here.
 pub fn linear_task_content(meta: &LinearIssueMeta) -> (String, String) {
     let name = match meta.identifier.as_deref() {
         Some(identifier) => format!("{identifier} {}", meta.title),
         None => meta.title.clone(),
     };
+    let unmapped_status = meta
+        .status
+        .as_deref()
+        .filter(|s| map_linear_status(s).is_none());
+    let unmapped_priority = meta
+        .priority
+        .as_deref()
+        .filter(|p| map_linear_priority(p).is_none());
     let footer = [
-        meta.status.as_deref().map(|s| format!("Status: {s}")),
-        meta.priority.as_deref().map(|p| format!("Priority: {p}")),
+        unmapped_status.map(|s| format!("Status: {s}")),
+        unmapped_priority.map(|p| format!("Priority: {p}")),
         Some(match meta.url.as_deref() {
             Some(url) => format!("Imported from [Linear]({url})"),
             None => "Imported from Linear".to_string(),

@@ -224,6 +224,9 @@ pub struct LinearIssueMeta {
     pub assignee: Option<String>,
     /// Assignee email, when Linear exposes it.
     pub assignee_email: Option<String>,
+    /// Due date as an ISO date (`YYYY-MM-DD`), when set.
+    #[serde(default)]
+    pub due_date: Option<String>,
     /// Deep link back to the issue in Linear.
     pub url: Option<String>,
 }
@@ -238,6 +241,7 @@ impl LinearIssueMeta {
             priority: truncate_opt(self.priority, MAX_TEXT),
             assignee: truncate_opt(self.assignee, MAX_TEXT),
             assignee_email: truncate_opt(self.assignee_email, MAX_TEXT),
+            due_date: truncate_opt(self.due_date, MAX_TEXT),
             url: truncate_opt(self.url, MAX_TEXT),
         }
     }
