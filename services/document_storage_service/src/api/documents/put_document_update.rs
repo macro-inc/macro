@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, GenericErrorResponse};
 
 #[derive(serde::Deserialize)]
@@ -31,7 +31,7 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, _auth))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     let res = macro_db_client::document::update::update_document(&ctx.db, &document_id).await;

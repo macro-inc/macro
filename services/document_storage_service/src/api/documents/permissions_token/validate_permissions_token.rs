@@ -7,7 +7,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use macro_sync_service_jwt::ISSUER;
 use model::{document::DocumentPermissionsToken, response::ErrorResponse};
 use utoipa::ToSchema;
@@ -40,7 +42,7 @@ pub struct DocumentPermissionsTokenRequest {
 )]
 pub async fn handler(
     State(config_context): State<Arc<Config>>,
-    user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     extract::Json(DocumentPermissionsTokenRequest { token }): extract::Json<
         DocumentPermissionsTokenRequest,
     >,
@@ -56,7 +58,7 @@ pub async fn handler(
     let user_id = user
         .authorization
         .as_ref()
-        .and_then(|authorization| authorization.acting_user())
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
         .map(|user| user.macro_user_id.to_string());
 
     // Attempt to decode the token.

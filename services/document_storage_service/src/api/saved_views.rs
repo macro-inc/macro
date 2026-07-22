@@ -5,7 +5,7 @@ use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
 use axum::{Router, routing::get};
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState, UserOrInternal};
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use saved_views::{ExcludedDefaultViewStorage, PgViewStorage, ViewStorage};
@@ -131,7 +131,7 @@ where
         let db = PgPool::from_ref(state);
 
         let user =
-            MacroAuthorizationExtractor::<AuthorizationService>::from_request_parts(parts, state)
+            MacroAuthorizationExtractor::<AuthorizationService, UserOrInternal>::from_request_parts(parts, state)
                 .await
                 .map_err(|_| SavedViewErr::Unauthorized)?;
 
@@ -143,17 +143,11 @@ where
         authorize_view_access(
             &PgViewStorage::new(db),
             saved_view_id,
-            crate::api::required_user(&user.authorization)
-                .macro_user_id
-                .as_ref(),
+            user.authorization.user.macro_user_id.as_ref(),
         )
         .await?;
 
-        Ok(SavedViewOwner(
-            crate::api::required_user(&user.authorization)
-                .user_context
-                .clone(),
-        ))
+        Ok(SavedViewOwner(user.authorization.user.user_context.clone()))
     }
 }
 
@@ -167,30 +161,22 @@ where
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id), err)]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id), err)]
 async fn get_views_handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<(StatusCode, Json<ViewsResponse>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
     let (views, excluded_default_views) = try_join!(
         async {
             pg_view_storage
-                .get_views_for_user(
-                    crate::api::required_user(&user.authorization)
-                        .macro_user_id
-                        .as_ref(),
-                )
+                .get_views_for_user(user.authorization.user.macro_user_id.as_ref())
                 .await
         },
         async {
             pg_view_storage
-                .get_excluded_default_views_for_user(
-                    crate::api::required_user(&user.authorization)
-                        .macro_user_id
-                        .as_ref(),
-                )
+                .get_excluded_default_views_for_user(user.authorization.user.macro_user_id.as_ref())
                 .await
         }
     )?;
@@ -216,15 +202,13 @@ async fn get_views_handler(
 )]
 async fn create_view_handler(
     ctx: State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(create_view_request): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<View>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
     let new_view = View::new(
-        crate::api::required_user(&user.authorization)
-            .macro_user_id
-            .to_string(),
+        user.authorization.user.macro_user_id.to_string(),
         create_view_request.name,
         create_view_request.config,
     );
@@ -302,10 +286,10 @@ async fn patch_view_handler(
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id), err)]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id), err)]
 pub async fn exclude_default_view_handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(ExcludeDefaultViewRequest {
         default_view_id: id,
     }): Json<ExcludeDefaultViewRequest>,
@@ -314,9 +298,7 @@ pub async fn exclude_default_view_handler(
 
     pg_view_storage
         .create_excluded_default_view(ExcludedDefaultView::new(
-            crate::api::required_user(&user.authorization)
-                .macro_user_id
-                .to_string(),
+            user.authorization.user.macro_user_id.to_string(),
             id.to_string(),
         ))
         .await?;

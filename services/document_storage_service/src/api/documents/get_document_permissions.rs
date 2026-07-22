@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::GenericErrorResponse;
 use model::version::ApiVersionEnum;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
@@ -35,7 +35,7 @@ pub struct Params {
     )]
 #[allow(unused, reason = "used to generate OpenAPI documentation")]
 pub(in crate::api) async fn get_document_permissions_handler_v2(
-    _user: MacroAuthorizationExtractor<AuthorizationService>,
+    _user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     _api_version: Extension<ApiVersionEnum>,
     Path(Params { document_id: _ }): Path<Params>,
 ) -> impl IntoResponse {
