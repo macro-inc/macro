@@ -26,6 +26,7 @@ export * from './callRecordSearchResultTranscriptId';
 export * from './callStatus';
 export * from './channelFilters';
 export * from './channelFiltersImportance';
+export * from './channelFiltersIsParticipant';
 export * from './channelFiltersOrgId';
 export * from './channelFiltersTeamId';
 export * from './channelMessageSearchResponseItem';

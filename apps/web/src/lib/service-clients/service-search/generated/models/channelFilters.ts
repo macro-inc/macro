@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelFiltersImportance } from './channelFiltersImportance';
+import type { ChannelFiltersIsParticipant } from './channelFiltersIsParticipant';
 import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 import type { ChannelFiltersTeamId } from './channelFiltersTeamId';
 import type { NotificationFilters } from './notificationFilters';
@@ -19,6 +20,11 @@ export interface ChannelFilters {
   channel_types?: string[];
   /** Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: ChannelFiltersImportance;
+  /** Filter by whether the requesting user is an active participant of the channel.
+Presence of this filter also widens the candidate set to team channels of the
+user's teams that they have not joined, so `false` matches those channels.
+None to ignore (participant channels only, today's default). */
+  is_participant?: ChannelFiltersIsParticipant;
   /** Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions. */
   mentions?: string[];
   /** Filter by channel notification state. */
