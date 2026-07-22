@@ -91,22 +91,30 @@ export function EntityTagsSection(props: EntityTagsSectionProps) {
   const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
     enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
   });
+  const tagsQuery = useTagsQuery();
 
   return (
     <Show
       when={tagsFlag().enabled && TAGGABLE_ENTITY_TYPES.has(props.entityType)}
     >
       <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
-        <Suspense fallback={<SidePanel.Loading />}>
-          <div class="text-xs">
-            <TagsRow
-              entityId={props.entityId}
-              entityType={props.entityType}
-              canEdit={props.canEdit}
-              triggerVariant="pill"
-            />
-          </div>
-        </Suspense>
+        <Show
+          when={!tagsQuery.isError}
+          fallback={
+            <span class="text-xs text-ink-extra-muted">Tags unavailable</span>
+          }
+        >
+          <Suspense fallback={<SidePanel.Loading />}>
+            <div class="text-xs">
+              <TagsRow
+                entityId={props.entityId}
+                entityType={props.entityType}
+                canEdit={props.canEdit}
+                triggerVariant="pill"
+              />
+            </div>
+          </Suspense>
+        </Show>
       </SidePanel.Section>
     </Show>
   );

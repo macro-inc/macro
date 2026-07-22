@@ -219,6 +219,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
         menu: tagMenuOperations,
         insertTags: false,
         onCreateTag: (tag) => {
+          if (!canEdit()) return;
           void documentTags.applyTag(tag.scope, tag.optionId);
         },
       })
