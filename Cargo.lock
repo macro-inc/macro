@@ -7543,10 +7543,12 @@ dependencies = [
 name = "kafka_consumer_util"
 version = "0.1.0"
 dependencies = [
+ "either",
  "macro_env",
  "macro_event_broker",
  "rdkafka",
  "thiserror 2.0.18",
+ "uuid",
  "workspace-hack",
 ]
 
