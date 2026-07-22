@@ -20,7 +20,7 @@ use futures::{
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::handle_websocket_stream;
 use model::user::UserContext;
@@ -41,16 +41,12 @@ pub fn router() -> Router<AppState> {
 )]
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     State(ctx): State<ApiContext>,
     State(config): State<Arc<Config>>,
 ) -> impl IntoResponse {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
-    let macro_user_id = user.macro_user_id.clone();
-    let user_context = user.user_context.clone();
+    let macro_user_id = authorization.authorization.user.macro_user_id.clone();
+    let user_context = authorization.authorization.user.user_context.clone();
 
     ws.on_upgrade(move |socket| {
         handle_websocket_connection(socket, ctx, config, macro_user_id, user_context)
