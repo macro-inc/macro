@@ -45,7 +45,7 @@ fn encoded_event() -> Vec<u8> {
 
 #[test]
 fn assigns_only_the_typed_soup_topic() {
-    assert_eq!(assigned_topics(), ["macro.soup"]);
+    assert_eq!(DeclaredMacroEvent::topics(), ["macro.soup"]);
 }
 
 #[test]

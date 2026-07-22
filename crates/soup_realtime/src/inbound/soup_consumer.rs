@@ -10,10 +10,9 @@ mod test;
 use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{MacroEvent, MacroEventConsumerService, Topic};
+use macro_event_broker::{MacroEvent, MacroEventCollection, MacroEventConsumerService};
 #[cfg(test)]
 use macro_event_broker::{MessageParts, MessageWrapper};
-use macro_event_topics::MacroSoupRealtimeTopic;
 use rootcause::prelude::{Report, ResultExt as _};
 
 use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
@@ -25,10 +24,6 @@ type IndependentKafkaConsumer = KafkaEventConsumer<Ungrouped>;
 type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
 macro_event_broker::declare_topics!(SoupMacroEvent);
-
-fn assigned_topics() -> [&'static str; 1] {
-    [MacroSoupRealtimeTopic.as_str()]
-}
 
 #[cfg(test)]
 struct TestMessage<'a> {
@@ -97,14 +92,14 @@ impl SoupTopicConsumer {
             .context("failed to create independent realtime Soup consumer")?;
         consumer
             .assign_topics(
-                &assigned_topics(),
+                DeclaredMacroEvent::topics(),
                 InitialOffset::Latest,
                 TOPIC_METADATA_TIMEOUT,
             )
             .context("failed to assign realtime Soup topic partitions")?;
 
         tracing::info!(
-            topics = ?assigned_topics(),
+            topics = ?DeclaredMacroEvent::topics(),
             "independent realtime Soup consumer listening"
         );
 

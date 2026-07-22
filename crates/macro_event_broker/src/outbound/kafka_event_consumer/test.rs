@@ -9,6 +9,10 @@ impl MacroEventCollection for TestEvents {
     fn decode<T: MessageParts>(_message: &T) -> Result<Self, EventBrokerError> {
         unreachable!("compile-time adapter assertion does not decode messages")
     }
+
+    fn topics() -> &'static [&'static str] {
+        &[]
+    }
 }
 
 fn assert_event_consumer<T: EventConsumer<TestEvents>>() {}

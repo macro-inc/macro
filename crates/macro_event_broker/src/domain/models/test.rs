@@ -4,7 +4,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::*;
-use crate::MessageParts;
+use crate::{MacroEventCollection, MessageParts};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExampleCreatedMetadata {
@@ -176,6 +176,14 @@ impl MessageParts for TestMessage {
     fn topic(&self) -> &str {
         self.topic
     }
+}
+
+#[test]
+fn exposes_each_declared_topic_in_order() {
+    assert_eq!(
+        DeclaredMacroEvent::topics(),
+        [MacroExampleTopic.as_str(), MacroDocumentsTopic.as_str(),]
+    );
 }
 
 #[test]

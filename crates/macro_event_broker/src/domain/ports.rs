@@ -39,6 +39,9 @@ pub trait EventPublisher: Send + Sync + 'static {
 pub trait MacroEventCollection: Sized {
     /// Decodes an event from the supplied broker message.
     fn decode<T: MessageParts>(message: &T) -> Result<Self, EventBrokerError>;
+
+    /// Lists the statically known topics in this event collection.
+    fn topics() -> &'static [&'static str];
 }
 
 /// Broker message fields needed to decode a [`MacroEvent`].

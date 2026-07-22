@@ -234,6 +234,20 @@ macro_rules! declare_topics {
 
                 Err($crate::EventBrokerError::UnknownTopic(message.topic().to_owned()))
             }
+
+            fn topics() -> &'static [&'static str] {
+                static TOPICS: std::sync::LazyLock<Vec<&'static str>> =
+                    std::sync::LazyLock::new(|| {
+                        vec![
+                            $(
+                                $crate::Topic::as_str(
+                                    &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
+                                ),
+                            )+
+                        ]
+                    });
+                TOPICS.as_slice()
+            }
         }
     };
 }
