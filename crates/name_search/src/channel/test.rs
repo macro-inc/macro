@@ -161,3 +161,52 @@ async fn member_can_find_direct_message_by_resolved_name(
     assert_eq!(results.items[0].name, "<macro_em>gab</macro_em>riel");
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("channel"))
+)]
+async fn scans_past_non_matching_batches_and_preserves_result_cursor(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let first_page = search_channel_names_in_batches(
+        &pool,
+        &user("macro|member@test.com"),
+        &channel_ids(),
+        "Macro".to_string(),
+        false,
+        1,
+        None,
+        1,
+    )
+    .await?;
+
+    assert_eq!(first_page.items.len(), 1);
+    assert_eq!(
+        first_page.items[0].entity_id,
+        "22222222-2222-2222-2222-222222222222".parse::<Uuid>()?
+    );
+    let SearchCursorOption::NotDone(Some(cursor)) = first_page.cursor else {
+        anyhow::bail!("expected another page");
+    };
+
+    let second_page = search_channel_names_in_batches(
+        &pool,
+        &user("macro|member@test.com"),
+        &channel_ids(),
+        "Macro".to_string(),
+        false,
+        1,
+        Some(cursor),
+        1,
+    )
+    .await?;
+
+    assert_eq!(second_page.items.len(), 1);
+    assert_eq!(
+        second_page.items[0].entity_id,
+        "11111111-1111-1111-1111-111111111111".parse::<Uuid>()?
+    );
+    assert!(second_page.cursor.is_done());
+    Ok(())
+}

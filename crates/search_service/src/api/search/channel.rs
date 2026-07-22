@@ -1,4 +1,4 @@
-use crate::api::search::simple::SearchError;
+use crate::api::search::simple::{SearchError, simple_channel};
 use crate::api::search::terms::split_search_terms;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
@@ -17,9 +17,10 @@ use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
-    ChannelMessageSearchResponseItem, ChannelNameSearchResponseItem, ChannelSearchRequest,
-    ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata,
-    ChannelSearchResult, ChannelSortTimestamp,
+    ChannelMessageSearchResponseItem, ChannelNameSearchRequest, ChannelNameSearchResponse,
+    ChannelNameSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
+    ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
+    ChannelSortTimestamp,
 };
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
@@ -292,7 +293,68 @@ pub fn construct_search_result(
 }
 
 pub fn router() -> Router<SearchHandlerState> {
-    Router::new().route("/", post(handler))
+    Router::new()
+        .route("/", post(handler))
+        .route("/name", post(name_handler))
+}
+
+/// Internal viewer-aware channel name search used by AI NameSearch.
+pub async fn name_handler(
+    State(ctx): State<SearchHandlerState>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    extract::Query(query_params): extract::Query<SearchPaginationParams>,
+    extract::Json(req): extract::Json<ChannelNameSearchRequest>,
+) -> Result<Json<ChannelNameSearchResponse>, SearchError> {
+    if !authorization.is_internal_access {
+        return Err(SearchError::InternalAccessRequired);
+    }
+
+    let query = req.query.trim();
+    if query.len() < 3 {
+        return Err(SearchError::InvalidQuerySize);
+    }
+    let page_size = query_params.page_size.unwrap_or(10);
+    if !(0..=100).contains(&page_size) {
+        return Err(SearchError::InvalidPageSize);
+    }
+
+    let user_id = MacroUserId::parse_from_str(&authorization.user_context.user_id)
+        .map_err(|_| SearchError::InvalidUserId(authorization.user_context.user_id.clone()))?
+        .lowercase();
+    let filters = item_filters::ChannelFilters::default();
+    let channels = simple_channel::filter_channels(
+        &ctx,
+        user_id.as_ref(),
+        authorization.user_context.organization_id,
+        &filters,
+    )
+    .await?;
+    let cursor = query_params
+        .cursor
+        .as_deref()
+        .and_then(SearchMethodCursor::decode)
+        .map(|cursor| SearchCursorOption::NotDone(Some(cursor)))
+        .unwrap_or_default();
+    let (hits, next_cursor) = simple_channel::search_names(
+        &ctx.db,
+        &user_id,
+        &channels,
+        query.to_string(),
+        req.match_type == MatchType::Exact,
+        page_size,
+        cursor,
+    )
+    .await?;
+    let results = enrich_channel_names(&ctx, user_id.as_ref(), hits).await?;
+    let next_cursor = match next_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => cursor.encode(),
+        _ => None,
+    };
+
+    Ok(Json(ChannelNameSearchResponse {
+        results,
+        next_cursor,
+    }))
 }
 
 /// Channel content search.

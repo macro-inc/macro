@@ -14,7 +14,7 @@ pub(in crate::api::search) struct FilterChannelResponse {
 /// Performs the name search over channel names.
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db), err)]
-pub(in crate::api::search::simple) async fn search_names<'a>(
+pub(in crate::api::search) async fn search_names<'a>(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
     filter_channel_response: &FilterChannelResponse,

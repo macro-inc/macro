@@ -154,10 +154,6 @@ impl SearchCursorOption {
 pub struct SearchCursor {
     /// The chat name cursor
     pub chat_name_cursor: SearchCursorOption,
-    /// The channel name cursor. Defaults to a fresh cursor when decoding
-    /// cursors minted before channel name search existed.
-    #[serde(default)]
-    pub channel_name_cursor: SearchCursorOption,
     /// The content cursor
     pub content_cursor: SearchCursorOption,
     /// The project cursor
@@ -187,7 +183,6 @@ impl SearchCursor {
     /// Returns if the cursor is fully exhausted
     pub fn is_exhausted(&self) -> bool {
         self.chat_name_cursor.is_done()
-            && self.channel_name_cursor.is_done()
             && self.content_cursor.is_done()
             && self.project_name_cursor.is_done()
             && self.crm_company_cursor.is_done()
@@ -198,8 +193,9 @@ impl SearchCursor {
 mod test {
     use super::*;
 
-    /// A cursor minted before CRM and channel name search existed must still
-    /// decode, with new fields defaulting to fresh cursors rather than failing.
+    /// A cursor minted before CRM search existed (no `crm_company_cursor`
+    /// field) must still decode, with the new field defaulting to a fresh
+    /// `NotDone(None)` rather than failing.
     #[test]
     fn decodes_legacy_cursor_without_crm_field() {
         let legacy = r#"{"document_name_cursor":"Done","chat_name_cursor":"Done","content_cursor":"Done","project_name_cursor":"Done"}"#;
@@ -211,10 +207,8 @@ mod test {
             cursor.crm_company_cursor.has_more(),
             "missing crm cursor should default to NotDone(None)"
         );
-        assert!(
-            cursor.channel_name_cursor.has_more(),
-            "missing channel cursor should default to NotDone(None)"
-        );
+        // The four legacy sources are Done, but the defaulted CRM cursor is
+        // NotDone, so the whole cursor is not yet exhausted.
         assert!(!cursor.is_exhausted());
     }
 
@@ -232,7 +226,6 @@ mod test {
     fn is_exhausted_requires_crm_done() {
         let mut cursor = SearchCursor {
             chat_name_cursor: SearchCursorOption::Done,
-            channel_name_cursor: SearchCursorOption::Done,
             content_cursor: SearchCursorOption::Done,
             project_name_cursor: SearchCursorOption::Done,
             crm_company_cursor: SearchCursorOption::Done,

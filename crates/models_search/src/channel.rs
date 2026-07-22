@@ -83,7 +83,16 @@ pub struct ChannelSearchResponseItemWithMetadata {
     pub extra: ChannelSearchResponseItem,
 }
 
-/// A channel-name hit in the unified search response.
+/// Request for viewer-aware channel name search.
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct ChannelNameSearchRequest {
+    /// Channel name prefix or exact token to search for.
+    pub query: String,
+    /// Whether to use prefix or exact-token matching.
+    pub match_type: MatchType,
+}
+
+/// A channel-name search hit.
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelNameSearchResponseItem {
     /// Metadata for the channel.
@@ -101,6 +110,15 @@ pub struct ChannelNameSearchResponseItem {
     /// The score of the result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
+}
+
+/// Response from viewer-aware channel name search.
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct ChannelNameSearchResponse {
+    /// Matching channels in descending update order.
+    pub results: Vec<ChannelNameSearchResponseItem>,
+    /// Cursor for the next page, if one exists.
+    pub next_cursor: Option<String>,
 }
 
 /// A single channel-message content hit in the unified search response.

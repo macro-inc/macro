@@ -7,12 +7,8 @@ use opensearch_client::search::model::SearchHit;
 use crate::api::{
     context::SearchHandlerState,
     search::{
-        call_record::enrich_call_records,
-        channel::{enrich_channel_messages, enrich_channel_names},
-        chat::enrich_chats,
-        document::enrich_documents,
-        email::enrich_emails,
-        project::enrich_projects,
+        call_record::enrich_call_records, channel::enrich_channel_messages, chat::enrich_chats,
+        document::enrich_documents, email::enrich_emails, project::enrich_projects,
         simple::SearchError,
     },
 };
@@ -42,20 +38,10 @@ pub async fn enrich_search_response(
                 .collect())
         }
         SearchEntityType::Channels => {
-            let (name_hits, message_hits): (Vec<_>, Vec<_>) =
-                results.into_iter().partition(|hit| hit.goto.is_none());
-            let (names, messages) = tokio::try_join!(
-                enrich_channel_names(ctx, user_id, name_hits),
-                enrich_channel_messages(ctx, user_id, message_hits),
-            )?;
-            Ok(names
+            let response = enrich_channel_messages(ctx, user_id, results).await?;
+            Ok(response
                 .into_iter()
-                .map(UnifiedSearchResponseItem::Channel)
-                .chain(
-                    messages
-                        .into_iter()
-                        .map(UnifiedSearchResponseItem::ChannelMessage),
-                )
+                .map(UnifiedSearchResponseItem::ChannelMessage)
                 .collect())
         }
         SearchEntityType::Chats => {
