@@ -56,7 +56,7 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
     pub fn subscribe<M2: MacroEventCollection>(
         self,
     ) -> Result<KafkaConsumerAdapter<T, M2>, rootcause::Report> {
-        let KafkaConsumerAdapter { inner, topics } = self;
+        let KafkaConsumerAdapter { inner, .. } = self;
         inner.subscribe(M2::topics())?;
         Ok(KafkaConsumerAdapter {
             inner,
