@@ -19,7 +19,7 @@ impl SupportChannelMessageGateway for RecordingGateway {
         actor: Sender,
         channel_id: Uuid,
         request: PostMessageRequest,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Report> {
         *self.posted.lock().unwrap() = Some(PostedWelcomeMessage {
             actor,
             channel_id,
@@ -87,6 +87,9 @@ async fn rejects_an_invalid_channel_id_without_posting() {
             .await
             .unwrap_err();
 
-    assert_eq!(error.to_string(), "support channel returned an invalid id");
+    assert_eq!(
+        error.downcast_current_context::<&str>().copied(),
+        Some("support channel returned an invalid id")
+    );
     assert!(gateway.posted.lock().unwrap().is_none());
 }

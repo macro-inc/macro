@@ -1,12 +1,12 @@
 use std::future::Future;
 
-use anyhow::Context;
 use channels::domain::{
     models::{PostMessageNotificationPolicy, PostMessageRequest, Sender, SimpleMention},
     ports::ChannelService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mention_utils::serialize::user_mention;
+use rootcause::{Report, prelude::ResultExt};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -24,7 +24,7 @@ pub trait SupportChannelMessageGateway: Send + Sync + 'static {
         actor: Sender,
         channel_id: Uuid,
         request: PostMessageRequest,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 impl<T> SupportChannelMessageGateway for T
@@ -36,7 +36,7 @@ where
         actor: Sender,
         channel_id: Uuid,
         request: PostMessageRequest,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Report> {
         ChannelService::post_message(self, actor, channel_id, request)
             .await
             .context("failed to post Macro support welcome message")?;
@@ -45,9 +45,9 @@ where
     }
 }
 
-fn support_user(email: &str) -> anyhow::Result<MacroUserIdStr<'static>> {
-    MacroUserIdStr::try_from_email(email)
-        .with_context(|| format!("invalid Macro support user email: {email}"))
+fn support_user(email: &str) -> Result<MacroUserIdStr<'static>, Report> {
+    Ok(MacroUserIdStr::try_from_email(email)
+        .context_with(|| format!("invalid Macro support user email: {email}"))?)
 }
 
 /// Post Julia's welcome message in a newly created support channel.
@@ -55,7 +55,7 @@ pub async fn post_support_channel_welcome(
     gateway: &impl SupportChannelMessageGateway,
     channel_id: &str,
     new_user: MacroUserIdStr<'static>,
-) -> anyhow::Result<()> {
+) -> Result<(), Report> {
     let channel_id =
         Uuid::parse_str(channel_id).context("support channel returned an invalid id")?;
     let jacob = support_user(JACOB_EMAIL)?;

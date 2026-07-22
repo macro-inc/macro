@@ -117,6 +117,7 @@ referral = { path = "../../crates/referral" }
 remote_env_var = { path = "../../crates/remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../../crates/roles_and_permissions" }
+rootcause = { workspace = true }
 rsa = { version = "0.9.10", features = ["getrandom"] }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }

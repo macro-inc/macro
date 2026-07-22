@@ -1023,6 +1023,7 @@ dependencies = [
  "remote_env_var",
  "reqwest 0.13.4",
  "roles_and_permissions",
+ "rootcause",
  "rsa",
  "secretsmanager_client",
  "serde",
