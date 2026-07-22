@@ -371,6 +371,12 @@ pub enum CrmError {
     /// The team already tracks a company for the requested domain.
     #[error("a crm company already exists for this domain")]
     CompanyAlreadyExistsForTeam,
+    /// The company already has a contact with the requested email.
+    #[error("a crm contact with this email already exists for the company")]
+    ContactAlreadyExistsForCompany,
+    /// The contact's email domain is not one of the company's domains.
+    #[error("contact email domain must match one of the company's domains")]
+    ContactEmailDomainMismatch,
     /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
     #[error("crm is not enabled for this team")]
     CrmDisabledForTeam,

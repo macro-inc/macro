@@ -41,6 +41,18 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn create_contact_for_company(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _email: &str,
+        _name: &str,
+        _now: DateTime<Utc>,
+        _include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
     async fn lookup_domain_metadata(
         &self,
         _domain: &str,
@@ -390,6 +402,48 @@ async fn create_company_rejects_generic_email_domains() {
         assert!(
             matches!(err, CrmError::InvalidRequest(_)),
             "domain {domain:?}"
+        );
+    }
+}
+
+fn company_receipt() -> CrmCompanyReceipt<ViewAccessLevel> {
+    CrmCompanyReceipt::dangerously_internal(uuid::Uuid::now_v7(), uuid::Uuid::now_v7())
+}
+
+#[tokio::test]
+async fn create_contact_rejects_blank_name() {
+    let access = company_receipt();
+    for name in ["", "   ", "\t\n"] {
+        let err = service()
+            .create_contact(&access, name, "jane@acme.com")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
+    }
+}
+
+#[tokio::test]
+async fn create_contact_rejects_malformed_emails() {
+    let access = company_receipt();
+    for email in [
+        "",
+        "   ",
+        "jane",
+        "jane@",
+        "@acme.com",
+        "jane@acme",
+        "ja ne@acme.com",
+        "jane@ac me.com",
+        "jane@@acme.com",
+        "jane@acme.com/path",
+    ] {
+        let err = service()
+            .create_contact(&access, "Jane", email)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, CrmError::InvalidRequest(_)),
+            "email {email:?}"
         );
     }
 }

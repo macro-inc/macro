@@ -173,6 +173,52 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
+    /// Manually creates a contact under `company_id` (scoped to
+    /// `team_id`) with a display `name` and `email`. In a single
+    /// transaction:
+    ///
+    /// 1. Reads the team killswitch; returns
+    ///    [`CrmError::CrmDisabledForTeam`] when off.
+    /// 2. Locks the company row (`FOR UPDATE`, serializing with the
+    ///    hide/un-hide contact cascade) and scopes it to `team_id`.
+    ///    Missing, cross-team, or — for `include_hidden = false`
+    ///    (member) callers — hidden companies return
+    ///    [`CrmError::CompanyNotFoundForTeam`].
+    /// 3. Requires the email's domain to be one of the company's
+    ///    `crm_domains` (case-insensitively); returns
+    ///    [`CrmError::ContactEmailDomainMismatch`] otherwise — a
+    ///    foreign-domain contact would never receive populate updates,
+    ///    since its domain resolves to a different company.
+    /// 4. Inserts the `crm_contacts` row, inheriting the company's
+    ///    current `hidden` (an admin adding a contact to a hidden
+    ///    company gets a hidden contact, matching populate's
+    ///    inheritance). Returns
+    ///    [`CrmError::ContactAlreadyExistsForCompany`] when the company
+    ///    already has a contact for the email.
+    ///
+    /// `email` is normalized to lowercase before storage. Both
+    /// interaction endpoints seed from `now`; later populates for the
+    /// same `(company, email)` merge real timestamps via LEAST/GREATEST
+    /// and keep the manual `name` (first non-NULL name wins).
+    ///
+    /// The row is stamped `manually_created = TRUE` so the depopulate
+    /// orphan cleanup ([`depopulate_contact`] /
+    /// [`depopulate_link_in_team`]) never deletes it — manual contacts
+    /// have no `crm_contact_sources` rows and would otherwise be
+    /// indistinguishable from derived-data orphans.
+    ///
+    /// [`depopulate_contact`]: CompaniesRepository::depopulate_contact
+    /// [`depopulate_link_in_team`]: CompaniesRepository::depopulate_link_in_team
+    fn create_contact_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email: &str,
+        name: &str,
+        now: DateTime<Utc>,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
     /// Read the cached [`DomainMetadata`] for `domain` from
     /// `crm_domain_directory`, if any. `domain` is matched
     /// case-insensitively. Returns `Ok(None)` when no row exists for
@@ -218,7 +264,13 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// in a "default sync = true" state.
     ///
     /// Source and contact rows are derived data and are always cleaned
-    /// up regardless of the company's `email_sync`.
+    /// up regardless of the company's `email_sync` — except rows with
+    /// `manually_created = TRUE` (user-created via
+    /// [`create_contact_for_company`] / [`create_company_for_team`]),
+    /// which are never deleted by this teardown.
+    ///
+    /// [`create_contact_for_company`]: CompaniesRepository::create_contact_for_company
+    /// [`create_company_for_team`]: CompaniesRepository::create_company_for_team
     ///
     /// The whole cascade runs in a single transaction that begins by
     /// acquiring the same advisory lock [`populate_contact`] takes (key

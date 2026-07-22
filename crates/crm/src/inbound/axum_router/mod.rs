@@ -23,6 +23,9 @@ pub mod get_company;
 /// Manually create a CRM company (name + domain) for the caller's team.
 pub mod create_company;
 
+/// Manually create a contact (name + email) under a CRM company.
+pub mod create_contact;
+
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
 
@@ -124,7 +127,8 @@ where
         )
         .route(
             "/companies/{company_id}/contacts",
-            get(list_company_contacts::handler::<C, Eas, Auth>),
+            get(list_company_contacts::handler::<C, Eas, Auth>)
+                .post(create_contact::handler::<C, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}",
@@ -215,6 +219,18 @@ impl IntoResponse for CrmError {
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "a crm company already exists for this domain".into(),
+                }),
+            ),
+            CrmError::ContactAlreadyExistsForCompany => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm contact with this email already exists for the company".into(),
+                }),
+            ),
+            CrmError::ContactEmailDomainMismatch => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "contact email domain must match one of the company's domains".into(),
                 }),
             ),
             CrmError::CrmDisabledForTeam => (

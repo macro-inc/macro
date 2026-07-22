@@ -262,6 +262,8 @@ export * from './createCommentResponseAllOf';
 export * from './createCommentResponseAllOfAnchor';
 export * from './createCrmCommentRequest';
 export * from './createCrmCommentRequestThreadId';
+export * from './createCrmCompanyRequest';
+export * from './createCrmContactRequest';
 export * from './createDocument200';
 export * from './createDocument200DataOneOf';
 export * from './createDocument200DataOneOfAllOf';

@@ -161,7 +161,9 @@ impl CompaniesRepositoryImpl {
     /// `(team, normalized_domain)`, seeding the interaction columns from
     /// the caller's known range. `custom_name` is the team-scoped
     /// display-name override (manual creation); populate passes `None`.
-    /// The caller must hold the per-`(team, domain)` advisory lock.
+    /// `manually_created` stamps user-created rows so the depopulate
+    /// orphan cleanup keeps them. The caller must hold the
+    /// per-`(team, domain)` advisory lock.
     ///
     /// Returns `(company_id, created)`. The domain insert carries a
     /// defensive ON CONFLICT — the advisory lock should prevent it, but
@@ -173,17 +175,20 @@ impl CompaniesRepositoryImpl {
         team_id: &uuid::Uuid,
         normalized_domain: &str,
         custom_name: Option<&str>,
+        manually_created: bool,
         first_at: DateTime<Utc>,
         last_at: DateTime<Utc>,
     ) -> Result<(uuid::Uuid, bool), CrmError> {
         let new_company = sqlx::query!(
             r#"
-            INSERT INTO crm_companies (team_id, custom_name, first_interaction, last_interaction)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO crm_companies
+                (team_id, custom_name, manually_created, first_interaction, last_interaction)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             "#,
             team_id,
             custom_name,
+            manually_created,
             first_at,
             last_at,
         )
@@ -343,6 +348,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     team_id,
                     &normalized_domain,
                     None,
+                    false,
                     first_at,
                     last_at,
                 )
@@ -466,6 +472,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             team_id,
             &normalized_domain,
             Some(name),
+            true,
             now,
             now,
         )
@@ -488,6 +495,125 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     "created crm company vanished before hydration"
                 ))
             })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_contact_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email: &str,
+        name: &str,
+        now: DateTime<Utc>,
+        include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        let normalized_email = email.to_ascii_lowercase();
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if !Self::team_crm_enabled(&mut tx, team_id).await? {
+            return Err(CrmError::CrmDisabledForTeam);
+        }
+
+        // Scope + authorize on the company row. FOR UPDATE serializes
+        // with the hide/un-hide contact cascade so the inherited
+        // `hidden` can't go stale between this read and our insert.
+        // Hidden companies are unreachable for members
+        // (`include_hidden = false`) — same 404 semantics as the reads.
+        let company = sqlx::query!(
+            r#"
+            SELECT hidden
+            FROM crm_companies
+            WHERE id = $1
+              AND team_id = $2
+              AND ($3 OR hidden = FALSE)
+            FOR UPDATE
+            "#,
+            company_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let Some(company) = company else {
+            return Err(CrmError::CompanyNotFoundForTeam);
+        };
+
+        // The contact must live on one of the company's domains —
+        // contacts are keyed by email under a domain-keyed company, and
+        // a foreign-domain contact would never receive populate
+        // updates (its domain resolves to a different company).
+        let Some((_, email_domain)) = normalized_email.split_once('@') else {
+            return Err(CrmError::InvalidRequest("email must contain an '@'".into()));
+        };
+        let domain_matches = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM crm_domains
+                WHERE company_id = $1 AND LOWER(domain) = $2
+            ) AS "exists!"
+            "#,
+            company_id,
+            email_domain,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if !domain_matches {
+            return Err(CrmError::ContactEmailDomainMismatch);
+        }
+
+        // New contacts inherit the company's `hidden` (matches
+        // populate). `manually_created = TRUE` shields the row from the
+        // depopulate orphan cleanup — it has no sources by
+        // construction. No interaction history yet: both endpoints
+        // seed from `now`; later populates merge via LEAST/GREATEST
+        // and keep the manual name (first non-NULL wins).
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO crm_contacts
+                (company_id, email, name, first_interaction, last_interaction, hidden, manually_created)
+            VALUES ($1, $2, $3, $4, $4, $5, TRUE)
+            ON CONFLICT (company_id, email) DO NOTHING
+            RETURNING id, company_id, email, name, hidden,
+                      first_interaction, last_interaction, created_at, updated_at
+            "#,
+            company_id,
+            normalized_email,
+            name,
+            now,
+            company.hidden,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let Some(row) = row else {
+            return Err(CrmError::ContactAlreadyExistsForCompany);
+        };
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(CrmContact {
+            id: row.id,
+            company_id: row.company_id,
+            email: row.email,
+            name: row.name,
+            hidden: row.hidden,
+            first_interaction: row.first_interaction,
+            last_interaction: row.last_interaction,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -522,8 +648,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             r#"
             SELECT
                 ct.id AS contact_id,
+                ct.manually_created AS "contact_manually_created!",
                 co.id AS company_id,
-                co.email_sync AS "email_sync!"
+                co.email_sync AS "email_sync!",
+                co.manually_created AS "company_manually_created!"
             FROM crm_contacts ct
             JOIN crm_companies co ON co.id = ct.company_id
             JOIN crm_domains d ON d.company_id = co.id
@@ -559,8 +687,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // 2. Keep the contact iff any other link in the team still
-        //    references it.
+        // 2. Manually created contacts are user data, not derived —
+        //    never torn down (they have no sources by construction, so
+        //    the orphan check below would always condemn them).
+        if row.contact_manually_created {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        //    Otherwise keep the contact iff any other link in the team
+        //    still references it.
         let other_sources = sqlx::query_scalar!(
             r#"
             SELECT EXISTS(
@@ -587,7 +725,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         // 3. Keep killswitched companies — dropping would erase the
         //    opt-out and a future populate would recreate as enabled.
-        if !row.email_sync {
+        //    Manually created companies are likewise user data and
+        //    survive teardown even when empty.
+        if !row.email_sync || row.company_manually_created {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -656,13 +796,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // 2. Drop every contact in this team that no longer has any
-        //    source.
+        //    source. Manually created contacts have no sources by
+        //    construction — they're user data and survive teardown.
         sqlx::query!(
             r#"
             DELETE FROM crm_contacts ct
             USING crm_companies co
             WHERE ct.company_id = co.id
               AND co.team_id = $1
+              AND ct.manually_created = FALSE
               AND NOT EXISTS (
                   SELECT 1 FROM crm_contact_sources WHERE contact_id = ct.id
               )
@@ -673,13 +815,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // 3. Drop orphan non-killswitched companies. crm_domains
-        //    cascades via FK.
+        // 3. Drop orphan non-killswitched companies. Manually created
+        //    companies survive even when empty — they're user data,
+        //    not derived from the departing link. crm_domains cascades
+        //    via FK.
         sqlx::query!(
             r#"
             DELETE FROM crm_companies co
             WHERE co.team_id = $1
               AND co.email_sync = TRUE
+              AND co.manually_created = FALSE
               AND NOT EXISTS (
                   SELECT 1 FROM crm_contacts WHERE company_id = co.id
               )

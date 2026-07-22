@@ -92,6 +92,7 @@ export function CreateCompanyModal() {
     <Dialog
       open={createCompanyModalOpen()}
       onOpenChange={(open) => !open && close()}
+      class="w-120"
     >
       <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
         <Panel.Body>

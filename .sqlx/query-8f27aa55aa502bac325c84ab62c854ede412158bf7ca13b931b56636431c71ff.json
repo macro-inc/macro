@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO crm_companies (team_id, custom_name, first_interaction, last_interaction)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id\n            ",
+  "query": "\n            INSERT INTO crm_companies\n                (team_id, custom_name, manually_created, first_interaction, last_interaction)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id\n            ",
   "describe": {
     "columns": [
       {
@@ -13,6 +13,7 @@
       "Left": [
         "Uuid",
         "Text",
+        "Bool",
         "Timestamptz",
         "Timestamptz"
       ]
@@ -21,5 +22,5 @@
       false
     ]
   },
-  "hash": "cfae1c003200da561e73f8f5dc449e49d9d27b76b87aec666cde08f76472a5a8"
+  "hash": "8f27aa55aa502bac325c84ab62c854ede412158bf7ca13b931b56636431c71ff"
 }

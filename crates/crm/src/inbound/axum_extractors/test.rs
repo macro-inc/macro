@@ -290,6 +290,15 @@ impl CrmService for FakeCrmService {
         panic!("unexpected create_company call")
     }
 
+    async fn create_contact(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _name: &str,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        panic!("unexpected create_contact call")
+    }
+
     async fn set_email_sync(
         &self,
         _access: &CrmCompanyReceipt<EditAccessLevel>,

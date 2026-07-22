@@ -3168,6 +3168,121 @@ export const createCrmCommentResponse = zod
   );
 
 /**
+ * @summary Manually create a CRM company for the caller's team. Any team member
+may create one. The domain must not already be tracked by the team
+(409), and the team's CRM killswitch must be on (403). Returns the
+created company in the same shape as `GET /crm/companies/{id}` (its
+contact list is empty until emails populate it).
+ */
+export const createCrmCompanyBody = zod
+  .object({
+    domain: zod
+      .string()
+      .describe(
+        'The company\'s email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
+      ),
+    name: zod
+      .string()
+      .describe(
+        'Display name for the company. Team-scoped: overrides the\ndomain-directory name on every read path.'
+      ),
+  })
+  .describe('Request body for `POST \/crm\/companies`.');
+
+export const createCrmCompanyResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this company.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display description from the primary domain's directory entry."
+      ),
+    domains: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the domain belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the domain record was created.'),
+            domain: zod.string().describe('The domain (e.g. \"acme.com\").'),
+            id: zod.uuid().describe('The id of the domain record.'),
+          })
+          .describe('A CRM domain associated with a company.')
+      )
+      .describe(
+        'All domains associated with this company, ordered by creation\ntime ascending (primary first).'
+      ),
+    emailSync: zod
+      .boolean()
+      .describe('Whether email sync is enabled for this company.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin\/owner callers see\nhidden companies so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the company.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+      ),
+    teamId: zod
+      .uuid()
+      .describe('The id of the team that owns this company record.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this company.'),
+  })
+  .describe(
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest."
+  );
+
+/**
  * @summary Fetch a single CRM company by id, hydrated with its domains, the
 primary domain's directory display metadata (name + description),
 and the company's contacts. Access is enforced by
@@ -3319,6 +3434,64 @@ export const listCompanyContactsResponseItem = zod
 export const listCompanyContactsResponse = zod.array(
   listCompanyContactsResponseItem
 );
+
+/**
+ * @summary Manually create a contact under a CRM company. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
+that owns the company (hidden companies are reachable for
+admin/owner only, and the new contact then inherits `hidden`). The
+company must not already track the email (409), and the team's CRM
+killswitch must be on (403).
+ */
+export const createCrmContactParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to add the contact to'),
+});
+
+export const createCrmContactBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The contact\'s email address, e.g. \"jane@acme.com\". Any domain is\naccepted (including generic providers like gmail.com).'
+      ),
+    name: zod.string().describe('Display name for the contact.'),
+  })
+  .describe(
+    'Request body for `POST \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+export const createCrmContactResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
 
 /**
  * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
