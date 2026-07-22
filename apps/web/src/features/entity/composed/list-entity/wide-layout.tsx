@@ -189,12 +189,11 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => (
-            // No filter-by-tag affordance. The soup email path does not apply
-            // tag filters, so filtering would leave email rows unfiltered.
-            <EntityRowTags
+            <RowTags
               entityId={entity().id}
               entityType={EntityType.THREAD}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
