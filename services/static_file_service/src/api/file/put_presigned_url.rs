@@ -24,17 +24,13 @@ use super::required_user;
     (status = 500, body=String),
   ),
 )]
-#[tracing::instrument(skip(ctx, user), fields(user_id = tracing::field::Empty))]
+#[tracing::instrument(skip(ctx, user), fields(actor = %user.acting_entity()))]
 pub async fn put_presigned_url(
     State(ctx): State<AppState>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(request): Json<PutFileRequest>,
 ) -> Result<Response, Response> {
     let acting_user = required_user(&user.authorization);
-    tracing::Span::current().record(
-        "user_id",
-        tracing::field::display(&acting_user.macro_user_id),
-    );
 
     let content_type = if let Some(content_type) = request.content_type {
         Ok(content_type)

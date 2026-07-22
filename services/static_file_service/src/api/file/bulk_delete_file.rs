@@ -56,7 +56,7 @@ impl IntoResponse for BulkDeleteError {
 ]
 #[tracing::instrument(
     skip(metadata_client, storage_client, user),
-    fields(user_id = tracing::field::Empty),
+    fields(actor = %user.acting_entity()),
     err
 )]
 pub async fn handle_bulk_delete_file(
@@ -66,10 +66,6 @@ pub async fn handle_bulk_delete_file(
     Json(req): Json<BulkDeleteRequest>,
 ) -> Result<Json<BulkDeleteResponse>, BulkDeleteError> {
     let acting_user = required_user(&user.authorization);
-    tracing::Span::current().record(
-        "user_id",
-        tracing::field::display(&acting_user.macro_user_id),
-    );
 
     // Validate request
     if req.file_ids.is_empty() {

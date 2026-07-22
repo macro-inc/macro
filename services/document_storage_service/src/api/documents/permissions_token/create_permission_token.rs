@@ -45,7 +45,7 @@ pub struct DocumentPermissionsTokenResponse {
     )]
 #[tracing::instrument(
     skip(state, user, users_access_level),
-    fields(user_id = tracing::field::Empty)
+    fields(actor = tracing::field::Empty)
 )]
 pub async fn handler(
     State(state): State<ApiContext>,
@@ -57,14 +57,14 @@ pub async fn handler(
     >,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
     let user_id = user
         .authorization
         .as_ref()
         .and_then(|authorization| authorization.acting_user())
         .map(|user| user.macro_user_id.to_string());
-    if let Some(user_id) = &user_id {
-        tracing::Span::current().record("user_id", tracing::field::display(user_id));
-    }
 
     let access_level = match users_access_level.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,

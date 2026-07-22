@@ -32,20 +32,20 @@ pub struct Params {
       (status = 500, body = String),
   )
 )]
-#[tracing::instrument(skip(db, user), fields(user_id = tracing::field::Empty))]
+#[tracing::instrument(skip(db, user), fields(actor = tracing::field::Empty))]
 pub async fn get_citation_handler(
     State(db): State<PgPool>,
     user: OptionalMacroAuthorizationExtractor<DcsAuthorizationService>,
     Path(Params { id }): Path<Params>,
 ) -> Result<Json<DocumentTextPart>, (StatusCode, String)> {
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
     let user_id = user
         .authorization
         .as_ref()
         .and_then(|authorization| authorization.acting_user())
         .map(|user| user.macro_user_id.as_ref());
-    if let Some(user_id) = user_id {
-        tracing::Span::current().record("user_id", tracing::field::display(user_id));
-    }
     match get_part_by_id(db, id.as_str()).await {
         Ok(Some(part)) => Ok(Json(part)),
         Ok(None) => Err((

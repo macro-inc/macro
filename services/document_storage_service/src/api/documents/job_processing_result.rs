@@ -33,7 +33,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user), fields(user_id = tracing::field::Empty))]
+#[tracing::instrument(skip(db, user), fields(actor = tracing::field::Empty))]
 pub async fn job_processing_result_handler(
     State(db): State<PgPool>,
     user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
@@ -42,12 +42,8 @@ pub async fn job_processing_result_handler(
         job_id,
     }): Path<Params>,
 ) -> impl IntoResponse {
-    if let Some(user) = user
-        .authorization
-        .as_ref()
-        .and_then(|authorization| authorization.acting_user())
-    {
-        tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
     }
 
     let processing_result =

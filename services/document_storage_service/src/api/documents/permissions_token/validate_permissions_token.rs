@@ -36,7 +36,7 @@ pub struct DocumentPermissionsTokenRequest {
     )]
 #[tracing::instrument(
     skip(config_context, user),
-    fields(user_id = tracing::field::Empty)
+    fields(actor = tracing::field::Empty)
 )]
 pub async fn handler(
     State(config_context): State<Arc<Config>>,
@@ -50,14 +50,14 @@ pub async fn handler(
 
     validation.set_issuer(&[ISSUER]);
 
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
     let user_id = user
         .authorization
         .as_ref()
         .and_then(|authorization| authorization.acting_user())
         .map(|user| user.macro_user_id.to_string());
-    if let Some(user_id) = &user_id {
-        tracing::Span::current().record("user_id", tracing::field::display(user_id));
-    }
 
     // Attempt to decode the token.
     let decoded_jwt: DocumentPermissionsToken = match jsonwebtoken::decode::<DocumentPermissionsToken>(

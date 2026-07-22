@@ -186,7 +186,7 @@ pub struct CreateChatRequest {
 /// Create a new chat.
 #[tracing::instrument(
     skip(state, user, _access, req),
-    fields(user_id = tracing::field::Empty),
+    fields(actor = %user.acting_entity()),
     err(Debug)
 )]
 pub async fn create_chat_handler<
@@ -205,7 +205,6 @@ pub async fn create_chat_handler<
         .authorization
         .acting_user()
         .expect("required authorization guarantees an acting user");
-    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
 
     let id = state
         .inner

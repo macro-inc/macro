@@ -50,7 +50,7 @@ pub struct AddContactRequest {
 ]
 #[instrument(
     skip(authorization, contacts),
-    fields(user_id = tracing::field::Empty)
+    fields(actor = %authorization.acting_entity())
 )]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
@@ -60,7 +60,6 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
         .authorization
         .acting_user()
         .expect("required authorization guarantees an acting user");
-    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
 
     match contacts.query_contacts(user.macro_user_id.clone()).await {
         Ok(contacts) if !contacts.is_empty() => {
@@ -84,7 +83,7 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
 ]
 #[instrument(
     skip(service, authorization),
-    fields(user_id = tracing::field::Empty),
+    fields(actor = %authorization.acting_entity()),
     err
 )]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
@@ -96,7 +95,6 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
         .authorization
         .acting_user()
         .expect("required authorization guarantees an acting user");
-    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
 
     service
         .add_contact_nodes(ContactsNodes {

@@ -85,7 +85,7 @@ where
 )]
 #[tracing::instrument(
     skip(service, user),
-    fields(user_id = tracing::field::Empty)
+    fields(actor = %user.acting_entity())
 )]
 pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
@@ -95,7 +95,6 @@ pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationServic
         .authorization
         .acting_user()
         .expect("required authorization guarantees an acting user");
-    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
 
     match service
         .get_or_generate_memory(user.macro_user_id.clone())

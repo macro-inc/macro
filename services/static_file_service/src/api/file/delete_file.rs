@@ -32,7 +32,7 @@ pub struct Params {
 ]
 #[tracing::instrument(
     skip(metadata_client, storage_client, user),
-    fields(user_id = tracing::field::Empty)
+    fields(actor = %user.acting_entity())
 )]
 pub async fn handle_delete_file(
     State(metadata_client): State<DynamodbClient>,
@@ -41,10 +41,6 @@ pub async fn handle_delete_file(
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
     let acting_user = required_user(&user.authorization);
-    tracing::Span::current().record(
-        "user_id",
-        tracing::field::display(&acting_user.macro_user_id),
-    );
 
     let metadata = metadata_client
         .get_metadata(file_id.as_str())

@@ -16,7 +16,7 @@ use reqwest::StatusCode;
 
 #[tracing::instrument(
     skip(ctx, user, req),
-    fields(user_id = tracing::field::Empty)
+    fields(actor = tracing::field::Empty)
 )]
 #[utoipa::path(
     tag = "document",
@@ -34,12 +34,8 @@ pub async fn get_batch_preview_handler(
     user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<GetBatchPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchPreviewResponse>), Response> {
-    if let Some(user) = user
-        .authorization
-        .as_ref()
-        .and_then(|authorization| authorization.acting_user())
-    {
-        tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
     }
 
     // Ensure the document ids are unique to prevent duplicate work

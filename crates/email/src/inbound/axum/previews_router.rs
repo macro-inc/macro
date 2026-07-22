@@ -86,7 +86,7 @@ where
 #[tracing::instrument(
     skip(links, macro_user, service),
     fields(
-        user_id = tracing::field::Empty,
+        actor = %macro_user.acting_entity(),
         fusionauth_user_id = tracing::field::Empty,
     )
 )]
@@ -100,7 +100,6 @@ async fn cursor_handler<T: EmailService, Auth: MacroAuthorizationService>(
 ) -> Result<Json<ApiPaginatedThreadCursor>, GetPreviewsCursorError> {
     let user = required_user(&macro_user.authorization);
     let span = tracing::Span::current();
-    span.record("user_id", tracing::field::display(&user.macro_user_id));
     span.record(
         "fusionauth_user_id",
         tracing::field::display(&user.user_context.fusion_user_id),
