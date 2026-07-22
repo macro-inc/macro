@@ -281,6 +281,15 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_team_id_for_user call")
     }
 
+    async fn create_company(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        panic!("unexpected create_company call")
+    }
+
     async fn set_email_sync(
         &self,
         _access: &CrmCompanyReceipt<EditAccessLevel>,

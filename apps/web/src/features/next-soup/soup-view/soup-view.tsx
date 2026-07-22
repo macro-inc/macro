@@ -701,20 +701,20 @@ export const SoupView = (props: SoupViewProps) => {
             <SplitHeaderRight>
               <Show
                 when={
-                  !narrowSearchExpanded() && isComponentListView('companies')
-                }
-              >
-                <CompanyViewsMenu />
-                <CompanyDisplayMenu />
-              </Show>
-              <Show
-                when={
                   !narrowSearchExpanded() &&
                   !isComponentListView('search') &&
                   props.showCreateButton !== false
                 }
               >
                 <SoupViewCreateButton />
+              </Show>
+              <Show
+                when={
+                  !narrowSearchExpanded() && isComponentListView('companies')
+                }
+              >
+                <CompanyViewsMenu />
+                <CompanyDisplayMenu />
               </Show>
               <Show when={narrowSearchExpanded()}>
                 <Layer depth={2}>

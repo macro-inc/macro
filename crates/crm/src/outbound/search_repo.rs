@@ -71,17 +71,19 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         let cursor_ts = cursor.map(|c| c.last_updated_at);
         let cursor_id = cursor.map(|c| c.last_id);
 
-        // Company names live in `crm_domain_directory` (keyed by domain),
-        // not on `crm_companies` — so we match over both the domain string
-        // and the directory name, and resolve the display name from the
-        // company's primary (earliest-created) domain, mirroring
-        // `list_companies_for_soup`. `$2` (hidden) defaults to visible-only
-        // when NULL. The keyset guard ($7/$8) seeks past the previous page
-        // under the `(updated_at DESC, id DESC)` sort; NULL = first page.
+        // Display names resolve as: the team-scoped
+        // `crm_companies.custom_name` override (manual creation) when
+        // set, otherwise the primary
+        // (earliest-created) domain's `crm_domain_directory` name,
+        // mirroring `list_companies_for_soup` — so we match over the
+        // override, the domain string, and the directory name. `$2`
+        // (hidden) defaults to visible-only when NULL. The keyset guard
+        // ($7/$8) seeks past the previous page under the
+        // `(updated_at DESC, id DESC)` sort; NULL = first page.
         let rows = sqlx::query!(
             r#"
             WITH matched AS (
-                SELECT c.id, c.last_interaction AS updated_at
+                SELECT c.id, c.custom_name, c.last_interaction AS updated_at
                 FROM crm_companies c
                 WHERE c.team_id = $1
                   AND (
@@ -89,13 +91,16 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                       OR (c.hidden = TRUE AND $2 = TRUE AND $9)
                   )
                   AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))
-                  AND EXISTS (
-                      SELECT 1
-                      FROM crm_domains d
-                      LEFT JOIN crm_domain_directory dd
-                          ON LOWER(dd.domain) = LOWER(d.domain)
-                      WHERE d.company_id = c.id
-                        AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
+                  AND (
+                      c.custom_name ILIKE $4
+                      OR EXISTS (
+                          SELECT 1
+                          FROM crm_domains d
+                          LEFT JOIN crm_domain_directory dd
+                              ON LOWER(dd.domain) = LOWER(d.domain)
+                          WHERE d.company_id = c.id
+                            AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
+                      )
                   )
                   AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))
                 ORDER BY c.last_interaction DESC, c.id DESC
@@ -113,9 +118,9 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
             )
             SELECT
                 m.id                                  AS "id!",
-                COALESCE(pd.display_name, '')         AS "name!",
+                COALESCE(m.custom_name, pd.display_name, '') AS "name!",
                 regexp_replace(
-                    COALESCE(pd.display_name, ''),
+                    COALESCE(m.custom_name, pd.display_name, ''),
                     $6, '<macro_em>\1</macro_em>', 'gi'
                 )                                     AS "name_highlighted!",
                 m.updated_at                          AS "updated_at!"
@@ -175,7 +180,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                 d.id                AS "domain_id?",
                 d.domain            AS "domain?",
                 d.created_at        AS "domain_created_at?",
-                dd.name             AS "dir_name?",
+                COALESCE(c.custom_name, dd.name) AS "display_name?",
                 dd.description      AS "dir_description?"
             FROM crm_companies c
             LEFT JOIN crm_domains d ON d.company_id = c.id
@@ -210,7 +215,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                         updated_at: row.company_updated_at,
                         domains: Vec::new(),
                     },
-                    name: row.dir_name,
+                    name: row.display_name,
                     description: row.dir_description,
                     // Search results aren't resolved against per-user view
                     // history; the soup listing path supplies viewed_at.

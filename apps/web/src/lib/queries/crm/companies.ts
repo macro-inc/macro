@@ -125,6 +125,25 @@ function wipeCompanyEmailCache(companyId: string): void {
 }
 
 /**
+ * Manually creates a CRM company via `POST /crm/companies` (a team-scoped
+ * display name + one domain). Seeds the company detail cache from the
+ * response and invalidates soup so the new company appears in the
+ * Customers listings. Server-side failures worth surfacing: 409 when the
+ * team already tracks the domain, 403 when CRM is disabled for the team,
+ * 400 on a malformed/generic-provider domain.
+ */
+export function useCreateCompanyMutation() {
+  return useMutation(() => ({
+    mutationFn: ({ name, domain }: { name: string; domain: string }) =>
+      throwOnErr(() => storageServiceClient.createCompany({ name, domain })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(crmKeys.company(data.id).queryKey, data);
+      return queryClient.invalidateQueries({ queryKey: soupKeys._def });
+    },
+  }));
+}
+
+/**
  * Toggles `crm_companies.hidden` via `PUT /crm/companies/{id}/hidden`. Hiding
  * also disables `email_sync` and soft-hides the company's contacts; un-hide
  * restores contact visibility (contact rows and sources survive the cycle).

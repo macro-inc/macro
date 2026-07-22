@@ -15,6 +15,7 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -385,6 +386,7 @@ function LayoutInner(props: RouteSectionProps) {
           <IosShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
+          <CreateCompanyModal />
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>

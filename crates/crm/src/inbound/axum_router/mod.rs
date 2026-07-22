@@ -20,6 +20,9 @@ pub mod get_contact;
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
+/// Manually create a CRM company (name + domain) for the caller's team.
+pub mod create_company;
+
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
 
@@ -34,7 +37,7 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, patch, put},
+    routing::{get, patch, post, put},
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
@@ -106,6 +109,7 @@ where
     S: Send + Sync + 'static,
 {
     Router::new()
+        .route("/companies", post(create_company::handler::<C, Eas, Auth>))
         .route(
             "/companies/{company_id}/email-sync",
             put(set_email_sync::handler::<C, Eas, Auth>),
@@ -205,6 +209,18 @@ impl IntoResponse for CrmError {
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "crm company is hidden; un-hide before enabling email sync".into(),
+                }),
+            ),
+            CrmError::CompanyAlreadyExistsForTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm company already exists for this domain".into(),
+                }),
+            ),
+            CrmError::CrmDisabledForTeam => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "crm is not enabled for this team".into(),
                 }),
             ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (

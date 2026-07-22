@@ -135,6 +135,38 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 
+    /// Manually creates a CRM company for the caller's team with a
+    /// team-scoped display `name` and a single `domain` — the
+    /// user-driven counterpart of the populate flow's automatic company
+    /// creation. Any team member may create (the receipt only proves
+    /// membership).
+    ///
+    /// Validates the inputs first: `name` must be non-blank (and within
+    /// a sane length); `domain` must look like a bare domain
+    /// ("acme.com" — no scheme, path, `@`, or whitespace) and must not
+    /// be a generic email provider domain (gmail.com etc. — a company
+    /// keyed on one would swallow every contact on that provider).
+    /// Rejections surface as [`CrmError::InvalidRequest`].
+    ///
+    /// Like populate, ensures `crm_domain_directory` has an entry for
+    /// the domain (resolving via the
+    /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
+    /// on a miss) so the company still picks up icon/description
+    /// enrichment; the user's `name` is stored on `crm_companies.custom_name`
+    /// (never in the shared directory — it's global across teams) and
+    /// overrides the directory name on every read path.
+    ///
+    /// Returns [`CrmError::CrmDisabledForTeam`] when the team-level
+    /// killswitch is off and [`CrmError::CompanyAlreadyExistsForTeam`]
+    /// when the team already tracks the domain. See
+    /// [`crate::domain::companies_repo::CompaniesRepository::create_company_for_team`].
+    fn create_company(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        name: &str,
+        domain: &str,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
+
     /// Toggle `email_sync` for the company addressed by `access`. Purely
     /// a visibility/permission flag — populate continues to write CRM
     /// rows regardless. See
@@ -302,6 +334,40 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: &CrmTeamReceipt<MemberTeamRole>,
         patch: CrmTeamSettingsPatch,
     ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
+}
+
+/// Maximum accepted length (in chars) for a manually specified company
+/// name.
+const MAX_COMPANY_NAME_CHARS: usize = 200;
+
+/// Maximum accepted length for a domain (RFC 1035 limit).
+const MAX_DOMAIN_CHARS: usize = 253;
+
+/// Validates and normalizes a user-supplied company domain: trims
+/// whitespace and trailing dots, then lowercases. Rejects anything that
+/// isn't a bare domain like "acme.com" (schemes, paths, emails, ports).
+fn normalize_company_domain(raw: &str) -> Result<String, CrmError> {
+    let domain = raw.trim().trim_end_matches('.').to_ascii_lowercase();
+    if domain.is_empty() {
+        return Err(CrmError::InvalidRequest("domain must not be empty".into()));
+    }
+    if domain.len() > MAX_DOMAIN_CHARS {
+        return Err(CrmError::InvalidRequest("domain is too long".into()));
+    }
+    if domain
+        .chars()
+        .any(|c| c.is_whitespace() || matches!(c, '@' | '/' | ':' | '?' | '#'))
+    {
+        return Err(CrmError::InvalidRequest(
+            "domain must be a bare domain like acme.com (no scheme, path, or email)".into(),
+        ));
+    }
+    if !domain.contains('.') || domain.starts_with('.') || domain.contains("..") {
+        return Err(CrmError::InvalidRequest(
+            "domain must be a valid domain like acme.com".into(),
+        ));
+    }
+    Ok(domain)
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -487,6 +553,53 @@ where
     async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         self.companies_repository
             .get_team_id_for_user(macro_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn create_company(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        name: &str,
+        domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(CrmError::InvalidRequest("name must not be empty".into()));
+        }
+        if name.chars().count() > MAX_COMPANY_NAME_CHARS {
+            return Err(CrmError::InvalidRequest("name is too long".into()));
+        }
+
+        let domain = normalize_company_domain(domain)?;
+
+        // Same guard populate applies: companies are keyed by domain,
+        // so a generic provider domain would swallow every contact on
+        // that provider.
+        if is_generic_email_domain(&domain) {
+            return Err(CrmError::InvalidRequest(
+                "generic email provider domains cannot be added as crm companies".into(),
+            ));
+        }
+
+        // Mirror populate: ensure the directory has an entry for the
+        // domain so icon/description enrichment resolves. The user's
+        // name never goes here — the directory is global across teams;
+        // it lands on `crm_companies.custom_name` in the repo instead.
+        if self
+            .companies_repository
+            .lookup_domain_metadata(&domain)
+            .await?
+            .is_none()
+        {
+            let metadata = self.metadata_resolver.resolve(&domain).await;
+            self.companies_repository
+                .upsert_domain_metadata(&domain, &metadata)
+                .await?;
+        }
+
+        self.companies_repository
+            .create_company_for_team(&access.team_id(), &domain, name, Utc::now())
             .await
     }
 
@@ -793,6 +906,15 @@ impl CrmService for NoOpCrmService {
 
     async fn get_team_id_for_user(&self, _macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         unimplemented!("NoOpCrmService.get_team_id_for_user")
+    }
+
+    async fn create_company(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        unimplemented!("NoOpCrmService.create_company")
     }
 
     async fn set_email_sync(

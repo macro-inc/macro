@@ -133,6 +133,46 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Manually creates a company for `(team_id, domain)` with a
+    /// team-scoped display `name`, sharing the insert path
+    /// [`populate_contact`] uses (same per-`(team, lower(domain))`
+    /// advisory lock, same `crm_companies` + `crm_domains` insert). In a
+    /// single transaction:
+    ///
+    /// 1. Take the advisory lock so a concurrent populate/depopulate on
+    ///    the same `(team, domain)` serializes with us.
+    /// 2. Read the team killswitch; returns
+    ///    [`CrmError::CrmDisabledForTeam`] when off (matching populate,
+    ///    which no-ops).
+    /// 3. Returns [`CrmError::CompanyAlreadyExistsForTeam`] when the
+    ///    team already tracks the domain (case-insensitively).
+    /// 4. Inserts the `crm_companies` row (storing `name` on the
+    ///    team-scoped `custom_name` column, which read paths COALESCE
+    ///    over the global directory name) and its
+    ///    `crm_domains` row. `first_interaction` / `last_interaction`
+    ///    are both seeded from `now` — there is no email history yet;
+    ///    the next populate merges real timestamps via LEAST/GREATEST.
+    ///
+    /// `domain` is normalized to lowercase before storage. The caller is
+    /// expected to have validated `name` / `domain` and ensured a
+    /// `crm_domain_directory` entry exists for `domain` (mirroring the
+    /// populate flow) so the company still picks up icon/description
+    /// enrichment.
+    ///
+    /// Returns the created company hydrated like
+    /// [`get_company_for_team`] (domains + display metadata + the —
+    /// empty — contact list).
+    ///
+    /// [`populate_contact`]: CompaniesRepository::populate_contact
+    /// [`get_company_for_team`]: CompaniesRepository::get_company_for_team
+    fn create_company_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        name: &str,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
+
     /// Read the cached [`DomainMetadata`] for `domain` from
     /// `crm_domain_directory`, if any. `domain` is matched
     /// case-insensitively. Returns `Ok(None)` when no row exists for

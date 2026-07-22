@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                c.id                AS \"company_id!\",\n                c.team_id           AS \"company_team_id!\",\n                c.email_sync        AS \"company_email_sync!\",\n                c.hidden            AS \"company_hidden!\",\n                c.first_interaction AS \"company_created_at!\",\n                c.last_interaction  AS \"company_updated_at!\",\n                d.id                AS \"domain_id?\",\n                d.domain            AS \"domain?\",\n                d.created_at        AS \"domain_created_at?\",\n                dd.name             AS \"dir_name?\",\n                dd.description      AS \"dir_description?\"\n            FROM crm_companies c\n            LEFT JOIN crm_domains d ON d.company_id = c.id\n            LEFT JOIN crm_domain_directory dd\n                ON LOWER(dd.domain) = LOWER(d.domain)\n            WHERE c.id = $1\n              AND c.team_id = $2\n              AND ($3 OR c.hidden = FALSE)\n            ORDER BY d.created_at ASC NULLS LAST\n            ",
+  "query": "\n            SELECT\n                c.id                AS \"company_id!\",\n                c.team_id           AS \"company_team_id!\",\n                c.email_sync        AS \"company_email_sync!\",\n                c.hidden            AS \"company_hidden!\",\n                c.first_interaction AS \"company_created_at!\",\n                c.last_interaction  AS \"company_updated_at!\",\n                d.id                AS \"domain_id?\",\n                d.domain            AS \"domain?\",\n                d.created_at        AS \"domain_created_at?\",\n                COALESCE(c.custom_name, dd.name) AS \"display_name?\",\n                dd.description      AS \"dir_description?\"\n            FROM crm_companies c\n            LEFT JOIN crm_domains d ON d.company_id = c.id\n            LEFT JOIN crm_domain_directory dd\n                ON LOWER(dd.domain) = LOWER(d.domain)\n            WHERE c.id = $1\n              AND c.team_id = $2\n              AND ($3 OR c.hidden = FALSE)\n            ORDER BY d.created_at ASC NULLS LAST\n            ",
   "describe": {
     "columns": [
       {
@@ -50,7 +50,7 @@
       },
       {
         "ordinal": 9,
-        "name": "dir_name?",
+        "name": "display_name?",
         "type_info": "Text"
       },
       {
@@ -76,9 +76,9 @@
       false,
       false,
       false,
-      true,
+      null,
       true
     ]
   },
-  "hash": "c7c058fd3acdc93e77a805b28b844150503f955a91339be026f8b68f65092adb"
+  "hash": "da0dbddbc6fa69a1d86ab3187781c5ea5ad8d7e43d340506daa74d04f29ea6da"
 }

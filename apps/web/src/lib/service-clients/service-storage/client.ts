@@ -2277,6 +2277,12 @@ export const storageServiceClient = {
       })
     ).map((result) => result.data);
   },
+  async createCompany({ name, domain }: { name: string; domain: string }) {
+    return await dssFetch<CrmCompanyResponse>('/crm/companies', {
+      method: 'POST',
+      body: JSON.stringify({ name, domain }),
+    });
+  },
   async getCompany({ companyId }: { companyId: string }) {
     return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
       method: 'GET',
