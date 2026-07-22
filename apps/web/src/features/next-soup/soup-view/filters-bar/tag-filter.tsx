@@ -1,7 +1,7 @@
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 
 /**
- * The caller's tags as pickable options, plus the flag/availability gating.
+ * The caller's tags as pickable options, plus availability gating.
  * Shared by every tag-filter surface (search facet, filter dropdown, chip bar)
  * so option labels, colors, and the owning-definition mapping stay in sync.
  */

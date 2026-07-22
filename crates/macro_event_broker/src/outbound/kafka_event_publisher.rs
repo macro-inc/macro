@@ -16,7 +16,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 
 use crate::domain::models::EventBrokerError;
 use crate::domain::ports::EventPublisher;
-use crate::outbound::msk_iam::{MskIamClientContext, configure_sasl_iam};
+use crate::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
 
 /// How long a record may sit in the producer queue before delivery is considered failed.
 const MESSAGE_TIMEOUT_MS: &str = "5000";
@@ -64,8 +64,7 @@ impl KafkaEventPublisher {
                 Producer::Plaintext(base_config(brokers).create().map_err(create_error)?)
             }
             Environment::Develop | Environment::Production => {
-                let mut config = base_config(brokers);
-                configure_sasl_iam(&mut config);
+                let config = configure_sasl_iam(base_config(brokers));
 
                 Producer::MskIam(
                     config

@@ -820,9 +820,7 @@ export const UnifiedFilterDropdown = (
 
   const tagFilter = useTagFilter();
   const showTagsFilter = () =>
-    tagFilter.enabled() &&
-    tagFilter.hasTags() &&
-    (isTasksView() || isDocumentsView());
+    tagFilter.hasTags() && (isTasksView() || isDocumentsView());
 
   registerHotkey({
     hotkey: 'f',

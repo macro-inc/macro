@@ -686,7 +686,7 @@ export function useFilterRefinements() {
     // Tags chip (consolidated, searchable) for the documents/tasks views.
     const pushTagsConsolidatedChip = () => {
       if (view !== 'tasks' && view !== 'documents') return;
-      if (!tagFilter.enabled() || !tagFilter.hasTags()) return;
+      if (!tagFilter.hasTags()) return;
 
       const key = 'tags';
       const popupOpen =

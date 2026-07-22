@@ -5,12 +5,12 @@ use crate::domain::{
         Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
         ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
         ChannelParticipant, ChannelType, CountedReaction, CreateChannelRequest,
-        CreateEntityMentionOptions, DeleteMessageQuery, EntityMention, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-        PostReactionRequest, ReactionAction, ReferencedShareItem, ReferencedShareItemType,
-        ResolvedChannelMessage, Sender, SimpleMention, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow,
+        CreateEntityMentionOptions, CreatedChannel, DeleteMessageQuery, EntityMention,
+        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
+        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
+        ReferencedShareItemType, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelMentionExtractor, ChannelReferenceSharePermissions,
@@ -523,11 +523,27 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn create_channel(
         &self,
-        _owner_id: MacroUserIdStr<'_>,
+        owner_id: MacroUserIdStr<'_>,
         _org_id: Option<i64>,
-        _req: crate::domain::models::CreateChannelRequest,
-    ) -> Result<Uuid, Self::Err> {
-        Ok(self.state.lock().unwrap().channel_id)
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<CreatedChannel, Self::Err> {
+        let state = self.state.lock().unwrap();
+        let mut participant_user_ids = req.participants;
+        participant_user_ids.insert(owner_id.into_owned());
+        if req.auto_join_team {
+            participant_user_ids.extend(
+                state
+                    .participants
+                    .iter()
+                    .map(|participant| macro_id(&participant.user_id)),
+            );
+        }
+        let mut participant_user_ids: Vec<_> = participant_user_ids.into_iter().collect();
+        participant_user_ids.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        Ok(CreatedChannel {
+            id: state.channel_id,
+            participant_user_ids,
+        })
     }
 
     async fn auto_join_by_team_id(
@@ -1932,6 +1948,37 @@ async fn create_private_channel_allows_no_invited_participants() {
         events.as_slice(),
         [ChannelEvent::ChannelCreated { participant_user_ids, .. }]
             if participant_user_ids == &[macro_id("macro|sender@test.com")]
+    ));
+}
+
+#[tokio::test]
+async fn create_auto_join_team_channel_event_includes_current_team_members() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel(
+        sender("macro|sender@test.com"),
+        None,
+        CreateChannelRequest {
+            name: Some("general".to_string()),
+            channel_type: ChannelType::Team,
+            team_id: Some(Uuid::new_v4()),
+            auto_join_team: true,
+            participants: HashSet::from([macro_id("macro|sender@test.com")]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated { participant_user_ids, .. }]
+            if participant_user_ids.len() == 2
+                && participant_user_ids.contains(&macro_id("macro|sender@test.com"))
+                && participant_user_ids.contains(&macro_id("macro|recipient@test.com"))
     ));
 }
 

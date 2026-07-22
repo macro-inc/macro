@@ -7541,6 +7541,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kafka_consumer_util"
+version = "0.1.0"
+dependencies = [
+ "either",
+ "macro_env",
+ "macro_event_broker",
+ "rdkafka",
+ "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [
@@ -13388,6 +13401,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "soup_realtime"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "documents",
+ "entity_access",
+ "futures",
+ "kafka_consumer_util",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "model-entity",
+ "models_properties",
+ "models_soup",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15517,9 +15556,9 @@ dependencies = [
  "futures",
  "hex",
  "hmac 0.12.1",
+ "kafka_consumer_util",
  "macro_authorization",
  "macro_db_migrator",
- "macro_env",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",

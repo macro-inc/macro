@@ -12,12 +12,12 @@ use crate::domain::{
         ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem, ChannelMessage,
         ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
         ChannelPreviewRow, ChannelType, ChannelWithParticipants, CountedReaction,
-        CreateChannelRequest, CreateEntityMentionOptions, EntityMention, GetChannelsParams,
-        GetThreadReplyRowsParams, LatestMessage, MessageAttachment, MessagePageDirection,
-        MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, SimpleMention,
-        ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName,
-        fallback_user_name,
+        CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
+        GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage,
+        SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+        UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -2737,7 +2737,14 @@ impl ChannelRepo for PgChannelsRepo {
         owner_id: MacroUserIdStr<'_>,
         _org_id: Option<i64>,
         req: CreateChannelRequest,
-    ) -> Result<Uuid, Self::Err> {
+    ) -> Result<CreatedChannel, Self::Err> {
+        let CreateChannelRequest {
+            name,
+            channel_type,
+            team_id,
+            auto_join_team,
+            participants,
+        } = req;
         let channel_id = macro_uuid::generate_uuid_v7();
         let mut transaction = self.pool.begin().await?;
         sqlx::query!(
@@ -2748,12 +2755,12 @@ impl ChannelRepo for PgChannelsRepo {
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             channel_id,
-            req.name.as_deref(),
+            name.as_deref(),
             owner_id.as_ref(),
             None::<i64>,
-            req.team_id,
-            req.channel_type as ChannelType,
-            req.auto_join_team,
+            team_id,
+            channel_type as ChannelType,
+            auto_join_team,
         )
         .execute(&mut *transaction)
         .await
@@ -2772,8 +2779,7 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to create channel participant for owner")?;
 
-        for participant in req
-            .participants
+        for participant in participants
             .into_iter()
             .filter(|participant| participant.as_ref() != owner_id.as_ref())
         {
@@ -2791,14 +2797,52 @@ impl ChannelRepo for PgChannelsRepo {
             .context("unable to create channel participant")?;
         }
 
+        if auto_join_team {
+            sqlx::query!(
+                r#"
+                INSERT INTO comms_channel_participants (channel_id, role, user_id)
+                SELECT $1, 'member'::comms_participant_role, user_id
+                FROM team_user
+                WHERE team_id = $2
+                ON CONFLICT (channel_id, user_id) DO NOTHING
+                "#,
+                channel_id,
+                team_id,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("unable to add current team members to channel")?;
+        }
+
         create_activity(&mut *transaction, channel_id, owner_id.as_ref())
             .await
             .context("unable to create activity for channel")?;
+
+        let participant_user_ids = sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM comms_channel_participants
+            WHERE channel_id = $1 AND left_at IS NULL
+            ORDER BY user_id
+            "#,
+            channel_id,
+        )
+        .fetch_all(&mut *transaction)
+        .await
+        .context("unable to fetch created channel participants")?
+        .into_iter()
+        .map(MacroUserIdStr::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .context("created channel contains an invalid user id")?;
+
         transaction
             .commit()
             .await
             .context("unable to commit transaction")?;
-        Ok(channel_id)
+        Ok(CreatedChannel {
+            id: channel_id,
+            participant_user_ids,
+        })
     }
 
     async fn auto_join_by_team_id(

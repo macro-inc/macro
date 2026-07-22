@@ -5,15 +5,16 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "outbound"]
-outbound = [
+default = ["outbound", "ports"]
+kafka = [
   "dep:aws-msk-iam-sasl-signer",
   "dep:aws-types",
   "dep:macro_env",
   "dep:macro_env_var",
   "dep:rdkafka",
-  "ports",
+  "dep:tokio",
 ]
+outbound = ["kafka", "ports"]
 ports = ["dep:tokio"]
 
 [dependencies]

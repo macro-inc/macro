@@ -5,6 +5,7 @@
   "macro.email",
   "macro.example",
   "macro.projects",
+  "macro.soup",
   "macro.teams",
   "macro.webhooks"
 ]

@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "kafka_consumer_util"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+either = { workspace = true }
+macro_env = { path = "../macro_env" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, features = [
+  "kafka",
+] }
+rdkafka = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

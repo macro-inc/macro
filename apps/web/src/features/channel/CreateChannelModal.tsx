@@ -1,19 +1,26 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
+import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { WithCustomUserInput } from '@core/user';
+import {
+  tryMacroId,
+  useDisplayName,
+  type WithCustomUserInput,
+} from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
 import HashIcon from '@phosphor/hash.svg';
 import InfoIcon from '@phosphor/info.svg';
 import XIcon from '@phosphor/x.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
-import { useUserTeamsQuery } from '@queries/team/teams';
+import { useCurrentTeamQuery } from '@queries/team/teams';
+import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { Button, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
 const newChannelModalFocusLock = useFocusLock('create-channel');
@@ -25,6 +32,28 @@ const CHANNEL_TYPE_TABS = [
 
 type CreatableChannelType = 'private' | 'team';
 
+function TeamMemberListItem(props: { member: TeamMember; isLast: boolean }) {
+  const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+
+  return (
+    <div
+      class="flex items-center gap-2 bg-surface px-3 py-1.5"
+      classList={{ 'border-b border-edge-muted': !props.isLast }}
+    >
+      <UserIcon
+        id={props.member.user_id}
+        size="md"
+        showTooltip={false}
+        suppressClick
+      />
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm font-medium text-ink">{displayName()}</div>
+        <div class="text-xs capitalize text-ink-muted">{props.member.role}</div>
+      </div>
+    </div>
+  );
+}
+
 export function openNewChannelModal() {
   newChannelModalFocusLock.acquire();
   setNewChannelModalOpen(true);
@@ -35,8 +64,10 @@ export function CreateChannelModal() {
   const userId = useUserId();
   const { users: recipientOptions } = useCombinedRecipients();
   const createChannelMutation = useCreateChannelMutation();
-  const userTeamsQuery = useUserTeamsQuery();
+  const currentTeamQuery = useCurrentTeamQuery();
   const [name, setName] = createSignal('');
+  const [teamListScrollRef, setTeamListScrollRef] =
+    createSignal<HTMLDivElement>();
   const [channelType, setChannelType] =
     createSignal<CreatableChannelType>('private');
   const [autoJoinTeam, setAutoJoinTeam] = createSignal(false);
@@ -45,7 +76,8 @@ export function CreateChannelModal() {
   >([]);
   const [error, setError] = createSignal<string>();
   const channelName = createMemo(() => name().trim());
-  const team = createMemo(() => userTeamsQuery.data?.[0]);
+  const team = createMemo(() => currentTeamQuery.data?.team);
+  const teamMembers = createMemo(() => currentTeamQuery.data?.members ?? []);
   const canSubmit = createMemo(
     () => channelName().length > 0 && !createChannelMutation.isPending
   );
@@ -185,6 +217,37 @@ export function CreateChannelModal() {
                   setSelectedOptions={setSelectedRecipients}
                   placeholder="To: Macro users or email addresses"
                 />
+                <Show when={channelType() === 'team' && autoJoinTeam()}>
+                  <div class="mt-2 flex flex-col gap-2">
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs font-medium text-ink-muted">
+                        Included team members
+                      </span>
+                      <span class="text-xs text-ink-extra-muted">
+                        ({teamMembers().length})
+                      </span>
+                    </div>
+                    <div class="relative max-h-56 rounded-lg ring ring-edge-muted">
+                      <div
+                        ref={setTeamListScrollRef}
+                        class="scrollbar-hidden max-h-56 overflow-y-auto"
+                      >
+                        <For each={teamMembers()}>
+                          {(member, index) => (
+                            <TeamMemberListItem
+                              member={member}
+                              isLast={index() === teamMembers().length - 1}
+                            />
+                          )}
+                        </For>
+                      </div>
+                      <CustomScrollbar
+                        scrollContainer={teamListScrollRef}
+                        watchContent
+                      />
+                    </div>
+                  </div>
+                </Show>
               </div>
             </div>
 
@@ -217,7 +280,7 @@ export function CreateChannelModal() {
                     placement="bottom"
                     label={
                       autoJoinTeam()
-                        ? 'New team members will automatically join this channel.'
+                        ? 'Current and new team members will join automatically.'
                         : 'Team members can choose whether to join this channel.'
                     }
                   >

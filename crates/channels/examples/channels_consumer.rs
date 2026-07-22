@@ -103,7 +103,7 @@ impl ChannelsConsumer {
                     .context("failed to create plaintext kafka consumer")?,
             ),
             Environment::Develop | Environment::Production => {
-                configure_sasl_iam(&mut config);
+                let config = configure_sasl_iam(config);
                 Self::MskIam(
                     config
                         .create_with_context(MskIamClientContext::from_env())

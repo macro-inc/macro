@@ -17,10 +17,11 @@ macro_env_var::maybe_env_var! {
 
 /// Apply the TLS + SASL/OAUTHBEARER settings required to authenticate to an
 /// AWS MSK cluster with IAM auth (the `:9098` bootstrap listener).
-pub fn configure_sasl_iam(config: &mut ClientConfig) -> &mut ClientConfig {
+pub fn configure_sasl_iam(mut config: ClientConfig) -> ClientConfig {
     config
         .set("security.protocol", "SASL_SSL")
-        .set("sasl.mechanism", "OAUTHBEARER")
+        .set("sasl.mechanism", "OAUTHBEARER");
+    config
 }
 
 /// Client context that supplies AWS MSK IAM (SASL/OAUTHBEARER) auth tokens,

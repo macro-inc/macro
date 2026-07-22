@@ -233,7 +233,7 @@ async fn is_participant_filter_inside_not_widens_candidates(pool: Pool<Postgres>
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn create_channel_persists_auto_join_team(pool: Pool<Postgres>) {
+async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
 
     let enabled_channel_id = repo
@@ -267,21 +267,60 @@ async fn create_channel_persists_auto_join_team(pool: Pool<Postgres>) {
 
     let enabled = sqlx::query_scalar!(
         "SELECT auto_join_team FROM comms_channels WHERE id = $1",
-        enabled_channel_id,
+        enabled_channel_id.id,
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     let disabled = sqlx::query_scalar!(
         "SELECT auto_join_team FROM comms_channels WHERE id = $1",
-        disabled_channel_id,
+        disabled_channel_id.id,
     )
     .fetch_one(&pool)
+    .await
+    .unwrap();
+    let enabled_participants = sqlx::query!(
+        r#"
+        SELECT user_id, role AS "role: ParticipantRole"
+        FROM comms_channel_participants
+        WHERE channel_id = $1
+        ORDER BY user_id
+        "#,
+        enabled_channel_id.id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let disabled_participants = sqlx::query_scalar!(
+        r#"
+        SELECT user_id
+        FROM comms_channel_participants
+        WHERE channel_id = $1
+        ORDER BY user_id
+        "#,
+        disabled_channel_id.id,
+    )
+    .fetch_all(&pool)
     .await
     .unwrap();
 
     assert!(enabled);
     assert!(!disabled);
+    assert_eq!(
+        enabled_participants
+            .iter()
+            .map(|participant| (participant.user_id.as_str(), participant.role))
+            .collect::<Vec<_>>(),
+        vec![
+            (LEFT_USER, ParticipantRole::Member),
+            (USER_A, ParticipantRole::Owner),
+        ]
+    );
+    assert_eq!(disabled_participants, vec![USER_A]);
+    assert_eq!(
+        enabled_channel_id.participant_user_ids,
+        vec![macro_user_id(LEFT_USER), macro_user_id(USER_A)]
+    );
 }
 
 #[sqlx::test(
