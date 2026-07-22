@@ -6,4 +6,4 @@
 -- custom_name to make the override semantics explicit — user-typed
 -- names must stay scoped to the owning team and cannot live in the
 -- global directory.
-ALTER TABLE crm_companies ADD COLUMN custom_name TEXT;
+ALTER TABLE crm_companies ADD COLUMN IF NOT EXISTS custom_name TEXT;
