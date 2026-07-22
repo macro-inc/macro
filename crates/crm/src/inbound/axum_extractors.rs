@@ -27,7 +27,7 @@ use entity_access::{
     inbound::axum_extractors::ExtractorError,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use uuid::Uuid;
 
@@ -82,15 +82,11 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing company_id path parameter"))?;
         let company_id = extract_company_id(&path_params)?.to_string();
 
-        let authorization = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user")
-            .macro_user_id
-            .clone();
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -162,15 +158,11 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing contact_id path parameter"))?;
         let contact_id = extract_contact_id(&path_params)?.to_string();
 
-        let authorization = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user")
-            .macro_user_id
-            .clone();
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -243,15 +235,11 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing comment_id path parameter"))?;
         let comment_id = extract_comment_id(&path_params)?;
 
-        let authorization = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user")
-            .macro_user_id
-            .clone();
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
         let (crm_entity_type, entity_id) = crm_service
             .get_comment_entity(&comment_id)
