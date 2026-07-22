@@ -22,13 +22,6 @@ export interface PropertyRootContextValue {
   editorOpen: Accessor<boolean>;
   openEditor: (anchor?: HTMLElement) => void;
   closeEditor: () => void;
-
-  // Closest `.portal-scope` ancestor at the time Property.Root mounted.
-  // Used by PopoverEditor to mount the dropdown into the same stacking
-  // context as the surrounding panel/dialog instead of document.body —
-  // otherwise the editor renders behind a host modal. Undefined until the
-  // root div mounts, after which Kobalte's Portal falls back to body.
-  portalMount: Accessor<HTMLElement | undefined>;
 }
 
 export const PropertyRootContext = createContext<PropertyRootContextValue>();

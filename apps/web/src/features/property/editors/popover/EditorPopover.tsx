@@ -86,6 +86,9 @@ export function EditorPopover(props: EditorPopoverProps) {
   };
 
   return (
+    // Keep the default body portal. The editor uses a virtual anchor rectangle,
+    // so mounting inside a local portal-scope gives Floating UI the wrong
+    // clipping and offset context.
     <Dropdown.Content
       class={cn(
         'max-h-96 overflow-hidden flex flex-col w-full max-w-70 p-0 text-sm',
@@ -93,7 +96,6 @@ export function EditorPopover(props: EditorPopoverProps) {
       )}
       onInteractOutside={handleInteractOutside}
       onEscapeKeyDown={handleEscapeKeyDown}
-      mount={ctx.portalMount()}
       depth={3}
     >
       <Dropdown.Group
