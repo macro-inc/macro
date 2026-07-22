@@ -5,6 +5,6 @@ pub mod models;
 #[cfg(feature = "ports")]
 pub mod ports;
 
-/// Service orchestration for publishing events.
+/// Service orchestration for producing and consuming typed events.
 #[cfg(feature = "ports")]
 pub mod service;

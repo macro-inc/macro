@@ -10,38 +10,26 @@ mod test;
 use std::time::Duration;
 
 use kafka_consumer_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{EventBrokerError, MacroEvent, Topic as _, TopicEvent};
+use macro_event_broker::{MacroEvent, MacroEventConsumerService};
 use rdkafka::message::Message as _;
 use rootcause::prelude::{Report, ResultExt as _};
 
-use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage, SoupTopicEvent};
+use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
 
 /// Maximum time to wait for Soup topic metadata during partition assignment.
 const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 
 type IndependentKafkaConsumer = KafkaEventConsumer<Ungrouped>;
+type SoupEventConsumer = MacroEventConsumerService<SoupMacroEvent>;
 
 fn assigned_topics() -> [&'static str; 1] {
-    [<SoupTopicEvent as TopicEvent>::Topic::default().as_str()]
+    [SoupEventConsumer::topic_name()]
 }
 
 fn decode_message(topic: &str, key: &str, payload: &[u8]) -> Result<SoupRealtimeMessage, Report> {
-    let expected_topic = <SoupTopicEvent as TopicEvent>::Topic::default();
-    if topic != expected_topic.as_str() {
-        return Err(EventBrokerError::UnknownTopic(topic.to_string()).into());
-    }
-
-    let event = SoupMacroEvent::decode(key, payload).context("failed to decode Soup event")?;
-    let envelope = event.event();
-    let expected_version = envelope.event.schema_version();
-    if envelope.schema_version != expected_version {
-        rootcause::bail!(
-            "unsupported realtime Soup schema version {}; expected {}",
-            envelope.schema_version,
-            expected_version
-        );
-    }
-
+    let event = SoupEventConsumer::new()
+        .decode(topic, key, payload)
+        .context("failed to decode Soup event")?;
     let event_key = event.key().to_string();
     let message = event.into_message();
     if event_key != message.user_id.as_ref() {

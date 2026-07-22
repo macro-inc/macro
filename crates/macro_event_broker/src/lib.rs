@@ -5,9 +5,11 @@
 //! [`TopicEvent`](domain::models::TopicEvent) enums, the
 //! [`MacroEvent`](domain::models::MacroEvent) event abstraction, the inbound
 //! [`MacroEventBroker`](domain::ports::MacroEventBroker) API, the outbound
-//! [`EventPublisher`](domain::ports::EventPublisher) port, and the
-//! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService) that ties
-//! them together. Kafka topic definitions live in the `macro_event_topics` crate.
+//! [`EventPublisher`](domain::ports::EventPublisher) port, the producing
+//! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService), and the
+//! single-topic typed
+//! [`MacroEventConsumerService`](domain::service::MacroEventConsumerService).
+//! Kafka topic definitions live in the `macro_event_topics` crate.
 //! The [`outbound`] layer provides the Kafka publisher adapter.
 
 /// Domain layer: models, ports, and service.
@@ -22,7 +24,9 @@ pub use macro_event_topics::{
 #[cfg(feature = "ports")]
 pub use domain::ports::{EventPublisher, MacroEventBroker};
 #[cfg(feature = "ports")]
-pub use domain::service::{MacroEventBrokerService, NoopMacroEventBroker};
+pub use domain::service::{
+    MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
+};
 #[cfg(feature = "kafka")]
 pub use kafka::msk_iam::MskIamClientContext;
 #[cfg(feature = "outbound")]

@@ -5,7 +5,7 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use macro_event_topics::{MacroExampleTopic, Topic};
+use macro_event_topics::{MacroDocumentsTopic, MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -167,6 +167,62 @@ fn example_event() -> ExampleMacroEvent {
             }),
         ),
     )
+}
+
+#[test]
+fn consumer_service_derives_topic_and_decodes_typed_event() {
+    let service = MacroEventConsumerService::<ExampleMacroEvent>::new();
+    let event = example_event();
+    let payload = serde_json::to_vec(event.event()).expect("event serializes");
+
+    assert_eq!(
+        MacroEventConsumerService::<ExampleMacroEvent>::topic_name(),
+        MacroExampleTopic.as_str()
+    );
+
+    let decoded = service
+        .decode(MacroExampleTopic.as_str(), "msg-123", &payload)
+        .expect("associated topic decodes");
+    assert_eq!(decoded.key(), "msg-123");
+    assert_eq!(decoded.event(), event.event());
+}
+
+#[test]
+fn consumer_service_rejects_a_different_topic() {
+    let service = MacroEventConsumerService::<ExampleMacroEvent>::new();
+    let event = example_event();
+    let payload = serde_json::to_vec(event.event()).expect("event serializes");
+
+    assert!(matches!(
+        service.decode(MacroDocumentsTopic.as_str(), "msg-123", &payload),
+        Err(EventBrokerError::UnknownTopic(topic)) if topic == MacroDocumentsTopic.as_str()
+    ));
+}
+
+#[test]
+fn consumer_service_rejects_an_unsupported_schema_version() {
+    let service = MacroEventConsumerService::<ExampleMacroEvent>::new();
+    let event = ExampleMacroEvent::with_event(
+        "msg-123",
+        Event::with_event_id_and_schema_version(
+            Uuid::from_u128(1),
+            2,
+            ExampleTopicEvent::Created(ExampleCreatedMetadata {
+                name: "hello".to_string(),
+                count: 7,
+            }),
+        ),
+    );
+    let payload = serde_json::to_vec(event.event()).expect("event serializes");
+
+    assert!(matches!(
+        service.decode(MacroExampleTopic.as_str(), "msg-123", &payload),
+        Err(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected: 1,
+            actual: 2,
+        }) if topic == MacroExampleTopic.as_str()
+    ));
 }
 
 #[derive(Debug, Deserialize)]

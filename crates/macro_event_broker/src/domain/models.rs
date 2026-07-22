@@ -113,6 +113,16 @@ pub enum EventBrokerError {
     /// The Kafka topic name is not handled by a consumer-specific event enum.
     #[error("unknown event topic: {0}")]
     UnknownTopic(String),
+    /// The event envelope schema version is not supported by its typed payload.
+    #[error("unsupported schema version {actual} for topic {topic}; expected {expected}")]
+    UnsupportedSchemaVersion {
+        /// Topic carrying the event.
+        topic: &'static str,
+        /// Schema version declared by the typed event payload.
+        expected: u8,
+        /// Schema version found in the decoded envelope.
+        actual: u8,
+    },
     /// The broker rejected or failed to deliver the message.
     #[error("failed to publish event: {0}")]
     Publish(String),
