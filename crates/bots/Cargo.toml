@@ -19,7 +19,7 @@ inbound = [
   "ports",
 ]
 outbound = ["dep:sqlx", "dep:macro_uuid", "ports"]
-ports = ["dep:tokio", "macro_event_broker/ports"]
+ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }

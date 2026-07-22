@@ -5,17 +5,15 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["outbound", "ports"]
+default = ["outbound"]
 kafka = [
   "dep:aws-msk-iam-sasl-signer",
   "dep:aws-types",
   "dep:macro_env",
   "dep:macro_env_var",
   "dep:rdkafka",
-  "dep:tokio",
 ]
-outbound = ["kafka", "ports"]
-ports = ["dep:tokio"]
+outbound = ["kafka"]
 
 [dependencies]
 aws-msk-iam-sasl-signer = { workspace = true, optional = true }
@@ -27,7 +25,7 @@ rdkafka = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "time"], optional = true }
+tokio = { workspace = true, features = ["macros", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

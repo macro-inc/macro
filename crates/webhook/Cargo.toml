@@ -44,7 +44,7 @@ outbound = [
   "dep:url",
   "ports",
 ]
-ports = ["dep:serde_json", "dep:url", "macro_event_broker/ports"]
+ports = ["dep:serde_json", "dep:url"]
 worker = ["dep:tokio", "ports"]
 
 [dependencies]

@@ -30,11 +30,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:tokio"]
-service = [
-  "dep:entity_access_management",
-  "macro_event_broker/ports",
-  "ports",
-]
+service = ["dep:entity_access_management", "ports"]
 
 [dependencies]
 # Core

@@ -1,19 +1,20 @@
-use macro_event_topics::{MacroExampleTopic, Topic};
+use macro_event_topics::{MacroDocumentsTopic, MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
 use super::*;
+use crate::MessageParts;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ExampleCreatedMetadata {
+pub struct ExampleCreatedMetadata {
     name: String,
     count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
-enum ExampleTopicEvent {
+pub enum ExampleTopicEvent {
     #[serde(rename = "example.created")]
     Created(ExampleCreatedMetadata),
 }
@@ -27,7 +28,7 @@ impl TopicEvent for ExampleTopicEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ExampleMacroEvent {
+pub struct ExampleMacroEvent {
     key: String,
     event: Event<ExampleTopicEvent>,
 }
@@ -121,4 +122,103 @@ fn consumer_specific_enum_decodes_by_topic() {
 
     let ExampleConsumerEvent::Example(decoded) = decoded;
     assert_eq!(decoded.key(), "msg-123");
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocumentsTopicEvent;
+
+impl TopicEvent for DocumentsTopicEvent {
+    type Topic = MacroDocumentsTopic;
+
+    fn schema_version(&self) -> u8 {
+        1
+    }
+}
+
+pub struct DocumentsMacroEvent {
+    key: String,
+    event: Event<DocumentsTopicEvent>,
+}
+
+impl MacroEvent for DocumentsMacroEvent {
+    type EventPayload = DocumentsTopicEvent;
+
+    fn key(&self) -> &str {
+        &self.key
+    }
+
+    fn event(&self) -> &Event<Self::EventPayload> {
+        &self.event
+    }
+
+    fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
+        Self { key, event }
+    }
+}
+
+crate::declare_topics!(ExampleMacroEvent, DocumentsMacroEvent,);
+
+struct TestMessage {
+    topic: &'static str,
+    key: &'static str,
+    payload: Vec<u8>,
+}
+
+impl MessageParts for TestMessage {
+    fn key(&self) -> &str {
+        self.key
+    }
+
+    fn payload(&self) -> &[u8] {
+        &self.payload
+    }
+
+    fn topic(&self) -> &str {
+        self.topic
+    }
+}
+
+#[test]
+fn decodes_each_declared_topic_into_its_enum_variant() {
+    let example_payload = serde_json::to_vec(&example_event()).unwrap();
+    let example_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic: MacroExampleTopic.as_str(),
+        key: "example-key",
+        payload: example_payload,
+    });
+
+    match example_message.decode_payload().unwrap() {
+        DeclaredMacroEvent::ExampleMacroEvent(event) => {
+            assert_eq!(event.key(), "example-key");
+        }
+        DeclaredMacroEvent::DocumentsMacroEvent(_) => panic!("decoded the wrong event type"),
+    }
+
+    let documents_payload = serde_json::to_vec(&Event::new(DocumentsTopicEvent)).unwrap();
+    let documents_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic: MacroDocumentsTopic.as_str(),
+        key: "documents-key",
+        payload: documents_payload,
+    });
+
+    match documents_message.decode_payload().unwrap() {
+        DeclaredMacroEvent::DocumentsMacroEvent(event) => {
+            assert_eq!(event.key(), "documents-key");
+        }
+        DeclaredMacroEvent::ExampleMacroEvent(_) => panic!("decoded the wrong event type"),
+    }
+}
+
+#[test]
+fn rejects_topics_not_declared_by_the_macro() {
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic: "macro.unknown",
+        key: "key",
+        payload: Vec::new(),
+    });
+
+    assert!(matches!(
+        message.decode_payload(),
+        Err(EventBrokerError::UnknownTopic(topic)) if topic == "macro.unknown"
+    ));
 }

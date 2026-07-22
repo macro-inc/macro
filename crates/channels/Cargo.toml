@@ -63,7 +63,7 @@ outbound = [
   "macro_user_id/sqlx",
   "ports",
 ]
-ports = ["dep:tokio", "macro_event_broker/ports"]
+ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }

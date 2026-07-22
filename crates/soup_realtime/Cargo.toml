@@ -10,14 +10,12 @@ consumer = [
   "dep:kafka_consumer_util",
   "dep:rdkafka",
   "dep:tokio",
-  "macro_event_broker/ports",
   "ports",
 ]
 default = ["consumer", "outbound", "ports"]
 outbound = [
   "dep:entity_access",
   "dep:soup",
-  "macro_event_broker/ports",
   "ports",
 ]
 ports = ["dep:futures", "dep:rootcause", "dep:tracing"]

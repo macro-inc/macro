@@ -1,8 +1,12 @@
 //! Domain models for the event broker.
 
+use std::marker::PhantomData;
+
 use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
+
+use crate::domain::ports::{MacroEventCollection, MessageParts};
 
 /// Event payload enum for a single [`Topic`].
 ///
@@ -141,6 +145,77 @@ impl From<rootcause::Report> for EventBrokerError {
     fn from(report: rootcause::Report) -> Self {
         EventBrokerError::Internal(report)
     }
+}
+
+/// A broker message paired with the type of event collection it can decode.
+pub struct MessageWrapper<T, M> {
+    inner: T,
+    marker: PhantomData<M>,
+}
+
+impl<T, M> MessageWrapper<T, M> {
+    /// Wraps the transport-specific message.
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner,
+            marker: PhantomData,
+        }
+    }
+
+    /// Borrows the transport-specific message.
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
+
+    /// Returns the transport-specific message.
+    pub fn into_inner(self) -> T {
+        self.inner
+    }
+}
+
+impl<T: MessageParts, M: MacroEventCollection> MessageWrapper<T, M> {
+    /// Decodes the message into one of the declared event types.
+    pub fn decode_payload(&self) -> Result<M, EventBrokerError> {
+        M::decode(&self.inner)
+    }
+}
+
+/// Declares the [`MacroEvent`] types accepted by a consumer.
+///
+/// The macro creates a `DeclaredMacroEvent` enum with one variant per supplied
+/// event type and implements topic-based decoding for it. Event types must be
+/// identifiers and must implement [`MacroEvent`].
+#[macro_export]
+macro_rules! declare_topics {
+    ($($event:ident),+ $(,)?) => {
+        /// An event decoded from one of the topics declared by `declare_topics!`.
+        pub enum DeclaredMacroEvent {
+            $(
+                #[doc = concat!("A decoded `", stringify!($event), "` event.")]
+                $event($event),
+            )+
+        }
+
+        impl $crate::MacroEventCollection for DeclaredMacroEvent {
+            fn decode<T: $crate::MessageParts>(
+                message: &T,
+            ) -> Result<Self, $crate::EventBrokerError> {
+                $(
+                    if message.topic() == $crate::Topic::as_str(
+                        &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
+                    ) {
+                        return <$event as $crate::MacroEvent>::decode(
+                            message.key(),
+                            message.payload(),
+                        )
+                        .map(DeclaredMacroEvent::$event);
+                    }
+                )+
+
+                Err($crate::EventBrokerError::UnknownTopic(message.topic().to_owned()))
+            }
+        }
+    };
 }
 
 #[cfg(test)]

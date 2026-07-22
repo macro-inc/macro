@@ -15,18 +15,15 @@
 /// Domain layer: models, ports, and service.
 pub mod domain;
 
-pub use domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
+pub use domain::models::{Event, EventBrokerError, MacroEvent, MessageWrapper, TopicEvent};
 pub use macro_event_topics::{
     MacroChannelsTopic, MacroDocumentsTopic, MacroEmailTopic, MacroExampleTopic,
     MacroProjectsTopic, Topic,
 };
 
-#[cfg(feature = "ports")]
 pub use domain::ports::{
     EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection, MessageParts,
-    MessageWrapper,
 };
-#[cfg(feature = "ports")]
 pub use domain::service::{
     MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
 };
