@@ -14,11 +14,12 @@ use ::axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use bot_id::BotId;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
 
-use crate::MacroUserAuthentication;
+use crate::{MacroAuthorization, MacroUserAuthentication};
 
 pub use bot::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
@@ -34,6 +35,41 @@ pub use internal::{
 pub use macro_authorization::MacroAuthorizationExtractor;
 pub use optional::OptionalMacroAuthorizationExtractor;
 pub use user::UserMacroAuthorizationExtractor;
+
+/// The authenticated entity responsible for a request.
+///
+/// This intentionally identifies the authenticating principal rather than an
+/// acting user. A bot acting for a user is attributed to the bot, and an
+/// internal service acting for a user is attributed to the internal service.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActingEntity<'a> {
+    /// A directly authenticated bot.
+    Bot(BotId),
+    /// A directly authenticated Macro user.
+    User(&'a str),
+    /// An authenticated internal service.
+    Internal,
+}
+
+impl<'a> From<&'a MacroAuthorization> for ActingEntity<'a> {
+    fn from(authorization: &'a MacroAuthorization) -> Self {
+        match authorization {
+            MacroAuthorization::User(user) => Self::User(user.macro_user_id.as_ref()),
+            MacroAuthorization::Bot(bot) => Self::Bot(bot.bot_id),
+            MacroAuthorization::Internal(_) => Self::Internal,
+        }
+    }
+}
+
+impl fmt::Display for ActingEntity<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Bot(bot_id) => bot_id.fmt(formatter),
+            Self::User(user_id) => formatter.write_str(user_id.as_ref()),
+            Self::Internal => formatter.write_str("internal"),
+        }
+    }
+}
 
 /// Rejection returned when request credentials cannot authorize a user.
 #[derive(Clone, Debug)]

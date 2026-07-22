@@ -14,7 +14,10 @@ use serde::Deserialize;
 
 use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication};
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
+use super::{
+    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
+    rejection,
+};
 
 #[cfg(feature = "local_auth")]
 maybe_env_vars! {
@@ -42,6 +45,13 @@ pub struct UserMacroAuthorizationExtractor<Svc> {
     /// The directly authenticated user.
     pub user: MacroUserAuthentication,
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> UserMacroAuthorizationExtractor<Svc> {
+    /// Return the authenticated user responsible for this request.
+    pub fn acting_entity(&self) -> ActingEntity<'_> {
+        ActingEntity::User(self.user.macro_user_id.as_ref())
+    }
 }
 
 impl<Svc> Clone for UserMacroAuthorizationExtractor<Svc> {

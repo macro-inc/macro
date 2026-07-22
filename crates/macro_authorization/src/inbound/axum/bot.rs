@@ -10,7 +10,9 @@ use crate::{
     BotActingUserClaims, BotAuthentication, MacroAuthorizationError, MacroAuthorizationService,
 };
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection};
+use super::{
+    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection,
+};
 
 /// Header carrying a bot authentication token.
 pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
@@ -32,6 +34,13 @@ pub struct BotMacroAuthorizationExtractor<Svc> {
     /// The validated bot principal.
     pub bot: BotAuthentication,
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> BotMacroAuthorizationExtractor<Svc> {
+    /// Return the authenticated bot responsible for this request.
+    pub fn acting_entity(&self) -> ActingEntity<'_> {
+        ActingEntity::Bot(self.bot.bot_id)
+    }
 }
 
 impl<Svc> Clone for BotMacroAuthorizationExtractor<Svc> {

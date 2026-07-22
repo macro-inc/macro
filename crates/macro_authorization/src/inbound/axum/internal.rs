@@ -10,7 +10,10 @@ use crate::{
     InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
 };
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
+use super::{
+    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
+    rejection,
+};
 
 /// Header carrying the shared key for standard internal service authorization.
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -68,6 +71,13 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
 #[non_exhaustive]
 pub struct InternalMacroAuthorizationExtractor<Svc> {
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> InternalMacroAuthorizationExtractor<Svc> {
+    /// Return the internal service responsible for this request.
+    pub fn acting_entity(&self) -> ActingEntity<'_> {
+        ActingEntity::Internal
+    }
 }
 
 impl<Svc> Clone for InternalMacroAuthorizationExtractor<Svc> {

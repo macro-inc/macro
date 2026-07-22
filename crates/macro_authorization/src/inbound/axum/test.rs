@@ -189,6 +189,7 @@ async fn required_handler(
     extractor: MacroAuthorizationExtractor<FakeAuthorizationService>,
 ) -> Json<Value> {
     let extractor = extractor.clone();
+    let acting_entity = extractor.acting_entity().to_string();
     let authorization = authorization_json(&extractor.authorization);
     let acting_user = extractor
         .authorization
@@ -197,6 +198,7 @@ async fn required_handler(
 
     Json(json!({
         "authorization": authorization,
+        "acting_entity": acting_entity,
         "macro_user_id": acting_user.macro_user_id.to_string(),
         "user_context": acting_user.user_context,
         "is_internal_access": extractor.authorization.is_internal(),
@@ -207,6 +209,9 @@ async fn optional_handler(
     extractor: OptionalMacroAuthorizationExtractor<FakeAuthorizationService>,
 ) -> Json<Value> {
     let extractor = extractor.clone();
+    let acting_entity = extractor
+        .acting_entity()
+        .map(|acting_entity| acting_entity.to_string());
     let authorization = extractor.authorization.as_ref().map(authorization_json);
     let acting_user = extractor
         .authorization
@@ -215,6 +220,7 @@ async fn optional_handler(
 
     Json(json!({
         "authorization": authorization,
+        "acting_entity": acting_entity,
         "macro_user_id": acting_user.map(|user| user.macro_user_id.to_string()),
         "user_context": acting_user.map(|user| user.user_context.clone()).unwrap_or_default(),
         "is_internal_access": extractor
@@ -228,8 +234,10 @@ async fn user_handler(
     extractor: UserMacroAuthorizationExtractor<FakeAuthorizationService>,
 ) -> Json<Value> {
     let extractor = extractor.clone();
+    let acting_entity = extractor.acting_entity().to_string();
 
     Json(json!({
+        "acting_entity": acting_entity,
         "macro_user_id": extractor.user.macro_user_id.to_string(),
         "user_context": extractor.user.user_context,
     }))
@@ -238,15 +246,19 @@ async fn user_handler(
 async fn internal_handler(
     extractor: InternalMacroAuthorizationExtractor<FakeAuthorizationService>,
 ) -> Json<Value> {
-    let _extractor = extractor.clone();
-    Json(json!({ "authorized": true }))
+    let extractor = extractor.clone();
+    Json(json!({
+        "acting_entity": extractor.acting_entity().to_string(),
+        "authorized": true,
+    }))
 }
 
 async fn bot_handler(
     extractor: BotMacroAuthorizationExtractor<FakeAuthorizationService>,
 ) -> Json<Value> {
     let extractor = extractor.clone();
-    Json(bot_json(&extractor.bot))
+    let acting_entity = extractor.acting_entity().to_string();
+    Json(bot_json(&extractor.bot, &acting_entity))
 }
 
 async fn optional_bot_handler(
@@ -254,13 +266,18 @@ async fn optional_bot_handler(
 ) -> Json<Value> {
     Json(
         extractor
-            .map(|extractor| bot_json(&extractor.clone().bot))
+            .map(|extractor| {
+                let extractor = extractor.clone();
+                let acting_entity = extractor.acting_entity().to_string();
+                bot_json(&extractor.bot, &acting_entity)
+            })
             .unwrap_or(Value::Null),
     )
 }
 
-fn bot_json(bot: &BotAuthentication) -> Value {
+fn bot_json(bot: &BotAuthentication, acting_entity: &str) -> Value {
     json!({
+        "acting_entity": acting_entity,
         "bot_id": bot.bot_id.to_string(),
         "token_id": bot.token_id.to_string(),
         "acting_user_id": bot
@@ -363,6 +380,64 @@ fn state_and_extractors_are_clone_without_requiring_service_clone() {
     assert_clone_without_service_clone::<UserMacroAuthorizationExtractor<NotClone>>();
 }
 
+#[tokio::test]
+async fn extractors_report_the_authenticating_entity() {
+    let (router, _service) = test_router();
+    let requests = [
+        (
+            empty_body(request("/required").header("authorization", "Bearer valid")),
+            Some(VALID_USER_ID.to_string()),
+        ),
+        (
+            empty_body(request("/required").header(BOT_TOKEN_HEADER, "bot-acting")),
+            Some(BOT_ID.to_string()),
+        ),
+        (
+            empty_body(
+                request("/required")
+                    .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+                    .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID),
+            ),
+            Some("internal".to_string()),
+        ),
+        (
+            empty_body(request("/optional").header("authorization", "Bearer optional")),
+            Some(OPTIONAL_USER_ID.to_string()),
+        ),
+        (
+            empty_body(request("/optional").header(BOT_TOKEN_HEADER, "bot-bare")),
+            Some(BOT_ID.to_string()),
+        ),
+        (
+            empty_body(request("/optional").header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)),
+            Some("internal".to_string()),
+        ),
+        (empty_body(request("/optional")), None),
+        (
+            empty_body(request("/user").header("authorization", "Bearer valid")),
+            Some(VALID_USER_ID.to_string()),
+        ),
+        (
+            empty_body(request("/bot").header(BOT_TOKEN_HEADER, "bot-bare")),
+            Some(BOT_ID.to_string()),
+        ),
+        (
+            empty_body(request("/internal").header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)),
+            Some("internal".to_string()),
+        ),
+    ];
+
+    for (request, expected) in requests {
+        let (status, body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body["acting_entity"],
+            expected.map(Value::String).unwrap_or(Value::Null)
+        );
+    }
+}
+
 #[allow(deprecated)]
 #[tokio::test]
 async fn internal_accepts_standard_and_legacy_api_keys_without_identity_headers() {
@@ -373,7 +448,10 @@ async fn internal_accepts_standard_and_legacy_api_keys_without_identity_headers(
         let (status, body) = send(&router, request).await;
 
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, json!({ "authorized": true }));
+        assert_eq!(
+            body,
+            json!({ "acting_entity": "internal", "authorized": true })
+        );
     }
 
     assert_eq!(
@@ -405,7 +483,10 @@ async fn internal_forwards_identity_headers_to_create_user_context() {
     let (status, body) = send(&router, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, json!({ "authorized": true }));
+    assert_eq!(
+        body,
+        json!({ "acting_entity": "internal", "authorized": true })
+    );
     assert_eq!(
         service.calls(),
         [AuthorizationCall::Internal {
@@ -1454,7 +1535,10 @@ async fn dedicated_extractors_validate_only_their_own_credential_type() {
     );
     let (status, body) = send(&router, internal_request).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, json!({ "authorized": true }));
+    assert_eq!(
+        body,
+        json!({ "acting_entity": "internal", "authorized": true })
+    );
 
     let (status, body) = send(
         &router,

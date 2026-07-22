@@ -8,7 +8,7 @@ use ::axum::{
 use crate::{MacroAuthorization, MacroAuthorizationService};
 
 use super::{
-    MacroAuthorizationRejection, MacroAuthorizationState,
+    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState,
     bot::{BOT_TOKEN_HEADER, authorize_optional_bot_request},
     internal::{authorize_internal_request, internal_header_convention},
     rejection, status_rejection,
@@ -31,6 +31,13 @@ pub struct MacroAuthorizationExtractor<Svc> {
     /// Derive acting-user and internal-access information from this value.
     pub authorization: MacroAuthorization,
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> MacroAuthorizationExtractor<Svc> {
+    /// Return the authenticated entity responsible for this request.
+    pub fn acting_entity(&self) -> ActingEntity<'_> {
+        ActingEntity::from(&self.authorization)
+    }
 }
 
 impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {

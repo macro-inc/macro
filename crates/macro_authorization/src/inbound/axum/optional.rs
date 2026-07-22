@@ -8,7 +8,8 @@ use ::axum::{
 use crate::{MacroAuthorization, MacroAuthorizationService};
 
 use super::{
-    MacroAuthorizationRejection, MacroAuthorizationState, macro_authorization::authorize_request,
+    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState,
+    macro_authorization::authorize_request,
 };
 
 /// Extracts and authorizes an optional acting user.
@@ -27,6 +28,13 @@ pub struct OptionalMacroAuthorizationExtractor<Svc> {
     /// Derive acting-user and internal-access information from this value when present.
     pub authorization: Option<MacroAuthorization>,
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> OptionalMacroAuthorizationExtractor<Svc> {
+    /// Return the authenticated entity responsible for this request, if any.
+    pub fn acting_entity(&self) -> Option<ActingEntity<'_>> {
+        self.authorization.as_ref().map(ActingEntity::from)
+    }
 }
 
 impl<Svc> Clone for OptionalMacroAuthorizationExtractor<Svc> {
