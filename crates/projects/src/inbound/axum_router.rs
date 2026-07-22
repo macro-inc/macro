@@ -24,9 +24,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{
-    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication,
-};
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model::response::GenericErrorResponse;
 use serde::Deserialize;
 
@@ -42,12 +40,6 @@ use self::{
     upload_folder::{upload_extract_folder_handler, upload_folder_handler},
 };
 use crate::domain::{models::ProjectError, ports::ProjectService};
-
-fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
-    authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user")
-}
 
 /// Router state containing project endpoint dependencies.
 pub struct ProjectRouterState<T, Svc, Auth> {

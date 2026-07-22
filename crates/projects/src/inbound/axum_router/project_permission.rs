@@ -8,10 +8,10 @@ use entity_access::{
     },
     inbound::axum_extractors::ProjectAccessLevelExtractor,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_permissions::share_permission::{SharePermissionV2, access_level::AccessLevel};
 
-use super::{ProjectRouterState, required_user};
+use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Get a project's share permissions.
@@ -29,12 +29,12 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
 )]
 #[tracing::instrument(
     skip(state, user, access),
-    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    fields(user_id = ?user.authorization.user.macro_user_id),
     err
 )]
 pub async fn get_project_permissions_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     access: ProjectAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
 ) -> Result<Json<SharePermissionV2>, ProjectError>
 where
@@ -65,12 +65,12 @@ where
 )]
 #[tracing::instrument(
     skip(state, user, access),
-    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    fields(user_id = ?user.authorization.user.macro_user_id),
     err
 )]
 pub async fn get_project_access_level_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     access: ProjectAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
 ) -> Result<Json<AccessLevel>, ProjectError>
 where

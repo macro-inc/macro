@@ -2,7 +2,9 @@
 
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationService, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{
+    MacroAuthorizationService, OptionalMacroAuthorizationExtractor, UserOrInternalService,
+};
 use model::project::{
     request::GetBatchProjectPreviewRequest, response::GetBatchProjectPreviewResponse,
 };
@@ -29,7 +31,7 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
 )]
 pub async fn get_batch_preview_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: OptionalMacroAuthorizationExtractor<Auth>,
+    user: OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
     Json(request): Json<GetBatchProjectPreviewRequest>,
 ) -> Result<Json<GetBatchProjectPreviewResponse>, ProjectError>
 where
