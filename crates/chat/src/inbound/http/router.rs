@@ -13,7 +13,7 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
@@ -196,15 +196,12 @@ pub async fn create_chat_handler<
     P: UserRolesAndPermissionsService,
 >(
     State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     // 402 on no perms
     _access: ChatModelAccess<Auth, P>,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>> {
-    let user = user
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = &user.authorization.user;
 
     let id = state
         .inner

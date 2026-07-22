@@ -12,7 +12,7 @@ use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationState, UserOrInternal,
 };
 use roles_and_permissions::domain::model::PermissionId;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
@@ -103,14 +103,11 @@ where
     type Rejection = ChatModelAccessRejection;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ChatModelAccessRejection::Unauthorized)?;
-
-        let user = user
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user");
+        let user =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+                .await
+                .map_err(ChatModelAccessRejection::Unauthorized)?;
+        let user = &user.authorization.user;
         let UserPermissionsState(permissions_service) = UserPermissionsState::<P>::from_ref(state);
         let permissions = permissions_service
             .get_user_permissions(&user.macro_user_id)
