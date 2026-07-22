@@ -38,12 +38,14 @@ use sqlx::PgPool;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
+pub(crate) type ChannelServiceType = channels::domain::service::ChannelServiceImpl<
+    channels::outbound::pg_channels_repo::PgChannelsRepo,
+>;
+
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
-    channels::domain::service::ChannelServiceImpl<
-        channels::outbound::pg_channels_repo::PgChannelsRepo,
-    >,
+    ChannelServiceType,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
@@ -96,6 +98,7 @@ pub(crate) struct ApiContext {
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub channel_service: Arc<ChannelServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
