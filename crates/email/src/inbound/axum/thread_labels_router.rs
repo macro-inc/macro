@@ -7,7 +7,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use thiserror::Error;
@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::domain::{models::EmailErr, ports::EmailService};
 
-use super::{previews_router::EmailRouterState, required_user};
+use super::previews_router::EmailRouterState;
 
 /// Request body for updating a thread's labels.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
@@ -115,14 +115,14 @@ where
 #[tracing::instrument(err, skip(state, macro_user, body))]
 pub async fn update_thread_labels_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Path(thread_id): Path<Uuid>,
     Json(body): Json<UpdateThreadLabelRequest>,
 ) -> Result<Json<UpdateThreadLabelsResponse>, UpdateThreadLabelError> {
     // Resolve the inbox from the thread (scoped to the caller's own and delegated
     // inboxes). No Gmail token is needed here — provider sync goes through the
     // gmail_ops queue, which authenticates itself.
-    let user = required_user(&macro_user.authorization);
+    let user = &macro_user.authorization.user;
     let link = state
         .inner
         .get_owned_link_for_thread(user.macro_user_id.clone(), thread_id)

@@ -3,7 +3,7 @@ use crate::{
         models::{EmailErr, Link, PreviewView},
         ports::EmailService,
     },
-    inbound::axum::{api_types::ApiSortMethod, previews_router::EmailRouterState, required_user},
+    inbound::axum::{api_types::ApiSortMethod, previews_router::EmailRouterState},
 };
 use axum::{
     RequestPartsExt,
@@ -14,7 +14,7 @@ use axum::{
 use axum_extra::extract::Cached;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -167,13 +167,12 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let header_link_id = parse_link_id_header(parts)?;
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> = parts
-            .extract_with_state(state)
-            .await
-            .map_err(EmailLinkErr::Authorization)?;
-        let macro_user_id = required_user(&authorization.authorization)
-            .macro_user_id
-            .clone();
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
+            parts
+                .extract_with_state(state)
+                .await
+                .map_err(EmailLinkErr::Authorization)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
         let caller = macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
@@ -208,13 +207,12 @@ where
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> = parts
-            .extract_with_state(state)
-            .await
-            .map_err(EmailLinkErr::Authorization)?;
-        let macro_user_id = required_user(&authorization.authorization)
-            .macro_user_id
-            .clone();
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
+            parts
+                .extract_with_state(state)
+                .await
+                .map_err(EmailLinkErr::Authorization)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_inboxes_for_macro_id(macro_user_id)

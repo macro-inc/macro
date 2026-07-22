@@ -5,7 +5,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use models_pagination::{
@@ -22,7 +22,6 @@ use crate::{
             GetPreviewsCursorError, GetPreviewsCursorParams, MultiEmailLinkExtractor,
             PreviewViewPathExtractor,
         },
-        required_user,
     },
 };
 
@@ -92,13 +91,13 @@ where
 )]
 async fn cursor_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(service): State<EmailRouterState<T>>,
-    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T, Auth>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,
 ) -> Result<Json<ApiPaginatedThreadCursor>, GetPreviewsCursorError> {
-    let user = required_user(&macro_user.authorization);
+    let user = &macro_user.authorization.user;
     let span = tracing::Span::current();
     span.record(
         "fusionauth_user_id",
