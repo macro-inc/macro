@@ -14,7 +14,11 @@ type ResizeSolver = {
   dropPanel: (id: PanelId) => void;
   updatePanel: (
     id: PanelId,
-    config: { minSize?: number; maxSize?: number }
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionMaxSize?: number;
+    }
   ) => void;
   solve: () => LayoutResult;
   reset: () => void;
@@ -150,6 +154,7 @@ function initPanel(panel: PanelConfig): Panel {
     ...panel,
     minSize: panel.minSize ?? 0,
     maxSize: panel.maxSize ?? Infinity,
+    redistributionMaxSize: panel.redistributionMaxSize ?? Infinity,
     target: panel.target || { kind: 'auto' },
     share: 0,
   };
@@ -179,7 +184,11 @@ export function createResizeSolver(params: {
   // counter manually manages reactivity, rather than a store on panel data -
   // whose side effects become a pain.
   const [counter, setCounter] = createSignal(0);
-  const setDirty = () => setCounter((p) => p + 1);
+  let nextSolveKind: 'automatic' | 'manual' = 'automatic';
+  const setDirty = (kind: 'automatic' | 'manual' = 'automatic') => {
+    nextSolveKind = kind;
+    setCounter((p) => p + 1);
+  };
 
   const panelsInOrder = () => {
     counter(); // deps
@@ -207,18 +216,43 @@ export function createResizeSolver(params: {
   // the solve on dependencies effect
   createEffect(() => {
     const ps = panelsInOrder();
+    const solveKind = nextSolveKind;
+    nextSolveKind = 'automatic';
+
+    const usable = getUsable(ps.length, params.size(), params.gutter());
+    const solvePanels =
+      solveKind === 'automatic'
+        ? (() => {
+            const automaticallyConstrained = ps.map((panel) => ({
+              ...panel,
+              maxSize: Math.max(
+                panel.minSize,
+                Math.min(panel.maxSize, panel.redistributionMaxSize)
+              ),
+            }));
+            const totalMax = sumArray(
+              automaticallyConstrained.map((panel) => panel.maxSize)
+            );
+            // Never leave empty space when every panel has a finite
+            // redistribution maximum. Fall back to the hard constraints.
+            return totalMax + EPSILON >= usable ? automaticallyConstrained : ps;
+          })()
+        : ps;
 
     // run the solve to get pixel values
-    const solve = computeFractionalShares(ps, params.size(), params.gutter());
+    const solve = computeFractionalShares(
+      solvePanels,
+      params.size(),
+      params.gutter()
+    );
 
     // basically update the float share values to match the actual pixel sizes returned by the solve.
     const ids = order();
     const n = ids.length;
-    const usable = getUsable(n, params.size(), params.gutter());
     if (usable > 0 && n > 0) {
       const clampedPx = ids.map((id) => solve.sizes.get(id) ?? 0);
-      const mins = ps.map((p) => p.minSize ?? 0);
-      const maxs = ps.map((p) => p.maxSize ?? Infinity);
+      const mins = solvePanels.map((p) => p.minSize ?? 0);
+      const maxs = solvePanels.map((p) => p.maxSize ?? Infinity);
 
       const free: number[] = [];
       const clamped: number[] = [];
@@ -322,7 +356,11 @@ export function createResizeSolver(params: {
 
   function updatePanel(
     id: PanelId,
-    config: { minSize?: number; maxSize?: number }
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionMaxSize?: number;
+    }
   ) {
     const panel = panelData[id];
     if (!panel) return;
@@ -338,6 +376,13 @@ export function createResizeSolver(params: {
       const next = config.maxSize ?? Infinity;
       if (panel.maxSize !== next) {
         panel.maxSize = next;
+        changed = true;
+      }
+    }
+    if ('redistributionMaxSize' in config) {
+      const next = config.redistributionMaxSize ?? Infinity;
+      if (panel.redistributionMaxSize !== next) {
+        panel.redistributionMaxSize = next;
         changed = true;
       }
     }
@@ -486,7 +531,7 @@ export function createResizeSolver(params: {
       }
     }
 
-    setDirty();
+    setDirty('manual');
   }
 
   /**

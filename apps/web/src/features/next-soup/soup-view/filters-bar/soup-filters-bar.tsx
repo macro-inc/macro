@@ -37,7 +37,6 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
 
   const togglePreview = () => {
     if (previewEngaged()) {
-      // The viewer split stays open as a normal split; only the link goes.
       panel.handle.disengagePreview();
       return;
     }

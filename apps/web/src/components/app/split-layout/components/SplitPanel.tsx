@@ -81,6 +81,7 @@ export function SplitPanel(props: SplitPanelProps) {
       const content = props.handle.content();
       return !isListViewID(content.id);
     },
+    isPreviewSplit: () => props.handle.isPreviewSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -170,15 +171,11 @@ export function SplitPanel(props: SplitPanelProps) {
    * against the controller, reading as tucked behind it.
    */
   const tuckedBehindController = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager || isMobile()) return false;
-    if (props.handle.isSpotLight()) return false;
-    const controllerId = manager.controllerOf(props.split.id);
-    if (!controllerId) return false;
-    const splits = manager.splits();
-    const index = splits.findIndex((s) => s.id === props.split.id);
-    if (index <= 0 || splits[index - 1].id !== controllerId) return false;
-    return !manager.getSplit(controllerId)?.isSpotLight();
+    return (
+      !isMobile() &&
+      !props.handle.isSpotLight() &&
+      props.handle.isPreviewSplit()
+    );
   });
 
   /**
@@ -187,15 +184,32 @@ export function SplitPanel(props: SplitPanelProps) {
    * shadow read as being in front.
    */
   const hasTuckedViewer = createMemo(() => {
+    return (
+      !isMobile() &&
+      !props.handle.isSpotLight() &&
+      props.handle.isControllerSplit()
+    );
+  });
+
+  /**
+   * Both members of a tucked preview pair share the active edge color when
+   * either member is active. The active member stays solid; its partner is
+   * dashed so focus ownership remains visible without breaking the pair's
+   * shared visual treatment.
+   */
+  const previewPairFocusStyling = createMemo(() => {
     const manager = globalSplitManager();
-    if (!manager || isMobile()) return false;
-    if (props.handle.isSpotLight()) return false;
-    const viewerId = manager.viewerOf(props.split.id);
-    if (!viewerId) return false;
-    const splits = manager.splits();
-    const index = splits.findIndex((s) => s.id === props.split.id);
-    if (splits[index + 1]?.id !== viewerId) return false;
-    return !manager.getSplit(viewerId)?.isSpotLight();
+    if (!manager || isMobile() || props.handle.isSpotLight()) return false;
+
+    const peerId = props.handle.isControllerSplit()
+      ? manager.viewerOf(props.split.id)
+      : props.handle.isPreviewSplit()
+        ? manager.controllerOf(props.split.id)
+        : undefined;
+    if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;
+
+    const activeId = manager.activeSplitId();
+    return activeId === props.split.id || activeId === peerId;
   });
 
   return (
@@ -277,7 +291,7 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               edgeColor={
-                splitFocusStyling()
+                splitFocusStyling() || previewPairFocusStyling()
                   ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
                   : undefined
               }
@@ -287,12 +301,15 @@ export function SplitPanel(props: SplitPanelProps) {
                   'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
                     splitUnfocusedStyling(),
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
+                  'border-solid!': previewPairFocusStyling() && props.active,
+                  'border-dashed!': previewPairFocusStyling() && !props.active,
                   // Drawer look: the preview split meets its controller with
                   // a square, borderless left edge (the ! beats Surface's
                   // inline border shorthand)...
                   'rounded-l-none border-l-0!': tuckedBehindController(),
-                  // ...and the controller squares its right edge to match.
-                  'rounded-r-none': hasTuckedViewer(),
+                  // ...and the controller squares and removes its right edge,
+                  // leaving no border between the paired panels.
+                  'rounded-r-none border-r-0!': hasTuckedViewer(),
                 }
               )}
               depth={isMobile() ? 0 : 1}

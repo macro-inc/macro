@@ -81,4 +81,59 @@ describe('createResizeSolver', () => {
       });
     });
   });
+
+  describe('redistributionMaxSize', () => {
+    it('waits until another panel can absorb the redistributed space', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 8,
+          size: () => 1600,
+          panels: [],
+        }),
+      }));
+
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'controller', minSize: 100 });
+      solver.updatePanel('controller', { redistributionMaxSize: 440 });
+      expect(solver.solve().sizes.get('controller')).toBe(1600);
+
+      solver.addPanel({ id: 'viewer', minSize: 100 });
+      expect(solver.solve().sizes.get('controller')).toBe(440);
+
+      dispose();
+    });
+
+    it('caps automatic redistribution without constraining manual resizing', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 8,
+          size: () => 1600,
+          panels: [],
+        }),
+      }));
+
+      // createEffect performs its initial solve after the root body.
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'controller', minSize: 100 });
+      solver.addPanel({ id: 'viewer', minSize: 100 });
+      solver.addPanel({ id: 'adjacent', minSize: 100 });
+      solver.updatePanel('controller', { redistributionMaxSize: 440 });
+
+      expect(solver.solve().sizes.get('controller')).toBe(440);
+
+      solver.moveHandle(0, 160);
+      expect(solver.solve().sizes.get('controller')).toBe(600);
+
+      solver.dropPanel('adjacent');
+      expect(solver.solve().sizes.get('controller')).toBe(440);
+
+      dispose();
+    });
+  });
 });

@@ -464,7 +464,7 @@ describe('layoutManager', () => {
   describe('preview mode', () => {
     const setup = () => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'unified-list' },
+        { type: 'component', id: 'inbox' },
       ]);
       const controllerId = manager.splits()[0].id;
       manager.activateSplit(controllerId);
@@ -477,10 +477,15 @@ describe('layoutManager', () => {
         manager.engagePreviewMode(controllerId);
 
         expect(manager.isPreviewEngaged(controllerId)).toBe(true);
+        expect(manager.previewControllerWidth(controllerId)).toBe(440);
         expect(manager.splits()).toHaveLength(2);
         const viewerId = manager.splits()[1].id;
         expect(manager.viewerOf(controllerId)).toBe(viewerId);
         expect(manager.controllerOf(viewerId)).toBe(controllerId);
+        expect(manager.getSplit(controllerId)?.isControllerSplit()).toBe(true);
+        expect(manager.getSplit(controllerId)?.isPreviewSplit()).toBe(false);
+        expect(manager.getSplit(viewerId)?.isControllerSplit()).toBe(false);
+        expect(manager.getSplit(viewerId)?.isPreviewSplit()).toBe(true);
         expect(manager.viewerLinks()).toEqual([{ controllerId, viewerId }]);
         expect(manager.splits()[1].content).toMatchObject({
           type: 'component',
@@ -507,12 +512,27 @@ describe('layoutManager', () => {
       });
     });
 
+    it('uses the configured controller width for Email Soup', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'mail' },
+        ]);
+        const controllerId = manager.splits()[0].id;
+
+        manager.engagePreviewMode(controllerId);
+
+        expect(manager.previewControllerWidth(controllerId)).toBe(660);
+
+        dispose();
+      });
+    });
+
     it('adopts an unclaimed adjacent placeholder split instead of duplicating it', () => {
       createRoot((dispose) => {
-        // A reload restores controller + placeholder as two plain splits,
-        // leaving the placeholder (last initial split) active.
+        // An existing unclaimed placeholder is adopted rather than duplicated,
+        // leaving the placeholder (last initial split) active beforehand.
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'unified-list' },
+          { type: 'component', id: 'inbox' },
           { type: 'component', id: 'preview-empty' },
         ]);
         const controllerId = manager.splits()[0].id;
@@ -526,6 +546,101 @@ describe('layoutManager', () => {
         // The controller takes over activation from its adopted viewer so
         // active-split-targeted navigations redirect through it.
         expect(manager.activeSplitId()).toBe(controllerId);
+
+        dispose();
+      });
+    });
+
+    it('restores a persisted relationship onto existing adjacent splits', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'md', id: 'doc-1' },
+        ]);
+        const controllerId = manager.splits()[0].id;
+        const viewerId = manager.splits()[1].id;
+
+        expect(manager.restorePreviewMode(controllerId, viewerId)).toBe(true);
+        expect(manager.splits()).toHaveLength(2);
+        expect(manager.viewerOf(controllerId)).toBe(viewerId);
+        expect(manager.controllerOf(viewerId)).toBe(controllerId);
+        expect(manager.previewControllerWidth(controllerId)).toBe(440);
+        expect(manager.activeSplitId()).toBe(controllerId);
+
+        dispose();
+      });
+    });
+
+    it('rejects a persisted relationship that is no longer adjacent', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'md', id: 'between' },
+          { type: 'md', id: 'viewer' },
+        ]);
+        const controllerId = manager.splits()[0].id;
+        const viewerId = manager.splits()[2].id;
+
+        expect(manager.restorePreviewMode(controllerId, viewerId)).toBe(false);
+        expect(manager.viewerLinks()).toEqual([]);
+
+        dispose();
+      });
+    });
+
+    it('unlinks a preview pair when a split is inserted between it', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+        manager.engagePreviewMode(controllerId);
+        const viewerId = manager.viewerOf(controllerId)!;
+
+        const inserted = manager.createNewSplit({
+          content: { type: 'md', id: 'between' },
+          referredFrom: null,
+          insertIndex: 1,
+        });
+
+        expect(manager.splits().map((split) => split.id)).toEqual([
+          controllerId,
+          inserted.id,
+          viewerId,
+        ]);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
+        expect(manager.controllerOf(viewerId)).toBeUndefined();
+        expect(manager.viewerLinks()).toEqual([]);
+
+        dispose();
+      });
+    });
+
+    it('unlinks a preview pair when reconciliation separates it', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+        manager.engagePreviewMode(controllerId);
+        manager.openWithSplit(
+          { type: 'md', id: 'viewer' },
+          { referredFrom: null, handle: manager.getSplit(controllerId) }
+        );
+        const viewerId = manager.viewerOf(controllerId)!;
+        const between = manager.createNewSplit({
+          content: { type: 'md', id: 'between' },
+          referredFrom: null,
+        });
+
+        manager.reconcile([
+          { type: 'component', id: 'inbox' },
+          { type: 'md', id: 'between' },
+          { type: 'md', id: 'viewer' },
+        ]);
+
+        expect(manager.splits().map((split) => split.id)).toEqual([
+          controllerId,
+          between.id,
+          viewerId,
+        ]);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
+        expect(manager.controllerOf(viewerId)).toBeUndefined();
+        expect(manager.viewerLinks()).toEqual([]);
 
         dispose();
       });
@@ -606,6 +721,34 @@ describe('layoutManager', () => {
       });
     });
 
+    it('honors handle-less new-split intent without dissolving the pair', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+        manager.engagePreviewMode(controllerId);
+        const viewerId = manager.viewerOf(controllerId)!;
+
+        const newSplit = manager.openWithSplit(
+          { type: 'component', id: 'inbox' },
+          {
+            referredFrom: 'hotkey',
+            allowDuplicate: true,
+            preferNewSplit: true,
+          }
+        );
+
+        expect(manager.splits()).toHaveLength(3);
+        expect(manager.viewerOf(controllerId)).toBe(viewerId);
+        expect(manager.controllerOf(viewerId)).toBe(controllerId);
+        expect(newSplit?.content()).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+        expect(manager.activeSplitId()).toBe(newSplit?.id);
+
+        dispose();
+      });
+    });
+
     it('new-split intent falls back to the preview split when the layout is full', () => {
       createRoot((dispose) => {
         const { manager, controllerId } = setup();
@@ -631,7 +774,7 @@ describe('layoutManager', () => {
         });
         expect(manager.getSplit(controllerId)!.content()).toMatchObject({
           type: 'component',
-          id: 'unified-list',
+          id: 'inbox',
         });
 
         dispose();
@@ -756,7 +899,7 @@ describe('layoutManager', () => {
       });
     });
 
-    it('keeps a content-bearing viewer when the controller leaves its list view', () => {
+    it('closes a content-bearing viewer when the controller leaves its list view', () => {
       createRoot((dispose) => {
         const { manager, controllerId } = setup();
         manager.engagePreviewMode(controllerId);
@@ -770,17 +913,14 @@ describe('layoutManager', () => {
           next: { type: 'md', id: 'doc-x' },
         });
         expect(manager.isPreviewEngaged(controllerId)).toBe(false);
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
+        expect(manager.splits()).toHaveLength(1);
+        expect(manager.getSplit(viewerId)).toBeUndefined();
 
         dispose();
       });
     });
 
-    it('clears the association when the controller closes, keeping the viewer', () => {
+    it('closes the viewer when the controller closes', () => {
       createRoot((dispose) => {
         const { manager, controllerId } = setup();
         manager.engagePreviewMode(controllerId);
@@ -790,11 +930,16 @@ describe('layoutManager', () => {
         );
         const viewerId = manager.viewerOf(controllerId)!;
 
-        manager.removeSplit(controllerId);
+        manager.getSplit(controllerId)!.close();
         expect(manager.isPreviewEngaged(controllerId)).toBe(false);
         expect(manager.viewerLinks()).toEqual([]);
-        expect(manager.getSplit(viewerId)).toBeDefined();
+        expect(manager.getSplit(controllerId)).toBeUndefined();
+        expect(manager.getSplit(viewerId)).toBeUndefined();
         expect(manager.splits()).toHaveLength(1);
+        expect(manager.splits()[0].content).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
 
         dispose();
       });
@@ -810,7 +955,7 @@ describe('layoutManager', () => {
         );
         expect(manager.viewerOf(controllerId)).toBeDefined();
 
-        manager.reconcile([{ type: 'component', id: 'unified-list' }]);
+        manager.reconcile([{ type: 'component', id: 'inbox' }]);
 
         expect(manager.splits()).toHaveLength(1);
         expect(manager.splits()[0].id).toBe(controllerId);
@@ -821,7 +966,7 @@ describe('layoutManager', () => {
       });
     });
 
-    it('disengage restores normal replace behavior and keeps the viewer', () => {
+    it('disengage closes the viewer and restores normal replace behavior', () => {
       createRoot((dispose) => {
         const { manager, controllerId } = setup();
         manager.engagePreviewMode(controllerId);
@@ -833,21 +978,39 @@ describe('layoutManager', () => {
 
         manager.disengagePreviewMode(controllerId);
         expect(manager.isPreviewEngaged(controllerId)).toBe(false);
-        expect(manager.getSplit(viewerId)).toBeDefined();
+        expect(manager.previewControllerWidth(controllerId)).toBeUndefined();
+        expect(manager.getSplit(viewerId)).toBeUndefined();
 
         manager.openWithSplit(
           { type: 'md', id: 'doc-2' },
           { referredFrom: null, handle: manager.getSplit(controllerId) }
         );
-        expect(manager.splits()).toHaveLength(2);
+        expect(manager.splits()).toHaveLength(1);
         expect(manager.getSplit(controllerId)!.content()).toMatchObject({
           type: 'md',
           id: 'doc-2',
         });
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
+
+        dispose();
+      });
+    });
+
+    it('can unlink the pair without closing splits for URL reconstruction', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+        manager.engagePreviewMode(controllerId);
+        manager.openWithSplit(
+          { type: 'md', id: 'doc-1' },
+          { referredFrom: null, handle: manager.getSplit(controllerId) }
+        );
+        const viewerId = manager.viewerOf(controllerId)!;
+
+        manager.unlinkPreviewMode(controllerId);
+
+        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.previewControllerWidth(controllerId)).toBeUndefined();
+        expect(manager.getSplit(controllerId)).toBeDefined();
+        expect(manager.getSplit(viewerId)).toBeDefined();
 
         dispose();
       });
@@ -907,7 +1070,7 @@ describe('layoutManager', () => {
         });
         expect(manager.getSplit(controllerId)!.content()).toMatchObject({
           type: 'component',
-          id: 'unified-list',
+          id: 'inbox',
         });
         expect(manager.viewerOf(controllerId)).toBe(viewerId);
 
