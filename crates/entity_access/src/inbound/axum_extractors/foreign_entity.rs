@@ -1,5 +1,8 @@
 //! Foreign entity access extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;

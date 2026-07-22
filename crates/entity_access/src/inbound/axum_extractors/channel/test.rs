@@ -8,8 +8,9 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, INTERNAL_API_KEY_HEADER,
+    INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -21,9 +22,12 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{
-    AccessError, AccessLevel, AdminParticipantRole, BotId, CallChannelInfo, MemberParticipantRole,
-    OwnerParticipantRole, UserTeamInfo, ViewOnly,
+use crate::{
+    domain::models::{
+        AccessError, AccessLevel, AdminParticipantRole, BotId, CallChannelInfo,
+        MemberParticipantRole, OwnerParticipantRole, UserTeamInfo, ViewOnly,
+    },
+    inbound::axum_extractors::test_support::{VALID_BOT_TOKEN, valid_bot_authentication},
 };
 
 const CHANNEL_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
@@ -186,6 +190,18 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(valid_bot_authentication())
     }
 
     async fn authorize_internal(
@@ -443,6 +459,29 @@ async fn missing_credentials_are_rejected_without_acl_call() {
         .expect("request should complete");
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_credentials_are_forbidden_without_permission_lookup() {
+    let state = TestState::new(EntityPermission::ChannelRole {
+        role: ParticipantRole::Owner,
+    });
+    let mut request = request(None);
+    request.headers_mut().insert(
+        BOT_TOKEN_HEADER,
+        VALID_BOT_TOKEN.parse().expect("bot token should be valid"),
+    );
+    let response = app(state.clone(), member_handler)
+        .oneshot(request)
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body should be readable");
+    assert_eq!(body.as_ref(), br#"{"message":"forbidden"}"#);
     assert!(state.entity_access.calls().is_empty());
 }
 

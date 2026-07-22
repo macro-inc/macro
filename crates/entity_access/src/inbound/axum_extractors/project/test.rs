@@ -7,8 +7,9 @@ use axum::{
     response::IntoResponse,
 };
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, INTERNAL_API_KEY_HEADER,
+    INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model_user::UserContext;
@@ -16,9 +17,12 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{
-    AccessError, BotId, CallChannelInfo, EditAccessLevel, EntityAccessAuth, UserTeamInfo,
-    ViewAccessLevel,
+use crate::{
+    domain::models::{
+        AccessError, BotId, CallChannelInfo, EditAccessLevel, EntityAccessAuth, UserTeamInfo,
+        ViewAccessLevel,
+    },
+    inbound::axum_extractors::test_support::{VALID_BOT_TOKEN, valid_bot_authentication},
 };
 
 const PROJECT_ID: &str = "project-1";
@@ -182,6 +186,18 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(valid_bot_authentication())
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -255,6 +271,14 @@ fn bearer_request(body: &str, token: &str) -> Request<Body> {
     Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+fn bot_request(body: &str) -> Request<Body> {
+    Request::post("/")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
         .body(Body::from(body.to_string()))
         .expect("request should be valid")
 }
@@ -348,6 +372,27 @@ async fn authenticated_project_owner_bypasses_access_lookup() {
             access_level: AccessLevel::Owner
         }
     ));
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_project_access_is_forbidden_before_acl_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let mut request = project_request(None, project(false));
+    request.headers_mut().insert(
+        BOT_TOKEN_HEADER,
+        VALID_BOT_TOKEN.parse().expect("bot token should be valid"),
+    );
+    let error = extract_project_access::<ViewAccessLevel>(request, &state)
+        .await
+        .expect_err("bot credentials should be forbidden");
+    let response = error.into_response();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body should be readable");
+    assert_eq!(body.as_ref(), br#"{"message":"forbidden"}"#);
     assert!(state.entity_access.calls().is_empty());
 }
 
@@ -453,6 +498,25 @@ async fn direct_project_id_with_sufficient_access_returns_receipt_and_body() {
             entity_type: EntityType::Project,
         }]
     );
+}
+
+#[tokio::test]
+async fn bot_project_body_access_is_forbidden_before_acl_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let error = EditExtractor::from_request(
+        bot_request(r#"{"name":"document","projectId":"project-1"}"#),
+        &state,
+    )
+    .await
+    .expect_err("bot credentials should be forbidden");
+    let response = error.into_response();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body should be readable");
+    assert_eq!(body.as_ref(), br#"{"message":"forbidden"}"#);
+    assert!(state.entity_access.calls().is_empty());
 }
 
 #[tokio::test]

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     body::{Body, to_bytes},
@@ -9,8 +12,9 @@ use axum::{
 #[allow(deprecated)]
 use macro_authorization::LEGACY_DSS_INTERNAL_API_KEY_HEADER;
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, INTERNAL_API_KEY_HEADER,
+    INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -21,9 +25,12 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{
-    AccessError, AccessLevel, AdminTeamRole, BotId, CallChannelInfo, EntityAccessAuth,
-    EntityPermission, TeamRole, UserTeamInfo,
+use crate::{
+    domain::models::{
+        AccessError, AccessLevel, AdminTeamRole, BotId, CallChannelInfo, EntityAccessAuth,
+        EntityPermission, TeamRole, UserTeamInfo,
+    },
+    inbound::axum_extractors::test_support::{VALID_BOT_TOKEN, valid_bot_authentication},
 };
 
 const USER_ID: &str = "macro|team-member@example.com";
@@ -43,6 +50,7 @@ type RequiredV2Extractor =
 #[derive(Clone, Debug, Default)]
 struct FakeEntityAccessService {
     memberships: Arc<HashMap<String, UserTeamInfo>>,
+    membership_lookups: Arc<Mutex<Vec<String>>>,
 }
 
 impl FakeEntityAccessService {
@@ -56,6 +64,13 @@ impl FakeEntityAccessService {
         );
         self
     }
+
+    fn membership_lookups(&self) -> Vec<String> {
+        self.membership_lookups
+            .lock()
+            .expect("membership lookups lock poisoned")
+            .clone()
+    }
 }
 
 impl EntityAccessService for FakeEntityAccessService {
@@ -66,7 +81,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        panic!("unexpected generate_entity_access_receipt call")
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
@@ -75,7 +90,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        panic!("unexpected generate_bot_entity_access_receipt call")
     }
 
     async fn get_access_level(
@@ -151,6 +166,10 @@ impl EntityAccessService for FakeEntityAccessService {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
+        self.membership_lookups
+            .lock()
+            .expect("membership lookups lock poisoned")
+            .push(user_id.as_ref().to_string());
         Ok(self.memberships.get(user_id.as_ref()).copied())
     }
 }
@@ -175,6 +194,18 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(valid_bot_authentication())
     }
 
     async fn authorize_internal(
@@ -345,6 +376,47 @@ async fn required_v2_rejects_expired_credentials() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, r#"{"message":"jwt expired"}"#);
+}
+
+#[tokio::test]
+async fn team_extractors_forbid_bots_without_membership_lookup() {
+    let optional_state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+    let optional_error = extract_v2(
+        Request::builder()
+            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .body(Body::empty())
+            .expect("request should be valid"),
+        &optional_state,
+    )
+    .await
+    .expect_err("bot credentials should be forbidden");
+    let (status, body) = response_parts(optional_error.into_response()).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, r#"{"message":"forbidden"}"#);
+    assert!(optional_state.entity_access.membership_lookups().is_empty());
+
+    let required_state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+    let required_error = extract_required_v2(
+        Request::builder()
+            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .body(Body::empty())
+            .expect("request should be valid"),
+        &required_state,
+    )
+    .await
+    .expect_err("bot credentials should be forbidden");
+    let (status, body) = response_parts(required_error.into_response()).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, r#"{"message":"forbidden"}"#);
+    assert!(required_state.entity_access.membership_lookups().is_empty());
 }
 
 #[tokio::test]
