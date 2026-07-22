@@ -683,9 +683,9 @@ export function useFilterRefinements() {
       );
     };
 
-    // Tags chip (consolidated, searchable) for the documents/tasks views.
+    // Tags chip (consolidated, searchable) for the documents/tasks/mail views.
     const pushTagsConsolidatedChip = () => {
-      if (view !== 'tasks' && view !== 'documents') return;
+      if (view !== 'tasks' && view !== 'documents' && view !== 'mail') return;
       if (!tagFilter.hasTags()) return;
 
       const key = 'tags';

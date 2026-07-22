@@ -817,10 +817,11 @@ export const UnifiedFilterDropdown = (
   const isTasksView = () => currentView() === 'tasks';
   const isCompaniesView = () => currentView() === 'companies';
   const isDocumentsView = () => currentView() === 'documents';
+  const isMailView = () => currentView() === 'mail';
 
   const tagFilter = useTagFilter();
   const showTagsFilter = () =>
-    tagFilter.hasTags() && (isTasksView() || isDocumentsView());
+    tagFilter.hasTags() && (isTasksView() || isDocumentsView() || isMailView());
 
   registerHotkey({
     hotkey: 'f',

@@ -114,10 +114,10 @@ export const soupItemMatchesTagFilter = (
 
 /**
  * `soupItemMatchesTagFilter` for mapped entities. Rendered rows are checked
- * against the active tag filter because the server only tag-filters the
- * document/chat/project soup unions and the document search leg. Entity types
- * without loaded properties (channels, calls, search-service email results)
- * never match, so they are excluded rather than leaking through unfiltered.
+ * against the active tag filter as a client-side backstop, since the server
+ * does not tag-filter every soup union. Rows carrying loaded properties are
+ * matched on those (emails included); rows without loaded properties never
+ * match, so they are excluded rather than leaking through unfiltered.
  */
 export const entityMatchesTagFilter = (
   entity: EntityData,
