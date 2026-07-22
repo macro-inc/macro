@@ -10,13 +10,10 @@ mod test;
 use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
+use macro_event_broker::{KafkaEventConsumerAdapter, MacroEvent, MacroEventConsumerService, Topic};
 #[cfg(test)]
-use macro_event_broker::MessageParts;
-use macro_event_broker::{
-    EventConsumer, MacroEvent, MacroEventConsumerService, MessageWrapper, Topic,
-};
+use macro_event_broker::{MessageParts, MessageWrapper};
 use macro_event_topics::MacroSoupRealtimeTopic;
-use rdkafka::message::{BorrowedMessage, Message};
 use rootcause::prelude::{Report, ResultExt as _};
 
 use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
@@ -25,7 +22,8 @@ use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
 const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 
 type IndependentKafkaConsumer = KafkaEventConsumer<Ungrouped>;
-type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, SoupKafkaEventConsumer>;
+type SoupEventConsumer =
+    MacroEventConsumerService<DeclaredMacroEvent, KafkaEventConsumerAdapter<Ungrouped>>;
 
 macro_event_broker::declare_topics!(SoupMacroEvent);
 
@@ -52,34 +50,6 @@ impl MessageParts for TestMessage<'_> {
 
     fn topic(&self) -> &str {
         self.topic
-    }
-}
-
-struct SoupKafkaEventConsumer {
-    inner: IndependentKafkaConsumer,
-}
-
-impl EventConsumer<DeclaredMacroEvent> for SoupKafkaEventConsumer {
-    type MessageType<'a> = BorrowedMessage<'a>;
-
-    async fn recv<'a>(
-        &'a self,
-    ) -> Result<MessageWrapper<Self::MessageType<'a>, DeclaredMacroEvent>, rootcause::Report> {
-        let message = self
-            .inner
-            .recv()
-            .await
-            .context("failed to receive realtime Soup message")?;
-
-        tracing::trace!(
-            topic = Message::topic(&message),
-            partition = message.partition(),
-            offset = message.offset(),
-            payload_len = Message::payload(&message).map_or(0, <[u8]>::len),
-            "received realtime Soup message"
-        );
-
-        Ok(MessageWrapper::new(message))
     }
 }
 
@@ -140,7 +110,7 @@ impl SoupTopicConsumer {
         );
 
         Ok(Self {
-            consumer: SoupEventConsumer::new(SoupKafkaEventConsumer { inner: consumer }),
+            consumer: SoupEventConsumer::new(KafkaEventConsumerAdapter::new(consumer)),
         })
     }
 
