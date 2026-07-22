@@ -102,6 +102,7 @@ export function Root(props: PropertyRootProps) {
         onOpenChange={handleOpenChange}
         getAnchorRect={() => editorAnchor()?.getBoundingClientRect()}
         placement={virtualKeyboardVisible() ? 'top-start' : 'bottom-start'}
+        fitViewport
       >
         <div
           ref={rootEl}
