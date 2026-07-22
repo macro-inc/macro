@@ -4,7 +4,10 @@
 use std::{marker::PhantomData, time::Duration};
 
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, Ungrouped};
-use rdkafka::message::{BorrowedMessage, Message as _};
+use rdkafka::{
+    consumer::CommitMode,
+    message::{BorrowedMessage, Message as _},
+};
 
 use crate::{EventConsumer, MacroEventCollection, MessageWrapper};
 
@@ -62,6 +65,29 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
             inner,
             topics: PhantomData,
         })
+    }
+
+    /// Commits a message using the caller-selected commit mode.
+    pub fn commit_message(
+        &self,
+        message: &BorrowedMessage<'_>,
+        mode: CommitMode,
+    ) -> Result<(), rootcause::Report> {
+        Ok(self.inner.commit_message(message, mode)?)
+    }
+}
+
+impl<T, M: MacroEventCollection> KafkaConsumerAdapter<T, M> {
+    /// Pauses the partition containing `message`.
+    ///
+    /// Grouped consumers can use this to prevent a later cumulative commit
+    /// from advancing past a failed record. Ungrouped consumers can use it to
+    /// stop additional delivery from a failed partition.
+    pub fn pause_message_partition(
+        &self,
+        message: &BorrowedMessage<'_>,
+    ) -> Result<(), rootcause::Report> {
+        Ok(self.inner.pause_message_partition(message)?)
     }
 }
 

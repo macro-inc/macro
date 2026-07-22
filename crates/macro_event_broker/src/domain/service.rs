@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use tracing::Instrument as _;
 
+use crate::MessageWrapper;
 use crate::domain::models::{EventBrokerError, MacroEvent, TopicEvent};
 use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection};
 
@@ -39,9 +40,15 @@ where
 
     /// Receives and decodes the next event from the underlying consumer.
     #[tracing::instrument(skip(self), err)]
-    pub async fn recv(&self) -> Result<M, rootcause::Report> {
-        let message = self.consumer.recv().await?;
-        Ok(message.decode_payload()?)
+    pub async fn recv<'a>(
+        &'a self,
+    ) -> Result<MessageWrapper<C::MessageType<'a>, M>, rootcause::Report> {
+        self.consumer.recv().await
+    }
+
+    /// get a reference to the inner consumer
+    pub fn inner(&self) -> &C {
+        &self.consumer
     }
 }
 
