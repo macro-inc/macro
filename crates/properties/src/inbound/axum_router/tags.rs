@@ -6,15 +6,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use super::{
-    PropertiesRouterState, PropertyTeamExtractor, properties_err_status, required_macro_user_id,
-};
+use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::model as properties_model;
 use crate::domain::service::PropertiesService;
@@ -111,10 +109,10 @@ pub async fn list_tags<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     let sets = state
         .properties_service
         .list_tag_sets(&user, team.entity_access_receipt.as_ref())
@@ -143,11 +141,11 @@ pub async fn ensure_tag_set<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     let set = state
         .properties_service
         .ensure_tag_set(

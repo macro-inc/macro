@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_properties::EntityType;
 use models_properties::api::CreatePropertyDefinitionRequest;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -17,9 +17,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{
-    PropertiesRouterState, PropertyTeamExtractor, properties_err_status, required_macro_user_id,
-};
+use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
 
@@ -107,10 +105,10 @@ pub async fn list_properties<
 >(
     Query(query): Query<ListPropertiesQuery>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     let callers_team = team.entity_access_receipt.as_ref();
 
     // Determine query parameters based on scope. The team receipt and user id are
@@ -207,11 +205,11 @@ pub async fn create_property_definition<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     tracing::info!(scope = ?request.scope, "creating property definition");
 
     // The owner is derived in the service from the authenticated caller and
@@ -272,10 +270,10 @@ pub async fn delete_property_definition<
 >(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     tracing::info!("deleting property definition");
 
     state

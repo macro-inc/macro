@@ -17,7 +17,7 @@ use entity_access::domain::{
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, InternalAuthConfig, JwtValidator, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, ValidatedIdentity,
+    MacroAuthorizationState, UserOrInternal, ValidatedIdentity,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -256,14 +256,9 @@ fn test_router(entity_access_service: FakeEntityAccessService) -> Router {
 }
 
 async fn required_auth_handler(
-    authorization: MacroAuthorizationExtractor<TestAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<TestAuthorizationService, UserOrInternal>,
 ) -> String {
-    authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user")
-        .macro_user_id
-        .to_string()
+    authorization.authorization.user.macro_user_id.to_string()
 }
 
 async fn team_handler(

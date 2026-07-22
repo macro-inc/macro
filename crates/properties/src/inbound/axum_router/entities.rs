@@ -15,7 +15,7 @@ use axum::{
 };
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_properties::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
 use super::extract::{mint_authenticated_receipt, mint_view_receipt, target_entity_type};
-use super::{PropertiesRouterState, properties_err_status, required_macro_user_id};
+use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::PropertyAccessReceiptExt;
 use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome, EntityPropertyOptionUpdate};
@@ -250,10 +250,10 @@ pub async fn get_bulk_entity_properties<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     // The public endpoint requires explicit property IDs. An empty property_ids
     // means "no properties requested", so return early with empty result.
     if request.entities.is_empty() || request.property_ids.is_empty() {
@@ -935,9 +935,9 @@ pub async fn delete_entity_property<
 >(
     Path(entity_property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
-    let user = required_macro_user_id(&user.authorization);
+    let user = user.authorization.user.macro_user_id;
     tracing::info!("removing entity property");
 
     // The entity this property is attached to is only known after a lookup, so

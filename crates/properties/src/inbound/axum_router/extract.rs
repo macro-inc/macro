@@ -21,12 +21,12 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    OptionalMacroAuthorizationExtractor,
+    OptionalMacroAuthorizationExtractor, UserOrInternal, UserOrInternalService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::PropertyTargetEntityType;
 
-use super::{PropertiesRouterState, properties_err_status, required_macro_user_id};
+use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{EditReceipt, ViewReceipt};
 use crate::domain::service::PropertiesService;
@@ -178,7 +178,10 @@ where
         let params = entity_path_params(parts).await?;
 
         let authorization = parts
-            .extract_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
+            .extract_with_state::<
+                OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
+                _,
+            >(state)
             .await
             .map_err(ReceiptRejection::from)?;
         let user = authorization
@@ -219,11 +222,11 @@ where
         let params = entity_path_params(parts).await?;
 
         let authorization = parts
-            .extract_with_state::<MacroAuthorizationExtractor<Auth>, _>(state)
+            .extract_with_state::<MacroAuthorizationExtractor<Auth, UserOrInternal>, _>(state)
             .await
             .map_err(ReceiptRejection::from)?;
 
-        let user = required_macro_user_id(&authorization.authorization);
+        let user = authorization.authorization.user.macro_user_id;
         let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
             state.entity_access_service.as_ref(),
             &user,
