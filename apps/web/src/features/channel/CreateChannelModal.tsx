@@ -186,7 +186,7 @@ export function CreateChannelModal() {
                   <Tooltip
                     as="span"
                     placement="top"
-                    label="New members automatically join this channel when they join your team. Existing members can find and join it from the Teams tab."
+                    label="New team members automatically join this channel."
                   >
                     <InfoIcon class="size-3.5 text-ink-extra-muted" />
                   </Tooltip>
