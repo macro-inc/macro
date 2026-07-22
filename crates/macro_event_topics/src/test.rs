@@ -17,12 +17,12 @@ fn all_topic_names_is_non_empty_and_unique() {
 
 #[test]
 fn all_topic_names_includes_declared_topics() {
-    assert!(all_topic_names().contains(&MacroExampleTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroDocumentsTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroSoupRealtimeTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroProjectsTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroTeamsTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroChannelsTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroBotsTopic.as_str()));
-    assert!(all_topic_names().contains(&MacroWebhooksTopic.as_str()));
+    assert!(all_topic_names().contains(&MacroExampleTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroDocumentsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroSoupRealtimeTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroProjectsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroTeamsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroChannelsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroBotsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroWebhooksTopic::TOPIC_STR));
 }

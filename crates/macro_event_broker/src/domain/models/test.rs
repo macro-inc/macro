@@ -65,7 +65,7 @@ enum ExampleConsumerEvent {
 impl ExampleConsumerEvent {
     fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
         match topic {
-            topic if topic == MacroExampleTopic.as_str() => {
+            topic if topic == MacroExampleTopic::TOPIC_STR => {
                 Ok(Self::Example(ExampleMacroEvent::decode(key, payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
@@ -117,7 +117,7 @@ fn consumer_specific_enum_decodes_by_topic() {
     let event = example_event();
     let payload = serde_json::to_vec(&event).unwrap();
 
-    let decoded = ExampleConsumerEvent::decode(MacroExampleTopic.as_str(), "msg-123", &payload)
+    let decoded = ExampleConsumerEvent::decode(MacroExampleTopic::TOPIC_STR, "msg-123", &payload)
         .expect("topic should decode");
 
     let ExampleConsumerEvent::Example(decoded) = decoded;
@@ -182,7 +182,7 @@ impl MessageParts for TestMessage {
 fn exposes_each_declared_topic_in_order() {
     assert_eq!(
         DeclaredMacroEvent::topics(),
-        [MacroExampleTopic.as_str(), MacroDocumentsTopic.as_str(),]
+        [MacroExampleTopic::TOPIC_STR, MacroDocumentsTopic::TOPIC_STR,]
     );
 }
 
@@ -190,7 +190,7 @@ fn exposes_each_declared_topic_in_order() {
 fn decodes_each_declared_topic_into_its_enum_variant() {
     let example_payload = serde_json::to_vec(&example_event()).unwrap();
     let example_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
-        topic: MacroExampleTopic.as_str(),
+        topic: MacroExampleTopic::TOPIC_STR,
         key: Some("example-key"),
         payload: Some(example_payload),
     });
@@ -204,7 +204,7 @@ fn decodes_each_declared_topic_into_its_enum_variant() {
 
     let documents_payload = serde_json::to_vec(&Event::new(DocumentsTopicEvent)).unwrap();
     let documents_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
-        topic: MacroDocumentsTopic.as_str(),
+        topic: MacroDocumentsTopic::TOPIC_STR,
         key: Some("documents-key"),
         payload: Some(documents_payload),
     });
@@ -234,7 +234,7 @@ fn rejects_topics_not_declared_by_the_macro() {
 #[test]
 fn rejects_a_missing_message_key() {
     let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
-        topic: MacroExampleTopic.as_str(),
+        topic: MacroExampleTopic::TOPIC_STR,
         key: None,
         payload: Some(serde_json::to_vec(&example_event()).unwrap()),
     });
@@ -248,7 +248,7 @@ fn rejects_a_missing_message_key() {
 #[test]
 fn rejects_a_missing_message_payload() {
     let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
-        topic: MacroExampleTopic.as_str(),
+        topic: MacroExampleTopic::TOPIC_STR,
         key: Some("example-key"),
         payload: None,
     });
@@ -270,7 +270,7 @@ fn rejects_an_unsupported_schema_version() {
         }),
     );
     let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
-        topic: MacroExampleTopic.as_str(),
+        topic: MacroExampleTopic::TOPIC_STR,
         key: Some("example-key"),
         payload: Some(serde_json::to_vec(&event).unwrap()),
     });
@@ -281,6 +281,6 @@ fn rejects_an_unsupported_schema_version() {
             topic,
             expected: 1,
             actual: 2,
-        }) if topic == MacroExampleTopic.as_str()
+        }) if topic == MacroExampleTopic::TOPIC_STR
     ));
 }

@@ -23,17 +23,12 @@ struct RecordingPublisher {
 }
 
 impl EventPublisher for RecordingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        topic: T,
-        key: &str,
-        payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
         self.records
             .lock()
             .expect("records lock")
             .push(PublishedRecord {
-                topic: topic.as_str().to_string(),
+                topic: T::TOPIC_STR.to_string(),
                 key: key.to_string(),
                 payload: payload.to_vec(),
             });

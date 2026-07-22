@@ -1219,7 +1219,7 @@ impl MacroEventBroker for RecordingEventBroker {
         }
 
         self.events.lock().unwrap().push(PublishedTeamEvent {
-            topic: event.topic().as_str(),
+            topic: event.topic(),
             key: event.key().to_string(),
             envelope: serde_json::to_value(event.event())?,
         });

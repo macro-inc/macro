@@ -42,7 +42,7 @@ fn decodes_document_events() {
     let payload = serde_json::to_vec(&event).expect("serializable");
 
     let decoded =
-        WebhookConsumerEvent::decode(MacroDocumentsTopic.as_str(), &payload).expect("decodable");
+        WebhookConsumerEvent::decode(MacroDocumentsTopic::TOPIC_STR, &payload).expect("decodable");
 
     match decoded {
         WebhookConsumerEvent::Documents(decoded) => assert_eq!(decoded, event),
@@ -62,7 +62,7 @@ fn decodes_channel_events() {
     let payload = serde_json::to_vec(&event).expect("serializable");
 
     let decoded =
-        WebhookConsumerEvent::decode(MacroChannelsTopic.as_str(), &payload).expect("decodable");
+        WebhookConsumerEvent::decode(MacroChannelsTopic::TOPIC_STR, &payload).expect("decodable");
 
     match decoded {
         WebhookConsumerEvent::Channels(decoded) => assert_eq!(decoded, event),
@@ -78,7 +78,7 @@ fn decodes_webhook_events() {
     let payload = serde_json::to_vec(&event).expect("serializable");
 
     let decoded =
-        WebhookConsumerEvent::decode(MacroWebhooksTopic.as_str(), &payload).expect("decodable");
+        WebhookConsumerEvent::decode(MacroWebhooksTopic::TOPIC_STR, &payload).expect("decodable");
 
     match decoded {
         WebhookConsumerEvent::Webhooks(decoded) => assert_eq!(decoded, event),
@@ -96,7 +96,7 @@ fn rejects_unknown_topics() {
 
 #[test]
 fn rejects_malformed_webhook_payloads() {
-    let err = WebhookConsumerEvent::decode(MacroWebhooksTopic.as_str(), b"not json")
+    let err = WebhookConsumerEvent::decode(MacroWebhooksTopic::TOPIC_STR, b"not json")
         .expect_err("malformed payload");
     assert!(matches!(err, EventBrokerError::Serialization(_)));
 }

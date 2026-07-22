@@ -68,9 +68,9 @@ impl<E: TopicEvent> Event<E> {
         Ok(serde_json::from_slice(payload)?)
     }
 
-    /// Kafka topic this event belongs to.
-    pub fn topic(&self) -> E::Topic {
-        E::Topic::default()
+    /// Broker topic this event belongs to.
+    pub fn topic(&self) -> &'static str {
+        E::Topic::TOPIC_STR
     }
 }
 
@@ -83,9 +83,9 @@ pub trait MacroEvent: Send + Sync {
     /// Topic-specific event enum carried by this macro event.
     type EventPayload: TopicEvent;
 
-    /// Kafka topic this event should be published to.
-    fn topic(&self) -> <Self::EventPayload as TopicEvent>::Topic {
-        <<Self as MacroEvent>::EventPayload as TopicEvent>::Topic::default()
+    /// Broker topic this event should be published to.
+    fn topic(&self) -> &'static str {
+        <Self::EventPayload as TopicEvent>::Topic::TOPIC_STR
     }
 
     /// Kafka message key used for partitioning and compaction.
@@ -207,9 +207,8 @@ macro_rules! declare_topics {
                 message: &T,
             ) -> Result<Self, $crate::EventBrokerError> {
                 $(
-                    let expected_topic = $crate::Topic::as_str(
-                        &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
-                    );
+                    let expected_topic =
+                        <<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as $crate::Topic>::TOPIC_STR;
                     if message.topic() == expected_topic {
                         let key = message
                             .key()
@@ -236,17 +235,11 @@ macro_rules! declare_topics {
             }
 
             fn topics() -> &'static [&'static str] {
-                static TOPICS: std::sync::LazyLock<Vec<&'static str>> =
-                    std::sync::LazyLock::new(|| {
-                        vec![
-                            $(
-                                $crate::Topic::as_str(
-                                    &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
-                                ),
-                            )+
-                        ]
-                    });
-                TOPICS.as_slice()
+                &[
+                    $(
+                        <<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as $crate::Topic>::TOPIC_STR,
+                    )+
+                ]
             }
         }
     };

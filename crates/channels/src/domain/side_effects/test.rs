@@ -1055,7 +1055,7 @@ impl MacroEventBroker for TestEventBroker {
     > {
         use macro_event_topics::Topic as _;
         self.published.lock().unwrap().push(PublishedEvent {
-            topic: event.topic().as_str().to_string(),
+            topic: event.topic().to_string(),
             key: event.key().to_string(),
             envelope: serde_json::to_value(event.event())?,
         });

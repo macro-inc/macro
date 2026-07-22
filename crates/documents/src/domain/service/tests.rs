@@ -350,7 +350,7 @@ impl MacroEventBroker for TestEventBroker {
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
         self.published.lock().unwrap().push(PublishedEvent {
-            topic: event.topic().as_str(),
+            topic: event.topic(),
             key: event.key().to_string(),
             payload: serde_json::to_value(event.event())?,
         });

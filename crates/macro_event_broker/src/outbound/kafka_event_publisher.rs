@@ -27,15 +27,10 @@ impl KafkaEventPublisher {
 }
 
 impl EventPublisher for KafkaEventPublisher {
-    #[tracing::instrument(err, skip(self, payload), fields(topic = %topic.as_str(), key = %key))]
-    async fn publish<T: Topic>(
-        &self,
-        topic: T,
-        key: &str,
-        payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    #[tracing::instrument(err, skip(self, payload), fields(topic = T::TOPIC_STR, key = %key))]
+    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
         self.producer
-            .send(topic.as_str(), key, payload)
+            .send(T::TOPIC_STR, key, payload)
             .await
             .map_err(|error| EventBrokerError::Publish(error.to_string()))
     }

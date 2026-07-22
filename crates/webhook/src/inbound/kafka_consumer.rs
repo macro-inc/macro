@@ -55,9 +55,9 @@ const INGEST_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
 fn subscribed_topics() -> [&'static str; 3] {
     [
-        MacroDocumentsTopic.as_str(),
-        MacroChannelsTopic.as_str(),
-        MacroWebhooksTopic.as_str(),
+        MacroDocumentsTopic::TOPIC_STR,
+        MacroChannelsTopic::TOPIC_STR,
+        MacroWebhooksTopic::TOPIC_STR,
     ]
 }
 
@@ -79,13 +79,13 @@ impl WebhookConsumerEvent {
     /// Decode one Kafka message into this consumer's event enum.
     pub fn decode(topic: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
         match topic {
-            topic if topic == MacroDocumentsTopic.as_str() => {
+            topic if topic == MacroDocumentsTopic::TOPIC_STR => {
                 Ok(Self::Documents(Event::decode(payload)?))
             }
-            topic if topic == MacroChannelsTopic.as_str() => {
+            topic if topic == MacroChannelsTopic::TOPIC_STR => {
                 Ok(Self::Channels(Event::decode(payload)?))
             }
-            topic if topic == MacroWebhooksTopic.as_str() => {
+            topic if topic == MacroWebhooksTopic::TOPIC_STR => {
                 Ok(Self::Webhooks(Event::decode(payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),

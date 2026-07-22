@@ -69,7 +69,7 @@ impl MacroEventBroker for TestEventBroker {
         }
 
         self.published.lock().unwrap().push(PublishedEvent {
-            topic: event.topic().as_str(),
+            topic: event.topic(),
             key: event.key().to_string(),
             payload: serde_json::to_value(event.event())?,
         });

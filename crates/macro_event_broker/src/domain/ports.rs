@@ -26,10 +26,9 @@ pub trait MacroEventBroker: Send + Sync + 'static {
 /// Kept byte-oriented so payload serialization stays the service's concern and the
 /// port is trivial to mock or stub in tests.
 pub trait EventPublisher: Send + Sync + 'static {
-    /// Publish a raw `payload` to `topic`, keyed by `key`.
+    /// Publishes a raw `payload` to [`T::TOPIC_STR`](Topic::TOPIC_STR), keyed by `key`.
     fn publish<T: Topic>(
         &self,
-        topic: T,
         key: &str,
         payload: &[u8],
     ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;

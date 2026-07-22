@@ -59,7 +59,7 @@ impl ChannelsConsumerEvent {
     /// Decode one Kafka message into this consumer's event enum.
     fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
         match topic {
-            topic if topic == MacroChannelsTopic.as_str() => {
+            topic if topic == MacroChannelsTopic::TOPIC_STR => {
                 Ok(Self::Channels(ChannelMacroEvent::decode(key, payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
@@ -116,7 +116,7 @@ impl ChannelsConsumer {
     }
 
     fn subscribe(&self) -> KafkaResult<()> {
-        let topics = [MacroChannelsTopic.as_str()];
+        let topics = [MacroChannelsTopic::TOPIC_STR];
         match self {
             Self::Plaintext(consumer) => consumer.subscribe(&topics),
             Self::MskIam(consumer) => consumer.subscribe(&topics),
@@ -198,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to subscribe to channels topic")?;
     println!(
         "listening on topic={} group={} brokers={} (ctrl-c to stop)",
-        MacroChannelsTopic.as_str(),
+        MacroChannelsTopic::TOPIC_STR,
         GROUP_ID,
         env.kafka_brokers.as_ref(),
     );

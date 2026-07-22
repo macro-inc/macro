@@ -10,7 +10,7 @@ use std::time::Duration;
 use macro_event_topics::Topic as _;
 use tracing::Instrument as _;
 
-use crate::domain::models::{EventBrokerError, MacroEvent};
+use crate::domain::models::{EventBrokerError, MacroEvent, TopicEvent};
 use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection};
 
 const PUBLISH_TIMEOUT: Duration = Duration::from_secs(6);
@@ -69,7 +69,7 @@ impl<P: EventPublisher> MacroEventBrokerService<P> {
 }
 
 impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
-    #[tracing::instrument(err, skip(self, event), fields(topic = %event.topic().as_str(), key = %event.key()))]
+    #[tracing::instrument(err, skip(self, event), fields(topic = event.topic(), key = %event.key()))]
     fn send_event<E: MacroEvent + ?Sized>(
         &self,
         event: &E,
@@ -82,20 +82,25 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
 
         let handle = tokio::spawn(
             async move {
-                tokio::time::timeout(PUBLISH_TIMEOUT, publisher.publish(topic, &key, &payload))
-                    .await
-                    .map_err(|_| EventBrokerError::PublishTimeout {
-                        timeout: PUBLISH_TIMEOUT,
-                    })
-                    .and_then(std::convert::identity)
-                    .inspect_err(|error| {
-                        tracing::error!(
-                            error = ?error,
-                            topic = topic.as_str(),
-                            key = %key,
-                            "failed to publish event",
-                        );
-                    })
+                tokio::time::timeout(
+                    PUBLISH_TIMEOUT,
+                    publisher.publish::<<<E as MacroEvent>::EventPayload as TopicEvent>::Topic>(
+                        &key, &payload,
+                    ),
+                )
+                .await
+                .map_err(|_| EventBrokerError::PublishTimeout {
+                    timeout: PUBLISH_TIMEOUT,
+                })
+                .and_then(std::convert::identity)
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        topic,
+                        key = %key,
+                        "failed to publish event",
+                    );
+                })
             }
             .instrument(span),
         );

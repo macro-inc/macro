@@ -35,7 +35,7 @@ const MAX_SERVICE_ATTEMPTS: u32 = 5;
 const SERVICE_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
 fn subscribed_topics() -> [&'static str; 1] {
-    [MacroDocumentsTopic.as_str()]
+    [MacroDocumentsTopic::TOPIC_STR]
 }
 
 fn entity_from_document_event(event: DocumentTopicEvent) -> Option<Entity<'static>> {

@@ -28,14 +28,9 @@ struct RecordingPublisher {
 }
 
 impl EventPublisher for RecordingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        topic: T,
-        key: &str,
-        payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
         self.calls.lock().unwrap().push(Published {
-            topic: topic.as_str().to_string(),
+            topic: T::TOPIC_STR.to_string(),
             key: key.to_string(),
             payload: payload.to_vec(),
         });
@@ -48,12 +43,7 @@ struct PendingPublisher {
 }
 
 impl EventPublisher for PendingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        _topic: T,
-        _key: &str,
-        _payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         pending().await
     }
@@ -75,12 +65,7 @@ struct HangingPublisher {
 }
 
 impl EventPublisher for HangingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        _topic: T,
-        _key: &str,
-        _payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         let _drop_guard = PublishDropGuard {
             dropped: Arc::clone(&self.dropped),
@@ -94,12 +79,7 @@ struct FailingPublisher {
 }
 
 impl EventPublisher for FailingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        _topic: T,
-        _key: &str,
-        _payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.attempted.store(true, Ordering::SeqCst);
         Err(EventBrokerError::Publish("test failure".to_string()))
     }
@@ -215,7 +195,7 @@ fn example_event() -> ExampleMacroEvent {
 async fn consumer_service_receives_and_decodes_typed_event() {
     let event = example_event();
     let consumer = TestEventConsumer {
-        topic: MacroExampleTopic.as_str(),
+        topic: MacroExampleTopic::TOPIC_STR,
         key: "msg-123",
         payload: serde_json::to_vec(event.event()).expect("event serializes"),
     };
@@ -283,7 +263,7 @@ async fn dispatch_serializes_and_routes() {
     let calls = service.publisher.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
-    assert_eq!(call.topic, MacroExampleTopic.as_str());
+    assert_eq!(call.topic, MacroExampleTopic::TOPIC_STR);
     assert_eq!(call.key, "msg-123");
     assert_eq!(call.payload, expected_payload);
 }

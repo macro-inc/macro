@@ -59,7 +59,7 @@ impl ProjectsConsumerEvent {
     /// Decode one Kafka message into this consumer's event enum.
     fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
         match topic {
-            topic if topic == MacroProjectsTopic.as_str() => {
+            topic if topic == MacroProjectsTopic::TOPIC_STR => {
                 Ok(Self::Projects(ProjectMacroEvent::decode(key, payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
@@ -116,7 +116,7 @@ impl ProjectsConsumer {
     }
 
     fn subscribe(&self) -> KafkaResult<()> {
-        let topics = [MacroProjectsTopic.as_str()];
+        let topics = [MacroProjectsTopic::TOPIC_STR];
         match self {
             Self::Plaintext(consumer) => consumer.subscribe(&topics),
             Self::MskIam(consumer) => consumer.subscribe(&topics),
@@ -194,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to subscribe to projects topic")?;
     println!(
         "listening on topic={} group={} brokers={} (ctrl-c to stop)",
-        MacroProjectsTopic.as_str(),
+        MacroProjectsTopic::TOPIC_STR,
         GROUP_ID,
         env.kafka_brokers.as_ref(),
     );

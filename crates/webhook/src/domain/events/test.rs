@@ -254,7 +254,7 @@ fn constructors_key_events_by_subject_webhook_id() {
 
     for (event, expected_event_type) in cases.into_iter().zip(expected_event_types) {
         assert_eq!(event.key(), WEBHOOK_ID);
-        assert_eq!(event.topic().as_str(), "macro.webhooks");
+        assert_eq!(event.topic(), "macro.webhooks");
         assert_eq!(event.event().schema_version, 1);
         assert_eq!(
             serde_json::to_value(event.event()).expect("serializable event")["event_type"],
@@ -290,5 +290,5 @@ fn macro_event_round_trips_without_exposing_secrets_or_header_values() {
     let decoded = WebhookMacroEvent::decode(original.key(), &payload).expect("decodable event");
     assert_eq!(decoded.key(), WEBHOOK_ID);
     assert_eq!(decoded.event(), original.event());
-    assert_eq!(decoded.topic().as_str(), "macro.webhooks");
+    assert_eq!(decoded.topic(), "macro.webhooks");
 }

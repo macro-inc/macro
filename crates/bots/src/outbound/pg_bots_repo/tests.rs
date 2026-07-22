@@ -95,7 +95,7 @@ impl MacroEventBroker for RecordingEventBroker {
             .lock()
             .expect("event lock poisoned")
             .push(PublishedEvent {
-                topic: event.topic().as_str(),
+                topic: event.topic(),
                 key: event.key().to_string(),
                 payload: serde_json::to_value(event.event())?,
             });
