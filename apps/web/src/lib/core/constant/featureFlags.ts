@@ -546,3 +546,11 @@ export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
 export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
+
+// New split-screen onboarding (/setup): connect tools on the left, pick
+// what to import on the right. Dev-mode default; override with
+// VITE_ENABLE_NEW_ONBOARDING.
+export const ENABLE_NEW_ONBOARDING = resolveFeatureFlag(
+  'ENABLE_NEW_ONBOARDING',
+  DEV_MODE_ENV
+);

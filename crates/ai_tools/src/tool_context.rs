@@ -655,6 +655,123 @@ pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManag
 /// Type alias for the chat tool context
 pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
 
+/// Creates the Macro entities the import pipeline's fixed mapping calls for
+/// (linear → task, notion → md, slack → channel), reusing the same document
+/// creator and channel service the other AI tools run on.
+#[derive(Clone)]
+pub struct ToolEntityCreator {
+    /// Backend-owned document creation use case (shared with document tools).
+    pub document_creator:
+        documents::inbound::toolset::DefaultDocumentToolCreator<ToolDocumentService>,
+    /// Team lookup so imported tasks get the user's team task numbering.
+    pub entity_access_service: Arc<ToolEntityAccessService>,
+    /// Channel creation service.
+    pub channel_service: Arc<ToolChannelMessagesService>,
+}
+
+impl ToolEntityCreator {
+    async fn create_doc(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        markdown: &str,
+        is_task: bool,
+        team_id: Option<uuid::Uuid>,
+    ) -> anyhow::Result<String> {
+        use std::str::FromStr as _;
+        let document = documents::domain::create::NewPlainTextDocument::builder(
+            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
+        )
+        .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
+        .text(markdown.to_string())
+        .task_flag(is_task, team_id)
+        .build()?;
+        let created = self
+            .document_creator
+            .create_plain_text(user.clone(), document)
+            .await?;
+        Ok(created
+            .into_response()
+            .document_response
+            .document_metadata
+            .metadata
+            .document_id
+            .to_string())
+    }
+}
+
+impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn create_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        markdown: &str,
+    ) -> anyhow::Result<String> {
+        // Same team resolution as the CreateDocument tool, so imported tasks
+        // number correctly within the user's team.
+        let team_id = self
+            .entity_access_service
+            .get_user_team(user)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to get user's team: {e:?}"))?
+            .map(|team| team.team_id);
+        self.create_doc(user, name, markdown, true, team_id).await
+    }
+
+    async fn create_markdown_doc(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        markdown: &str,
+    ) -> anyhow::Result<String> {
+        self.create_doc(user, name, markdown, false, None).await
+    }
+
+    async fn create_channel(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        team_id: Option<uuid::Uuid>,
+    ) -> anyhow::Result<String> {
+        use channels::domain::ports::ChannelService as _;
+        let request = channels::domain::models::CreateChannelRequest {
+            name: Some(name.to_string()),
+            channel_type: if team_id.is_some() {
+                channels::domain::models::ChannelType::Team
+            } else {
+                channels::domain::models::ChannelType::Public
+            },
+            team_id,
+            // The creator is the only known member; the service requires a
+            // non-empty participant list and the repo filters out the owner,
+            // so this creates an owner-only channel.
+            participants: std::iter::once(user.clone()).collect(),
+        };
+        let response = self
+            .channel_service
+            .create_channel(
+                channels::domain::models::Sender::new_from_user(user.clone()),
+                None,
+                request,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to create channel: {e:?}"))?;
+        Ok(response.id)
+    }
+}
+
+/// Type alias for the import service implementation used by AI tools.
+pub type ToolImportService = import::domain::service::ImportServiceImpl<
+    import::outbound::pg_import_repo::PgImportRepo,
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    ToolEntityCreator,
+>;
+
+/// Type alias for the import tool context. Built `unwired` by the shared
+/// context builder; hosts that can run the import pipeline (DCS) replace it
+/// with a wired one after constructing the import service.
+pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
+
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
 
@@ -676,6 +793,9 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
+    /// Import staging/tracking tools. `unwired` in hosts that can't build
+    /// the import service — calls there fail with a clear error.
+    pub import_tool_context: ToolImportToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.

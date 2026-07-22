@@ -417,6 +417,66 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized chat tool context");
 
+    let channel_tool_context =
+        ai_tools::build_channel_tool_context(db.clone(), lexical_client.clone());
+    let recorder = ai_usage::pg_recorder(db.clone());
+
+    // The import pipeline: staged/imported external items, gather jobs over
+    // the user's connectors, and the Haiku import job. Built before the tool
+    // service context so the chat toolset gets a wired import context.
+    let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
+        config.mcp_credentials_key_secret_name.as_ref(),
+    )
+    .context("invalid MCP credentials encryption key")?;
+    let mcp_server_repo =
+        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
+
+    // Nudges the user's connected clients when import rows flip, so setup
+    // sections and chat surfaces update immediately instead of on the next
+    // poll. Same free-form gateway message pattern as ai_projections.
+    let import_gateway = Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+        internal_api_key.clone(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    ));
+    let import_notify: import::domain::service::ImportNotify = Arc::new(
+        move |user: macro_user_id::user_id::MacroUserIdStr<'static>| {
+            let gateway = import_gateway.clone();
+            Box::pin(async move {
+                let entity = model_entity::EntityType::User.with_entity_str(user.as_ref());
+                let payload = serde_json::json!({ "type": "import_updated" });
+                if let Err(e) = gateway
+                    .send_message(entity, "import_updated".to_string(), payload)
+                    .await
+                {
+                    tracing::warn!(%user, error = ?e, "failed to push import update");
+                }
+            })
+        },
+    );
+
+    let entity_creator = ai_tools::ToolEntityCreator {
+        document_creator: document_tool_context.creator.clone(),
+        entity_access_service: entity_access_service.clone(),
+        channel_service: channel_tool_context.service.clone(),
+    };
+    let import_service = Arc::new(
+        import::domain::service::ImportServiceImpl::new(
+            import::outbound::pg_import_repo::PgImportRepo::new(db.clone()),
+            Arc::new(mcp_server_repo.clone()),
+            Arc::new(entity_creator),
+            recorder.clone(),
+        )
+        .with_notifier(import_notify),
+    );
+
+    // Import jobs are in-process tasks: any row still `importing` at boot
+    // was orphaned by the previous process and must become retryable again.
+    if let Err(e) = import_service.recover_interrupted_imports().await {
+        tracing::warn!(error = ?e, "failed to recover interrupted imports");
+    }
+
+    tracing::info!("initialized import service");
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -427,16 +487,16 @@ async fn main() -> anyhow::Result<()> {
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         notification_tool_context: notification_tool_context.clone(),
-        chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(
-            db.clone(),
-            lexical_client.clone(),
+        import_tool_context: import::inbound::toolset::ImportToolContext::wired(
+            import_service.clone(),
         ),
+        chat_tool_context,
+        channel_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
-        recorder: ai_usage::pg_recorder(db.clone()),
+        recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
     let all_tools = ai_tools::all_tools();
@@ -508,12 +568,17 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized ai projections service");
 
-    let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
-        config.mcp_credentials_key_secret_name.as_ref(),
-    )
-    .context("invalid MCP credentials encryption key")?;
-    let mcp_server_repo =
-        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
+    // The onboarding flow drives the import pipeline: reads/hooks start
+    // gather runs for authenticated connectors, completion discards leftover
+    // onboarding-staged candidates.
+    let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
+        onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
+        Arc::new(mcp_server_repo.clone()),
+        import_service.clone(),
+    ));
+
+    tracing::info!("initialized onboarding service");
+
     let mcp_redirect_uri = format!(
         "{}/mcp/servers/auth/callback",
         DocumentCognitionServiceUrl::new()?,
@@ -528,11 +593,28 @@ async fn main() -> anyhow::Result<()> {
         mcp_redirect_uri,
         mcp_pre_registered,
     );
+    // The moment a connector finishes OAuth, reconcile onboarding for that
+    // user — gather jobs start before the user even returns to their
+    // original tab. Spawned so the callback response never waits on them.
+    let onboarding_for_auth_hook = onboarding_service.clone();
+    let mcp_auth_hook: mcp_client::inbound::axum_router::McpAuthCompletedHook =
+        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
+            let service = onboarding_for_auth_hook.clone();
+            Box::pin(async move {
+                tokio::spawn(async move {
+                    use onboarding::domain::service::OnboardingService;
+                    if let Err(e) = service.reconcile(record.user_id).await {
+                        tracing::warn!(error = ?e, "post-auth onboarding reconcile failed");
+                    }
+                });
+            })
+        });
     let mcp_state = mcp_client::inbound::McpRouterState::new(
         mcp_server_repo,
         mcp_oauth,
         authorization_state.clone(),
-    );
+    )
+    .with_auth_completed_hook(mcp_auth_hook);
 
     let user_permissions_service = Arc::new(
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
@@ -573,6 +655,8 @@ async fn main() -> anyhow::Result<()> {
             redis_client.clone(),
         ),
         mcp_state,
+        import_service,
+        onboarding_service,
     })
     .await
     .context("failed to setup and serve api")?;

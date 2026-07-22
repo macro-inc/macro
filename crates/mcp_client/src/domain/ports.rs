@@ -1,4 +1,4 @@
-use super::models::{MacroUserIdStr, McpServer, McpServerRecord, StoredCredentials};
+use super::models::{MacroUserIdStr, McpServer, McpServerRecord};
 
 /// Port for persisting MCP server records, keyed by user.
 pub trait McpServerStore: Send + Sync + 'static {
@@ -91,11 +91,11 @@ pub trait OAuthClient: Send + Sync + 'static {
     /// Complete the OAuth flow using the `code` and `state` returned by the
     /// authorization server's redirect.
     ///
-    /// Exchanges the authorization code for tokens and returns the resulting
-    /// credentials ready to be persisted.
+    /// Exchanges the authorization code for tokens, persists them, and
+    /// returns the saved server record (user, url, credentials).
     fn exchange_authorization_code(
         &self,
         code: &str,
         state: &str,
-    ) -> impl Future<Output = anyhow::Result<StoredCredentials>> + Send;
+    ) -> impl Future<Output = anyhow::Result<McpServerRecord>> + Send;
 }

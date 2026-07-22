@@ -1,5 +1,5 @@
 use crate::domain::models::MCP_CLIENT_NAME;
-use crate::domain::models::{MacroUserIdStr, McpServerRecord, StoredCredentials};
+use crate::domain::models::{MacroUserIdStr, McpServerRecord};
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
 #[cfg(feature = "providers")]
 use crate::domain::provider_registry::PreRegisteredProviders;
@@ -153,7 +153,7 @@ where
         &self,
         code: &str,
         state: &str,
-    ) -> anyhow::Result<StoredCredentials> {
+    ) -> anyhow::Result<McpServerRecord> {
         let pending = self
             .state_store
             .take(state)
@@ -212,7 +212,7 @@ where
             .map_err(anyhow::Error::from)?;
 
         tracing::info!("OAuth flow completed successfully");
-        Ok(credentials)
+        Ok(record)
     }
 }
 

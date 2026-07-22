@@ -35,6 +35,7 @@ entity_access_management = { path = "../entity_access_management" }
 foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures.workspace = true
+import = { path = "../import" }
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 lexical_client = { path = "../lexical_client" }
@@ -45,6 +46,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker" }
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
+mcp_client = { path = "../mcp_client" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }

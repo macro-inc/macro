@@ -73,6 +73,8 @@ fn api_router(api_context: ApiContext) -> Router {
     let memory_service = api_context.memory_service.clone();
     let usage_service = api_context.usage_service.clone();
     let ai_projections_service = api_context.ai_projections_service.clone();
+    let import_service = api_context.import_service.clone();
+    let onboarding_service = api_context.onboarding_service.clone();
     let authorization_state = api_context.authorization_state.clone();
 
     let mcp_state = api_context.mcp_state.clone();
@@ -92,6 +94,18 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(memory::inbound::axum_router::memory_router(
             memory::inbound::axum_router::MemoryRouterState {
                 service: memory_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(import::inbound::axum_router::import_router(
+            import::inbound::axum_router::ImportRouterState {
+                service: import_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(onboarding::inbound::axum_router::onboarding_router(
+            onboarding::inbound::axum_router::OnboardingRouterState {
+                service: onboarding_service,
                 authorization_state: authorization_state.clone(),
             },
         ))

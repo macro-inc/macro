@@ -6,7 +6,7 @@
 
 use crate::tool_context::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpSnsEndpointManager,
-    ToolNotificationQueue, ToolServiceContext,
+    ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
@@ -366,6 +366,7 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),

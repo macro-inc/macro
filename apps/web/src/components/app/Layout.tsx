@@ -43,14 +43,21 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
+import { ENABLE_NEW_ONBOARDING } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { useUserInfoQuery } from '@queries/auth/user-info';
 import { makePersisted } from '@solid-primitives/storage';
-import { type RouteSectionProps, useLocation } from '@solidjs/router';
+import {
+  type RouteSectionProps,
+  useLocation,
+  useNavigate,
+} from '@solidjs/router';
 import { cn } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
@@ -78,6 +85,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login/popup`,
   `${ROUTER_BASE_CONCAT}login/popup/success`,
   `${ROUTER_BASE_CONCAT}onboarding`,
+  `${ROUTER_BASE_CONCAT}setup`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}offline`,
@@ -272,6 +280,31 @@ function CollapsedSidebarIncomingCallWidget(props: {
   );
 }
 
+/**
+ * Sends first-time desktop users into the split-screen onboarding at
+ * /setup. Fires from anywhere in the app (marketing SSO lands on /app, not
+ * /login), but never off auth/full-screen routes — /setup itself included.
+ */
+function NewOnboardingRedirect() {
+  const userInfoQuery = useUserInfoQuery();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  createEffect(() => {
+    if (!ENABLE_NEW_ONBOARDING || isMobile() || isNativeMobilePlatform()) {
+      return;
+    }
+    const data = userInfoQuery.data;
+    if (data?.authenticated !== true || data.tutorialComplete !== false) {
+      return;
+    }
+    if (AUTH_URLS.includes(location.pathname)) return;
+    navigate('/setup', { replace: true });
+  });
+
+  return null;
+}
+
 function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
@@ -362,6 +395,7 @@ function LayoutInner(props: RouteSectionProps) {
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
+          <NewOnboardingRedirect />
           <Show when={!AUTH_URLS.includes(location.pathname)}>
             <GithubReauthenticationPrompt />
             <GmailReauthenticationPrompt />

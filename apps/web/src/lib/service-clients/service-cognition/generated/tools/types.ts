@@ -127,6 +127,18 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * External systems items can be imported from.
+ */
+export type ImportSource = 'linear' | 'notion' | 'slack';
+/**
+ * Status values accepted by [`CreateImportEntity`].
+ */
+export type CreateImportStatus = 'staged' | 'imported';
+/**
+ * Lifecycle of one import entity.
+ */
+export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
+/**
  * A tag color from the fixed palette.
  */
 export type TagColor =
@@ -1131,6 +1143,74 @@ export interface CreateDocumentResponse {
   documentId: string;
 }
 /**
+ * Track an external item (Linear issue, Notion page, Slack channel) in the import ledger. Use status `staged` to propose an item for import BEFORE creating anything; use status `imported` (with entityId) only to record a Macro entity you already created from the item. The response tells you when the item was already imported by the user or a teammate — in that case do NOT create a duplicate; point the user at the existing entity instead.
+ */
+export interface CreateImportEntity {
+  /**
+   * The id of the Macro entity you created, required when status is `imported`. The entity type is fixed by source: linear → task, notion → md (document), slack → channel.
+   */
+  entityId?: string | null;
+  /**
+   * Stable id of the item in the source system: the Linear issue identifier (e.g. `ENG-142`), the Notion page URL or id, or the Slack channel id (e.g. `C0123456789`, falling back to the channel name).
+   */
+  foreignId: string;
+  /**
+   * Metadata describing the item. Linear: {identifier, title, description?, status?, priority?, assignee?, assignee_email?, url?}. Notion: {title, url?, summary?} — never include page content. Slack: {name, channel_id?, purpose?, participants?: [{name, email?}]}.
+   */
+  metadata: {
+    [k: string]: unknown;
+  };
+  source: ImportSource;
+  status: CreateImportStatus;
+}
+/**
+ * Response from tracking an item.
+ */
+export interface CreateImportEntityResponse {
+  entity: ImportEntityView;
+  /**
+   * What to do with this outcome.
+   */
+  message: string;
+  /**
+   * What happened: `staged`, `recorded_imported`, `already_imported`,
+   * `already_imported_by_teammate`, `previously_declined`, or
+   * `import_in_progress`.
+   */
+  outcome: string;
+}
+/**
+ * Compact row view returned by import tools.
+ */
+export interface ImportEntityView {
+  /**
+   * The Macro entity it became, when imported.
+   */
+  entityId?: string | null;
+  /**
+   * The Macro entity type, when imported.
+   */
+  entityType?: string | null;
+  /**
+   * Stable id in the source system.
+   */
+  foreignId: string;
+  /**
+   * Ledger row id (use with DeleteImportEntity).
+   */
+  id: string;
+  /**
+   * Whether the row belongs to a teammate (team-imported), not the user.
+   */
+  importedByTeammate: boolean;
+  /**
+   * A human label from the metadata (title / channel name).
+   */
+  label: string;
+  source: ImportSource;
+  status: ImportStatus;
+}
+/**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
@@ -1229,6 +1309,28 @@ export interface CrmCompanySearchResponseItem {
    * When the company was last updated (the sort key).
    */
   updatedAt: string;
+}
+/**
+ * Decline a staged import candidate on the user's behalf. The item is remembered as declined so it won't be proposed again; only the user's own staged items can be declined.
+ */
+export interface DeleteImportEntity {
+  /**
+   * The import entity id to decline (from CreateImportEntity or ListImportEntities).
+   */
+  id: string;
+}
+/**
+ * Response from declining a candidate.
+ */
+export interface DeleteImportEntityResponse {
+  /**
+   * Whether the row is now discarded.
+   */
+  discarded: boolean;
+  /**
+   * What happened.
+   */
+  message: string;
 }
 /**
  * Permanently delete a tag from the user's personal set or their team's shared set. This removes the tag from every item it is currently applied to, so it is destructive and cannot be undone — confirm with the user first. Both ids come from a ListTags result: `id` is the tag's option id, and `property_definition_id` is the propertyDefinitionId of the set that contains it. To simply remove a tag from a single item without deleting the tag itself, use SetEntityProperty with remove_option_ids instead.
@@ -1948,6 +2050,28 @@ export interface ListEntitiesResponse {
    * Human-readable summary of the returned items.
    */
   summary: string;
+}
+/**
+ * List the user's import ledger: staged candidates, in-flight imports, imported items (including ones teammates imported into the team), and declined items. Use this to check what already exists before proposing or creating imports.
+ */
+export interface ListImportEntities {
+  /**
+   * Filter to one source system.
+   */
+  source?: ImportSource | null;
+  /**
+   * Filter to one status: staged, importing, imported, or discarded. Omit for all.
+   */
+  status?: ImportStatus | null;
+}
+/**
+ * Response from listing the ledger.
+ */
+export interface ListImportEntitiesResponse {
+  /**
+   * The visible rows, newest first.
+   */
+  entities: ImportEntityView[];
 }
 /**
  * List the email inboxes the user can read or act on. Returns the caller's primary inbox, any other inboxes they have connected, and any inboxes delegated to them by teammates. Each entry has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is specified), and `isDelegated` (true when the inbox belongs to another user).

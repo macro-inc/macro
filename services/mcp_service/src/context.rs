@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ai_tools::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpScheduleContext,
-    NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
+    NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use channels::{
@@ -327,6 +327,7 @@ async fn build_tool_context(
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(
             db.clone(),

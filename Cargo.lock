@@ -197,6 +197,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "import",
  "item_filters",
  "lazy_static",
  "lexical_client",
@@ -209,6 +210,7 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
+ "mcp_client",
  "model",
  "model-entity",
  "model_notifications",
@@ -4126,6 +4128,7 @@ dependencies = [
  "futures",
  "http 1.4.0",
  "http-body-util",
+ "import",
  "last_online_tracker",
  "lazy_static",
  "lexical_client",
@@ -4157,6 +4160,7 @@ dependencies = [
  "models_permissions",
  "non_empty",
  "notification",
+ "onboarding",
  "prompt",
  "readonly_pool",
  "redis",
@@ -7097,6 +7101,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40fac9d56ed6437b198fddba683305e8e2d651aa42647f00f5ae542e7f5c94a2"
 
 [[package]]
+name = "import"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "ai_toolset",
+ "ai_usage",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "futures",
+ "macro_authorization",
+ "macro_user_id",
+ "mcp_client",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "include_dir"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10003,6 +10035,29 @@ checksum = "9df9128cbbfef73cda168416ccf7f837b62737d748333bfe9ab71c245d76613e"
 dependencies = [
  "objc2",
  "objc2-foundation",
+]
+
+[[package]]
+name = "onboarding"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "import",
+ "macro_authorization",
+ "macro_user_id",
+ "mcp_client",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

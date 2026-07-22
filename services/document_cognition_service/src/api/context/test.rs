@@ -350,6 +350,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         notification_tool_context: notification_tool_context.clone(),
+        import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(
             pool.clone(),
@@ -366,6 +367,30 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
+
+    let (import_service, onboarding_service) = {
+        let mcp_key =
+            mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
+        let mcp_repo =
+            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+        let creator = ai_tools::ToolEntityCreator {
+            document_creator: document_tool_context.creator.clone(),
+            entity_access_service: entity_access_service.clone(),
+            channel_service: tool_service_context.channel_tool_context.service.clone(),
+        };
+        let import_service = Arc::new(import::domain::service::ImportServiceImpl::new(
+            import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
+            Arc::new(mcp_repo.clone()),
+            Arc::new(creator),
+            ai_usage::pg_recorder(pool.clone()),
+        ));
+        let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),
+            Arc::new(mcp_repo),
+            import_service.clone(),
+        ));
+        (import_service, onboarding_service)
+    };
 
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
@@ -501,6 +526,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             );
             mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth, authorization_state)
         },
+        import_service: import_service.clone(),
+        onboarding_service,
     };
     Arc::new(api_context)
 }

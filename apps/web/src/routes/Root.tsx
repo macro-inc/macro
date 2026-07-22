@@ -12,6 +12,7 @@ import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
+import { SetupPage } from '@app/features/setup/SetupPage';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
@@ -44,7 +45,9 @@ import {
 } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
+import { ENABLE_NEW_ONBOARDING } from '@core/constant/featureFlags';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -418,6 +421,15 @@ const ROUTES: RouteDefinition[] = [
       ),
   },
   {
+    path: '/setup',
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <Navigate href="/onboarding" />
+      ) : (
+        <SetupPage />
+      ),
+  },
+  {
     path: '/team-invite',
     component: TeamInviteAcceptance,
   },
@@ -540,6 +552,9 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
+    // The new split-screen onboarding replaces this modal on desktop; the
+    // Layout redirect sends first-time users to /setup instead.
+    (!ENABLE_NEW_ONBOARDING || isMobile()) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());

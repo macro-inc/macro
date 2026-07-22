@@ -14,13 +14,30 @@ const KEYS = {
   list: ['mcpServers', 'list'] as const,
 };
 
-export function useMcpServersQuery() {
+/** Stable placeholder so reads never suspend (see below). */
+const NO_SERVERS: ServerResponse[] = [];
+
+export function useMcpServersQuery(options?: {
+  /**
+   * Poll for connection changes. OAuth finishes in another tab, and if this
+   * one stayed visible no focus refetch fires — surfaces that must flip
+   * promptly (the setup connector chips) pass a short interval.
+   */
+  refetchInterval?: number;
+}) {
   return useQuery(() => ({
     queryKey: KEYS.list,
     queryFn: async () =>
       throwOnErr(async () => await cognitionApiServiceClient.listMcpServers()),
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: 'always' as const,
+    refetchInterval: options?.refetchInterval,
+    // Never suspend on this query: it polls on surfaces (onboarding) where a
+    // query that has never succeeded would otherwise re-suspend on EVERY
+    // scheduled refetch, escalating to the nearest Suspense boundary and
+    // blanking the page rhythmically. An empty list renders as "nothing
+    // connected yet", which every consumer already handles.
+    placeholderData: NO_SERVERS,
   }));
 }
 
