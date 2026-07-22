@@ -536,9 +536,11 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 
 // -- Normalized grouped cache tests --
 
+import type { Query } from '@app/features/next-soup/filters/filter-store/types';
+import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import { NOT_SET_GROUP_KEY } from '../grouped/types';
-import type { SoupAstItemsGroupedPage } from '../items';
+import type { SoupAstItemsFlatPage, SoupAstItemsGroupedPage } from '../items';
 
 const STATUS_DEF = 'status-def-id';
 const STATUS_GROUP_BY: GroupByField = {
@@ -898,5 +900,63 @@ describe('optimisticUpdateSoupEntity — parent item filter gate', () => {
     const notSet = page.groups.find((g) => g.key === NOT_SET_GROUP_KEY)!;
     expect(notSet.itemIds).toEqual([]);
     expect(notSet.totalCount).toBe(0);
+  });
+});
+
+/**
+ * End-to-end gate for the dynamic-UI `list` widget (macro-2587): the widget
+ * drives a flat astItems query from a raw `Query` and now attaches
+ * `soupItemMatchesQuery` as its `itemFilter`. Without it, any optimistic insert
+ * (e.g. creating a task) prepended into an email-scoped list's cache.
+ */
+describe('insertSoupEntity — dynamic-ui list query gate', () => {
+  function seedFlatAstQueryWithFilter(
+    items: SoupApiItem[],
+    query: Query,
+    suffix = 'widget-seed'
+  ) {
+    const key = [...soupKeys.astItems._def, {}, {}, undefined, suffix];
+    const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {
+      pages: [{ kind: 'flat', items, nextCursor: null }],
+      pageParams: [null],
+    };
+    testQueryClient.setQueryDefaults(key, {
+      meta: {
+        itemFilter: (item: SoupApiItem) => soupItemMatchesQuery(item, query),
+      },
+    });
+    testQueryClient.setQueryData(key, data);
+    return key;
+  }
+
+  const emailScopedQuery: Query = { include: { threadId: ['e-1'] } };
+
+  it('rejects a newly created task from an email-scoped list', () => {
+    const key = seedFlatAstQueryWithFilter(
+      [mockEmailItem('e-1')],
+      emailScopedQuery
+    );
+
+    insertSoupEntity(mockTaskItem('task-new', 'in_progress'));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['e-1']);
+  });
+
+  it('still inserts a matching email optimistically', () => {
+    const key = seedFlatAstQueryWithFilter([mockEmailItem('e-1')], {
+      include: { threadId: ['e-1', 'e-2'] },
+    });
+
+    insertSoupEntity(mockEmailItem('e-2'));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['e-2', 'e-1']);
   });
 });

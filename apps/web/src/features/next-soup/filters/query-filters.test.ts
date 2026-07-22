@@ -1,0 +1,79 @@
+import type { SoupApiItem } from '@service-storage/generated/schemas';
+import { describe, expect, it } from 'vitest';
+import type { Query } from './filter-store/types';
+import { soupItemMatchesQuery } from './query-filters';
+
+const documentItem = (id: string, overrides: object = {}): SoupApiItem =>
+  ({ tag: 'document', data: { id, ...overrides } }) as unknown as SoupApiItem;
+
+const emailItem = (id: string): SoupApiItem =>
+  ({ tag: 'emailThread', data: { id } }) as unknown as SoupApiItem;
+
+const chatItem = (id: string): SoupApiItem =>
+  ({ tag: 'chat', data: { id } }) as unknown as SoupApiItem;
+
+describe('soupItemMatchesQuery', () => {
+  it('rejects entity types the query never references (nil-fill gating)', () => {
+    // An email-scoped list: only threadId is referenced, everything else is
+    // nil-filled by defineQueryFilters.
+    const query: Query = { include: { threadId: ['thread-1'] } };
+
+    expect(soupItemMatchesQuery(emailItem('thread-1'), query)).toBe(true);
+    // A freshly created task/doc must NOT leak into an email-scoped list.
+    expect(soupItemMatchesQuery(documentItem('doc-1'), query)).toBe(false);
+    expect(soupItemMatchesQuery(chatItem('chat-1'), query)).toBe(false);
+  });
+
+  it('honors explicit id lists (items-mode refs)', () => {
+    const query: Query = { include: { documentId: ['doc-1', 'doc-2'] } };
+
+    expect(soupItemMatchesQuery(documentItem('doc-1'), query)).toBe(true);
+    expect(soupItemMatchesQuery(documentItem('doc-2'), query)).toBe(true);
+    expect(soupItemMatchesQuery(documentItem('doc-3'), query)).toBe(false);
+    expect(soupItemMatchesQuery(emailItem('thread-1'), query)).toBe(false);
+  });
+
+  it('accepts any in-type item when the type is scoped by a non-id field', () => {
+    // Referencing the document target via owner keeps documentId un-nil-filled,
+    // so a new document owned by that user still matches optimistically.
+    const query: Query = { include: { documentOwnerId: ['macro|me@x.com'] } };
+
+    expect(
+      soupItemMatchesQuery(
+        documentItem('doc-new', { ownerId: 'macro|me@x.com' }),
+        query
+      )
+    ).toBe(true);
+    expect(
+      soupItemMatchesQuery(
+        documentItem('doc-other', { ownerId: 'macro|other@x.com' }),
+        query
+      )
+    ).toBe(false);
+    expect(soupItemMatchesQuery(emailItem('thread-1'), query)).toBe(false);
+  });
+
+  it('filters documents by sub type', () => {
+    const query: Query = { include: { subType: ['task'] } };
+
+    expect(
+      soupItemMatchesQuery(
+        documentItem('doc-task', { subType: { type: 'task' } }),
+        query
+      )
+    ).toBe(true);
+    expect(
+      soupItemMatchesQuery(
+        documentItem('doc-note', { subType: { type: 'note' } }),
+        query
+      )
+    ).toBe(false);
+  });
+
+  it('rejects everything for an empty items-mode query', () => {
+    const query: Query = { include: {} };
+
+    expect(soupItemMatchesQuery(documentItem('doc-1'), query)).toBe(false);
+    expect(soupItemMatchesQuery(emailItem('thread-1'), query)).toBe(false);
+  });
+});

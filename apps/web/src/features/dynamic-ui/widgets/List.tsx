@@ -5,6 +5,7 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import type { FieldFilters } from '@app/features/next-soup/filters/filter-store/types';
+import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { CollapsibleList } from '@entity/components/CollapsibleList';
@@ -140,11 +141,23 @@ function Rows(props: {
   // and return nothing — which is the correct "No items." outcome anyway.
   // `groupBy` orders the returned entities by the requested facet (the grouped
   // select flattens groups into `data.entities` in group order).
-  const itemsQuery = useSoupAstItemsQuery(() => ({
-    params: { limit: 200 },
-    body: compileQuery(query()),
-    groupBy: props.groupBy ? GROUP_BY_BY_NAME[props.groupBy] : undefined,
-  }));
+  const itemsQuery = useSoupAstItemsQuery(
+    () => ({
+      params: { limit: 200 },
+      body: compileQuery(query()),
+      groupBy: props.groupBy ? GROUP_BY_BY_NAME[props.groupBy] : undefined,
+    }),
+    () => {
+      // Unlike the soup view, this query has no client `itemFilter`, so the
+      // normalized cache would prepend ANY optimistically/WS-inserted entity
+      // into it (a new task landing in an email-scoped list, etc.). Gate inserts
+      // on the same `Query` that produced the AST so only matching items appear.
+      const source = query();
+      return {
+        meta: { itemFilter: (item) => soupItemMatchesQuery(item, source) },
+      };
+    }
+  );
 
   const entities = createMemo<EntityData[]>(() => {
     const all = itemsQuery.data?.entities ?? [];
