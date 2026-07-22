@@ -10,11 +10,7 @@ mod test;
 use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{
-    KafkaConsumerAdapter, MacroEvent, MacroEventCollection, MacroEventConsumerService,
-};
-#[cfg(test)]
-use macro_event_broker::{MessageParts, MessageWrapper};
+use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
 use rootcause::prelude::{Report, ResultExt as _};
 
 use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
@@ -70,7 +66,7 @@ impl SoupTopicConsumer {
             .context("failed to decode realtime Soup event")?;
 
         match event {
-            DeclaredMacroEvent::SoupMacroEvent(soup_macro_event) => todo!(),
+            DeclaredMacroEvent::SoupMacroEvent(event) => Ok(event.into_message()),
         }
     }
 }
