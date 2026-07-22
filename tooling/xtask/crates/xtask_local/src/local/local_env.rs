@@ -240,9 +240,10 @@ impl ServiceAuthEnv {
 }
 
 /// FusionAuth identity — all fixed UUIDs/secrets shared with the deterministic
-/// kickstart (see [`identity`]). The OAuth redirect is the only per-instance bit.
+/// kickstart (see [`identity`]). Browser-facing URLs are instance-specific.
 struct FusionAuthEnv {
     oauth_redirect_uri: String,
+    public_url: String,
     /// The auth service's own public origin (`BASE_URL`): OAuth callbacks and
     /// email verification links are built on it. Same host-port convention as
     /// [`identity::oauth_redirect_uri`]. Doppler supplies it for dev; the
@@ -255,6 +256,7 @@ impl FusionAuthEnv {
     fn for_instance(instance: &Instance) -> Self {
         FusionAuthEnv {
             oauth_redirect_uri: identity::oauth_redirect_uri(instance.port(Port::Auth)),
+            public_url: format!("http://localhost:{}", instance.port(Port::FusionAuth)),
             base_url: format!("http://localhost:{}", instance.port(Port::Auth)),
         }
     }
@@ -265,6 +267,7 @@ impl FusionAuthEnv {
             "FUSIONAUTH_BASE_URL".into(),
             "http://fusionauth:9011".into(),
         );
+        env.insert("FUSIONAUTH_PUBLIC_URL".into(), self.public_url.clone());
         env.insert(
             "FUSIONAUTH_API_KEY".into(),
             identity::FUSIONAUTH_API_KEY.into(),

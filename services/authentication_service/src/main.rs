@@ -147,6 +147,11 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let fusionauth_public_url = config
+        .fusionauth_public_url
+        .value()
+        .unwrap_or(config.fusionauth_base_url.as_ref())
+        .to_owned();
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id.to_string(),
         fusionauth_api_key,
@@ -156,7 +161,8 @@ async fn main() -> anyhow::Result<()> {
         config.fusionauth_oauth_redirect_uri.to_string().clone(),
         config.google_client_id.to_string().clone(),
         google_client_secret,
-    );
+    )
+    .with_public_url(fusionauth_public_url);
     tracing::trace!("initialized auth client");
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
