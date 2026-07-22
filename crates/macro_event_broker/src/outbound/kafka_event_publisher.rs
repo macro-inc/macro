@@ -9,16 +9,14 @@
 
 use std::time::Duration;
 
-use macro_env::Environment;
-use macro_event_topics::Topic;
-use rdkafka::message::BorrowedMessage;
-use rdkafka::producer::{FutureProducer, FutureRecord};
-use rdkafka::{ClientConfig, Message};
-
 use crate::MessageParts;
 use crate::domain::models::EventBrokerError;
 use crate::domain::ports::EventPublisher;
 use crate::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
+use macro_env::Environment;
+use macro_event_topics::Topic;
+use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::{ClientConfig, Message};
 
 /// How long a record may sit in the producer queue before delivery is considered failed.
 const MESSAGE_TIMEOUT_MS: &str = "5000";
@@ -100,16 +98,9 @@ impl EventPublisher for KafkaEventPublisher {
     }
 }
 
-impl<T> MessageParts for T
-where
-    T: Message,
-{
+impl<T: Message> MessageParts for T {
     fn key(&self) -> Option<&str> {
-        Message::key(self)
-            .map(std::str::from_utf8)
-            .transpose()
-            .ok()
-            .flatten()
+        Message::key(self).and_then(|key| std::str::from_utf8(key).ok())
     }
 
     fn payload(&self) -> Option<&[u8]> {

@@ -160,17 +160,17 @@ crate::declare_topics!(ExampleMacroEvent, DocumentsMacroEvent,);
 
 struct TestMessage {
     topic: &'static str,
-    key: &'static str,
-    payload: Vec<u8>,
+    key: Option<&'static str>,
+    payload: Option<Vec<u8>>,
 }
 
 impl MessageParts for TestMessage {
-    fn key(&self) -> &str {
+    fn key(&self) -> Option<&str> {
         self.key
     }
 
-    fn payload(&self) -> &[u8] {
-        &self.payload
+    fn payload(&self) -> Option<&[u8]> {
+        self.payload.as_deref()
     }
 
     fn topic(&self) -> &str {
@@ -183,8 +183,8 @@ fn decodes_each_declared_topic_into_its_enum_variant() {
     let example_payload = serde_json::to_vec(&example_event()).unwrap();
     let example_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         topic: MacroExampleTopic.as_str(),
-        key: "example-key",
-        payload: example_payload,
+        key: Some("example-key"),
+        payload: Some(example_payload),
     });
 
     match example_message.decode_payload().unwrap() {
@@ -197,8 +197,8 @@ fn decodes_each_declared_topic_into_its_enum_variant() {
     let documents_payload = serde_json::to_vec(&Event::new(DocumentsTopicEvent)).unwrap();
     let documents_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         topic: MacroDocumentsTopic.as_str(),
-        key: "documents-key",
-        payload: documents_payload,
+        key: Some("documents-key"),
+        payload: Some(documents_payload),
     });
 
     match documents_message.decode_payload().unwrap() {
@@ -213,13 +213,41 @@ fn decodes_each_declared_topic_into_its_enum_variant() {
 fn rejects_topics_not_declared_by_the_macro() {
     let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         topic: "macro.unknown",
-        key: "key",
-        payload: Vec::new(),
+        key: None,
+        payload: None,
     });
 
     assert!(matches!(
         message.decode_payload(),
         Err(EventBrokerError::UnknownTopic(topic)) if topic == "macro.unknown"
+    ));
+}
+
+#[test]
+fn rejects_a_missing_message_key() {
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic: MacroExampleTopic.as_str(),
+        key: None,
+        payload: Some(serde_json::to_vec(&example_event()).unwrap()),
+    });
+
+    assert!(matches!(
+        message.decode_payload(),
+        Err(EventBrokerError::MissingMessageKey)
+    ));
+}
+
+#[test]
+fn rejects_a_missing_message_payload() {
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic: MacroExampleTopic.as_str(),
+        key: Some("example-key"),
+        payload: None,
+    });
+
+    assert!(matches!(
+        message.decode_payload(),
+        Err(EventBrokerError::MissingMessagePayload)
     ));
 }
 
@@ -235,8 +263,8 @@ fn rejects_an_unsupported_schema_version() {
     );
     let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         topic: MacroExampleTopic.as_str(),
-        key: "example-key",
-        payload: serde_json::to_vec(&event).unwrap(),
+        key: Some("example-key"),
+        payload: Some(serde_json::to_vec(&event).unwrap()),
     });
 
     assert!(matches!(

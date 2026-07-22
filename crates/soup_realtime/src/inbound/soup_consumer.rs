@@ -10,11 +10,13 @@ mod test;
 use std::time::Duration;
 
 use kafka_consumer_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
+#[cfg(test)]
+use macro_event_broker::MessageParts;
 use macro_event_broker::{
-    EventConsumer, MacroEvent, MacroEventConsumerService, MessageParts, MessageWrapper, Topic,
+    EventConsumer, MacroEvent, MacroEventConsumerService, MessageWrapper, Topic,
 };
 use macro_event_topics::MacroSoupRealtimeTopic;
-use rdkafka::message::Message as _;
+use rdkafka::message::{BorrowedMessage, Message};
 use rootcause::prelude::{Report, ResultExt as _};
 
 use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
@@ -31,23 +33,25 @@ fn assigned_topics() -> [&'static str; 1] {
     [MacroSoupRealtimeTopic.as_str()]
 }
 
-struct ValidatedKafkaMessage {
-    topic: String,
-    key: String,
-    payload: Vec<u8>,
+#[cfg(test)]
+struct TestMessage<'a> {
+    topic: &'a str,
+    key: &'a str,
+    payload: &'a [u8],
 }
 
-impl MessageParts for ValidatedKafkaMessage {
-    fn key(&self) -> &str {
-        &self.key
+#[cfg(test)]
+impl MessageParts for TestMessage<'_> {
+    fn key(&self) -> Option<&str> {
+        Some(self.key)
     }
 
-    fn payload(&self) -> &[u8] {
-        &self.payload
+    fn payload(&self) -> Option<&[u8]> {
+        Some(self.payload)
     }
 
     fn topic(&self) -> &str {
-        &self.topic
+        self.topic
     }
 }
 
@@ -56,7 +60,7 @@ struct SoupKafkaEventConsumer {
 }
 
 impl EventConsumer<DeclaredMacroEvent> for SoupKafkaEventConsumer {
-    type MessageType<'a> = ValidatedKafkaMessage;
+    type MessageType<'a> = BorrowedMessage<'a>;
 
     async fn recv<'a>(
         &'a self,
@@ -68,38 +72,14 @@ impl EventConsumer<DeclaredMacroEvent> for SoupKafkaEventConsumer {
             .context("failed to receive realtime Soup message")?;
 
         tracing::trace!(
-            topic = message.topic(),
+            topic = Message::topic(&message),
             partition = message.partition(),
             offset = message.offset(),
-            payload_len = message.payload().map_or(0, <[u8]>::len),
+            payload_len = Message::payload(&message).map_or(0, <[u8]>::len),
             "received realtime Soup message"
         );
 
-        let key = message.key().ok_or_else(|| {
-            rootcause::report!(
-                "realtime Soup event had no recipient key (partition {} offset {})",
-                message.partition(),
-                message.offset()
-            )
-        })?;
-        let key = std::str::from_utf8(key)
-            .context("realtime Soup event had a non-UTF-8 recipient key")?;
-        let payload = message
-            .payload()
-            .filter(|payload| !payload.is_empty())
-            .ok_or_else(|| {
-                rootcause::report!(
-                    "realtime Soup event had an empty payload (partition {} offset {})",
-                    message.partition(),
-                    message.offset()
-                )
-            })?;
-
-        Ok(MessageWrapper::new(ValidatedKafkaMessage {
-            topic: message.topic().to_owned(),
-            key: key.to_owned(),
-            payload: payload.to_vec(),
-        }))
+        Ok(MessageWrapper::new(message))
     }
 }
 
@@ -119,10 +99,10 @@ fn into_message(event: DeclaredMacroEvent) -> Result<SoupRealtimeMessage, Report
 
 #[cfg(test)]
 fn decode_message(topic: &str, key: &str, payload: &[u8]) -> Result<SoupRealtimeMessage, Report> {
-    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(ValidatedKafkaMessage {
-        topic: topic.to_owned(),
-        key: key.to_owned(),
-        payload: payload.to_vec(),
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic,
+        key,
+        payload,
     });
     let event = message
         .decode_payload()

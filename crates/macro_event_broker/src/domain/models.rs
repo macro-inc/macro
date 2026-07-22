@@ -114,6 +114,12 @@ pub enum EventBrokerError {
     /// The event payload could not be serialized to or deserialized from JSON.
     #[error("failed to serialize or deserialize event payload")]
     Serialization(#[from] serde_json::Error),
+    /// The consumed broker message did not include a key.
+    #[error("event broker message is missing a key")]
+    MissingMessageKey,
+    /// The consumed broker message did not include a payload.
+    #[error("event broker message is missing a payload")]
+    MissingMessagePayload,
     /// The Kafka topic name is not handled by a consumer-specific event enum.
     #[error("unknown event topic: {0}")]
     UnknownTopic(String),
@@ -205,10 +211,13 @@ macro_rules! declare_topics {
                         &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
                     );
                     if message.topic() == expected_topic {
-                        let event = <$event as $crate::MacroEvent>::decode(
-                            message.key(),
-                            message.payload(),
-                        )?;
+                        let key = message
+                            .key()
+                            .ok_or($crate::EventBrokerError::MissingMessageKey)?;
+                        let payload = message
+                            .payload()
+                            .ok_or($crate::EventBrokerError::MissingMessagePayload)?;
+                        let event = <$event as $crate::MacroEvent>::decode(key, payload)?;
                         let envelope = <$event as $crate::MacroEvent>::event(&event);
                         let expected = $crate::TopicEvent::schema_version(&envelope.event);
                         let actual = envelope.schema_version;

@@ -165,12 +165,12 @@ struct TestMessage {
 }
 
 impl MessageParts for TestMessage {
-    fn key(&self) -> &str {
-        self.key
+    fn key(&self) -> Option<&str> {
+        Some(self.key)
     }
 
-    fn payload(&self) -> &[u8] {
-        &self.payload
+    fn payload(&self) -> Option<&[u8]> {
+        Some(&self.payload)
     }
 
     fn topic(&self) -> &str {
