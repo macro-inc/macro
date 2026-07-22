@@ -12,7 +12,7 @@ use axum::{
 };
 use frecency::domain::models::AggregateFrecency;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Serialize;
@@ -20,7 +20,6 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::required_user;
 use crate::domain::{
     models::{
         Activity, ChannelListItem, ChannelType as DomainChannelType, ChannelWithLatest,
@@ -109,13 +108,13 @@ impl IntoResponse for ChannelListRouterErr {
 )]
 async fn get_channels_handler<S, Auth>(
     State(service): State<ChannelListRouterState<S, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ApiChannelWithLatest>>, ChannelListRouterErr>
 where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
-    let user = required_user(&authorization.authorization);
+    let user = &authorization.authorization.user;
     let res = service
         .inner
         .get_channels(GetChannelsRequest {
@@ -150,13 +149,13 @@ where
 /// Handle legacy channel activity list requests.
 pub async fn get_activity_handler<S, Auth>(
     State(service): State<ChannelListRouterState<S, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ApiActivity>>, ChannelListRouterErr>
 where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
-    let user = required_user(&authorization.authorization);
+    let user = &authorization.authorization.user;
     let res = service
         .inner
         .get_activities(user.macro_user_id.clone())
