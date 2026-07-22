@@ -8,7 +8,7 @@ use axum_extra::extract::Cached;
 use ip_extractor::ClientIp;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::email::EmailStr;
 use rate_limit::inbound::RateLimitExtractable;
@@ -49,13 +49,10 @@ pub async fn post_referral_invite_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ReferralRouterState<T, R, Auth>>,
-    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
 ) -> Result<StatusCode, ReferralError> {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = authorization.authorization.user;
     let () = state
         .service
         .send_referral_invite(user.macro_user_id.clone(), recipient)
@@ -65,7 +62,7 @@ pub async fn post_referral_invite_handler<
 }
 
 /// the rate limit definition for the per-user rate limit on referring new users
-pub struct PerUserReferralRateLimit<Auth>(MacroAuthorizationExtractor<Auth>);
+pub struct PerUserReferralRateLimit<Auth>(MacroAuthorizationExtractor<Auth, UserOrInternal>);
 
 impl<S, Auth> RateLimitExtractable<S> for PerUserReferralRateLimit<Auth>
 where
@@ -82,13 +79,8 @@ where
     }
 
     fn key(&self) -> rate_limit::RateLimitKey {
-        let user = self
-            .0
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user");
         RateLimitKey::builder(&"per-user-referral")
-            .append(&user.macro_user_id.as_ref())
+            .append(&self.0.authorization.user.macro_user_id.as_ref())
             .finish()
     }
 }
@@ -105,7 +97,7 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> =
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
             parts.extract_with_state(state).await?;
         Ok(Self(authorization))
     }
