@@ -11,6 +11,7 @@ consumer = [
   "dep:macro_event_broker",
   "dep:macro_event_topics",
   "dep:rdkafka",
+  "dep:serde_json",
   "dep:tokio",
   "ports",
 ]
