@@ -979,6 +979,7 @@ dependencies = [
  "email_db_client",
  "email_validator",
  "entity_access",
+ "favorites",
  "foreign_entity",
  "fusionauth",
  "futures",

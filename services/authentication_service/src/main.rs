@@ -290,6 +290,9 @@ async fn main() -> anyhow::Result<()> {
         config.stripe_price_id.to_string().clone(),
     );
     let channel_service = ChannelServiceImpl::new(PgChannelsRepo::new(db.clone()));
+    let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
+        favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
+    );
     let team_crm_settings_repo_impl =
         teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl::new(db.clone());
 
@@ -383,6 +386,7 @@ async fn main() -> anyhow::Result<()> {
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
             channel_service: Arc::new(channel_service),
+            favorites_service: Arc::new(favorites_service),
             entity_access_service: Arc::new(entity_access_service_impl),
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {

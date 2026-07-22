@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use analytics_client::{MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
@@ -17,14 +20,23 @@ use channels::domain::{
     models::{ChannelType, CreateChannelRequest, Sender},
     ports::ChannelService,
 };
+use favorites::domain::ports::FavoritesService;
 use fusionauth::error::FusionAuthClientError;
-use macro_user_id::{email::Email, user_id::MacroUserIdStr};
+use macro_user_id::{
+    email::{Email, ReadEmailParts},
+    user_id::MacroUserIdStr,
+};
 use model::authentication::webhooks::FusionAuthUserWebhook;
+use model_entity::EntityType;
 use std::collections::HashSet;
 use teams::domain::team_repo::TeamService;
 
 /// Macro support team members added to every new user's support channel.
 const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "teo@macro.com"];
+
+fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
+    format!("Macro Support x {}", email.local_part())
+}
 
 /// FusionAuth create user webhook
 #[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
@@ -110,9 +122,11 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // FusionAuth's own email validation is more permissive than ours (e.g. it allows
     // single quotes). The user.create event is transactional (AbsoluteMajority), so
     // returning an error here aborts the FusionAuth user creation entirely.
-    if let Err(e) = Email::parse_from_str(&email) {
-        anyhow::bail!("email is not a valid macro email: {e}");
-    }
+    let parsed_email = match Email::parse_from_str(&email) {
+        Ok(email) => email,
+        Err(e) => anyhow::bail!("email is not a valid macro email: {e}"),
+    };
+    let support_channel_name = support_channel_name(&parsed_email);
 
     // rate limit check for user creation
     let rate_limit = ctx
@@ -303,8 +317,10 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // never block user creation.
     tokio::spawn({
         let channel_service = ctx.channel_service.clone();
+        let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
         let email = email.clone();
+        let support_channel_name = support_channel_name.clone();
         async move {
             let owner_id = match MacroUserIdStr::try_from(user_id) {
                 Ok(owner_id) => owner_id,
@@ -326,12 +342,12 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 }
             };
 
-            if let Err(e) = channel_service
+            let channel = match channel_service
                 .create_channel(
-                    Sender::new_from_user(owner_id),
+                    Sender::new_from_user(owner_id.clone()),
                     None,
                     CreateChannelRequest {
-                        name: Some(format!("{email} x Macro Support")),
+                        name: Some(support_channel_name),
                         channel_type: ChannelType::Private,
                         team_id: None,
                         auto_join_team: false,
@@ -340,7 +356,19 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 )
                 .await
             {
-                tracing::error!(error=?e, %email, "failed to create Macro support channel");
+                Ok(channel) => channel,
+                Err(e) => {
+                    tracing::error!(error=?e, %email, "failed to create Macro support channel");
+                    return;
+                }
+            };
+
+            let channel_entity = EntityType::Channel.with_entity_str(&channel.id);
+            if let Err(e) = favorites_service
+                .add_favorite_with_established_access(&owner_id, &channel_entity)
+                .await
+            {
+                tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
         }
     });

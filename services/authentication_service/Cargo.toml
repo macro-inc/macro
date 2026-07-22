@@ -58,6 +58,7 @@ email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
 entity_access = { path = "../../crates/entity_access" }
 foreign_entity = { path = "../../crates/foreign_entity" }
+favorites = { path = "../../crates/favorites", features = ["postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = [
