@@ -7,7 +7,7 @@ use axum::routing::get;
 use axum::{RequestPartsExt, Router};
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rate_limit::domain::models::RateLimitOk;
@@ -54,12 +54,9 @@ pub struct AddContactRequest {
 )]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> impl IntoResponse {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = authorization.authorization.user;
 
     match contacts.query_contacts(user.macro_user_id.clone()).await {
         Ok(contacts) if !contacts.is_empty() => {
@@ -88,13 +85,10 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
 )]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Json(body): Json<AddContactRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = authorization.authorization.user;
 
     service
         .add_contact_nodes(ContactsNodes {
@@ -109,7 +103,7 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
 }
 
 /// Rate limit for adding contacts: 50 requests per user per hour.
-pub struct PerUserAddContactRateLimit<Auth>(MacroAuthorizationExtractor<Auth>);
+pub struct PerUserAddContactRateLimit<Auth>(MacroAuthorizationExtractor<Auth, UserOrInternal>);
 
 impl<S, Auth> RateLimitExtractable<S> for PerUserAddContactRateLimit<Auth>
 where
@@ -125,13 +119,8 @@ where
     }
 
     fn key(&self) -> RateLimitKey {
-        let user = self
-            .0
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user");
         RateLimitKey::builder(&"per-user-add-contact")
-            .append(&user.macro_user_id.as_ref())
+            .append(&self.0.authorization.user.macro_user_id.as_ref())
             .finish()
     }
 }
@@ -148,7 +137,7 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> =
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
             parts.extract_with_state(state).await?;
         Ok(Self(authorization))
     }
