@@ -44,7 +44,7 @@ function runInRoot(run: () => Promise<void>): Promise<void> {
 }
 
 describe('createRecordSelectionQuickAccessItems', () => {
-  it('filters, sorts, searches, counts, and paginates locally', async () => {
+  it('filters, sorts, searches, and counts locally', async () => {
     await runInRoot(async () => {
       const [searchTerm, setSearchTerm] = createSignal('');
       const selected = [
@@ -73,7 +73,6 @@ describe('createRecordSelectionQuickAccessItems', () => {
         buckets: [],
         searchTerm,
         enabled: () => true,
-        pageSize: 2,
         selectedItems: () => selected,
         localItems: () => local,
         instructionsId: () => undefined,
@@ -82,9 +81,14 @@ describe('createRecordSelectionQuickAccessItems', () => {
         onItems: () => undefined,
       });
 
-      expect(list.items().map((item) => item.id)).toEqual(['b', 'a']);
+      expect(list.items().map((item) => item.id)).toEqual([
+        'b',
+        'a',
+        'c',
+        'person',
+      ]);
       expect(list.totalCount()).toBe(4);
-      expect(list.hasMore()).toBe(true);
+      expect(list.hasMore()).toBe(false);
       await list.loadMore();
       expect(list.items().map((item) => item.id)).toEqual([
         'b',
@@ -92,7 +96,6 @@ describe('createRecordSelectionQuickAccessItems', () => {
         'c',
         'person',
       ]);
-      expect(list.hasMore()).toBe(false);
 
       setSearchTerm('charlie');
       await Promise.resolve();
@@ -102,13 +105,12 @@ describe('createRecordSelectionQuickAccessItems', () => {
     });
   });
 
-  it('applies bucket filtering before counts and visible slicing', async () => {
+  it('applies bucket filtering before counting items', async () => {
     await runInRoot(async () => {
       const list = createRecordSelectionQuickAccessItems({
         buckets: ['document'],
         searchTerm: () => '',
         enabled: () => true,
-        pageSize: 1,
         selectedItems: () => [
           entity('doc-a', 'document', 'A', 1),
           entity('email-a', 'email', 'Email', 2),
@@ -121,9 +123,9 @@ describe('createRecordSelectionQuickAccessItems', () => {
         onItems: () => undefined,
       });
 
-      expect(list.items().map((item) => item.id)).toEqual(['doc-b']);
+      expect(list.items().map((item) => item.id)).toEqual(['doc-b', 'doc-a']);
       expect(list.totalCount()).toBe(2);
-      expect(list.hasMore()).toBe(true);
+      expect(list.hasMore()).toBe(false);
       await list.loadMore();
       expect(list.items().map((item) => item.id)).toEqual(['doc-b', 'doc-a']);
     });

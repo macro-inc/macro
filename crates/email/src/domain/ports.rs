@@ -252,6 +252,14 @@ pub trait EmailRepo: Send + Sync + 'static {
         is_read: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Update the denormalized thread-level read status, verified by link_id.
+    fn update_thread_read_status(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        is_read: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the starred status for a batch of messages, verified by link_id.
     fn update_message_starred_status_batch(
         &self,
@@ -442,10 +450,10 @@ pub trait EmailService: Send + Sync + 'static {
         link: &Link,
     ) -> impl Future<Output = Result<Vec<LinkLabel>, EmailErr>> + Send;
 
-    /// Add or remove a label from all messages in a thread.
+    /// Add or remove a label from all messages in a thread. Provider sync
+    /// happens asynchronously via the gmail_ops queue.
     fn update_thread_labels(
         &self,
-        access_token: &str,
         link: &Link,
         thread_id: Uuid,
         label_id: Uuid,
@@ -639,7 +647,6 @@ impl EmailService for NoOpEmailService {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &Link,
         _thread_id: Uuid,
         _label_id: Uuid,

@@ -341,6 +341,13 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   true
 );
 
+// Inline AI editing: the floating document AI edit pill and the AI editing
+// tool in the selection formatting menu. Gated by PostHog; use the reactive
+// `useFeatureFlag(INLINE_AI_EDITING_FLAG, { enabledOverride: INLINE_AI_EDITING_OVERRIDE })`.
+export const INLINE_AI_EDITING_FLAG = 'inline-ai-editing';
+export const INLINE_AI_EDITING_OVERRIDE =
+  resolveFeatureFlag('INLINE_AI_EDITING', DEV_MODE_ENV) || undefined;
+
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
   true

@@ -1,9 +1,11 @@
 #![deny(missing_docs)]
 //! This crate contains queries to search over macro db entities by their name
 
+mod channel;
 mod chat;
 mod highlight;
 
+pub use channel::search_channel_names;
 pub use chat::search_chat_names;
 pub use highlight::highlight_name;
 pub use models_opensearch::SearchEntityType;

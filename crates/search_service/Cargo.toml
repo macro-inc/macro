@@ -42,9 +42,6 @@ system_properties = { path = "../system_properties" }
 readonly_pool = { path = "../readonly_pool" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
-macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-  "auth",
-] }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 models_email = { path = "../models_email" }

@@ -310,6 +310,7 @@ export function MarkdownEditor(props: {
   const [state, setState] = createSignal<EditorState>(editor.getEditorState());
 
   setMdStore('editor', editor);
+  setMdStore('mapping', lexicalWrapper.mapping);
   setMdStore('plugins', plugins);
 
   const [editorFocus, setEditorFocus] = createSignal(false);
@@ -425,6 +426,9 @@ export function MarkdownEditor(props: {
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {
+    // dndDragMove is a trailing throttle, so a callback scheduled just before
+    // the drop would otherwise fire after it and could re-show the indicator.
+    dndDragMove.clear();
     // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
     if (event.draggable?.data.dragType !== 'entity') return;
     dndDragEnd(event);
@@ -547,6 +551,7 @@ export function MarkdownEditor(props: {
         menu: tagsMenuOperations,
         peerIdValidator: peerIdValidator(),
         onCreateTag: (tag) => {
+          if (!canEdit()) return;
           void documentTags.applyTag(tag.scope, tag.optionId);
         },
       })

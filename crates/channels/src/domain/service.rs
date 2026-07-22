@@ -342,6 +342,11 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        if req.auto_join_team && req.channel_type != ChannelType::Team {
+            return Err(ChannelMutationErr::BadRequest(
+                "auto-join is only available for team channels".to_string(),
+            ));
+        }
         if req.channel_type == ChannelType::Team {
             let team_id = req.team_id.ok_or_else(|| {
                 ChannelMutationErr::BadRequest("team id missing for team channel type".to_string())
@@ -422,6 +427,7 @@ where
                 name: None,
                 channel_type: ChannelType::DirectMessage,
                 team_id: None,
+                auto_join_team: false,
                 participants: HashSet::from([actor, recipient_id.clone()]),
             },
         )
@@ -457,6 +463,7 @@ where
                 name: None,
                 channel_type: ChannelType::Private,
                 team_id: None,
+                auto_join_team: false,
                 participants: req.recipients,
             },
         )
@@ -1712,6 +1719,42 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::create_channel(self, actor, None, req).await
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn auto_join_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), ChannelMutationErr> {
+        self.repo
+            .auto_join_by_team_id(team_id, user_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn leave_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Uuid>, ChannelMutationErr> {
+        self.repo
+            .leave_by_team_id(team_id, user_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, user_id, channel_ids))]
+    async fn restore_by_channel_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        channel_ids: &[Uuid],
+    ) -> Result<(), ChannelMutationErr> {
+        self.repo
+            .restore_by_channel_ids(user_id, channel_ids)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
     }
 
     async fn get_or_create_dm(

@@ -15,6 +15,8 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -36,7 +38,7 @@ import {
   GoToHotkeys,
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
-import { mountMailtoInterceptor } from '@components/app/mailto-interceptor';
+import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
@@ -90,6 +92,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}offline`,
   `${ROUTER_BASE_CONCAT}welcome`,
+  `${ROUTER_BASE_CONCAT}mobile-email-signup`,
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
@@ -390,7 +393,8 @@ function LayoutInner(props: RouteSectionProps) {
 
   mountGlobalFocusListener();
 
-  mountMailtoInterceptor();
+  // Route mailto: links (via openExternalUrl) to the in-app email composer.
+  registerMailtoComposerHandler();
 
   attachGlobalDOMScope(document.body);
 
@@ -427,6 +431,8 @@ function LayoutInner(props: RouteSectionProps) {
           <IosShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
+          <CreateCompanyModal />
+          <CreateContactModal />
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>

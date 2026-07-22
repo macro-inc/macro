@@ -134,6 +134,7 @@ pub fn local_env(
                 "REDIS_URI",
                 "LOCAL_AWS_URL",
                 "FUSIONAUTH_BASE_URL",
+                "FUSIONAUTH_PUBLIC_URL",
                 "FUSIONAUTH_CLIENT_ID",
                 "JWT_SECRET_KEY",
                 "DOCUMENT_STORAGE_BUCKET",

@@ -1,8 +1,6 @@
 import {
-  BulkUpdateEntityPropertyOptionsError,
-  getEntityPropertyOptionDeltas,
-  rollbackEntityPropertyOptionDelta,
   useBulkUpdateEntityPropertyOptionsMutation,
+  useInFlightEntityPropertyOptions,
 } from '@queries/properties/entity';
 import {
   useEnsureTagSetMutation,
@@ -14,12 +12,7 @@ import type { PropertyOptionResponse } from '@service-properties/generated/schem
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { useEntityProperties } from '../hooks';
 import type { PropertyDefinitionDomain } from '../types';
 import { useTagSets } from './tag-sets-context';
@@ -72,7 +65,7 @@ function usePersistTagSelection(
   entityId: string,
   entityType: EntityType
 ): PersistTagSelection {
-  const mutation = useBulkUpdateEntityPropertyOptionsMutation();
+  const mutation = useBulkUpdateEntityPropertyOptionsMutation(entityId);
 
   return async (updates) => {
     await mutation.mutateAsync({
@@ -90,11 +83,14 @@ function usePersistTagSelection(
 function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   persistTagSelection: PersistTagSelection,
-  tagSets: Accessor<TagSetResponse[]>
+  tagSets: Accessor<TagSetResponse[]>,
+  // Optimistic overlay for query-backed sources (undefined for soup/local,
+  // whose sources update optimistically on their own).
+  inFlightOptionIdsForDefinition?: (
+    definitionId: string
+  ) => string[] | undefined
 ) {
   const ensureTagSet = useEnsureTagSetMutation();
-  const [pendingOptionIdsByDefinition, setPendingOptionIdsByDefinition] =
-    createSignal<Map<string, string[]>>(new Map());
   const [displayOptionOrder, setDisplayOptionOrder] = createSignal<string[]>(
     []
   );
@@ -124,7 +120,7 @@ function createDocTags(
   });
 
   const visibleOptionIdsForDefinition = (definitionId: string): string[] =>
-    pendingOptionIdsByDefinition().get(definitionId) ??
+    inFlightOptionIdsForDefinition?.(definitionId) ??
     appliedOptionIdsForDefinition(definitionId);
 
   const visibleTags = createMemo((): ResolvedTag[] => {
@@ -159,25 +155,6 @@ function createDocTags(
   const isApplied = (optionId: string): boolean =>
     appliedTags().some((tag) => tag.optionId === optionId);
 
-  createEffect(() => {
-    const pending = pendingOptionIdsByDefinition();
-    if (pending.size === 0) return;
-
-    let changed = false;
-    const next = new Map(pending);
-    for (const [definitionId, pendingIds] of pending) {
-      const sourceIds = appliedOptionIdsForDefinition(definitionId);
-      if (sameOptionIds(sourceIds, pendingIds)) {
-        next.delete(definitionId);
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      setPendingOptionIdsByDefinition(next);
-    }
-  });
-
   const resolveDefinition = async (
     scope: TagScope
   ): Promise<PropertyDefinitionDetailResponse> => {
@@ -190,53 +167,13 @@ function createDocTags(
     return provisioned.definition;
   };
 
-  const updatePendingOptionIds = (
-    definitionId: string,
-    update: (optionIds: string[]) => string[]
-  ) => {
-    setPendingOptionIdsByDefinition((prev) => {
-      const next = new Map(prev);
-      const current =
-        prev.get(definitionId) ?? appliedOptionIdsForDefinition(definitionId);
-      next.set(definitionId, update(current));
-      return next;
-    });
-  };
-
+  // Optimism and rollback live in the persistence layer: the soup/local sources
+  // update optimistically, and the query source reads the in-flight overlay
+  // above. A failed commit persists nothing and leaves no in-flight state, so
+  // there is nothing to unwind here.
   const commitTagSelection = async (updates: TagSelectionUpdate[]) => {
     if (updates.length === 0) return;
-
-    setPendingOptionIdsByDefinition((prev) => {
-      const next = new Map(prev);
-      for (const update of updates) {
-        next.set(update.definition.id, update.nextOptionIds);
-      }
-      return next;
-    });
-
-    try {
-      await persistTagSelection(updates);
-    } catch (error) {
-      const failed =
-        error instanceof BulkUpdateEntityPropertyOptionsError
-          ? error.failedDeltas.flatMap(({ updateIndex, delta }) => {
-              const update = updates[updateIndex];
-              return update ? [{ update, delta }] : [];
-            })
-          : updates.flatMap((update) =>
-              getEntityPropertyOptionDeltas(
-                update.currentOptionIds,
-                update.nextOptionIds
-              ).map((delta) => ({ update, delta }))
-            );
-
-      for (const { update, delta } of failed) {
-        updatePendingOptionIds(update.definition.id, (optionIds) =>
-          rollbackEntityPropertyOptionDelta(optionIds, delta)
-        );
-      }
-      throw error;
-    }
+    await persistTagSelection(updates);
   };
 
   const applyTag = async (scope: TagScope, optionId: string) => {
@@ -342,11 +279,16 @@ export function useDocTags(entityId: string, entityType: EntityType) {
   const persistTagSelection = usePersistTagSelection(entityId, entityType);
   const tagsQuery = useTagsQuery();
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+  // The properties query isn't optimistically written, so surface in-flight
+  // bulk updates as the optimistic value until the refetch lands.
+  const inFlightOptionIdsForDefinition =
+    useInFlightEntityPropertyOptions(entityId);
 
   return createDocTags(
     appliedOptionIdsForDefinition,
     persistTagSelection,
-    tagSets
+    tagSets,
+    inFlightOptionIdsForDefinition
   );
 }
 

@@ -4237,6 +4237,85 @@
         }
       }
     },
+    "/crm/companies": {
+      "post": {
+        "tags": ["crm::inbound::axum_router::create_company"],
+        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. The domain must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
+        "operationId": "create_crm_company",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmCompanyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_company"],
@@ -4340,6 +4419,105 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::create_contact"],
+        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\nemail's domain must be one of the company's domains (400), the\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "operationId": "create_crm_contact",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to add the contact to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmContactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -9228,11 +9406,8 @@
               }
             }
           },
-          "400": {
-            "description": "Malformed request or missing internal auth header"
-          },
           "401": {
-            "description": "Invalid internal auth header"
+            "description": "Authentication required (JSON error response)"
           }
         }
       }
@@ -11800,6 +11975,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "is_participant": {
+            "type": ["boolean", "null"],
+            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -12136,6 +12315,10 @@
             "$ref": "#/components/schemas/Channel",
             "description": "Channel metadata."
           },
+          "is_participant": {
+            "type": "boolean",
+            "description": "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+          },
           "participants": {
             "type": "array",
             "items": {
@@ -12396,6 +12579,11 @@
         "description": "Request to create a channel.",
         "required": ["channel_type", "participants"],
         "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether team members automatically join this channel. Defaults to false.",
+            "default": false
+          },
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."
@@ -12566,6 +12754,36 @@
           },
           "threadMetadata": {
             "description": "Metadata to set on a newly created thread (ignored when replying\nwithout a value)."
+          }
+        }
+      },
+      "CreateCrmCompanyRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/companies`.",
+        "required": ["name", "domain"],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "The company's email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the company. Team-scoped: overrides the\ndomain-directory name on every read path."
+          }
+        }
+      },
+      "CreateCrmContactRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/companies/{company_id}/contacts`.",
+        "required": ["name", "email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The contact's email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company's domains (400 otherwise)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the contact."
           }
         }
       },
@@ -14675,7 +14893,18 @@
           },
           {
             "type": "object",
-            "description": "Permission for channel-based entities.",
+            "description": "View-only permission for a channel without an active participant role.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["channel_view_only"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Permission for channel-based entities with an active participant role.",
             "required": ["role", "type"],
             "properties": {
               "role": {
@@ -14704,7 +14933,7 @@
             }
           }
         ],
-        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use view-only permission or participant roles."
       },
       "EntityPermissionResponse": {
         "oneOf": [

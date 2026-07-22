@@ -27,7 +27,8 @@ use uuid::Uuid;
 
 use super::error::PropertiesErr;
 use super::model::{
-    EditReceipt, EntityPropertyInfo, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
+    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
+    EntityPropertyOptionUpdate, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
 };
 
 /// The caller's team-membership proof, used to scope definition/option/tag
@@ -104,6 +105,41 @@ pub trait PropertiesService: Send + Sync + 'static {
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Apply a complete tag-picker selection across one or more of an entity's
+    /// multi-select properties in a single transaction, returning each
+    /// property's final option ids for cache reconciliation.
+    ///
+    /// Each property change is a delta (options to add / remove) so the whole
+    /// selection composes with concurrent edits under a per-row lock rather than
+    /// clobbering them. Validates that every added option belongs to its
+    /// (multi-select) property before any write; the persistence is
+    /// all-or-nothing, so a failure on any property rolls back the whole batch.
+    fn bulk_update_entity_property_options(
+        &self,
+        access: &EditReceipt,
+        updates: Vec<EntityPropertyOptionUpdate>,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyOptionSelection>, PropertiesErr>> + Send;
+
+    /// Apply one shared option delta to several entities at once, returning a
+    /// per-entity outcome aligned to `access` (same length and order).
+    ///
+    /// The shared delta (`add_option_ids` / `remove_option_ids` on one
+    /// multi-select `property_definition_id`) is validated once up front; a bad
+    /// property or option fails the whole call. Each entity is then updated in
+    /// its own transaction, so the batch is best-effort: an entity whose type
+    /// does not accept the property, or whose write fails, is reported as
+    /// [`EntityOptionUpdateOutcome::Failed`] without aborting the rest. Callers
+    /// mint one [`EditReceipt`] per entity at the edge and pass only the
+    /// entities the caller may edit; entities the caller cannot edit are handled
+    /// there, not here.
+    fn bulk_update_entities_property_options(
+        &self,
+        access: &[EditReceipt],
+        property_definition_id: Uuid,
+        add_option_ids: Vec<Uuid>,
+        remove_option_ids: Vec<Uuid>,
+    ) -> impl Future<Output = Result<Vec<EntityOptionUpdateOutcome>, PropertiesErr>> + Send;
 
     /// List property definitions owned by the given team and/or user, sorted by
     /// display name. Set `include_system` to true to also include system properties.

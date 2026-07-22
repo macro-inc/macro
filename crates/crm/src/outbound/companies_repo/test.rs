@@ -7,6 +7,8 @@
 mod helpers;
 
 mod comments;
+mod create_company;
+mod create_contact;
 mod get_company_for_team;
 mod get_contact_for_team;
 mod list_companies_for_soup;

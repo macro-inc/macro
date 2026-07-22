@@ -289,7 +289,7 @@ function TagPickerBody(props: {
     new Set(props.docTags.appliedTags().map((tag) => tag.optionId))
   );
   const [createStep, setCreateStep] = createSignal<CreateStep | null>(null);
-  const [createDraftLabel] = createSignal('');
+  const [createDraftLabel, setCreateDraftLabel] = createSignal('');
   const [selectedColorIndex, setSelectedColorIndex] = createSignal(0);
   const [selectedScopeIndex, setSelectedScopeIndex] = createSignal(0);
   const currentTeamQuery = useCurrentTeamQuery();
@@ -448,7 +448,12 @@ function TagPickerBody(props: {
     createStep() === 'color' ? TAG_COLOR_OPTIONS.length : scopeOptions().length;
 
   const beginCreate = () => {
-    void openCreateEditor();
+    const label = createLabel();
+    if (!showCreateRow() || !label) return;
+    setCreateDraftLabel(label);
+    setSelectedColorIndex(0);
+    setSelectedScopeIndex(0);
+    setCreateStep('color');
   };
 
   const editableTagForItem = (item: TagOptionItem): EditableTag => ({
@@ -463,23 +468,6 @@ function TagPickerBody(props: {
       type: 'edit',
       tag: editableTagForItem(item),
     });
-  };
-
-  const openCreateEditor = async () => {
-    const label = createLabel();
-    if (!showCreateRow() || !label) return;
-    if (!(await persistSelection())) return;
-
-    props.onOpenCreateEditor(
-      {
-        type: 'create',
-        initialScope: currentTeamQuery.data?.team ? 'team' : 'user',
-        initialLabel: label,
-      },
-      async (result) => {
-        await props.docTags.applyTag(result.scope, result.option.id);
-      }
-    );
   };
 
   const createTag = async (scope: TagScope) => {

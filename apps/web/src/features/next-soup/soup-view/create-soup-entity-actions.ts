@@ -25,8 +25,10 @@ import {
   makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
+  makeMarkReadAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
+  makeMarkUnreadAction,
   makeMoveToProjectAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
@@ -97,6 +99,9 @@ export function createSoupEntityActions(): {
     notificationSource: () => notificationSource,
   });
 
+  const markRead = makeMarkReadAction();
+  const markUnread = makeMarkUnreadAction();
+
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
   });
@@ -160,6 +165,28 @@ export function createSoupEntityActions(): {
           onClick: handle(markDone.executeWithSoup),
         });
       }
+    }
+
+    // Read-state toggle for email selections: a fully-read selection gets
+    // Mark Unread; anything with an unread thread gets Mark Read (which
+    // skips the already-read ones).
+    if (canExecuteAll(markUnread.canExecute)) {
+      topItems.push({
+        id: 'mark-unread',
+        label: 'Mark Unread',
+        hotkeyToken: TOKENS.entity.action.markUnread,
+        onClick: handle(markUnread.executeWithSoup),
+      });
+    } else if (
+      entities.every((e) => e.type === 'email') &&
+      entities.some(markRead.canExecute)
+    ) {
+      topItems.push({
+        id: 'mark-read',
+        label: 'Mark Read',
+        hotkeyToken: TOKENS.entity.action.markRead,
+        onClick: handle(markRead.executeWithSoup),
+      });
     }
 
     const canOpenInSplit = () => {

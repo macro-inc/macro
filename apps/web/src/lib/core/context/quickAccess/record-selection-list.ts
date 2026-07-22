@@ -1,9 +1,4 @@
-import {
-  type Accessor,
-  createComputed,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { searchQuickAccessEntities } from './entity-search';
 import type {
   Bucket,
@@ -40,12 +35,11 @@ function addItem(
   }
 }
 
-/** Creates a locally filtered and paginated Quick Access record list. */
+/** Creates a locally filtered Quick Access record list. */
 export function createRecordSelectionQuickAccessItems(options: {
   buckets: Bucket[];
   searchTerm: Accessor<string>;
   enabled: Accessor<boolean>;
-  pageSize: number;
   selectedItems: Accessor<EntityItem[]>;
   localItems: Accessor<QuickAccessItem[]>;
   instructionsId: Accessor<string | undefined>;
@@ -61,14 +55,6 @@ export function createRecordSelectionQuickAccessItems(options: {
         (bucket !== 'crm_company' || options.crmEnabled())
     )
   );
-  const [visibleLimit, setVisibleLimit] = createSignal(options.pageSize);
-
-  createComputed(() => {
-    options.searchTerm();
-    options.enabled();
-    entityBuckets();
-    setVisibleLimit(options.pageSize);
-  });
 
   const allItems = createMemo<QuickAccessItem[]>(() => {
     if (!options.enabled()) return [];
@@ -115,19 +101,12 @@ export function createRecordSelectionQuickAccessItems(options: {
     return result;
   });
 
-  const items = createMemo(() => allItems().slice(0, visibleLimit()));
-  const hasMore = createMemo(() => visibleLimit() < allItems().length);
-
   return {
-    items,
+    items: allItems,
     totalCount: () => allItems().length,
-    hasMore,
+    hasMore: () => false,
     isLoadingMore: () => false,
-    loadMore: async () => {
-      setVisibleLimit((limit) =>
-        Math.min(limit + options.pageSize, allItems().length)
-      );
-    },
+    loadMore: async () => undefined,
     entityBuckets,
   };
 }

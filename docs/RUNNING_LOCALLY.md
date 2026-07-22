@@ -162,6 +162,14 @@ Run local binaries against shared dev resources instead of a fully local stack:
 just run_dev
 ```
 
+See what a running (or stopped) instance looks like — endpoints with live
+reachability probes plus every container's state and host ports — without
+starting or rebuilding anything:
+
+```bash
+just status_local
+```
+
 Stop an instance but keep its volumes:
 
 ```bash

@@ -75,6 +75,8 @@ import type { CreateChannelScopedBotRequest } from './generated/schemas/createCh
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
+import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
+import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
@@ -188,7 +190,9 @@ export function dssFetch<T extends Record<string, any> = never>(
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
-async function getDocumentPermissionToken(documentId: string): Promise<string> {
+export async function getDocumentPermissionToken(
+  documentId: string
+): Promise<string> {
   const token = await fetchWithToken<GetDocumentPermissionsTokenResponse>(
     `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${documentId}`,
     {
@@ -2277,6 +2281,12 @@ export const storageServiceClient = {
       })
     ).map((result) => result.data);
   },
+  async createCompany(body: CreateCrmCompanyRequest) {
+    return await dssFetch<CrmCompanyResponse>('/crm/companies', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
   async getCompany({ companyId }: { companyId: string }) {
     return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
       method: 'GET',
@@ -2286,6 +2296,18 @@ export const storageServiceClient = {
     return await dssFetch<CrmContactResponse[]>(
       `/crm/companies/${companyId}/contacts`,
       { method: 'GET' }
+    );
+  },
+  async createContact({
+    companyId,
+    ...body
+  }: { companyId: string } & CreateCrmContactRequest) {
+    return await dssFetch<CrmContactResponse>(
+      `/crm/companies/${companyId}/contacts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
     );
   },
   async getContact({ contactId }: { contactId: string }) {

@@ -75,3 +75,27 @@ fn dangerously_assert_bot_creates_owner_level_test_receipt() {
         }
     ));
 }
+
+#[test]
+fn channel_view_only_satisfies_only_view_only_requirement() {
+    let permission = EntityPermission::ChannelViewOnly;
+
+    assert!(permission.satisfies::<ViewOnly>());
+    assert!(!permission.satisfies::<MemberParticipantRole>());
+    assert!(!permission.satisfies::<AdminParticipantRole>());
+    assert!(!permission.satisfies::<OwnerParticipantRole>());
+    assert!(!permission.satisfies::<ViewAccessLevel>());
+}
+
+#[test]
+fn all_channel_participant_roles_satisfy_view_only_requirement() {
+    for role in [
+        ParticipantRole::Member,
+        ParticipantRole::Admin,
+        ParticipantRole::Owner,
+    ] {
+        let permission = EntityPermission::ChannelRole { role };
+
+        assert!(permission.satisfies::<ViewOnly>());
+    }
+}

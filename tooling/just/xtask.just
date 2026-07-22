@@ -20,6 +20,10 @@ run_dev *ARGS:
 doctor-local *ARGS:
   {{ xtask }} doctor-local "$@"
 
+# Show an instance's endpoints and container states without starting anything.
+status_local *ARGS:
+  @{{ xtask }} status-local "$@"
+
 # Reset (drop, recreate, migrate) the instance database.
 reset_local *ARGS:
   {{ xtask }} reset-local "$@"

@@ -36,6 +36,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import IconShared from '@icon/wide-share.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import CheckIcon from '@phosphor/check.svg';
+import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
+import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
@@ -102,6 +104,14 @@ export function TopBar(props: {
     const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
     if (command && runCommand(command).commandCaptured) return;
     emailCtx.archiveThread();
+  };
+
+  const toggleMarkUnread = () => {
+    if (emailCtx.isThreadMarkedUnread()) {
+      emailCtx.markThreadRead();
+    } else {
+      emailCtx.markThreadUnread();
+    }
   };
 
   const trashThread = () => {
@@ -250,6 +260,35 @@ export function TopBar(props: {
           A done thread shows a bold accent check and unarchives on click. */}
       <Show when={!isMobile()}>
         <SplitHeaderRight>
+          {/* Read-state toggle. Viewing the thread marks it read, so it
+              starts as Mark as unread; marking unread flips it to a bold
+              accent closed envelope that re-marks the thread read. */}
+          <Show when={isOwnThread()}>
+            <Button
+              class="p-1 rounded-lg"
+              label={
+                emailCtx.isThreadMarkedUnread()
+                  ? 'Mark as read'
+                  : 'Mark as unread'
+              }
+              hotkey={
+                emailCtx.isThreadMarkedUnread()
+                  ? TOKENS.entity.action.markRead
+                  : TOKENS.entity.action.markUnread
+              }
+              onClick={toggleMarkUnread}
+              // Keep focus (and the hotkey scope cmd-K reads) in the thread
+              // content: focusing the header would hide its commands.
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <Show
+                when={emailCtx.isThreadMarkedUnread()}
+                fallback={<EnvelopeSimpleOpenIcon class="size-4" />}
+              >
+                <EnvelopeSimpleIcon class="size-4 text-accent" />
+              </Show>
+            </Button>
+          </Show>
           <Show when={isOwnThread()}>
             <Button
               class="p-1 rounded-lg"
@@ -260,6 +299,8 @@ export function TopBar(props: {
                   : TOKENS.entity.action.markDone
               }
               onClick={toggleMarkDone}
+              // Same focus-preservation as the read-state toggle above.
+              onMouseDown={(e) => e.preventDefault()}
             >
               <Show when={isDone()} fallback={<CheckIcon class="size-4" />}>
                 <CheckBoldIcon class="size-4 text-accent" />

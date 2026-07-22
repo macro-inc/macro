@@ -156,6 +156,17 @@ where
             post(entities::add_entity_property_option::<S, A, Auth>)
                 .delete(entities::remove_entity_property_option::<S, A, Auth>),
         )
+        // Transactional multi-property option deltas (one tag-picker selection)
+        .route(
+            "/entities/{entity_type}/{entity_id}/options/bulk",
+            post(entities::bulk_update_entity_property_options::<S, A, Auth>),
+        )
+        // Cross-entity option delta: one shared delta applied to many entities
+        // (e.g. tag N emails with one label), best-effort per entity
+        .route(
+            "/options/bulk",
+            post(entities::bulk_update_entities_property_options::<S, A, Auth>),
+        )
         .route(
             "/entity_properties/{entity_property_id}",
             delete(entities::delete_entity_property::<S, A, Auth>),

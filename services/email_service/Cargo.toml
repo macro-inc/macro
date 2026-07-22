@@ -76,7 +76,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
-ammonia = "4.1.3"
+ammonia = "4.1.4"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }

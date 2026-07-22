@@ -6,10 +6,11 @@ version = "0.1.0"
 
 [features]
 default = []
-inbound = ["dep:axum", "dep:utoipa"]
+inbound = ["dep:axum", "dep:macro_authorization", "dep:utoipa"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 serde = { workspace = true }
 utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -70,23 +70,14 @@ where
     let link_ids = links.into_iter().map(|link| link.id).collect();
     let request = input.into_request(macro_user_id, link_ids)?;
 
-    // Team membership is only resolved when the query actually asks for
-    // CRM-scoped data; everything else skips the lookup entirely. The
-    // authorization itself (membership + admin role for hidden
-    // companies) is enforced by the soup domain and CRM service from
-    // the receipt.
-    let effective_filter = request.cursor.filter();
-    let team_receipt =
-        if effective_filter.requests_crm_scope() || effective_filter.requests_crm_admin() {
-            let Cached(team) = extract_part::<
-                Cached<OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>>,
-                St,
-            >(ctx)
-            .await?;
-            team.entity_access_receipt
-        } else {
-            None
-        };
+    // Always forward the optional team receipt: Soup uses it for all
+    // team-scoped foreign entities, not only CRM-scoped filters.
+    let Cached(team) = extract_part::<
+        Cached<OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>>,
+        St,
+    >(ctx)
+    .await?;
+    let team_receipt = team.entity_access_receipt;
 
     let include_frecency = ctx
         .look_ahead()

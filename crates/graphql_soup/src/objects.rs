@@ -905,6 +905,11 @@ where
         self.0.interacted_at.map(|ts| ts.to_rfc3339())
     }
 
+    /// Whether the requesting user is an active participant of the channel.
+    async fn is_participant(&self) -> bool {
+        self.0.channel.is_participant
+    }
+
     /// The participant count.
     async fn participant_count(&self) -> usize {
         self.0.channel.participants.len()

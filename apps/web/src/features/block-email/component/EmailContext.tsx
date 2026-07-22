@@ -38,6 +38,8 @@ import {
   markSenderNoiseWithToast,
   markSenderSignalWithToast,
   trackExternalThreadArchive,
+  useMarkThreadAsSeenMutation,
+  useMarkThreadAsUnreadMutation,
   useThreadQuery,
   useUndoableArchiveThreadMutation,
 } from '@queries/email/thread';
@@ -156,6 +158,13 @@ type EmailContextValues = {
   isThreadDone: Accessor<boolean>;
   /** Unarchives a done thread and restores its notifications. */
   markThreadNotDone: () => boolean;
+  /** True when the user marked the open thread unread. Resets to false per
+   *  thread — viewing marks it read, so the toggle starts at Mark Unread. */
+  isThreadMarkedUnread: Accessor<boolean>;
+  /** Marks the open thread unread; the toggle then offers Mark Read. */
+  markThreadUnread: () => boolean;
+  /** Re-marks the thread read after a mark-unread. */
+  markThreadRead: () => boolean;
   getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
@@ -626,6 +635,79 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return true;
   };
 
+  const markSeenMutation = useMarkThreadAsSeenMutation();
+  const markUnreadMutation = useMarkThreadAsUnreadMutation();
+
+  // Viewing a thread marks it read (EmailDebouncedReadMarker), so each thread
+  // starts with the toggle offering Mark Unread.
+  const [threadMarkedUnread, setThreadMarkedUnread] = createSignal(false);
+  createEffect(() => {
+    void props.threadID;
+    setThreadMarkedUnread(false);
+  });
+
+  const markThreadUnread = () => {
+    const thread = threadQuery.data;
+    if (!thread?.db_id) return false;
+    if (threadMarkedUnread()) return false;
+    // A toggle mid-flight would race the pending request; ignore it.
+    if (markUnreadMutation.isPending || markSeenMutation.isPending) {
+      return false;
+    }
+
+    const threadId = thread.db_id;
+    setThreadMarkedUnread(true);
+    markUnreadMutation.mutate(
+      { threadId, linkId: thread.link_id },
+      {
+        onSuccess: () => {
+          toast.success('Marked as unread', {
+            duration: 3_000,
+            stack: true,
+            hideOnMobile: true,
+          });
+        },
+        onError: () => {
+          setThreadMarkedUnread(false);
+          toast.failure('Failed to mark as unread');
+          void refetchSoupEntity(threadId, 'emailThread');
+        },
+      }
+    );
+    return true;
+  };
+
+  const markThreadRead = () => {
+    const thread = threadQuery.data;
+    if (!thread?.db_id) return false;
+    if (!threadMarkedUnread()) return false;
+    // A toggle mid-flight would race the pending request; ignore it.
+    if (markUnreadMutation.isPending || markSeenMutation.isPending) {
+      return false;
+    }
+
+    const threadId = thread.db_id;
+    setThreadMarkedUnread(false);
+    markSeenMutation.mutate(
+      { threadId, linkId: toHeaderLinkId(thread.link_id) },
+      {
+        onSuccess: () => {
+          toast.success('Marked as read', {
+            duration: 3_000,
+            stack: true,
+            hideOnMobile: true,
+          });
+        },
+        onError: () => {
+          setThreadMarkedUnread(true);
+          toast.failure('Failed to mark as read');
+          void refetchSoupEntity(threadId, 'emailThread');
+        },
+      }
+    );
+    return true;
+  };
+
   const currentUserEmail = useEmail();
 
   const blockSender = () => {
@@ -797,6 +879,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           archiveThread,
           isThreadDone,
           markThreadNotDone,
+          isThreadMarkedUnread: threadMarkedUnread,
+          markThreadUnread,
+          markThreadRead,
           getMarkDoneNavigationTargetId,
           blockSender,
           markSenderSignal,

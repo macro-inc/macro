@@ -509,6 +509,7 @@ fn channel_role_result_to_permission(
 ) -> Result<EntityPermission, AccessError> {
     match result {
         ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
+        ChannelRoleResult::ViewOnly => Ok(EntityPermission::ChannelViewOnly),
         ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
         ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
     }

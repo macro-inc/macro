@@ -102,13 +102,9 @@ where
                 internal_error: anyhow::anyhow!("no owned link for thread"),
             })?;
 
-        // No Gmail token needed here. Label changes are written to the DB and the
-        // Gmail API calls are enqueued to the gmail_ops worker, which fetches its
-        // own token. The AI tool context has a no-op token provider, so fetching
-        // one here would always fail.
         let result = service_context
             .service
-            .update_thread_labels("", &link, self.thread_id, self.label_id, self.add)
+            .update_thread_labels(&link, self.thread_id, self.label_id, self.add)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to update thread labels: {e}"),

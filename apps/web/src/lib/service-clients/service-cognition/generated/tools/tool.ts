@@ -12,6 +12,10 @@ type ToolParserMap = {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
+  BulkSetEntityPropertyOptions: {
+    call: types.BulkSetEntityPropertyOptions;
+    response: types.BulkSetEntityPropertyOptionsResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -140,6 +144,10 @@ const toolParserMap = {
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
+  },
+  BulkSetEntityPropertyOptions: {
+    call: schemas.BulkSetEntityPropertyOptions,
+    response: schemas.BulkSetEntityPropertyOptionsResponse,
   },
   ContentSearch: {
     call: schemas.ContentSearch,
@@ -295,6 +303,10 @@ type ToolDataMap = {
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
+  };
+  BulkSetEntityPropertyOptions: {
+    call: types.BulkSetEntityPropertyOptions;
+    response: types.BulkSetEntityPropertyOptionsResponse;
   };
   ContentSearch: {
     call: types.ContentSearch;

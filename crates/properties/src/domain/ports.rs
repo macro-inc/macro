@@ -21,8 +21,9 @@ use models_properties::{DataType, EntityPropertyReference, EntityReference, Enti
 use uuid::Uuid;
 
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner,
-    TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
+    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyOptionSelection,
+    EntityPropertyOptionUpdate, PropertyDefinitionOwner, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -192,6 +193,20 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Apply option deltas to several of an entity's multi-select property values
+    /// in a single transaction, returning each property's final option ids.
+    ///
+    /// Each property's row is locked (`SELECT ... FOR UPDATE`) before its current
+    /// value is read, diffed, and rewritten, so the whole selection composes with
+    /// concurrent edits without a lost update. The transaction is all-or-nothing:
+    /// any failure rolls back every property in the batch.
+    fn bulk_update_entity_property_options(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        updates: &[EntityPropertyOptionUpdate],
+    ) -> impl Future<Output = Result<Vec<EntityPropertyOptionSelection>, Self::Err>> + Send;
 
     /// Atomically link or unlink a task's parent (for Parent Task property).
     ///

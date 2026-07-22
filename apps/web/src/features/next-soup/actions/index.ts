@@ -10,6 +10,10 @@ export { makeMarkDoneAction } from './make-mark-done-action';
 export { makeMarkNotDoneAction } from './make-mark-not-done-action';
 export { makeMarkSenderSignalAction } from './make-mark-sender-important-action';
 export { makeMarkSenderNoiseAction } from './make-mark-sender-noise-action';
+export {
+  makeMarkReadAction,
+  makeMarkUnreadAction,
+} from './make-mark-unread-action';
 export { makeMoveToProjectAction } from './make-move-to-project-action';
 export { makeRemoveFromProjectAction } from './make-remove-from-project-action';
 export { makeRenameAction } from './make-rename-action';

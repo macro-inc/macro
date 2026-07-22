@@ -4,9 +4,9 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CallRecordSearchResponseItemWithMetadata } from './callRecordSearchResponseItemWithMetadata';
+import type { ProjectSearchResponseItemWithMetadata } from './projectSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfOnesixAllOf } from './unifiedSearchResponseItemOneOfOnesixAllOf';
 
 export type UnifiedSearchResponseItemOneOfOnesix =
-  CallRecordSearchResponseItemWithMetadata &
+  ProjectSearchResponseItemWithMetadata &
     UnifiedSearchResponseItemOneOfOnesixAllOf;

@@ -23,7 +23,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     AccessError, AccessLevel, AdminParticipantRole, BotId, CallChannelInfo, MemberParticipantRole,
-    OwnerParticipantRole, UserTeamInfo,
+    OwnerParticipantRole, UserTeamInfo, ViewOnly,
 };
 
 const CHANNEL_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
@@ -238,6 +238,8 @@ impl FromRef<TestState> for MacroAuthorizationState<FakeAuthorizationService> {
     }
 }
 
+type ViewOnlyExtractor =
+    ChannelAccessLevelExtractor<ViewOnly, FakeEntityAccessService, FakeAuthorizationService>;
 type MemberExtractor = ChannelAccessLevelExtractor<
     MemberParticipantRole,
     FakeEntityAccessService,
@@ -305,6 +307,14 @@ fn assert_member_receipt(receipt: &EntityAccessReceipt<MemberParticipantRole>) {
     ));
 }
 
+async fn view_only_handler(extractor: ViewOnlyExtractor) -> StatusCode {
+    assert_eq!(
+        extractor.entity_access_receipt.entity().entity_id,
+        CHANNEL_ID
+    );
+    StatusCode::OK
+}
+
 async fn member_handler(extractor: MemberExtractor) -> StatusCode {
     assert_member_receipt(&extractor.entity_access_receipt);
     StatusCode::OK
@@ -368,6 +378,44 @@ async fn authenticated_access_forwards_organization_and_mints_receipt() {
             organization_id: Some(i64::from(ORGANIZATION_ID)),
         }]
     );
+}
+
+#[tokio::test]
+async fn view_only_permission_satisfies_view_only_extractor() {
+    let state = TestState::new(EntityPermission::ChannelViewOnly);
+    let response = app(state.clone(), view_only_handler)
+        .oneshot(request(Some("valid")))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(state.entity_access.calls().len(), 1);
+}
+
+#[tokio::test]
+async fn member_permission_satisfies_view_only_extractor() {
+    let state = TestState::new(EntityPermission::ChannelRole {
+        role: ParticipantRole::Member,
+    });
+    let response = app(state.clone(), view_only_handler)
+        .oneshot(request(Some("valid")))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(state.entity_access.calls().len(), 1);
+}
+
+#[tokio::test]
+async fn view_only_permission_does_not_satisfy_member_extractor() {
+    let state = TestState::new(EntityPermission::ChannelViewOnly);
+    let response = app(state.clone(), member_handler)
+        .oneshot(request(Some("valid")))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(state.entity_access.calls().len(), 1);
 }
 
 #[tokio::test]

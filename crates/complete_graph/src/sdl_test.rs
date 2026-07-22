@@ -6,6 +6,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupChannel {",
         "organizationId: ID",
         "interactedAt: String",
+        "isParticipant: Boolean!",
         "participantIds: [String!]!",
         "participants: [GraphqlSoupChannelParticipant!]!",
         "latestMessage: GraphqlSoupChannelMessage",

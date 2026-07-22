@@ -5,6 +5,8 @@ use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+use crate::domain::model::{EntityPropertyOptionSelection, EntityPropertyOptionUpdate};
+
 /// Upsert an entity property value (insert or update).
 /// If the property doesn't exist, it will be created and attached to the entity.
 /// If it exists, the value will be updated.
@@ -150,6 +152,134 @@ pub async fn remove_entity_property_option(
     .await?;
 
     Ok(())
+}
+
+/// Apply option deltas to several of an entity's multi-select property values in
+/// one transaction, returning each property's final option ids.
+///
+/// A property is only attached (row created) when there are options to add;
+/// otherwise the row is locked with `SELECT ... FOR UPDATE` before its current
+/// value is read, diffed, and rewritten. A removal-only update on an unattached
+/// property is a no-op — it does not create an empty row. Because each delta is
+/// applied to the freshly locked value, two bulk updates racing on the same row
+/// compose instead of overwriting each other (no lost update). The whole batch
+/// shares one transaction, so a failure on any property rolls back the batch.
+pub async fn bulk_update_entity_property_options(
+    pool: &Pool<Postgres>,
+    entity_id: &str,
+    entity_type: EntityType,
+    updates: &[EntityPropertyOptionUpdate],
+) -> anyhow::Result<Vec<EntityPropertyOptionSelection>> {
+    let mut tx = pool.begin().await?;
+    let mut selections = Vec::with_capacity(updates.len());
+
+    // Acquire row locks in a consistent order across all callers so two bulk
+    // updates touching the same properties in different orders can't deadlock.
+    let mut ordered: Vec<&EntityPropertyOptionUpdate> = updates.iter().collect();
+    ordered.sort_by_key(|update| update.property_definition_id);
+
+    for update in ordered {
+        let has_additions = !update.add_option_ids.is_empty();
+
+        // Attach the property only when adding options. A concurrent creator
+        // blocks on the unique index here until it commits, after which this
+        // insert is a no-op and the FOR UPDATE below sequences the two writers.
+        if has_additions {
+            let id = macro_uuid::generate_uuid_v7();
+            sqlx::query!(
+                r#"
+                INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+                VALUES (
+                    $1, $2, $3, $4,
+                    jsonb_build_object('type', 'SelectOption', 'value', '[]'::jsonb)
+                )
+                ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING
+                "#,
+                id,
+                entity_id,
+                entity_type as EntityType,
+                update.property_definition_id,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // Lock the row (if any) and read the current stored value before diffing.
+        let existing = sqlx::query_scalar!(
+            r#"
+            SELECT values as "values: serde_json::Value"
+            FROM entity_properties
+            WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+            FOR UPDATE
+            "#,
+            entity_id,
+            entity_type as EntityType,
+            update.property_definition_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let row_exists = existing.is_some();
+        let current_ids = match existing.flatten() {
+            Some(value) => match serde_json::from_value::<PropertyValue>(value) {
+                Ok(PropertyValue::SelectOption(ids)) => ids,
+                _ => Vec::new(),
+            },
+            None => Vec::new(),
+        };
+
+        let final_ids = apply_option_delta(
+            current_ids,
+            &update.add_option_ids,
+            &update.remove_option_ids,
+        );
+
+        // Nothing to add and no row to remove from: a no-op, leave the DB alone.
+        if row_exists {
+            let value_json = serde_json::json!({
+                "type": "SelectOption",
+                "value": final_ids,
+            });
+            sqlx::query!(
+                r#"
+                UPDATE entity_properties
+                SET values = $4, updated_at = NOW()
+                WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+                "#,
+                entity_id,
+                entity_type as EntityType,
+                update.property_definition_id,
+                value_json,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        selections.push(EntityPropertyOptionSelection {
+            property_definition_id: update.property_definition_id,
+            option_ids: final_ids,
+        });
+    }
+
+    tx.commit().await?;
+    Ok(selections)
+}
+
+/// Apply an add/remove delta to a stored option-id list, keeping the order of
+/// surviving options and appending new ones. An id named in both add and remove
+/// is removed (removals win), matching a delta where the two sets are disjoint.
+fn apply_option_delta(current: Vec<Uuid>, add: &[Uuid], remove: &[Uuid]) -> Vec<Uuid> {
+    let remove_set: std::collections::HashSet<Uuid> = remove.iter().copied().collect();
+    let mut result: Vec<Uuid> = current
+        .into_iter()
+        .filter(|id| !remove_set.contains(id))
+        .collect();
+    for id in add {
+        if !remove_set.contains(id) && !result.contains(id) {
+            result.push(*id);
+        }
+    }
+    result
 }
 
 /// Counts how many of the provided option IDs exist for the property definition.

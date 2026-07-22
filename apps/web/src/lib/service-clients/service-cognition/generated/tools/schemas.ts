@@ -71,6 +71,41 @@ export const BashCodeExecutionResponse = z.object({
   tool_use_id: z.string(),
 });
 
+export const BulkSetEntityPropertyOptions = z.object({
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
+  entities: z.array(
+    z.object({
+      entity_id: z.string(),
+      entity_type: z.enum([
+        'document',
+        'project',
+        'chat',
+        'thread',
+        'channel',
+        'call',
+        'user',
+        'company',
+      ]),
+    })
+  ),
+  property_definition_id: z.string().uuid(),
+  remove_option_ids: z
+    .union([z.array(z.string().uuid()), z.null()])
+    .default(null),
+});
+
+export const BulkSetEntityPropertyOptionsResponse = z.object({
+  results: z.array(
+    z.object({
+      entityId: z.string(),
+      entityType: z.string(),
+      error: z.union([z.string(), z.null()]).optional(),
+      status: z.string(),
+    })
+  ),
+  summary: z.string(),
+});
+
 export const ContentSearch = z.object({
   entityTypes: z
     .array(
@@ -401,6 +436,46 @@ export const SearchToolResponse = z.object({
                 updated_at: z.string().datetime({ offset: true }),
               }),
               z.object({ type: z.literal('channelMessage') })
+            ),
+            z.intersection(
+              z.object({
+                channel_id: z.string().uuid(),
+                channel_type: z.string(),
+                highlight: z.object({
+                  bcc: z.array(z.string()).optional(),
+                  cc: z.array(z.string()).optional(),
+                  content: z.array(z.string()).optional(),
+                  name: z.union([z.string(), z.null()]).optional(),
+                  recipients: z.array(z.string()).optional(),
+                  sender: z.union([z.string(), z.null()]).optional(),
+                  user_id: z.union([z.string(), z.null()]).optional(),
+                }),
+                id: z.string().uuid(),
+                metadata: z
+                  .union([
+                    z.object({
+                      created_at: z.string().datetime({ offset: true }),
+                      interacted_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                owner_id: z.union([z.string(), z.null()]).optional(),
+                score: z.union([z.number(), z.null()]).optional(),
+              }),
+              z.object({ type: z.literal('channel') })
             ),
             z.intersection(
               z.object({

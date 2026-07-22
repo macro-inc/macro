@@ -30,7 +30,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let hex_thread_labels_routes = email::inbound::axum::thread_labels_router::thread_labels_router::<
         ApiContext,
         crate::api::context::EmailSvc,
-        email::outbound::GmailTokenProviderImpl,
         crate::api::context::AuthorizationService,
     >();
 

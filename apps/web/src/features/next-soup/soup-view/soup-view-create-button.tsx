@@ -3,6 +3,7 @@ import {
   CREATABLE_BLOCKS,
   runCreateAction,
 } from '@app/features/command/Launcher';
+import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
@@ -14,6 +15,7 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
+import BuildingsIcon from '@phosphor/buildings.svg';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
@@ -34,7 +36,12 @@ const VIEW_CREATE_BLOCKNAMES: Partial<
 };
 
 type CreateOption = {
-  id: BlockName | BlockAlias | 'import-file' | 'import-folder';
+  id:
+    | BlockName
+    | BlockAlias
+    | 'import-file'
+    | 'import-folder'
+    | 'create-company';
   label: string;
 };
 
@@ -45,6 +52,12 @@ const IMPORT_FILE_OPTION: CreateOption = {
 const IMPORT_FOLDER_OPTION: CreateOption = {
   id: 'import-folder',
   label: 'Import folder',
+};
+// Companies aren't blocks, so the Customers view gets a bespoke option
+// that opens the create-company modal instead of a create action.
+const CREATE_COMPANY_OPTION: CreateOption = {
+  id: 'create-company',
+  label: 'Company',
 };
 
 /**
@@ -60,6 +73,7 @@ const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
 const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   agents: 'Agent',
   channels: 'Channel',
+  companies: 'Company',
   documents: 'New',
   folders: 'Folder',
   mail: 'Email',
@@ -82,22 +96,28 @@ function getViewCreateOptions(view: ListView): CreateOption[] {
   if (view === 'folders') {
     options.push(IMPORT_FOLDER_OPTION);
   }
+  if (view === 'companies') {
+    options.push(CREATE_COMPANY_OPTION);
+  }
   return options;
 }
 
-function CreateOptionIcon(props: {
-  id: BlockName | BlockAlias | 'import-file' | 'import-folder';
-}) {
+function CreateOptionIcon(props: { id: CreateOption['id'] }) {
   return (
     <Show
       when={props.id !== 'import-file' && props.id !== 'import-folder'}
       fallback={<UploadIcon class="size-3.5" />}
     >
-      <EntityIcon
-        targetType={props.id as BlockName}
-        size="xs"
-        class="mobile:size-6"
-      />
+      <Show
+        when={props.id !== 'create-company'}
+        fallback={<BuildingsIcon class="size-3.5" />}
+      >
+        <EntityIcon
+          targetType={props.id as BlockName}
+          size="xs"
+          class="mobile:size-6"
+        />
+      </Show>
     </Show>
   );
 }
@@ -126,6 +146,10 @@ export const SoupViewCreateButton = () => {
   const handleSelect = (option: CreateOption) => {
     if (currentView() === 'channels' && option.id === 'channel') {
       openNewChannelModal();
+      return;
+    }
+    if (option.id === 'create-company') {
+      openCreateCompanyModal();
       return;
     }
     if (option.id === 'import-file') {

@@ -51,7 +51,6 @@ import type {
 } from './types';
 
 const QUICK_ACCESS_LIMIT = 500;
-const DEFAULT_SEARCH_PAGE_SIZE = 50;
 const CACHE_REFRESH_DEBOUNCE_MS = 250;
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -279,7 +278,6 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
         buckets,
         searchTerm: activeSearchTerm,
         enabled: listEnabled,
-        pageSize: DEFAULT_SEARCH_PAGE_SIZE,
         selectedItems,
         localItems,
         instructionsId: () => instructionsIdQuery.data ?? undefined,

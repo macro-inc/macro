@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO comms_channel_participants (channel_id, user_id, role)\n            SELECT id, $2, 'member'::comms_participant_role\n            FROM comms_channels\n            WHERE team_id = $1 AND auto_join_team = TRUE\n            ON CONFLICT (channel_id, user_id) DO UPDATE\n            SET role = EXCLUDED.role,\n                joined_at = NOW(),\n                left_at = NULL\n            WHERE comms_channel_participants.left_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee4b1b82e0153531885a2070a1c43f3a496e9016fd0505562134626ef76356c2"
+}

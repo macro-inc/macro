@@ -3,6 +3,7 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use channels::{domain::service::ChannelServiceImpl, outbound::pg_channels_repo::PgChannelsRepo};
 use config::{Config, Environment};
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -44,8 +45,7 @@ use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
         contacts_enqueuer::ContactsIngressEnqueuer, customer_repo::CustomerRepositoryImpl,
-        team_analytics::AnalyticsClientTeamAnalytics,
-        team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
+        team_analytics::AnalyticsClientTeamAnalytics, team_repo::TeamRepositoryImpl,
     },
 };
 
@@ -147,6 +147,11 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let fusionauth_public_url = config
+        .fusionauth_public_url
+        .value()
+        .unwrap_or(config.fusionauth_base_url.as_ref())
+        .to_owned();
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id.to_string(),
         fusionauth_api_key,
@@ -156,7 +161,8 @@ async fn main() -> anyhow::Result<()> {
         config.fusionauth_oauth_redirect_uri.to_string().clone(),
         config.google_client_id.to_string().clone(),
         google_client_secret,
-    );
+    )
+    .with_public_url(fusionauth_public_url);
     tracing::trace!("initialized auth client");
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
@@ -283,7 +289,7 @@ async fn main() -> anyhow::Result<()> {
         stripe_client.clone(),
         config.stripe_price_id.to_string().clone(),
     );
-    let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
+    let channel_service = ChannelServiceImpl::new(PgChannelsRepo::new(db.clone()));
     let team_crm_settings_repo_impl =
         teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl::new(db.clone());
 
@@ -306,7 +312,7 @@ async fn main() -> anyhow::Result<()> {
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,
         customer_repo_impl,
-        team_channels_repo_impl,
+        channel_service.clone(),
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,
@@ -376,6 +382,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            channel_service: Arc::new(channel_service),
             entity_access_service: Arc::new(entity_access_service_impl),
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {

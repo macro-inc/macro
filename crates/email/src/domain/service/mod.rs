@@ -263,13 +263,12 @@ where
 
     async fn update_thread_labels(
         &self,
-        access_token: &str,
         link: &Link,
         thread_id: Uuid,
         label_id: Uuid,
         add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
-        self.update_thread_labels_impl(access_token, link, thread_id, label_id, add)
+        self.update_thread_labels_impl(link, thread_id, label_id, add)
             .await
     }
 

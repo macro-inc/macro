@@ -36,7 +36,7 @@ use entity_access::{
         models::{
             AccessError, AccessLevel, AdminParticipantRole, EntityAccessAuth, EntityAccessReceipt,
             EntityPermission, EntityType, MemberParticipantRole, OwnerParticipantRole,
-            RequiredPermission,
+            RequiredPermission, ViewOnly,
         },
         ports::EntityAccessService,
     },
@@ -206,13 +206,6 @@ pub struct MessageContextParams {
     /// Number of newer messages to include.
     #[serde(default)]
     after: i64,
-}
-
-/// Path params for channel-level endpoints.
-#[derive(Debug, Deserialize)]
-pub struct ChannelPath {
-    /// Channel ID from path.
-    channel_id: Uuid,
 }
 
 /// Path params for the attachment-references endpoint.
@@ -911,14 +904,11 @@ pub async fn join_channel_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
-    Path(path): Path<ChannelPath>,
-    user: MacroAuthorizationExtractor<Auth>,
+    access: ChannelAccessLevelExtractor<ViewOnly, Svc, Auth>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
-    let channel_id = path.channel_id;
-    state
-        .service
-        .join_channel(Sender::new_from_user(user.macro_user_id), channel_id)
-        .await?;
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
+    state.service.join_channel(actor, channel_id).await?;
     Ok(StatusCode::OK)
 }
 

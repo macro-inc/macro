@@ -33,6 +33,7 @@ import {
   isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
+  isNonMemberChannelEntity,
   isSearchEntity,
   isWithNotification,
   queryKeys,
@@ -183,6 +184,13 @@ const isNewerEntity = (
   return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
+/**
+ * Opens an entity via {@link openExternalUrl}. On web this is a new browser
+ * tab; inside the native Tauri shell a same-origin Macro `/app` link is routed
+ * in-app (in place) instead — `window.open` there would kick the user out to
+ * the system browser. So despite the name, this does not guarantee a separate
+ * tab/pane under Tauri.
+ */
 export const openEntityInNewTab = ({
   entity,
   location,
@@ -271,7 +279,7 @@ export const openEntityInNewTab = ({
     }
   }
 
-  window.open(entityUrl.toString(), '_blank', 'noopener');
+  openExternalUrl(entityUrl.toString());
 };
 
 /**
@@ -491,6 +499,10 @@ export const openEntityInSplitFromUnifiedList = async (
     console.error('No split manager found');
     return;
   }
+
+  // Channels the viewer hasn't joined can't be read; the row's Join button is
+  // the only affordance.
+  if (isNonMemberChannelEntity(entity)) return;
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {

@@ -7,6 +7,7 @@ import {
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import DotsThree from '@phosphor/dots-three.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
@@ -172,6 +173,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
     }
+    // Raw mailto: anchors open the in-app composer instead of the OS mail client
+    interceptMailtoLinks(messageDiv);
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'auto';
     shadow.appendChild(messageDiv);

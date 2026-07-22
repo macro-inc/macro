@@ -5,6 +5,10 @@ mod test;
 
 use std::{collections::HashSet, sync::Arc};
 
+use channels::domain::{
+    models::{ChannelType, CreateChannelRequest, Sender},
+    ports::{ChannelMutationErr, ChannelService},
+};
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
 };
@@ -44,7 +48,7 @@ use crate::domain::{
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
-    team_repo::{TeamChannelsRepository, TeamMembersService, TeamRepository, TeamService},
+    team_repo::{TeamMembersService, TeamRepository, TeamService},
 };
 
 /// Implementation of the TeamService using a TeamRepository
@@ -52,7 +56,7 @@ use crate::domain::{
 pub struct TeamServiceImpl<
     TR,
     CR,
-    TCR,
+    CS,
     URPS,
     NI,
     CE,
@@ -63,7 +67,7 @@ pub struct TeamServiceImpl<
 > where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -76,8 +80,8 @@ pub struct TeamServiceImpl<
     team_repository: TR,
     /// The underlying customer repository
     customer_repository: CR,
-    /// The team channels repository
-    team_channels_repository: TCR,
+    /// The channel service
+    channel_service: CS,
     /// The underlying user roles and permissions service
     user_roles_and_permissions_service: URPS,
     /// The notification ingress service
@@ -97,12 +101,16 @@ pub struct TeamServiceImpl<
     event_broker: EB,
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB> Clone
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
+fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
+    TeamError::StorageLayerError(error.into())
+}
+
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB> Clone
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -115,7 +123,7 @@ where
         Self {
             team_repository: self.team_repository.clone(),
             customer_repository: self.customer_repository.clone(),
-            team_channels_repository: self.team_channels_repository.clone(),
+            channel_service: self.channel_service.clone(),
             user_roles_and_permissions_service: self.user_roles_and_permissions_service.clone(),
             notification_ingress: self.notification_ingress.clone(),
             crm_enqueuer: self.crm_enqueuer.clone(),
@@ -127,11 +135,11 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS>
     TeamServiceImpl<
         TR,
         CR,
-        TCR,
+        CS,
         URPS,
         NI,
         CE,
@@ -143,7 +151,7 @@ impl<TR, CR, TCR, URPS, NI, CE, TCRMS>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -153,7 +161,7 @@ where
     pub fn new(
         team_repository: TR,
         customer_repository: CR,
-        team_channels_repository: TCR,
+        channel_service: CS,
         user_roles_and_permissions_service: URPS,
         notification_ingress: Arc<NI>,
         crm_enqueuer: CE,
@@ -162,7 +170,7 @@ where
         Self::new_with_analytics(
             team_repository,
             customer_repository,
-            team_channels_repository,
+            channel_service,
             user_roles_and_permissions_service,
             notification_ingress,
             crm_enqueuer,
@@ -172,23 +180,12 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
-    TeamServiceImpl<
-        TR,
-        CR,
-        TCR,
-        URPS,
-        NI,
-        CE,
-        TCRMS,
-        TA,
-        NoOpContactsEnqueuer,
-        NoopMacroEventBroker,
-    >
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA>
+    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, NoOpContactsEnqueuer, NoopMacroEventBroker>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -203,7 +200,7 @@ where
     pub fn new_with_analytics(
         team_repository: TR,
         customer_repository: CR,
-        team_channels_repository: TCR,
+        channel_service: CS,
         user_roles_and_permissions_service: URPS,
         notification_ingress: Arc<NI>,
         crm_enqueuer: CE,
@@ -213,7 +210,7 @@ where
         Self {
             team_repository,
             customer_repository,
-            team_channels_repository,
+            channel_service,
             user_roles_and_permissions_service,
             notification_ingress,
             crm_enqueuer,
@@ -225,12 +222,12 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
-    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
+    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -243,14 +240,14 @@ where
     pub fn with_contacts_enqueuer<CNE2>(
         self,
         contacts_enqueuer: CNE2,
-    ) -> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE2, EB>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE2, EB>
     where
         CNE2: ContactsEnqueuer,
     {
         TeamServiceImpl {
             team_repository: self.team_repository,
             customer_repository: self.customer_repository,
-            team_channels_repository: self.team_channels_repository,
+            channel_service: self.channel_service,
             user_roles_and_permissions_service: self.user_roles_and_permissions_service,
             notification_ingress: self.notification_ingress,
             crm_enqueuer: self.crm_enqueuer,
@@ -265,14 +262,14 @@ where
     pub fn with_event_broker<EB2>(
         self,
         event_broker: EB2,
-    ) -> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB2>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB2>
     where
         EB2: MacroEventBroker,
     {
         TeamServiceImpl {
             team_repository: self.team_repository,
             customer_repository: self.customer_repository,
-            team_channels_repository: self.team_channels_repository,
+            channel_service: self.channel_service,
             user_roles_and_permissions_service: self.user_roles_and_permissions_service,
             notification_ingress: self.notification_ingress,
             crm_enqueuer: self.crm_enqueuer,
@@ -504,12 +501,12 @@ impl GetTeamSubscriptionError {
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamMembersService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamMembersService
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -533,12 +530,12 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamService
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    TCR: TeamChannelsRepository,
+    CS: ChannelService + Clone,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -563,6 +560,22 @@ where
             .team_repository
             .create_team(user_id, team_name, subscription_id)
             .await?;
+        let owner_id = user_id.clone().into_owned();
+        self.channel_service
+            .create_channel(
+                Sender::new_from_user(owner_id.clone()),
+                None,
+                CreateChannelRequest {
+                    name: Some(team.name().to_owned()),
+                    channel_type: ChannelType::Team,
+                    team_id: Some(*team.id()),
+                    auto_join_team: true,
+                    participants: HashSet::from([owner_id]),
+                },
+            )
+            .await
+            .map_err(|error| CreateTeamError::StorageLayerError(error.into()))?;
+
         if let Some(subscription_id) = subscription_id {
             self.customer_repository
                 .convert_subscription_to_team(subscription_id, team.id(), user_id)
@@ -860,35 +873,40 @@ where
             return Err(RemoveUserFromTeamError::CustomerError(e));
         }
 
-        if let Err(e) = self
-            .team_channels_repository
-            .remove_team_member_from_channels(&team_id, user_id)
+        let left_channel_ids = match self
+            .channel_service
+            .leave_by_team_id(&team_id, user_id)
             .await
         {
-            if let Some(subscription_id) = subscription_id.as_ref() {
-                self.customer_repository
-                    .increment_seat_count(subscription_id, 1)
+            Ok(channel_ids) => channel_ids,
+            Err(error) => {
+                if let Some(subscription_id) = subscription_id.as_ref() {
+                    self.customer_repository
+                        .increment_seat_count(subscription_id, 1)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback customer seat count after removing team member from channels failed"
+                            );
+                        })
+                        .ok();
+                }
+                self.team_repository
+                    .rollback_remove_user_from_team(&removed_member)
                     .await
                     .inspect_err(|rollback_err| {
                         tracing::error!(
                             error=?rollback_err,
-                            "unable to rollback customer seat count after removing team member from channels failed"
+                            "unable to rollback removed team member after removing team member from channels failed"
                         );
                     })
                     .ok();
+                return Err(RemoveUserFromTeamError::TeamError(
+                    channel_error_to_team_error(error),
+                ));
             }
-            self.team_repository
-                .rollback_remove_user_from_team(&removed_member)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback removed team member after removing team member from channels failed"
-                    );
-                })
-                .ok();
-            return Err(RemoveUserFromTeamError::TeamError(e));
-        }
+        };
 
         let roles_to_remove = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
         let roles = non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap();
@@ -898,8 +916,8 @@ where
             .dangerous_remove_roles_from_user(user_id, &roles)
             .await
         {
-            self.team_channels_repository
-                .add_team_member_to_channels(&team_id, user_id)
+            self.channel_service
+                .restore_by_channel_ids(user_id, &left_channel_ids)
                 .await
                 .inspect_err(|rollback_err| {
                     tracing::error!(
@@ -1338,8 +1356,8 @@ where
         }
 
         if let Err(e) = self
-            .team_channels_repository
-            .add_team_member_to_channels(&team_member.team_id, user_id)
+            .channel_service
+            .auto_join_by_team_id(&team_member.team_id, user_id)
             .await
         {
             if grants_premium {
@@ -1377,7 +1395,7 @@ where
                     );
                 })
                 .ok();
-            return Err(JoinTeamError::TeamError(e));
+            return Err(JoinTeamError::TeamError(channel_error_to_team_error(e)));
         }
 
         // Best-effort: ask the email service to seed CRM tables from this
@@ -1924,8 +1942,8 @@ where
         }
 
         if let Err(e) = self
-            .team_channels_repository
-            .add_team_member_to_channels(&team_id, user_id)
+            .channel_service
+            .auto_join_by_team_id(&team_id, user_id)
             .await
         {
             if grants_premium {
@@ -1955,7 +1973,7 @@ where
             }
             self.rollback_add_user_to_team(&team_id, user_id, "adding team member to channels")
                 .await;
-            return Err(JoinTeamError::TeamError(e).into());
+            return Err(JoinTeamError::TeamError(channel_error_to_team_error(e)).into());
         }
 
         // Best-effort: ask the email service to seed CRM tables from this

@@ -863,6 +863,10 @@ enum GraphqlChannelLiteral {
     ChannelType(GraphqlChannelTypeFilter),
     /// The importance option.
     Importance(bool),
+    /// The is participant option. Filters by whether the requesting user is an
+    /// active participant; its presence widens the candidate set to team channels
+    /// of the user's teams they have not joined.
+    IsParticipant(bool),
     /// The notification done option.
     NotificationDone(bool),
     /// The notification seen option.
@@ -883,6 +887,7 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
             Self::Sender(sender) => ChannelLiteral::Sender(parse_macro_user_id(sender, "sender")?),
             Self::ChannelType(channel_type) => ChannelLiteral::ChannelType(channel_type.into()),
             Self::Importance(importance) => ChannelLiteral::Importance(importance),
+            Self::IsParticipant(is_participant) => ChannelLiteral::IsParticipant(is_participant),
             Self::NotificationDone(done) => ChannelLiteral::NotificationDone(done),
             Self::NotificationSeen(seen) => ChannelLiteral::NotificationSeen(seen),
         };

@@ -20,6 +20,12 @@ pub mod get_contact;
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
+/// Manually create a CRM company (name + domain) for the caller's team.
+pub mod create_company;
+
+/// Manually create a contact (name + email) under a CRM company.
+pub mod create_contact;
+
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
 
@@ -34,7 +40,7 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, patch, put},
+    routing::{get, patch, post, put},
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
@@ -106,6 +112,7 @@ where
     S: Send + Sync + 'static,
 {
     Router::new()
+        .route("/companies", post(create_company::handler::<C, Eas, Auth>))
         .route(
             "/companies/{company_id}/email-sync",
             put(set_email_sync::handler::<C, Eas, Auth>),
@@ -120,7 +127,8 @@ where
         )
         .route(
             "/companies/{company_id}/contacts",
-            get(list_company_contacts::handler::<C, Eas, Auth>),
+            get(list_company_contacts::handler::<C, Eas, Auth>)
+                .post(create_contact::handler::<C, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}",
@@ -205,6 +213,30 @@ impl IntoResponse for CrmError {
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "crm company is hidden; un-hide before enabling email sync".into(),
+                }),
+            ),
+            CrmError::CompanyAlreadyExistsForTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm company already exists for this domain".into(),
+                }),
+            ),
+            CrmError::ContactAlreadyExistsForCompany => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm contact with this email already exists for the company".into(),
+                }),
+            ),
+            CrmError::ContactEmailDomainMismatch => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "contact email domain must match one of the company's domains".into(),
+                }),
+            ),
+            CrmError::CrmDisabledForTeam => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "crm is not enabled for this team".into(),
                 }),
             ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (

@@ -286,6 +286,35 @@ fn it_expands_channel_types() {
 }
 
 #[test]
+fn it_expands_is_participant() {
+    let f = EntityFilters {
+        channel_filters: crate::ChannelFilters {
+            is_participant: Some(false),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .channel_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "IsParticipant": false
+        }
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
 fn it_expands_multiple_channel_types() {
     let f = EntityFilters {
         channel_filters: crate::ChannelFilters {

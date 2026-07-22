@@ -38,6 +38,18 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Canonical entity type accepted when an AI tool targets an entity's properties.
+ */
+export type ToolPropertyTargetEntityType =
+  | 'document'
+  | 'project'
+  | 'chat'
+  | 'thread'
+  | 'channel'
+  | 'call'
+  | 'user'
+  | 'company';
+/**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
  */
@@ -328,18 +340,6 @@ export type EntityItem =
       type: 'foreignEntity';
     };
 /**
- * Canonical entity type accepted when an AI tool targets an entity's properties.
- */
-export type ToolPropertyTargetEntityType =
-  | 'document'
-  | 'project'
-  | 'chat'
-  | 'thread'
-  | 'channel'
-  | 'call'
-  | 'user'
-  | 'company';
-/**
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
@@ -433,6 +433,9 @@ export type TaggedSearchResult1 =
     })
   | (ChannelMessageSearchResponseItem & {
       type: 'channelMessage';
+    })
+  | (ChannelNameSearchResponseItem & {
+      type: 'channel';
     })
   | (ProjectSearchResponseItemWithMetadata & {
       type: 'project';
@@ -603,6 +606,77 @@ export interface BashCodeExecutionResponse {
   content: BashCodeExecutionContent;
   tool_use_id: string;
 }
+/**
+ * Apply one multi-select option delta — most often a tag — to many entities in a single call. Use this instead of calling SetEntityProperty once per entity when the user asks to tag or label a set of items at once (e.g. "tag the last 50 emails as Follow-up"). Provide the property_definition_id (a tag set's propertyDefinitionId from ListTags) and the option ids to add and/or remove (a tag's option id from ListTags). The same add_option_ids/remove_option_ids delta is applied to every entity, composing atomically with concurrent edits per entity.
+ *
+ * Only for multi-select or tag properties; for other value types, or a single entity, use SetEntityProperty. Up to 200 entities per call — split larger sets across multiple calls.
+ *
+ * Best-effort: each entity is handled independently. Entities you don't have edit access to are reported with status 'skipped_no_permission' and left unchanged, entities that can't take the property are 'failed', and the rest are 'applied' — one call never fails wholesale because a few entities were not editable. Inspect the per-entity results and the summary to see what happened.
+ */
+export interface BulkSetEntityPropertyOptions {
+  /**
+   * Options to add to every entity (e.g. a tag's option id from ListTags),
+   * deduped against each entity's current value.
+   */
+  add_option_ids?: string[] | null;
+  /**
+   * The entities to update (up to 200). Entities the user can't edit are skipped.
+   */
+  entities: BulkTargetEntity[];
+  /**
+   * The multi-select property definition id changed on every entity — e.g. a
+   * tag set's propertyDefinitionId from ListTags.
+   */
+  property_definition_id: string;
+  /**
+   * Options to remove from every entity. Removing an absent option is a no-op.
+   */
+  remove_option_ids?: string[] | null;
+}
+/**
+ * One entity targeted by a bulk option update.
+ */
+export interface BulkTargetEntity {
+  /**
+   * The id of the entity.
+   */
+  entity_id: string;
+  entity_type: ToolPropertyTargetEntityType;
+}
+/**
+ * Response from the BulkSetEntityPropertyOptions tool.
+ */
+export interface BulkSetEntityPropertyOptionsResponse {
+  /**
+   * Per-entity results, aligned to the requested entities' order.
+   */
+  results: BulkSetEntityPropertyOptionsResult[];
+  /**
+   * Human-readable summary of how many entities were applied/skipped/failed.
+   */
+  summary: string;
+}
+/**
+ * One entity's result in the tool response.
+ */
+export interface BulkSetEntityPropertyOptionsResult {
+  /**
+   * The entity's id this result is for.
+   */
+  entityId: string;
+  /**
+   * The entity's type this result is for.
+   */
+  entityType: string;
+  /**
+   * A human-readable reason, present only when the status is failed.
+   */
+  error?: string | null;
+  /**
+   * One of: applied, skipped_no_permission, failed.
+   */
+  status: string;
+}
 export interface CallRecordMetadata {
   attended: boolean;
   channel_name?: string | null;
@@ -763,6 +837,45 @@ export interface ChannelMessageSearchResponseItem {
    * When the channel message was last updated
    */
   updated_at: string;
+}
+/**
+ * Metadata for a channel fetched from the database
+ */
+export interface ChannelMetadata {
+  created_at: string;
+  interacted_at?: string | null;
+  updated_at: string;
+  viewed_at?: string | null;
+}
+/**
+ * A channel-name search hit.
+ */
+export interface ChannelNameSearchResponseItem {
+  /**
+   * The channel id.
+   */
+  channel_id: string;
+  /**
+   * The type of channel.
+   */
+  channel_type: string;
+  highlight: SearchHighlight;
+  /**
+   * Standardized id field shared by all item types; the channel id.
+   */
+  id: string;
+  /**
+   * Metadata for the channel.
+   */
+  metadata?: ChannelMetadata | null;
+  /**
+   * The channel owner.
+   */
+  owner_id?: string | null;
+  /**
+   * The score of the result.
+   */
+  score?: number | null;
 }
 /**
  * A single message in the tool response.
@@ -1986,7 +2099,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}.
+   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}. Supports filtering by thread timestamp: {"l":{"ca":{"gte":"<start>"}}} matches created_at, {"l":{"ua":{"gte":"<start>","lt":"<end>"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For "emails from the last 7 days", AND a ua (or ca) gte bound set to 7 days before now, e.g. {"l":{"ua":{"gte":"<7-days-ago-ISO>"}}}.
    */
   ef?: {
     [k: string]: unknown;
@@ -2431,7 +2544,7 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
   /**

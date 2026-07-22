@@ -300,6 +300,22 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self, updates), err)]
+    async fn bulk_update_entity_property_options(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        updates: &[crate::domain::model::EntityPropertyOptionUpdate],
+    ) -> Result<Vec<crate::domain::model::EntityPropertyOptionSelection>, Self::Err> {
+        entity_property_queries::bulk_update_entity_property_options(
+            &self.pool,
+            entity_id,
+            entity_type,
+            updates,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self))]
     async fn link_parent_task(
         &self,

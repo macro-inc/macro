@@ -473,6 +473,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               joined_at: participant.joinedAt,
               left_at: participant.leftAt ?? undefined,
             })),
+            is_participant: entity.isParticipant,
             viewed_at: entity.viewedAt ?? undefined,
             interacted_at: entity.interactedAt ?? undefined,
             latest_message: mapChannelMessage(entity.latestMessage),

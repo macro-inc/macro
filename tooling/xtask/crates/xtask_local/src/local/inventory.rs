@@ -62,10 +62,13 @@ impl RustService {
 
     /// Cargo features to re-enable alongside `--no-default-features` for this
     /// service's local build (empty = none). Only `search_processing_service`
-    /// needs this: dropping default features removes the amd64-only `pdf`
-    /// feature, but its bin still requires `processing`/`service`.
+    /// needs this: `authentication_service` opts into local passwordless code
+    /// responses, and dropping `search_processing_service` default features
+    /// removes the amd64-only `pdf` feature, but its bin still requires
+    /// `processing`/`service`.
     pub fn build_features(&self) -> &'static [&'static str] {
         match self.cargo_bin {
+            "authentication_service" => &["return_passwordless_code"],
             "search_processing_service" => &["processing", "service"],
             _ => &[],
         }
