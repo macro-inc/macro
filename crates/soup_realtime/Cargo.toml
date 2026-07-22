@@ -7,10 +7,11 @@ version = "0.1.0"
 [features]
 consumer = [
   "dep:documents",
+  "dep:kafka_consumer_util",
+  "dep:macro_event_broker",
   "dep:macro_event_topics",
   "dep:rdkafka",
   "dep:tokio",
-  "macro_event_broker/consumer",
   "ports",
 ]
 default = ["consumer", "outbound", "ports"]
@@ -28,6 +29,7 @@ ports = ["dep:futures", "dep:rootcause", "dep:tracing"]
 documents = { path = "../documents", default-features = false, optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"], optional = true }
 futures = { workspace = true, optional = true }
+kafka_consumer_util = { path = "../kafka_consumer_util", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
 macro_event_topics = { path = "../macro_event_topics", optional = true }
 macro_user_id = { path = "../macro_user_id" }

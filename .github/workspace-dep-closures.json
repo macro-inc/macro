@@ -1507,6 +1507,7 @@
       "crates/invite_email",
       "crates/ip_extractor",
       "crates/item_filters",
+      "crates/kafka_consumer_util",
       "crates/last_online_tracker",
       "crates/lexical_client",
       "crates/lexical_mention_extractor",
@@ -2882,6 +2883,14 @@
       "crates/macro_user_id",
       "crates/model_file_type",
       "crates/non_empty",
+      "crates/workspace-hack"
+    ],
+    "kafka_consumer_util": [
+      "crates/kafka_consumer_util",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_event_broker",
+      "crates/macro_event_topics",
       "crates/workspace-hack"
     ],
     "lambda_client": [
@@ -4928,6 +4937,7 @@
       "crates/frecency",
       "crates/invite_email",
       "crates/item_filters",
+      "crates/kafka_consumer_util",
       "crates/last_online_tracker",
       "crates/lexical_client",
       "crates/macro_auth",
@@ -5517,6 +5527,7 @@
       "crates/frecency",
       "crates/invite_email",
       "crates/item_filters",
+      "crates/kafka_consumer_util",
       "crates/last_online_tracker",
       "crates/lexical_client",
       "crates/macro_auth",

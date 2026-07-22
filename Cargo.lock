@@ -7540,6 +7540,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kafka_consumer_util"
+version = "0.1.0"
+dependencies = [
+ "macro_env",
+ "macro_event_broker",
+ "rdkafka",
+ "thiserror 2.0.18",
+ "workspace-hack",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [
@@ -13393,6 +13404,7 @@ dependencies = [
  "documents",
  "entity_access",
  "futures",
+ "kafka_consumer_util",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -15540,6 +15552,7 @@ dependencies = [
  "futures",
  "hex",
  "hmac 0.12.1",
+ "kafka_consumer_util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",

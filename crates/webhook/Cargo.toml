@@ -6,10 +6,10 @@ version = "0.1.0"
 
 [features]
 consumer = [
+  "dep:kafka_consumer_util",
   "dep:rdkafka",
   "dep:tokio",
   "ingestion",
-  "macro_event_broker/consumer",
 ]
 default = ["consumer", "inbound", "outbound", "ports"]
 inbound = [
@@ -60,6 +60,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
+kafka_consumer_util = { path = "../kafka_consumer_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }

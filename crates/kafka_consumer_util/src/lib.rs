@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 //! Environment-aware Kafka consumer transport.
 //!
 //! This adapter centralizes the repository's plaintext-local versus MSK-IAM
@@ -14,7 +15,7 @@ use rdkafka::consumer::{CommitMode, Consumer as _, StreamConsumer};
 use rdkafka::error::{KafkaError, KafkaResult};
 use rdkafka::message::{BorrowedMessage, Message as _};
 
-use crate::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
+use macro_event_broker::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
 
 /// Failure to construct an environment-specific Kafka consumer.
 #[derive(Debug, thiserror::Error)]

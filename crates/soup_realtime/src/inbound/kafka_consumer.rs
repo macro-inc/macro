@@ -10,7 +10,8 @@ mod test;
 use std::{future::Future, time::Duration};
 
 use documents::domain::events::DocumentTopicEvent;
-use macro_event_broker::{Event, EventBrokerError, KafkaEventConsumer, Topic as _};
+use kafka_consumer_util::KafkaEventConsumer;
+use macro_event_broker::{Event, EventBrokerError, Topic as _};
 use macro_event_topics::MacroDocumentsTopic;
 use model_entity::{Entity, EntityType};
 use rdkafka::consumer::CommitMode;
