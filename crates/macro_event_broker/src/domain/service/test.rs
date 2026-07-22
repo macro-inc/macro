@@ -201,7 +201,8 @@ async fn consumer_service_receives_and_decodes_typed_event() {
     };
     let service = MacroEventConsumerService::<DeclaredMacroEvent, _>::new(consumer);
 
-    let decoded = service.recv().await.expect("associated topic decodes");
+    let message = service.recv().await.expect("message is received");
+    let decoded = message.decode_payload().expect("associated topic decodes");
     let DeclaredMacroEvent::ExampleMacroEvent(decoded) = decoded;
     assert_eq!(decoded.key(), "msg-123");
     assert_eq!(decoded.event(), event.event());

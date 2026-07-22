@@ -59,10 +59,13 @@ impl SoupTopicConsumer {
     /// payloads are returned as errors; because the consumer is ungrouped, a
     /// subsequent call proceeds to the next locally assigned record.
     pub async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
-        let event = self
+        let message = self
             .consumer
             .recv()
             .await
+            .context("failed to receive realtime Soup event")?;
+        let event = message
+            .decode_payload()
             .context("failed to decode realtime Soup event")?;
 
         match event {

@@ -15,7 +15,7 @@ use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, Macr
 
 const PUBLISH_TIMEOUT: Duration = Duration::from_secs(6);
 
-/// Receives transport messages and decodes their declared macro events.
+/// Receives transport messages associated with a declared macro event collection.
 pub struct MacroEventConsumerService<M, C>
 where
     M: MacroEventCollection,
@@ -38,7 +38,9 @@ where
         }
     }
 
-    /// Receives and decodes the next event from the underlying consumer.
+    /// Receives the next message from the underlying consumer.
+    ///
+    /// Call [`MessageWrapper::decode_payload`] to decode its declared event.
     #[tracing::instrument(skip(self), err)]
     pub async fn recv<'a>(
         &'a self,
@@ -46,8 +48,11 @@ where
         self.consumer.recv().await
     }
 
-    /// get a reference to the inner consumer
-    pub fn inner(&self) -> &C {
+    /// Returns the underlying consumer.
+    ///
+    /// This provides access to transport-specific delivery operations after a
+    /// message has been received through this service.
+    pub const fn inner(&self) -> &C {
         &self.consumer
     }
 }
