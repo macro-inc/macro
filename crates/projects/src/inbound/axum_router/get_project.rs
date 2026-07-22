@@ -8,7 +8,7 @@ use entity_access::{
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::project::response::{GetProjectContentResponse, GetProjectResponse};
 
-use super::ProjectRouterState;
+use super::{ProjectRouterState, required_user};
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Get project metadata.
@@ -22,7 +22,11 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, access), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, access),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn get_project_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
@@ -52,7 +56,11 @@ where
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, access), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, access),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn get_project_content_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,

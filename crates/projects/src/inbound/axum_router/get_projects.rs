@@ -5,7 +5,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::{project::response::GetProjectsResponse, response::TypedSuccessResponse};
 
-use super::ProjectRouterState;
+use super::{ProjectRouterState, required_user};
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Successful pending-project list response.
@@ -22,7 +22,11 @@ pub type PendingProjectsResponse = TypedSuccessResponse<Vec<model::project::Pend
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn get_projects_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
@@ -34,7 +38,7 @@ where
 {
     let projects = state
         .service
-        .list_projects(user.macro_user_id.clone())
+        .list_projects(required_user(&user.authorization).macro_user_id.clone())
         .await?;
     Ok(Json(GetProjectsResponse {
         error: false,
@@ -53,7 +57,11 @@ where
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn get_pending_projects_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
@@ -65,7 +73,7 @@ where
 {
     let projects = state
         .service
-        .list_pending_projects(user.macro_user_id.clone())
+        .list_pending_projects(required_user(&user.authorization).macro_user_id.clone())
         .await?;
     Ok(Json(PendingProjectsResponse {
         error: false,

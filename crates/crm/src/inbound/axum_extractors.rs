@@ -85,7 +85,12 @@ where
         let authorization = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
             .await
             .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization.macro_user_id.clone();
+        let macro_user_id = authorization
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user")
+            .macro_user_id
+            .clone();
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -160,7 +165,12 @@ where
         let authorization = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
             .await
             .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization.macro_user_id.clone();
+        let macro_user_id = authorization
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user")
+            .macro_user_id
+            .clone();
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -236,7 +246,12 @@ where
         let authorization = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
             .await
             .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization.macro_user_id.clone();
+        let macro_user_id = authorization
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user")
+            .macro_user_id
+            .clone();
 
         let (crm_entity_type, entity_id) = crm_service
             .get_comment_entity(&comment_id)

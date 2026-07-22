@@ -55,14 +55,16 @@ impl IntoResponse for HealthCheckError {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
 pub async fn health_check_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, HealthCheckError> {
     let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
     )
     .await
     .map_err(HealthCheckError::DatabaseError)?;

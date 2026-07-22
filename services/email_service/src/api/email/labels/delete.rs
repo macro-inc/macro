@@ -25,7 +25,7 @@ use uuid::Uuid;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,

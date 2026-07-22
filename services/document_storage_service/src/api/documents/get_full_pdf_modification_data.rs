@@ -39,7 +39,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user, document_context), fields(user_id=?user.macro_user_id, file_type=?document_context.file_type))]
+#[tracing::instrument(skip(ctx, user, document_context), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id, file_type=?document_context.file_type))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,

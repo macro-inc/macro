@@ -25,12 +25,21 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use std::sync::Arc;
 use uuid::Uuid;
+
+fn required_macro_user_id(authorization: &MacroAuthorization) -> MacroUserIdStr<'static> {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+        .macro_user_id
+        .clone()
+}
 
 /// State for the bots router.
 pub struct BotsRouterState<S, Svc, Auth> {
@@ -186,7 +195,7 @@ async fn create_bot_handler<
 ) -> Result<(StatusCode, Json<Bot>), BotsHandlerErr> {
     let bot = state
         .service
-        .create_bot(authorization.macro_user_id.clone(), req)
+        .create_bot(required_macro_user_id(&authorization.authorization), req)
         .await?;
     Ok((StatusCode::CREATED, Json(bot)))
 }
@@ -202,7 +211,7 @@ async fn list_bots_handler<
     Ok(Json(
         state
             .service
-            .list_bots(authorization.macro_user_id.clone())
+            .list_bots(required_macro_user_id(&authorization.authorization))
             .await?,
     ))
 }
@@ -219,7 +228,10 @@ async fn get_bot_handler<
     Ok(Json(
         state
             .service
-            .get_bot(authorization.macro_user_id.clone(), path.bot_id)
+            .get_bot(
+                required_macro_user_id(&authorization.authorization),
+                path.bot_id,
+            )
             .await?,
     ))
 }
@@ -237,7 +249,11 @@ async fn patch_bot_handler<
     Ok(Json(
         state
             .service
-            .patch_bot(authorization.macro_user_id.clone(), path.bot_id, req)
+            .patch_bot(
+                required_macro_user_id(&authorization.authorization),
+                path.bot_id,
+                req,
+            )
             .await?,
     ))
 }
@@ -253,7 +269,10 @@ async fn delete_bot_handler<
 ) -> Result<StatusCode, BotsHandlerErr> {
     state
         .service
-        .delete_bot(authorization.macro_user_id.clone(), path.bot_id)
+        .delete_bot(
+            required_macro_user_id(&authorization.authorization),
+            path.bot_id,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -270,7 +289,11 @@ async fn create_token_handler<
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
     let token = state
         .service
-        .create_token(authorization.macro_user_id.clone(), path.bot_id, req)
+        .create_token(
+            required_macro_user_id(&authorization.authorization),
+            path.bot_id,
+            req,
+        )
         .await?;
     Ok((StatusCode::CREATED, Json(token)))
 }
@@ -287,7 +310,10 @@ async fn list_tokens_handler<
     Ok(Json(
         state
             .service
-            .list_tokens(authorization.macro_user_id.clone(), path.bot_id)
+            .list_tokens(
+                required_macro_user_id(&authorization.authorization),
+                path.bot_id,
+            )
             .await?,
     ))
 }
@@ -304,7 +330,7 @@ async fn revoke_token_handler<
     state
         .service
         .revoke_token(
-            authorization.macro_user_id.clone(),
+            required_macro_user_id(&authorization.authorization),
             path.bot_id,
             path.token_id,
         )
@@ -340,7 +366,10 @@ pub async fn list_bot_channels_handler<
     Ok(Json(
         state
             .service
-            .list_bot_channels(authorization.macro_user_id.clone(), path.bot_id)
+            .list_bot_channels(
+                required_macro_user_id(&authorization.authorization),
+                path.bot_id,
+            )
             .await?,
     ))
 }
@@ -374,7 +403,7 @@ pub async fn remove_bot_channel_handler<
     state
         .service
         .remove_bot_from_channel(
-            authorization.macro_user_id.clone(),
+            required_macro_user_id(&authorization.authorization),
             path.channel_id,
             path.bot_id,
         )

@@ -192,7 +192,7 @@ pub struct InitParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<InitParams>,
@@ -223,8 +223,12 @@ async fn init_user(
     }): Query<InitParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, InitError> {
-    let macro_user_id = authorization.macro_user_id.clone();
-    let user_context = authorization.user_context.clone();
+    let macro_user_id = crate::api::required_user(&authorization.authorization)
+        .macro_user_id
+        .clone();
+    let user_context = crate::api::required_user(&authorization.authorization)
+        .user_context
+        .clone();
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());

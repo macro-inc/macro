@@ -194,12 +194,18 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
-    let cleanup_user_id = user.macro_user_id.clone();
+    let user_id = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+        .macro_user_id
+        .clone();
+    let cleanup_user_id = user_id.clone();
     let axum::Json(response) = ::notification::inbound::http::list_user_notifications::<
         S,
         AuthorizationService,
         serde_json::Value,
-    >(&state, user.macro_user_id.clone(), query, cursor)
+    >(&state, user_id, query, cursor)
     .await?;
 
     let (notifs, failed): (Vec<_>, Vec<_>) = response

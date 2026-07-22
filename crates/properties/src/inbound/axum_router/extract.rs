@@ -26,7 +26,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::PropertyTargetEntityType;
 
-use super::{PropertiesRouterState, properties_err_status};
+use super::{PropertiesRouterState, properties_err_status, required_macro_user_id};
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{EditReceipt, ViewReceipt};
 use crate::domain::service::PropertiesService;
@@ -182,7 +182,9 @@ where
             .await
             .map_err(ReceiptRejection::from)?;
         let user = authorization
-            .acting_user()
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
             .map(|user| user.macro_user_id.clone());
 
         let receipt = mint_view_receipt(
@@ -221,9 +223,10 @@ where
             .await
             .map_err(ReceiptRejection::from)?;
 
+        let user = required_macro_user_id(&authorization.authorization);
         let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
             state.entity_access_service.as_ref(),
-            &authorization.macro_user_id,
+            &user,
             &params.entity_id,
             target_entity_type(params.entity_type),
         )

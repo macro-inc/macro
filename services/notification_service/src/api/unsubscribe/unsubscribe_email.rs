@@ -9,6 +9,8 @@ use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
+use super::required_user;
+
 /// Unsubscribes a user from receiving emails
 #[utoipa::path(
         post,
@@ -25,7 +27,10 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
-    let email = user.user_context.user_id.replace("macro|", "");
+    let email = required_user(&user.authorization)
+        .user_context
+        .user_id
+        .replace("macro|", "");
     notification_db_client::unsubscribe::email::upsert_email_unsubscribe(&ctx.db, &email)
         .await
         .map_err(|e| {

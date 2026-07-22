@@ -34,13 +34,13 @@ where
         let db = PgPool::from_ref(state);
         let permissions = macro_db_client::user::get_permissions::get_user_permissions(
             &db,
-            &authorization.user_context.user_id,
+            &crate::api::required_user(&authorization.authorization).user_context.user_id,
         )
         .await
         .map_err(|error| {
             tracing::error!(
                 error = ?error,
-                user_id = %authorization.user_context.user_id,
+                user_id = %crate::api::required_user(&authorization.authorization).user_context.user_id,
                 "unable to get user permissions"
             );
             (

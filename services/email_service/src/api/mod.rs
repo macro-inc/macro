@@ -1,6 +1,7 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
+use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -17,6 +18,12 @@ pub(crate) mod gmail;
 mod internal;
 mod middleware;
 pub(crate) mod swagger;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;

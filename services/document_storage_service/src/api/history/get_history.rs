@@ -16,7 +16,7 @@ use model::version::ApiVersionEnum;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn get_history_handler(
     State(ctx): State<ApiContext>,
     api_version: Extension<ApiVersionEnum>,
@@ -26,13 +26,15 @@ pub async fn get_history_handler(
 
     let history = match macro_db_client::history::get_user_history(
         &ctx.db,
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
     )
     .await
     {
         Ok(history) => history,
         Err(e) => {
-            tracing::error!(error=?e, user_id=?user.macro_user_id, "unable to get history");
+            tracing::error!(error=?e, user_id=?crate::api::required_user(&user.authorization).macro_user_id, "unable to get history");
             return GenericResponse::builder()
                 .message("unable to get history")
                 .is_error(true)

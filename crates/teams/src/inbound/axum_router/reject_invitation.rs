@@ -5,7 +5,7 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::{model::RemoveTeamInviteError, team_repo::TeamService};
 
-use super::TeamRouterState;
+use super::{TeamRouterState, required_user};
 
 /// Path parameters for reject invitation endpoint.
 #[derive(serde::Deserialize)]
@@ -37,7 +37,10 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 ) -> Result<(), RemoveTeamInviteError> {
     state
         .service
-        .reject_invitation(&authorization.macro_user_id, &team_invite_id)
+        .reject_invitation(
+            &required_user(&authorization.authorization).macro_user_id,
+            &team_invite_id,
+        )
         .await?;
     Ok(())
 }

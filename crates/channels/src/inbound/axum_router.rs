@@ -55,6 +55,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use super::required_user;
+
 /// State for the channels router.
 pub struct ChannelsRouterState<S, Svc, Auth> {
     service: Arc<S>,
@@ -409,6 +411,7 @@ pub async fn create_channel_handler<
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<CreateChannelRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelResponse>), ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let res = state
         .service
         .create_channel(
@@ -445,6 +448,7 @@ pub async fn get_or_create_dm_handler<
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<GetOrCreateDmRequest>,
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let res = state
         .service
         .get_or_create_dm(Sender::new_from_user(user.macro_user_id.clone()), req)
@@ -477,6 +481,7 @@ pub async fn get_or_create_private_handler<
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<GetOrCreatePrivateRequest>,
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let res = state
         .service
         .get_or_create_private(Sender::new_from_user(user.macro_user_id.clone()), req)
@@ -873,6 +878,7 @@ pub async fn join_channel_by_code_handler<
     Path(join_code): Path<Uuid>,
     user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     state
         .service
         .join_channel_by_code(Sender::new_from_user(user.macro_user_id.clone()), join_code)
@@ -1011,6 +1017,7 @@ pub async fn create_mention_handler<
     macro_user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<CreateEntityMentionRequest>,
 ) -> Result<(StatusCode, Json<CreateEntityMentionResponse>), ChannelsHandlerErr> {
+    let macro_user = required_user(&macro_user.authorization);
     require_document_edit_access(
         state.access_service.as_ref(),
         &macro_user.macro_user_id,
@@ -1071,6 +1078,7 @@ pub async fn delete_mention_handler<
     macro_user: MacroAuthorizationExtractor<Auth>,
     Path(mention_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DeleteEntityMentionResponse>), ChannelsHandlerErr> {
+    let macro_user = required_user(&macro_user.authorization);
     let mention = state
         .service
         .get_entity_mention(mention_id)
@@ -1624,6 +1632,7 @@ pub async fn get_batch_channel_preview_handler<
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<GetBatchChannelPreviewRequest>,
 ) -> Result<Json<GetBatchChannelPreviewResponse>, ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let org_id = user.user_context.organization_id.map(i64::from);
     let previews = state
         .service
@@ -1665,6 +1674,7 @@ pub async fn get_attachment_references_handler<
     user: MacroAuthorizationExtractor<Auth>,
     Path(path): Path<AttachmentReferencesPath>,
 ) -> Result<Json<GetAttachmentReferencesResponse>, ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let span = tracing::Span::current();
     span.record("entity_type", tracing::field::display(&path.entity_type));
     span.record("entity_id", tracing::field::display(&path.entity_id));
@@ -1708,6 +1718,7 @@ pub async fn get_activity_handler<
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<Vec<ApiActivity>>, ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let activities = state
         .service
         .get_activities(user.macro_user_id.to_string())
@@ -1742,6 +1753,7 @@ pub async fn post_activity_handler<
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<PostActivityRequest>,
 ) -> Result<(StatusCode, Json<ApiActivity>), ChannelsHandlerErr> {
+    let user = required_user(&user.authorization);
     let channel_id = Uuid::parse_str(&req.channel_id)
         .map_err(|_| ChannelsHandlerErr::BadRequest("Invalid channel_id"))?;
     let activity = state

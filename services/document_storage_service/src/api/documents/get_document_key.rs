@@ -34,7 +34,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user, document_context, _access), fields(user_id=?user.macro_user_id, file_type=?document_context.file_type))]
+#[tracing::instrument(skip(state, user, document_context, _access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id, file_type=?document_context.file_type))]
 pub async fn get_document_key_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,

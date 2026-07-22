@@ -7,7 +7,8 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::Utc;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, MacroUserAuthentication,
 };
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
@@ -17,6 +18,12 @@ use crate::domain::models::{
     ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 pub struct ScheduledActionRouterState<S, Auth> {
     pub service: Arc<S>,
@@ -106,7 +113,7 @@ pub async fn create_action<
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: None,
-        owner: user.macro_user_id.clone(),
+        owner: required_user(&user.authorization).macro_user_id.clone(),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -142,7 +149,7 @@ pub async fn list_actions<
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let actions = state
         .service
-        .get_actions(user.macro_user_id.clone())
+        .get_actions(required_user(&user.authorization).macro_user_id.clone())
         .await?;
     Ok(Json(actions))
 }
@@ -177,7 +184,7 @@ pub async fn update_action<
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: Some(id),
-        owner: user.macro_user_id.clone(),
+        owner: required_user(&user.authorization).macro_user_id.clone(),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -191,7 +198,10 @@ pub async fn update_action<
     };
     let updated = state
         .service
-        .update_action(action, user.macro_user_id.clone())
+        .update_action(
+            action,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
     Ok(Json(updated))
 }
@@ -219,7 +229,10 @@ pub async fn delete_action<
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     state
         .service
-        .delete_action(&id, user.macro_user_id.clone())
+        .delete_action(
+            &id,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -248,7 +261,10 @@ pub async fn execute_action<
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let execution = state
         .service
-        .execute_action_now(&id, user.macro_user_id.clone())
+        .execute_action_now(
+            &id,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
     Ok(Json(execution))
 }
@@ -276,7 +292,10 @@ pub async fn list_history<
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let records = state
         .service
-        .get_execution_records(&id, user.macro_user_id.clone())
+        .get_execution_records(
+            &id,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
     Ok(Json(records))
 }

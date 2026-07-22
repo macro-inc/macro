@@ -3,7 +3,7 @@ use crate::{
         models::{EmailErr, Link, PreviewView},
         ports::EmailService,
     },
-    inbound::axum::{api_types::ApiSortMethod, previews_router::EmailRouterState},
+    inbound::axum::{api_types::ApiSortMethod, previews_router::EmailRouterState, required_user},
 };
 use axum::{
     RequestPartsExt,
@@ -171,7 +171,9 @@ where
             .extract_with_state(state)
             .await
             .map_err(EmailLinkErr::Authorization)?;
-        let macro_user_id = authorization.macro_user_id.clone();
+        let macro_user_id = required_user(&authorization.authorization)
+            .macro_user_id
+            .clone();
         let caller = macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
@@ -210,7 +212,9 @@ where
             .extract_with_state(state)
             .await
             .map_err(EmailLinkErr::Authorization)?;
-        let macro_user_id = authorization.macro_user_id.clone();
+        let macro_user_id = required_user(&authorization.authorization)
+            .macro_user_id
+            .clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_inboxes_for_macro_id(macro_user_id)

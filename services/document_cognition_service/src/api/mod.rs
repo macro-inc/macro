@@ -4,6 +4,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::post;
 use context::GLOBAL_CONTEXT;
+use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -25,6 +26,12 @@ pub mod utils;
 mod attachments;
 mod chats;
 pub mod structured_completion;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {

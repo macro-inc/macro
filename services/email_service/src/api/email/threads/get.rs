@@ -89,7 +89,7 @@ const MESSAGE_MAX: i64 = 100;
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
 pub async fn get_thread_messages_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -100,7 +100,9 @@ pub async fn get_thread_messages_handler(
 
     let link_ids: HashSet<Uuid> = email_db_client::links::get::fetch_inboxes_for_macro_id(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
     )
     .await
     .context("Failed to fetch links")?

@@ -53,7 +53,9 @@ pub async fn delete_comment_handler(
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<DeleteCommentRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .as_ref();
     match delete_document_comment(&db, comment_id, user_id, req).await {
         Ok(res) => {
             let response: DeleteCommentResponse = res;

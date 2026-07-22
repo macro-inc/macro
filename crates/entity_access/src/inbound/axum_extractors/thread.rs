@@ -62,7 +62,9 @@ where
             .as_ref()
             .is_some_and(MacroAuthorization::is_internal);
         let macro_user_id = authorization
-            .acting_user()
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
             .map(|user| user.macro_user_id.clone());
 
         let Path(path_params): Path<HashMap<String, String>> = parts

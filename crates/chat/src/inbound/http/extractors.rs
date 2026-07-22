@@ -107,6 +107,10 @@ where
             .await
             .map_err(ChatModelAccessRejection::Unauthorized)?;
 
+        let user = user
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user");
         let UserPermissionsState(permissions_service) = UserPermissionsState::<P>::from_ref(state);
         let permissions = permissions_service
             .get_user_permissions(&user.macro_user_id)

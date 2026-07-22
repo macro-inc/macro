@@ -28,7 +28,7 @@ pub type RecentlyDeletedResponse = TypedSuccessResponse<RecentlyDeletedResponseD
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn handler(
     State(db): State<PgPool>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -37,7 +37,9 @@ pub async fn handler(
 
     let items = match macro_db_client::recents::deleted::get_recently_deleted(
         &db,
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
     )
     .await
     {

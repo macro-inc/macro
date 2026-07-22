@@ -66,7 +66,9 @@ pub async fn create_comment_handler(
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateCommentRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.to_string();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .to_string();
     if document_context.deleted_at.is_some() {
         return Err((
             StatusCode::BAD_REQUEST,

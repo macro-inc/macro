@@ -385,7 +385,13 @@ pub async fn handler(
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
 ) -> Result<Json<ChannelSearchResponse>, SearchError> {
-    let user_id = authorization.user_context.user_id.clone();
+    let user_id = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+        .user_context
+        .user_id
+        .clone();
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }

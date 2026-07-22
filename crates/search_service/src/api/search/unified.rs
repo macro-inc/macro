@@ -43,7 +43,11 @@ pub async fn handler(
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
-    let user_context = &authorization.user_context;
+    let user_context = &authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+        .user_context;
 
     tracing::info!(
         user_id = user_context.user_id,

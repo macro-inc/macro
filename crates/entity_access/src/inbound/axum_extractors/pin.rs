@@ -71,7 +71,9 @@ where
             .await
             .map_err(ExtractorError::from)?;
         let macro_user_id = authorization
-            .acting_user()
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
             .map(|user| user.macro_user_id.clone())
             .ok_or(ExtractorError::Unauthorized)?;
 

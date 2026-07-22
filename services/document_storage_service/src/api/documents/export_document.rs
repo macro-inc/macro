@@ -61,7 +61,7 @@ pub struct ExportDocumentResponse {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user, _access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, _access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     Path(Params { .. }): Path<Params>,

@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
 use super::extract::{mint_authenticated_receipt, mint_view_receipt, target_entity_type};
-use super::{PropertiesRouterState, properties_err_status};
+use super::{PropertiesRouterState, properties_err_status, required_macro_user_id};
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::PropertyAccessReceiptExt;
 use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome, EntityPropertyOptionUpdate};
@@ -253,7 +253,7 @@ pub async fn get_bulk_entity_properties<
     user: MacroAuthorizationExtractor<Auth>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
-    let user = user.macro_user_id.clone();
+    let user = required_macro_user_id(&user.authorization);
     // The public endpoint requires explicit property IDs. An empty property_ids
     // means "no properties requested", so return early with empty result.
     if request.entities.is_empty() || request.property_ids.is_empty() {
@@ -937,7 +937,7 @@ pub async fn delete_entity_property<
     State(state): State<PropertiesRouterState<S, A, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
-    let user = user.macro_user_id.clone();
+    let user = required_macro_user_id(&user.authorization);
     tracing::info!("removing entity property");
 
     // The entity this property is attached to is only known after a lookup, so

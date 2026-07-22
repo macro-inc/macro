@@ -32,7 +32,7 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user, _access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, _access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
@@ -41,7 +41,9 @@ pub async fn handler(
 ) -> impl IntoResponse {
     match macro_db_client::user_document_view_location::get::get_user_document_view_location(
         &ctx.db,
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
         &document_id,
     )
     .await

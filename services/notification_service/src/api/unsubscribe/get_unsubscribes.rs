@@ -10,6 +10,8 @@ use model_notifications::UserUnsubscribe;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
+use super::required_user;
+
 /// Gets the users unsubscribe items.
 #[utoipa::path(
         get,
@@ -28,7 +30,7 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     let unsubscribe_items = notification_db_client::unsubscribe::get::get_user_unsubscribes(
         &ctx.db,
-        &user.user_context.user_id,
+        &required_user(&user.authorization).user_context.user_id,
     )
     .await
     .map_err(|e| {

@@ -5,7 +5,7 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::{model::JoinTeamError, team_repo::TeamService};
 
-use super::TeamRouterState;
+use super::{TeamRouterState, required_user};
 
 /// Path parameters for join team endpoint.
 #[derive(serde::Deserialize)]
@@ -37,7 +37,10 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 ) -> Result<(), JoinTeamError> {
     state
         .service
-        .join_team(&team_invite_id, &authorization.macro_user_id)
+        .join_team(
+            &team_invite_id,
+            &required_user(&authorization.authorization).macro_user_id,
+        )
         .await?;
     Ok(())
 }

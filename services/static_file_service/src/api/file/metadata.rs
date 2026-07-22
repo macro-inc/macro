@@ -7,6 +7,8 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use macro_authorization::MacroAuthorizationExtractor;
 
+use super::required_user;
+
 #[derive(serde::Deserialize)]
 pub struct Params {
     pub file_id: String,
@@ -25,12 +27,21 @@ pub struct Params {
     (status = 500, body=String)
     )
 )]
-#[tracing::instrument(skip(metadata_client, user), fields(user_id = ?user.macro_user_id))]
+#[tracing::instrument(
+    skip(metadata_client, user),
+    fields(user_id = tracing::field::Empty)
+)]
 pub async fn handle_get_metadata(
     State(metadata_client): State<DynamodbClient>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
+    let acting_user = required_user(&user.authorization);
+    tracing::Span::current().record(
+        "user_id",
+        tracing::field::display(&acting_user.macro_user_id),
+    );
+
     metadata_client
         .get_metadata(file_id.as_str())
         .await

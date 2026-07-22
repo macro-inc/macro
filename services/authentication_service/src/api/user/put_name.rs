@@ -25,7 +25,7 @@ use model::user::PutUserNameQueryParams;
         ),
         params(PutUserNameQueryParams),
     )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id = authorization.user_context.user_id, macro_user_id = authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id = crate::api::required_user(&authorization.authorization).user_context.user_id, macro_user_id = crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     Query(params): Query<PutUserNameQueryParams>,
@@ -35,7 +35,9 @@ pub async fn handler(
 
     update_user_name(
         &ctx.db,
-        &authorization.user_context.fusion_user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .fusion_user_id,
         params.first_name,
         params.last_name,
     )

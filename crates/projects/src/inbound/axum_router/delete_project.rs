@@ -11,7 +11,7 @@ use model::response::{GenericSuccessResponse, SuccessResponse, TypedSuccessRespo
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::ProjectRouterState;
+use super::{ProjectRouterState, required_user};
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Identifiers affected by a recursive project soft deletion.
@@ -40,7 +40,11 @@ pub type ProjectDeleteResponse = TypedSuccessResponse<ProjectDeleteResponseData>
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, access, project), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, access, project),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn delete_project_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
@@ -57,7 +61,7 @@ where
         .soft_delete_project(
             access.entity_access_receipt,
             project.0,
-            user.macro_user_id.to_string(),
+            required_user(&user.authorization).macro_user_id.to_string(),
         )
         .await?;
 
@@ -85,7 +89,11 @@ where
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, access, project), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, access, project),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn permanently_delete_project_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,

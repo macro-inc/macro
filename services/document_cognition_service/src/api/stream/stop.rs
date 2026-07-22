@@ -68,7 +68,7 @@ impl IntoResponse for StopChatStreamError {
         (status = 403, description = "Forbidden", body = StopChatStreamError),
     )
 )]
-#[tracing::instrument(skip(state, user), fields(chat_id = %request.chat_id, stream_id = %request.stream_id, user_id = %user.macro_user_id), err)]
+#[tracing::instrument(skip(state, user), fields(chat_id = %request.chat_id, stream_id = %request.stream_id, user_id = %crate::api::required_user(&user.authorization).macro_user_id), err)]
 pub async fn stop_chat_stream(
     State(state): State<ApiContext>,
     user: MacroAuthorizationExtractor<DcsAuthorizationService>,
@@ -76,7 +76,7 @@ pub async fn stop_chat_stream(
 ) -> Result<Json<StopChatStreamResponse>, StopChatStreamError> {
     let access = chat_permissions::chat_access(
         &state,
-        &user.macro_user_id,
+        &crate::api::required_user(&user.authorization).macro_user_id,
         &request.chat_id,
         request.stream_id.clone(),
     )

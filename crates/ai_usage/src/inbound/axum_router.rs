@@ -102,6 +102,10 @@ where
 
 /// Returns `Some(403)` unless the caller is a Macro admin.
 fn admin_rejection<Auth>(user: &MacroAuthorizationExtractor<Auth>) -> Option<Response> {
+    let user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     if user.macro_user_id.email_str().ends_with(ADMIN_EMAIL_SUFFIX) {
         None
     } else {
@@ -140,12 +144,24 @@ fn internal_error(context: &str) -> Response {
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(
+    skip(service, user),
+    fields(user_id = tracing::field::Empty)
+)]
 pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<UsageRequest>,
 ) -> Response {
+    let acting_user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
+    tracing::Span::current().record(
+        "user_id",
+        tracing::field::display(&acting_user.macro_user_id),
+    );
+
     if let Some(resp) = admin_rejection(&user) {
         return resp;
     }
@@ -196,12 +212,24 @@ pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(
+    skip(service, user),
+    fields(user_id = tracing::field::Empty)
+)]
 pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
+    let acting_user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
+    tracing::Span::current().record(
+        "user_id",
+        tracing::field::display(&acting_user.macro_user_id),
+    );
+
     if let Some(resp) = admin_rejection(&user) {
         return resp;
     }

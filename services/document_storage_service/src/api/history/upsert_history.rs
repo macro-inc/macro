@@ -32,7 +32,7 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user, history_access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, history_access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn upsert_history_handler(
     history_access: HistoryAccessExtractor<
         ViewAccessLevel,
@@ -85,7 +85,9 @@ pub async fn upsert_history_handler(
 
     if let Err(e) = macro_db_client::history::upsert_user_history(
         &mut transaction,
-        user.macro_user_id.clone(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .clone(),
         item_id.as_str(),
         item_type.as_str(),
     )
@@ -103,7 +105,11 @@ pub async fn upsert_history_handler(
         && let Err(e) = macro_db_client::document::track_document::track_document(
             &mut transaction,
             item_id.as_str(),
-            Some(user.macro_user_id.as_ref()),
+            Some(
+                crate::api::required_user(&user.authorization)
+                    .macro_user_id
+                    .as_ref(),
+            ),
         )
         .await
     {

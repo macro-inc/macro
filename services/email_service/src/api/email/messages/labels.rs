@@ -43,7 +43,7 @@ pub struct UpdateLabelBatchResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -66,7 +66,9 @@ pub async fn handler(
     // delegated inboxes); a single label op targets messages in one inbox.
     let link = email_db_client::links::get::fetch_owned_link_for_message(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
         body.message_ids[0],
     )
     .await
@@ -119,7 +121,9 @@ pub async fn handler(
     let db_messages = email_db_client::messages::get_simple_messages::get_simple_messages_batch(
         &ctx.db,
         &body.message_ids,
-        &authorization.user_context.fusion_user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .fusion_user_id,
     )
     .await
     .map_err(|e| {
@@ -186,7 +190,9 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_read_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &authorization.user_context.fusion_user_id,
+                    &crate::api::required_user(&authorization.authorization)
+                        .user_context
+                        .fusion_user_id,
                     !is_adding,
                 )
                 .await
@@ -195,7 +201,9 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_starred_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &authorization.user_context.fusion_user_id,
+                    &crate::api::required_user(&authorization.authorization)
+                        .user_context
+                        .fusion_user_id,
                     is_adding,
                 )
                 .await

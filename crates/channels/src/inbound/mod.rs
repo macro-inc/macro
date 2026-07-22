@@ -1,3 +1,13 @@
+#[cfg(feature = "inbound")]
+use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
+
+#[cfg(feature = "inbound")]
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
+
 /// Attachment adapter for resolving channel references into AI-consumable context.
 #[cfg(feature = "attachment")]
 pub mod attachment;

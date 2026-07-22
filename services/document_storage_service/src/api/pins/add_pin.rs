@@ -36,7 +36,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user, pin_type, inner), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, pin_type, inner), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn add_pin_handler(
     State(ctx): State<ApiContext>,
@@ -53,7 +53,9 @@ pub async fn add_pin_handler(
 ) -> impl IntoResponse {
     match macro_db_client::pins::upsert_pin(
         ctx.db.clone(),
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
         pinned_item_id.as_str(),
         pin_type.pin_type.as_str(),
         inner.pin_index,
@@ -62,7 +64,7 @@ pub async fn add_pin_handler(
     {
         Ok(_) => (),
         Err(err) => {
-            tracing::error!(error=?err, user_id=?user.macro_user_id, "failed to add pin");
+            tracing::error!(error=?err, user_id=?crate::api::required_user(&user.authorization).macro_user_id, "failed to add pin");
             return GenericResponse::builder()
                 .message("failed to add pin")
                 .is_error(true)

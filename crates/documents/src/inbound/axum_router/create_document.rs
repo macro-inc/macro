@@ -34,7 +34,7 @@ use crate::domain::response::CreateDocumentResponse;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, project), fields(user_id=?super::required_user(&user.authorization).macro_user_id))]
 pub async fn create_document_handler<
     T: DocumentService,
     Svc: EntityAccessService,
@@ -88,7 +88,9 @@ pub async fn create_document_handler<
         id: req.id,
         sha: req.sha,
         document_name,
-        user_id: user.macro_user_id.clone(),
+        user_id: super::required_user(&user.authorization)
+            .macro_user_id
+            .clone(),
         file_type,
         project_id: req.project_id,
         team_id,
@@ -102,7 +104,13 @@ pub async fn create_document_handler<
 
     let response_data = state
         .service
-        .create_document(user.macro_user_id.clone(), args, req.job_id)
+        .create_document(
+            super::required_user(&user.authorization)
+                .macro_user_id
+                .clone(),
+            args,
+            req.job_id,
+        )
         .await?;
 
     Ok(Json(CreateDocumentResponse {

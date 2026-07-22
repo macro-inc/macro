@@ -7,7 +7,7 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-use super::TeamRouterState;
+use super::{TeamRouterState, required_user};
 
 /// The request body to create a new team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
@@ -34,6 +34,7 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<CreateTeamRequest>,
 ) -> Result<Json<Team>, CreateTeamError> {
+    let user = required_user(&user.authorization);
     // Teams are free up to FREE_TEAM_MAX_MEMBERS members - a subscription is
     // linked when the owner has one, but is no longer required to create.
     let subscription_id = state

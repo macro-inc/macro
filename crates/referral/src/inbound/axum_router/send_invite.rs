@@ -52,9 +52,13 @@ pub async fn post_referral_invite_handler<
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>>,
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
 ) -> Result<StatusCode, ReferralError> {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let () = state
         .service
-        .send_referral_invite(authorization.macro_user_id.clone(), recipient)
+        .send_referral_invite(user.macro_user_id.clone(), recipient)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -78,8 +82,13 @@ where
     }
 
     fn key(&self) -> rate_limit::RateLimitKey {
+        let user = self
+            .0
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user");
         RateLimitKey::builder(&"per-user-referral")
-            .append(&self.0.macro_user_id.as_ref())
+            .append(&user.macro_user_id.as_ref())
             .finish()
     }
 }

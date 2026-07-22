@@ -3,6 +3,7 @@ use anyhow::Context;
 use axum::Router;
 use axum::http::HeaderName;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
+use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use native_app_service::inbound::RouterState;
 use std::net::SocketAddr;
@@ -41,6 +42,12 @@ mod webhooks;
 mod middleware;
 pub(crate) mod swagger;
 mod utils;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(

@@ -11,6 +11,8 @@ use utoipa::{IntoParams, ToSchema};
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
+use super::required_user;
+
 #[derive(Deserialize, Serialize, ToSchema, IntoParams)]
 pub struct UnsubscribeItemPathParams {
     pub item_type: String,
@@ -37,7 +39,7 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     notification_db_client::unsubscribe::item::upsert_unsubscribed_item_user(
         &ctx.db,
-        &user.user_context.user_id,
+        &required_user(&user.authorization).user_context.user_id,
         &item_id,
         &item_type,
     )

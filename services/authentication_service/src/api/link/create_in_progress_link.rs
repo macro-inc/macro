@@ -29,7 +29,7 @@ pub struct CreateInProgressLinkResponse {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.user_context.user_id, fusion_user_id=%authorization.user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%crate::api::required_user(&authorization.authorization).user_context.user_id, fusion_user_id=%crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
@@ -40,7 +40,9 @@ pub async fn handler(
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &authorization.user_context.fusion_user_id,
+            &crate::api::required_user(&authorization.authorization)
+                .user_context
+                .fusion_user_id,
         )
         .await
         .map_err(|e| {
@@ -65,7 +67,9 @@ pub async fn handler(
 
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
         &ctx.db,
-        &authorization.user_context.fusion_user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .fusion_user_id,
     )
     .await
     .map_err(|e| {

@@ -22,14 +22,16 @@ use model::response::ErrorResponse;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=%authorization.macro_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=%crate::api::required_user(&authorization.authorization).macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
     let permissions = macro_db_client::user::get_permissions::get_user_permissions(
         &ctx.db,
-        authorization.macro_user_id.as_ref(),
+        crate::api::required_user(&authorization.authorization)
+            .macro_user_id
+            .as_ref(),
     )
     .await
     .map_err(|e| {
@@ -46,8 +48,12 @@ pub async fn handler(
     Ok((
         StatusCode::OK,
         Json(GetUserInfo {
-            user_id: authorization.macro_user_id.to_string(),
-            organization_id: authorization.user_context.organization_id,
+            user_id: crate::api::required_user(&authorization.authorization)
+                .macro_user_id
+                .to_string(),
+            organization_id: crate::api::required_user(&authorization.authorization)
+                .user_context
+                .organization_id,
             permissions: permissions.into_iter().collect(),
         }),
     )

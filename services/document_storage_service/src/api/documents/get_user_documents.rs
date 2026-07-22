@@ -30,7 +30,7 @@ use sqlx::PgPool;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user, params), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user, params), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn get_user_documents_handler(
     State(db): State<PgPool>,
@@ -54,7 +54,9 @@ pub async fn get_user_documents_handler(
 
     let documents = match get_user_documents(
         &db,
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
         query_params.limit,
         query_params.offset,
         query_params.file_type,
@@ -63,7 +65,7 @@ pub async fn get_user_documents_handler(
     {
         Ok(documents) => documents,
         Err(e) => {
-            tracing::error!(error=?e, user_id=?user.macro_user_id, "failed to get user documents");
+            tracing::error!(error=?e, user_id=?crate::api::required_user(&user.authorization).macro_user_id, "failed to get user documents");
             return GenericResponse::builder()
                 .message("failed to get documents")
                 .is_error(true)

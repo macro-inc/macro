@@ -16,7 +16,8 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, MacroUserAuthentication,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::domain::models::RateLimitOk;
@@ -25,6 +26,12 @@ use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitServic
 use rootcause::Report;
 use std::sync::Arc;
 use std::time::Duration;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 /// State for the webhook router.
 pub struct WebhookRouterState<S, R, Auth> {
@@ -98,7 +105,11 @@ where
 
     fn key(&self) -> RateLimitKey {
         RateLimitKey::builder(&"per-user-validate-webhook")
-            .append(&self.authorization.macro_user_id.as_ref())
+            .append(
+                &required_user(&self.authorization.authorization)
+                    .macro_user_id
+                    .as_ref(),
+            )
             .append(&self.webhook_id)
             .finish()
     }
@@ -225,7 +236,12 @@ pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
     let webhook = service
-        .create_webhook(authorization.macro_user_id.clone(), request)
+        .create_webhook(
+            required_user(&authorization.authorization)
+                .macro_user_id
+                .clone(),
+            request,
+        )
         .await?;
     Ok((StatusCode::CREATED, Json(webhook.into())))
 }
@@ -254,7 +270,9 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Ok(Json(
         service
             .patch_webhook(
-                authorization.macro_user_id.clone(),
+                required_user(&authorization.authorization)
+                    .macro_user_id
+                    .clone(),
                 path.webhook_id,
                 request,
             )
@@ -281,7 +299,12 @@ pub async fn delete_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Path(path): Path<WebhookPath>,
 ) -> Result<StatusCode, WebhookHandlerError> {
     service
-        .delete_webhook(authorization.macro_user_id.clone(), path.webhook_id)
+        .delete_webhook(
+            required_user(&authorization.authorization)
+                .macro_user_id
+                .clone(),
+            path.webhook_id,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -307,7 +330,12 @@ pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
     Ok(Json(
         service
-            .validate_webhook(authorization.macro_user_id.clone(), path.webhook_id)
+            .validate_webhook(
+                required_user(&authorization.authorization)
+                    .macro_user_id
+                    .clone(),
+                path.webhook_id,
+            )
             .await?,
     ))
 }

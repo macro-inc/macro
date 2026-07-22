@@ -79,7 +79,7 @@ pub struct PathParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -93,7 +93,13 @@ pub async fn handler(
         return Err(GetMessageError::MessageNotFound);
     };
 
-    let link_ids = owned_link_ids(&ctx, &authorization.user_context.user_id).await?;
+    let link_ids = owned_link_ids(
+        &ctx,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
+    )
+    .await?;
     if link_ids.contains(&message.link_id) {
         Ok(Json(message).into_response())
     } else {
@@ -115,7 +121,7 @@ pub async fn handler(
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn batch_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -131,7 +137,13 @@ pub async fn batch_handler(
         return Err(GetMessageError::MessageNotFound);
     }
 
-    let link_ids = owned_link_ids(&ctx, &authorization.user_context.user_id).await?;
+    let link_ids = owned_link_ids(
+        &ctx,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
+    )
+    .await?;
     let accessible_messages = messages
         .into_iter()
         .filter(|msg| link_ids.contains(&msg.link_id))

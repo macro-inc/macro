@@ -16,7 +16,7 @@ use utoipa::ToSchema;
 
 use crate::domain::{models::signing::SignedUrl, service::NotificationReader};
 
-use super::NotificationRouterState;
+use super::{NotificationRouterState, required_macro_user_id};
 
 /// Path parameter for a notification event type.
 #[derive(Deserialize)]
@@ -53,7 +53,7 @@ pub async fn get_notification_type_preferences<
 {
     let disabled = state
         .inner
-        .get_disabled_notification_types(user.macro_user_id.clone())
+        .get_disabled_notification_types(required_macro_user_id(&user.authorization))
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get notification type preferences");
@@ -97,7 +97,7 @@ pub async fn disable_notification_type<S: NotificationReader, Auth: MacroAuthori
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     disable_notification_type_inner(
         &state,
-        user.macro_user_id.copied(),
+        required_macro_user_id(&user.authorization).copied(),
         notification_event_type.as_str(),
     )
     .await
@@ -228,7 +228,10 @@ pub async fn enable_notification_type<S: NotificationReader, Auth: MacroAuthoriz
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .enable_notification_type(user.macro_user_id.clone(), &notification_event_type)
+        .enable_notification_type(
+            required_macro_user_id(&user.authorization),
+            &notification_event_type,
+        )
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to enable notification type");

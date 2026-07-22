@@ -68,12 +68,16 @@ impl IntoResponse for GetUserOrganizationResponse {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=?user_context.user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=?crate::api::required_user(&user_context.authorization).user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<GetUserOrganizationResponse, UserOrganizationError> {
-    let organization_id = if let Some(organization_id) = user_context.user_context.organization_id {
+    let organization_id = if let Some(organization_id) =
+        crate::api::required_user(&user_context.authorization)
+            .user_context
+            .organization_id
+    {
         organization_id
     } else {
         return Ok(GetUserOrganizationResponse::NoOrganization);

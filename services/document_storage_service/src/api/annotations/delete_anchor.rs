@@ -42,7 +42,9 @@ pub async fn delete_anchor_handler(
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<DeleteUnthreadedAnchorRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .as_ref();
     match delete_document_anchor(&db, user_id, req).await {
         Ok(res) => {
             let response: DeleteUnthreadedAnchorResponse = res;

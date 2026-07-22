@@ -55,7 +55,9 @@ pub async fn edit_comment_handler(
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.to_string();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .to_string();
     // TODO: check if the user has comment access to the document
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {

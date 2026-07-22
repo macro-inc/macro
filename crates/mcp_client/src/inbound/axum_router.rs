@@ -252,9 +252,13 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let records = state
         .store
-        .list(&authorization.macro_user_id)
+        .list(&user.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -288,8 +292,12 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let record = McpServerRecord {
-        user_id: authorization.macro_user_id.clone(),
+        user_id: user.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
         credentials: None,
@@ -334,9 +342,13 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let mut record = state
         .store
-        .load(&authorization.macro_user_id, &body.url)
+        .load(&user.macro_user_id, &body.url)
         .await
         .map_err(anyhow::Error::from)?
         .ok_or(McpHandlerErr::NotFound)?;
@@ -382,9 +394,13 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     state
         .store
-        .delete(&authorization.macro_user_id, &params.url)
+        .delete(&user.macro_user_id, &params.url)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -415,13 +431,13 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let authorization_url = state
         .oauth
-        .start_authorization(
-            &authorization.macro_user_id,
-            &body.server_url,
-            &body.server_name,
-        )
+        .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
         .await?;
 
     Ok(Json(StartAuthResponse { authorization_url }))

@@ -19,14 +19,16 @@ use crate::api::context::{ApiContext, AuthorizationService};
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=%authorization.user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=%crate::api::required_user(&authorization.authorization).user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
     let permissions = macro_db_client::user::get_permissions::get_user_permissions(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
     )
     .await
     .map_err(|e| {

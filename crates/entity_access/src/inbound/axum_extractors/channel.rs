@@ -64,7 +64,9 @@ where
             .as_ref()
             .is_some_and(MacroAuthorization::is_internal);
         let (macro_user_id, user_context) = authorization
-            .acting_user()
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
             .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
             .unwrap_or_default();
 

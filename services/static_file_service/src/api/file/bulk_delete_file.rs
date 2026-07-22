@@ -12,6 +12,8 @@ use std::sync::Arc;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
+use super::required_user;
+
 #[derive(Debug, Error, AsRefStr)]
 pub enum BulkDeleteError {
     #[error("Validation error: {0}")]
@@ -52,13 +54,23 @@ impl IntoResponse for BulkDeleteError {
     )
   )
 ]
-#[tracing::instrument(skip(metadata_client, storage_client, user), fields(user_id = ?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(metadata_client, storage_client, user),
+    fields(user_id = tracing::field::Empty),
+    err
+)]
 pub async fn handle_bulk_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<BulkDeleteRequest>,
 ) -> Result<Json<BulkDeleteResponse>, BulkDeleteError> {
+    let acting_user = required_user(&user.authorization);
+    tracing::Span::current().record(
+        "user_id",
+        tracing::field::display(&acting_user.macro_user_id),
+    );
+
     // Validate request
     if req.file_ids.is_empty() {
         return Err(BulkDeleteError::Validation(
@@ -89,7 +101,7 @@ pub async fn handle_bulk_delete_file(
             Some(metadata) => {
                 // Skip owner check for internal requests
                 if !user.authorization.is_internal()
-                    && metadata.owner_id != user.macro_user_id.as_ref()
+                    && metadata.owner_id != acting_user.macro_user_id.as_ref()
                 {
                     tracing::warn!(file_id = file_id, "delete requested by non-owner");
                     results.push(DeleteResult {

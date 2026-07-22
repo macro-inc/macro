@@ -48,15 +48,21 @@ pub struct AddContactRequest {
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(authorization, contacts), fields(user_id = authorization.macro_user_id.as_ref()))]
+#[instrument(
+    skip(authorization, contacts),
+    fields(user_id = tracing::field::Empty)
+)]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth>,
 ) -> impl IntoResponse {
-    match contacts
-        .query_contacts(authorization.macro_user_id.clone())
-        .await
-    {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
+    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
+
+    match contacts.query_contacts(user.macro_user_id.clone()).await {
         Ok(contacts) if !contacts.is_empty() => {
             (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
         }
@@ -76,15 +82,25 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(service, authorization), fields(user_id = authorization.macro_user_id.as_ref()), err)]
+#[instrument(
+    skip(service, authorization),
+    fields(user_id = tracing::field::Empty),
+    err
+)]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>>,
     Json(body): Json<AddContactRequest>,
 ) -> Result<StatusCode, StatusCode> {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
+    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
+
     service
         .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([authorization.macro_user_id.clone(), body.user_id]),
+            users: HashSet::from([user.macro_user_id.clone(), body.user_id]),
         })
         .await
         .map_err(|e| {
@@ -111,8 +127,13 @@ where
     }
 
     fn key(&self) -> RateLimitKey {
+        let user = self
+            .0
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user");
         RateLimitKey::builder(&"per-user-add-contact")
-            .append(&self.0.macro_user_id.as_ref())
+            .append(&user.macro_user_id.as_ref())
             .finish()
     }
 }

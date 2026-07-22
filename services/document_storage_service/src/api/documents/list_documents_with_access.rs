@@ -45,7 +45,7 @@ pub struct ListDocumentsWithAccessQuery {
         (status = 500, body = GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn list_documents_with_access_handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -93,7 +93,9 @@ pub async fn list_documents_with_access_handler(
 
     let documents = match macro_db_client::document::list_documents_with_access(
         &ctx.db,
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
         &filters,
         min_access_level,
         offset,
@@ -105,7 +107,7 @@ pub async fn list_documents_with_access_handler(
         Err(e) => {
             tracing::error!(
                 error=?e,
-                user_id=?user.macro_user_id,
+                user_id=?crate::api::required_user(&user.authorization).macro_user_id,
                 "unable to list documents with access"
             );
             return (

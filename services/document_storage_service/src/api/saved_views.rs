@@ -143,11 +143,17 @@ where
         authorize_view_access(
             &PgViewStorage::new(db),
             saved_view_id,
-            user.macro_user_id.as_ref(),
+            crate::api::required_user(&user.authorization)
+                .macro_user_id
+                .as_ref(),
         )
         .await?;
 
-        Ok(SavedViewOwner(user.user_context.clone()))
+        Ok(SavedViewOwner(
+            crate::api::required_user(&user.authorization)
+                .user_context
+                .clone(),
+        ))
     }
 }
 
@@ -161,7 +167,7 @@ where
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id), err)]
 async fn get_views_handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -171,12 +177,20 @@ async fn get_views_handler(
     let (views, excluded_default_views) = try_join!(
         async {
             pg_view_storage
-                .get_views_for_user(user.macro_user_id.as_ref())
+                .get_views_for_user(
+                    crate::api::required_user(&user.authorization)
+                        .macro_user_id
+                        .as_ref(),
+                )
                 .await
         },
         async {
             pg_view_storage
-                .get_excluded_default_views_for_user(user.macro_user_id.as_ref())
+                .get_excluded_default_views_for_user(
+                    crate::api::required_user(&user.authorization)
+                        .macro_user_id
+                        .as_ref(),
+                )
                 .await
         }
     )?;
@@ -208,7 +222,9 @@ async fn create_view_handler(
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
     let new_view = View::new(
-        user.macro_user_id.to_string(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .to_string(),
         create_view_request.name,
         create_view_request.config,
     );
@@ -286,7 +302,7 @@ async fn patch_view_handler(
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id), err)]
 pub async fn exclude_default_view_handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -298,7 +314,9 @@ pub async fn exclude_default_view_handler(
 
     pg_view_storage
         .create_excluded_default_view(ExcludedDefaultView::new(
-            user.macro_user_id.to_string(),
+            crate::api::required_user(&user.authorization)
+                .macro_user_id
+                .to_string(),
             id.to_string(),
         ))
         .await?;

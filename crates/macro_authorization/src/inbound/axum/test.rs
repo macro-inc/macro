@@ -187,7 +187,10 @@ async fn required_handler(
 ) -> Json<Value> {
     let extractor = extractor.clone();
     let authorization = authorization_json(&extractor.authorization);
-    let acting_user = extractor.acting_user();
+    let acting_user = extractor
+        .authorization
+        .acting_user()
+        .expect("required extractor guarantees an acting user");
 
     Json(json!({
         "authorization": authorization,
@@ -202,7 +205,10 @@ async fn optional_handler(
 ) -> Json<Value> {
     let extractor = extractor.clone();
     let authorization = extractor.authorization.as_ref().map(authorization_json);
-    let acting_user = extractor.acting_user();
+    let acting_user = extractor
+        .authorization
+        .as_ref()
+        .and_then(MacroAuthorization::acting_user);
 
     Json(json!({
         "authorization": authorization,

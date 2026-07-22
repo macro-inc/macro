@@ -41,7 +41,9 @@ pub async fn edit_anchor_handler(
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<EditAnchorRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .as_ref();
     match edit_document_anchor(&db, user_id, req).await {
         Ok(res) => {
             let response: EditAnchorResponse = res;

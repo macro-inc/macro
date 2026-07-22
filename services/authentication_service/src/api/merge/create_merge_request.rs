@@ -40,7 +40,7 @@ static MERGE_REQUEST_TEMPLATE: &str = include_str!("./_merge_request_template.ht
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, authorization, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%authorization.user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -48,7 +48,7 @@ pub async fn handler(
     extract::Json(mut req): extract::Json<CreateAccountMergeRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("create_merge_request");
-    let user_context = &authorization.user_context;
+    let user_context = &crate::api::required_user(&authorization.authorization).user_context;
 
     // normalize the email
     req.email = email_validator::normalize_email(&req.email)

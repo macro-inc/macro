@@ -49,7 +49,7 @@ static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, document_context, _access_level), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, document_context, _access_level), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn get_location_handler(
     _access_level: DocumentAccessExtractor<
         ViewAccessLevel,

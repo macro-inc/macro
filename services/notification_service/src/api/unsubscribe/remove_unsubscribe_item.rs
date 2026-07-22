@@ -9,7 +9,7 @@ use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
-use super::unsubscribe_item::UnsubscribeItemPathParams;
+use super::{required_user, unsubscribe_item::UnsubscribeItemPathParams};
 
 /// Removes a unsubscribe item for a user.
 #[utoipa::path(
@@ -31,7 +31,7 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     notification_db_client::unsubscribe::item::remove_unsubscribed_item_user(
         &ctx.db,
-        &user.user_context.user_id,
+        &required_user(&user.authorization).user_context.user_id,
         &item_id,
     )
     .await

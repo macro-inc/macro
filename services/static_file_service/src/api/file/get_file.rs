@@ -8,6 +8,8 @@ use crate::api::context::AuthorizationService;
 use crate::service::dynamodb::client::DynamodbClient;
 use crate::service::s3::client::S3Client;
 
+use super::required_user;
+
 #[derive(serde::Deserialize)]
 pub struct Params {
     pub file_id: String,
@@ -26,13 +28,22 @@ pub struct Params {
         (status = 500, body=String)
     )
 )]
-#[tracing::instrument(skip(metadata_client, storage_client, user), fields(user_id = ?user.macro_user_id))]
+#[tracing::instrument(
+    skip(metadata_client, storage_client, user),
+    fields(user_id = tracing::field::Empty)
+)]
 pub async fn handle_get_presigned_url(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
+    let acting_user = required_user(&user.authorization);
+    tracing::Span::current().record(
+        "user_id",
+        tracing::field::display(&acting_user.macro_user_id),
+    );
+
     // First get metadata to ensure file exists and is uploaded
     let metadata = metadata_client
         .get_metadata(file_id.as_str())

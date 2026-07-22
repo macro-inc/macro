@@ -21,18 +21,24 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user, req), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, req), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn reorder_pins_handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<Vec<ReorderPinRequest>>,
 ) -> impl IntoResponse {
-    match macro_db_client::pins::reorder_pins(ctx.db.clone(), user.macro_user_id.as_ref(), req)
-        .await
+    match macro_db_client::pins::reorder_pins(
+        ctx.db.clone(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
+        req,
+    )
+    .await
     {
         Ok(_) => (),
         Err(err) => {
-            tracing::error!(error=?err, user_id=?user.macro_user_id, "failed to reorder pins");
+            tracing::error!(error=?err, user_id=?crate::api::required_user(&user.authorization).macro_user_id, "failed to reorder pins");
             return GenericResponse::builder()
                 .message("failed to reorder pins")
                 .is_error(true)

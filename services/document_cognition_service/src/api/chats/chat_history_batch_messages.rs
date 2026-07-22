@@ -26,13 +26,15 @@ use sqlx::PgPool;
         (status = 500, body = String, description = "Internal server error")
     )
 )]
-#[tracing::instrument(skip(db, user, request), fields(user_id = %user.macro_user_id, message_count = request.message_ids.len()))]
+#[tracing::instrument(skip(db, user, request), fields(user_id = %crate::api::required_user(&user.authorization).macro_user_id, message_count = request.message_ids.len()))]
 pub async fn get_chat_history_batch_messages_handler(
     State(db): State<PgPool>,
     user: MacroAuthorizationExtractor<DcsAuthorizationService>,
     Json(request): Json<ChatHistoryBatchMessagesRequest>,
 ) -> Result<Json<ChatHistory>, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .as_ref();
 
     // Get all unique chat IDs and check access to each
     let chat_ids = get_chat_ids_for_messages(&db, &request.message_ids)

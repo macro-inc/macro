@@ -68,7 +68,7 @@ pub struct ArchiveThreadRequest {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
 pub async fn archived_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -81,7 +81,9 @@ pub async fn archived_handler(
     // delegated inboxes.
     let link = email_db_client::links::get::fetch_owned_link_for_thread(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
         thread_id,
     )
     .await?

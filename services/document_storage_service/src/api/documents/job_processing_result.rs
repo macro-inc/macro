@@ -42,7 +42,11 @@ pub async fn job_processing_result_handler(
         job_id,
     }): Path<Params>,
 ) -> impl IntoResponse {
-    if let Some(user) = user.acting_user() {
+    if let Some(user) = user
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.acting_user())
+    {
         tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
     }
 

@@ -66,15 +66,19 @@ impl IntoResponse for PatchUserGroupError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=user_context.user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=crate::api::required_user(&user_context.authorization).user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: MacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<PatchUserGroupRequest>,
 ) -> Result<Json<EmptyResponse>, PatchUserGroupError> {
-    let user_id = MacroUserId::parse_from_str(&user_context.user_context.user_id)
-        .map_err(|_| PatchUserGroupError::InvalidMacroUserId)?
-        .lowercase();
+    let user_id = MacroUserId::parse_from_str(
+        &crate::api::required_user(&user_context.authorization)
+            .user_context
+            .user_id,
+    )
+    .map_err(|_| PatchUserGroupError::InvalidMacroUserId)?
+    .lowercase();
 
     macro_db_client::user::patch::patch_user_group(&ctx.db, &user_id, &req.group)
         .await

@@ -128,9 +128,12 @@ where
             .extract_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
+        let user = authorization
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user");
         let outcome =
-            team_access_outcome::<T, Svc>(service.as_ref(), authorization.macro_user_id.clone())
-                .await?;
+            team_access_outcome::<T, Svc>(service.as_ref(), user.macro_user_id.clone()).await?;
 
         Ok(Self {
             entity_access_receipt: outcome.into_optional_receipt(),
@@ -170,8 +173,12 @@ where
             .extract_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
+        let user = authorization
+            .authorization
+            .acting_user()
+            .expect("required authorization guarantees an acting user");
         let entity_access_receipt =
-            team_access_outcome::<T, Svc>(service.as_ref(), authorization.macro_user_id.clone())
+            team_access_outcome::<T, Svc>(service.as_ref(), user.macro_user_id.clone())
                 .await?
                 .into_required_receipt()?;
 

@@ -29,13 +29,15 @@ pub struct Params {
         ),
         params( ("attachment_id" = String, Path, description = "id of the attachment"))
     )]
-#[tracing::instrument(skip(db, user), fields(user_id=%user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id=%crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn get_chats_for_attachment_handler(
     State(db): State<PgPool>,
     user: MacroAuthorizationExtractor<DcsAuthorizationService>,
     Path(Params { attachment_id }): Path<Params>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .as_ref();
     let mut transaction = db.begin().await.map_err(|e| {
         tracing::error!(error=?e, user_id=%user_id, attachment_id=%attachment_id, "failed to begin transaction");
         StatusCode::INTERNAL_SERVER_ERROR.into_response()

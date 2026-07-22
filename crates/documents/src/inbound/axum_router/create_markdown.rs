@@ -29,7 +29,7 @@ use crate::domain::ports::create::DocumentCreationService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, project), fields(user_id=?super::required_user(&user.authorization).macro_user_id))]
 pub async fn create_markdown_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
@@ -57,7 +57,9 @@ pub async fn create_markdown_handler<
     let created = state
         .creator
         .create_markdown_text(
-            user.macro_user_id.clone(),
+            super::required_user(&user.authorization)
+                .macro_user_id
+                .clone(),
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown: req.markdown.unwrap_or_default(),
@@ -75,7 +77,12 @@ pub async fn create_markdown_handler<
         .clone();
 
     let token = encode_permission_token(
-        Some(user.macro_user_id.as_ref().to_string()),
+        Some(
+            super::required_user(&user.authorization)
+                .macro_user_id
+                .as_ref()
+                .to_string(),
+        ),
         document_id.clone(),
         AccessLevel::Edit,
         &state.document_permission_jwt_secret,

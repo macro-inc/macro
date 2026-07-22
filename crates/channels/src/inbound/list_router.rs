@@ -20,6 +20,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use super::required_user;
 use crate::domain::{
     models::{
         Activity, ChannelListItem, ChannelType as DomainChannelType, ChannelWithLatest,
@@ -114,10 +115,11 @@ where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
+    let user = required_user(&authorization.authorization);
     let res = service
         .inner
         .get_channels(GetChannelsRequest {
-            macro_id: authorization.macro_user_id.clone(),
+            macro_id: user.macro_user_id.clone(),
             limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
             include_frecency: true,
             query: models_pagination::Query::Sort(
@@ -154,9 +156,10 @@ where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
+    let user = required_user(&authorization.authorization);
     let res = service
         .inner
-        .get_activities(authorization.macro_user_id.clone())
+        .get_activities(user.macro_user_id.clone())
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 

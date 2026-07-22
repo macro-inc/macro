@@ -51,7 +51,9 @@ pub async fn handler(
     validation.set_issuer(&[ISSUER]);
 
     let user_id = user
-        .acting_user()
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.acting_user())
         .map(|user| user.macro_user_id.to_string());
     if let Some(user_id) = &user_id {
         tracing::Span::current().record("user_id", tracing::field::display(user_id));

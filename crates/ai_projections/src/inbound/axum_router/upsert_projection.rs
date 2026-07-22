@@ -101,6 +101,11 @@ pub async fn handler<T: AiProjectionService, Auth: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<UpsertProjectionRequest>,
 ) -> Result<Json<ProjectionStateResponse>, UpsertProjectionError> {
+    let user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
+
     // Free-tier models are available to everyone; anything else (including
     // the default smart model when no model is named) is premium-only.
     if requires_professional_features(req.model.as_deref())

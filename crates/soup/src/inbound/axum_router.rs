@@ -46,7 +46,8 @@ use item_filters::{
     },
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -66,6 +67,14 @@ use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
+
+fn required_macro_user_id(authorization: &MacroAuthorization) -> MacroUserIdStr<'static> {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+        .macro_user_id
+        .clone()
+}
 
 #[cfg(test)]
 mod tests;
@@ -786,7 +795,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let macro_user_id = authorization.macro_user_id.clone();
+    let macro_user_id = required_macro_user_id(&authorization.authorization);
     let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Team receipt is plumbed through even for GET so that paginating a
     // team-scoped query via a cursor (which carries the original filter)
@@ -863,7 +872,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let macro_user_id = authorization.macro_user_id.clone();
+    let macro_user_id = required_macro_user_id(&authorization.authorization);
     let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
@@ -930,7 +939,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let macro_user_id = authorization.macro_user_id.clone();
+    let macro_user_id = required_macro_user_id(&authorization.authorization);
     let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
@@ -1017,7 +1026,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let macro_user_id = authorization.macro_user_id.clone();
+    let macro_user_id = required_macro_user_id(&authorization.authorization);
     let (filters, params, mode) = match request {
         PostGroupedSoupAstRequest::Initial(request) => (
             request.filters,

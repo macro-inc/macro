@@ -9,6 +9,14 @@ pub mod send_router;
 pub mod thread_labels_router;
 pub mod thread_project_router;
 
+use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
+
 pub use api_types::{
     ApiAttachment, ApiAttachmentDraft, ApiAttachmentForwarded, ApiContact, ApiContactInfo,
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, ApiLabel, ApiLabelListVisibility,

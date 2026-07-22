@@ -43,7 +43,10 @@ async fn graphql_handler(
     let request = graphql_query_context_data(
         request.into_inner(),
         &state,
-        auth.acting_user().map(|user| user.macro_user_id.clone()),
+        auth.authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
+            .map(|user| user.macro_user_id.clone()),
     );
     state
         .graphql_soup_schema
@@ -58,7 +61,12 @@ async fn subscription_handler(
     protocol: GraphQLProtocol,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let Some(macro_user_id) = auth.acting_user().map(|user| user.macro_user_id.clone()) else {
+    let Some(macro_user_id) = auth
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.acting_user())
+        .map(|user| user.macro_user_id.clone())
+    else {
         return (
             StatusCode::UNAUTHORIZED,
             "authentication required for GraphQL Soup subscriptions",

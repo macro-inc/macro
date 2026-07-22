@@ -8,7 +8,7 @@ use entity_access::{
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::project::{request::CreateProjectRequest, response::CreateProjectResponse};
 
-use super::ProjectRouterState;
+use super::{ProjectRouterState, required_user};
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Create a project, optionally beneath an existing project.
@@ -23,7 +23,11 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, project),
+    fields(user_id = ?required_user(&user.authorization).macro_user_id),
+    err
+)]
 pub async fn create_project_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
@@ -36,7 +40,10 @@ where
 {
     let data = state
         .service
-        .create_project(user.macro_user_id.clone(), project.into_inner())
+        .create_project(
+            required_user(&user.authorization).macro_user_id.clone(),
+            project.into_inner(),
+        )
         .await?;
 
     Ok(Json(CreateProjectResponse { error: false, data }))

@@ -49,11 +49,19 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication,
+};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
 use task_dedup::PgTaskDedupService;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 #[cfg(feature = "document_create")]
 use self::create_markdown::create_markdown_handler;

@@ -33,7 +33,7 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user, pagination_query), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, pagination_query), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 #[deprecated]
 pub async fn get_recent_activity_handler(
     State(ctx): State<ApiContext>,
@@ -55,7 +55,9 @@ pub async fn get_recent_activity_handler(
 
     let result = match macro_db_client::activity::get_recent_activities(
         ctx.db.clone(),
-        user.macro_user_id.as_ref(),
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
         pagination.limit,
         pagination.offset,
     )

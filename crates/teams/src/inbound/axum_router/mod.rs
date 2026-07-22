@@ -46,7 +46,9 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication,
+};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -56,6 +58,12 @@ use crate::domain::{
     },
     team_repo::TeamService,
 };
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 /// Router state containing the team service.
 pub struct TeamRouterState<T, Eas, Auth> {

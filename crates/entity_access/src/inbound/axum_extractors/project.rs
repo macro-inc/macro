@@ -67,7 +67,9 @@ where
             .as_ref()
             .is_some_and(MacroAuthorization::is_internal);
         let macro_user_id = authorization
-            .acting_user()
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
             .map(|user| user.macro_user_id.clone());
 
         let project_context: Extension<BasicProject> = parts
@@ -281,7 +283,9 @@ where
             .as_ref()
             .is_some_and(MacroAuthorization::is_internal);
         let macro_user_id = authorization
-            .acting_user()
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
             .map(|user| user.macro_user_id.clone());
         let has_internal_owner_access = macro_user_id.is_none() && is_internal_access;
 

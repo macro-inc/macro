@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
+use super::{
+    PropertiesRouterState, PropertyTeamExtractor, properties_err_status, required_macro_user_id,
+};
 use crate::domain::error::PropertiesErr;
 use crate::domain::model as properties_model;
 use crate::domain::service::PropertiesService;
@@ -112,7 +114,7 @@ pub async fn list_tags<
     user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
-    let user = user.macro_user_id.clone();
+    let user = required_macro_user_id(&user.authorization);
     let sets = state
         .properties_service
         .list_tag_sets(&user, team.entity_access_receipt.as_ref())
@@ -145,7 +147,7 @@ pub async fn ensure_tag_set<
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
-    let user = user.macro_user_id.clone();
+    let user = required_macro_user_id(&user.authorization);
     let set = state
         .properties_service
         .ensure_tag_set(

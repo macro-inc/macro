@@ -26,9 +26,13 @@ pub async fn get_referral_code_handler<T: ReferralService, R, Auth: MacroAuthori
     State(state): State<ReferralRouterState<T, R, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<ReferralCode>, ReferralError> {
+    let user = authorization
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let code = state
         .service
-        .get_referral_code_for_user(&authorization.macro_user_id)
+        .get_referral_code_for_user(&user.macro_user_id)
         .await?;
 
     Ok(Json(code))

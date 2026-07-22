@@ -76,8 +76,11 @@ where
         let entity_access_receipt = state
             .access_service
             .generate_entity_access_receipt::<Level>(
-                &user.macro_user_id,
-                user.user_context.organization_id.map(i64::from),
+                &super::required_user(&user.authorization).macro_user_id,
+                super::required_user(&user.authorization)
+                    .user_context
+                    .organization_id
+                    .map(i64::from),
                 &document_id,
                 EntityType::Document,
             )

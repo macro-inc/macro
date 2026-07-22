@@ -172,6 +172,10 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let favorites = state.service.list_favorites(&user.macro_user_id).await?;
     Ok(Json(FavoritesList { favorites }))
 }
@@ -233,6 +237,10 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let entity = params.entity_type.with_entity_str(&params.entity_id);
     state
         .service
@@ -266,6 +274,10 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
     let ordered: Vec<_> = req
         .favorites
         .iter()

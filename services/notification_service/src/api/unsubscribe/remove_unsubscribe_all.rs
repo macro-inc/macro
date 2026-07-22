@@ -9,6 +9,8 @@ use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
+use super::required_user;
+
 /// Unmutes all notifications.
 /// Existing notifications that were muted manually will remain muted.
 #[utoipa::path(
@@ -28,7 +30,7 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     notification_db_client::user_mute_notification::remove_user_mute_notification(
         &ctx.db,
-        &user.user_context.user_id,
+        &required_user(&user.authorization).user_context.user_id,
     )
     .await
     .map_err(|e| {

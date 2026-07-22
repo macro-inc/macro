@@ -15,14 +15,19 @@ pub async fn handler(
     req: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, String)> {
-    let is_onboarded = get_onboarding_status(&db, user.macro_user_id.as_ref())
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get onboarding status: {}", e),
-            )
-        })?;
+    let is_onboarded = get_onboarding_status(
+        &db,
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get onboarding status: {}", e),
+        )
+    })?;
 
     if is_onboarded {
         return Err((

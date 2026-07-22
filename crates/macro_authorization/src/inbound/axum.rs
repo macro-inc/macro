@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{borrow::Cow, fmt, marker::PhantomData, ops::Deref, sync::Arc};
+use std::{borrow::Cow, fmt, marker::PhantomData, sync::Arc};
 
 use ::axum::{
     Json,
@@ -138,25 +138,10 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
 #[non_exhaustive]
 pub struct MacroAuthorizationExtractor<Svc> {
     /// The typed authorization principal established for the request.
+    ///
+    /// Derive acting-user and internal-access information from this value.
     pub authorization: MacroAuthorization,
     _service: PhantomData<fn() -> Svc>,
-}
-
-impl<Svc> MacroAuthorizationExtractor<Svc> {
-    /// Return the acting user guaranteed by required authorization extraction.
-    pub fn acting_user(&self) -> &MacroUserAuthentication {
-        self.authorization
-            .acting_user()
-            .expect("required authorization always has an acting user")
-    }
-}
-
-impl<Svc> Deref for MacroAuthorizationExtractor<Svc> {
-    type Target = MacroUserAuthentication;
-
-    fn deref(&self) -> &Self::Target {
-        self.acting_user()
-    }
 }
 
 impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
@@ -314,17 +299,10 @@ where
 #[non_exhaustive]
 pub struct OptionalMacroAuthorizationExtractor<Svc> {
     /// The typed authorization principal, or `None` for an anonymous request.
+    ///
+    /// Derive acting-user and internal-access information from this value when present.
     pub authorization: Option<MacroAuthorization>,
     _service: PhantomData<fn() -> Svc>,
-}
-
-impl<Svc> OptionalMacroAuthorizationExtractor<Svc> {
-    /// Return the acting user when the request established one.
-    pub fn acting_user(&self) -> Option<&MacroUserAuthentication> {
-        self.authorization
-            .as_ref()
-            .and_then(MacroAuthorization::acting_user)
-    }
 }
 
 impl<Svc> Clone for OptionalMacroAuthorizationExtractor<Svc> {

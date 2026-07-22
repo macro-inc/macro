@@ -163,7 +163,7 @@ pub struct ProxyParams {
 #[tracing::instrument(
     err(Debug),
     skip(user, http_client),
-    fields(user_id = ?user.macro_user_id)
+    fields(user_id = tracing::field::Empty)
 )]
 pub async fn proxy_request_handler(
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -171,6 +171,12 @@ pub async fn proxy_request_handler(
     State(http_client): State<reqwest::Client>,
     _ip: ClientIp,
 ) -> Result<Response, ProxyError> {
+    let user = user
+        .authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user");
+    tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
+
     let url = validate_url(&params.url)?;
 
     // Primary attempt with a browser-like User-Agent — most hosts are fine

@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::domain::{models::EmailErr, ports::EmailService};
 
-use super::previews_router::EmailRouterState;
+use super::{previews_router::EmailRouterState, required_user};
 
 /// Request body for updating a thread's labels.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
@@ -122,9 +122,10 @@ pub async fn update_thread_labels_handler<T: EmailService, Auth: MacroAuthorizat
     // Resolve the inbox from the thread (scoped to the caller's own and delegated
     // inboxes). No Gmail token is needed here — provider sync goes through the
     // gmail_ops queue, which authenticates itself.
+    let user = required_user(&macro_user.authorization);
     let link = state
         .inner
-        .get_owned_link_for_thread(macro_user.macro_user_id.clone(), thread_id)
+        .get_owned_link_for_thread(user.macro_user_id.clone(), thread_id)
         .await?
         .ok_or_else(|| UpdateThreadLabelError::NotFound("Thread not found".to_string()))?;
 

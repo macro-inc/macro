@@ -48,7 +48,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user, document_context, _access, project), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, document_context, _access, project), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn save_document_handler(
     _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,

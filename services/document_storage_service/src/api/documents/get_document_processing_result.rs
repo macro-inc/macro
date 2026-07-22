@@ -34,7 +34,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user, _access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user, _access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,

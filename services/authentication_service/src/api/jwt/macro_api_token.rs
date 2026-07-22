@@ -47,7 +47,7 @@ pub async fn handler(
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
-    let user_context = &authorization.user_context;
+    let user_context = &crate::api::required_user(&authorization.authorization).user_context;
     let email = if let Some(email) = query.email.clone() {
         // TODO: figure out if email is url_encoded by default
         let email = urlencoding::decode(email.as_ref()).map_err(|e| {

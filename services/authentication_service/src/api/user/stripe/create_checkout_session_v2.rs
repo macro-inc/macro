@@ -51,7 +51,7 @@ pub struct CreateCheckoutSessionV2Request {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user, optional_team), err, fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, optional_team), err, fields(user_id = %crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn create_checkout_session<Eas: EntityAccessService>(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -59,10 +59,12 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
     Json(req): Json<CreateCheckoutSessionV2Request>,
 ) -> Result<Json<StripeSessionResponse>, StripeOperationError> {
     // Get the stripe customer ID from the database
-    let stripe_customer_id =
-        macro_db_client::user::get::get_stripe_customer_id_by_user_id(&ctx.db, &user.macro_user_id)
-            .await?
-            .ok_or(StripeOperationError::MissingStripeId)?;
+    let stripe_customer_id = macro_db_client::user::get::get_stripe_customer_id_by_user_id(
+        &ctx.db,
+        &crate::api::required_user(&user.authorization).macro_user_id,
+    )
+    .await?
+    .ok_or(StripeOperationError::MissingStripeId)?;
 
     let customer_id: stripe::CustomerId = stripe_customer_id.parse()?;
 
@@ -116,7 +118,12 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
         let team_id = team.entity().entity_id.clone();
         metadata.insert("team_id".to_string(), team_id);
 
-        metadata.insert("owner_id".to_string(), user.macro_user_id.to_string());
+        metadata.insert(
+            "owner_id".to_string(),
+            crate::api::required_user(&user.authorization)
+                .macro_user_id
+                .to_string(),
+        );
     }
 
     if let Some(ga_client_id) = req.metadata.ga_client_id {

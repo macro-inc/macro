@@ -28,7 +28,8 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, MacroUserAuthentication,
 };
 use model_error_response::ErrorResponse;
 use uuid::Uuid;
@@ -39,6 +40,12 @@ use crate::domain::models::{
     LeaveCallResponse, MAX_BATCH_CALL_IDS, RingStatusResponse, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 // ---------------------------------------------------------------------------
 // Call router (authenticated)
@@ -297,7 +304,10 @@ pub async fn get_or_create_call_handler<
 
     let response = state
         .service
-        .get_or_create_call(&channel_id, user.macro_user_id.clone())
+        .get_or_create_call(
+            &channel_id,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
 
     Ok(Json(response))
@@ -551,7 +561,10 @@ pub async fn get_batch_call_record_preview_handler<
 
     let response = state
         .service
-        .get_batch_call_record_previews(request, user.macro_user_id.clone())
+        .get_batch_call_record_previews(
+            request,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
     Ok(Json(response))
 }
@@ -585,7 +598,10 @@ pub async fn leave_or_end_call_handler<
 
     let response = state
         .service
-        .leave_or_end_call(&channel_id, user.macro_user_id.clone())
+        .leave_or_end_call(
+            &channel_id,
+            required_user(&user.authorization).macro_user_id.clone(),
+        )
         .await?;
 
     Ok(Json(response))

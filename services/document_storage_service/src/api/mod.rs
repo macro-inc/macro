@@ -6,6 +6,7 @@ use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
 use github::inbound::github_sync_router::GithubSyncRouterState;
+use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
@@ -21,6 +22,12 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 mod saved_views;
 mod util;
+
+fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+}
 
 // Middleware
 mod middleware;

@@ -62,7 +62,7 @@ impl IntoResponse for StructuredCompletionError {
         (status = 500, description = "Internal error", body = StructuredCompletionError),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.macro_user_id), err)]
+#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %crate::api::required_user(&user.authorization).macro_user_id), err)]
 pub async fn structured_completion(
     State(state): State<ApiContext>,
     model_access: DcsChatModelAccess,
@@ -72,7 +72,9 @@ pub async fn structured_completion(
     let ctx = Arc::new(state);
     let model = model_access.best_model();
 
-    let user_id = user.macro_user_id.clone();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .clone();
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,

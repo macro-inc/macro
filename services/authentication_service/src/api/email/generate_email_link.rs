@@ -36,7 +36,7 @@ static VERIFY_EMAIL_TEMPLATE: &str = include_str!("./_verify_email_template.html
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, authorization, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%authorization.user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -44,7 +44,7 @@ pub async fn handler(
     extract::Json(mut req): extract::Json<GenerateEmailLinkRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("generate_email_link");
-    let user_context = &authorization.user_context;
+    let user_context = &crate::api::required_user(&authorization.authorization).user_context;
     // normalize the email before linking
     req.email = email_validator::normalize_email(&req.email)
         .context("failed to normalize email")

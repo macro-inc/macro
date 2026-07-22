@@ -19,7 +19,7 @@ const HOW_TO_GUIDE_TEMPLATE: &str = include_str!("./template/macro_how_to_guide.
 /// Creates the "Macro how to guide" markdown document for the user and pins it
 /// to their sidebar favorites. Called by the authentication service when a new
 /// user signs up.
-#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
+#[tracing::instrument(skip(state, user_context), fields(user_id=?crate::api::required_user(&user_context.authorization).macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
     user_context: MacroAuthorizationExtractor<AuthorizationService>,
@@ -30,7 +30,9 @@ pub async fn handler(
         .documents_state
         .creator
         .create_markdown_text(
-            user_context.macro_user_id.clone(),
+            crate::api::required_user(&user_context.authorization)
+                .macro_user_id
+                .clone(),
             NewMarkdownTextDocument {
                 metadata: NewDocumentMetadata::builder(HOW_TO_GUIDE_NAME).build(),
                 markdown: HOW_TO_GUIDE_TEMPLATE.to_string(),
@@ -52,8 +54,11 @@ pub async fn handler(
     let receipt = state
         .entity_access_service
         .generate_entity_access_receipt::<ViewAccessLevel>(
-            &user_context.macro_user_id,
-            user_context.user_context.organization_id.map(i64::from),
+            &crate::api::required_user(&user_context.authorization).macro_user_id,
+            crate::api::required_user(&user_context.authorization)
+                .user_context
+                .organization_id
+                .map(i64::from),
             created.document_id(),
             EntityType::Document,
         )

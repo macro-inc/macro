@@ -36,7 +36,7 @@ pub struct GetBackfillJobResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -151,14 +151,16 @@ pub struct ListBackfillJobsResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
 pub async fn list_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, ListBackfillJobsError> {
     let jobs = email_db_client::backfill::job::get::get_all_jobs_by_fusionauth_user_id(
         &ctx.db,
-        &authorization.user_context.fusion_user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .fusion_user_id,
     )
     .await
     .map_err(ListBackfillJobsError::QueryError)?;

@@ -34,7 +34,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user, document_id, _access), fields(user_id=?user.macro_user_id, document_id=?document_context.document_id, original_document_id=?document_id))]
+#[tracing::instrument(skip(db, user, document_id, _access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id, document_id=?document_context.document_id, original_document_id=?document_id))]
 pub async fn get_document_views_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     Path(Params { document_id }): Path<Params>,

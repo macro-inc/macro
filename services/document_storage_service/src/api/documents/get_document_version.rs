@@ -38,7 +38,7 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user, access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user, access), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn handler(
     access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
@@ -66,18 +66,24 @@ pub async fn handler(
         }
     };
 
-    let view_location =
-        match get_user_document_view_location(&db, user.macro_user_id.as_ref(), &document_id).await
-        {
-            Ok(view_location) => view_location,
-            Err(e) => {
-                tracing::error!(error=?e, "error getting view location");
-                return GenericResponse::builder()
-                    .message("error getting view location")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+    let view_location = match get_user_document_view_location(
+        &db,
+        crate::api::required_user(&user.authorization)
+            .macro_user_id
+            .as_ref(),
+        &document_id,
+    )
+    .await
+    {
+        Ok(view_location) => view_location,
+        Err(e) => {
+            tracing::error!(error=?e, "error getting view location");
+            return GenericResponse::builder()
+                .message("error getting view location")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     let user_access_level = match access.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,

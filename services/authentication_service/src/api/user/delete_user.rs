@@ -26,14 +26,14 @@ use model::response::{ErrorResponse, GenericSuccessResponse};
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%authorization.user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%crate::api::required_user(&authorization.authorization).user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
     JwtSessionContext(jwt_session): JwtSessionContext,
     cookies: Cookies,
 ) -> Result<Response, Response> {
-    let user_context = &authorization.user_context;
+    let user_context = &crate::api::required_user(&authorization.authorization).user_context;
     let user_id = &*user_context.user_id;
     // This may seem dumb, but if you delete this account it will delete my fusionauth account and
     // we will then be locked out of fusionauth. So this is a way to prevent any accidental fuck

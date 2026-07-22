@@ -33,7 +33,7 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, authorization, ip_context), fields(client_ip=%ip_context, fusion_user_id=%authorization.user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, ip_context), fields(client_ip=%ip_context, fusion_user_id=%crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
@@ -41,7 +41,7 @@ pub async fn handler(
     extract::Path(Params { code }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("verify_merge_request");
-    let user_context = &authorization.user_context;
+    let user_context = &crate::api::required_user(&authorization.authorization).user_context;
 
     let (account_merge_request_id, to_merge_macro_user_id) =
         macro_db_client::account_merge_request::get_merge_request_info(

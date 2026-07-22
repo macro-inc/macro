@@ -39,7 +39,7 @@ pub struct UserLinkResponse {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id = authorization.user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id = crate::api::required_user(&authorization.authorization).user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
@@ -76,10 +76,10 @@ pub async fn handler(
 
     let links = ctx
             .auth_client
-            .get_links(&authorization.user_context.fusion_user_id, Some(idp_id.clone()))
+            .get_links(&crate::api::required_user(&authorization.authorization).user_context.fusion_user_id, Some(idp_id.clone()))
             .await
             .map_err(|e| {
-                tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", authorization.user_context.fusion_user_id, idp_id.as_str());
+                tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", crate::api::required_user(&authorization.authorization).user_context.fusion_user_id, idp_id.as_str());
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {

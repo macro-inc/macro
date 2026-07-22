@@ -34,7 +34,11 @@ pub async fn get_batch_preview_handler(
     user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<GetBatchPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchPreviewResponse>), Response> {
-    if let Some(user) = user.acting_user() {
+    if let Some(user) = user
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.acting_user())
+    {
         tracing::Span::current().record("user_id", tracing::field::display(&user.macro_user_id));
     }
 

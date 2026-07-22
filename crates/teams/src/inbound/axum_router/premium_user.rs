@@ -17,7 +17,7 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::{model::TeamError, team_repo::TeamService};
 
-use super::TeamRouterState;
+use super::{TeamRouterState, required_user};
 
 /// Extractor that ensures the authenticated user is a premium user
 /// (has an active stripe subscription).
@@ -86,6 +86,7 @@ where
     ) -> Result<Self, Self::Rejection> {
         let user = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state).await?;
 
+        let user = required_user(&user.authorization);
         let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
         else {
             return Err(PremiumUserRejection::NotPremium);

@@ -55,7 +55,9 @@ pub async fn handler(
 
     let user_names = get_user_names_with_email(
         &ctx.db,
-        authorization.macro_user_id.as_ref(),
+        crate::api::required_user(&authorization.authorization)
+            .macro_user_id
+            .as_ref(),
         user_profile_ids,
     )
     .await

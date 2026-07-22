@@ -6,7 +6,7 @@ use macro_authorization::MacroAuthorizationExtractor;
 use model::document_storage_service_internal::{ValidateItemIDsRequest, ValidateItemIDsResponse};
 
 /// Validates the user has access to the provided list of item ids
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?crate::api::required_user(&user.authorization).macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
@@ -14,7 +14,10 @@ pub async fn handler(
 ) -> Result<(StatusCode, Json<ValidateItemIDsResponse>), (StatusCode, String)> {
     tracing::info!("validate_item_ids");
 
-    let user_id = user.user_context.user_id.clone();
+    let user_id = crate::api::required_user(&user.authorization)
+        .user_context
+        .user_id
+        .clone();
 
     if matches!(user_id.as_str(), "" | MACRO_INTERNAL_USER_ID) {
         return Err((

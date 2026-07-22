@@ -30,7 +30,7 @@ pub fn router() -> Router<ApiContext> {
             (status = 200, body= EmptyResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%authorization.user_context.user_id, organization_id=?authorization.user_context.organization_id))]
+#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%crate::api::required_user(&authorization.authorization).user_context.user_id, organization_id=?crate::api::required_user(&authorization.authorization).user_context.organization_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,

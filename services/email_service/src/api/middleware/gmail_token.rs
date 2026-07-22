@@ -12,7 +12,7 @@ pub(in crate::api) async fn attach_gmail_token(
     next: Next,
 ) -> Result<Response, Response> {
     let gmail_token = fetch_gmail_token_usercontext_response(
-        &authorization.user_context,
+        &crate::api::required_user(&authorization.authorization).user_context,
         &ctx.redis_client,
         &ctx.auth_service_client,
     )

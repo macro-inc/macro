@@ -27,10 +27,19 @@ use axum::{
 use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractorV2;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
+
+fn required_macro_user_id(authorization: &MacroAuthorization) -> MacroUserIdStr<'static> {
+    authorization
+        .acting_user()
+        .expect("required authorization guarantees an acting user")
+        .macro_user_id
+        .clone()
+}
 
 /// State for the properties router.
 pub struct PropertiesRouterState<S, A, Auth> {

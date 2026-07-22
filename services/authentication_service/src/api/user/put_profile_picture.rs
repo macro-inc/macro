@@ -38,13 +38,13 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     update_profile_picture(
         &ctx.db,
-        &authorization.user_context.fusion_user_id,
+        &crate::api::required_user(&authorization.authorization).user_context.fusion_user_id,
         &params.url,
         "000",
     )
     .await
     .map_err(|e| {
-        tracing::error!(error=?e, authorization.user_context.user_id, "failed to update user profile picture");
+        tracing::error!(error=?e, user_id = %crate::api::required_user(&authorization.authorization).user_context.user_id, "failed to update user profile picture");
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
     })?;
     Ok((StatusCode::OK, Json(EmptyResponse {})).into_response())

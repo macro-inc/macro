@@ -46,13 +46,13 @@ impl IntoResponse for DisableSyncError {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
 pub async fn disable_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
     link: Extension<Link>,
 ) -> Result<Response, DisableSyncError> {
-    tracing::info!(user_id = %authorization.user_context.user_id, "Disable called");
+    tracing::info!(user_id = %crate::api::required_user(&authorization.authorization).user_context.user_id, "Disable called");
 
     // Enqueue the delete operation to handle cleanup asynchronously
     let message = LinkManagerMessage::DeleteLink {

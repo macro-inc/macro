@@ -37,7 +37,11 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let user_id = user.acting_user().map(|user| user.macro_user_id.clone());
+    let user_id = user
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.acting_user())
+        .map(|user| user.macro_user_id.clone());
     if let Some(user_id) = &user_id {
         tracing::Span::current().record("user_id", tracing::field::display(user_id));
     }

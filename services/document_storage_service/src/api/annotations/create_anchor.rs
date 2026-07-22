@@ -65,7 +65,9 @@ pub async fn create_anchor_handler(
         )
             .into_response());
     }
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = crate::api::required_user(&user.authorization)
+        .macro_user_id
+        .as_ref();
     let document_id = document_id.as_str();
     match create_unthreaded_anchor(&db, user_id, document_id, req).await {
         Ok(res) => {

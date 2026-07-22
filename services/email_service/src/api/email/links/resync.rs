@@ -41,14 +41,20 @@ pub struct ResyncResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=crate::api::required_user(&authorization.authorization).user_context.user_id, fusionauth_user_id=crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
 pub async fn resync_link_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
     Path(link_id): Path<Uuid>,
 ) -> Result<Response, InboxActionError> {
-    let (link, _access) =
-        authorize_inbox_access(&ctx, &authorization.user_context.user_id, link_id).await?;
+    let (link, _access) = authorize_inbox_access(
+        &ctx,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
+        link_id,
+    )
+    .await?;
 
     if let Some(active) =
         email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)

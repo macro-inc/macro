@@ -28,10 +28,10 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
-    let user_name = get_user_name(&ctx.db, &authorization.user_context.fusion_user_id)
+    let user_name = get_user_name(&ctx.db, &crate::api::required_user(&authorization.authorization).user_context.fusion_user_id)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, authorization.user_context.user_id, "failed to update user name");
+            tracing::error!(error=?e, user_id = %crate::api::required_user(&authorization.authorization).user_context.user_id, "failed to update user name");
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         })?;
     Ok((StatusCode::OK, Json(user_name)).into_response())

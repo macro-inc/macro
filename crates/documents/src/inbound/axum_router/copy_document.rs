@@ -38,7 +38,7 @@ use crate::domain::ports::DocumentService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, access, user, document_context, req), fields(user_id=%user.macro_user_id, document_version_id=?params.version_id))]
+#[tracing::instrument(skip(state, access, user, document_context, req), fields(user_id=%super::required_user(&user.authorization).macro_user_id, document_version_id=?params.version_id))]
 pub async fn copy_document_handler<
     T: DocumentService,
     Svc: EntityAccessService,
@@ -61,7 +61,9 @@ pub async fn copy_document_handler<
         .copy_document(
             access.entity_access_receipt,
             document_context.0,
-            user.macro_user_id.clone(),
+            super::required_user(&user.authorization)
+                .macro_user_id
+                .clone(),
             req.document_name,
             params.version_id,
             req.version_id,

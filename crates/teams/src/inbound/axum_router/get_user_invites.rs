@@ -8,7 +8,7 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-use super::TeamRouterState;
+use super::{TeamRouterState, required_user};
 
 /// Response containing a list of team invites
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -36,7 +36,7 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 ) -> Result<Json<TeamInvitesResponse>, TeamError> {
     let invites = state
         .service
-        .get_user_invites(&authorization.macro_user_id)
+        .get_user_invites(&required_user(&authorization.authorization).macro_user_id)
         .await?;
     Ok(Json(TeamInvitesResponse { invites }))
 }

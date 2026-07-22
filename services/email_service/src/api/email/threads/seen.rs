@@ -78,7 +78,9 @@ pub async fn seen_handler(
     // delegated inboxes.
     let link = email_db_client::links::get::fetch_owned_link_for_thread(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &crate::api::required_user(&authorization.authorization)
+            .user_context
+            .user_id,
         thread_id,
     )
     .await
@@ -129,7 +131,9 @@ pub async fn seen_handler(
         email_db_client::messages::update::update_message_read_status_batch(
             &mut *tx,
             message_db_ids.clone(),
-            &authorization.user_context.fusion_user_id,
+            &crate::api::required_user(&authorization.authorization)
+                .user_context
+                .fusion_user_id,
             true,
         )
         .await
