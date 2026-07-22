@@ -11,6 +11,7 @@ import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxCo
 import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
+import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
@@ -407,6 +408,14 @@ const ROUTES: RouteDefinition[] = [
       ) : (
         <Navigate href="/login" />
       ),
+  },
+  {
+    // Mobile-web visitors can't sign up on a phone, so instead of pushing them
+    // through Google SSO + onboarding we capture their email and email them a
+    // link to open on desktop. The marketing site redirects mobile browsers
+    // here.
+    path: '/mobile-email-signup',
+    component: MobileWebSignup,
   },
   {
     path: '/onboarding',
