@@ -19,9 +19,16 @@ outbound = [
   "dep:soup",
   "ports",
 ]
-ports = ["dep:futures", "dep:rootcause", "dep:tracing"]
+ports = [
+  "dep:broadcast",
+  "dep:futures",
+  "dep:rootcause",
+  "dep:tokio",
+  "dep:tracing",
+]
 
 [dependencies]
+broadcast = { path = "../broadcast", optional = true }
 documents = { path = "../documents", default-features = false, optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"], optional = true }
 futures = { workspace = true, optional = true }
@@ -35,7 +42,7 @@ rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"], optional = true }
-tokio = { workspace = true, features = ["time"], optional = true }
+tokio = { workspace = true, features = ["sync", "time"], optional = true }
 tracing = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

@@ -5014,6 +5014,7 @@
       "crates/attachment",
       "crates/authentication_service_client",
       "crates/bot_id",
+      "crates/broadcast",
       "crates/call",
       "crates/channel_sender",
       "crates/channels",

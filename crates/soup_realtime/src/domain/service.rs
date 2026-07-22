@@ -3,9 +3,11 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, num::NonZeroUsize, sync::Arc};
 
+use broadcast::{BroadcastManager, GlobalSpawner};
 use futures::{StreamExt as _, stream};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_soup::item::SoupItem;
 use rootcause::prelude::{Report, ResultExt as _};
@@ -18,12 +20,18 @@ use super::{
     },
 };
 
-/// Stub service for processing recipient-targeted realtime Soup messages.
+/// Number of messages retained by each user-keyed broadcast channel.
+const BROADCAST_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(64).unwrap();
+/// Number of messages buffered for each individual subscriber.
+const SUBSCRIBER_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
+
+/// Service for distributing recipient-targeted realtime Soup messages.
 pub struct SoupRealtimeConsumerService<C>
 where
     C: SoupRealtimeConsumer,
 {
-    _consumer: C,
+    consumer: C,
+    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, Arc<SoupItem<()>>>,
 }
 
 impl<C> SoupRealtimeConsumerService<C>
@@ -31,9 +39,45 @@ where
     C: SoupRealtimeConsumer,
 {
     /// Creates a realtime Soup consumer service backed by `consumer`.
-    pub const fn new(consumer: C) -> Self {
+    pub fn new(consumer: C) -> Self {
         Self {
-            _consumer: consumer,
+            consumer,
+            broadcasts: BroadcastManager::new(GlobalSpawner, BROADCAST_BUFFER_CAPACITY),
+        }
+    }
+
+    /// Subscribes to realtime Soup items addressed to `user_id`.
+    ///
+    /// The returned receiver is closed if its buffer fills, ensuring a slow
+    /// subscriber cannot delay the shared consumer or other subscribers.
+    #[must_use]
+    pub fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+        self.broadcasts
+            .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
+    }
+
+    /// Receives messages and distributes them to subscribers until reception fails.
+    ///
+    /// Callers should run this future in a supervised task. A message for a user
+    /// without active subscribers is intentionally dropped.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn run(&self) -> Result<(), Report> {
+        loop {
+            let SoupRealtimeMessage { user_id, item } = self
+                .consumer
+                .recv()
+                .await
+                .context("failed to receive realtime Soup message")?;
+
+            match self.broadcasts.publish(&user_id, Arc::new(item)) {
+                Ok(subscriber_count) => {
+                    tracing::trace!(subscriber_count, "distributed realtime Soup message")
+                }
+                Err(_) => tracing::trace!("dropping realtime Soup message without subscribers"),
+            }
         }
     }
 }

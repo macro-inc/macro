@@ -1,6 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -9,7 +10,9 @@ use models_soup::{document::SoupDocument, item::SoupItem};
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::ports::{SoupItemReader, SoupRealtimePublisher, UserAccessExpander};
+use crate::domain::ports::{
+    SoupItemReader, SoupRealtimeConsumer, SoupRealtimePublisher, UserAccessExpander,
+};
 
 const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
 const OTHER_DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000002";
@@ -63,6 +66,20 @@ impl SoupItemReader for FakeReader {
             ReadResponse::Missing => Ok(None),
             ReadResponse::Failure => Err(rootcause::report!("reader unavailable")),
         }
+    }
+}
+
+struct FakeRealtimeConsumer {
+    messages: Mutex<VecDeque<Result<SoupRealtimeMessage, Report>>>,
+}
+
+impl SoupRealtimeConsumer for FakeRealtimeConsumer {
+    async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
+        self.messages
+            .lock()
+            .expect("consumer messages lock")
+            .pop_front()
+            .unwrap_or_else(|| Err(rootcause::report!("consumer stopped")))
     }
 }
 
@@ -123,6 +140,13 @@ fn document_entity() -> Entity<'static> {
     EntityType::Document.with_entity_string(DOCUMENT_ID.to_string())
 }
 
+fn document_name(item: &SoupItem<()>) -> &str {
+    let SoupItem::Document(document) = item else {
+        panic!("expected document item")
+    };
+    &document.name
+}
+
 fn harness(
     users: Vec<MacroUserIdStr<'static>>,
     responses: HashMap<String, ReadResponse>,
@@ -163,6 +187,62 @@ fn item_response(
         recipient.as_ref().to_string(),
         ReadResponse::Item(Box::new(item)),
     )
+}
+
+#[tokio::test]
+async fn consumer_service_distributes_items_only_to_their_users() {
+    let one = user("one");
+    let two = user("two");
+    let consumer = FakeRealtimeConsumer {
+        messages: Mutex::new(VecDeque::from([
+            Ok(SoupRealtimeMessage::new(
+                one.clone(),
+                document_item(DOCUMENT_ID, "For one", None),
+            )),
+            Ok(SoupRealtimeMessage::new(
+                two.clone(),
+                document_item(OTHER_DOCUMENT_ID, "For two", None),
+            )),
+        ])),
+    };
+    let service = Arc::new(SoupRealtimeConsumerService::new(consumer));
+    let mut one_first = service.subscribe(one.clone());
+    let mut one_second = service.subscribe(one);
+    let mut two_receiver = service.subscribe(two);
+
+    let run_error = tokio::spawn({
+        let service = Arc::clone(&service);
+        async move { service.run().await }
+    })
+    .await
+    .expect("consumer task joins")
+    .expect_err("fake consumer eventually stops");
+    assert!(run_error.to_string().contains("failed to receive"));
+
+    let one_first_item = tokio::time::timeout(Duration::from_secs(1), one_first.recv())
+        .await
+        .expect("first user subscription receives before timeout")
+        .expect("first user subscription remains open");
+    let one_second_item = tokio::time::timeout(Duration::from_secs(1), one_second.recv())
+        .await
+        .expect("second user subscription receives before timeout")
+        .expect("second user subscription remains open");
+    let two_item = tokio::time::timeout(Duration::from_secs(1), two_receiver.recv())
+        .await
+        .expect("other user subscription receives before timeout")
+        .expect("other user subscription remains open");
+
+    assert_eq!(document_name(&one_first_item), "For one");
+    assert!(Arc::ptr_eq(&one_first_item, &one_second_item));
+    assert_eq!(document_name(&two_item), "For two");
+    assert!(matches!(
+        one_first.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
+    assert!(matches!(
+        two_receiver.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
 }
 
 #[tokio::test]
