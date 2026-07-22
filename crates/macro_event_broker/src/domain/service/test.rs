@@ -5,13 +5,13 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use macro_event_topics::{MacroDocumentsTopic, MacroExampleTopic, Topic};
+use macro_event_topics::{MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
-use crate::domain::ports::{EventPublisher, MacroEventBroker};
+use crate::domain::models::{Event, EventBrokerError, MacroEvent, MessageWrapper, TopicEvent};
+use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, MessageParts};
 
 /// A captured publish call: topic, key, and raw payload bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,14 +106,14 @@ impl EventPublisher for FailingPublisher {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ExampleCreatedMetadata {
+pub struct ExampleCreatedMetadata {
     name: String,
     count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
-enum ExampleTopicEvent {
+pub enum ExampleTopicEvent {
     #[serde(rename = "example.created")]
     Created(ExampleCreatedMetadata),
 }
@@ -126,7 +126,7 @@ impl TopicEvent for ExampleTopicEvent {
     }
 }
 
-struct ExampleMacroEvent {
+pub struct ExampleMacroEvent {
     key: String,
     event: Event<ExampleTopicEvent>,
 }
@@ -156,6 +156,48 @@ impl MacroEvent for ExampleMacroEvent {
     }
 }
 
+crate::declare_topics!(ExampleMacroEvent);
+
+struct TestMessage {
+    topic: &'static str,
+    key: &'static str,
+    payload: Vec<u8>,
+}
+
+impl MessageParts for TestMessage {
+    fn key(&self) -> &str {
+        self.key
+    }
+
+    fn payload(&self) -> &[u8] {
+        &self.payload
+    }
+
+    fn topic(&self) -> &str {
+        self.topic
+    }
+}
+
+struct TestEventConsumer {
+    topic: &'static str,
+    key: &'static str,
+    payload: Vec<u8>,
+}
+
+impl EventConsumer<DeclaredMacroEvent> for TestEventConsumer {
+    type MessageType<'a> = TestMessage;
+
+    async fn recv<'a>(
+        &'a self,
+    ) -> Result<MessageWrapper<Self::MessageType<'a>, DeclaredMacroEvent>, rootcause::Report> {
+        Ok(MessageWrapper::new(TestMessage {
+            topic: self.topic,
+            key: self.key,
+            payload: self.payload.clone(),
+        }))
+    }
+}
+
 fn example_event() -> ExampleMacroEvent {
     ExampleMacroEvent::with_event(
         "msg-123",
@@ -169,60 +211,20 @@ fn example_event() -> ExampleMacroEvent {
     )
 }
 
-#[test]
-fn consumer_service_derives_topic_and_decodes_typed_event() {
-    let service = MacroEventConsumerService::<ExampleMacroEvent>::new();
+#[tokio::test]
+async fn consumer_service_receives_and_decodes_typed_event() {
     let event = example_event();
-    let payload = serde_json::to_vec(event.event()).expect("event serializes");
+    let consumer = TestEventConsumer {
+        topic: MacroExampleTopic.as_str(),
+        key: "msg-123",
+        payload: serde_json::to_vec(event.event()).expect("event serializes"),
+    };
+    let service = MacroEventConsumerService::<DeclaredMacroEvent, _>::new(consumer);
 
-    assert_eq!(
-        MacroEventConsumerService::<ExampleMacroEvent>::topic_name(),
-        MacroExampleTopic.as_str()
-    );
-
-    let decoded = service
-        .decode(MacroExampleTopic.as_str(), "msg-123", &payload)
-        .expect("associated topic decodes");
+    let decoded = service.recv().await.expect("associated topic decodes");
+    let DeclaredMacroEvent::ExampleMacroEvent(decoded) = decoded;
     assert_eq!(decoded.key(), "msg-123");
     assert_eq!(decoded.event(), event.event());
-}
-
-#[test]
-fn consumer_service_rejects_a_different_topic() {
-    let service = MacroEventConsumerService::<ExampleMacroEvent>::new();
-    let event = example_event();
-    let payload = serde_json::to_vec(event.event()).expect("event serializes");
-
-    assert!(matches!(
-        service.decode(MacroDocumentsTopic.as_str(), "msg-123", &payload),
-        Err(EventBrokerError::UnknownTopic(topic)) if topic == MacroDocumentsTopic.as_str()
-    ));
-}
-
-#[test]
-fn consumer_service_rejects_an_unsupported_schema_version() {
-    let service = MacroEventConsumerService::<ExampleMacroEvent>::new();
-    let event = ExampleMacroEvent::with_event(
-        "msg-123",
-        Event::with_event_id_and_schema_version(
-            Uuid::from_u128(1),
-            2,
-            ExampleTopicEvent::Created(ExampleCreatedMetadata {
-                name: "hello".to_string(),
-                count: 7,
-            }),
-        ),
-    );
-    let payload = serde_json::to_vec(event.event()).expect("event serializes");
-
-    assert!(matches!(
-        service.decode(MacroExampleTopic.as_str(), "msg-123", &payload),
-        Err(EventBrokerError::UnsupportedSchemaVersion {
-            topic,
-            expected: 1,
-            actual: 2,
-        }) if topic == MacroExampleTopic.as_str()
-    ));
 }
 
 #[derive(Debug, Deserialize)]

@@ -201,14 +201,25 @@ macro_rules! declare_topics {
                 message: &T,
             ) -> Result<Self, $crate::EventBrokerError> {
                 $(
-                    if message.topic() == $crate::Topic::as_str(
+                    let expected_topic = $crate::Topic::as_str(
                         &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
-                    ) {
-                        return <$event as $crate::MacroEvent>::decode(
+                    );
+                    if message.topic() == expected_topic {
+                        let event = <$event as $crate::MacroEvent>::decode(
                             message.key(),
                             message.payload(),
-                        )
-                        .map(DeclaredMacroEvent::$event);
+                        )?;
+                        let envelope = <$event as $crate::MacroEvent>::event(&event);
+                        let expected = $crate::TopicEvent::schema_version(&envelope.event);
+                        let actual = envelope.schema_version;
+                        if actual != expected {
+                            return Err($crate::EventBrokerError::UnsupportedSchemaVersion {
+                                topic: expected_topic,
+                                expected,
+                                actual,
+                            });
+                        }
+                        return Ok(DeclaredMacroEvent::$event(event));
                     }
                 )+
 

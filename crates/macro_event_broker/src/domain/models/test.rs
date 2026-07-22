@@ -222,3 +222,29 @@ fn rejects_topics_not_declared_by_the_macro() {
         Err(EventBrokerError::UnknownTopic(topic)) if topic == "macro.unknown"
     ));
 }
+
+#[test]
+fn rejects_an_unsupported_schema_version() {
+    let event = Event::with_event_id_and_schema_version(
+        Uuid::from_u128(1),
+        2,
+        ExampleTopicEvent::Created(ExampleCreatedMetadata {
+            name: "hello".to_string(),
+            count: 7,
+        }),
+    );
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
+        topic: MacroExampleTopic.as_str(),
+        key: "example-key",
+        payload: serde_json::to_vec(&event).unwrap(),
+    });
+
+    assert!(matches!(
+        message.decode_payload(),
+        Err(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected: 1,
+            actual: 2,
+        }) if topic == MacroExampleTopic.as_str()
+    ));
+}
