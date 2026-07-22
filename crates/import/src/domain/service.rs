@@ -16,8 +16,8 @@ use super::ports::{EntityCreator, ImportError, ImportRepo, ImportedTaskPropertie
 use crate::inbound::toolset::{
     ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
 };
-use agent::AgentLoop;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent::{AgentLoop, PredefinedModel};
 use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -37,6 +37,8 @@ mod test;
 
 /// Model for gather sessions: fast beats maximal while the user watches the
 /// section shimmer, and Cerebras serves gpt-oss-120b at interactive latency.
+/// A raw provider-prefixed id (not [`PredefinedModel`]) because the registry
+/// has no Cerebras tier — the model router resolves the `cerebras/` prefix.
 const GATHER_MODEL: &str = "cerebras/gpt-oss-120b";
 /// Turn cap for gather sessions: a couple of searches plus one staging tool
 /// call per candidate (providers may batch several per turn).
@@ -46,7 +48,7 @@ const GATHER_MAX_TURNS: usize = 24;
 const GATHER_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Model for Notion import sessions (normal ai_usage attribution).
-const NOTION_IMPORT_MODEL: &str = "claude-haiku-4-5";
+const NOTION_IMPORT_MODEL: PredefinedModel = PredefinedModel::Fast;
 /// Hard cap on importing ONE Notion page (fetch + convert + finalize).
 /// Pages run as independent single-page sessions.
 const NOTION_PAGE_IMPORT_TIMEOUT: Duration = Duration::from_secs(120);
@@ -473,15 +475,14 @@ where
     async fn drive_session(
         &self,
         user: &MacroUserIdStr<'static>,
-        model: &str,
+        model: impl ToString,
         max_turns: usize,
         toolset: NativePlusMcp<ImportToolContext<Self>>,
         context: ImportToolContext<Self>,
         system_prompt: &str,
         user_prompt: &str,
     ) -> anyhow::Result<()> {
-        let usage_ctx =
-            ai_usage::UsageContext::new(ai_usage::AiFeature::DynamicCompletionsApi, user.clone());
+        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Import, user.clone());
         let agent_loop = AgentLoop::new(self.recorder.clone())
             .with_model(model)
             .with_max_turns(max_turns);

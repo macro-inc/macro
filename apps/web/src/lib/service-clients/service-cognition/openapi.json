@@ -1748,7 +1748,8 @@
           "call_summary",
           "channel_bot",
           "ai_projection",
-          "ai_editing"
+          "ai_editing",
+          "import"
         ]
       },
       "AssistantMessagePart": {
