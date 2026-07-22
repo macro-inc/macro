@@ -117,6 +117,7 @@ fn into_message(event: DeclaredMacroEvent) -> Result<SoupRealtimeMessage, Report
     Ok(message)
 }
 
+#[cfg(test)]
 fn decode_message(topic: &str, key: &str, payload: &[u8]) -> Result<SoupRealtimeMessage, Report> {
     let message = MessageWrapper::<_, DeclaredMacroEvent>::new(ValidatedKafkaMessage {
         topic: topic.to_owned(),
