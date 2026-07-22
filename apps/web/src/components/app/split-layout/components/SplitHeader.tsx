@@ -179,9 +179,9 @@ function SplitCloseButton() {
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
-  // A preview split has no close affordance or close hotkey: it closes with
-  // its controller, when its pair dissolves (external navigation, controller
-  // leaving its list view), or via the preview toggle.
+  // A Viewer has no close affordance or close hotkey: it closes with its
+  // Controller, when its Preview Pair dissolves (external navigation or the
+  // Controller leaving its list view), or via the preview toggle.
   const isPreviewViewer = () => context.handle.isPreviewSplit();
 
   return (

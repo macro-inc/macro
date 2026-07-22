@@ -4,7 +4,10 @@ import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-
 import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  openEntityInSplitFromUnifiedList,
+  preventDuplicatePreviewEntityOpen,
+} from '@app/features/next-soup/utils';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
@@ -186,6 +189,12 @@ export function CompanyKanban() {
   };
 
   const openCompany = (entity: EntityData, event: MouseEvent) => {
+    if (
+      panel.handle.isPreviewEngaged() &&
+      preventDuplicatePreviewEntityOpen(entity, panel.handle)
+    ) {
+      return;
+    }
     soup.focus.set(entity.id);
 
     // While the preview pane is open, card clicks retarget it instead of

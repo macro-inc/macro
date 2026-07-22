@@ -43,8 +43,8 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
     if (!canEngage()) return;
 
     analytics.track('preview_panel_use');
-    // Eagerly opens the viewer split with its empty state and pins this
-    // split to its compact width (see engagePreviewMode).
+    // Eagerly opens the Preview Pair's Viewer with its empty state and pins
+    // this Controller to its compact width (see engagePreviewMode).
     panel.handle.engagePreview();
   };
 

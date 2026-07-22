@@ -34,7 +34,7 @@ import {
   type SplitManager,
   type SplitState,
 } from './layoutManager';
-import { createLayoutUrlSync, restorePreviewLinks } from './layoutUrlSync';
+import { createLayoutUrlSync, restorePreviewPairs } from './layoutUrlSync';
 import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,
@@ -156,7 +156,7 @@ function createSplitFocusTracker(props: {
   };
 
   /**
-   * Focus may only enter a preview viewer split through a deliberate user
+   * Focus may only enter a Preview Pair's Viewer through a deliberate user
    * action: a pointer gesture inside it, or a programmatic activation (e.g.
    * the cmd+enter hand-off, which activates the viewer before focusing it).
    * Blocks mounted inside the viewer autofocus themselves at arbitrary times
@@ -177,7 +177,7 @@ function createSplitFocusTracker(props: {
 
   /**
    * Returns true (and restores focus to the controller) when `element`
-   * receiving focus inside a viewer split constitutes theft: the viewer's
+   * receiving focus inside a Viewer constitutes theft: the Viewer's
    * controller is the active split and no recent pointer gesture targeted the
    * viewer.
    */
@@ -292,16 +292,16 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const previewQuery = () => location.query[PREVIEW_QUERY_PARAM];
   const decodedLayout = createMemo(() =>
     loadRestorablePreviewLayout(props.pairs, previewQuery(), {
-      allowPreviewLinks: !isMobile(),
+      allowPreviewPairs: !isMobile(),
     })
   );
   const initialLayout = decodedLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const splitManager = createSplitLayout(
     blockOrchestrator,
-    initialLayout.pairs
+    initialLayout.contents
   );
-  restorePreviewLinks(splitManager, initialLayout.links);
+  restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
   const sidebar = useSidebarCollapse();
 

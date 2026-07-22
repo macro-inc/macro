@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   loadRestorablePreviewLayout,
-  serializePreviewLinks,
+  serializePreviewPairs,
 } from '../previewPersistence';
 
 vi.mock('../layoutUtils', () => ({
@@ -24,37 +24,37 @@ const controllerAndPlaceholder = [
   'preview-empty',
 ];
 
-describe('preview relationship URL state', () => {
-  it('serializes one or more relationships in controller order', () => {
+describe('Preview Pair URL state', () => {
+  it('serializes one or more Preview Pairs in Controller order', () => {
     expect(
-      serializePreviewLinks([{ controllerIndex: 2 }, { controllerIndex: 0 }])
+      serializePreviewPairs([{ controllerIndex: 2 }, { controllerIndex: 0 }])
     ).toBe('0_2');
-    expect(serializePreviewLinks([])).toBeUndefined();
+    expect(serializePreviewPairs([])).toBeUndefined();
   });
 
-  it('restores a copied placeholder relationship', () => {
+  it('restores a copied placeholder Preview Pair', () => {
     expect(loadRestorablePreviewLayout(controllerAndPlaceholder, '0')).toEqual({
-      pairs: [
+      contents: [
         { type: 'component', id: 'mail' },
         { type: 'component', id: 'preview-empty' },
       ],
-      links: [{ controllerIndex: 0 }],
+      previewPairs: [{ controllerIndex: 0 }],
     });
   });
 
-  it('restores a relationship after the viewer has real content', () => {
+  it('restores a Preview Pair after the Viewer has real content', () => {
     const segments = ['component', 'mail', 'md', 'doc-1'];
 
     expect(loadRestorablePreviewLayout(segments, '0')).toEqual({
-      pairs: [
+      contents: [
         { type: 'component', id: 'mail' },
         { type: 'md', id: 'doc-1' },
       ],
-      links: [{ controllerIndex: 0 }],
+      previewPairs: [{ controllerIndex: 0 }],
     });
   });
 
-  it('restores multiple non-overlapping relationships', () => {
+  it('restores multiple non-overlapping Preview Pairs', () => {
     const segments = [
       'component',
       'mail',
@@ -67,22 +67,22 @@ describe('preview relationship URL state', () => {
     ];
 
     expect(loadRestorablePreviewLayout(segments, '0_2')).toEqual({
-      pairs: [
+      contents: [
         { type: 'component', id: 'mail' },
         { type: 'component', id: 'preview-empty' },
         { type: 'component', id: 'channels' },
         { type: 'md', id: 'doc-1' },
       ],
-      links: [{ controllerIndex: 0 }, { controllerIndex: 2 }],
+      previewPairs: [{ controllerIndex: 0 }, { controllerIndex: 2 }],
     });
   });
 
-  it('removes a bare preview placeholder without a query relationship', () => {
+  it('removes a bare preview placeholder without a query Preview Pair', () => {
     expect(
       loadRestorablePreviewLayout(controllerAndPlaceholder, undefined)
     ).toEqual({
-      pairs: [{ type: 'component', id: 'mail' }],
-      links: [],
+      contents: [{ type: 'component', id: 'mail' }],
+      previewPairs: [],
     });
   });
 
@@ -99,7 +99,7 @@ describe('preview relationship URL state', () => {
     ];
 
     expect(
-      loadRestorablePreviewLayout(segments, 'bad_0_0_nope_2').links
+      loadRestorablePreviewLayout(segments, 'bad_0_0_nope_2').previewPairs
     ).toEqual([{ controllerIndex: 0 }, { controllerIndex: 2 }]);
   });
 
@@ -110,11 +110,11 @@ describe('preview relationship URL state', () => {
         '0_4'
       )
     ).toEqual({
-      pairs: [
+      contents: [
         { type: 'component', id: 'settings' },
         { type: 'md', id: 'doc-1' },
       ],
-      links: [],
+      previewPairs: [],
     });
   });
 
@@ -122,8 +122,8 @@ describe('preview relationship URL state', () => {
     expect(
       loadRestorablePreviewLayout(controllerAndPlaceholder, ['0', '2'])
     ).toEqual({
-      pairs: [{ type: 'component', id: 'mail' }],
-      links: [],
+      contents: [{ type: 'component', id: 'mail' }],
+      previewPairs: [],
     });
   });
 
@@ -131,19 +131,19 @@ describe('preview relationship URL state', () => {
     expect(
       loadRestorablePreviewLayout(['component', 'preview-empty'], undefined)
     ).toEqual({
-      pairs: [{ type: 'component', id: 'inbox' }],
-      links: [],
+      contents: [{ type: 'component', id: 'inbox' }],
+      previewPairs: [],
     });
   });
 
-  it('filters preview state when preview links are disabled', () => {
+  it('filters preview state when Preview Pairs are disabled', () => {
     expect(
       loadRestorablePreviewLayout(controllerAndPlaceholder, '0', {
-        allowPreviewLinks: false,
+        allowPreviewPairs: false,
       })
     ).toEqual({
-      pairs: [{ type: 'component', id: 'mail' }],
-      links: [],
+      contents: [{ type: 'component', id: 'mail' }],
+      previewPairs: [],
     });
   });
 });

@@ -1,5 +1,9 @@
 import { isListViewID } from '@app/constants/list-views';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  isDuplicatePreviewEntityOpen,
+  notifyDuplicateContentOpen,
+  openEntityInSplitFromUnifiedList,
+} from '@app/features/next-soup/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type {
   SplitContent,
@@ -15,6 +19,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
+import { previewContentMatchesEntity } from './preview-content-row';
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
@@ -54,7 +59,7 @@ export const useSoupNavigationHotkeys = (
   });
 
   // Row focus moves instantly on every keypress; the (expensive) block swap in
-  // the viewer split trails the last press. mergeHistory keeps the viewer's
+  // the Viewer trails the last press. mergeHistory keeps the Viewer's
   // history at a single scanning entry while holding j/k.
   const openInViewerDebounced = debounce((entity: EntityData) => {
     openEntityInSplitFromUnifiedList(entity, {
@@ -82,6 +87,26 @@ export const useSoupNavigationHotkeys = (
     });
   };
 
+  const navigateToOpenableEntity = (offset: -1 | 1) => {
+    let skippedDuplicate = false;
+    const next = soup.navigate.by(offset, {
+      skip: (row) => {
+        if (
+          !splitHandle.isPreviewEngaged() ||
+          row.getIsGrouped() ||
+          row.getIsLoadMore()
+        ) {
+          return false;
+        }
+        const blocked = isDuplicatePreviewEntityOpen(row.original, splitHandle);
+        skippedDuplicate ||= blocked;
+        return blocked;
+      },
+    });
+    if (skippedDuplicate) notifyDuplicateContentOpen();
+    return next;
+  };
+
   /**
    * The row this preview-split content corresponds to, if it lives in this
    * list. Channel messages/threads open as their channel, so those rows are
@@ -90,12 +115,12 @@ export const useSoupNavigationHotkeys = (
   const rowForPreviewContent = (content: SplitContent) =>
     soup.rows().find((row) => {
       if (row.getIsGrouped() || row.getIsLoadMore()) return false;
-      const entity = row.original as EntityData & { channelId?: string };
+      const entity = row.original as EntityData;
       if (!entity) return false;
-      return entity.id === content.id || entity.channelId === content.id;
+      return previewContentMatchesEntity(content, entity);
     });
 
-  // Preview history → list selection: stepping the preview split's history
+  // Preview history → list selection: stepping the Viewer's history
   // back or forward to content that was opened from this list re-selects the
   // corresponding row.
   createEffect(() => {
@@ -189,7 +214,7 @@ export const useSoupNavigationHotkeys = (
 
   const navigateDown = () => {
     const rowCount = soup.rows().length;
-    const next = soup.navigate.down();
+    const next = navigateToOpenableEntity(1);
 
     if (!next) {
       fetchNextPageIfNeeded();
@@ -207,7 +232,7 @@ export const useSoupNavigationHotkeys = (
   };
 
   const navigateUp = () => {
-    const next = soup.navigate.up();
+    const next = navigateToOpenableEntity(-1);
 
     if (!next) return true;
 

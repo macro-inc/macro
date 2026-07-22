@@ -55,9 +55,11 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  isDuplicatePreviewEntityOpen,
   navigateChannelEntityToTarget,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
+  preventDuplicatePreviewEntityOpen,
 } from '@app/features/next-soup/utils';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
@@ -422,7 +424,7 @@ export const SoupView = (props: SoupViewProps) => {
     init = true;
     batch(() => {
       // The inner preview pane is superseded by split-level preview mode
-      // (see layoutManager previewLinks): never resurrect it from persisted
+      // (see layoutManager previewPairs): never resurrect it from persisted
       // entry state.
       soup.setPreviewEntity(undefined);
       soupView.setPreviewOpen(false);
@@ -1024,8 +1026,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     if (panel.handle.isPreviewEngaged() && type === 'entity') {
-      // Single click: focus the row AND open it in the viewer split. The
-      // openWithSplit redirect keeps the viewer unfocused so keyboard
+      if (preventDuplicatePreviewEntityOpen(entity, panel.handle)) return;
+
+      // Single click: focus the row AND open it in the Preview Pair's Viewer.
+      // The openWithSplit redirect keeps the Viewer unfocused so keyboard
       // navigation stays in this list.
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);

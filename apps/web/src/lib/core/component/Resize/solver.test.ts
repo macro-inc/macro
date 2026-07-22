@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { createResizeSolver } from './solver';
 
@@ -134,6 +134,30 @@ describe('createResizeSolver', () => {
       expect(solver.solve().sizes.get('controller')).toBe(440);
 
       dispose();
+    });
+  });
+
+  describe('canFitPanel', () => {
+    it('accounts for the gutter added by the candidate panel', () => {
+      createRoot((dispose) => {
+        const [size, setSize] = createSignal(1215);
+        const solver = createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 8,
+          size,
+          panels: [
+            { id: 'A', minSize: 400 },
+            { id: 'B', minSize: 400 },
+          ],
+        });
+
+        expect(solver.canFitPanel({ id: 'C', minSize: 400 })).toBe(false);
+
+        setSize(1216);
+        expect(solver.canFitPanel({ id: 'C', minSize: 400 })).toBe(true);
+
+        dispose();
+      });
     });
   });
 });

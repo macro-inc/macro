@@ -37,7 +37,7 @@ describe('registerSplitHotkeys', () => {
     vi.mocked(registerHotkey).mockClear();
   });
 
-  it('disables cmd+escape and opt+escape inside a preview split', () => {
+  it('disables cmd+escape and opt+escape inside a Preview Pair Viewer', () => {
     let isPreviewSplit = true;
     registerSplitHotkeys({
       splitHotkeyScope: 'split=test',

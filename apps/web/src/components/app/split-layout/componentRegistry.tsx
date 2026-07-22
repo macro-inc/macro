@@ -371,7 +371,7 @@ registerComponent(
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
-// Placeholder a preview viewer split opens with before its controller has
+// Placeholder a Preview Pair's Viewer opens before its Controller has
 // navigated anywhere (see layoutManager engagePreviewMode).
 registerComponent('preview-empty', () => {
   const panel = useSplitPanelOrThrow();

@@ -1,131 +1,142 @@
-import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 import type { SplitContent } from './layoutManager';
 import { decodePairs } from './layoutUtils';
+import { isPreviewControllerContent } from './previewController';
 
-/** Query parameter carrying controller/viewer preview relationships. */
+/** Query parameter carrying Controller/Viewer Preview Pairs. */
 export const PREVIEW_QUERY_PARAM = 'preview';
 
-/** A preview association keyed by its controller's stable URL-order index. */
-export type PreviewLinkUrlEntry = {
+/** A Preview Pair keyed by its Controller's stable URL-order index. */
+export type PreviewPairUrlEntry = {
   controllerIndex: number;
 };
 
-/** URL content plus preview associations restored from its query string. */
+/** URL content plus Preview Pairs restored from its query string. */
 export type RestorablePreviewLayout = {
-  pairs: SplitContent[];
-  links: PreviewLinkUrlEntry[];
+  contents: SplitContent[];
+  previewPairs: PreviewPairUrlEntry[];
 };
 
 export type PreviewQueryValue = string | string[] | undefined;
 
-function isPreviewLinkUrlEntry(
-  value: PreviewLinkUrlEntry
-): value is PreviewLinkUrlEntry {
+function isPreviewPairUrlEntry(
+  value: PreviewPairUrlEntry
+): value is PreviewPairUrlEntry {
   return Number.isInteger(value.controllerIndex) && value.controllerIndex >= 0;
 }
 
-function parsePreviewLinks(value: PreviewQueryValue): PreviewLinkUrlEntry[] {
+function parsePreviewPairs(value: PreviewQueryValue): PreviewPairUrlEntry[] {
   if (typeof value !== 'string' || value.length === 0) return [];
 
-  return value.split('_').flatMap((tuple): PreviewLinkUrlEntry[] => {
+  return value.split('_').flatMap((tuple): PreviewPairUrlEntry[] => {
     if (!/^\d+$/.test(tuple)) return [];
 
-    const entry: PreviewLinkUrlEntry = {
+    const entry: PreviewPairUrlEntry = {
       controllerIndex: Number(tuple),
     };
-    return isPreviewLinkUrlEntry(entry) ? [entry] : [];
+    return isPreviewPairUrlEntry(entry) ? [entry] : [];
   });
 }
 
-/** Serialize preview relationships into their canonical compact query value. */
-export function serializePreviewLinks(
-  links: readonly PreviewLinkUrlEntry[]
+/** Serialize Preview Pairs into their canonical compact query value. */
+export function serializePreviewPairs(
+  previewPairs: readonly PreviewPairUrlEntry[]
 ): string | undefined {
-  const value = links
-    .filter(isPreviewLinkUrlEntry)
+  const value = previewPairs
+    .filter(isPreviewPairUrlEntry)
     .toSorted((a, b) => a.controllerIndex - b.controllerIndex)
     .map(({ controllerIndex }) => String(controllerIndex))
     .join('_');
   return value || undefined;
 }
 
-function isListContent(content: SplitContent): boolean {
-  return content.type === 'component' && isListViewID(content.id);
-}
-
 function isPreviewEmpty(content: SplitContent): boolean {
   return content.type === 'component' && content.id === 'preview-empty';
 }
 
-function validLinksForPairs(
-  pairs: readonly SplitContent[],
-  links: readonly PreviewLinkUrlEntry[]
-): PreviewLinkUrlEntry[] {
+function validPreviewPairsForContents(
+  contents: readonly SplitContent[],
+  previewPairs: readonly PreviewPairUrlEntry[]
+): PreviewPairUrlEntry[] {
   const claimedIndices = new Set<number>();
-  const valid: PreviewLinkUrlEntry[] = [];
+  const valid: PreviewPairUrlEntry[] = [];
 
-  for (const link of links) {
-    const viewerIndex = link.controllerIndex + 1;
-    const controller = pairs[link.controllerIndex];
-    const viewer = pairs[viewerIndex];
+  for (const previewPair of previewPairs) {
+    const viewerIndex = previewPair.controllerIndex + 1;
+    const controller = contents[previewPair.controllerIndex];
+    const viewer = contents[viewerIndex];
     if (!controller || !viewer) continue;
-    if (!isListContent(controller) || isListContent(viewer)) continue;
     if (
-      claimedIndices.has(link.controllerIndex) ||
+      !isPreviewControllerContent(controller) ||
+      isPreviewControllerContent(viewer)
+    ) {
+      continue;
+    }
+    if (
+      claimedIndices.has(previewPair.controllerIndex) ||
       claimedIndices.has(viewerIndex)
     ) {
       continue;
     }
-    claimedIndices.add(link.controllerIndex);
+    claimedIndices.add(previewPair.controllerIndex);
     claimedIndices.add(viewerIndex);
-    valid.push(link);
+    valid.push(previewPair);
   }
 
   return valid.sort((a, b) => a.controllerIndex - b.controllerIndex);
 }
 
 /**
- * Decode a URL layout and restore preview links declared by its query string.
+ * Decode a URL layout and restore Preview Pairs declared by its query string.
  * Unlinked `preview-empty` entries are removed so the internal placeholder can
  * never load as an independent split.
  */
 export function loadRestorablePreviewLayout(
   segments: readonly string[],
   previewQuery: PreviewQueryValue,
-  options: { allowPreviewLinks?: boolean } = {}
+  options: { allowPreviewPairs?: boolean } = {}
 ): RestorablePreviewLayout {
   const decoded = decodePairs([...segments]);
-  const queryLinks =
-    options.allowPreviewLinks === false ? [] : parsePreviewLinks(previewQuery);
-  const validLinks = validLinksForPairs(decoded, queryLinks);
+  const queryPreviewPairs =
+    options.allowPreviewPairs === false ? [] : parsePreviewPairs(previewQuery);
+  const validPreviewPairs = validPreviewPairsForContents(
+    decoded,
+    queryPreviewPairs
+  );
   const linkedViewerIndices = new Set(
-    validLinks.map((link) => link.controllerIndex + 1)
+    validPreviewPairs.map((previewPair) => previewPair.controllerIndex + 1)
   );
 
-  const keptPairs: SplitContent[] = [];
+  const keptContents: SplitContent[] = [];
   const remappedIndices = new Map<number, number>();
   decoded.forEach((content, index) => {
     if (isPreviewEmpty(content) && !linkedViewerIndices.has(index)) return;
-    remappedIndices.set(index, keptPairs.length);
-    keptPairs.push(content);
+    remappedIndices.set(index, keptContents.length);
+    keptContents.push(content);
   });
 
-  if (keptPairs.length === 0) {
+  if (keptContents.length === 0) {
     return {
-      pairs: [{ type: 'component', id: LIST_VIEW_ID.inbox }],
-      links: [],
+      contents: [{ type: 'component', id: LIST_VIEW_ID.inbox }],
+      previewPairs: [],
     };
   }
 
   return {
-    pairs: keptPairs,
-    links: validLinks.flatMap((link): PreviewLinkUrlEntry[] => {
-      const controllerIndex = remappedIndices.get(link.controllerIndex);
-      const viewerIndex = remappedIndices.get(link.controllerIndex + 1);
-      return controllerIndex === undefined ||
-        viewerIndex !== controllerIndex + 1
-        ? []
-        : [{ ...link, controllerIndex }];
-    }),
+    contents: keptContents,
+    previewPairs: validPreviewPairs.flatMap(
+      (previewPair): PreviewPairUrlEntry[] => {
+        const controllerIndex = remappedIndices.get(
+          previewPair.controllerIndex
+        );
+        const viewerIndex = remappedIndices.get(
+          previewPair.controllerIndex + 1
+        );
+        return controllerIndex === undefined ||
+          viewerIndex !== controllerIndex + 1
+          ? []
+          : [{ ...previewPair, controllerIndex }];
+      }
+    ),
   };
 }

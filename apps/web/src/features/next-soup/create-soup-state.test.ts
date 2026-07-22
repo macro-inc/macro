@@ -227,6 +227,27 @@ describe('createSoupState', () => {
       });
     });
 
+    it('should skip rows rejected by the navigation predicate', () => {
+      createRoot((dispose) => {
+        const entities = [
+          createTestEntity('1'),
+          createTestEntity('2'),
+          createTestEntity('3'),
+        ];
+        const state = createSoupState({ initialData: entities });
+        state.focus.set('1');
+
+        const result = state.navigate.down({
+          skip: (row) => row.id === '2',
+        });
+
+        expect(result?.row.original).toBe(entities[2]);
+        expect(state.focus.id()).toBe('3');
+
+        dispose();
+      });
+    });
+
     it('should navigate to first', () => {
       createRoot((dispose) => {
         const entities = [createTestEntity('1'), createTestEntity('2')];

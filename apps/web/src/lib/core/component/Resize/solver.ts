@@ -579,7 +579,7 @@ export function createResizeSolver(params: {
     canFitPanel: (panel: PanelConfig) => {
       const currentPanels = panelsInOrder();
       const n = currentPanels.length;
-      const usable = getUsable(n, params.size(), params.gutter());
+      const usable = getUsable(n + 1, params.size(), params.gutter());
       if (usable <= 0) return false;
       const minSum = sumArray(currentPanels.map((p) => p.minSize ?? 0));
       const totalMinRequired = minSum + (panel.minSize ?? 0);

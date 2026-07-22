@@ -59,6 +59,7 @@ type NavigationOptions = {
   wrapNavigation?: boolean;
   skipGroupHeaders?: boolean;
   skipLoadMore?: boolean;
+  skip?: (row: SoupRow) => boolean;
 };
 
 export type SortConfig<T> = {
@@ -223,6 +224,7 @@ export const createSoupState = <TId extends string = FilterID>(
     row: SoupRow,
     options?: NavigationOptions
   ): boolean => {
+    if (options?.skip?.(row)) return true;
     if (row.getIsLoadMore() && options?.skipLoadMore) return true;
     if (!row.group) return false;
     if (row.getIsGrouped()) {
@@ -299,8 +301,11 @@ export const createSoupState = <TId extends string = FilterID>(
     return calculateFocusRow(nextIndex);
   };
 
-  const navigateBy = (offset: number): NavigationResult => {
-    const peeked = peek(offset);
+  const navigateBy = (
+    offset: number,
+    options?: NavigationOptions
+  ): NavigationResult => {
+    const peeked = peek(offset, options);
     if (!peeked) return;
 
     return setFocus(peeked.index);
@@ -353,8 +358,8 @@ export const createSoupState = <TId extends string = FilterID>(
     },
 
     navigate: {
-      down: () => navigateBy(1),
-      up: () => navigateBy(-1),
+      down: (options?: NavigationOptions) => navigateBy(1, options),
+      up: (options?: NavigationOptions) => navigateBy(-1, options),
       by: navigateBy,
       toIndex: setFocus,
       toId: (id: string) => {

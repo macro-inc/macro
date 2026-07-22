@@ -12,8 +12,10 @@ import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {
   ReferredFrom,
+  SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
@@ -66,6 +68,7 @@ import {
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
+import { withPreviewSourceEntityId } from './preview-history';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -330,6 +333,38 @@ interface OpenEntityOptions {
   referredFrom?: ReferredFrom;
 }
 
+const DUPLICATE_CONTENT_MESSAGE =
+  'Content already open.';
+
+/** Whether this entity is open outside the controller's own preview viewer. */
+export function isDuplicatePreviewEntityOpen(
+  entity: EntityData,
+  controller: SplitHandle
+): boolean {
+  const splitManager = globalSplitManager();
+  const viewerId = controller.viewerId();
+  if (!splitManager || !viewerId) return false;
+
+  const content = getEntitySplitContent(entity);
+  const existing = splitManager.getSplitByContent(content.type, content.id);
+  return existing !== undefined && existing.id !== viewerId;
+}
+
+/** Show the standard duplicate-content notification. */
+export function notifyDuplicateContentOpen() {
+  toast.alert(DUPLICATE_CONTENT_MESSAGE);
+}
+
+/** Reject and notify for an entity already owned by another split. */
+export function preventDuplicatePreviewEntityOpen(
+  entity: EntityData,
+  controller: SplitHandle
+): boolean {
+  if (!isDuplicatePreviewEntityOpen(entity, controller)) return false;
+  notifyDuplicateContentOpen();
+  return true;
+}
+
 /**
  * Resolve which channel message to activate when a channel row is opened.
  *
@@ -499,6 +534,15 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
+  if (
+    !allowDuplicate &&
+    !openInNewSplit &&
+    splitHandle &&
+    preventDuplicatePreviewEntityOpen(entity, splitHandle)
+  ) {
+    return;
+  }
+
   const channelTarget = getChannelEntityTarget(entity);
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
@@ -525,21 +569,23 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  splitManager.openWithSplit(
-    { ...content, params },
-    {
-      referredFrom,
-      activate: true,
-      preferNewSplit: openInNewSplit,
-      handle: splitHandle,
-      mergeHistory,
-      allowDuplicate,
-      reopen:
-        entity.type === 'channel' && !location && openChannelAtLatest
-          ? 'latest'
-          : undefined,
-    }
-  );
+  let splitContent: SplitContent = { ...content, params };
+  if (splitHandle?.isPreviewEngaged()) {
+    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
+  }
+
+  splitManager.openWithSplit(splitContent, {
+    referredFrom,
+    activate: true,
+    preferNewSplit: openInNewSplit,
+    handle: splitHandle,
+    mergeHistory,
+    allowDuplicate,
+    reopen:
+      entity.type === 'channel' && !location && openChannelAtLatest
+        ? 'latest'
+        : undefined,
+  });
 
   // Navigate to specific location if provided
   if (location) {

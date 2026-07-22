@@ -11,10 +11,10 @@ import type { SplitContent, SplitManager } from './layoutManager';
 import { decodePairs } from './layoutUtils';
 import {
   PREVIEW_QUERY_PARAM,
-  type PreviewLinkUrlEntry,
+  type PreviewPairUrlEntry,
   type PreviewQueryValue,
   type RestorablePreviewLayout,
-  serializePreviewLinks,
+  serializePreviewPairs,
 } from './previewPersistence';
 
 type LayoutUrlSyncEnvironment = {
@@ -46,27 +46,29 @@ function getUrlSyncAffectedSplit(
     .find((split) => sameSplitContentIdentity(split.content, affectedPair));
 }
 
-/** Restore URL-declared relationships through the manager's invariant gate. */
-export function restorePreviewLinks(
+/** Restore URL-declared Preview Pairs through the manager's invariant gate. */
+export function restorePreviewPairs(
   splitManager: SplitManager,
-  links: readonly PreviewLinkUrlEntry[]
+  previewPairs: readonly PreviewPairUrlEntry[]
 ) {
   const splits = splitManager.splits();
-  for (const link of links) {
-    const controller = splits[link.controllerIndex];
-    const viewer = splits[link.controllerIndex + 1];
+  for (const previewPair of previewPairs) {
+    const controller = splits[previewPair.controllerIndex];
+    const viewer = splits[previewPair.controllerIndex + 1];
     if (!controller || !viewer) continue;
-    splitManager.restorePreviewMode(controller.id, viewer.id);
+    splitManager.restorePreviewPair(controller.id, viewer.id);
   }
 }
 
-function previewLinksForUrl(splitManager: SplitManager): PreviewLinkUrlEntry[] {
+function previewPairsForUrl(splitManager: SplitManager): PreviewPairUrlEntry[] {
   const splits = splitManager.getVisibleSplits();
   const indices = new Map(splits.map((split, index) => [split.id, index]));
-  return splitManager.viewerLinks().flatMap((link): PreviewLinkUrlEntry[] => {
-    const controllerIndex = indices.get(link.controllerId);
-    return controllerIndex === undefined ? [] : [{ controllerIndex }];
-  });
+  return splitManager
+    .previewPairs()
+    .flatMap((previewPair): PreviewPairUrlEntry[] => {
+      const controllerIndex = indices.get(previewPair.controllerId);
+      return controllerIndex === undefined ? [] : [{ controllerIndex }];
+    });
 }
 
 function previewQueryMatches(
@@ -97,7 +99,7 @@ export function createLayoutUrlSync(
 
   const managerUrlState = () => {
     const segments = splitManager.getUrlSegments();
-    const preview = serializePreviewLinks(previewLinksForUrl(splitManager));
+    const preview = serializePreviewPairs(previewPairsForUrl(splitManager));
     return { segments, preview };
   };
 
@@ -122,7 +124,7 @@ export function createLayoutUrlSync(
     const nextPairs = decodePairs(nextState.segments);
     const affectedSplit = getUrlSyncAffectedSplit(
       splitManager,
-      decodedLayout().pairs,
+      decodedLayout().contents,
       nextPairs
     );
     const replace =
@@ -148,9 +150,9 @@ export function createLayoutUrlSync(
     environment.navigate(nextUrl, { replace });
   };
 
-  // Preview operations can update splits and their relationship in separate
+  // Preview operations can update splits and their Preview Pair in separate
   // reactive writes. Coalesce those writes so the URL never observes an
-  // intermediate bare placeholder or severed relationship.
+  // intermediate bare placeholder or severed Preview Pair.
   const scheduleManagerToUrlSync = () => {
     if (managerSyncQueued) return;
     managerSyncQueued = true;
@@ -179,11 +181,11 @@ export function createLayoutUrlSync(
         reconcilingFromUrl = true;
         try {
           batch(() => {
-            for (const link of splitManager.viewerLinks()) {
-              splitManager.unlinkPreviewMode(link.controllerId);
+            for (const previewPair of splitManager.previewPairs()) {
+              splitManager.unlinkPreviewPair(previewPair.controllerId);
             }
-            splitManager.reconcile(nextLayout.pairs);
-            restorePreviewLinks(splitManager, nextLayout.links);
+            splitManager.reconcile(nextLayout.contents);
+            restorePreviewPairs(splitManager, nextLayout.previewPairs);
           });
         } finally {
           reconcilingFromUrl = false;

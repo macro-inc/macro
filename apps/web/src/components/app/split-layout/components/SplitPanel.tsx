@@ -101,7 +101,7 @@ export function SplitPanel(props: SplitPanelProps) {
   createEffect(
     on([panelRef], () => {
       if (isMobile()) return;
-      // Only the active split may claim focus on mount. A preview viewer split
+      // Only the active split may claim focus on mount. A Preview Pair's Viewer
       // is created with activate:false while its controller stays active, and
       // must not steal the keyboard from it.
       if (!props.active) return;
@@ -166,9 +166,9 @@ export function SplitPanel(props: SplitPanelProps) {
     globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
 
   /**
-   * This split is a preview viewer sitting immediately right of its
-   * controller: the pane slides left across the gutter so it sits flush
-   * against the controller, reading as tucked behind it.
+   * This split is a Viewer sitting immediately right of its Controller: the
+   * pane slides left across the gutter so it sits flush against the
+   * Controller, reading as tucked behind it.
    */
   const tuckedBehindController = createMemo(() => {
     return (
@@ -192,10 +192,10 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   /**
-   * Both members of a tucked preview pair share the active edge color when
+   * Both members of a tucked Preview Pair share the active edge color when
    * either member is active. The active member stays solid; its partner is
-   * dashed so focus ownership remains visible without breaking the pair's
-   * shared visual treatment.
+   * dashed so focus ownership remains visible without breaking the Preview
+   * Pair's shared visual treatment.
    */
   const previewPairFocusStyling = createMemo(() => {
     const manager = globalSplitManager();
@@ -303,12 +303,12 @@ export function SplitPanel(props: SplitPanelProps) {
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
                   'border-solid!': previewPairFocusStyling() && props.active,
                   'border-dashed!': previewPairFocusStyling() && !props.active,
-                  // Drawer look: the preview split meets its controller with
+                  // Drawer look: the Viewer meets its Controller with
                   // a square, borderless left edge (the ! beats Surface's
                   // inline border shorthand)...
                   'rounded-l-none border-l-0!': tuckedBehindController(),
                   // ...and the controller squares and removes its right edge,
-                  // leaving no border between the paired panels.
+                  // leaving no border between the Preview Pair's panels.
                   'rounded-r-none border-r-0!': hasTuckedViewer(),
                 }
               )}
