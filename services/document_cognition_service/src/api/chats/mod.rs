@@ -14,7 +14,7 @@ use chat::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_r
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use tower::ServiceBuilder;
 
 /// Requires an authenticated acting user before the request proceeds.
@@ -25,7 +25,7 @@ use tower::ServiceBuilder;
 /// pre-existing ordering where missing/invalid credentials get a 401 before
 /// `ensure_chat_exists` performs its lookup (and 404s).
 async fn require_authenticated_user(
-    _user: MacroAuthorizationExtractor<DcsAuthorizationService>,
+    _user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     req: Request,
     next: Next,
 ) -> Response {
