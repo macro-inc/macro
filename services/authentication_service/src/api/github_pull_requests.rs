@@ -9,7 +9,7 @@ use github::domain::{
     models::{EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse, GithubError},
     ports::GithubLinkService,
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -64,10 +64,10 @@ pub fn router() -> Router<ApiContext> {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %crate::api::required_user(&authorization.authorization).macro_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     extract::Json(request): extract::Json<EnrichGithubPullRequestsProxyRequest>,
 ) -> Result<Json<EnrichGithubPullRequestsResponse>, EnrichGithubPullRequestsProxyError> {
     tracing::info!("enrich_github_pull_requests");
@@ -75,7 +75,7 @@ pub async fn handler(
     let pull_requests = ctx
         .github_link_service
         .enrich_pull_requests(
-            &crate::api::required_user(&authorization.authorization).macro_user_id,
+            &authorization.authorization.user.macro_user_id,
             request.pull_requests,
         )
         .await?;

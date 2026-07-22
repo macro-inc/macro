@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use fusionauth::error::FusionAuthClientError;
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -25,7 +25,7 @@ pub struct DeleteInboxGrantUserQueryParams {
 #[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Query(DeleteInboxGrantUserQueryParams { fusionauth_user_id }): extract::Query<
         DeleteInboxGrantUserQueryParams,
     >,

@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -68,15 +68,13 @@ impl IntoResponse for GetUserOrganizationResponse {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=?crate::api::required_user(&user_context.authorization).user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=?user_context.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroAuthorizationExtractor<AuthorizationService>,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<GetUserOrganizationResponse, UserOrganizationError> {
     let organization_id = if let Some(organization_id) =
-        crate::api::required_user(&user_context.authorization)
-            .user_context
-            .organization_id
+        user_context.authorization.user.user_context.organization_id
     {
         organization_id
     } else {

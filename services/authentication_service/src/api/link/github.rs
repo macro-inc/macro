@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use model::response::{EmptyResponse, ErrorResponse};
 use serde_utils::urlencode::UrlEncoded;
@@ -118,16 +118,14 @@ impl IntoResponse for GithubLinkStatusError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%crate::api::required_user(&authorization.authorization).macro_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.macro_user_id), err)]
 pub async fn check_github_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<GithubLinkStatusResponse>, GithubLinkStatusError> {
     ctx.github_link_service
-        .check_user_link_token(
-            &crate::api::required_user(&authorization.authorization).macro_user_id,
-        )
+        .check_user_link_token(&authorization.authorization.user.macro_user_id)
         .await?;
 
     Ok(Json(GithubLinkStatusResponse {
@@ -158,12 +156,12 @@ pub(crate) struct InitGithubLinkQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%crate::api::required_user(&authorization.authorization).user_context.user_id, fusion_user_id=%crate::api::required_user(&authorization.authorization).user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.user_context.user_id, fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id), err)]
 pub async fn init_github_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGithubLinkQueryParams>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     let Query(InitGithubLinkQueryParams { original_url }) = query;
     // TODO: this should probably be a middleware or extractor
@@ -171,9 +169,7 @@ pub async fn init_github_link_handler(
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &crate::api::required_user(&authorization.authorization)
-                .user_context
-                .fusion_user_id,
+            &authorization.authorization.user.user_context.fusion_user_id,
         )
         .await?;
 
@@ -184,9 +180,7 @@ pub async fn init_github_link_handler(
     // Create in-progress link
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
         &ctx.db,
-        &crate::api::required_user(&authorization.authorization)
-            .user_context
-            .fusion_user_id,
+        &authorization.authorization.user.user_context.fusion_user_id,
     )
     .await?;
 
@@ -260,14 +254,14 @@ impl IntoResponse for DeleteGithubLinkError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%crate::api::required_user(&authorization.authorization).macro_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.macro_user_id), err)]
 pub async fn delete_github_link_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<EmptyResponse>, DeleteGithubLinkError> {
     ctx.github_link_service
-        .delete_user_link(&crate::api::required_user(&authorization.authorization).macro_user_id)
+        .delete_user_link(&authorization.authorization.user.macro_user_id)
         .await?;
 
     Ok(Json(EmptyResponse::default()))
