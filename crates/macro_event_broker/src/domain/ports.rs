@@ -66,10 +66,10 @@ impl<T, M> MessageWrapper<T, M> {
     }
 }
 
-/// A collection of [`MacroEvent`] types that can decode a broker message by topic.
+/// A collection of [`MacroEvent`] types that can decode a broker message.
 pub trait MacroEventCollection: Sized {
-    /// Decodes an event using its broker topic, key, and payload.
-    fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError>;
+    /// Decodes an event from the supplied broker message.
+    fn decode<T: MessageParts>(message: &T) -> Result<Self, EventBrokerError>;
 }
 
 /// Declares the [`MacroEvent`] types accepted by a consumer.
@@ -89,21 +89,22 @@ macro_rules! declare_topics {
         }
 
         impl $crate::MacroEventCollection for DeclaredMacroEvent {
-            fn decode(
-                topic: &str,
-                key: &str,
-                payload: &[u8],
+            fn decode<T: $crate::MessageParts>(
+                message: &T,
             ) -> Result<Self, $crate::EventBrokerError> {
                 $(
-                    if topic == $crate::Topic::as_str(
+                    if message.topic() == $crate::Topic::as_str(
                         &<<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as Default>::default(),
                     ) {
-                        return <$event as $crate::MacroEvent>::decode(key, payload)
-                            .map(DeclaredMacroEvent::$event);
+                        return <$event as $crate::MacroEvent>::decode(
+                            message.key(),
+                            message.payload(),
+                        )
+                        .map(DeclaredMacroEvent::$event);
                     }
                 )+
 
-                Err($crate::EventBrokerError::UnknownTopic(topic.to_owned()))
+                Err($crate::EventBrokerError::UnknownTopic(message.topic().to_owned()))
             }
         }
     };
@@ -112,7 +113,7 @@ macro_rules! declare_topics {
 impl<T: MessageParts, M: MacroEventCollection> MessageWrapper<T, M> {
     /// Decodes the message into one of the declared event types.
     pub fn decode_payload(&self) -> Result<M, EventBrokerError> {
-        M::decode(self.inner.topic(), self.inner.key(), self.inner.payload())
+        M::decode(&self.inner)
     }
 }
 

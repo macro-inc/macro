@@ -5,7 +5,7 @@ use super::{MessageParts, MessageWrapper};
 use crate::{Event, EventBrokerError, MacroEvent, Topic, TopicEvent};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ExampleTopicEvent;
+pub struct ExampleTopicEvent;
 
 impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
@@ -15,7 +15,7 @@ impl TopicEvent for ExampleTopicEvent {
     }
 }
 
-struct ExampleMacroEvent {
+pub struct ExampleMacroEvent {
     key: String,
     event: Event<ExampleTopicEvent>,
 }
@@ -37,7 +37,7 @@ impl MacroEvent for ExampleMacroEvent {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct DocumentsTopicEvent;
+pub struct DocumentsTopicEvent;
 
 impl TopicEvent for DocumentsTopicEvent {
     type Topic = MacroDocumentsTopic;
@@ -47,7 +47,7 @@ impl TopicEvent for DocumentsTopicEvent {
     }
 }
 
-struct DocumentsMacroEvent {
+pub struct DocumentsMacroEvent {
     key: String,
     event: Event<DocumentsTopicEvent>,
 }
