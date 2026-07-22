@@ -7,7 +7,7 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -89,17 +89,11 @@ where
 )]
 pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Response {
-    let user = user
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = user.authorization.user;
 
-    match service
-        .get_or_generate_memory(user.macro_user_id.clone())
-        .await
-    {
+    match service.get_or_generate_memory(user.macro_user_id).await {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
