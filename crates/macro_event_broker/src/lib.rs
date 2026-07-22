@@ -1,8 +1,7 @@
 #![deny(missing_docs)]
 //! Event broker that publishes events to Kafka via a ports-and-adapters design.
 //!
-//! The [`domain`] layer defines typed event envelopes, direct
-//! [`TopicMessage`](domain::models::TopicMessage) contracts, per-topic
+//! The [`domain`] layer defines typed event envelopes, per-topic
 //! [`TopicEvent`](domain::models::TopicEvent) enums, the
 //! [`MacroEvent`](domain::models::MacroEvent) event abstraction, the inbound
 //! [`MacroEventBroker`](domain::ports::MacroEventBroker) API, the outbound
@@ -14,14 +13,14 @@
 /// Domain layer: models, ports, and service.
 pub mod domain;
 
-pub use domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent, TopicMessage};
+pub use domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
 pub use macro_event_topics::{
     MacroChannelsTopic, MacroDocumentsTopic, MacroEmailTopic, MacroExampleTopic,
     MacroProjectsTopic, Topic,
 };
 
 #[cfg(feature = "ports")]
-pub use domain::ports::{EventPublisher, MacroEventBroker, TopicMessagePublisher};
+pub use domain::ports::{EventPublisher, MacroEventBroker};
 #[cfg(feature = "ports")]
 pub use domain::service::{MacroEventBrokerService, NoopMacroEventBroker};
 #[cfg(feature = "kafka")]

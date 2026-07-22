@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use macro_event_broker::MacroEvent as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::{document::SoupDocument, item::SoupItem};
 use uuid::Uuid;
@@ -37,18 +38,25 @@ fn message() -> SoupRealtimeMessage {
     )
 }
 
+fn encoded_event() -> Vec<u8> {
+    let event = SoupMacroEvent::item_updated(message());
+    serde_json::to_vec(event.event()).expect("serializable event")
+}
+
 #[test]
-fn assigns_only_the_soup_topic() {
+fn assigns_only_the_typed_soup_topic() {
     assert_eq!(assigned_topics(), ["macro.soup"]);
 }
 
 #[test]
-fn decodes_current_schema_message() {
-    let payload = serde_json::to_vec(&message()).expect("serializable message");
+fn decodes_current_typed_event() {
+    let decoded = decode_message(
+        "macro.soup",
+        "macro|recipient@example.com",
+        &encoded_event(),
+    )
+    .expect("event decodes");
 
-    let decoded = decode_message("macro.soup", &payload).expect("message decodes");
-
-    assert_eq!(decoded.schema_version, SoupRealtimeMessage::SCHEMA_VERSION);
     assert_eq!(decoded.user_id.as_ref(), "macro|recipient@example.com");
     match decoded.item {
         SoupItem::Document(document) => assert_eq!(document.name, "Realtime document"),
@@ -58,24 +66,33 @@ fn decodes_current_schema_message() {
 
 #[test]
 fn rejects_unsupported_schema_version() {
-    let mut json = serde_json::to_value(message()).expect("serializable message");
-    json["schema_version"] = serde_json::json!(SoupRealtimeMessage::SCHEMA_VERSION + 1);
+    let mut json: serde_json::Value =
+        serde_json::from_slice(&encoded_event()).expect("event is JSON");
+    json["schema_version"] = serde_json::json!(2);
     let payload = serde_json::to_vec(&json).expect("serializable JSON");
 
-    decode_message("macro.soup", &payload).expect_err("unsupported schema is rejected");
+    decode_message("macro.soup", "macro|recipient@example.com", &payload)
+        .expect_err("unsupported schema is rejected");
 }
 
 #[test]
 fn rejects_malformed_payload() {
-    decode_message("macro.soup", b"not json").expect_err("malformed payload is rejected");
+    decode_message("macro.soup", "macro|recipient@example.com", b"not json")
+        .expect_err("malformed payload is rejected");
 }
 
 #[test]
 fn rejects_payload_from_a_different_topic() {
-    let payload = serde_json::to_vec(&message()).expect("serializable message");
+    decode_message(
+        "macro.documents",
+        "macro|recipient@example.com",
+        &encoded_event(),
+    )
+    .expect_err("different topic is rejected");
+}
 
-    assert!(matches!(
-        decode_message("macro.documents", &payload),
-        Err(EventBrokerError::UnknownTopic(topic)) if topic == "macro.documents"
-    ));
+#[test]
+fn rejects_key_that_does_not_match_recipient() {
+    decode_message("macro.soup", "macro|other@example.com", &encoded_event())
+        .expect_err("mismatched recipient key is rejected");
 }

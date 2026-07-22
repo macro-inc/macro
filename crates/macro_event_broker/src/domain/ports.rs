@@ -4,7 +4,7 @@ use std::future::Future;
 
 use macro_event_topics::Topic;
 
-use crate::domain::models::{EventBrokerError, MacroEvent, TopicMessage};
+use crate::domain::models::{EventBrokerError, MacroEvent};
 
 /// Inbound port: the public API for sending events through the broker.
 ///
@@ -26,8 +26,7 @@ pub trait MacroEventBroker: Send + Sync + 'static {
 /// Outbound port: the boundary to the underlying message broker (e.g. Kafka).
 ///
 /// Kept byte-oriented so payload serialization stays the service's concern and the
-/// port is trivial to mock or stub in tests. Application publishers should use
-/// [`TopicMessagePublisher`] when publishing a [`TopicMessage`].
+/// port is trivial to mock or stub in tests.
 pub trait EventPublisher: Send + Sync + 'static {
     /// Publish a raw `payload` to `topic`, keyed by `key`.
     fn publish<T: Topic>(
@@ -37,20 +36,3 @@ pub trait EventPublisher: Send + Sync + 'static {
         payload: &[u8],
     ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;
 }
-
-/// Typed publication extension for byte-oriented [`EventPublisher`] adapters.
-pub trait TopicMessagePublisher: EventPublisher {
-    /// Validate, serialize, and publish a message to its associated topic.
-    fn publish_message<M: TopicMessage>(
-        &self,
-        message: &M,
-    ) -> impl Future<Output = Result<(), EventBrokerError>> + Send {
-        async move {
-            let payload = message.encode()?;
-            self.publish(M::Topic::default(), message.key(), &payload)
-                .await
-        }
-    }
-}
-
-impl<P: EventPublisher> TopicMessagePublisher for P {}

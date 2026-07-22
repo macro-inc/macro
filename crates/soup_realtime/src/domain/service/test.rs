@@ -181,7 +181,7 @@ async fn zero_users_skips_reads_and_publications() {
 }
 
 #[tokio::test]
-async fn one_user_receives_one_full_versioned_message() {
+async fn one_user_receives_one_full_message() {
     let recipient = user("one");
     let viewed_at = Some(timestamp(3));
     let responses = HashMap::from([item_response(
@@ -199,7 +199,6 @@ async fn one_user_receives_one_full_versioned_message() {
     let mut messages = harness.messages.lock().expect("messages lock");
     let message = messages.pop().expect("one message");
     assert!(messages.is_empty());
-    assert_eq!(message.schema_version, 1);
     assert_eq!(message.user_id, recipient);
     match message.item {
         SoupItem::Document(document) => {

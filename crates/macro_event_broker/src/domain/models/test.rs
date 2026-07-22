@@ -1,4 +1,4 @@
-use macro_event_topics::{MacroDocumentsTopic, MacroExampleTopic, Topic};
+use macro_event_topics::{MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
@@ -23,32 +23,6 @@ impl TopicEvent for ExampleTopicEvent {
 
     fn schema_version(&self) -> u8 {
         1
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ExampleTopicMessage {
-    schema_version: u8,
-    key: String,
-    value: String,
-}
-
-impl TopicMessage for ExampleTopicMessage {
-    type Topic = MacroExampleTopic;
-
-    fn key(&self) -> &str {
-        &self.key
-    }
-
-    fn validate(&self) -> Result<(), String> {
-        if self.schema_version == 1 {
-            Ok(())
-        } else {
-            Err(format!(
-                "unsupported schema version {}",
-                self.schema_version
-            ))
-        }
     }
 }
 
@@ -106,57 +80,6 @@ fn example_event() -> Event<ExampleTopicEvent> {
             count: 7,
         }),
     )
-}
-
-#[test]
-fn topic_message_round_trips_through_its_associated_topic() {
-    let message = ExampleTopicMessage {
-        schema_version: 1,
-        key: "message-key".to_string(),
-        value: "hello".to_string(),
-    };
-
-    let payload = message.encode().expect("message encodes");
-    let decoded = ExampleTopicMessage::decode(MacroExampleTopic.as_str(), &payload)
-        .expect("associated topic decodes");
-
-    assert_eq!(decoded, message);
-    assert_eq!(decoded.key(), "message-key");
-}
-
-#[test]
-fn topic_message_rejects_a_different_topic() {
-    let message = ExampleTopicMessage {
-        schema_version: 1,
-        key: "message-key".to_string(),
-        value: "hello".to_string(),
-    };
-    let payload = message.encode().expect("message encodes");
-
-    assert!(matches!(
-        ExampleTopicMessage::decode(MacroDocumentsTopic.as_str(), &payload),
-        Err(EventBrokerError::UnknownTopic(topic)) if topic == MacroDocumentsTopic.as_str()
-    ));
-}
-
-#[test]
-fn topic_message_validates_on_encode_and_decode() {
-    let invalid = ExampleTopicMessage {
-        schema_version: 2,
-        key: "message-key".to_string(),
-        value: "hello".to_string(),
-    };
-
-    assert!(matches!(
-        invalid.encode(),
-        Err(EventBrokerError::InvalidMessage { topic, .. }) if topic == MacroExampleTopic.as_str()
-    ));
-
-    let payload = serde_json::to_vec(&invalid).expect("raw message serializes");
-    assert!(matches!(
-        ExampleTopicMessage::decode(MacroExampleTopic.as_str(), &payload),
-        Err(EventBrokerError::InvalidMessage { topic, .. }) if topic == MacroExampleTopic.as_str()
-    ));
 }
 
 #[test]

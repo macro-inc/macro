@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use macro_event_broker::{EventBrokerError, Topic};
+use macro_event_broker::{
+    EventBrokerError, EventPublisher, MacroEvent, MacroEventBrokerService, Topic,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::{document::SoupDocument, item::SoupItem};
 use uuid::Uuid;
@@ -76,12 +78,13 @@ fn message() -> SoupRealtimeMessage {
 }
 
 #[tokio::test]
-async fn publishes_user_keyed_full_message_to_realtime_topic() {
+async fn publishes_typed_recipient_keyed_event_to_soup_topic() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let adapter = KafkaSoupRealtimePublisher::new(RecordingPublisher {
+    let broker = MacroEventBrokerService::new(RecordingPublisher {
         records: records.clone(),
         fail: false,
     });
+    let adapter = KafkaSoupRealtimePublisher::new(broker);
 
     adapter.publish(message()).await.expect("publish succeeds");
 
@@ -92,13 +95,14 @@ async fn publishes_user_keyed_full_message_to_realtime_topic() {
     assert_eq!(record.key, "macro|recipient@example.com");
 
     let json: serde_json::Value = serde_json::from_slice(&record.payload).expect("payload is JSON");
+    assert!(json["event_id"].is_string());
     assert_eq!(json["schema_version"], 1);
-    assert_eq!(json["user_id"], "macro|recipient@example.com");
-    assert!(json.get("event_id").is_none());
+    assert_eq!(json["event_type"], "soup.item.updated");
+    assert_eq!(json["metadata"]["user_id"], "macro|recipient@example.com");
 
-    let decoded: SoupRealtimeMessage =
-        serde_json::from_slice(&record.payload).expect("payload round-trips");
-    assert_eq!(decoded.schema_version, 1);
+    let decoded = SoupMacroEvent::decode(record.key, &record.payload).expect("event round-trips");
+    assert_eq!(decoded.event().schema_version, 1);
+    let decoded = decoded.into_message();
     assert_eq!(decoded.user_id.as_ref(), "macro|recipient@example.com");
     match decoded.item {
         SoupItem::Document(document) => {
@@ -111,29 +115,12 @@ async fn publishes_user_keyed_full_message_to_realtime_topic() {
 }
 
 #[tokio::test]
-async fn rejects_invalid_typed_message_before_publication() {
-    let records = Arc::new(Mutex::new(Vec::new()));
-    let adapter = KafkaSoupRealtimePublisher::new(RecordingPublisher {
-        records: records.clone(),
-        fail: false,
-    });
-    let mut message = message();
-    message.schema_version = SoupRealtimeMessage::SCHEMA_VERSION + 1;
-
-    adapter
-        .publish(message)
-        .await
-        .expect_err("invalid typed message is rejected");
-
-    assert!(records.lock().expect("records lock").is_empty());
-}
-
-#[tokio::test]
-async fn propagates_delivery_failures() {
-    let adapter = KafkaSoupRealtimePublisher::new(RecordingPublisher {
+async fn propagates_delivery_failures_from_event_broker_service() {
+    let broker = MacroEventBrokerService::new(RecordingPublisher {
         records: Arc::new(Mutex::new(Vec::new())),
         fail: true,
     });
+    let adapter = KafkaSoupRealtimePublisher::new(broker);
 
     adapter
         .publish(message())
