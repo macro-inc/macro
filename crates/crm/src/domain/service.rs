@@ -216,6 +216,22 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Set the team-scoped display-name override for the company
+    /// addressed by `access` (`crm_companies.custom_name`, which every
+    /// read path COALESCEs over the global directory name). Any team
+    /// member who can see the company may rename it — the same access
+    /// model as [`CrmService::create_contact`]; the receipt's role
+    /// decides whether a hidden company is reachable. The name is
+    /// validated like the creation flows (non-blank, within a sane
+    /// length; [`CrmError::InvalidRequest`] otherwise) and is never
+    /// written to the global `crm_domain_directory`. See
+    /// [`crate::domain::companies_repo::CompaniesRepository::set_company_custom_name`].
+    fn set_company_name(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+        name: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
     /// Toggle the `hidden` flag on the contact addressed by `access`.
     /// Hiding is a display-only opt-out and does not affect
     /// populate/depopulate.
@@ -715,6 +731,20 @@ where
     }
 
     #[tracing::instrument(skip(self, access), err)]
+    async fn set_company_name(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+        name: &str,
+    ) -> Result<(), CrmError> {
+        let name = validate_display_name(name)?;
+        let team_id = access.team_id();
+        let company_id = access.company_id()?;
+        self.companies_repository
+            .set_company_custom_name(&team_id, &company_id, name, access.include_hidden())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
     async fn set_contact_hidden(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
@@ -1025,6 +1055,14 @@ impl CrmService for NoOpCrmService {
         _hidden: bool,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_company_hidden")
+    }
+
+    async fn set_company_name(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _name: &str,
+    ) -> Result<(), CrmError> {
+        unimplemented!("NoOpCrmService.set_company_name")
     }
 
     async fn set_contact_hidden(

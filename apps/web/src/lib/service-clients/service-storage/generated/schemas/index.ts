@@ -828,6 +828,7 @@ export * from './saveDocumentResponse';
 export * from './saveDocumentResponseData';
 export * from './saveDocumentResponseDataPresignedUrl';
 export * from './setCompanyHiddenRequest';
+export * from './setCompanyNameRequest';
 export * from './setContactHiddenRequest';
 export * from './setDocumentTeamShareRequest';
 export * from './setEmailSyncRequest';

@@ -4678,6 +4678,80 @@
         }
       }
     },
+    "/crm/companies/{company_id}/name": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_company_name"],
+        "summary": "Rename a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only). The name is a team-scoped override\n(`custom_name`) and never touches the global domain directory.",
+        "operationId": "set_crm_company_name",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to rename",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCompanyNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
@@ -18469,6 +18543,17 @@
           "hidden": {
             "type": "boolean",
             "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings, disables `email_sync`, and\nsoft-hides every contact under it (`crm_contacts.hidden = true`).\nContact rows and `crm_contact_sources` are preserved across the\ncycle, so un-hide is a true reverse. Setting to `false`\nun-hides the company and soft-restores its contacts;\n`email_sync` is left untouched and the team must re-enable it\nexplicitly."
+          }
+        }
+      },
+      "SetCompanyNameRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /companies/{company_id}/name`.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name for the company. Stored on the team-scoped\n`crm_companies.custom_name` override, which read paths COALESCE\nover the global directory name — the shared directory is never\nmodified. Must be non-blank (400 otherwise)."
           }
         }
       },

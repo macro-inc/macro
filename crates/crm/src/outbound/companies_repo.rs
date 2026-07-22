@@ -1146,6 +1146,42 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn set_company_custom_name(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        name: &str,
+        include_hidden: bool,
+    ) -> Result<(), CrmError> {
+        // Scoping on id AND team_id rejects cross-team callers as
+        // NotFound; the hidden guard keeps member (include_hidden =
+        // false) callers off hidden companies, matching the read paths.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_companies
+            SET custom_name = $3
+            WHERE id = $1
+              AND team_id = $2
+              AND (NOT hidden OR $4)
+            RETURNING id
+            "#,
+            company_id,
+            team_id,
+            name,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            return Err(CrmError::CompanyNotFoundForTeam);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn set_contact_hidden(
         &self,
         team_id: &uuid::Uuid,

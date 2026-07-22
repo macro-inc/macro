@@ -6,6 +6,10 @@ pub mod set_email_sync;
 /// Toggle the `hidden` flag on a `crm_companies` row.
 pub mod set_company_hidden;
 
+/// Set the team-scoped display-name override (`custom_name`) on a
+/// `crm_companies` row.
+pub mod set_company_name;
+
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
@@ -120,6 +124,10 @@ where
         .route(
             "/companies/{company_id}/hidden",
             put(set_company_hidden::handler::<C, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/name",
+            put(set_company_name::handler::<C, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}",
