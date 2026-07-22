@@ -10,6 +10,7 @@ consumer = [
   "dep:rdkafka",
   "dep:tokio",
   "ingestion",
+  "macro_event_broker/outbound",
 ]
 default = ["consumer", "inbound", "outbound", "ports"]
 inbound = [

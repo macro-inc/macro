@@ -1,7 +1,7 @@
 //! Kafka consumer that feeds broker events into webhook ingestion.
 //!
-//! Subscribes to [`MacroDocumentsTopic`], [`MacroChannelsTopic`], and
-//! [`MacroWebhooksTopic`] and hands every decoded event envelope to a
+//! Subscribes to [`DocumentMacroEvent`], [`ChannelMacroEvent`], and
+//! [`WebhookMacroEvent`] topics and hands every decoded event envelope to a
 //! [`WebhookEventIngestionService`].
 //!
 //! Delivery is at-least-once: an event's offset is committed only after the
@@ -21,13 +21,14 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::{events::WebhookTopicEvent, ingestion::WebhookEventIngestionService};
+use crate::domain::{events::WebhookMacroEvent, ingestion::WebhookEventIngestionService};
 use anyhow::Context as _;
-use channels::domain::broker_events::ChannelTopicEvent;
-use documents::domain::events::DocumentTopicEvent;
+use channels::domain::broker_events::ChannelMacroEvent;
+use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_event_broker::{Event, EventBrokerError, Topic as _};
-use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroWebhooksTopic};
+use macro_event_broker::{
+    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
+};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use std::future::Future;
@@ -41,7 +42,11 @@ impl GroupName for WebhookEventIngestionConsumerGroup {
     const GROUP_NAME: &'static str = "webhook-event-ingestion";
 }
 
-type WebhookKafkaConsumer = KafkaEventConsumer<WebhookEventIngestionConsumerGroup>;
+type WebhookKafkaAdapter =
+    KafkaConsumerAdapter<WebhookEventIngestionConsumerGroup, DeclaredMacroEvent>;
+type WebhookKafkaConsumer = MacroEventConsumerService<DeclaredMacroEvent, WebhookKafkaAdapter>;
+
+macro_event_broker::declare_topics!(DocumentMacroEvent, ChannelMacroEvent, WebhookMacroEvent);
 
 /// Maximum in-process ingestion attempts per event before the consumer bails
 /// out and lets a restart redeliver from the last committed offset.
@@ -53,49 +58,9 @@ const MAX_INGEST_ATTEMPTS: u32 = 5;
 /// consumer from its group.
 const INGEST_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
-fn subscribed_topics() -> [&'static str; 3] {
-    [
-        MacroDocumentsTopic::TOPIC_STR,
-        MacroChannelsTopic::TOPIC_STR,
-        MacroWebhooksTopic::TOPIC_STR,
-    ]
-}
-
-/// One decoded event envelope from a topic this consumer subscribes to.
-///
-/// The Kafka message key is not carried: every event's metadata already
-/// contains the entity ids the ingestion service needs.
-#[derive(Debug)]
-pub enum WebhookConsumerEvent {
-    /// Event received on [`MacroDocumentsTopic`].
-    Documents(Event<DocumentTopicEvent>),
-    /// Event received on [`MacroChannelsTopic`].
-    Channels(Event<ChannelTopicEvent>),
-    /// Event received on [`MacroWebhooksTopic`].
-    Webhooks(Event<WebhookTopicEvent>),
-}
-
-impl WebhookConsumerEvent {
-    /// Decode one Kafka message into this consumer's event enum.
-    pub fn decode(topic: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
-        match topic {
-            topic if topic == MacroDocumentsTopic::TOPIC_STR => {
-                Ok(Self::Documents(Event::decode(payload)?))
-            }
-            topic if topic == MacroChannelsTopic::TOPIC_STR => {
-                Ok(Self::Channels(Event::decode(payload)?))
-            }
-            topic if topic == MacroWebhooksTopic::TOPIC_STR => {
-                Ok(Self::Webhooks(Event::decode(payload)?))
-            }
-            unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
-        }
-    }
-}
-
 /// Commit `message`'s offset, logging the outcome.
 fn commit_logged(consumer: &WebhookKafkaConsumer, message: &BorrowedMessage<'_>) {
-    match consumer.commit_message(message, CommitMode::Async) {
+    match consumer.inner().commit_message(message, CommitMode::Async) {
         Ok(()) => tracing::trace!(
             partition = message.partition(),
             offset = message.offset(),
@@ -118,7 +83,7 @@ fn commit_logged(consumer: &WebhookKafkaConsumer, message: &BorrowedMessage<'_>)
 /// the caller must exit without committing so the event is redelivered.
 async fn ingest_with_retry<S: WebhookEventIngestionService>(
     service: &S,
-    event: &WebhookConsumerEvent,
+    event: &DeclaredMacroEvent,
     partition: i32,
     offset: i64,
 ) -> anyhow::Result<()> {
@@ -127,14 +92,14 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
     loop {
         tracing::trace!(partition, offset, attempt, "ingesting broker event");
         let result = match event {
-            WebhookConsumerEvent::Documents(event) => {
-                service.ingest_document_event(event.clone()).await
+            DeclaredMacroEvent::DocumentMacroEvent(event) => {
+                service.ingest_document_event(event.event().clone()).await
             }
-            WebhookConsumerEvent::Channels(event) => {
-                service.ingest_channel_event(event.clone()).await
+            DeclaredMacroEvent::ChannelMacroEvent(event) => {
+                service.ingest_channel_event(event.event().clone()).await
             }
-            WebhookConsumerEvent::Webhooks(event) => {
-                service.ingest_webhook_event(event.clone()).await
+            DeclaredMacroEvent::WebhookMacroEvent(event) => {
+                service.ingest_webhook_event(event.event().clone()).await
             }
         };
         match result {
@@ -179,9 +144,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
 
 /// Run the webhook event consumer until `shutdown` resolves.
 ///
-/// Connects to `brokers` and subscribes to [`MacroDocumentsTopic`],
-/// [`MacroChannelsTopic`], and [`MacroWebhooksTopic`] under the
-/// `webhook-event-ingestion` consumer group. Every decoded event is fed to
+/// Connects to `brokers` and subscribes to the topics declared by
+/// [`DocumentMacroEvent`], [`ChannelMacroEvent`], and [`WebhookMacroEvent`]
+/// under the `webhook-event-ingestion` consumer group. Every decoded event is fed to
 /// `service`, committing each offset only
 /// after ingestion succeeds (see `ingest_with_retry` for the retry policy).
 /// Returns an error when the consumer cannot be created or subscribed, or when
@@ -197,12 +162,15 @@ pub async fn run_webhook_event_consumer<S>(
 where
     S: WebhookEventIngestionService,
 {
-    let consumer = WebhookKafkaConsumer::from_env(brokers)?;
-    consumer
-        .subscribe(&subscribed_topics())
-        .context("failed to subscribe to webhook event topics")?;
+    let consumer = KafkaEventConsumer::<WebhookEventIngestionConsumerGroup>::from_env(brokers)?;
+    let consumer = KafkaConsumerAdapter::<WebhookEventIngestionConsumerGroup, ()>::new(consumer)
+        .subscribe::<DeclaredMacroEvent>()
+        .map_err(|error| {
+            anyhow::anyhow!("failed to subscribe to webhook event topics: {error:?}")
+        })?;
+    let consumer = WebhookKafkaConsumer::new(consumer);
     tracing::info!(
-        topics = ?subscribed_topics(),
+        topics = ?DeclaredMacroEvent::topics(),
         group = WebhookEventIngestionConsumerGroup::GROUP_NAME,
         "webhook event consumer listening"
     );
@@ -222,36 +190,19 @@ where
                         continue;
                     }
                 };
-                tracing::trace!(
-                    topic = message.topic(),
-                    partition = message.partition(),
-                    offset = message.offset(),
-                    payload_len = message.payload().map_or(0, <[u8]>::len),
-                    "received kafka message"
-                );
-
-                let Some(payload) = message.payload() else {
-                    tracing::warn!(
-                        partition = message.partition(),
-                        offset = message.offset(),
-                        "skipping message with empty payload"
-                    );
-                    commit_logged(&consumer, &message);
-                    continue;
-                };
-
-                match WebhookConsumerEvent::decode(message.topic(), payload) {
+                let kafka_message = message.inner();
+                match message.decode_payload() {
                     Ok(event) => {
                         tracing::trace!(
-                            partition = message.partition(),
-                            offset = message.offset(),
+                            partition = kafka_message.partition(),
+                            offset = kafka_message.offset(),
                             "decoded broker event"
                         );
                         ingest_with_retry(
                             &service,
                             &event,
-                            message.partition(),
-                            message.offset(),
+                            kafka_message.partition(),
+                            kafka_message.offset(),
                         )
                         .await?;
                     }
@@ -259,16 +210,16 @@ where
                     // wedging the partition on a poison message.
                     Err(e) => tracing::error!(
                         error = ?e,
-                        topic = message.topic(),
-                        partition = message.partition(),
-                        offset = message.offset(),
+                        topic = kafka_message.topic(),
+                        partition = kafka_message.partition(),
+                        offset = kafka_message.offset(),
                         "failed to decode broker event"
                     ),
                 }
 
                 // Commit only after the event was ingested or permanently
                 // rejected: at-least-once, retried across restarts.
-                commit_logged(&consumer, &message);
+                commit_logged(&consumer, kafka_message);
             }
         }
     }
