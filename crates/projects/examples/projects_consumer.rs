@@ -24,9 +24,9 @@
 //! ```
 
 use anyhow::Context as _;
+use kafka_util::{MskIamClientContext, configure_sasl_iam};
 use macro_env::Environment;
-use macro_event_broker::outbound::msk_iam::configure_sasl_iam;
-use macro_event_broker::{EventBrokerError, MacroEvent, MskIamClientContext, Topic as _};
+use macro_event_broker::{EventBrokerError, MacroEvent, Topic as _};
 use macro_event_topics::MacroProjectsTopic;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use rdkafka::ClientConfig;

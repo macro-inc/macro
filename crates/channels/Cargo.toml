@@ -120,6 +120,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }

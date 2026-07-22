@@ -28,14 +28,9 @@ pub use domain::ports::{
 pub use domain::service::{
     MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
 };
-#[cfg(feature = "kafka")]
-pub use kafka::msk_iam::MskIamClientContext;
 #[cfg(feature = "outbound")]
 pub use outbound::kafka_event_publisher::KafkaEventPublisher;
 
-/// Kafka message integration and authentication support shared by adapters.
-#[cfg(feature = "kafka")]
-pub mod kafka;
 /// Outbound adapters for the macro event broker's required ports.
 #[cfg(feature = "outbound")]
 pub mod outbound;

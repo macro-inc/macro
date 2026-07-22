@@ -6,8 +6,7 @@ version = "0.1.0"
 
 [features]
 default = ["outbound"]
-kafka = ["dep:kafka_util", "dep:rdkafka"]
-outbound = ["kafka"]
+outbound = ["dep:kafka_util", "dep:rdkafka"]
 
 [dependencies]
 kafka_util = { path = "../kafka_util", optional = true }
