@@ -979,10 +979,13 @@ async fn snapshot_upload_requires_internal_api_key() {
         .expect("request should build");
     assert_eq!(
         send_status(&router, jwt_request).await,
-        StatusCode::UNAUTHORIZED
+        StatusCode::FORBIDDEN
     );
     assert!(document_service.upload_snapshot_calls().is_empty());
-    assert!(authorization_service.calls().is_empty());
+    assert_eq!(
+        authorization_service.calls(),
+        [AuthorizationCall::Jwt(JWT_TOKEN.to_string())]
+    );
 
     let internal_request = Request::put("/snapshot-document/snapshot")
         .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
@@ -998,10 +1001,13 @@ async fn snapshot_upload_requires_internal_api_key() {
     );
     assert_eq!(
         authorization_service.calls(),
-        [AuthorizationCall::Internal {
-            provided_key: STANDARD_INTERNAL_KEY.to_string(),
-            claims: InternalIdentityClaims::default(),
-        }]
+        [
+            AuthorizationCall::Jwt(JWT_TOKEN.to_string()),
+            AuthorizationCall::Internal {
+                provided_key: STANDARD_INTERNAL_KEY.to_string(),
+                claims: InternalIdentityClaims::default(),
+            }
+        ]
     );
 }
 
