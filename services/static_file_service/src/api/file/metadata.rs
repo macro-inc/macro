@@ -5,7 +5,7 @@ use axum::extract::{Json, Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -31,7 +31,7 @@ pub struct Params {
 )]
 pub async fn handle_get_metadata(
     State(metadata_client): State<DynamodbClient>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
     metadata_client

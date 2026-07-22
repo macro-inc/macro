@@ -4,17 +4,9 @@ pub mod get_file;
 pub mod metadata;
 pub mod put_presigned_url;
 
+use crate::api::context::AppState;
 use axum::Router;
 use axum::routing::{delete, get, post, put};
-use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
-
-use crate::api::context::AppState;
-
-fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
-    authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user")
-}
 
 pub fn router() -> Router<AppState> {
     Router::new()

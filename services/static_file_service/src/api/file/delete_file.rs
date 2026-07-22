@@ -6,10 +6,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal, UserOrInternalCaller};
 use std::sync::Arc;
-
-use super::required_user;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -37,11 +35,9 @@ pub struct Params {
 pub async fn handle_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
-    let acting_user = required_user(&user.authorization);
-
     let metadata = metadata_client
         .get_metadata(file_id.as_str())
         .await
@@ -52,8 +48,8 @@ pub async fn handle_delete_file(
         .ok_or_else(|| (StatusCode::NOT_FOUND, "not found").into_response())?;
 
     // Skip owner check for internal requests
-    if !user.authorization.is_internal() && metadata.owner_id != acting_user.macro_user_id.as_ref()
-    {
+    let is_internal = user.authorization.caller == UserOrInternalCaller::Internal;
+    if !is_internal && metadata.owner_id != user.authorization.user.macro_user_id.as_ref() {
         tracing::warn!("delete requested by non-owner");
         return Err((StatusCode::FORBIDDEN, "access denied").into_response());
     }

@@ -6,13 +6,11 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal, UserOrInternalCaller};
 use model::response::ErrorResponse;
 use std::sync::Arc;
 use strum_macros::AsRefStr;
 use thiserror::Error;
-
-use super::required_user;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum BulkDeleteError {
@@ -62,11 +60,9 @@ impl IntoResponse for BulkDeleteError {
 pub async fn handle_bulk_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<BulkDeleteRequest>,
 ) -> Result<Json<BulkDeleteResponse>, BulkDeleteError> {
-    let acting_user = required_user(&user.authorization);
-
     // Validate request
     if req.file_ids.is_empty() {
         return Err(BulkDeleteError::Validation(
@@ -91,13 +87,15 @@ pub async fn handle_bulk_delete_file(
     let mut s3_keys_to_delete = Vec::new();
     let mut file_ids_to_delete = Vec::new();
 
+    let is_internal = user.authorization.caller == UserOrInternalCaller::Internal;
+
     // Process each file
     for file_id in &req.file_ids {
         match metadata_results.get(file_id) {
             Some(metadata) => {
                 // Skip owner check for internal requests
-                if !user.authorization.is_internal()
-                    && metadata.owner_id != acting_user.macro_user_id.as_ref()
+                if !is_internal
+                    && metadata.owner_id != user.authorization.user.macro_user_id.as_ref()
                 {
                     tracing::warn!(file_id = file_id, "delete requested by non-owner");
                     results.push(DeleteResult {
