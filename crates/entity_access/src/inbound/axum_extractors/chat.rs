@@ -12,8 +12,8 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
-    OptionalMacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 
 use super::{ExtractorError, RequiredPermission};
@@ -57,17 +57,19 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-                .await
-                .map_err(ExtractorError::from)?;
+            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+                parts, state,
+            )
+            .await
+            .map_err(ExtractorError::from)?;
         let is_internal_access = authorization
             .authorization
             .as_ref()
-            .is_some_and(MacroAuthorization::is_internal);
+            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
         let macro_user_id = authorization
             .authorization
             .as_ref()
-            .and_then(|authorization| authorization.acting_user())
+            .and_then(UserOrInternalServiceAuthorization::acting_user)
             .map(|user| user.macro_user_id.clone());
 
         let chat_context: Extension<ChatBasic> = parts

@@ -13,6 +13,7 @@ use axum::{
 };
 use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 
 use super::{ExtractorError, RequiredPermission};
@@ -67,13 +68,16 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization = req
-            .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
+            .extract_parts_with_state::<
+                OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
+                _,
+            >(state)
             .await
             .map_err(ExtractorError::from)?;
         let macro_user_id = authorization
             .authorization
             .as_ref()
-            .and_then(|authorization| authorization.acting_user())
+            .and_then(UserOrInternalServiceAuthorization::acting_user)
             .map(|user| user.macro_user_id.clone())
             .ok_or(ExtractorError::Unauthorized)?;
 

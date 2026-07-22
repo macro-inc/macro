@@ -22,7 +22,7 @@ use crate::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -124,16 +124,15 @@ where
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-        let authorization: MacroAuthorizationExtractor<Auth> = parts
+        let authorization: MacroAuthorizationExtractor<Auth, UserOrInternal> = parts
             .extract_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
-        let user = authorization
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user");
-        let outcome =
-            team_access_outcome::<T, Svc>(service.as_ref(), user.macro_user_id.clone()).await?;
+        let outcome = team_access_outcome::<T, Svc>(
+            service.as_ref(),
+            authorization.authorization.user.macro_user_id,
+        )
+        .await?;
 
         Ok(Self {
             entity_access_receipt: outcome.into_optional_receipt(),
@@ -169,18 +168,16 @@ where
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-        let authorization: MacroAuthorizationExtractor<Auth> = parts
+        let authorization: MacroAuthorizationExtractor<Auth, UserOrInternal> = parts
             .extract_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
-        let user = authorization
-            .authorization
-            .acting_user()
-            .expect("required authorization guarantees an acting user");
-        let entity_access_receipt =
-            team_access_outcome::<T, Svc>(service.as_ref(), user.macro_user_id.clone())
-                .await?
-                .into_required_receipt()?;
+        let entity_access_receipt = team_access_outcome::<T, Svc>(
+            service.as_ref(),
+            authorization.authorization.user.macro_user_id,
+        )
+        .await?
+        .into_required_receipt()?;
 
         Ok(Self {
             entity_access_receipt,
