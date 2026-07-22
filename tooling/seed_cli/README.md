@@ -24,6 +24,9 @@ just seed-scenario apply --file seed/scenarios/team-perms.json
 just seed-scenario matrix --file seed/scenarios/team-perms.json
 just seed-scenario status --file seed/scenarios/team-perms.json  # or no --file
 just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
+
+# Target a named `run_local --instance 2508` stack.
+just seed-scenario --instance 2508 apply --file seed/scenarios/team-perms.json
 ```
 
 - `apply` deletes the scenario's own rows first and re-seeds, so it always

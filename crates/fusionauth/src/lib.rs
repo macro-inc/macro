@@ -188,7 +188,10 @@ impl FusionAuthClient {
 /// Determines if fusionauth is local based on the url
 #[tracing::instrument(level = tracing::Level::TRACE)]
 fn is_local_fusionauth(url: &str) -> bool {
-    url.starts_with("http://fusionauth:9011") || url.starts_with("http://localhost:9011")
+    url.starts_with("http://fusionauth:")
+        || url.starts_with("http://localhost:")
+        || url.starts_with("http://127.0.0.1:")
+        || url.starts_with("http://[::1]:")
 }
 
 /// Transforms the url replacing the domain with localhost

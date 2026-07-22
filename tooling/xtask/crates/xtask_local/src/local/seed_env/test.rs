@@ -24,6 +24,17 @@ fn default_instance_reproduces_the_fixed_ports() {
         rendered.contains(r#"export FRONTEND_PORT="${FRONTEND_PORT:-3000}""#),
         "{rendered}"
     );
+    assert!(
+        rendered
+            .contains(r#"export SYNC_SERVICE_URL="${SYNC_SERVICE_URL:-http://localhost:8787}""#),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains(
+            r#"export LEXICAL_SERVICE_URL="${LEXICAL_SERVICE_URL:-http://localhost:8096}""#
+        ),
+        "{rendered}"
+    );
 }
 
 #[test]
@@ -40,6 +51,15 @@ fn named_instance_shifts_into_its_port_window() {
     assert_eq!(instance.port(Port::Postgres), base);
     assert!(instance.port(Port::FusionAuth) > base);
     assert_ne!(instance.port(Port::FusionAuth), 9011);
+    let proxy = instance.port(Port::Proxy);
+    assert!(
+        render(&instance).contains(&format!("http://localhost:{proxy}/sync")),
+        "sync-service should use the named instance proxy"
+    );
+    assert!(
+        render(&instance).contains(&format!("http://localhost:{proxy}/lexical")),
+        "lexical-service should use the named instance proxy"
+    );
 }
 
 #[test]

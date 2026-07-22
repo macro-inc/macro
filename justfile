@@ -55,12 +55,11 @@ local-e2e-seed:
 # `just seed-scenario apply --file seed/scenarios/team-perms.json`.
 # Add --force to drop and re-migrate the local database first (pristine world).
 # `just seed-scenario status` reports what's applied and re-prints login links.
-# Set INSTANCE=<name> to target a `run_local --instance <name>` stack; it
-# resolves that instance's host ports for Postgres/FusionAuth/LocalStack/frontend.
-# Defaults to the `macro` instance (unchanged from the fixed local ports).
+# Pass `--instance <name>` before the scenario subcommand to target a named
+# `run_local` stack. Omitting it targets the default `macro` instance.
 [positional-arguments]
 seed-scenario *ARGS:
-  @eval "$({{ xtask }} seed-env --instance "${INSTANCE:-macro}")" && just tooling/seed_cli/scenario "$@"
+  @{{ xtask }} seed-scenario "$@"
 
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.
