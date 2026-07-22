@@ -5,7 +5,9 @@
 
 use kafka_util::{KafkaEventProducer, KafkaProducerError};
 use macro_event_topics::Topic;
+use rdkafka::Message;
 
+use crate::MessageParts;
 use crate::domain::models::EventBrokerError;
 use crate::domain::ports::EventPublisher;
 
@@ -36,5 +38,19 @@ impl EventPublisher for KafkaEventPublisher {
             .send(topic.as_str(), key, payload)
             .await
             .map_err(|error| EventBrokerError::Publish(error.to_string()))
+    }
+}
+
+impl<T: Message> MessageParts for T {
+    fn key(&self) -> Option<&str> {
+        Message::key(self).and_then(|key| std::str::from_utf8(key).ok())
+    }
+
+    fn payload(&self) -> Option<&[u8]> {
+        Message::payload(self)
+    }
+
+    fn topic(&self) -> &str {
+        Message::topic(self)
     }
 }
