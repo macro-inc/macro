@@ -1,7 +1,5 @@
-use std::marker::PhantomData;
-
 use ::axum::{
-    extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
+    extract::FromRef,
     http::{HeaderMap, StatusCode, request::Parts},
 };
 use rootcause::Report;
@@ -10,9 +8,7 @@ use crate::{
     BotActingUserClaims, BotAuthentication, MacroAuthorizationError, MacroAuthorizationService,
 };
 
-use super::{
-    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection,
-};
+use super::{MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection};
 
 /// Header carrying a bot authentication token.
 pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
@@ -22,78 +18,6 @@ pub const BOT_FOR_MACRO_USER_ID_HEADER: &str = "x-macro-bot-for-macro-user-id";
 pub const BOT_FOR_FUSIONAUTH_USER_ID_HEADER: &str = "x-macro-bot-for-fusionauth-user-id";
 /// Header carrying the organization ID a bot claims to act for.
 pub const BOT_FOR_ORGANIZATION_ID_HEADER: &str = "x-macro-bot-for-organization-id";
-
-/// Authorizes an exclusively bot-token endpoint.
-///
-/// Use this extractor only when bot-only access is part of the endpoint's
-/// security contract. User and internal credentials are not substitutes. The
-/// extractor validates only the bot credential, ignores other credential
-/// types, and carries the validated bot principal without retaining its token.
-#[non_exhaustive]
-pub struct BotMacroAuthorizationExtractor<Svc> {
-    /// The validated bot principal.
-    pub bot: BotAuthentication,
-    _service: PhantomData<fn() -> Svc>,
-}
-
-impl<Svc> BotMacroAuthorizationExtractor<Svc> {
-    /// Return the authenticated bot responsible for this request.
-    pub fn acting_entity(&self) -> ActingEntity<'_> {
-        ActingEntity::Bot(self.bot.bot_id)
-    }
-}
-
-impl<Svc> Clone for BotMacroAuthorizationExtractor<Svc> {
-    fn clone(&self) -> Self {
-        Self {
-            bot: self.bot.clone(),
-            _service: PhantomData,
-        }
-    }
-}
-
-impl<S, Svc> FromRequestParts<S> for BotMacroAuthorizationExtractor<Svc>
-where
-    MacroAuthorizationState<Svc>: FromRef<S>,
-    Svc: MacroAuthorizationService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = MacroAuthorizationRejection;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
-            .await?
-            .ok_or_else(|| rejection("unauthorized"))?;
-
-        Ok(Self {
-            bot,
-            _service: PhantomData,
-        })
-    }
-}
-
-impl<S, Svc> OptionalFromRequestParts<S> for BotMacroAuthorizationExtractor<Svc>
-where
-    MacroAuthorizationState<Svc>: FromRef<S>,
-    Svc: MacroAuthorizationService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = MacroAuthorizationRejection;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Option<Self>, Self::Rejection> {
-        let Some(bot) = authorize_optional_bot_request::<S, Svc>(parts, state).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(Self {
-            bot,
-            _service: PhantomData,
-        }))
-    }
-}
 
 pub(super) async fn authorize_optional_bot_request<S, Svc>(
     parts: &Parts,

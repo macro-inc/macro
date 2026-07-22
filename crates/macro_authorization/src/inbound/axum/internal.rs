@@ -1,7 +1,5 @@
-use std::marker::PhantomData;
-
 use ::axum::{
-    extract::{FromRef, FromRequestParts},
+    extract::FromRef,
     http::{HeaderMap, request::Parts},
 };
 use rootcause::Report;
@@ -10,10 +8,7 @@ use crate::{
     InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
 };
 
-use super::{
-    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
-    rejection,
-};
+use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
 
 /// Header carrying the shared key for standard internal service authorization.
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -53,60 +48,6 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
         fusion_user_id_header: None,
     },
 ];
-
-/// Authorizes an exclusively internal service endpoint using an internal API key.
-///
-/// Use this extractor only for endpoints that will never accept direct user
-/// access. Do not use it merely to support internal callers:
-/// [`MacroAuthorizationExtractor`](super::MacroAuthorizationExtractor) and
-/// [`OptionalMacroAuthorizationExtractor`](super::OptionalMacroAuthorizationExtractor)
-/// already accept internal credentials automatically. This extractor does not
-/// accept user credentials as a substitute and intentionally exposes no user
-/// identity.
-///
-/// Both the standard and legacy DSS internal API key headers are accepted.
-/// Acting-user identity headers are forwarded to the authorization service so
-/// it can validate any supplied identity, but only the internal API key is
-/// required.
-#[non_exhaustive]
-pub struct InternalMacroAuthorizationExtractor<Svc> {
-    _service: PhantomData<fn() -> Svc>,
-}
-
-impl<Svc> InternalMacroAuthorizationExtractor<Svc> {
-    /// Return the internal service responsible for this request.
-    pub fn acting_entity(&self) -> ActingEntity<'_> {
-        ActingEntity::Internal
-    }
-}
-
-impl<Svc> Clone for InternalMacroAuthorizationExtractor<Svc> {
-    fn clone(&self) -> Self {
-        Self {
-            _service: PhantomData,
-        }
-    }
-}
-
-impl<S, Svc> FromRequestParts<S> for InternalMacroAuthorizationExtractor<Svc>
-where
-    MacroAuthorizationState<Svc>: FromRef<S>,
-    Svc: MacroAuthorizationService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = MacroAuthorizationRejection;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let convention =
-            internal_header_convention(&parts.headers).ok_or_else(|| rejection("unauthorized"))?;
-
-        authorize_internal_request::<S, Svc>(parts, state, convention).await?;
-
-        Ok(Self {
-            _service: PhantomData,
-        })
-    }
-}
 
 pub(super) async fn authorize_internal_request<S, Svc>(
     parts: &Parts,

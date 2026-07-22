@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use ::axum::{
     extract::{FromRef, FromRequestParts, Query},
     http::{header, request::Parts},
@@ -14,10 +12,7 @@ use serde::Deserialize;
 
 use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication};
 
-use super::{
-    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
-    rejection,
-};
+use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
 
 #[cfg(feature = "local_auth")]
 maybe_env_vars! {
@@ -29,58 +24,6 @@ maybe_env_vars! {
 #[serde(rename_all = "kebab-case")]
 struct AuthorizationQuery {
     macro_api_token: Option<String>,
-}
-
-/// Authorizes an exclusively direct-user endpoint using user credentials.
-///
-/// Use this extractor only when direct-user-only access is part of the
-/// endpoint's security contract. Bot and internal credentials are not
-/// substitutes. The extractor validates only user query, bearer, or
-/// access-token cookie credentials, ignores bot and internal credential types,
-/// and carries the authenticated user. Local-auth fallback remains available
-/// when that feature is enabled. The authorization service is resolved from
-/// Axum state.
-#[non_exhaustive]
-pub struct UserMacroAuthorizationExtractor<Svc> {
-    /// The directly authenticated user.
-    pub user: MacroUserAuthentication,
-    _service: PhantomData<fn() -> Svc>,
-}
-
-impl<Svc> UserMacroAuthorizationExtractor<Svc> {
-    /// Return the authenticated user responsible for this request.
-    pub fn acting_entity(&self) -> ActingEntity<'_> {
-        ActingEntity::User(self.user.macro_user_id.as_ref())
-    }
-}
-
-impl<Svc> Clone for UserMacroAuthorizationExtractor<Svc> {
-    fn clone(&self) -> Self {
-        Self {
-            user: self.user.clone(),
-            _service: PhantomData,
-        }
-    }
-}
-
-impl<S, Svc> FromRequestParts<S> for UserMacroAuthorizationExtractor<Svc>
-where
-    MacroAuthorizationState<Svc>: FromRef<S>,
-    Svc: MacroAuthorizationService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = MacroAuthorizationRejection;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = authorize_optional_user_request::<S, Svc>(parts, state)
-            .await?
-            .ok_or_else(|| rejection("unauthorized"))?;
-
-        Ok(Self {
-            user,
-            _service: PhantomData,
-        })
-    }
 }
 
 pub(super) fn explicit_user_credential_present(parts: &Parts) -> bool {

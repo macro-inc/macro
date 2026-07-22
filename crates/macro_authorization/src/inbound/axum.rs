@@ -5,6 +5,7 @@ mod bot;
 mod internal;
 mod macro_authorization;
 mod optional;
+mod policy;
 mod user;
 
 use std::{borrow::Cow, fmt, sync::Arc};
@@ -23,18 +24,22 @@ use crate::{MacroAuthorization, MacroUserAuthentication};
 
 pub use bot::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
-    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER, BotMacroAuthorizationExtractor,
+    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER,
 };
 #[allow(deprecated)]
 pub use internal::{
     INTERNAL_API_KEY_HEADER, INTERNAL_FUSIONAUTH_USER_ID_HEADER,
     INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
-    InternalMacroAuthorizationExtractor, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
-    LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
+    LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
 };
 pub use macro_authorization::MacroAuthorizationExtractor;
 pub use optional::OptionalMacroAuthorizationExtractor;
-pub use user::UserMacroAuthorizationExtractor;
+pub use policy::{
+    ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy, BotOnly,
+    InternalAuthorization, InternalEntity, InternalOnly, UserOnly, UserOrInternal,
+    UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
+    UserOrInternalServiceAuthorization,
+};
 
 /// The authenticated entity responsible for a request.
 ///

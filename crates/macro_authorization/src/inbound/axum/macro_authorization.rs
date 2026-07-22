@@ -8,39 +8,29 @@ use ::axum::{
 use crate::{MacroAuthorization, MacroAuthorizationService};
 
 use super::{
-    ActingEntity, MacroAuthorizationRejection, MacroAuthorizationState,
+    AuthorizationPolicy, MacroAuthorizationRejection, MacroAuthorizationState,
     bot::{BOT_TOKEN_HEADER, authorize_optional_bot_request},
     internal::{authorize_internal_request, internal_header_convention},
     rejection, status_rejection,
     user::{authorize_optional_user_request, explicit_user_credential_present},
 };
 
-/// Extracts and authorizes a required acting user.
-///
-/// This extractor supports direct user, bot, and internal service credentials.
-/// A bot or internal caller must resolve to an acting user. Supplying more than
-/// one explicit credential type is rejected; an access-token cookie is ambient
-/// and is used only when no explicit credential is present. Use a dedicated
-/// extractor instead when being user-only, bot-only, or internal-only is part
-/// of the endpoint's contract. The authorization service is resolved from Axum
-/// state.
+/// Extracts and authorizes the request principal, then narrows it with `Policy`.
 #[non_exhaustive]
-pub struct MacroAuthorizationExtractor<Svc> {
-    /// The typed authorization principal established for the request.
-    ///
-    /// Derive acting-user and internal-access information from this value.
-    pub authorization: MacroAuthorization,
+pub struct MacroAuthorizationExtractor<Svc, Policy: AuthorizationPolicy> {
+    /// The policy-narrowed authorization established for the request.
+    pub authorization: Policy::Output,
     _service: PhantomData<fn() -> Svc>,
 }
 
-impl<Svc> MacroAuthorizationExtractor<Svc> {
+impl<Svc, Policy: AuthorizationPolicy> MacroAuthorizationExtractor<Svc, Policy> {
     /// Return the authenticated entity responsible for this request.
-    pub fn acting_entity(&self) -> ActingEntity<'_> {
-        ActingEntity::from(&self.authorization)
+    pub fn acting_entity(&self) -> Policy::ActingEntity<'_> {
+        Policy::acting_entity(&self.authorization)
     }
 }
 
-impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
+impl<Svc, Policy: AuthorizationPolicy> Clone for MacroAuthorizationExtractor<Svc, Policy> {
     fn clone(&self) -> Self {
         Self {
             authorization: self.authorization.clone(),
@@ -49,10 +39,11 @@ impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
     }
 }
 
-impl<S, Svc> FromRequestParts<S> for MacroAuthorizationExtractor<Svc>
+impl<S, Svc, Policy> FromRequestParts<S> for MacroAuthorizationExtractor<Svc, Policy>
 where
     MacroAuthorizationState<Svc>: FromRef<S>,
     Svc: MacroAuthorizationService,
+    Policy: AuthorizationPolicy,
     S: Send + Sync + 'static,
 {
     type Rejection = MacroAuthorizationRejection;
@@ -61,12 +52,9 @@ where
         let authorization = authorize_request::<S, Svc>(parts, state)
             .await?
             .ok_or_else(|| rejection("unauthorized"))?;
-        authorization
-            .acting_user()
-            .ok_or_else(|| rejection("unauthorized"))?;
 
         Ok(Self {
-            authorization,
+            authorization: Policy::narrow(authorization)?,
             _service: PhantomData,
         })
     }

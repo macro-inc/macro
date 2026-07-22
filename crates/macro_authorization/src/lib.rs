@@ -10,32 +10,27 @@
 //!
 //! # Choosing an Axum extractor
 //!
-//! The `axum` feature provides five request extractors:
+//! The `axum` feature provides a required [`MacroAuthorizationExtractor`] and
+//! an [`OptionalMacroAuthorizationExtractor`] for endpoints that permit
+//! anonymous requests. Both require an explicit [`AuthorizationPolicy`] type:
 //!
-//! - [`MacroAuthorizationExtractor`] requires an acting user. It accepts user,
-//!   bot, or internal service credentials and exposes only the typed
-//!   [`MacroAuthorization`] principal. Bot and internal requests must resolve
-//!   to a user.
-//! - [`OptionalMacroAuthorizationExtractor`] additionally supports anonymous,
-//!   identityless bot, and identityless internal callers. Its optional
-//!   [`MacroAuthorization`] distinguishes those security states.
-//! - [`UserMacroAuthorizationExtractor`] guards direct-user-only endpoints. It
-//!   validates only user query, bearer, or access-token cookie credentials and
-//!   carries the authenticated user.
-//! - [`InternalMacroAuthorizationExtractor`] guards internal-only endpoints. It
-//!   validates only an internal API key and exposes no user identity.
-//! - [`BotMacroAuthorizationExtractor`] guards bot-only endpoints. It validates
-//!   only [`BOT_TOKEN_HEADER`] and carries the authenticated bot principal.
+//! | Policy | Admitted principals | Narrowed output |
+//! |---|---|---|
+//! | [`UserOrInternal`] | User or internal service acting for a user | [`UserOrInternalAuthorization`] |
+//! | [`UserOrInternalService`] | User or internal service, with optional acting user | [`UserOrInternalServiceAuthorization`] |
+//! | [`ActingUser`] | Any principal with an acting user | [`ActingUserAuthorization`] |
+//! | [`UserOnly`] | Directly authenticated user | [`MacroUserAuthentication`] |
+//! | [`BotOnly`] | Bot, with optional acting user | [`BotAuthentication`] |
+//! | [`InternalOnly`] | Internal service, with optional acting user | [`InternalAuthorization`] |
+//! | [`AnyPrincipal`] | Any authenticated principal | [`MacroAuthorization`] |
 //!
-//! The general required and optional extractors reject requests that combine
-//! explicit credential types (internal key, bot token, or user query/bearer)
-//! with `400 Bad Request` rather than choosing a principal. Query and bearer
-//! credentials are one user type, while access-token cookies are ambient; an
-//! explicit credential wins over a cookie. Local-auth fallback and cookies are
-//! considered only when no explicit credential is present. Dedicated user,
-//! bot, and internal extractors are exempt and never substitute another
-//! credential type. Use them only when that exclusive caller type is part of
-//! the endpoint's security contract.
+//! Both extractors reject requests that combine explicit credential types
+//! (internal key, bot token, or user query/bearer) with `400 Bad Request` rather
+//! than choosing a principal. Query and bearer credentials are one user type,
+//! while access-token cookies are ambient; an explicit credential wins over a
+//! cookie. Local-auth fallback and cookies are considered only when no explicit
+//! credential is present. A valid principal not admitted by the selected policy
+//! is rejected with `403 Forbidden`.
 //!
 //! These extractors authenticate the caller; they do not decide whether that
 //! caller may act on a particular entity. Entity authorization and business
@@ -67,14 +62,16 @@ pub use domain::{
 #[allow(deprecated)]
 #[cfg(feature = "axum")]
 pub use inbound::{
-    ActingEntity, BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
-    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER, BotMacroAuthorizationExtractor,
-    INTERNAL_API_KEY_HEADER, INTERNAL_FUSIONAUTH_USER_ID_HEADER,
-    INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
-    InternalMacroAuthorizationExtractor, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
-    LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
-    MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserMacroAuthorizationExtractor,
+    ActingEntity, ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy,
+    BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
+    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER, BotOnly, INTERNAL_API_KEY_HEADER,
+    INTERNAL_FUSIONAUTH_USER_ID_HEADER, INTERNAL_MACRO_ORGANIZATION_ID_HEADER,
+    INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization, InternalEntity, InternalOnly,
+    LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor, UserOnly, UserOrInternal, UserOrInternalAuthorization,
+    UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
+    UserOrInternalServiceAuthorization,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
