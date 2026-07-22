@@ -5,9 +5,32 @@ use documents::domain::events::{
     DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentUpdatedMetadata,
 };
+use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+
+struct TestMessage {
+    payload: Vec<u8>,
+}
+
+impl MessageParts for TestMessage {
+    fn key(&self) -> Option<&str> {
+        Some(DOCUMENT_ID)
+    }
+
+    fn payload(&self) -> Option<&[u8]> {
+        Some(&self.payload)
+    }
+
+    fn topic(&self) -> &str {
+        "macro.documents"
+    }
+}
+
+fn decode_payload(payload: Vec<u8>) -> Result<DeclaredMacroEvent, EventBrokerError> {
+    DeclaredMacroEvent::decode(&TestMessage { payload })
+}
 
 const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
 
@@ -86,19 +109,19 @@ fn flaky_service(failures: u32) -> FlakyService {
 
 #[test]
 fn subscribes_only_to_documents() {
-    assert_eq!(subscribed_topics(), ["macro.documents"]);
+    assert_eq!(DeclaredMacroEvent::topics(), ["macro.documents"]);
 }
 
 #[tokio::test]
 async fn updated_payload_maps_to_document_entity() {
-    let payload = serde_json::to_vec(&updated_event()).expect("serializable event");
+    let event = DocumentMacroEvent::with_event(DOCUMENT_ID, updated_event());
     let service = flaky_service(0);
 
     assert!(matches!(
-        process_document_payload(&service, &payload, 0, 0)
+        process_document_event(&service, &event, 0, 0)
             .await
             .expect("processing succeeds"),
-        DocumentPayloadOutcome::Notified
+        DocumentEventOutcome::Notified
     ));
 
     let entities = service.entities.lock().expect("entities lock");
@@ -111,26 +134,20 @@ async fn updated_payload_maps_to_document_entity() {
 async fn created_deleted_and_copied_events_are_ignored() {
     let service = flaky_service(0);
     for event in ignored_events() {
-        let payload = serde_json::to_vec(&Event::new(event)).expect("serializable event");
+        let event = DocumentMacroEvent::with_event(DOCUMENT_ID, Event::new(event));
         assert!(matches!(
-            process_document_payload(&service, &payload, 0, 0)
+            process_document_event(&service, &event, 0, 0)
                 .await
                 .expect("processing succeeds"),
-            DocumentPayloadOutcome::Ignored
+            DocumentEventOutcome::Ignored
         ));
     }
     assert_eq!(service.attempts.load(Ordering::SeqCst), 0);
 }
 
-#[tokio::test]
-async fn malformed_and_unknown_events_are_rejected_without_notifying() {
-    let service = flaky_service(0);
-    assert!(matches!(
-        process_document_payload(&service, b"not json", 0, 0)
-            .await
-            .expect("poison payload is commit-safe"),
-        DocumentPayloadOutcome::Malformed(_)
-    ));
+#[test]
+fn malformed_and_unknown_events_are_rejected_by_the_declared_collection() {
+    assert!(decode_payload(b"not json".to_vec()).is_err());
 
     let unknown = serde_json::json!({
         "event_id": "00000000-0000-0000-0000-000000000003",
@@ -139,13 +156,7 @@ async fn malformed_and_unknown_events_are_rejected_without_notifying() {
         "metadata": { "document_id": DOCUMENT_ID }
     });
     let payload = serde_json::to_vec(&unknown).expect("serializable JSON");
-    assert!(matches!(
-        process_document_payload(&service, &payload, 0, 0)
-            .await
-            .expect("poison payload is commit-safe"),
-        DocumentPayloadOutcome::Malformed(_)
-    ));
-    assert_eq!(service.attempts.load(Ordering::SeqCst), 0);
+    assert!(decode_payload(payload).is_err());
 }
 
 #[tokio::test(start_paused = true)]

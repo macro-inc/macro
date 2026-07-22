@@ -9,10 +9,11 @@ mod test;
 
 use std::{future::Future, time::Duration};
 
-use documents::domain::events::DocumentTopicEvent;
+use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_event_broker::{Event, EventBrokerError, Topic as _};
-use macro_event_topics::MacroDocumentsTopic;
+use macro_event_broker::{
+    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
+};
 use model_entity::{Entity, EntityType};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
@@ -27,21 +28,21 @@ impl GroupName for SoupRealtimeConsumerGroup {
     const GROUP_NAME: &'static str = "soup-realtime";
 }
 
-type SoupRealtimeKafkaConsumer = KafkaEventConsumer<SoupRealtimeConsumerGroup>;
+type SoupRealtimeKafkaAdapter = KafkaConsumerAdapter<SoupRealtimeConsumerGroup, DeclaredMacroEvent>;
+type SoupRealtimeKafkaConsumer =
+    MacroEventConsumerService<DeclaredMacroEvent, SoupRealtimeKafkaAdapter>;
+
+macro_event_broker::declare_topics!(DocumentMacroEvent);
 
 /// Total service attempts before returning for supervisor-driven redelivery.
 const MAX_SERVICE_ATTEMPTS: u32 = 5;
 /// Delay before the first retry; each subsequent delay doubles.
 const SERVICE_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
-fn subscribed_topics() -> [&'static str; 1] {
-    [MacroDocumentsTopic::TOPIC_STR]
-}
-
-fn entity_from_document_event(event: DocumentTopicEvent) -> Option<Entity<'static>> {
-    match event {
+fn entity_from_document_event(event: &DocumentMacroEvent) -> Option<Entity<'static>> {
+    match &event.event().event {
         DocumentTopicEvent::Updated(metadata) => {
-            Some(EntityType::Document.with_entity_string(metadata.document_id))
+            Some(EntityType::Document.with_entity_string(metadata.document_id.clone()))
         }
         DocumentTopicEvent::Created(_) => {
             tracing::trace!(event_type = "document.created", "ignoring document event");
@@ -58,35 +59,27 @@ fn entity_from_document_event(event: DocumentTopicEvent) -> Option<Entity<'stati
     }
 }
 
-fn decode_updated_entity(payload: &[u8]) -> Result<Option<Entity<'static>>, EventBrokerError> {
-    let event = Event::<DocumentTopicEvent>::decode(payload)?;
-    Ok(entity_from_document_event(event.event))
-}
-
-/// Commit-safe outcome after processing one non-empty document payload.
-enum DocumentPayloadOutcome {
+/// Commit-safe outcome after processing one document event.
+enum DocumentEventOutcome {
     /// An update was successfully sent through the domain service.
     Notified,
     /// A recognized document event is outside the current scope.
     Ignored,
-    /// The payload could not be decoded and should be treated as poison.
-    Malformed(EventBrokerError),
 }
 
-#[tracing::instrument(skip(service, payload), fields(partition, offset, payload_len = payload.len()), err)]
-async fn process_document_payload<S: SoupRealtimeService>(
+#[tracing::instrument(skip(service, event), fields(partition, offset), err)]
+async fn process_document_event<S: SoupRealtimeService>(
     service: &S,
-    payload: &[u8],
+    event: &DocumentMacroEvent,
     partition: i32,
     offset: i64,
-) -> Result<DocumentPayloadOutcome, Report> {
-    match decode_updated_entity(payload) {
-        Ok(Some(entity)) => {
+) -> Result<DocumentEventOutcome, Report> {
+    match entity_from_document_event(event) {
+        Some(entity) => {
             notify_with_retry(service, entity, partition, offset).await?;
-            Ok(DocumentPayloadOutcome::Notified)
+            Ok(DocumentEventOutcome::Notified)
         }
-        Ok(None) => Ok(DocumentPayloadOutcome::Ignored),
-        Err(error) => Ok(DocumentPayloadOutcome::Malformed(error)),
+        None => Ok(DocumentEventOutcome::Ignored),
     }
 }
 
@@ -140,7 +133,7 @@ async fn notify_with_retry<S: SoupRealtimeService>(
 }
 
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
-    match consumer.commit_message(message, CommitMode::Async) {
+    match consumer.inner().commit_message(message, CommitMode::Async) {
         Ok(()) => tracing::trace!(
             partition = message.partition(),
             offset = message.offset(),
@@ -171,12 +164,13 @@ pub async fn run_document_update_consumer<S>(
 where
     S: SoupRealtimeService,
 {
-    let consumer = SoupRealtimeKafkaConsumer::from_env(brokers)?;
-    consumer
-        .subscribe(&subscribed_topics())
+    let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
+    let consumer = KafkaConsumerAdapter::<SoupRealtimeConsumerGroup, ()>::new(consumer)
+        .subscribe::<DeclaredMacroEvent>()
         .context("failed to subscribe to document update topic")?;
+    let consumer = SoupRealtimeKafkaConsumer::new(consumer);
     tracing::info!(
-        topics = ?subscribed_topics(),
+        topics = ?DeclaredMacroEvent::topics(),
         group = SoupRealtimeConsumerGroup::GROUP_NAME,
         "realtime Soup document consumer listening"
     );
@@ -196,63 +190,51 @@ where
                         continue;
                     }
                 };
-                tracing::trace!(
-                    topic = message.topic(),
-                    partition = message.partition(),
-                    offset = message.offset(),
-                    payload_len = message.payload().map_or(0, <[u8]>::len),
-                    "received realtime Soup input"
-                );
-
-                let Some(payload) = message.payload().filter(|payload| !payload.is_empty()) else {
-                    tracing::warn!(
-                        partition = message.partition(),
-                        offset = message.offset(),
-                        "skipping document event with empty payload"
-                    );
-                    commit_logged(&consumer, &message);
-                    continue;
-                };
-
-                let outcome = match process_document_payload(
-                    &service,
-                    payload,
-                    message.partition(),
-                    message.offset(),
-                )
-                .await
-                {
-                    Ok(outcome) => outcome,
+                let kafka_message = message.inner();
+                let event = match message.decode_payload() {
+                    Ok(DeclaredMacroEvent::DocumentMacroEvent(event)) => event,
                     Err(error) => {
                         tracing::error!(
                             error = ?error,
-                            topic = message.topic(),
-                            partition = message.partition(),
-                            offset = message.offset(),
+                            topic = kafka_message.topic(),
+                            partition = kafka_message.partition(),
+                            offset = kafka_message.offset(),
+                            "dropping malformed document event"
+                        );
+                        commit_logged(&consumer, kafka_message);
+                        continue;
+                    }
+                };
+
+                match process_document_event(
+                    &service,
+                    &event,
+                    kafka_message.partition(),
+                    kafka_message.offset(),
+                )
+                .await
+                {
+                    Ok(DocumentEventOutcome::Notified | DocumentEventOutcome::Ignored) => {}
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            topic = kafka_message.topic(),
+                            partition = kafka_message.partition(),
+                            offset = kafka_message.offset(),
                             "realtime Soup fan-out retries exhausted; pausing partition for redelivery"
                         );
                         // Kafka commits are cumulative within a partition, so
                         // pause it before any later record can advance the
                         // committed offset past this failure.
                         consumer
-                            .pause_message_partition(&message)
+                            .inner()
+                            .pause_message_partition(kafka_message)
                             .context("failed to pause Kafka partition after fan-out failure")?;
                         continue;
                     }
-                };
-
-                match outcome {
-                    DocumentPayloadOutcome::Notified | DocumentPayloadOutcome::Ignored => {}
-                    DocumentPayloadOutcome::Malformed(error) => tracing::error!(
-                        error = ?error,
-                        topic = message.topic(),
-                        partition = message.partition(),
-                        offset = message.offset(),
-                        "dropping malformed document event"
-                    ),
                 }
 
-                commit_logged(&consumer, &message);
+                commit_logged(&consumer, kafka_message);
             }
         }
     }
