@@ -2,7 +2,6 @@ use axum::{
     Router,
     routing::{delete, get, post},
 };
-use macro_authorization::{MacroAuthorization, MacroUserAuthentication};
 use tower::ServiceBuilder;
 
 use crate::api::context::ApiContext;
@@ -13,12 +12,6 @@ pub(in crate::api) mod remove_unsubscribe_item;
 pub(in crate::api) mod unsubscribe_all;
 pub(in crate::api) mod unsubscribe_email;
 pub(in crate::api) mod unsubscribe_item;
-
-fn required_user(authorization: &MacroAuthorization) -> &MacroUserAuthentication {
-    authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user")
-}
 
 pub fn router() -> Router<ApiContext> {
     Router::new()

@@ -4,12 +4,12 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
-use super::{required_user, unsubscribe_item::UnsubscribeItemPathParams};
+use super::unsubscribe_item::UnsubscribeItemPathParams;
 
 /// Removes a unsubscribe item for a user.
 #[utoipa::path(
@@ -26,12 +26,12 @@ use super::{required_user, unsubscribe_item::UnsubscribeItemPathParams};
 #[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(UnsubscribeItemPathParams { item_type, item_id }): Path<UnsubscribeItemPathParams>,
 ) -> Result<Response, Response> {
     notification_db_client::unsubscribe::item::remove_unsubscribed_item_user(
         &ctx.db,
-        &required_user(&user.authorization).user_context.user_id,
+        &user.authorization.user.user_context.user_id,
         &item_id,
     )
     .await

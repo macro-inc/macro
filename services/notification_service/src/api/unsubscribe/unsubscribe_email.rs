@@ -4,12 +4,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::{ApiContext, AuthorizationService};
-
-use super::required_user;
 
 /// Unsubscribes a user from receiving emails
 #[utoipa::path(
@@ -25,9 +23,11 @@ use super::required_user;
 #[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
-    let email = required_user(&user.authorization)
+    let email = user
+        .authorization
+        .user
         .user_context
         .user_id
         .replace("macro|", "");
