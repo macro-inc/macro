@@ -13,11 +13,16 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { Component } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   bulkSetEntityPropertyOptionsHandler,
   setEntityPropertyHandler,
 } from './Properties';
+
+vi.mock('@core/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/auth')>()),
+  useIsAuthenticated: () => () => true,
+}));
 
 const TAG_DEF = 'tag-def-1';
 const STATUS_DEF = 'status-def';
