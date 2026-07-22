@@ -9,8 +9,8 @@ use axum::{
     http::{Request as HttpRequest, header},
 };
 use macro_authorization::{
-    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
-    MacroAuthorizationState,
+    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use model_user::UserContext;
 use rootcause::Report;
@@ -19,6 +19,7 @@ use super::*;
 use crate::GraphqlRequestParts;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
+const VALID_BOT_TOKEN: &str = "valid-bot";
 
 #[derive(Clone, Default)]
 struct FakeAuthorizationService {
@@ -44,6 +45,26 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             fusion_user_id: "fusion-user-id".to_string(),
             permissions: None,
             organization_id: None,
+        })
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        _acting_user: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        self.authorization_calls.fetch_add(1, Ordering::SeqCst);
+
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(BotAuthentication {
+            bot_id: "00000000-0000-0000-0000-000000000001"
+                .parse()
+                .expect("valid bot ID"),
+            token_id: uuid::Uuid::from_u128(2),
+            acting_user: None,
         })
     }
 
@@ -87,17 +108,27 @@ impl TestQuery {
     }
 }
 
+enum RequestCredentials<'a> {
+    Anonymous,
+    Bearer(&'a str),
+    Bot(&'a str),
+}
+
 async fn execute(
     service: &FakeAuthorizationService,
-    bearer_token: Option<&str>,
+    credentials: RequestCredentials<'_>,
     query: &str,
 ) -> async_graphql::Response {
-    let request = match bearer_token {
-        Some(token) => HttpRequest::builder()
+    let request = match credentials {
+        RequestCredentials::Anonymous => HttpRequest::new(()),
+        RequestCredentials::Bearer(token) => HttpRequest::builder()
             .header(header::AUTHORIZATION, format!("Bearer {token}"))
             .body(())
             .unwrap(),
-        None => HttpRequest::new(()),
+        RequestCredentials::Bot(token) => HttpRequest::builder()
+            .header(BOT_TOKEN_HEADER, token)
+            .body(())
+            .unwrap(),
     };
     let (parts, ()) = request.into_parts();
     let state = TestState {
@@ -115,7 +146,7 @@ async fn execute(
 async fn valid_bearer_returns_macro_user_id() {
     let service = FakeAuthorizationService::default();
 
-    let response = execute(&service, Some("valid"), "{ userId }").await;
+    let response = execute(&service, RequestCredentials::Bearer("valid"), "{ userId }").await;
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
@@ -128,7 +159,7 @@ async fn valid_bearer_returns_macro_user_id() {
 async fn missing_credentials_require_authentication() {
     let service = FakeAuthorizationService::default();
 
-    let response = execute(&service, None, "{ userId }").await;
+    let response = execute(&service, RequestCredentials::Anonymous, "{ userId }").await;
 
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "authentication required");
@@ -139,7 +170,12 @@ async fn missing_credentials_require_authentication() {
 async fn invalid_credentials_preserve_safe_authorization_message() {
     let service = FakeAuthorizationService::default();
 
-    let response = execute(&service, Some("invalid"), "{ userId }").await;
+    let response = execute(
+        &service,
+        RequestCredentials::Bearer("invalid"),
+        "{ userId }",
+    )
+    .await;
 
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "unauthorized");
@@ -147,10 +183,31 @@ async fn invalid_credentials_preserve_safe_authorization_message() {
 }
 
 #[tokio::test]
+async fn valid_bot_credentials_return_safe_forbidden_message() {
+    let service = FakeAuthorizationService::default();
+
+    let response = execute(
+        &service,
+        RequestCredentials::Bot(VALID_BOT_TOKEN),
+        "{ userId }",
+    )
+    .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "forbidden");
+    assert_eq!(service.authorization_calls(), 1);
+}
+
+#[tokio::test]
 async fn repeated_helper_calls_share_cached_authorization() {
     let service = FakeAuthorizationService::default();
 
-    let response = execute(&service, Some("valid"), "{ repeatedUserIds }").await;
+    let response = execute(
+        &service,
+        RequestCredentials::Bearer("valid"),
+        "{ repeatedUserIds }",
+    )
+    .await;
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
