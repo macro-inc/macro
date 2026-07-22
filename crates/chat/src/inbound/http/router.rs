@@ -107,7 +107,29 @@ pub fn chat_create_router<
         .with_state(state)
 }
 
-/// Build the router for all `/{chat_id}` routes.
+/// Build the router for the read-only `GET /{chat_id}` view route.
+///
+/// Separated from [`chat_id_router`] so callers can apply
+/// `ensure_chat_exists` without also requiring a real authenticated user:
+/// the [`ChatAccessLevelExtractor`] already grants `ViewAccessLevel` to
+/// anonymous callers when the chat has public-link view sharing enabled,
+/// so gating this route on authentication would 401 legitimate public-link
+/// viewers before the extractor ever runs.
+pub fn chat_view_router<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    P: UserRolesAndPermissionsService,
+    T: Send + Sync + 'static,
+>(
+    state: ChatRouterState<S, Svc, Auth, P>,
+) -> Router<T> {
+    Router::new()
+        .route("/{chat_id}", get(get_chat_handler::<S, Svc, Auth, P>))
+        .with_state(state)
+}
+
+/// Build the router for the remaining, owner/editor-only `/{chat_id}` routes.
 ///
 /// These routes require `ensure_chat_exists` middleware to populate
 /// `ChatBasic` in extensions before the [`ChatAccessLevelExtractor`] runs.
@@ -123,8 +145,7 @@ pub fn chat_id_router<
     Router::new()
         .route(
             "/{chat_id}",
-            get(get_chat_handler::<S, Svc, Auth, P>)
-                .delete(delete_chat_handler::<S, Svc, Auth, P>)
+            delete(delete_chat_handler::<S, Svc, Auth, P>)
                 .patch(patch_chat_handler::<S, Svc, Auth, P>),
         )
         .route(

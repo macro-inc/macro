@@ -19,7 +19,9 @@ use crate::domain::models::{
     ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
 };
 use crate::domain::ports::ChatService;
-use crate::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
+use crate::inbound::http::router::{
+    ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
+};
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotId, EditAccessLevel, EntityAccessReceipt, EntityPermission,
@@ -578,36 +580,42 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 }
 
 fn mock_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(
+    let state = ChatRouterState::new(
         MockService,
         MockAccessService,
         authorization_state(),
         permissions_service(),
-    ))
-    .layer(chat_basic_extension())
-    .layer(axum::middleware::map_request(attach_bearer))
+    );
+    chat_view_router(state.clone())
+        .merge(chat_id_router(state))
+        .layer(chat_basic_extension())
+        .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn error_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(
+    let state = ChatRouterState::new(
         ErrorService,
         MockAccessService,
         authorization_state(),
         permissions_service(),
-    ))
-    .layer(chat_basic_extension())
-    .layer(axum::middleware::map_request(attach_bearer))
+    );
+    chat_view_router(state.clone())
+        .merge(chat_id_router(state))
+        .layer(chat_basic_extension())
+        .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn not_found_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(
+    let state = ChatRouterState::new(
         NotFoundService,
         MockAccessService,
         authorization_state(),
         permissions_service(),
-    ))
-    .layer(chat_basic_extension())
-    .layer(axum::middleware::map_request(attach_bearer))
+    );
+    chat_view_router(state.clone())
+        .merge(chat_id_router(state))
+        .layer(chat_basic_extension())
+        .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn mock_create_router() -> Router {
