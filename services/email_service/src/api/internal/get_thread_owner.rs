@@ -3,7 +3,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(thread_id): Path<Uuid>,
 ) -> Result<Response, Response> {
     let user_id = email_db_client::threads::get::get_macro_id_from_thread_id(&ctx.db, thread_id)

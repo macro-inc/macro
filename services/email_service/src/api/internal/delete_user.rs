@@ -3,14 +3,14 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use models_email::email::service::pubsub::LinkManagerMessage;
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(fusionauth_user_id): Path<String>,
 ) -> Result<Response, Response> {
     tracing::info!(user_id = fusionauth_user_id, "Delete user called");

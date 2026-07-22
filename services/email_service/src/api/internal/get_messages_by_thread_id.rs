@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
 
@@ -52,7 +52,7 @@ pub struct PathParams {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Path(PathParams { id }): extract::Path<PathParams>,
     extract::Query(query_params): extract::Query<ListThreadsParams>,
 ) -> Result<Response, Response> {

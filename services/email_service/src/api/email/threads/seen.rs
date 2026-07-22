@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadReadMetadata};
 use email_service::pubsub::publish_email_event;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::label::system_labels;
 use models_email::service::message::Message;
@@ -71,16 +71,14 @@ pub struct PathParams {
 #[tracing::instrument(skip(ctx, authorization), err)]
 pub async fn seen_handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
     // Resolve the inbox from the thread itself, scoped to the caller's own and
     // delegated inboxes.
     let link = email_db_client::links::get::fetch_owned_link_for_thread(
         &ctx.db,
-        &crate::api::required_user(&authorization.authorization)
-            .user_context
-            .user_id,
+        &authorization.authorization.user.user_context.user_id,
         thread_id,
     )
     .await
@@ -131,9 +129,7 @@ pub async fn seen_handler(
         email_db_client::messages::update::update_message_read_status_batch(
             &mut *tx,
             message_db_ids.clone(),
-            &crate::api::required_user(&authorization.authorization)
-                .user_context
-                .fusion_user_id,
+            &authorization.authorization.user.user_context.fusion_user_id,
             true,
         )
         .await
