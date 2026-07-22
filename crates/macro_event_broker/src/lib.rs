@@ -22,7 +22,10 @@ pub use macro_event_topics::{
 };
 
 #[cfg(feature = "ports")]
-pub use domain::ports::{EventPublisher, MacroEventBroker};
+pub use domain::ports::{
+    EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection, MessageParts,
+    MessageWrapper,
+};
 #[cfg(feature = "ports")]
 pub use domain::service::{
     MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
