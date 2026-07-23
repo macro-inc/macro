@@ -6,9 +6,51 @@ mod test;
 use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use rootcause::prelude::{Report, ResultExt as _};
-use soup::domain::{models::AdvancedSortParams, ports::SoupRepo};
+use soup::domain::{
+    models::AdvancedSortParams,
+    ports::{SoupItemService, SoupRepo},
+};
 
 use crate::domain::ports::SoupItemReader;
+
+/// Soup item reader backed by the complete Soup domain service.
+pub struct SoupServiceItemReader<S> {
+    service: S,
+}
+
+impl<S> SoupServiceItemReader<S> {
+    /// Creates a user-scoped item reader around a Soup domain service.
+    pub fn new(service: S) -> Self {
+        Self { service }
+    }
+}
+
+impl<S> SoupItemReader for SoupServiceItemReader<S>
+where
+    S: SoupItemService,
+{
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            user_id = %user_id,
+            entity_type = %entity.entity_type,
+            entity_id = %entity.entity_id,
+        ),
+        err
+    )]
+    async fn read_for_user(
+        &self,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        entity: &Entity<'static>,
+    ) -> Result<Option<SoupItem<()>>, Report> {
+        self.service
+            .get_user_soup_item(user_id, entity.clone())
+            .await
+            .map_err(Report::new)
+            .context("failed to read item through Soup service")
+            .map_err(Into::into)
+    }
+}
 
 /// Soup item reader backed by an existing [`SoupRepo`].
 pub struct SoupRepoItemReader<R> {

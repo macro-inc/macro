@@ -336,6 +336,7 @@ pub trait EmailRepo: Send + Sync + 'static {
 /// Read-only trait for fetching email thread previews.
 /// Used by soup to restrict access to only read email operations as it uses the read replica database.
 pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
+    /// Fetch email thread previews from the read-only store.
     fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,
@@ -345,6 +346,12 @@ pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
             EmailErr,
         >,
     > + Send;
+
+    /// Fetch every inbox the user may read from the read-only store.
+    fn get_inboxes_for_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
 }
 
 /// Read-only domain service used to hydrate lightweight email content edges.
@@ -372,6 +379,13 @@ impl<T: EmailService> EmailPreviewServiceReadOnly for ReadonlyEmailPreviewAdapte
         >,
     > + Send {
         EmailService::get_email_thread_previews(&self.0, req)
+    }
+
+    fn get_inboxes_for_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send {
+        EmailService::get_inboxes_for_macro_id(&self.0, macro_id)
     }
 }
 

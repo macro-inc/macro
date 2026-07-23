@@ -295,7 +295,7 @@ async fn one_user_receives_one_full_message() {
             assert_eq!(document.name, "Full document");
             assert_eq!(document.document_version_id, 42);
             assert_eq!(document.sha.as_deref(), Some("document-sha"));
-            assert_eq!(document.viewed_at, None);
+            assert_eq!(document.viewed_at, viewed_at);
         }
         _ => panic!("expected document item"),
     }
@@ -321,13 +321,18 @@ async fn three_unique_users_receive_exactly_three_messages() {
         .await
         .expect("fan-out succeeds");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 3);
     let messages = harness.messages.lock().expect("messages lock");
     assert_eq!(messages.len(), 3);
     let recipients: HashSet<_> = messages
         .iter()
         .map(|message| message.user_id.as_ref().to_string())
         .collect();
+    assert!(
+        messages
+            .iter()
+            .all(|message| { document_name(&message.item) == message.user_id.as_ref() })
+    );
     assert_eq!(recipients.len(), 3);
     assert!(
         users
@@ -357,23 +362,17 @@ async fn duplicate_accessors_are_deduplicated() {
         .await
         .expect("fan-out succeeds");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 2);
     assert_eq!(harness.messages.lock().expect("messages lock").len(), 2);
 }
 
 #[tokio::test]
-async fn all_recipients_get_the_first_item_with_no_viewed_at() {
+async fn each_recipient_gets_their_user_scoped_item() {
     let one = user("one");
     let two = user("two");
     let responses = HashMap::from([
-        item_response(
-            &one,
-            document_item(DOCUMENT_ID, "Representative", Some(timestamp(10))),
-        ),
-        item_response(
-            &two,
-            document_item(DOCUMENT_ID, "Should not be read", Some(timestamp(20))),
-        ),
+        item_response(&one, document_item(DOCUMENT_ID, "One", Some(timestamp(10)))),
+        item_response(&two, document_item(DOCUMENT_ID, "Two", Some(timestamp(20)))),
     ]);
     let harness = harness(vec![one, two], responses, false, HashSet::new());
 
@@ -383,16 +382,29 @@ async fn all_recipients_get_the_first_item_with_no_viewed_at() {
         .await
         .expect("fan-out succeeds");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 2);
     let messages = harness.messages.lock().expect("messages lock");
     assert_eq!(messages.len(), 2);
-    for message in messages.iter() {
-        let SoupItem::Document(document) = &message.item else {
-            panic!("expected document item")
-        };
-        assert_eq!(document.name, "Representative");
-        assert_eq!(document.viewed_at, None);
-    }
+    let items_by_user = messages
+        .iter()
+        .map(|message| {
+            let SoupItem::Document(document) = &message.item else {
+                panic!("expected document item")
+            };
+            (
+                message.user_id.as_ref(),
+                (document.name.as_str(), document.viewed_at),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    assert_eq!(
+        items_by_user["macro|one@example.com"],
+        ("One", Some(timestamp(10)))
+    );
+    assert_eq!(
+        items_by_user["macro|two@example.com"],
+        ("Two", Some(timestamp(20)))
+    );
 }
 
 #[tokio::test]
@@ -443,7 +455,7 @@ async fn mismatched_item_prevents_all_publication() {
 }
 
 #[tokio::test]
-async fn representative_reader_failure_prevents_all_publication() {
+async fn any_reader_failure_prevents_all_publication() {
     let one = user("one");
     let two = user("two");
     let responses = HashMap::from([(one.as_ref().to_string(), ReadResponse::Failure)]);
@@ -455,7 +467,7 @@ async fn representative_reader_failure_prevents_all_publication() {
         .await
         .expect_err("reader failure propagates");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 2);
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 

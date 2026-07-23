@@ -1288,6 +1288,7 @@ async fn handle_publishes_attachment_deltas() {
             channel_id,
             actor: Sender::new_from_user(user("alice@example.com")),
             message_id,
+            thread_id: None,
             attachments: vec![added.clone()],
             added: vec![added.clone()],
             removed: vec![removed.clone()],

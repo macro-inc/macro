@@ -1,7 +1,7 @@
-//! Kafka consumer for `document.updated` realtime Soup fan-out.
+//! Kafka consumer for entity events that change realtime Soup items.
 //!
 //! Delivery is at least once: offsets are committed only after successful
-//! domain processing. Malformed and currently unsupported document events are
+//! domain processing. Malformed and recognized-but-irrelevant events are
 //! poison/ignored records and are committed so they cannot wedge a partition.
 
 #[cfg(test)]
@@ -9,12 +9,16 @@ mod test;
 
 use std::{future::Future, time::Duration};
 
+use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
+use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent};
+use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
 use model_entity::{Entity, EntityType};
+use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
@@ -25,7 +29,7 @@ use crate::domain::{
     service::SoupRealtimeServiceImpl,
 };
 
-/// Consumer group used for document update fan-out offsets.
+/// Consumer group used for Soup-affecting entity event offsets.
 struct SoupRealtimeConsumerGroup;
 
 impl GroupName for SoupRealtimeConsumerGroup {
@@ -36,7 +40,14 @@ type SoupRealtimeKafkaAdapter = KafkaConsumerAdapter<SoupRealtimeConsumerGroup, 
 type SoupRealtimeKafkaConsumer =
     MacroEventConsumerService<DeclaredMacroEvent, SoupRealtimeKafkaAdapter>;
 
-macro_event_broker::declare_topics!(DeclaredMacroEvent: DocumentMacroEvent);
+macro_event_broker::declare_topics!(
+    DeclaredMacroEvent:
+        DocumentMacroEvent,
+        ProjectMacroEvent,
+        ChatMacroEvent,
+        EmailMacroEvent,
+        ChannelMacroEvent,
+);
 
 /// Total service attempts before returning for supervisor-driven redelivery.
 const MAX_SERVICE_ATTEMPTS: u32 = 5;
@@ -49,55 +60,179 @@ fn service_retry_strategy() -> impl Iterator<Item = Duration> {
         .take((MAX_SERVICE_ATTEMPTS - 1) as usize)
 }
 
-fn entity_from_document_event(event: &DocumentMacroEvent) -> Option<Entity<'static>> {
-    match &event.event().event {
+fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
+    entity_type.with_entity_string(entity_id.to_string())
+}
+
+fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<Entity<'static>> {
+    match event {
         DocumentTopicEvent::Updated(metadata) => {
-            Some(EntityType::Document.with_entity_string(metadata.document_id.clone()))
+            vec![entity(EntityType::Document, &metadata.document_id)]
         }
-        DocumentTopicEvent::Created(_) => {
-            tracing::trace!(event_type = "document.created", "ignoring document event");
-            None
+        DocumentTopicEvent::Created(_)
+        | DocumentTopicEvent::Deleted(_)
+        | DocumentTopicEvent::Copied(_)
+        | DocumentTopicEvent::Interaction(_) => Vec::new(),
+    }
+}
+
+fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<Entity<'static>> {
+    match event {
+        ProjectTopicEvent::Updated(metadata)
+            if metadata
+                .parent_id
+                .as_ref()
+                .map_or(metadata.previous_parent_id.is_none(), String::is_empty) =>
+        {
+            vec![entity(EntityType::Project, &metadata.project_id)]
         }
-        DocumentTopicEvent::Deleted(_) => {
-            tracing::trace!(event_type = "document.deleted", "ignoring document event");
-            None
+        ProjectTopicEvent::Created(_)
+        | ProjectTopicEvent::Updated(_)
+        | ProjectTopicEvent::Deleted(_)
+        | ProjectTopicEvent::Restored(_)
+        | ProjectTopicEvent::PermanentlyDeleted(_)
+        | ProjectTopicEvent::Uploaded(_) => Vec::new(),
+    }
+}
+
+fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<Entity<'static>> {
+    let chat_id = match event {
+        ChatTopicEvent::Updated(metadata) => &metadata.chat_id,
+        ChatTopicEvent::MessageSent(metadata) => &metadata.chat_id,
+        ChatTopicEvent::Created(_)
+        | ChatTopicEvent::Deleted(_)
+        | ChatTopicEvent::PermanentlyDeleted(_)
+        | ChatTopicEvent::Restored(_)
+        | ChatTopicEvent::Copied(_) => return Vec::new(),
+    };
+    vec![entity(EntityType::Chat, chat_id)]
+}
+
+fn entities_from_email_event(event: &EmailTopicEvent) -> Vec<Entity<'static>> {
+    let thread_id = match event {
+        EmailTopicEvent::MessageReceived(metadata) if !metadata.is_spam_or_trash => {
+            metadata.thread_id
         }
-        DocumentTopicEvent::Copied(_) => {
-            tracing::trace!(event_type = "document.copied", "ignoring document event");
-            None
+        EmailTopicEvent::MessageSent(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageDeleted(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageSendQueued(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageSendCancelled(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadArchived(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadTrashed(metadata) if !metadata.trashed => metadata.thread_id,
+        EmailTopicEvent::ThreadRead(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadStarred(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadProjectChanged(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadLabelsUpdated(metadata) => metadata.thread_id,
+        EmailTopicEvent::LinkConnected(_)
+        | EmailTopicEvent::LinkDisconnected(_)
+        | EmailTopicEvent::LinkReauthRequired(_)
+        | EmailTopicEvent::MessageReceived(_)
+        | EmailTopicEvent::ThreadTrashed(_) => return Vec::new(),
+    };
+    vec![entity(EntityType::EmailThread, thread_id)]
+}
+
+fn channel_and_thread_entities(
+    channel_id: impl ToString,
+    message_id: impl ToString,
+    thread_id: Option<impl ToString>,
+) -> Vec<Entity<'static>> {
+    vec![
+        entity(EntityType::Channel, channel_id),
+        entity(
+            EntityType::ChannelMessage,
+            thread_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| message_id.to_string()),
+        ),
+    ]
+}
+
+fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<Entity<'static>> {
+    match event {
+        ChannelTopicEvent::Updated(metadata) => {
+            vec![entity(EntityType::Channel, metadata.channel_id)]
         }
-        DocumentTopicEvent::Interaction(_) => {
-            tracing::trace!(
-                event_type = "document.interaction",
-                "ignoring document event"
-            );
-            None
+        ChannelTopicEvent::MessagePosted(metadata) => channel_and_thread_entities(
+            metadata.channel_id,
+            metadata.message_id,
+            metadata.thread_id,
+        ),
+        ChannelTopicEvent::MessagePatched(metadata) => channel_and_thread_entities(
+            metadata.channel_id,
+            metadata.message_id,
+            metadata.thread_id,
+        ),
+        ChannelTopicEvent::MessageDeleted(metadata) => {
+            let mut entities = vec![entity(EntityType::Channel, metadata.channel_id)];
+            if let Some(thread_id) = metadata.thread_id {
+                entities.push(entity(EntityType::ChannelMessage, thread_id));
+            }
+            entities
+        }
+        ChannelTopicEvent::MessageAttachmentCreated(metadata) => channel_and_thread_entities(
+            metadata.channel_id,
+            metadata.message_id,
+            metadata.thread_id,
+        ),
+        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => channel_and_thread_entities(
+            metadata.channel_id,
+            metadata.message_id,
+            metadata.thread_id,
+        ),
+        ChannelTopicEvent::ParticipantAdded(metadata) => {
+            vec![entity(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::ParticipantRemoved(metadata) => {
+            vec![entity(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::Created(_) | ChannelTopicEvent::Deleted(_) => Vec::new(),
+    }
+}
+
+fn entities_from_event(event: &DeclaredMacroEvent) -> Vec<Entity<'static>> {
+    match event {
+        DeclaredMacroEvent::DocumentMacroEvent(event) => {
+            entities_from_document_event(&event.event().event)
+        }
+        DeclaredMacroEvent::ProjectMacroEvent(event) => {
+            entities_from_project_event(&event.event().event)
+        }
+        DeclaredMacroEvent::ChatMacroEvent(event) => entities_from_chat_event(&event.event().event),
+        DeclaredMacroEvent::EmailMacroEvent(event) => {
+            entities_from_email_event(&event.event().event)
+        }
+        DeclaredMacroEvent::ChannelMacroEvent(event) => {
+            entities_from_channel_event(&event.event().event)
         }
     }
 }
 
-/// Commit-safe outcome after processing one document event.
-enum DocumentEventOutcome {
-    /// An update was successfully sent through the domain service.
+/// Commit-safe outcome after processing one entity event.
+enum EventOutcome {
+    /// Every affected item was successfully sent through the domain service.
     Notified,
-    /// A recognized document event is outside the current scope.
+    /// A recognized event does not update a currently hydratable Soup item.
     Ignored,
 }
 
 #[tracing::instrument(skip(service, event), fields(partition, offset), err)]
-async fn process_document_event<S: SoupRealtimeService>(
+async fn process_event<S: SoupRealtimeService>(
     service: &S,
-    event: &DocumentMacroEvent,
+    event: &DeclaredMacroEvent,
     partition: i32,
     offset: i64,
-) -> Result<DocumentEventOutcome, Report> {
-    match entity_from_document_event(event) {
-        Some(entity) => {
-            notify_with_retry(service, entity, partition, offset).await?;
-            Ok(DocumentEventOutcome::Notified)
-        }
-        None => Ok(DocumentEventOutcome::Ignored),
+) -> Result<EventOutcome, Report> {
+    let entities = entities_from_event(event);
+    if entities.is_empty() {
+        tracing::trace!("ignoring event without a hydratable Soup impact");
+        return Ok(EventOutcome::Ignored);
     }
+
+    for entity in entities {
+        notify_with_retry(service, entity, partition, offset).await?;
+    }
+    Ok(EventOutcome::Notified)
 }
 
 #[tracing::instrument(
@@ -172,15 +307,15 @@ where
     R: SoupItemReader,
     P: SoupRealtimePublisher,
 {
-    /// Runs the document update consumer until `shutdown` resolves.
+    /// Runs the Soup-affecting entity event consumer until `shutdown` resolves.
     ///
-    /// The consumer subscribes only to `macro.documents` under the
-    /// `soup-realtime` group. It commits malformed and recognized-but-ignored
-    /// events, and commits `document.updated` only after [`SoupRealtimeService`]
-    /// succeeds. Exhausted service retries return without committing so a future
-    /// supervisor restart can redeliver the record.
+    /// The consumer subscribes to every existing entity topic with events that
+    /// can change a Soup item under the `soup-realtime` group. It commits malformed
+    /// and recognized-but-ignored events, and commits affecting events only after
+    /// [`SoupRealtimeService`] succeeds. Exhausted service retries return without
+    /// committing so a future supervisor restart can redeliver the record.
     #[tracing::instrument(skip(self, shutdown), fields(brokers), err)]
-    pub async fn run_document_update_consumer(
+    pub async fn run_entity_update_consumer(
         &self,
         brokers: &str,
         shutdown: impl Future<Output = ()> + Send,
@@ -188,19 +323,19 @@ where
         let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
         let consumer = KafkaConsumerAdapter::<SoupRealtimeConsumerGroup, ()>::new(consumer)
             .subscribe::<DeclaredMacroEvent>()
-            .context("failed to subscribe to document update topic")?;
+            .context("failed to subscribe to Soup-affecting entity topics")?;
         let consumer = SoupRealtimeKafkaConsumer::new(consumer);
         tracing::info!(
             topics = ?DeclaredMacroEvent::topics(),
             group = SoupRealtimeConsumerGroup::GROUP_NAME,
-            "realtime Soup document consumer listening"
+            "realtime Soup entity consumer listening"
         );
 
         let mut shutdown = std::pin::pin!(shutdown);
         loop {
             tokio::select! {
                 _ = &mut shutdown => {
-                    tracing::info!("realtime Soup document consumer shutting down");
+                    tracing::info!("realtime Soup entity consumer shutting down");
                     break;
                 }
                 result = consumer.recv() => {
@@ -213,21 +348,21 @@ where
                     };
                     let kafka_message = message.inner();
                     let event = match message.decode_payload() {
-                        Ok(DeclaredMacroEvent::DocumentMacroEvent(event)) => event,
+                        Ok(event) => event,
                         Err(error) => {
                             tracing::error!(
                                 error = ?error,
                                 topic = kafka_message.topic(),
                                 partition = kafka_message.partition(),
                                 offset = kafka_message.offset(),
-                                "dropping malformed document event"
+                                "dropping malformed Soup source event"
                             );
                             commit_logged(&consumer, kafka_message);
                             continue;
                         }
                     };
 
-                    match process_document_event(
+                    match process_event(
                         self,
                         &event,
                         kafka_message.partition(),
@@ -235,7 +370,7 @@ where
                     )
                     .await
                     {
-                        Ok(DocumentEventOutcome::Notified | DocumentEventOutcome::Ignored) => {}
+                        Ok(EventOutcome::Notified | EventOutcome::Ignored) => {}
                         Err(error) => {
                             tracing::error!(
                                 error = ?error,

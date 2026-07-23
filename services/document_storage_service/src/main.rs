@@ -114,7 +114,7 @@ use soup_realtime::{
     domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
     outbound::{
         entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
-        soup_consumer::SoupTopicConsumer, soup_item_reader::SoupRepoItemReader,
+        soup_consumer::SoupTopicConsumer, soup_item_reader::SoupServiceItemReader,
     },
 };
 use sqlx::postgres::PgPoolOptions;
@@ -931,7 +931,7 @@ async fn main() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
-        let soup_pool = readonly_pool::ReadOnlyPool(readonly_db.clone());
+        let soup_service = soup_service.clone();
         let macro_event_broker = macro_event_broker.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -942,12 +942,12 @@ async fn main() -> anyhow::Result<()> {
 
                 let fanout_service = SoupRealtimeServiceImpl::new(
                     EntityAccessExpander::new(entity_access_service.clone()),
-                    SoupRepoItemReader::new(PgSoupRepo::new(soup_pool.clone())),
+                    SoupServiceItemReader::new(soup_service.clone()),
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
-                tracing::info!("starting realtime Soup document consumer");
+                tracing::info!("starting realtime Soup entity consumer");
                 let result = fanout_service
-                    .run_document_update_consumer(&brokers, cancellation_token.cancelled())
+                    .run_entity_update_consumer(&brokers, cancellation_token.cancelled())
                     .await;
 
                 if cancellation_token.is_cancelled() {
@@ -956,11 +956,11 @@ async fn main() -> anyhow::Result<()> {
 
                 match result {
                     Ok(()) => {
-                        tracing::error!("realtime Soup document consumer exited unexpectedly")
+                        tracing::error!("realtime Soup entity consumer exited unexpectedly")
                     }
                     Err(error) => tracing::error!(
                         error = ?error,
-                        "realtime Soup document consumer exited unexpectedly"
+                        "realtime Soup entity consumer exited unexpectedly"
                     ),
                 }
 

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct SoupRealtimeMessage {
     /// User to whom the Soup item is addressed.
     pub user_id: MacroUserIdStr<'static>,
-    /// Complete Soup item with transient user-specific fields normalized.
+    /// Complete Soup item hydrated through this recipient's visibility scope.
     pub item: SoupItem<()>,
 }
 

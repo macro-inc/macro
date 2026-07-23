@@ -11,7 +11,7 @@ use super::models::SoupRealtimeMessage;
 
 /// Inbound use-case port driven by entity update transports.
 pub trait SoupRealtimeService: Send + Sync + 'static {
-    /// Hydrates one normalized Soup item and publishes it to every current accessor.
+    /// Hydrates and publishes one user-scoped Soup item to every current accessor.
     fn notify_users(
         &self,
         entity: Entity<'static>,

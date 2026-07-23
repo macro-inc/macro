@@ -1378,7 +1378,8 @@ where
             .get_message_attachments(message_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        self.repo
+        let message = self
+            .repo
             .patch_message_attachments(message_id, all_attachments.clone())
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
@@ -1392,6 +1393,7 @@ where
             channel_id,
             actor,
             message_id,
+            thread_id: message.thread_id,
             attachments: all_attachments,
             added: added_attachments,
             removed: attachments_to_delete,

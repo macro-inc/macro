@@ -55,6 +55,13 @@ impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
             .paginate_on(0, SimpleSortMethod::CreatedAt)
             .into_page())
     }
+
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Ok(Vec::new())
+    }
 }
 
 struct NoopCommsService;

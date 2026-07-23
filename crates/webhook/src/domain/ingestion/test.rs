@@ -598,6 +598,7 @@ fn channel_event_cases() -> Vec<EventCase> {
                     ChannelMessageAttachmentCreatedMetadata {
                         channel_id,
                         message_id,
+                        thread_id: None,
                         actor: sender(member),
                         attachments: vec![],
                     },
@@ -615,6 +616,7 @@ fn channel_event_cases() -> Vec<EventCase> {
                     ChannelMessageAttachmentRemovedMetadata {
                         channel_id,
                         message_id,
+                        thread_id: None,
                         actor: sender(member),
                         attachments: vec![],
                     },

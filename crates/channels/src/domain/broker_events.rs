@@ -144,6 +144,9 @@ pub struct ChannelMessageAttachmentCreatedMetadata {
     pub channel_id: Uuid,
     /// Message the attachments were added to.
     pub message_id: Uuid,
+    /// Thread parent id when the changed message is a thread reply.
+    #[serde(default)]
+    pub thread_id: Option<Uuid>,
     /// Actor that added the attachments.
     pub actor: ChannelSender<'static>,
     /// Attachments created by this mutation.
@@ -157,6 +160,9 @@ pub struct ChannelMessageAttachmentRemovedMetadata {
     pub channel_id: Uuid,
     /// Message the attachments were removed from.
     pub message_id: Uuid,
+    /// Thread parent id when the changed message is a thread reply.
+    #[serde(default)]
+    pub thread_id: Option<Uuid>,
     /// Actor that removed the attachments.
     pub actor: ChannelSender<'static>,
     /// Attachments removed by this mutation.

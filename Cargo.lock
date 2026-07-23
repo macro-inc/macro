@@ -13596,8 +13596,11 @@ name = "soup_realtime"
 version = "0.1.0"
 dependencies = [
  "broadcast",
+ "channels",
+ "chat",
  "chrono",
  "documents",
+ "email",
  "entity_access",
  "futures",
  "kafka_util",
@@ -13607,6 +13610,7 @@ dependencies = [
  "model-entity",
  "models_properties",
  "models_soup",
+ "projects",
  "rdkafka",
  "rootcause",
  "serde",
