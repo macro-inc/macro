@@ -101,6 +101,17 @@ fn notion_import_turns_scale_with_pages_and_cap() {
 }
 
 #[test]
+fn slack_gather_lists_channels_with_an_explicit_empty_query() {
+    let prompt = prompts::gather_system(ImportSource::Slack);
+
+    assert!(prompt.contains("FIRST call `Search channels`"));
+    assert!(prompt.contains(r#"{"query": ""}"#));
+    assert!(prompt.contains("an empty query lists all channels"));
+    assert!(!prompt.contains("Always pass a non-empty query"));
+    assert!(prompt.contains("Participant details are optional"));
+}
+
+#[test]
 fn notion_fetch_text_parses_the_fetch_document_shape() {
     let (title, body) = parse_notion_fetch_text(
         r##"{"id":"abc","title":"Roadmap H2","text":"# Roadmap\ncontent","url":"https://notion.so/x"}"##,
