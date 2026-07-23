@@ -60,11 +60,17 @@ let tokenPromise: Promise<TokenResult> | null = null;
 // unsetTokenPromise, which the login flows call on a session change.
 let refreshUnavailable: TokenResult | null = null;
 
+// Bumped on every reset. A refresh started before a reset carries the older
+// generation, so once the session has moved on (e.g. a login) it can neither
+// re-latch refreshUnavailable nor clear a newer tokenPromise on completion.
+let refreshGeneration = 0;
+
 export async function fetchToken(): Promise<TokenResult> {
   if (refreshUnavailable != null) {
     return refreshUnavailable;
   }
   if (tokenPromise == null) {
+    const generation = refreshGeneration;
     tokenPromise = (async () => {
       try {
         const result = await fetchWithCredentials(
@@ -82,6 +88,7 @@ export async function fetchToken(): Promise<TokenResult> {
         if (result.isErr()) {
           const failure = err(result.error);
           if (
+            generation === refreshGeneration &&
             result.error.some(
               (e) => e.code === 'HTTP_ERROR' || e.code === 'UNAUTHORIZED'
             )
@@ -93,7 +100,9 @@ export async function fetchToken(): Promise<TokenResult> {
 
         return ok(undefined);
       } finally {
-        tokenPromise = null;
+        if (generation === refreshGeneration) {
+          tokenPromise = null;
+        }
       }
     })();
   }
@@ -180,6 +189,7 @@ export async function fetchWithToken<
  * unsetTokenPromise();
  */
 export function unsetTokenPromise() {
+  refreshGeneration++;
   tokenPromise = null;
   refreshUnavailable = null;
 }

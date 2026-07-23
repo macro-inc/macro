@@ -4,7 +4,11 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { fetchWithToken, unsetTokenPromise } from './fetchWithToken';
+import {
+  fetchToken,
+  fetchWithToken,
+  unsetTokenPromise,
+} from './fetchWithToken';
 
 const RESOURCE_URL = 'https://localhost/resource';
 
@@ -16,6 +20,16 @@ function jsonResponse(status: number, body: unknown = {}): Response {
     headers: new Headers({ 'Content-Type': 'application/json' }),
   } as Response;
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
 const isRefresh = (input: RequestInfo | URL) =>
   String(input).includes('/jwt/refresh');
@@ -112,5 +126,44 @@ describe('fetchWithToken refresh latch', () => {
 
     await fetchWithToken<{ data: string }>(RESOURCE_URL);
     expect(refreshCalls()).toBe(2);
+  });
+
+  test('a reset while a refresh is pending neither latches nor clears newer state', async () => {
+    const pending = [deferred<Response>(), deferred<Response>()];
+    let idx = 0;
+    mockFetch.mockImplementation((input) => {
+      if (isRefresh(input)) {
+        const d = pending[idx++];
+        return d ? d.promise : Promise.resolve(jsonResponse(200));
+      }
+      return Promise.resolve(jsonResponse(401));
+    });
+
+    // R1 starts and stays in-flight.
+    const p1 = fetchToken();
+    // A login-style reset happens while R1 is pending.
+    unsetTokenPromise();
+    // R2 starts under the new generation and also stays in-flight.
+    const p2 = fetchToken();
+    await tick();
+    expect(refreshCalls()).toBe(2);
+
+    // R1 fails under the stale generation.
+    pending[0].resolve(jsonResponse(400));
+    expect((await p1).isErr()).toBe(true);
+
+    // R1's finally must not have cleared R2's tokenPromise: a call now dedupes
+    // onto R2 instead of starting a third refresh.
+    const p2b = fetchToken();
+    await tick();
+    expect(refreshCalls()).toBe(2);
+
+    pending[1].resolve(jsonResponse(200));
+    expect((await p2).isOk()).toBe(true);
+    expect((await p2b).isOk()).toBe(true);
+
+    // R1's stale failure must not have latched: a fresh 401 still refreshes.
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(3);
   });
 });
