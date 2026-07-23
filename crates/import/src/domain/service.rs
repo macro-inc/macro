@@ -328,9 +328,12 @@ where
             };
             match finished {
                 Ok(true) if gather_succeeded => {
-                    if let Err(e) = service.maybe_start_auto_import(&user, source).await {
-                        tracing::error!(source = source.as_ref(), error = ?e, "failed to start automatic import");
-                    }
+                    let _ = service
+                        .maybe_start_auto_import(&user, source)
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(source = source.as_ref(), error = ?e, "failed to start automatic import");
+                        });
                 }
                 Ok(_) => {}
                 Err(e) => {
@@ -682,9 +685,13 @@ where
                 async move {
                     loop {
                         tokio::time::sleep(IMPORT_HEARTBEAT).await;
-                        if let Err(e) = service.repo.touch_importing(&user, &ids).await {
-                            tracing::warn!(error = ?e, "import heartbeat failed");
-                        }
+                        let _ = service
+                            .repo
+                            .touch_importing(&user, &ids)
+                            .await
+                            .inspect_err(|e| {
+                                tracing::warn!(error = ?e, "import heartbeat failed");
+                            });
                     }
                 }
             }));
@@ -744,9 +751,9 @@ where
                                 .unwrap_or_else(|_| {
                                     Err(anyhow::anyhow!("notion import timed out"))
                                 });
-                            if let Err(e) = outcome {
+                            let _ = outcome.inspect_err(|e| {
                                 tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
-                            }
+                            });
                             service
                                 .fail_unfinished(
                                     &user,
@@ -816,7 +823,12 @@ where
             .collect();
         let mut started = false;
         for source in auto_ready {
-            started |= self.maybe_start_auto_import(&user, source).await?;
+            match self.maybe_start_auto_import(&user, source).await {
+                Ok(did_start) => started |= did_start,
+                Err(e) => {
+                    tracing::warn!(source = source.as_ref(), error = ?e, "failed to self-heal automatic import start");
+                }
+            }
         }
         if started {
             runs = self.repo.list_runs(&user).await?;
