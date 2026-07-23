@@ -746,7 +746,6 @@ where
                 &message,
                 resolved_sender,
                 mentions,
-                notification_policy == PostMessageNotificationPolicy::Default,
             )
             .await
         {
@@ -795,7 +794,6 @@ where
         message: &MutatedMessage,
         resolved_sender: ResolvedNotificationSender,
         mentions: Vec<SimpleMention>,
-        resolve_invite_recipients: bool,
     ) -> anyhow::Result<PostedMessageNotificationContext> {
         let ResolvedNotificationSender {
             sender,
@@ -807,22 +805,6 @@ where
             .await
             .map_err(Into::into)?;
         let is_first_top_level_message = message_count <= 1 && message.thread_id.is_none();
-        let existing_user_ids = if resolve_invite_recipients
-            && is_first_top_level_message
-            && sender.as_user().is_some()
-        {
-            let participant_ids: Vec<_> = participants
-                .iter()
-                .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
-                .map(|id| id.into_owned())
-                .collect();
-            self.context
-                .get_existing_user_ids(participant_ids)
-                .await
-                .map_err(Into::into)?
-        } else {
-            HashSet::new()
-        };
 
         let (user_mentions, document_mention_ids) = mentions.into_iter().fold(
             (Vec::new(), Vec::new()),
@@ -872,7 +854,6 @@ where
             excluded_user_ids,
             recipients_without_sender,
             recipients_without_sender_and_mentions,
-            existing_user_ids,
             is_first_top_level_message,
         })
     }
@@ -1019,14 +1000,27 @@ where
         let Some(invited_by_user_id) = context.sender.as_user().cloned() else {
             return;
         };
+        let recipient_user_ids: Vec<_> = context
+            .recipients_without_sender_and_mentions
+            .into_iter()
+            .collect();
+        let existing_user_ids = match self
+            .context
+            .get_existing_user_ids(recipient_user_ids.clone())
+            .await
+        {
+            Ok(existing_user_ids) => existing_user_ids,
+            Err(err) => {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to get existing users for first-message invite");
+                return;
+            }
+        };
         self.send_invite_notification(InviteNotificationRequest {
             channel_id,
             invited_by_user_id,
-            recipient_user_ids: context
-                .recipients_without_sender_and_mentions
-                .into_iter()
-                .collect(),
-            existing_user_ids: context.existing_user_ids,
+            recipient_user_ids,
+            existing_user_ids,
             sender_profile_picture_url: context.sender_profile_picture_url,
             message_content: Some(message.content.clone()),
             metadata: context.metadata,
@@ -1147,7 +1141,6 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
-    existing_user_ids: HashSet<String>,
     is_first_top_level_message: bool,
 }
 
