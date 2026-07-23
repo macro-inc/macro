@@ -21,6 +21,7 @@ describe('ChannelTeamSettingsPanel', () => {
       />
     ));
 
+    expect(screen.getByText('Team access').closest('section')).not.toBeNull();
     fireEvent.click(screen.getByRole('switch', { name: 'Team channel' }));
 
     expect(onConvertToTeam).toHaveBeenCalledOnce();

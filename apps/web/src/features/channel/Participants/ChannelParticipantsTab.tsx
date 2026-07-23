@@ -139,17 +139,6 @@ export function ChannelParticipantsTab(props: {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
       <div class="max-w-200 size-full flex flex-col gap-2">
-        <Show when={canManageChannel() && supportsTeamSettings()}>
-          <ChannelTeamSettingsPanel
-            isTeamChannel={isTeamChannel()}
-            autoJoinTeam={autoJoinTeam()}
-            canConvertToTeam={canConvertToTeam()}
-            conversionUnavailableReason={conversionUnavailableReason()}
-            disabled={patchChannelMutation.isPending}
-            onConvertToTeam={convertToTeamChannel}
-            onAutoJoinTeamChange={updateAutoJoinTeam}
-          />
-        </Show>
         <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
           <Panel.Header class="justify-between gap-2 px-6">
             <div class="text-sm font-semibold">Participants</div>
@@ -165,6 +154,17 @@ export function ChannelParticipantsTab(props: {
           </Panel.Toolbar>
           <Panel.Body>
             <div class="flex h-full flex-col">
+              <Show when={canManageChannel() && supportsTeamSettings()}>
+                <ChannelTeamSettingsPanel
+                  isTeamChannel={isTeamChannel()}
+                  autoJoinTeam={autoJoinTeam()}
+                  canConvertToTeam={canConvertToTeam()}
+                  conversionUnavailableReason={conversionUnavailableReason()}
+                  disabled={patchChannelMutation.isPending}
+                  onConvertToTeam={convertToTeamChannel}
+                  onAutoJoinTeamChange={updateAutoJoinTeam}
+                />
+              </Show>
               <Show when={isEditable()}>
                 <div class="px-6 py-3 border-b border-edge-muted shrink-0">
                   <ParticipantsAddPanel
