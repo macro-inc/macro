@@ -21,7 +21,12 @@ function getPredicateNotifications(
 ) {
   const attachedNotifications = (entity as WithNotification<EntityData>)
     .notifications;
-  if (attachedNotifications) return attachedNotifications();
+
+  if (typeof attachedNotifications === 'function') {
+    return attachedNotifications();
+  }
+
+  if (Array.isArray(attachedNotifications)) return attachedNotifications;
 
   return notificationSource.notificationsByEntity()[
     compositeEntity(toNotificationEntity(entity))
