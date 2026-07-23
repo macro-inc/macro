@@ -9,8 +9,9 @@ use axum::{
     http::{Request as HttpRequest, header},
 };
 use macro_authorization::{
-    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use model_user::UserContext;
 use rootcause::Report;
@@ -51,6 +52,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize_bot(
         &self,
         token: &str,
+        bot_scope: BotScope,
         _acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         self.authorization_calls.fetch_add(1, Ordering::SeqCst);
@@ -64,6 +66,8 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                 .parse()
                 .expect("valid bot ID"),
             token_id: uuid::Uuid::from_u128(2),
+            bot_scope,
+            team_id: (bot_scope == BotScope::Team).then_some(uuid::Uuid::from_u128(3)),
             acting_user: None,
         })
     }
@@ -127,6 +131,7 @@ async fn execute(
             .unwrap(),
         RequestCredentials::Bot(token) => HttpRequest::builder()
             .header(BOT_TOKEN_HEADER, token)
+            .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
             .body(())
             .unwrap(),
     };

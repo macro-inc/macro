@@ -12,9 +12,9 @@ use axum::{
 #[allow(deprecated)]
 use macro_authorization::LEGACY_DSS_INTERNAL_API_KEY_HEADER;
 use macro_authorization::{
-    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, INTERNAL_API_KEY_HEADER,
-    INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims, MacroAuthorizationError,
-    MacroAuthorizationService, MacroAuthorizationState,
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -199,13 +199,14 @@ impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize_bot(
         &self,
         token: &str,
+        bot_scope: BotScope,
         _claims: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         if token != VALID_BOT_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
-        Ok(valid_bot_authentication())
+        Ok(valid_bot_authentication(bot_scope))
     }
 
     async fn authorize_internal(
@@ -387,6 +388,7 @@ async fn team_extractors_forbid_bots_without_membership_lookup() {
     let optional_error = extract_v2(
         Request::builder()
             .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
             .body(Body::empty())
             .expect("request should be valid"),
         &optional_state,
@@ -406,6 +408,7 @@ async fn team_extractors_forbid_bots_without_membership_lookup() {
     let required_error = extract_required_v2(
         Request::builder()
             .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
             .body(Body::empty())
             .expect("request should be valid"),
         &required_state,

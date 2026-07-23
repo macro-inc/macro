@@ -24,6 +24,10 @@
 //! | [`InternalOnly`] | Internal service, with optional acting user | [`InternalAuthorization`] |
 //! | [`AnyPrincipal`] | Any authenticated principal | [`MacroAuthorization`] |
 //!
+//! Bot requests must include `x-macro-bot-scope` with the value `user` or
+//! `team`; a missing or invalid scope is rejected with `400 Bad Request`, and
+//! only a team-owned bot may request team scope. Successful bot authorization
+//! includes the owning team ID when the bot is team-owned.
 //! Both extractors reject requests that combine explicit credential types
 //! (internal key, bot token, or user query/bearer) with `400 Bad Request` rather
 //! than choosing a principal. Query and bearer credentials are one user type,
@@ -48,9 +52,9 @@ pub mod outbound;
 pub use domain::{
     bot_authorizer::BotAuthorizerService,
     models::{
-        BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotTokenAuthorization,
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
-        MacroUserAuthentication, ResolvedBotActingUser, ValidatedIdentity,
+        BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotScope,
+        BotTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
+        MacroAuthorizationError, MacroUserAuthentication, ResolvedBotActingUser, ValidatedIdentity,
     },
     ports::{
         BotAuthorizationRepo, BotAuthorizer, JwtValidator, MacroAuthorizationService,
@@ -64,14 +68,14 @@ pub use domain::{
 pub use inbound::{
     ActingEntity, ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy,
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
-    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER, BotOnly, INTERNAL_API_KEY_HEADER,
-    INTERNAL_FUSIONAUTH_USER_ID_HEADER, INTERNAL_MACRO_ORGANIZATION_ID_HEADER,
-    INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization, InternalEntity, InternalOnly,
-    LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationState,
-    OptionalMacroAuthorizationExtractor, UserOnly, UserOrInternal, UserOrInternalAuthorization,
-    UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotOnly,
+    INTERNAL_API_KEY_HEADER, INTERNAL_FUSIONAUTH_USER_ID_HEADER,
+    INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization,
+    InternalEntity, InternalOnly, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
+    LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
+    MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserOnly, UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller,
+    UserOrInternalEntity, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]

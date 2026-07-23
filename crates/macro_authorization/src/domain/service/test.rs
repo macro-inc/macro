@@ -12,8 +12,9 @@ use uuid::Uuid;
 use super::MacroAuthorizationServiceImpl;
 use crate::domain::{
     models::{
-        BotActingUserClaims, BotAuthentication, InternalAuthConfig, InternalIdentityClaims,
-        MacroAuthorizationError, MacroUserAuthentication, ValidatedIdentity,
+        BotActingUserClaims, BotAuthentication, BotScope, InternalAuthConfig,
+        InternalIdentityClaims, MacroAuthorizationError, MacroUserAuthentication,
+        ValidatedIdentity,
     },
     ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer},
 };
@@ -32,6 +33,7 @@ impl JwtValidator for FakeJwtValidator {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BotAuthorizationCall {
     bot_token: String,
+    bot_scope: BotScope,
     acting_user: Option<BotActingUserClaims>,
 }
 
@@ -58,6 +60,7 @@ impl BotAuthorizer for FakeBotAuthorizer {
     async fn authorize_bot(
         &self,
         bot_token: &str,
+        bot_scope: BotScope,
         acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         self.calls
@@ -65,6 +68,7 @@ impl BotAuthorizer for FakeBotAuthorizer {
             .expect("calls lock poisoned")
             .push(BotAuthorizationCall {
                 bot_token: bot_token.to_string(),
+                bot_scope,
                 acting_user,
             });
 
@@ -92,6 +96,7 @@ impl MacroAuthorizationService for DefaultRejectingAuthorizationService {
 const INTERNAL_API_KEY: &str = "secret-key";
 const BOT_ID: BotId = BotId::new_from_uuid(Uuid::from_u128(1));
 const TOKEN_ID: Uuid = Uuid::from_u128(2);
+const TEAM_ID: Uuid = Uuid::from_u128(3);
 
 fn internal_auth_config(default_user_id: Option<&str>) -> InternalAuthConfig {
     InternalAuthConfig {
@@ -116,6 +121,8 @@ fn bot_authentication() -> BotAuthentication {
     BotAuthentication {
         bot_id: BOT_ID,
         token_id: TOKEN_ID,
+        bot_scope: BotScope::Team,
+        team_id: Some(TEAM_ID),
         acting_user: Some(MacroUserAuthentication {
             macro_user_id: MacroUserIdStr::try_from("macro|acting@example.com".to_string())
                 .expect("valid Macro user id"),
@@ -132,6 +139,8 @@ fn bot_authentication() -> BotAuthentication {
 fn assert_bot_authentication(bot: &BotAuthentication) {
     assert_eq!(bot.bot_id, BOT_ID);
     assert_eq!(bot.token_id, TOKEN_ID);
+    assert_eq!(bot.bot_scope, BotScope::Team);
+    assert_eq!(bot.team_id, Some(TEAM_ID));
 
     let acting_user = bot
         .acting_user
@@ -155,6 +164,7 @@ async fn no_bot_authorizer_rejects_bot_credentials() {
     let error = NoBotAuthorizer
         .authorize_bot(
             "bot-token",
+            BotScope::User,
             Some(BotActingUserClaims {
                 user_id: Some("macro|acting@example.com".to_string()),
                 fusion_user_id: None,
@@ -173,7 +183,7 @@ async fn no_bot_authorizer_rejects_bot_credentials() {
 #[tokio::test]
 async fn authorization_service_trait_rejects_bots_by_default() {
     let error = DefaultRejectingAuthorizationService
-        .authorize_bot("bot-token", None)
+        .authorize_bot("bot-token", BotScope::User, None)
         .await
         .unwrap_err();
 
@@ -186,7 +196,7 @@ async fn authorization_service_trait_rejects_bots_by_default() {
 #[tokio::test]
 async fn authorization_service_impl_rejects_bots_with_explicit_no_bot_authorizer() {
     let error = service_with_internal_auth(None)
-        .authorize_bot("bot-token", None)
+        .authorize_bot("bot-token", BotScope::User, None)
         .await
         .unwrap_err();
 
@@ -213,7 +223,7 @@ async fn authorize_bot_delegates_token_and_exact_acting_user_claims() {
     );
 
     let bot = service
-        .authorize_bot("bot-token", Some(claims.clone()))
+        .authorize_bot("bot-token", BotScope::Team, Some(claims.clone()))
         .await
         .unwrap();
 
@@ -222,6 +232,7 @@ async fn authorize_bot_delegates_token_and_exact_acting_user_claims() {
         authorizer.calls(),
         vec![BotAuthorizationCall {
             bot_token: "bot-token".to_string(),
+            bot_scope: BotScope::Team,
             acting_user: Some(claims),
         }]
     );
@@ -232,6 +243,7 @@ async fn authorize_bot_passes_through_authorizer_errors() {
     for expected in [
         MacroAuthorizationError::InvalidCredentials,
         MacroAuthorizationError::ActingUserNotAuthorized,
+        MacroAuthorizationError::BotScopeNotAuthorized,
         MacroAuthorizationError::Unavailable,
     ] {
         let service = MacroAuthorizationServiceImpl::new(
@@ -242,7 +254,10 @@ async fn authorize_bot_passes_through_authorizer_errors() {
             FakeBotAuthorizer::new(Err(expected)),
         );
 
-        let error = service.authorize_bot("bot-token", None).await.unwrap_err();
+        let error = service
+            .authorize_bot("bot-token", BotScope::User, None)
+            .await
+            .unwrap_err();
 
         assert_eq!(error.current_context(), &expected);
     }

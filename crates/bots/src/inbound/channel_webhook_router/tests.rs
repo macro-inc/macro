@@ -18,10 +18,11 @@ use entity_access::domain::{
 };
 use macro_authorization::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
-    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER,
+    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER,
     BotActingUserClaims as AuthorizationBotActingUserClaims, BotAuthentication, BotAuthorizer,
-    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, MacroUserAuthentication, ValidatedIdentity,
+    BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, MacroUserAuthentication,
+    ValidatedIdentity,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
@@ -484,6 +485,7 @@ enum TestBotAuthorizationMode {
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct BotAuthorizationCall {
     token: String,
+    bot_scope: BotScope,
     claims: Option<AuthorizationBotActingUserClaims>,
 }
 
@@ -528,6 +530,7 @@ impl BotAuthorizer for TestBotAuthorizer {
     async fn authorize_bot(
         &self,
         bot_token: &str,
+        bot_scope: BotScope,
         acting_user: Option<AuthorizationBotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         self.calls
@@ -535,6 +538,7 @@ impl BotAuthorizer for TestBotAuthorizer {
             .expect("bot authorization calls mutex poisoned")
             .push(BotAuthorizationCall {
                 token: bot_token.to_string(),
+                bot_scope,
                 claims: acting_user.clone(),
             });
 
@@ -544,7 +548,9 @@ impl BotAuthorizer for TestBotAuthorizer {
                 expected_claims,
                 authentication,
             } if bot_token == expected_token && acting_user == *expected_claims => {
-                Ok(authentication.as_ref().clone())
+                let mut authentication = authentication.as_ref().clone();
+                authentication.bot_scope = bot_scope;
+                Ok(authentication)
             }
             TestBotAuthorizationMode::Ok { .. } => {
                 Err(Report::new(MacroAuthorizationError::InvalidCredentials))
@@ -633,6 +639,8 @@ fn bot_authentication(bot_id: BotId) -> BotAuthentication {
     BotAuthentication {
         bot_id,
         token_id: Uuid::new_v4(),
+        bot_scope: BotScope::User,
+        team_id: None,
         acting_user: None,
     }
 }
@@ -641,6 +649,8 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
     BotAuthentication {
         bot_id,
         token_id: Uuid::new_v4(),
+        bot_scope: BotScope::User,
+        team_id: None,
         acting_user: Some(MacroUserAuthentication {
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),
@@ -767,6 +777,7 @@ async fn channel_webhook_router_preferred_token_posts_as_bot() {
     let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .body(Body::from(
             serde_json::json!({ "content": "hello preferred" }).to_string(),
         ))
@@ -818,6 +829,7 @@ async fn channel_webhook_router_verified_acting_user_is_not_used_for_attribution
     );
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .header(
             BOT_FOR_MACRO_USER_ID_HEADER,
             claims.user_id.as_deref().unwrap(),
@@ -850,6 +862,7 @@ async fn channel_webhook_router_verified_acting_user_is_not_used_for_attribution
             .as_slice(),
         &[BotAuthorizationCall {
             token: token.to_string(),
+            bot_scope: BotScope::User,
             claims: Some(claims),
         }]
     );
@@ -905,6 +918,7 @@ async fn channel_webhook_router_bot_token_and_user_are_ambiguous_without_posting
     let authorizer = rejecting_bot_authorizer();
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, "mbot_test_preferred")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .header(
             header::AUTHORIZATION,
             "Bearer macro|explicit-user@example.com",
@@ -948,6 +962,7 @@ async fn channel_webhook_router_both_bot_headers_are_ambiguous_before_validation
     let authorizer = rejecting_bot_authorizer();
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, "mbot_test_invalid_preferred")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .header(CHANNEL_BOT_TOKEN_HEADER, legacy_token)
         .body(Body::from(
             serde_json::json!({ "content": "ambiguous" }).to_string(),
@@ -986,6 +1001,7 @@ async fn channel_webhook_router_invalid_preferred_token_does_not_fall_back_to_le
     let authorizer = rejecting_bot_authorizer();
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, "mbot_test_invalid_preferred")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .body(Body::from(
             serde_json::json!({ "content": "invalid preferred" }).to_string(),
         ))
@@ -1020,6 +1036,7 @@ async fn channel_webhook_router_preferred_bot_outside_channel_is_unauthorized() 
     let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .body(Body::from(
             serde_json::json!({ "content": "outside channel" }).to_string(),
         ))
@@ -1052,6 +1069,7 @@ async fn channel_webhook_router_rejected_acting_user_is_forbidden_without_postin
     let authorizer = TestBotAuthorizer::rejecting(MacroAuthorizationError::ActingUserNotAuthorized);
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, "mbot_test_forbidden_claims")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
         .header(BOT_FOR_MACRO_USER_ID_HEADER, "macro|forbidden@example.com")
         .body(Body::from(
             serde_json::json!({ "content": "forbidden" }).to_string(),

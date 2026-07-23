@@ -5,7 +5,7 @@ use axum::{
     routing::post,
 };
 use macro_authorization::{
-    BOT_TOKEN_HEADER, INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
 };
 use serde::Deserialize;
 use tower::ServiceExt;
@@ -180,6 +180,7 @@ async fn bot_access_is_forbidden_before_body_and_acl_lookup() {
         .oneshot(
             request("/view")
                 .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .header(BOT_SCOPE_HEADER, "user")
                 .body(body("document", ENTITY_ID))
                 .unwrap(),
         )

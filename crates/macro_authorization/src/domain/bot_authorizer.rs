@@ -9,8 +9,9 @@ use rootcause::Report;
 
 use super::{
     models::{
-        BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotTokenAuthorization,
-        MacroAuthorizationError, MacroUserAuthentication, ResolvedBotActingUser,
+        BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotScope,
+        BotTokenAuthorization, MacroAuthorizationError, MacroUserAuthentication,
+        ResolvedBotActingUser,
     },
     ports::{BotAuthorizationRepo, BotAuthorizer},
 };
@@ -109,6 +110,7 @@ where
     async fn authorize_bot(
         &self,
         bot_token: &str,
+        bot_scope: BotScope,
         acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         let token = self
@@ -123,6 +125,14 @@ where
             .await
             .map_err(|error| repository_error(error, "mark bot token used"))?;
 
+        let team_id = match &token.owner {
+            BotAuthorizationOwner::Team { team_id } => Some(*team_id),
+            BotAuthorizationOwner::User { .. } | BotAuthorizationOwner::System => None,
+        };
+        if bot_scope == BotScope::Team && team_id.is_none() {
+            return Err(Report::new(MacroAuthorizationError::BotScopeNotAuthorized));
+        }
+
         let acting_user = match acting_user {
             Some(claims) => Some(user_authentication(
                 self.resolve_acting_user(&token, &claims).await?,
@@ -133,6 +143,8 @@ where
         Ok(BotAuthentication {
             bot_id: token.bot_id,
             token_id: token.token_id,
+            bot_scope,
+            team_id,
             acting_user,
         })
     }

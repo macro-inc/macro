@@ -146,6 +146,7 @@ fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAutho
         MacroAuthorizationError::CredentialsExpired => "jwt expired",
         MacroAuthorizationError::InvalidCredentials
         | MacroAuthorizationError::ActingUserNotAuthorized
+        | MacroAuthorizationError::BotScopeNotAuthorized
         | MacroAuthorizationError::Unavailable => "unauthorized",
     };
     tracing::error!(error=?error, "credential authorization failed");

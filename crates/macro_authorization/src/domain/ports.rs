@@ -4,8 +4,8 @@ use model_user::UserContext;
 use rootcause::Report;
 
 use super::models::{
-    BotActingUserClaims, BotAuthentication, BotTokenAuthorization, InternalIdentityClaims,
-    MacroAuthorizationError, ResolvedBotActingUser, ValidatedIdentity,
+    BotActingUserClaims, BotAuthentication, BotScope, BotTokenAuthorization,
+    InternalIdentityClaims, MacroAuthorizationError, ResolvedBotActingUser, ValidatedIdentity,
 };
 use uuid::Uuid;
 
@@ -44,6 +44,7 @@ pub trait BotAuthorizer: Clone + Send + Sync + 'static {
     fn authorize_bot(
         &self,
         bot_token: &str,
+        bot_scope: BotScope,
         acting_user: Option<BotActingUserClaims>,
     ) -> impl Future<Output = Result<BotAuthentication, Report<MacroAuthorizationError>>> + Send;
 }
@@ -56,6 +57,7 @@ impl BotAuthorizer for NoBotAuthorizer {
     async fn authorize_bot(
         &self,
         _bot_token: &str,
+        _bot_scope: BotScope,
         _acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
@@ -89,6 +91,7 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
     fn authorize_bot(
         &self,
         _bot_token: &str,
+        _bot_scope: BotScope,
         _acting_user: Option<BotActingUserClaims>,
     ) -> impl Future<Output = Result<BotAuthentication, Report<MacroAuthorizationError>>> + Send
     {

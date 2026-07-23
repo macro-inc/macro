@@ -4,7 +4,7 @@ use axum::{
     http::{Request, StatusCode},
     routing::get,
 };
-use macro_authorization::BOT_TOKEN_HEADER;
+use macro_authorization::{BOT_SCOPE_HEADER, BOT_TOKEN_HEADER};
 use tower::ServiceExt;
 
 use super::*;
@@ -35,6 +35,7 @@ async fn bot_credentials_are_forbidden_without_permission_lookup() {
         .with_state(state.clone());
     let request = Request::get(format!("/foreign/{FOREIGN_ENTITY_ID}"))
         .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "user")
         .body(Body::empty())
         .expect("request should be valid");
 

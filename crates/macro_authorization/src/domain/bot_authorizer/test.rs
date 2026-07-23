@@ -139,13 +139,15 @@ fn assert_error(
 async fn authorizes_bare_bot_and_marks_the_valid_token_used() {
     let repo = FakeRepo::owned_by_user();
     let authentication = BotAuthorizerService::new(repo.clone())
-        .authorize_bot(RAW_TOKEN, None)
+        .authorize_bot(RAW_TOKEN, BotScope::User, None)
         .await
         .unwrap();
 
     let token = repo.token.as_ref().unwrap();
     assert_eq!(authentication.bot_id, token.bot_id);
     assert_eq!(authentication.token_id, token.token_id);
+    assert_eq!(authentication.bot_scope, BotScope::User);
+    assert_eq!(authentication.team_id, None);
     assert!(authentication.acting_user.is_none());
 
     let calls = repo.calls.lock().unwrap();
@@ -158,10 +160,12 @@ async fn authorizes_bare_bot_and_marks_the_valid_token_used() {
 async fn authorizes_exact_user_owner_with_consistent_claims() {
     let repo = FakeRepo::owned_by_user();
     let authentication = BotAuthorizerService::new(repo.clone())
-        .authorize_bot(RAW_TOKEN, Some(claims()))
+        .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims()))
         .await
         .unwrap();
 
+    assert_eq!(authentication.bot_scope, BotScope::User);
+    assert_eq!(authentication.team_id, None);
     let acting_user = authentication.acting_user.unwrap();
     assert_eq!(acting_user.macro_user_id.as_ref(), OWNER_ID);
     assert_eq!(acting_user.user_context.user_id, OWNER_ID);
@@ -172,6 +176,46 @@ async fn authorizes_exact_user_owner_with_consistent_claims() {
     );
     assert_eq!(acting_user.user_context.permissions, None);
     assert_eq!(repo.calls.lock().unwrap().acting_user_claims, [claims()]);
+}
+
+#[tokio::test]
+async fn rejects_team_scope_for_user_and_system_bots() {
+    for owner in [
+        BotAuthorizationOwner::User {
+            user_id: OWNER_ID.to_string(),
+        },
+        BotAuthorizationOwner::System,
+    ] {
+        let mut repo = FakeRepo::owned_by_user();
+        repo.token.as_mut().unwrap().owner = owner;
+        let token_id = repo.token.as_ref().unwrap().token_id;
+
+        let result = BotAuthorizerService::new(repo.clone())
+            .authorize_bot(RAW_TOKEN, BotScope::Team, None)
+            .await;
+
+        assert_error(result, MacroAuthorizationError::BotScopeNotAuthorized);
+        let calls = repo.calls.lock().unwrap();
+        assert_eq!(calls.marked_token_ids, [token_id]);
+        assert!(calls.acting_user_claims.is_empty());
+        assert!(calls.team_lookups.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn user_scope_preserves_the_owning_team_id() {
+    let team_id = Uuid::from_u128(3);
+    let mut repo = FakeRepo::owned_by_user();
+    repo.token.as_mut().unwrap().owner = BotAuthorizationOwner::Team { team_id };
+
+    let authentication = BotAuthorizerService::new(repo.clone())
+        .authorize_bot(RAW_TOKEN, BotScope::User, None)
+        .await
+        .unwrap();
+
+    assert_eq!(authentication.bot_scope, BotScope::User);
+    assert_eq!(authentication.team_id, Some(team_id));
+    assert!(repo.calls.lock().unwrap().team_lookups.is_empty());
 }
 
 #[tokio::test]
@@ -189,13 +233,15 @@ async fn authorizes_current_team_member_and_rejects_non_member() {
         repo.user_has_team = has_team;
 
         let result = BotAuthorizerService::new(repo.clone())
-            .authorize_bot(RAW_TOKEN, Some(claims()))
+            .authorize_bot(RAW_TOKEN, BotScope::Team, Some(claims()))
             .await;
 
         if let Some(expected) = expected {
             assert_error(result, expected);
         } else {
-            result.unwrap();
+            let authentication = result.unwrap();
+            assert_eq!(authentication.bot_scope, BotScope::Team);
+            assert_eq!(authentication.team_id, Some(team_id));
         }
         assert_eq!(
             repo.calls.lock().unwrap().team_lookups,
@@ -210,7 +256,7 @@ async fn rejects_system_bot_claims_before_user_lookups() {
     repo.token.as_mut().unwrap().owner = BotAuthorizationOwner::System;
 
     let result = BotAuthorizerService::new(repo.clone())
-        .authorize_bot(RAW_TOKEN, Some(claims()))
+        .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims()))
         .await;
 
     assert_error(result, MacroAuthorizationError::ActingUserNotAuthorized);
@@ -242,7 +288,7 @@ async fn rejects_missing_malformed_or_inconsistent_acting_user_claims() {
 
     for claims in invalid_claims {
         let result = BotAuthorizerService::new(FakeRepo::owned_by_user())
-            .authorize_bot(RAW_TOKEN, Some(claims))
+            .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims))
             .await;
         assert_error(result, MacroAuthorizationError::ActingUserNotAuthorized);
     }
@@ -254,7 +300,7 @@ async fn rejects_unknown_token_without_marking_or_policy_lookups() {
     repo.token = None;
 
     let result = BotAuthorizerService::new(repo.clone())
-        .authorize_bot(RAW_TOKEN, Some(claims()))
+        .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims()))
         .await;
 
     assert_error(result, MacroAuthorizationError::InvalidCredentials);
@@ -271,7 +317,7 @@ async fn maps_repository_failures_to_unavailable() {
         Failure::FindActingUser,
     ] {
         let result = BotAuthorizerService::new(FakeRepo::owned_by_user().fail_at(failure))
-            .authorize_bot(RAW_TOKEN, Some(claims()))
+            .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims()))
             .await;
         assert_error(result, MacroAuthorizationError::Unavailable);
     }
@@ -280,7 +326,7 @@ async fn maps_repository_failures_to_unavailable() {
     let mut repo = FakeRepo::owned_by_user().fail_at(Failure::UserHasTeam);
     repo.token.as_mut().unwrap().owner = BotAuthorizationOwner::Team { team_id };
     let result = BotAuthorizerService::new(repo)
-        .authorize_bot(RAW_TOKEN, Some(claims()))
+        .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims()))
         .await;
     assert_error(result, MacroAuthorizationError::Unavailable);
 }

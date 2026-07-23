@@ -24,7 +24,7 @@ use crate::{MacroAuthorization, MacroUserAuthentication};
 
 pub use bot::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
-    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER,
+    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER,
 };
 #[allow(deprecated)]
 pub use internal::{

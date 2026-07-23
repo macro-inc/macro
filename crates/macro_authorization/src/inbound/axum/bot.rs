@@ -5,13 +5,16 @@ use ::axum::{
 use rootcause::Report;
 
 use crate::{
-    BotActingUserClaims, BotAuthentication, MacroAuthorizationError, MacroAuthorizationService,
+    BotActingUserClaims, BotAuthentication, BotScope, MacroAuthorizationError,
+    MacroAuthorizationService,
 };
 
 use super::{MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection};
 
 /// Header carrying a bot authentication token.
 pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
+/// Header carrying the access scope for a bot-authorized request.
+pub const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
 /// Header carrying the Macro user ID a bot claims to act for.
 pub const BOT_FOR_MACRO_USER_ID_HEADER: &str = "x-macro-bot-for-macro-user-id";
 /// Header carrying the FusionAuth user ID a bot claims to act for.
@@ -30,11 +33,12 @@ where
     let Some(token) = bot_token(&parts.headers)? else {
         return Ok(None);
     };
+    let bot_scope = bot_scope(&parts.headers)?;
     let claims = bot_acting_user_claims(&parts.headers)?;
     let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
     let bot = authorization
         .service
-        .authorize_bot(&token, claims)
+        .authorize_bot(&token, bot_scope, claims)
         .await
         .map_err(bot_authorization_rejection)?;
 
@@ -51,6 +55,20 @@ fn bot_token(headers: &HeaderMap) -> Result<Option<String>, MacroAuthorizationRe
     }
 
     Ok(Some(token.to_owned()))
+}
+
+fn bot_scope(headers: &HeaderMap) -> Result<BotScope, MacroAuthorizationRejection> {
+    let scope = headers
+        .get(BOT_SCOPE_HEADER)
+        .ok_or_else(invalid_bot_scope_rejection)?
+        .to_str()
+        .map_err(|_| invalid_bot_scope_rejection())?;
+
+    match scope {
+        "user" => Ok(BotScope::User),
+        "team" => Ok(BotScope::Team),
+        _ => Err(invalid_bot_scope_rejection()),
+    }
 }
 
 fn bot_acting_user_claims(
@@ -89,6 +107,10 @@ fn bot_claim_header(
         .transpose()
 }
 
+fn invalid_bot_scope_rejection() -> MacroAuthorizationRejection {
+    status_rejection(StatusCode::BAD_REQUEST, "invalid bot scope")
+}
+
 fn invalid_bot_claims_rejection() -> MacroAuthorizationRejection {
     status_rejection(StatusCode::BAD_REQUEST, "invalid bot claims")
 }
@@ -99,7 +121,8 @@ fn bot_authorization_rejection(
     let rejection = match error.current_context() {
         MacroAuthorizationError::CredentialsExpired
         | MacroAuthorizationError::InvalidCredentials => rejection("unauthorized"),
-        MacroAuthorizationError::ActingUserNotAuthorized => {
+        MacroAuthorizationError::ActingUserNotAuthorized
+        | MacroAuthorizationError::BotScopeNotAuthorized => {
             status_rejection(StatusCode::FORBIDDEN, "forbidden")
         }
         MacroAuthorizationError::Unavailable => {

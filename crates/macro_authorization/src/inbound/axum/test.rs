@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::{
-    BotActingUserClaims, BotAuthentication, InternalIdentityClaims, MacroAuthorization,
+    BotActingUserClaims, BotAuthentication, BotScope, InternalIdentityClaims, MacroAuthorization,
     MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication,
 };
 
@@ -35,6 +35,7 @@ const BOT_ACTING_USER_ID: &str = "macro|bot-acting@example.com";
 const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 const BOT_ID: BotId = BotId::new_from_uuid(Uuid::from_u128(1));
 const BOT_TOKEN_ID: Uuid = Uuid::from_u128(2);
+const BOT_TEAM_ID: Uuid = Uuid::from_u128(3);
 const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,6 +43,7 @@ enum AuthorizationCall {
     Jwt(String),
     Bot {
         token: String,
+        bot_scope: BotScope,
         claims: Option<BotActingUserClaims>,
     },
     Internal {
@@ -85,6 +87,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize_bot(
         &self,
         token: &str,
+        bot_scope: BotScope,
         claims: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         self.calls
@@ -92,16 +95,20 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             .expect("calls lock poisoned")
             .push(AuthorizationCall::Bot {
                 token: token.to_owned(),
+                bot_scope,
                 claims: claims.clone(),
             });
 
         match token {
-            "bot-bare" => Ok(bot_authentication(None)),
-            "bot-acting" => Ok(bot_authentication(Some(BOT_ACTING_USER_ID))),
+            "bot-bare" => Ok(bot_authentication(bot_scope, None)),
+            "bot-acting" => Ok(bot_authentication(bot_scope, Some(BOT_ACTING_USER_ID))),
             "bot-expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             "bot-forbidden" => Err(Report::new(
                 MacroAuthorizationError::ActingUserNotAuthorized,
             )),
+            "bot-scope-forbidden" => {
+                Err(Report::new(MacroAuthorizationError::BotScopeNotAuthorized))
+            }
             "bot-unavailable" => Err(Report::new(MacroAuthorizationError::Unavailable)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
@@ -146,10 +153,12 @@ fn user_context(user_id: &str, organization_id: Option<i32>) -> UserContext {
     }
 }
 
-fn bot_authentication(acting_user_id: Option<&str>) -> BotAuthentication {
+fn bot_authentication(bot_scope: BotScope, acting_user_id: Option<&str>) -> BotAuthentication {
     BotAuthentication {
         bot_id: BOT_ID,
         token_id: BOT_TOKEN_ID,
+        bot_scope,
+        team_id: (bot_scope == BotScope::Team).then_some(BOT_TEAM_ID),
         acting_user: acting_user_id.map(|user_id| MacroUserAuthentication {
             macro_user_id: MacroUserIdStr::try_from(user_id.to_owned())
                 .expect("valid bot acting user id"),
@@ -306,6 +315,8 @@ fn bot_json(bot: &BotAuthentication, acting_entity: &str) -> Value {
         "acting_entity": acting_entity,
         "bot_id": bot.bot_id.to_string(),
         "token_id": bot.token_id.to_string(),
+        "bot_scope": bot.bot_scope.as_str(),
+        "team_id": bot.team_id.map(|team_id| team_id.to_string()),
         "acting_user_id": bot
             .acting_user
             .as_ref()
@@ -391,6 +402,12 @@ fn request(path: &str) -> ::axum::http::request::Builder {
     Request::get(path)
 }
 
+fn bot_request(path: &str, token: &str) -> ::axum::http::request::Builder {
+    request(path)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+}
+
 fn empty_body(request: ::axum::http::request::Builder) -> Request<Body> {
     request.body(Body::empty()).unwrap()
 }
@@ -460,7 +477,7 @@ async fn extractors_report_the_authenticating_entity() {
             Some(VALID_USER_ID.to_string()),
         ),
         (
-            empty_body(request("/required/acting-user").header(BOT_TOKEN_HEADER, "bot-acting")),
+            empty_body(bot_request("/required/acting-user", "bot-acting")),
             Some(BOT_ID.to_string()),
         ),
         (
@@ -476,7 +493,7 @@ async fn extractors_report_the_authenticating_entity() {
             Some(OPTIONAL_USER_ID.to_string()),
         ),
         (
-            empty_body(request("/optional/any-principal").header(BOT_TOKEN_HEADER, "bot-bare")),
+            empty_body(bot_request("/optional/any-principal", "bot-bare")),
             Some(BOT_ID.to_string()),
         ),
         (
@@ -489,7 +506,7 @@ async fn extractors_report_the_authenticating_entity() {
             Some(VALID_USER_ID.to_string()),
         ),
         (
-            empty_body(request("/bot").header(BOT_TOKEN_HEADER, "bot-bare")),
+            empty_body(bot_request("/bot", "bot-bare")),
             Some(BOT_ID.to_string()),
         ),
         (
@@ -1194,6 +1211,7 @@ async fn malformed_internal_organization_is_ignored() {
 #[test]
 fn bot_header_constants_use_the_resolved_names() {
     assert_eq!(BOT_TOKEN_HEADER, "x-macro-bot-token");
+    assert_eq!(BOT_SCOPE_HEADER, "x-macro-bot-scope");
     assert_eq!(
         BOT_FOR_MACRO_USER_ID_HEADER,
         "x-macro-bot-for-macro-user-id"
@@ -1214,8 +1232,7 @@ async fn acting_user_and_any_principal_accept_bot_with_verified_acting_user() {
 
     for path in ["/required/acting-user", "/optional/any-principal"] {
         let request = empty_body(
-            request(path)
-                .header(BOT_TOKEN_HEADER, "bot-acting")
+            bot_request(path, "bot-acting")
                 .header(BOT_FOR_MACRO_USER_ID_HEADER, BOT_ACTING_USER_ID)
                 .header(BOT_FOR_FUSIONAUTH_USER_ID_HEADER, "fusion-claimed")
                 .header(BOT_FOR_ORGANIZATION_ID_HEADER, "42"),
@@ -1236,10 +1253,12 @@ async fn acting_user_and_any_principal_accept_bot_with_verified_acting_user() {
         [
             AuthorizationCall::Bot {
                 token: "bot-acting".to_owned(),
+                bot_scope: BotScope::User,
                 claims: claims.clone(),
             },
             AuthorizationCall::Bot {
                 token: "bot-acting".to_owned(),
+                bot_scope: BotScope::User,
                 claims,
             },
         ]
@@ -1250,31 +1269,21 @@ async fn acting_user_and_any_principal_accept_bot_with_verified_acting_user() {
 async fn bare_bot_is_forbidden_by_no_bot_policies_and_accepted_by_bot_only() {
     let (router, service) = test_router();
 
-    let (status, body) = send(
-        &router,
-        empty_body(request("/required").header(BOT_TOKEN_HEADER, "bot-bare")),
-    )
-    .await;
+    let (status, body) = send(&router, empty_body(bot_request("/required", "bot-bare"))).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body, json!({ "message": "forbidden" }));
 
-    let (status, body) = send(
-        &router,
-        empty_body(request("/optional").header(BOT_TOKEN_HEADER, "bot-bare")),
-    )
-    .await;
+    let (status, body) = send(&router, empty_body(bot_request("/optional", "bot-bare"))).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body, json!({ "message": "forbidden" }));
 
     for path in ["/bot", "/optional-bot"] {
-        let (status, body) = send(
-            &router,
-            empty_body(request(path).header(BOT_TOKEN_HEADER, "bot-bare")),
-        )
-        .await;
+        let (status, body) = send(&router, empty_body(bot_request(path, "bot-bare"))).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["bot_id"], BOT_ID.to_string());
         assert_eq!(body["token_id"], BOT_TOKEN_ID.to_string());
+        assert_eq!(body["bot_scope"], BotScope::User.as_str());
+        assert_eq!(body["team_id"], Value::Null);
         assert_eq!(body["acting_user_id"], Value::Null);
     }
 
@@ -1283,10 +1292,65 @@ async fn bare_bot_is_forbidden_by_no_bot_policies_and_accepted_by_bot_only() {
         vec![
             AuthorizationCall::Bot {
                 token: "bot-bare".to_owned(),
+                bot_scope: BotScope::User,
                 claims: None,
             };
             4
         ]
+    );
+}
+
+#[tokio::test]
+async fn bot_scope_is_required_and_must_be_user_or_team() {
+    let (router, service) = test_router();
+
+    for request in [
+        request("/bot").header(BOT_TOKEN_HEADER, "bot-bare"),
+        request("/bot")
+            .header(BOT_TOKEN_HEADER, "bot-bare")
+            .header(BOT_SCOPE_HEADER, ""),
+        request("/bot")
+            .header(BOT_TOKEN_HEADER, "bot-bare")
+            .header(BOT_SCOPE_HEADER, "organization"),
+    ] {
+        let (status, body) = send(&router, empty_body(request)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body, json!({ "message": "invalid bot scope" }));
+    }
+
+    let malformed_scope = HeaderValue::from_bytes(b"\xff").unwrap();
+    let request = empty_body(
+        request("/bot")
+            .header(BOT_TOKEN_HEADER, "bot-bare")
+            .header(BOT_SCOPE_HEADER, malformed_scope),
+    );
+    let (status, body) = send(&router, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({ "message": "invalid bot scope" }));
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_bot_scope_is_forwarded_and_returned() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/bot")
+            .header(BOT_TOKEN_HEADER, "bot-bare")
+            .header(BOT_SCOPE_HEADER, BotScope::Team.as_str()),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["bot_scope"], BotScope::Team.as_str());
+    assert_eq!(body["team_id"], BOT_TEAM_ID.to_string());
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Bot {
+            token: "bot-bare".to_owned(),
+            bot_scope: BotScope::Team,
+            claims: None,
+        }]
     );
 }
 
@@ -1306,18 +1370,18 @@ async fn missing_malformed_and_blank_bot_tokens_follow_required_and_optional_con
         let malformed_token = HeaderValue::from_bytes(b"\xff").unwrap();
         let (status, body) = send(
             &router,
-            empty_body(request(path).header(BOT_TOKEN_HEADER, malformed_token)),
+            empty_body(
+                request(path)
+                    .header(BOT_TOKEN_HEADER, malformed_token)
+                    .header(BOT_SCOPE_HEADER, BotScope::User.as_str()),
+            ),
         )
         .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(body, json!({ "message": "unauthorized" }));
 
         for blank_token in ["", "   "] {
-            let (status, body) = send(
-                &router,
-                empty_body(request(path).header(BOT_TOKEN_HEADER, blank_token)),
-            )
-            .await;
+            let (status, body) = send(&router, empty_body(bot_request(path, blank_token))).await;
             assert_eq!(status, StatusCode::UNAUTHORIZED);
             assert_eq!(body, json!({ "message": "unauthorized" }));
         }
@@ -1332,35 +1396,25 @@ async fn bot_authorization_errors_have_generic_status_specific_responses() {
 
     for token in ["bot-invalid", "bot-expired", "bot-revoked"] {
         for path in ["/required", "/optional", "/bot", "/optional-bot"] {
-            let (status, body) = send(
-                &router,
-                empty_body(request(path).header(BOT_TOKEN_HEADER, token)),
-            )
-            .await;
+            let (status, body) = send(&router, empty_body(bot_request(path, token))).await;
             assert_eq!(status, StatusCode::UNAUTHORIZED);
             assert_eq!(body, json!({ "message": "unauthorized" }));
         }
     }
 
     for path in ["/required", "/optional", "/bot", "/optional-bot"] {
-        let (status, body) = send(
-            &router,
-            empty_body(request(path).header(BOT_TOKEN_HEADER, "bot-forbidden")),
-        )
-        .await;
-        assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(body, json!({ "message": "forbidden" }));
+        for token in ["bot-forbidden", "bot-scope-forbidden"] {
+            let (status, body) = send(&router, empty_body(bot_request(path, token))).await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+            assert_eq!(body, json!({ "message": "forbidden" }));
+        }
 
-        let (status, body) = send(
-            &router,
-            empty_body(request(path).header(BOT_TOKEN_HEADER, "bot-unavailable")),
-        )
-        .await;
+        let (status, body) = send(&router, empty_body(bot_request(path, "bot-unavailable"))).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(body, json!({ "message": "internal server error" }));
     }
 
-    assert_eq!(service.calls().len(), 20);
+    assert_eq!(service.calls().len(), 24);
     assert!(
         service
             .calls()
@@ -1381,11 +1435,7 @@ async fn bot_claim_headers_are_strictly_parsed_before_authorization() {
     ] {
         let (status, body) = send(
             &router,
-            empty_body(
-                request("/bot")
-                    .header(BOT_TOKEN_HEADER, "bot-acting")
-                    .header(header, malformed_header.clone()),
-            ),
+            empty_body(bot_request("/bot", "bot-acting").header(header, malformed_header.clone())),
         )
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -1396,8 +1446,7 @@ async fn bot_claim_headers_are_strictly_parsed_before_authorization() {
         let (status, body) = send(
             &router,
             empty_body(
-                request("/bot")
-                    .header(BOT_TOKEN_HEADER, "bot-acting")
+                bot_request("/bot", "bot-acting")
                     .header(BOT_FOR_ORGANIZATION_ID_HEADER, organization_id),
             ),
         )
@@ -1413,9 +1462,7 @@ async fn bot_claim_headers_are_strictly_parsed_before_authorization() {
 async fn bot_claims_without_a_user_identifier_reach_the_authorizer() {
     let (router, service) = test_router();
     let request = empty_body(
-        request("/bot")
-            .header(BOT_TOKEN_HEADER, "bot-forbidden")
-            .header(BOT_FOR_ORGANIZATION_ID_HEADER, "42"),
+        bot_request("/bot", "bot-forbidden").header(BOT_FOR_ORGANIZATION_ID_HEADER, "42"),
     );
 
     let (status, body) = send(&router, request).await;
@@ -1426,6 +1473,7 @@ async fn bot_claims_without_a_user_identifier_reach_the_authorizer() {
         service.calls(),
         [AuthorizationCall::Bot {
             token: "bot-forbidden".to_owned(),
+            bot_scope: BotScope::User,
             claims: Some(BotActingUserClaims {
                 user_id: None,
                 fusion_user_id: None,
@@ -1461,26 +1509,24 @@ async fn every_combination_of_multiple_explicit_credential_types_is_ambiguous() 
                     .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
                     .header("authorization", "Bearer valid"),
             ),
-            empty_body(
-                request(path)
-                    .header(BOT_TOKEN_HEADER, "bot-acting")
-                    .header("authorization", "Bearer valid"),
-            ),
+            empty_body(bot_request(path, "bot-acting").header("authorization", "Bearer valid")),
             empty_body(
                 request(path)
                     .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
-                    .header(BOT_TOKEN_HEADER, "bot-acting"),
+                    .header(BOT_TOKEN_HEADER, "bot-acting")
+                    .header(BOT_SCOPE_HEADER, BotScope::User.as_str()),
             ),
             empty_body(
                 request(path)
                     .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
                     .header(BOT_TOKEN_HEADER, "bot-acting")
+                    .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
                     .header("authorization", "Bearer valid"),
             ),
             empty_body(
                 request(&path_with_query).header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY),
             ),
-            empty_body(request(&path_with_query).header(BOT_TOKEN_HEADER, "bot-acting")),
+            empty_body(bot_request(&path_with_query, "bot-acting")),
         ];
 
         for request in requests {
@@ -1498,8 +1544,7 @@ async fn explicit_credentials_win_over_ambient_cookies_without_fallback() {
     let (router, service) = test_router();
 
     let valid_bot_request = empty_body(
-        request("/required")
-            .header(BOT_TOKEN_HEADER, "bot-acting")
+        bot_request("/required", "bot-acting")
             .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
     );
     let (status, body) = send(&router, valid_bot_request).await;
@@ -1507,8 +1552,7 @@ async fn explicit_credentials_win_over_ambient_cookies_without_fallback() {
     assert_eq!(body, json!({ "message": "forbidden" }));
 
     let invalid_bot_request = empty_body(
-        request("/required")
-            .header(BOT_TOKEN_HEADER, "bot-invalid")
+        bot_request("/required", "bot-invalid")
             .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
     );
     let (status, body) = send(&router, invalid_bot_request).await;
@@ -1529,10 +1573,12 @@ async fn explicit_credentials_win_over_ambient_cookies_without_fallback() {
         [
             AuthorizationCall::Bot {
                 token: "bot-acting".to_owned(),
+                bot_scope: BotScope::User,
                 claims: None,
             },
             AuthorizationCall::Bot {
                 token: "bot-invalid".to_owned(),
+                bot_scope: BotScope::User,
                 claims: None,
             },
         ]
@@ -1561,12 +1607,8 @@ const PRINCIPAL_CREDENTIALS: [PrincipalCredentials; 6] = [
 fn principal_request(path: &str, credentials: PrincipalCredentials) -> Request<Body> {
     let request = match credentials {
         PrincipalCredentials::User => request(path).header("authorization", "Bearer valid"),
-        PrincipalCredentials::BotWithActingUser => {
-            request(path).header(BOT_TOKEN_HEADER, "bot-acting")
-        }
-        PrincipalCredentials::BotWithoutActingUser => {
-            request(path).header(BOT_TOKEN_HEADER, "bot-bare")
-        }
+        PrincipalCredentials::BotWithActingUser => bot_request(path, "bot-acting"),
+        PrincipalCredentials::BotWithoutActingUser => bot_request(path, "bot-bare"),
         PrincipalCredentials::InternalWithActingUser => request(path)
             .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
             .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID),
@@ -1780,7 +1822,7 @@ async fn assert_policy_matrix<const N: usize>(policies: [(&str, [StatusCode; 6])
 fn policies_report_typed_acting_entity_variants_with_display_parity() {
     let user = macro_user_authentication(VALID_USER_ID);
     let internal_user = macro_user_authentication(STANDARD_INTERNAL_USER_ID);
-    let bot = bot_authentication(Some(BOT_ACTING_USER_ID));
+    let bot = bot_authentication(BotScope::User, Some(BOT_ACTING_USER_ID));
 
     let direct_user = MacroAuthorization::User(user.clone());
     let user_or_internal = UserOrInternal::narrow(direct_user.clone()).unwrap();

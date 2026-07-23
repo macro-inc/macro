@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -18,6 +18,31 @@ pub struct MacroUserAuthentication {
     pub user_context: UserContext,
 }
 
+/// The access scope selected for a bot-authorized request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BotScope {
+    /// Authorize access in the bot's user scope.
+    User,
+    /// Authorize access in the bot's team scope.
+    Team,
+}
+
+impl BotScope {
+    /// Return the header representation of this scope.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Team => "team",
+        }
+    }
+}
+
+impl fmt::Display for BotScope {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 /// A bot principal whose token has been validated.
 ///
 /// The raw token is deliberately excluded so it cannot flow into handlers,
@@ -28,6 +53,10 @@ pub struct BotAuthentication {
     pub bot_id: BotId,
     /// The token row used to authenticate, for audit and telemetry.
     pub token_id: Uuid,
+    /// The access scope required by this bot-authorized request.
+    pub bot_scope: BotScope,
+    /// The bot's owning team for team-owned bots, regardless of the requested scope.
+    pub team_id: Option<Uuid>,
     /// The verified acting user, when one was requested and authorized.
     pub acting_user: Option<MacroUserAuthentication>,
 }
@@ -156,7 +185,7 @@ pub struct ValidatedIdentity {
     pub permissions: Option<HashSet<String>>,
 }
 
-/// Errors returned when a credential cannot authorize a user.
+/// Errors returned when a credential cannot authorize a caller.
 ///
 /// The variants deliberately omit validation implementation details so callers
 /// can handle authorization failures without exposing sensitive information.
@@ -171,6 +200,9 @@ pub enum MacroAuthorizationError {
     /// The authenticated bot is not authorized to act for the claimed user.
     #[error("acting user not authorized")]
     ActingUserNotAuthorized,
+    /// The authenticated bot cannot use the requested access scope.
+    #[error("bot scope not authorized")]
+    BotScopeNotAuthorized,
     /// Authorization could not be completed because a required service failed.
     #[error("authorization unavailable")]
     Unavailable,

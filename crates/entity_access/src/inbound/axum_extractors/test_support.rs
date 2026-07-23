@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use axum::extract::FromRef;
 use macro_authorization::{
-    BotActingUserClaims, BotAuthentication, InternalIdentityClaims, MacroAuthorizationError,
-    MacroAuthorizationService, MacroAuthorizationState,
+    BotActingUserClaims, BotAuthentication, BotScope, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -173,13 +173,14 @@ impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize_bot(
         &self,
         token: &str,
+        bot_scope: BotScope,
         _claims: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         if token != VALID_BOT_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
-        Ok(valid_bot_authentication())
+        Ok(valid_bot_authentication(bot_scope))
     }
 
     async fn authorize_internal(
@@ -195,10 +196,12 @@ impl MacroAuthorizationService for FakeAuthorizationService {
     }
 }
 
-pub(super) fn valid_bot_authentication() -> BotAuthentication {
+pub(super) fn valid_bot_authentication(bot_scope: BotScope) -> BotAuthentication {
     BotAuthentication {
         bot_id: BotId::new_from_uuid(Uuid::from_u128(1)),
         token_id: Uuid::from_u128(2),
+        bot_scope,
+        team_id: (bot_scope == BotScope::Team).then_some(Uuid::from_u128(3)),
         acting_user: None,
     }
 }

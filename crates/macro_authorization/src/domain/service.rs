@@ -9,8 +9,8 @@ use rootcause::Report;
 
 use super::{
     models::{
-        BotActingUserClaims, BotAuthentication, InternalAuthConfig, InternalIdentityClaims,
-        MacroAuthorizationError,
+        BotActingUserClaims, BotAuthentication, BotScope, InternalAuthConfig,
+        InternalIdentityClaims, MacroAuthorizationError,
     },
     ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService},
 };
@@ -25,6 +25,7 @@ trait DynBotAuthorizer: Send + Sync {
     fn authorize_bot<'a>(
         &'a self,
         bot_token: &'a str,
+        bot_scope: BotScope,
         acting_user: Option<BotActingUserClaims>,
     ) -> BotAuthorizationFuture<'a>;
 }
@@ -36,9 +37,15 @@ where
     fn authorize_bot<'a>(
         &'a self,
         bot_token: &'a str,
+        bot_scope: BotScope,
         acting_user: Option<BotActingUserClaims>,
     ) -> BotAuthorizationFuture<'a> {
-        Box::pin(BotAuthorizer::authorize_bot(self, bot_token, acting_user))
+        Box::pin(BotAuthorizer::authorize_bot(
+            self,
+            bot_token,
+            bot_scope,
+            acting_user,
+        ))
     }
 }
 
@@ -86,22 +93,29 @@ where
         fields(
             bot_id = tracing::field::Empty,
             token_id = tracing::field::Empty,
+            bot_scope = tracing::field::Empty,
+            team_id = tracing::field::Empty,
             acting_user_id = tracing::field::Empty,
         )
     )]
     async fn authorize_bot(
         &self,
         bot_token: &str,
+        bot_scope: BotScope,
         acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         let bot = self
             .bot_authorizer
-            .authorize_bot(bot_token, acting_user)
+            .authorize_bot(bot_token, bot_scope, acting_user)
             .await?;
 
         let span = tracing::Span::current();
         span.record("bot_id", tracing::field::display(bot.bot_id));
         span.record("token_id", tracing::field::display(bot.token_id));
+        span.record("bot_scope", tracing::field::display(bot.bot_scope));
+        if let Some(team_id) = bot.team_id {
+            span.record("team_id", tracing::field::display(team_id));
+        }
         if let Some(acting_user) = &bot.acting_user {
             span.record(
                 "acting_user_id",
