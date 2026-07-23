@@ -172,6 +172,7 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  getPersistedActiveTab: (view: ListView) => string | undefined;
   viewMode: Accessor<SoupViewMode>;
   setViewMode: Setter<SoupViewMode>;
   readFilter: Accessor<ReadFilter>;
@@ -465,6 +466,9 @@ export const SoupViewContextProvider: FlowComponent<
     },
   };
 
+  const getPersistedActiveTab = (view: ListView): string | undefined =>
+    filterPersistenceEnabled() ? persistedActiveTabs()[view] : undefined;
+
   const restorePersistedQueryFilters = (tabId: string): boolean => {
     if (!filterPersistenceEnabled()) return false;
 
@@ -552,13 +556,18 @@ export const SoupViewContextProvider: FlowComponent<
     on(
       () => [activeListView(), activeTab()] as const,
       ([view, tabId]) => {
-        if (!filterPersistenceEnabled() || !view || !tabId) return;
+        if (!view || !tabId) return;
+        if (!filterPersistenceEnabled()) {
+          if (enabled()) changedWhilePersistenceDisabled = true;
+          return;
+        }
 
         setPersistedActiveTabs((current) => ({
           ...current,
           [view]: tabId,
         }));
-      }
+      },
+      { defer: true }
     )
   );
 
@@ -566,7 +575,11 @@ export const SoupViewContextProvider: FlowComponent<
     on(
       () => [soup.predicates.andIds(), soup.predicates.orIds()] as const,
       ([and, or]) => {
-        if (!enabled() || !filterPersistenceEnabled()) return;
+        if (!enabled()) return;
+        if (!filterPersistenceEnabled()) {
+          changedWhilePersistenceDisabled = true;
+          return;
+        }
 
         const view = activeListView();
         if (!view) return;
@@ -593,7 +606,9 @@ export const SoupViewContextProvider: FlowComponent<
       if (!persistenceEnabled || filterPersistenceHydrated) return;
       filterPersistenceHydrated = true;
 
-      if (changedWhilePersistenceDisabled) return;
+      if (changedWhilePersistenceDisabled || config().preferInitialFilters) {
+        return;
+      }
 
       const view = activeListView();
       if (!view) return;
@@ -1501,6 +1516,7 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    getPersistedActiveTab,
     viewMode,
     setViewMode,
     readFilter,

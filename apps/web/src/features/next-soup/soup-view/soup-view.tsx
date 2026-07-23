@@ -433,8 +433,13 @@ export const SoupView = (props: SoupViewProps) => {
         initialSortIds = ['updated_at'];
       }
 
+      const persistedViewActiveTab = isListViewID(contentId)
+        ? soupView.getPersistedActiveTab(contentId)
+        : undefined;
       let initialActiveTab =
-        initialCrmView?.activeTab ?? persistedActiveTab ?? soupView.activeTab();
+        initialCrmView?.activeTab ??
+        persistedActiveTab ??
+        persistedViewActiveTab;
 
       if (initialActiveTab === undefined && isListViewID(contentId)) {
         initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
