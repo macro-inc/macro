@@ -2247,6 +2247,45 @@ async fn patch_channel_conversion_names_an_unnamed_private_channel() {
 }
 
 #[tokio::test]
+async fn patch_team_channel_conversion_to_private_clears_team_settings() {
+    let channel_id = Uuid::new_v4();
+    let team_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.channel_type = ChannelType::Team;
+        state.channel_team_id = Some(team_id);
+    }
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(false),
+            auto_join_team: Some(true),
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 0);
+    assert_eq!(state.channel_patches.len(), 1);
+    assert_eq!(state.channel_patches[0].1, None);
+    assert_eq!(
+        state.channel_patches[0].0.convert_to_team_channel,
+        Some(false)
+    );
+    assert_eq!(state.channel_patches[0].0.auto_join_team, Some(false));
+}
+
+#[tokio::test]
 async fn patch_channel_conversion_requires_the_user_to_have_a_team() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

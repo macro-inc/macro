@@ -16,6 +16,9 @@ export interface PatchChannelRequest {
   auto_join_team?: PatchChannelRequestAutoJoinTeam;
   /** New channel name. */
   channel_name?: PatchChannelRequestChannelName;
-  /** Whether to convert the channel into a team channel. */
+  /** Sets whether the channel is a team channel.
+
+`true` converts a non-team channel to a team channel, while `false`
+converts a team channel to a private channel. */
   convert_to_team_channel?: PatchChannelRequestConvertToTeamChannel;
 }

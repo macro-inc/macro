@@ -768,7 +768,10 @@ pub struct GetOrCreateChannelResponse {
 pub struct PatchChannelRequest {
     /// New channel name.
     pub channel_name: Option<String>,
-    /// Whether to convert the channel into a team channel.
+    /// Sets whether the channel is a team channel.
+    ///
+    /// `true` converts a non-team channel to a team channel, while `false`
+    /// converts a team channel to a private channel.
     pub convert_to_team_channel: Option<bool>,
     /// Whether team members should automatically join the channel.
     pub auto_join_team: Option<bool>,

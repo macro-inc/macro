@@ -455,6 +455,61 @@ async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn patch_team_channel_converts_to_private_and_clears_team_settings(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let participant_count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1",
+        TEAM_A_AUTO_ACTIVE,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    repo.patch_channel(
+        TEAM_A_AUTO_ACTIVE,
+        LEFT_USER.to_string(),
+        None,
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(false),
+            auto_join_team: Some(true),
+        },
+    )
+    .await
+    .unwrap();
+
+    let channel = sqlx::query!(
+        r#"
+        SELECT
+            channel_type AS "channel_type: ChannelType",
+            team_id,
+            auto_join_team
+        FROM comms_channels
+        WHERE id = $1
+        "#,
+        TEAM_A_AUTO_ACTIVE,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(channel.channel_type, ChannelType::Private);
+    assert_eq!(channel.team_id, None);
+    assert!(!channel.auto_join_team);
+
+    let participant_count_after = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1",
+        TEAM_A_AUTO_ACTIVE,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(participant_count_after, participant_count);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn auto_join_is_enabled_team_scoped_and_idempotent(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_id = macro_user_id(NON_MEMBER);

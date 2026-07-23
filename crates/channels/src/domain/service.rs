@@ -475,8 +475,11 @@ where
             ));
         }
 
-        let convert_to_team_channel = req.convert_to_team_channel == Some(true);
-        let team_id = if convert_to_team_channel && info.channel_type != ChannelType::Team {
+        let converting_to_team =
+            req.convert_to_team_channel == Some(true) && info.channel_type != ChannelType::Team;
+        let converting_to_private =
+            req.convert_to_team_channel == Some(false) && info.channel_type == ChannelType::Team;
+        let team_id = if converting_to_team {
             Some(
                 self.repo
                     .get_user_team_id(&actor)
@@ -489,18 +492,22 @@ where
                         )
                     })?,
             )
+        } else if converting_to_private {
+            req.auto_join_team = Some(false);
+            None
         } else {
             info.team_id
         };
 
-        let is_team_channel = info.channel_type == ChannelType::Team || convert_to_team_channel;
+        let is_team_channel =
+            info.channel_type == ChannelType::Team && !converting_to_private || converting_to_team;
         if req.auto_join_team == Some(true) && (!is_team_channel || team_id.is_none()) {
             return Err(ChannelMutationErr::BadRequest(
                 "auto-join is only available for team channels".to_string(),
             ));
         }
 
-        if convert_to_team_channel && info.channel_type != ChannelType::Team {
+        if converting_to_team {
             let requested_name = req
                 .channel_name
                 .as_deref()

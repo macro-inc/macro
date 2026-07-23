@@ -1901,7 +1901,9 @@ export const patchChannelBody = zod
     convert_to_team_channel: zod
       .boolean()
       .nullish()
-      .describe('Whether to convert the channel into a team channel.'),
+      .describe(
+        'Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel.'
+      ),
   })
   .describe('Request to patch a channel.');
 

@@ -13,7 +13,7 @@ import type { CreateChannelRequest } from '@service-storage/generated/schemas/cr
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-import { softInvalidateChannelParticipants } from './channel-participants';
+import { invalidateChannelParticipants } from './channel-participants';
 import { channelKeys } from './keys';
 
 export function useListChannelsQuery() {
@@ -111,13 +111,13 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
       ),
     ...withCallbacks<MessageResponse, Error, PatchChannelParams>(
       {
-        onSuccess: (_data, vars) => {
+        onSuccess: async (_data, vars) => {
           queryClient.setQueryData<ApiChannelWithLatest[]>(
             channelKeys.listChannels.queryKey,
             (channels) => updateCachedChannel(channels, vars)
           );
-          if (vars.auto_join_team === true) {
-            softInvalidateChannelParticipants(vars.channelId);
+          if (typeof vars.auto_join_team === 'boolean') {
+            await invalidateChannelParticipants(vars.channelId);
           }
           toast.success(
             vars.convert_to_team_channel === true

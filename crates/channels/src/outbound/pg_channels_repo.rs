@@ -3019,8 +3019,9 @@ impl ChannelRepo for PgChannelsRepo {
             convert_to_team_channel,
             auto_join_team,
         } = req;
-        let convert_to_team_channel = convert_to_team_channel == Some(true);
-        if (convert_to_team_channel || auto_join_team == Some(true)) && team_id.is_none() {
+        let enables_auto_join =
+            auto_join_team == Some(true) && convert_to_team_channel != Some(false);
+        if (convert_to_team_channel == Some(true) || enables_auto_join) && team_id.is_none() {
             anyhow::bail!("team id is required to patch team channel settings");
         }
 
@@ -3057,11 +3058,20 @@ impl ChannelRepo for PgChannelsRepo {
             UPDATE comms_channels
             SET name = COALESCE($2, name),
                 channel_type = CASE
-                    WHEN $3 THEN 'team'::comms_channel_type
+                    WHEN $3 IS TRUE THEN 'team'::comms_channel_type
+                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type
+                        THEN 'private'::comms_channel_type
                     ELSE channel_type
                 END,
-                team_id = CASE WHEN $3 THEN $4 ELSE team_id END,
-                auto_join_team = COALESCE($5, auto_join_team)
+                team_id = CASE
+                    WHEN $3 IS TRUE THEN $4
+                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN NULL
+                    ELSE team_id
+                END,
+                auto_join_team = CASE
+                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN FALSE
+                    ELSE COALESCE($5, auto_join_team)
+                END
             WHERE id = $1
             "#,
             channel_id,
@@ -3074,7 +3084,7 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to patch channel")?;
 
-        if auto_join_team == Some(true) {
+        if enables_auto_join {
             sqlx::query!(
                 r#"
                 INSERT INTO comms_channel_participants (channel_id, role, user_id)

@@ -16967,7 +16967,7 @@
           },
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
-            "description": "Whether to convert the channel into a team channel."
+            "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
           }
         }
       },

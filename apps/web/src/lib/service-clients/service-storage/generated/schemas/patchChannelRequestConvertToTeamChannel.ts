@@ -6,6 +6,9 @@
  */
 
 /**
- * Whether to convert the channel into a team channel.
+ * Sets whether the channel is a team channel.
+
+`true` converts a non-team channel to a team channel, while `false`
+converts a team channel to a private channel.
  */
 export type PatchChannelRequestConvertToTeamChannel = boolean | null;
