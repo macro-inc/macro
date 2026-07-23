@@ -43,7 +43,13 @@ export type ImportEntityStatus =
 
 export type ImportInitiator = 'onboarding' | 'chat';
 
-export type ImportRunStatus = 'running' | 'ready' | 'failed' | 'dismissed';
+export type ImportRunStatus =
+  | 'running'
+  | 'ready'
+  | 'importing'
+  | 'completed'
+  | 'failed'
+  | 'dismissed';
 
 /** Metadata shape for staged Linear issues (`source === 'linear'`). */
 export type LinearIssueMeta = {
@@ -100,6 +106,7 @@ export type ImportEntity = {
 export type ImportRun = {
   source: ImportSource;
   status: ImportRunStatus;
+  auto_import: boolean;
   error?: string | null;
   updated_at: string;
 };

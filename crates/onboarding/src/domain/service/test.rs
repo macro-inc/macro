@@ -110,7 +110,7 @@ impl McpServerStore for MockStore {
 
 #[derive(Default)]
 struct MockImport {
-    gathers: Mutex<Vec<ImportSource>>,
+    gathers: Mutex<Vec<(ImportSource, bool)>>,
     discards: Mutex<Vec<Initiator>>,
     deletions: Mutex<Vec<Initiator>>,
 }
@@ -127,8 +127,9 @@ impl ImportService for MockImport {
         &self,
         _user: MacroUserIdStr<'static>,
         source: ImportSource,
+        auto_import: bool,
     ) -> ImportResult<bool> {
-        self.gathers.lock().unwrap().push(source);
+        self.gathers.lock().unwrap().push((source, auto_import));
         Ok(true)
     }
 
@@ -223,7 +224,7 @@ async fn active_flow_starts_gathers_for_authenticated_connectors_only() {
     assert_eq!(state.connected_servers.len(), 3);
     assert_eq!(
         import.gathers.lock().unwrap().as_slice(),
-        &[ImportSource::Linear]
+        &[(ImportSource::Linear, true)]
     );
 }
 

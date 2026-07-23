@@ -14,6 +14,8 @@ export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
 export const RunStatus = {
   running: 'running',
   ready: 'ready',
+  importing: 'importing',
+  completed: 'completed',
   failed: 'failed',
   dismissed: 'dismissed',
 } as const;

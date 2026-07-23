@@ -30,6 +30,8 @@ fn enums_round_trip_through_strings() {
     for run in [
         RunStatus::Running,
         RunStatus::Ready,
+        RunStatus::Importing,
+        RunStatus::Completed,
         RunStatus::Failed,
         RunStatus::Dismissed,
     ] {

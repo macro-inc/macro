@@ -3,9 +3,9 @@
 //!
 //! Reconciliation is level-triggered and idempotent: every tick lists the
 //! user's MCP connections and asks the import service to start a gather for
-//! each authenticated connector. `start_gather` is a CAS that only wins when
-//! no run has ever started, so ticking on every read (and on the MCP
-//! post-auth hook) is safe.
+//! each authenticated connector with automatic import enabled.
+//! `start_gather` is a CAS that only wins when no run has ever started, so
+//! ticking on every read (and on the MCP post-auth hook) is safe.
 
 use super::models::{ConnectedServer, OnboardingRow, OnboardingState, OnboardingStatus};
 use super::ports::{OnboardingError, OnboardingRepo, Result};
@@ -34,9 +34,11 @@ pub trait OnboardingService: Send + Sync + 'static {
     /// outside onboarding must not start gathers.
     fn reconcile(&self, user: MacroUserIdStr<'static>) -> impl Future<Output = Result<()>> + Send;
 
-    /// Finish the flow (`skipped` records how). Leftover onboarding-staged
-    /// import candidates are deleted — never reviewed is not declined, so
-    /// they stay re-stageable by later gathers or chat.
+    /// Finish the flow (`skipped` records how). Unreserved leftover
+    /// onboarding-staged import candidates are deleted — never reviewed is
+    /// not declined, so they stay re-stageable by later gathers or chat.
+    /// Candidates reserved by configured automatic runs remain until their
+    /// run settles.
     fn complete(
         &self,
         user: MacroUserIdStr<'static>,
@@ -88,8 +90,9 @@ where
             .collect())
     }
 
-    /// Start a gather run for every authenticated connector that never had
-    /// one. A failing source must not block the others (or the read).
+    /// Start an auto-importing gather run for every authenticated connector
+    /// that never had one. A failing source must not block the others (or
+    /// the read).
     async fn start_due_gathers(&self, user: &MacroUserIdStr<'static>, servers: &[ConnectedServer]) {
         for source in ImportSource::all() {
             let connected = servers
@@ -98,7 +101,7 @@ where
             if !connected {
                 continue;
             }
-            if let Err(e) = self.import.start_gather(user.clone(), source).await {
+            if let Err(e) = self.import.start_gather(user.clone(), source, true).await {
                 tracing::warn!(source = source.as_ref(), error = ?e, "failed to start gather run");
             }
         }
@@ -158,11 +161,13 @@ where
         skipped: bool,
     ) -> Result<OnboardingRow> {
         let row = self.repo.complete(&user, skipped).await?;
-        // Candidates the user never acted on are removed from the ledger,
-        // not discarded: discard means "the user said no" and blocks
+        // Unreserved candidates the user never acted on are removed from the
+        // ledger, not discarded: discard means "the user said no" and blocks
         // re-staging forever, which is wrong for items they never looked at
-        // ("Set up later" skips the whole review). Explicit declines (a
-        // section toggled off) were already discarded by run_import.
+        // ("Set up later" skips the whole review). Candidates reserved by an
+        // active or retryable configured auto-import run survive this cleanup.
+        // Explicit declines (a section toggled off) were already discarded by
+        // run_import.
         // Chat-staged rows are untouched. Best-effort: the completion above
         // is durable, so a cleanup failure must not fail the call — the
         // next reconcile tick sweeps leftovers anyway.

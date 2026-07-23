@@ -168,7 +168,12 @@ pub enum RunStatus {
     Running,
     /// The gather finished; staged rows (if any) are ready.
     Ready,
-    /// The gather failed; `error` has details. Retryable.
+    /// The gather finished and its configured automatic import is running.
+    Importing,
+    /// The configured automatic import finished successfully.
+    Completed,
+    /// Gathering or automatic importing failed; `error` has details.
+    /// Retryable.
     Failed,
     /// The user dismissed this source's import section.
     Dismissed,
@@ -413,7 +418,10 @@ pub struct ImportRun {
     pub source: ImportSource,
     /// Where the run is in its lifecycle.
     pub status: RunStatus,
-    /// Failure detail, when the run failed.
+    /// Whether this run should import its onboarding-staged candidates as
+    /// soon as gathering finishes.
+    pub auto_import: bool,
+    /// Gather or automatic-import failure detail, when the run failed.
     pub error: Option<String>,
     /// When the run state last changed.
     pub updated_at: DateTime<Utc>,

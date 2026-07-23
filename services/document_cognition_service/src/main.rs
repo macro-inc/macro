@@ -558,8 +558,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized ai projections service");
 
     // The onboarding flow drives the import pipeline: reads/hooks start
-    // gather runs for authenticated connectors, completion discards leftover
-    // onboarding-staged candidates.
+    // auto-importing gather runs for authenticated connectors, and
+    // completion deletes unreserved onboarding-staged candidates.
     let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
         onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
         Arc::new(mcp_server_repo.clone()),

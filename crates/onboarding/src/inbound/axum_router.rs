@@ -98,8 +98,8 @@ pub async fn get_state_handler<T: OnboardingService, Auth: MacroAuthorizationSer
     }
 }
 
-/// Complete (or skip) onboarding. Leftover onboarding-staged import
-/// candidates are discarded.
+/// Complete (or skip) onboarding. Unreserved leftover onboarding-staged
+/// import candidates are deleted.
 #[utoipa::path(
     post,
     path = "/onboarding/complete",

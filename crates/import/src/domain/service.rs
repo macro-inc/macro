@@ -131,11 +131,14 @@ pub trait ImportService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ImportState>> + Send;
 
     /// Start a gather run for `source` if none has ever run (the
-    /// connector-just-authenticated hook). Returns whether a run started.
+    /// connector-just-authenticated hook). `auto_import` is persisted with
+    /// the new run before its background gather starts. Returns whether a
+    /// run started.
     fn start_gather(
         &self,
         user: MacroUserIdStr<'static>,
         source: ImportSource,
+        auto_import: bool,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Restart a failed (or dismissed) gather run. Returns whether a run
@@ -171,10 +174,11 @@ pub trait ImportService: Send + Sync + 'static {
         initiator: Initiator,
     ) -> impl Future<Output = Result<u64>> + Send;
 
-    /// Delete all remaining staged rows with `initiator` (onboarding
-    /// completion cleanup). Unlike discarding, deleted candidates were
-    /// never reviewed and stay re-stageable by later gathers or chat.
-    /// Returns how many were removed.
+    /// Delete remaining unreserved staged rows with `initiator` (onboarding
+    /// completion cleanup). Candidates reserved by active or retryable
+    /// configured auto-import runs survive. Unlike discarding, deleted
+    /// candidates were never reviewed and stay re-stageable by later gathers
+    /// or chat. Returns how many were removed.
     fn delete_staged_by_initiator(
         &self,
         user: MacroUserIdStr<'static>,
@@ -305,6 +309,7 @@ where
                 tokio::time::timeout(GATHER_TIMEOUT, service.run_gather_session(&user, source))
                     .await
                     .unwrap_or_else(|_| Err(anyhow::anyhow!("gather session timed out")));
+            let gather_succeeded = outcome.is_ok();
 
             let finished = match outcome {
                 Ok(()) => {
@@ -321,11 +326,62 @@ where
                         .await
                 }
             };
-            if let Err(e) = finished {
-                tracing::error!(source = source.as_ref(), error = ?e, "failed to persist gather outcome");
+            match finished {
+                Ok(true) if gather_succeeded => {
+                    if let Err(e) = service.maybe_start_auto_import(&user, source).await {
+                        tracing::error!(source = source.as_ref(), error = ?e, "failed to start automatic import");
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!(source = source.as_ref(), error = ?e, "failed to persist gather outcome");
+                }
             }
             service.notify(&user).await;
         });
+    }
+
+    /// Claim and spawn a configured automatic import once gathering is ready.
+    /// The repository CAS makes this safe when completion, configuration, and
+    /// read-path reconciliation race across service replicas.
+    async fn maybe_start_auto_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<bool> {
+        let Some(rows) = self.repo.begin_auto_import(user, source).await? else {
+            return Ok(false);
+        };
+        let ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+        self.notify(user).await;
+        if rows.is_empty() {
+            self.finish_auto_import_batch(user, source, &ids).await;
+        } else {
+            self.spawn_import_batch(user.clone(), rows, Some(source));
+        }
+        Ok(true)
+    }
+
+    async fn finish_auto_import_batch(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        ids: &[Uuid],
+    ) {
+        match self.repo.finish_auto_import(user, source, ids).await {
+            Ok(Some(status)) => {
+                tracing::info!(
+                    source = source.as_ref(),
+                    status = status.as_ref(),
+                    "automatic import finished"
+                );
+                self.notify(user).await;
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::error!(source = source.as_ref(), error = ?e, "failed to persist automatic import outcome");
+            }
+        }
     }
 
     /// Run one gather session: connector MCP tools plus the locked
@@ -599,6 +655,118 @@ where
             }
         }
     }
+
+    /// Run a claimed import batch in the background. Manual batches only
+    /// update their entity rows; automatic batches also settle their owning
+    /// run after every row reaches a terminal state.
+    fn spawn_import_batch(
+        &self,
+        user: MacroUserIdStr<'static>,
+        rows: Vec<ImportEntity>,
+        auto_run: Option<ImportSource>,
+    ) {
+        let service = self.clone();
+        tokio::spawn(async move {
+            let batch_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+            let (notion_rows, direct_rows): (Vec<ImportEntity>, Vec<ImportEntity>) = rows
+                .into_iter()
+                .partition(|row| row.source == ImportSource::Notion);
+
+            // Heartbeat every row this batch owns (queued and in-flight) for
+            // as long as the batch runs, so the read path's stale reaper only
+            // fires on rows whose process actually died.
+            let _heartbeat = AbortOnDrop(tokio::spawn({
+                let service = service.clone();
+                let user = user.clone();
+                let ids = batch_ids.clone();
+                async move {
+                    loop {
+                        tokio::time::sleep(IMPORT_HEARTBEAT).await;
+                        if let Err(e) = service.repo.touch_importing(&user, &ids).await {
+                            tracing::warn!(error = ?e, "import heartbeat failed");
+                        }
+                    }
+                }
+            }));
+
+            for row in &direct_rows {
+                service.import_deterministic(&user, row).await;
+            }
+
+            if !notion_rows.is_empty() {
+                // One connector connection per batch, pages a few at a time.
+                // Each page first tries direct fetch → markdown → finalize;
+                // the agent session is the fallback.
+                let mcp_tools = match service.connector_tools(&user, ImportSource::Notion).await {
+                    Ok(tools) => tools,
+                    Err(e) => {
+                        tracing::warn!(error = ?e, "notion connector unavailable");
+                        let ids: Vec<Uuid> = notion_rows.iter().map(|row| row.id).collect();
+                        service
+                            .fail_unfinished(&user, &ids, &format!("notion unavailable: {e}"))
+                            .await;
+                        service.notify(&user).await;
+                        if let Some(source) = auto_run {
+                            service
+                                .finish_auto_import_batch(&user, source, &batch_ids)
+                                .await;
+                        }
+                        return;
+                    }
+                };
+
+                futures::stream::iter(notion_rows)
+                    .for_each_concurrent(NOTION_IMPORT_CONCURRENCY, |row| {
+                        let service = service.clone();
+                        let user = user.clone();
+                        let mcp_tools = mcp_tools.clone();
+                        async move {
+                            let outcome =
+                                tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
+                                    match service
+                                        .import_notion_page_direct(&user, &mcp_tools, &row)
+                                        .await
+                                    {
+                                        Ok(()) => Ok(()),
+                                        Err(direct_error) => {
+                                            tracing::info!(id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
+                                            service
+                                                .run_notion_import_session(
+                                                    &user,
+                                                    std::slice::from_ref(&row),
+                                                    mcp_tools.clone(),
+                                                )
+                                                .await
+                                        }
+                                    }
+                                })
+                                .await
+                                .unwrap_or_else(|_| {
+                                    Err(anyhow::anyhow!("notion import timed out"))
+                                });
+                            if let Err(e) = outcome {
+                                tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
+                            }
+                            service
+                                .fail_unfinished(
+                                    &user,
+                                    &[row.id],
+                                    "the import job did not finish this item",
+                                )
+                                .await;
+                        }
+                    })
+                    .await;
+                service.notify(&user).await;
+            }
+
+            if let Some(source) = auto_run {
+                service
+                    .finish_auto_import_batch(&user, source, &batch_ids)
+                    .await;
+            }
+        });
+    }
 }
 
 impl<R, S, C> ImportService for ImportServiceImpl<R, S, C>
@@ -627,7 +795,32 @@ where
             Err(e) => tracing::warn!(error = ?e, "failed to reap stale imports"),
         }
 
-        let runs = self.repo.list_runs(&user).await?;
+        match self.repo.reconcile_auto_import_runs(&user).await {
+            Ok(0) => {}
+            Ok(reconciled) => {
+                tracing::warn!(reconciled, "reconciled interrupted automatic import runs");
+                self.notify(&user).await;
+            }
+            // A read must never fail because recovery did.
+            Err(e) => tracing::warn!(error = ?e, "failed to reconcile automatic import runs"),
+        }
+
+        // Self-heal the small window between persisting gather completion and
+        // spawning its configured follow-on batch. The begin CAS makes this
+        // safe across concurrent readers and replicas.
+        let mut runs = self.repo.list_runs(&user).await?;
+        let auto_ready: Vec<ImportSource> = runs
+            .iter()
+            .filter(|run| run.auto_import && run.status == RunStatus::Ready)
+            .map(|run| run.source)
+            .collect();
+        let mut started = false;
+        for source in auto_ready {
+            started |= self.maybe_start_auto_import(&user, source).await?;
+        }
+        if started {
+            runs = self.repo.list_runs(&user).await?;
+        }
         let entities = self.repo.list(&user, None, None).await?;
         Ok(ImportState { runs, entities })
     }
@@ -637,10 +830,11 @@ where
         &self,
         user: MacroUserIdStr<'static>,
         source: ImportSource,
+        auto_import: bool,
     ) -> Result<bool> {
         // Wins only when no run row exists — gathers run once per
         // connection; explicit retry is the only re-entry.
-        let won = self.repo.start_run(&user, source, &[]).await?;
+        let won = self.repo.start_run(&user, source, &[], auto_import).await?;
         if won {
             self.spawn_gather(user.clone(), source);
             self.notify(&user).await;
@@ -656,7 +850,12 @@ where
     ) -> Result<bool> {
         let won = self
             .repo
-            .start_run(&user, source, &[RunStatus::Failed, RunStatus::Dismissed])
+            .start_run(
+                &user,
+                source,
+                &[RunStatus::Failed, RunStatus::Dismissed],
+                false,
+            )
             .await?;
         if won {
             self.spawn_gather(user.clone(), source);
@@ -667,7 +866,8 @@ where
 
     #[tracing::instrument(skip(self, user), err)]
     async fn dismiss_run(&self, user: MacroUserIdStr<'static>, source: ImportSource) -> Result<()> {
-        self.repo
+        let dismissed = self
+            .repo
             .transition_run(
                 &user,
                 source,
@@ -675,6 +875,9 @@ where
                 RunStatus::Dismissed,
             )
             .await?;
+        if dismissed {
+            self.notify(&user).await;
+        }
         Ok(())
     }
 
@@ -697,106 +900,7 @@ where
         self.notify(&user).await;
 
         if !rows.is_empty() {
-            let (notion_rows, direct_rows): (Vec<ImportEntity>, Vec<ImportEntity>) = rows
-                .into_iter()
-                .partition(|row| row.source == ImportSource::Notion);
-
-            let service = self.clone();
-            let user = user.clone();
-            tokio::spawn(async move {
-                // Heartbeat every row this batch owns (queued and in-flight)
-                // for as long as the batch runs, so the read path's stale
-                // reaper only ever fires on rows whose process actually
-                // died. Dropped (aborted) on every exit path of this task.
-                let _heartbeat = AbortOnDrop(tokio::spawn({
-                    let service = service.clone();
-                    let user = user.clone();
-                    let ids: Vec<Uuid> = direct_rows
-                        .iter()
-                        .chain(notion_rows.iter())
-                        .map(|row| row.id)
-                        .collect();
-                    async move {
-                        loop {
-                            tokio::time::sleep(IMPORT_HEARTBEAT).await;
-                            if let Err(e) = service.repo.touch_importing(&user, &ids).await {
-                                tracing::warn!(error = ?e, "import heartbeat failed");
-                            }
-                        }
-                    }
-                }));
-
-                for row in &direct_rows {
-                    service.import_deterministic(&user, row).await;
-                }
-
-                if !notion_rows.is_empty() {
-                    // One connector connection per batch, pages a few at a
-                    // time. Each page first tries the direct path (fetch
-                    // tool → markdown → finalize, no model); the Haiku
-                    // session is the fallback for pages that path can't
-                    // handle.
-                    let mcp_tools = match service.connector_tools(&user, ImportSource::Notion).await
-                    {
-                        Ok(tools) => tools,
-                        Err(e) => {
-                            tracing::warn!(error = ?e, "notion connector unavailable");
-                            let ids: Vec<Uuid> = notion_rows.iter().map(|r| r.id).collect();
-                            service
-                                .fail_unfinished(&user, &ids, &format!("notion unavailable: {e}"))
-                                .await;
-                            service.notify(&user).await;
-                            return;
-                        }
-                    };
-
-                    futures::stream::iter(notion_rows)
-                        .for_each_concurrent(NOTION_IMPORT_CONCURRENCY, |row| {
-                            let service = service.clone();
-                            let user = user.clone();
-                            let mcp_tools = mcp_tools.clone();
-                            async move {
-                                let outcome = tokio::time::timeout(
-                                    NOTION_PAGE_IMPORT_TIMEOUT,
-                                    async {
-                                        match service
-                                            .import_notion_page_direct(&user, &mcp_tools, &row)
-                                            .await
-                                        {
-                                            Ok(()) => Ok(()),
-                                            Err(direct_error) => {
-                                                tracing::info!(id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
-                                                service
-                                                    .run_notion_import_session(
-                                                        &user,
-                                                        std::slice::from_ref(&row),
-                                                        mcp_tools.clone(),
-                                                    )
-                                                    .await
-                                            }
-                                        }
-                                    },
-                                )
-                                .await
-                                .unwrap_or_else(|_| {
-                                    Err(anyhow::anyhow!("notion import timed out"))
-                                });
-                                if let Err(e) = outcome {
-                                    tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
-                                }
-                                service
-                                    .fail_unfinished(
-                                        &user,
-                                        &[row.id],
-                                        "the import job did not finish this item",
-                                    )
-                                    .await;
-                            }
-                        })
-                        .await;
-                    service.notify(&user).await;
-                }
-            });
+            self.spawn_import_batch(user.clone(), rows, None);
         }
 
         Ok(RunImportOutcome {

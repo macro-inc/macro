@@ -51,8 +51,9 @@ const PENDING_IMPORT_STATE: ImportState = { runs: [], entities: [] };
 function anythingInFlight(state: ImportState | undefined): boolean {
   if (!state) return false;
   return (
-    state.runs.some((run) => run.status === 'running') ||
-    state.entities.some((entity) => entity.status === 'importing')
+    state.runs.some(
+      (run) => run.status === 'running' || run.status === 'importing'
+    ) || state.entities.some((entity) => entity.status === 'importing')
   );
 }
 

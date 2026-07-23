@@ -153,10 +153,11 @@ pub trait ImportRepo: Send + Sync + 'static {
         initiator: Initiator,
     ) -> impl Future<Output = Result<u64>> + Send;
 
-    /// DELETE all of the user's remaining `staged` rows with the given
-    /// initiator (onboarding completion cleanup: candidates the user never
-    /// acted on vanish from the ledger and stay re-stageable later, unlike
-    /// discarded rows). Returns how many were removed.
+    /// DELETE the user's remaining unreserved `staged` rows with the given
+    /// initiator. Onboarding candidates reserved by an active or retryable
+    /// configured auto-import run survive completion cleanup; other
+    /// candidates the user never acted on vanish and stay re-stageable later.
+    /// Returns how many were removed.
     fn delete_staged_by_initiator(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -175,14 +176,16 @@ pub trait ImportRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<ImportRun>>> + Send;
 
-    /// CAS a gather run to `running`. Wins when no run row exists yet, or
-    /// when the existing row's status is in `from`. Returns whether this
-    /// call won.
+    /// CAS a gather run to `running`. New rows persist `auto_import`
+    /// atomically; retries preserve the existing run's setting. Wins when no
+    /// run row exists yet, or when the existing row's status is in `from`.
+    /// Returns whether this call won.
     fn start_run(
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         from: &[RunStatus],
+        auto_import: bool,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// CAS the `running` run for `source` to `to` (ready/failed), recording
@@ -203,6 +206,33 @@ pub trait ImportRepo: Send + Sync + 'static {
         from: &[RunStatus],
         to: RunStatus,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Atomically claim a ready, auto-import-enabled run and all of its own
+    /// onboarding-staged candidates. `None` means another caller won or the
+    /// run is not ready/configured; `Some([])` is a valid empty run.
+    fn begin_auto_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> impl Future<Output = Result<Option<Vec<ImportEntity>>>> + Send;
+
+    /// Finish an auto-import run after every claimed row has settled. The run
+    /// becomes `completed` only when all claimed rows are imported; otherwise
+    /// it becomes `failed`. Returns the terminal status when this call won.
+    fn finish_auto_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<RunStatus>>> + Send;
+
+    /// Repair auto-import run rows after process interruption. An `importing`
+    /// run with no importing onboarding rows is terminal: `failed` when a
+    /// staged row carries an import error, otherwise `completed`.
+    fn reconcile_auto_import_runs(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<u64>> + Send;
 }
 
 /// System properties to set on an imported task, already normalized to

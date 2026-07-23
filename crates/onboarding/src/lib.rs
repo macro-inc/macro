@@ -4,8 +4,9 @@
 //!
 //! All the actual import machinery — staging, dedup, gather/import jobs —
 //! lives in the `import` crate. Onboarding is just a feature that uses it:
-//! it starts gathers for authenticated connectors while the flow is active,
-//! and discards leftover onboarding-staged rows when the flow completes.
+//! it starts auto-importing gathers for authenticated connectors while the
+//! flow is active, and deletes unreserved onboarding-staged rows when the
+//! flow completes.
 
 #![deny(missing_docs)]
 

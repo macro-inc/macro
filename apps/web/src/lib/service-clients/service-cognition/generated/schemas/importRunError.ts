@@ -6,6 +6,6 @@
  */
 
 /**
- * Failure detail, when the run failed.
+ * Gather or automatic-import failure detail, when the run failed.
  */
 export type ImportRunError = string | null;

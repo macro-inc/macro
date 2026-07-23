@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO import_run (user_id, source, status, auto_import)\n            VALUES ($1, $2, 'running', $4)\n            ON CONFLICT (user_id, source) DO UPDATE\n            SET status = 'running', error = NULL, updated_at = NOW()\n            WHERE import_run.status = ANY($3::text[])\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "428fd64517891fe33f2b6b112b568af36b236993aff7113f9f4aa81a55c6f5e7"
+}

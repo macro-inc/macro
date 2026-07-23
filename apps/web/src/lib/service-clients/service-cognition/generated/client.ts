@@ -1823,8 +1823,8 @@ export const getMemoryHandler = async (
 };
 
 /**
- * @summary Complete (or skip) onboarding. Leftover onboarding-staged import
-candidates are discarded.
+ * @summary Complete (or skip) onboarding. Unreserved leftover onboarding-staged
+import candidates are deleted.
  */
 export type completeHandlerResponse200 = {
   data: OnboardingRow;

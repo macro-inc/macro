@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT source, status, error, updated_at\n            FROM import_run WHERE user_id = $1\n            ORDER BY source\n            ",
+  "query": "\n            SELECT source, status, auto_import, error, updated_at\n            FROM import_run WHERE user_id = $1\n            ORDER BY source\n            ",
   "describe": {
     "columns": [
       {
@@ -15,11 +15,16 @@
       },
       {
         "ordinal": 2,
+        "name": "auto_import",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
         "name": "error",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -32,9 +37,10 @@
     "nullable": [
       false,
       false,
+      false,
       true,
       false
     ]
   },
-  "hash": "d919f2560dd92b03ba4cde5d6f024a94ac6e340f12eee4ac14ccec55b7008485"
+  "hash": "6b6bce59ed506e0cb8eb5236766fa1fd71c9b572d04442ba6588f02864dc92fd"
 }

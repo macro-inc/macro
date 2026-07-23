@@ -1493,7 +1493,7 @@
     "/onboarding/complete": {
       "post": {
         "tags": ["onboarding"],
-        "summary": "Complete (or skip) onboarding. Leftover onboarding-staged import\ncandidates are discarded.",
+        "summary": "Complete (or skip) onboarding. Unreserved leftover onboarding-staged\nimport candidates are deleted.",
         "operationId": "complete_handler",
         "requestBody": {
           "content": {
@@ -3261,11 +3261,15 @@
       "ImportRun": {
         "type": "object",
         "description": "Gather-run state for one user × source.",
-        "required": ["source", "status", "updated_at"],
+        "required": ["source", "status", "auto_import", "updated_at"],
         "properties": {
+          "auto_import": {
+            "type": "boolean",
+            "description": "Whether this run should import its onboarding-staged candidates as\nsoon as gathering finishes."
+          },
           "error": {
             "type": ["string", "null"],
-            "description": "Failure detail, when the run failed."
+            "description": "Gather or automatic-import failure detail, when the run failed."
           },
           "source": {
             "$ref": "#/components/schemas/ImportSource",
@@ -3698,7 +3702,14 @@
       "RunStatus": {
         "type": "string",
         "description": "Lifecycle of a gather run (one per user × source).",
-        "enum": ["running", "ready", "failed", "dismissed"]
+        "enum": [
+          "running",
+          "ready",
+          "importing",
+          "completed",
+          "failed",
+          "dismissed"
+        ]
       },
       "SendChatMessagePayload": {
         "allOf": [

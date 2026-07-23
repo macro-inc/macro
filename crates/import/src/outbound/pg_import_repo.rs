@@ -15,6 +15,9 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Postgres-backed import repository (MacroDB).
 #[derive(Clone)]
 pub struct PgImportRepo {
@@ -75,6 +78,7 @@ impl TryFrom<ImportEntityDbRow> for ImportEntity {
 struct ImportRunDbRow {
     source: String,
     status: String,
+    auto_import: bool,
     error: Option<String>,
     updated_at: DateTime<Utc>,
 }
@@ -90,6 +94,7 @@ impl TryFrom<ImportRunDbRow> for ImportRun {
         Ok(ImportRun {
             source,
             status,
+            auto_import: row.auto_import,
             error: row.error,
             updated_at: row.updated_at,
         })
@@ -472,6 +477,17 @@ impl ImportRepo for PgImportRepo {
             r#"
             DELETE FROM import_entity
             WHERE user_id = $1 AND initiator = $2 AND status = 'staged'
+              AND NOT (
+                  $2 = 'onboarding'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM import_run
+                      WHERE import_run.user_id = import_entity.user_id
+                        AND import_run.source = import_entity.source
+                        AND import_run.auto_import
+                        AND import_run.status IN ('running', 'ready', 'importing', 'failed')
+                  )
+              )
             "#,
             user.as_ref(),
             initiator.as_ref(),
@@ -497,7 +513,7 @@ impl ImportRepo for PgImportRepo {
         let rows = sqlx::query_as!(
             ImportRunDbRow,
             r#"
-            SELECT source, status, error, updated_at
+            SELECT source, status, auto_import, error, updated_at
             FROM import_run WHERE user_id = $1
             ORDER BY source
             "#,
@@ -514,12 +530,13 @@ impl ImportRepo for PgImportRepo {
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         from: &[RunStatus],
+        auto_import: bool,
     ) -> Result<bool> {
         let from = run_status_strings(from);
         let result = sqlx::query!(
             r#"
-            INSERT INTO import_run (user_id, source, status)
-            VALUES ($1, $2, 'running')
+            INSERT INTO import_run (user_id, source, status, auto_import)
+            VALUES ($1, $2, 'running', $4)
             ON CONFLICT (user_id, source) DO UPDATE
             SET status = 'running', error = NULL, updated_at = NOW()
             WHERE import_run.status = ANY($3::text[])
@@ -527,6 +544,7 @@ impl ImportRepo for PgImportRepo {
             user.as_ref(),
             source.as_ref(),
             &from,
+            auto_import,
         )
         .execute(&self.pool)
         .await?;
@@ -580,5 +598,144 @@ impl ImportRepo for PgImportRepo {
         .execute(&self.pool)
         .await?;
         Ok(result.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn begin_auto_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<Option<Vec<ImportEntity>>> {
+        let mut transaction = self.pool.begin().await?;
+        let claimed = sqlx::query_scalar!(
+            r#"
+            UPDATE import_run
+            SET status = 'importing', error = NULL, updated_at = NOW()
+            WHERE user_id = $1 AND source = $2
+              AND status = 'ready' AND auto_import
+            RETURNING source
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if claimed.is_none() {
+            return Ok(None);
+        }
+
+        let rows = sqlx::query_as!(
+            ImportEntityDbRow,
+            r#"
+            UPDATE import_entity
+            SET status = 'importing', last_error = NULL, updated_at = NOW()
+            WHERE user_id = $1 AND source = $2
+              AND initiator = 'onboarding' AND status = 'staged'
+            RETURNING id, user_id, team_id, source, foreign_id, status, initiator,
+                      metadata, entity_id, entity_type, last_error, created_at, updated_at
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(Some(
+            rows.into_iter()
+                .map(ImportEntity::try_from)
+                .collect::<Result<Vec<_>>>()?,
+        ))
+    }
+
+    #[tracing::instrument(skip(self, ids), fields(count = ids.len()), err)]
+    async fn finish_auto_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        ids: &[Uuid],
+    ) -> Result<Option<RunStatus>> {
+        let status = sqlx::query_scalar!(
+            r#"
+            WITH outcome AS (
+                SELECT
+                    COUNT(*) FILTER (WHERE status = 'imported')
+                        = CARDINALITY($3::uuid[])::bigint AS succeeded
+                FROM import_entity
+                WHERE user_id = $1 AND id = ANY($3::uuid[])
+            )
+            UPDATE import_run
+            SET status = CASE
+                    WHEN outcome.succeeded THEN 'completed'
+                    ELSE 'failed'
+                END,
+                error = CASE
+                    WHEN outcome.succeeded THEN NULL
+                    ELSE 'one or more automatic imports failed'
+                END,
+                updated_at = NOW()
+            FROM outcome
+            WHERE user_id = $1 AND source = $2 AND status = 'importing'
+            RETURNING import_run.status
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            ids,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        status
+            .map(|status| {
+                RunStatus::from_str(&status)
+                    .map_err(|_| anyhow::anyhow!("unknown run status: {status}").into())
+            })
+            .transpose()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn reconcile_auto_import_runs(&self, user: &MacroUserIdStr<'static>) -> Result<u64> {
+        let result = sqlx::query!(
+            r#"
+            WITH settled AS (
+                SELECT
+                    run.source,
+                    EXISTS (
+                        SELECT 1
+                        FROM import_entity entity
+                        WHERE entity.user_id = run.user_id
+                          AND entity.source = run.source
+                          AND entity.initiator = 'onboarding'
+                          AND entity.status = 'staged'
+                          AND entity.last_error IS NOT NULL
+                    ) AS failed
+                FROM import_run run
+                WHERE run.user_id = $1
+                  AND run.status = 'importing'
+                  AND run.auto_import
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM import_entity entity
+                      WHERE entity.user_id = run.user_id
+                        AND entity.source = run.source
+                        AND entity.initiator = 'onboarding'
+                        AND entity.status = 'importing'
+                  )
+            )
+            UPDATE import_run run
+            SET status = CASE WHEN settled.failed THEN 'failed' ELSE 'completed' END,
+                error = CASE
+                    WHEN settled.failed THEN 'one or more automatic imports failed'
+                    ELSE NULL
+                END,
+                updated_at = NOW()
+            FROM settled
+            WHERE run.user_id = $1
+              AND run.source = settled.source
+              AND run.status = 'importing'
+            "#,
+            user.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
     }
 }

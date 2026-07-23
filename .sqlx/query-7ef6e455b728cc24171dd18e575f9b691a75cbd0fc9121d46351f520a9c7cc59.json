@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH settled AS (\n                SELECT\n                    run.source,\n                    EXISTS (\n                        SELECT 1\n                        FROM import_entity entity\n                        WHERE entity.user_id = run.user_id\n                          AND entity.source = run.source\n                          AND entity.initiator = 'onboarding'\n                          AND entity.status = 'staged'\n                          AND entity.last_error IS NOT NULL\n                    ) AS failed\n                FROM import_run run\n                WHERE run.user_id = $1\n                  AND run.status = 'importing'\n                  AND run.auto_import\n                  AND NOT EXISTS (\n                      SELECT 1\n                      FROM import_entity entity\n                      WHERE entity.user_id = run.user_id\n                        AND entity.source = run.source\n                        AND entity.initiator = 'onboarding'\n                        AND entity.status = 'importing'\n                  )\n            )\n            UPDATE import_run run\n            SET status = CASE WHEN settled.failed THEN 'failed' ELSE 'completed' END,\n                error = CASE\n                    WHEN settled.failed THEN 'one or more automatic imports failed'\n                    ELSE NULL\n                END,\n                updated_at = NOW()\n            FROM settled\n            WHERE run.user_id = $1\n              AND run.source = settled.source\n              AND run.status = 'importing'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ef6e455b728cc24171dd18e575f9b691a75cbd0fc9121d46351f520a9c7cc59"
+}
