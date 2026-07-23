@@ -641,6 +641,7 @@ impl DocumentSyncSession {
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
+            or_unauth!(claims.has_document_id_access(document_id).then_some(()));
             if self.maybe_set_document_id(document_id).await? {
                 trace!("init document_id={document_id}");
             } else {
