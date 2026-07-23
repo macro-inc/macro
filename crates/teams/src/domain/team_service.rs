@@ -44,7 +44,7 @@ use crate::domain::{
         RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
         TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-        TryJoinTeamByDomainError, is_generic_email_domain,
+        TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -556,9 +556,10 @@ where
         // for the email-backfill fan-out to populate yet. The fan-out
         // happens later, on the disabled → enabled transition in
         // `set_team_crm_enabled`.
+        let team_slug = team_slug_from_name(team_name);
         let team = self
             .team_repository
-            .create_team(user_id, team_name, subscription_id)
+            .create_team(user_id, team_name, &team_slug, subscription_id)
             .await?;
         let owner_id = user_id.clone().into_owned();
         self.channel_service

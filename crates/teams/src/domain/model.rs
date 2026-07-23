@@ -56,6 +56,61 @@ impl TeamPlan {
 /// requires the owner to subscribe.
 pub const FREE_TEAM_MAX_MEMBERS: i32 = 5;
 
+/// Slug assigned when a team name cannot be converted to a valid team slug.
+pub const DEFAULT_TEAM_SLUG: &str = "MACRO";
+
+const MAX_TEAM_SLUG_LEN: usize = 20;
+
+pub(crate) fn normalize_team_slug(slug: &str) -> Result<String, TeamError> {
+    let mut normalized = String::new();
+    let mut last_was_separator = false;
+
+    for ch in slug.chars() {
+        let normalized_char = if ch.is_ascii_alphabetic() {
+            ch.to_ascii_uppercase()
+        } else if ch == '_' || ch == '-' || ch.is_ascii_whitespace() {
+            '_'
+        } else {
+            return Err(TeamError::BadRequest(
+                "team slug may only contain ASCII letters, spaces, hyphens, and underscores"
+                    .to_string(),
+            ));
+        };
+
+        if normalized_char == '_' {
+            if !normalized.is_empty() && !last_was_separator {
+                normalized.push('_');
+            }
+            last_was_separator = true;
+        } else {
+            normalized.push(normalized_char);
+            last_was_separator = false;
+        }
+    }
+
+    while normalized.ends_with('_') {
+        normalized.pop();
+    }
+
+    if normalized.is_empty() {
+        return Err(TeamError::BadRequest(
+            "team slug cannot be empty".to_string(),
+        ));
+    }
+
+    if normalized.len() > MAX_TEAM_SLUG_LEN {
+        return Err(TeamError::BadRequest(format!(
+            "team slug cannot be longer than {MAX_TEAM_SLUG_LEN} characters"
+        )));
+    }
+
+    Ok(normalized)
+}
+
+pub(crate) fn team_slug_from_name(team_name: &str) -> String {
+    normalize_team_slug(team_name).unwrap_or_else(|_| DEFAULT_TEAM_SLUG.to_string())
+}
+
 #[derive(
     Eq,
     PartialEq,

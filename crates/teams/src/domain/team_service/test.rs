@@ -97,6 +97,7 @@ struct MockTeamRepository {
     patch_team_name_calls: Arc<Mutex<Vec<(uuid::Uuid, Option<String>, Option<String>)>>>,
     fail_patch_team: bool,
     created_team: Team,
+    create_team_calls: Arc<Mutex<Vec<(String, String)>>>,
     github_installation_move_calls: Arc<Mutex<Vec<(String, uuid::Uuid)>>>,
     subscription_update_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     payment_update_calls: Arc<Mutex<Vec<(uuid::Uuid, bool)>>>,
@@ -169,6 +170,7 @@ impl MockTeamRepository {
                 false,
                 false,
             ),
+            create_team_calls: Arc::new(Mutex::new(Vec::new())),
             github_installation_move_calls: Arc::new(Mutex::new(Vec::new())),
             subscription_update_calls: Arc::new(Mutex::new(Vec::new())),
             payment_update_calls: Arc::new(Mutex::new(Vec::new())),
@@ -303,9 +305,14 @@ impl TeamRepository for MockTeamRepository {
     fn create_team(
         &self,
         _: &MacroUserIdStr<'_>,
-        _: &str,
+        team_name: &str,
+        team_slug: &str,
         _: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send {
+        self.create_team_calls
+            .lock()
+            .unwrap()
+            .push((team_name.to_string(), team_slug.to_string()));
         let team = self.created_team.clone();
         async move { Ok(team) }
     }
@@ -1945,6 +1952,36 @@ async fn team_payment_patch_payment_status_delegates_to_repository() {
         *payment_update_calls.lock().unwrap(),
         vec![(team_id, false), (team_id, true)]
     );
+}
+
+#[tokio::test]
+async fn create_team_sets_slug_from_name_or_uses_default() {
+    let owner = MacroUserIdStr::parse_from_str("macro|creator@gmail.com").unwrap();
+
+    for (team_name, expected_slug) in [
+        ("Product Engineering", "PRODUCT_ENGINEERING"),
+        ("Team 42", "MACRO"),
+    ] {
+        let team_repository =
+            MockTeamRepository::new(Vec::new(), team_name, Arc::new(Mutex::new(Vec::new())));
+        let create_team_calls = team_repository.create_team_calls.clone();
+        let service = TeamServiceImpl::new(
+            team_repository,
+            MockCustomerRepository::default(),
+            RecordingChannelService::default(),
+            MockUserRolesAndPermissionsService::default(),
+            Arc::new(MockNotificationIngress::new(HashSet::new())),
+            NoOpCrmEnqueuer,
+            NoOpTeamCrmSettingsRepository,
+        );
+
+        service.create_team(&owner, team_name, None).await.unwrap();
+
+        assert_eq!(
+            *create_team_calls.lock().unwrap(),
+            vec![(team_name.to_string(), expected_slug.to_string())]
+        );
+    }
 }
 
 #[tokio::test]
