@@ -537,7 +537,10 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 // -- Normalized grouped cache tests --
 
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
-import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
+import {
+  soupItemMatchesProjectMembership,
+  soupItemMatchesQuery,
+} from '@app/features/next-soup/filters/query-filters';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import { NOT_SET_GROUP_KEY } from '../grouped/types';
 import type { SoupAstItemsFlatPage, SoupAstItemsGroupedPage } from '../items';
@@ -958,5 +961,64 @@ describe('insertSoupEntity — dynamic-ui list query gate', () => {
         key
       )!.pages[0];
     expect(page.items.map(getSoupItemId)).toEqual(['e-2', 'e-1']);
+  });
+});
+
+/**
+ * End-to-end gate for the folder (project) block (macro-2290): the block drives
+ * a project-scoped soup view and attaches `soupItemMatchesProjectMembership` as
+ * its `itemFilter`. Without it, creating or opening an entity outside the folder
+ * (which refetches the item and prepends it into every matching list cache)
+ * flashed into the folder's contents until the server refetch corrected it.
+ */
+describe('insertSoupEntity — folder membership gate', () => {
+  const FOLDER = 'proj-1';
+
+  function folderDocItem(id: string, projectId: string | null): SoupApiItem {
+    return {
+      tag: 'document',
+      data: { id, title: `doc ${id}`, projectId },
+      frecency_score: 1,
+    } as unknown as SoupApiItem;
+  }
+
+  function seedFolderScopedQuery(items: SoupApiItem[], suffix = 'folder-seed') {
+    const key = [...soupKeys.astItems._def, {}, {}, undefined, suffix];
+    const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {
+      pages: [{ kind: 'flat', items, nextCursor: null }],
+      pageParams: [null],
+    };
+    testQueryClient.setQueryDefaults(key, {
+      meta: {
+        itemFilter: (item: SoupApiItem) =>
+          soupItemMatchesProjectMembership(item, FOLDER),
+      },
+    });
+    testQueryClient.setQueryData(key, data);
+    return key;
+  }
+
+  it('rejects a task created outside the folder', () => {
+    const key = seedFolderScopedQuery([folderDocItem('d-in', FOLDER)]);
+
+    insertSoupEntity(folderDocItem('d-root', null));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['d-in']);
+  });
+
+  it('still inserts an entity that belongs to the folder', () => {
+    const key = seedFolderScopedQuery([folderDocItem('d-in', FOLDER)]);
+
+    insertSoupEntity(folderDocItem('d-new', FOLDER));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['d-new', 'd-in']);
   });
 });

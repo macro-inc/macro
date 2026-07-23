@@ -121,6 +121,15 @@ type SoupViewInitializeOptions = {
   initialSearchText?: string;
   disableLocalSearch?: boolean;
   additionalEntities?: Accessor<EntityData[]>;
+  /**
+   * Extra gate applied to optimistic/websocket cache inserts on top of the
+   * active filters. The soup view's `itemFilter` reflects the active filters
+   * (tab/search/tag), not the base query's scope, so a scoped view (e.g. a
+   * folder's contents) passes this to reject inserts that fall outside its
+   * scope — otherwise an entity created or opened elsewhere flashes into the
+   * list until the server refetch corrects it.
+   */
+  itemMembershipFilter?: (item: SoupApiItem) => boolean;
 };
 
 export type ReadFilter = 'all' | 'unread' | 'read';
@@ -221,6 +230,7 @@ export const SoupViewContextProvider: FlowComponent<
     initialSearchText: props.initialSearchText,
     disableLocalSearch: props.disableLocalSearch,
     additionalEntities: props.additionalEntities,
+    itemMembershipFilter: props.itemMembershipFilter,
   });
 
   const queryClient = useQueryClient();
@@ -614,6 +624,9 @@ export const SoupViewContextProvider: FlowComponent<
     ) {
       return false;
     }
+
+    const membershipFilter = config().itemMembershipFilter;
+    if (membershipFilter && !membershipFilter(item)) return false;
 
     return soup.predicates.test(
       mapApiSoupItemToEntity(item) as SoupEntity,
