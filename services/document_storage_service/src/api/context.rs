@@ -95,6 +95,10 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
+#[cfg(feature = "graphql")]
+use soup_realtime::{
+    domain::service::SoupRealtimeConsumerService, outbound::soup_consumer::SoupTopicConsumer,
+};
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -145,12 +149,17 @@ pub(crate) type DssSoupService = SoupImpl<
 type DssSoupState =
     SoupRouterState<DssSoupService, DssEmailService, EntityAccessService, AuthorizationService>;
 
+/// Realtime Soup consumer service used by GraphQL subscriptions.
+#[cfg(feature = "graphql")]
+pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicConsumer>;
+
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
 #[cfg(feature = "graphql")]
 pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
+    DssSoupRealtimeService,
     DssEmailService,
     EntityAccessService,
     AuthorizationService,

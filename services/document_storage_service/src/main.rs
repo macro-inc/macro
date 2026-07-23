@@ -107,6 +107,10 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
+#[cfg(feature = "graphql")]
+use soup_realtime::{
+    domain::service::SoupRealtimeConsumerService, outbound::soup_consumer::SoupTopicConsumer,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -848,6 +852,28 @@ async fn main() -> anyhow::Result<()> {
         foreign_entity_service_for_soup,
     ));
 
+    #[cfg(feature = "graphql")]
+    let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
+        SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
+            anyhow::anyhow!("failed to create realtime Soup topic consumer: {error:?}")
+        })?,
+    ));
+    #[cfg(feature = "graphql")]
+    tokio::spawn({
+        let soup_realtime_service = Arc::clone(&soup_realtime_service);
+        async move {
+            loop {
+                let _ = soup_realtime_service.run().await.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "realtime Soup subscription consumer stopped"
+                    );
+                });
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        }
+    });
+
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
     let api_context = ApiContext {
@@ -868,7 +894,10 @@ async fn main() -> anyhow::Result<()> {
         ),
         favorites_service,
         #[cfg(feature = "graphql")]
-        graphql_soup_schema: complete_graph::build_schema_from_arc(soup_service),
+        graphql_soup_schema: complete_graph::build_schema_from_arcs(
+            soup_service,
+            soup_realtime_service,
+        ),
         #[cfg(feature = "graphql")]
         graphql_notification_reader,
         github_sync_service: Arc::new(github_sync_service_impl),
