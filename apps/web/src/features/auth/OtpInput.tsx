@@ -1,5 +1,5 @@
 import { cn } from '@ui';
-import { createSignal, Index, onMount } from 'solid-js';
+import { createSignal, Index, onCleanup, onMount } from 'solid-js';
 
 /**
  * Segmented one-time-code input: one visible box per digit, backed by a
@@ -22,9 +22,15 @@ export function OtpInput(props: {
   onMount(() => {
     // The Stepper's outin Transition resolves this step's JSX (firing
     // onMount) before attaching it to the document, so the input is still
-    // detached here. Poll until it's connected, then focus.
+    // detached here. Poll until it's connected, then focus — and stop on
+    // unmount, or a node discarded before ever attaching would keep the
+    // rAF loop (and itself) alive forever.
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
     const focusWhenConnected = () => {
-      if (!inputEl) return;
+      if (cancelled || !inputEl) return;
       if (inputEl.isConnected) inputEl.focus({ preventScroll: true });
       else requestAnimationFrame(focusWhenConnected);
     };

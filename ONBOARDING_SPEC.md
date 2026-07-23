@@ -5,7 +5,7 @@
 - New users land in a full-screen, multi-step onboarding immediately after signup — no dead end at `/app/login`.
 - This flow **replaces `/setup`** as the onboarding surface. The `/setup` page goes away; its backend machinery is what powers this flow.
 - Navigation is forward-only: each optional step can be skipped, but there is no going back.
-- Every connector step drives the **real** import machinery. This onboarding uses the exact same backend as `/setup`: `crates/onboarding` + `crates/import` (`import_entity` / `import_run`, gather-on-connect, auto-import runs, `GET /import/state`, `import_updated` gateway pushes). No mocks, no parallel implementation.
+- Every import-capable connector step (Linear, Notion, Slack — GitHub is connect-only, see step 5) drives the **real** import machinery. This onboarding uses the exact same backend as `/setup`: `crates/onboarding` + `crates/import` (`import_entity` / `import_run`, gather-on-connect, auto-import runs, `GET /import/state`, `import_updated` gateway pushes). No mocks, no parallel implementation.
 - Auto-import is on: connecting a source gathers and imports without a manual accept step; the summary page reports what happened.
 
 ## Entry point
@@ -56,7 +56,7 @@ Scenarios:
   - If Google is connected we can query contacts by this point: suggest inviting people under the same domain (v1: filtered client-side from the contacts service; a ranked colleagues endpoint does not exist on main).
 - **Custom domain, team already exists for the domain:**
   - Show that they have been automatically added to that team. Verified backend behavior: the join happens at account creation (`create_user_webhook` → `try_join_team_by_domain`, fire-and-forget), keyed on the **signup/account email only**. The step just renders the resulting membership.
-- **Free-mail domain** (generic consumer domains — gmail.com, yahoo.com, etc.; the shared list lives in `email_utils::free_mail`):
+- **Free-mail domain** (generic consumer domains — gmail.com, yahoo.com, etc.; the canonical list lives in `crates/generic_email_domains`, shared by teams and the onboarding suggestion):
   - Still show the team step, just without domain-derived suggestions: the user can create a team (they name it themselves) and invite teammates by email. Skippable like the other optional steps.
 
 Verified backend facts the step builds on (and their limits):

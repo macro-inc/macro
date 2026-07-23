@@ -1,7 +1,7 @@
 import ArrowRight from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { Button, Layer } from '@ui';
-import { For, onMount } from 'solid-js';
+import { For, onCleanup, onMount } from 'solid-js';
 
 /*
  * Shared bits for the onboarding flow steps: the card's form controls and
@@ -48,9 +48,15 @@ export function FormInput(props: {
     if (!props.autoFocus) return;
     // The Stepper's outin Transition resolves this step's JSX (firing
     // onMount) before attaching it to the document, so the input is still
-    // detached here. Poll until it's connected, then focus.
+    // detached here. Poll until it's connected, then focus — and stop on
+    // unmount, or a node discarded before ever attaching would keep the
+    // rAF loop (and itself) alive forever.
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
     const focusWhenConnected = () => {
-      if (!inputEl) return;
+      if (cancelled || !inputEl) return;
       if (inputEl.isConnected) inputEl.focus({ preventScroll: true });
       else requestAnimationFrame(focusWhenConnected);
     };

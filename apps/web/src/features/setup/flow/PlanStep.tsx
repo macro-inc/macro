@@ -36,7 +36,7 @@ export function PlanStep(props: {
               type="button"
               onClick={() => setSelected(plan().tier)}
               class={cn(
-                'flex flex-col gap-4 rounded-xl border p-5 text-left transition-colors cursor-pointer',
+                'flex flex-col gap-4 rounded-xl border p-5 text-left transition-colors cursor-default',
                 selected() === plan().tier
                   ? 'border-ink/40 ring-1 ring-ink/20'
                   : 'border-edge hover:border-edge-muted'
