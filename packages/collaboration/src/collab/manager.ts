@@ -227,9 +227,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
-    const didChange = Object.keys(importStatus.success).length > 0;
+    const didChange = importStatus.success.size > 0;
 
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
+    if ((importStatus.pending?.size ?? 0) > 0) {
       return err([
         { code: LoroManagerError.ImportFailed, message: 'Import failed' },
       ]);
@@ -260,9 +260,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
-    const didChange = Object.keys(importStatus.success).length > 0;
+    const didChange = importStatus.success.size > 0;
 
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
+    if ((importStatus.pending?.size ?? 0) > 0) {
       return err([
         { code: LoroManagerError.ImportFailed, message: 'Import failed' },
       ]);
@@ -439,7 +439,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
+    if ((importStatus.pending?.size ?? 0) > 0) {
       return err([
         {
           code: LoroManagerError.ImportFailed,

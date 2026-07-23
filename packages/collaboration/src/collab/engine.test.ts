@@ -1,4 +1,5 @@
 import { LoroDoc } from 'loro-crdt';
+import { ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { SyncEngine } from './engine';
 import {
@@ -199,5 +200,31 @@ describe('SyncEngine', () => {
 
     expect(started).toBe(false);
     expect(source.registerPeerId).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a late startup convergence response after stop', async () => {
+    const source = new MockLiveSyncSource();
+    const pendingUpdate = Promise.withResolvers<Uint8Array>();
+    source.requestUpdatesSince.mockReturnValueOnce(
+      ResultAsync.fromSafePromise(pendingUpdate.promise)
+    );
+    const { wal } = makeTestWAL(source);
+    const manager = new MockLoroManager();
+    const engine = new SyncEngine({
+      loroManager: manager,
+      awareness: makeAwareness(),
+      syncs: { wal, live: source },
+      bindings: { onRemoteState: vi.fn() },
+    });
+
+    engine.start();
+    expect(source.requestUpdatesSince).toHaveBeenCalledOnce();
+    engine.stop();
+
+    pendingUpdate.resolve(new Uint8Array([1, 2, 3]));
+    await pendingUpdate.promise;
+    await Promise.resolve();
+
+    expect(manager.importUpdate).not.toHaveBeenCalled();
   });
 });

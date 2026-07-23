@@ -68,6 +68,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly readonly: () => boolean;
   private readonly syncLock = new Mutex();
   private unsubscribe?: () => void;
+  private liveUnsubscribe?: () => void;
   private snapshotInterval?: ReturnType<typeof setInterval>;
   private readonly snapshotStore?: LoroSnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
@@ -75,6 +76,8 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly makeChatter: (documentId: string) => Chatter;
   private chatter?: Chatter;
   private chatterUnsub?: () => void;
+  private lifecycleGeneration = 0;
+  private convergence?: { generation: number; promise: Promise<void> };
 
   constructor({
     loroManager,
@@ -133,7 +136,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         .exhaustive()
     );
 
-    this.syncs.live.listen((event) => this.handleSourceEvent(event));
+    this._isRunning = true;
+    this.lifecycleGeneration++;
+
+    this.liveUnsubscribe?.();
+    this.liveUnsubscribe = this.syncs.live.listen((event) =>
+      this.handleSourceEvent(event)
+    );
     this.syncs.live.registerPeerId(this.loroManager.peerId);
 
     if (this.snapshotStore && this.snapshotInterval === undefined) {
@@ -143,15 +152,21 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       );
     }
 
-    this._isRunning = true;
     this.onRunningChange(true);
     this.log('info', 'engine.start: ok');
+    void this.convergeFromServer();
     return true;
   }
 
   public stop() {
+    this._isRunning = false;
+    this.lifecycleGeneration++;
+
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+
+    this.liveUnsubscribe?.();
+    this.liveUnsubscribe = undefined;
 
     this.chatterUnsub?.();
     this.chatter?.close();
@@ -165,7 +180,6 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     this.awareness.updateLocalAwareness(undefined);
     this.syncs.live.pushAwareness(this.awareness.getEncodedLocalAwareness());
-    this._isRunning = false;
     this.onRunningChange(false);
     this.log('info', 'engine.stop: ok');
   }
@@ -308,17 +322,53 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           'info',
           'engine: reconnect, requesting updates since current version'
         );
-        this.requestAndHandleUpdatesSince(this.loroManager.doc.version());
+        void this.convergeFromServer();
         break;
     }
   }
 
+  /**
+   * Pull every server operation missing from the current local seed.
+   *
+   * Snapshot sources are intentionally transport-agnostic and first-wins, so
+   * this anti-entropy step is what makes optimistic, IDB, and S3 seeds converge
+   * to server truth. Calls within one engine lifecycle are coalesced.
+   */
+  private convergeFromServer(): Promise<void> {
+    const generation = this.lifecycleGeneration;
+    if (!this.isActiveGeneration(generation)) return Promise.resolve();
+
+    if (this.convergence?.generation === generation) {
+      return this.convergence.promise;
+    }
+
+    const since = this.loroManager.doc.version();
+    const promise = this.requestAndHandleUpdatesSince(since, 1, generation);
+    this.convergence = { generation, promise };
+    const clearConvergence = () => {
+      if (this.convergence?.promise === promise) {
+        this.convergence = undefined;
+      }
+    };
+    void promise.then(clearConvergence, clearConvergence);
+    return promise;
+  }
+
+  private isActiveGeneration(generation: number): boolean {
+    return this._isRunning && this.lifecycleGeneration === generation;
+  }
+
   private async requestAndHandleUpdatesSince(
     since: VersionVector,
-    attempt = 1
+    attempt: number,
+    generation: number
   ) {
+    if (!this.isActiveGeneration(generation)) return;
+
     this.log('debug', `engine: requestUpdatesSince (attempt ${attempt})`);
     const updates = await this.syncs.live.requestUpdatesSince(since);
+    if (!this.isActiveGeneration(generation)) return;
+
     if (updates.isErr() || !updates.value) {
       this.log('error', 'engine: requestUpdatesSince failed', {
         err: 'error' in updates ? updates.error : 'update is undefined',
@@ -327,13 +377,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         await new Promise((resolve) =>
           setTimeout(resolve, REQUEST_UPDATES_RETRY_DELAY_MS)
         );
-        void this.requestAndHandleUpdatesSince(since, attempt + 1);
+        await this.requestAndHandleUpdatesSince(since, attempt + 1, generation);
       }
       return;
     }
 
     this.log('debug', 'engine: requestUpdatesSince ok, applying update');
-    this.handleRemoteUpdate(updates.value);
+    await this.handleRemoteUpdate(updates.value);
   }
 }
 
