@@ -88,8 +88,12 @@ pub async fn structured_completion(
     let mcp_store = ctx.mcp_state.store();
     let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
     let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
-        mcp_client::domain::service::CombinedToolSet::new(ctx.all_tools.clone(), &mcp_records)
-            .await,
+        mcp_client::domain::service::CombinedToolSet::new(
+            ctx.all_tools.clone(),
+            &mcp_records,
+            mcp_store.clone(),
+        )
+        .await,
     );
 
     let user_message = ChatMessage {

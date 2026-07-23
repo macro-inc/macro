@@ -461,7 +461,7 @@ where
             .collect();
         anyhow::ensure!(!records.is_empty(), "no {} connection", source.as_ref());
 
-        let mcp_tools = McpToolSet::new(&records).await;
+        let mcp_tools = McpToolSet::new(&records, self.mcp_store.clone()).await;
         anyhow::ensure!(
             !mcp_tools.is_empty(),
             "could not load tools from {}",

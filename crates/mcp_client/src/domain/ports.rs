@@ -1,4 +1,5 @@
 use super::models::{MacroUserIdStr, McpServer, McpServerRecord};
+use std::sync::Arc;
 
 /// Port for persisting MCP server records, keyed by user.
 pub trait McpServerStore: Send + Sync + 'static {
@@ -32,7 +33,14 @@ pub trait McpServerStore: Send + Sync + 'static {
 /// Port for establishing a connection to an MCP server.
 pub trait McpConnector: Send + Sync {
     /// Connect to the MCP server described by this value.
-    fn connect(&self) -> impl Future<Output = anyhow::Result<McpServer>> + Send;
+    ///
+    /// Credential updates produced while connecting — and later, while the
+    /// connection is in use (e.g. refreshed OAuth tokens) — are persisted
+    /// through `server_store`.
+    fn connect<S: McpServerStore>(
+        &self,
+        server_store: Arc<S>,
+    ) -> impl Future<Output = anyhow::Result<McpServer>> + Send;
 }
 
 /// Everything needed to resume the OAuth flow on callback.
