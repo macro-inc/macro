@@ -305,13 +305,14 @@ export function SplitPanel(props: SplitPanelProps) {
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
                   'border-solid!': previewPairFocusStyling() && props.active,
                   'border-dashed!': previewPairFocusStyling() && !props.active,
-                  // Drawer look: the Viewer meets its Controller with
-                  // a square, borderless left edge (the ! beats Surface's
-                  // inline border shorthand)...
-                  'rounded-l-none border-l-0!': tuckedBehindController(),
-                  // ...and the controller squares its right edge, keeping its
-                  // border as the single seam line between the pair's panels.
+                  // Drawer look: both members square their seam corners, and
+                  // the seam border belongs to the pair's active member — its
+                  // partner's seam edge goes borderless so the line never
+                  // doubles (the ! beats Surface's inline border shorthand).
+                  'rounded-l-none': tuckedBehindController(),
+                  'border-l-0!': tuckedBehindController() && !props.active,
                   'rounded-r-none': hasTuckedViewer(),
+                  'border-r-0!': hasTuckedViewer() && !props.active,
                 }
               )}
               depth={isMobile() ? 0 : 1}
