@@ -15,6 +15,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotId, Entity, EntityAccessReceipt, EntityPermission, EntityType,
