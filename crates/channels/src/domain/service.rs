@@ -461,7 +461,7 @@ where
         &self,
         actor: Sender,
         channel_id: Uuid,
-        req: PatchChannelRequest,
+        mut req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
         let info = self
@@ -498,6 +498,26 @@ where
             return Err(ChannelMutationErr::BadRequest(
                 "auto-join is only available for team channels".to_string(),
             ));
+        }
+
+        if convert_to_team_channel && info.channel_type != ChannelType::Team {
+            let requested_name = req
+                .channel_name
+                .as_deref()
+                .filter(|name| !name.trim().is_empty());
+            let stored_name = info.name.as_deref().filter(|name| !name.trim().is_empty());
+            if requested_name.is_none() {
+                req.channel_name = if stored_name.is_some() {
+                    None
+                } else {
+                    Some(
+                        self.repo
+                            .resolve_channel_name(&info, actor.clone())
+                            .await
+                            .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
+                    )
+                };
+            }
         }
 
         let channel_name = req.channel_name.clone();

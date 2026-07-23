@@ -284,6 +284,7 @@ struct FakeMutationRepo {
 
 struct FakeMutationRepoState {
     channel_id: Uuid,
+    channel_name: Option<String>,
     channel_type: ChannelType,
     channel_team_id: Option<Uuid>,
     user_team_id: Option<Uuid>,
@@ -321,6 +322,7 @@ impl FakeMutationRepo {
         Self {
             state: Arc::new(Mutex::new(FakeMutationRepoState {
                 channel_id,
+                channel_name: Some("Project".to_string()),
                 channel_type: ChannelType::Private,
                 channel_team_id: None,
                 user_team_id: None,
@@ -470,7 +472,7 @@ impl ChannelRepo for FakeMutationRepo {
         let state = self.state.lock().unwrap();
         Ok(ChannelInfo {
             id: channel_id,
-            name: Some("Project".to_string()),
+            name: state.channel_name.clone(),
             channel_type: state.channel_type,
             org_id: None,
             team_id: state.channel_team_id,
@@ -490,7 +492,7 @@ impl ChannelRepo for FakeMutationRepo {
         let state = self.state.lock().unwrap();
         Ok((state.join_code == Some(join_code)).then(|| ChannelInfo {
             id: state.channel_id,
-            name: Some("Project".to_string()),
+            name: state.channel_name.clone(),
             channel_type: state.channel_type,
             org_id: None,
             team_id: state.channel_team_id,
@@ -2205,6 +2207,42 @@ async fn patch_channel_conversion_uses_the_users_team() {
     assert_eq!(
         state.channel_patches[0].0.convert_to_team_channel,
         Some(true)
+    );
+}
+
+#[tokio::test]
+async fn patch_channel_conversion_names_an_unnamed_private_channel() {
+    let channel_id = Uuid::new_v4();
+    let team_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.channel_name = None;
+        state.user_team_id = Some(team_id);
+    }
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.channel_patches.len(), 1);
+    assert_eq!(
+        state.channel_patches[0].0.channel_name.as_deref(),
+        Some("Project")
     );
 }
 

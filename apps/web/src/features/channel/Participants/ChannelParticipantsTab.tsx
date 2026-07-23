@@ -71,7 +71,8 @@ export function ChannelParticipantsTab(props: {
       ? 'Checking your team membership…'
       : 'You need to belong to a team before converting this channel.';
   };
-  const canAddParticipants = () => channelType() === ChannelType.private;
+  const canAddParticipants = () =>
+    channelType() === ChannelType.private || channelType() === ChannelType.team;
   const isEditable = () => canAddParticipants();
 
   const filteredParticipants = () => {
@@ -113,6 +114,7 @@ export function ChannelParticipantsTab(props: {
     if (!canManageChannel() || !canConvertToTeam()) return;
     patchChannelMutation.mutate({
       channelId: props.channelId,
+      channel_name: channel()?.name,
       convert_to_team_channel: true,
     });
   };
