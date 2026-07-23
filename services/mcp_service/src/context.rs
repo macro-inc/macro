@@ -171,7 +171,9 @@ async fn build_tool_context(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        call::domain::service::CallRecordQueryServiceImpl::new(
+            call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+        ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -280,12 +282,8 @@ async fn build_tool_context(
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
-    );
     let call_tool_context = call::inbound::toolset::CallToolContext::new(
         call_service,
-        call_query_service,
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 

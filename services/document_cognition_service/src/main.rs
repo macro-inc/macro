@@ -256,7 +256,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -398,12 +398,7 @@ async fn main() -> anyhow::Result<()> {
         None::<S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone()));
-    let call_tool_context = CallToolContext::new(
-        call_service,
-        call_query_service,
-        (*entity_access_service).clone(),
-    );
+    let call_tool_context = CallToolContext::new(call_service, (*entity_access_service).clone());
 
     tracing::info!("initialized call tool context");
 

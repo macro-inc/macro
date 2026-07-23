@@ -55,11 +55,6 @@ export type ToolPropertyTargetEntityType =
  */
 export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
 /**
- * Schema-only mirror of [`CallStatus`] without variant docs, keeping AI tool
- * schemas as a simple enum instead of `oneOf`.
- */
-export type ToolCallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
-/**
  * Type of channel timeline window to read.
  */
 export type ChannelMessagesWindowType =
@@ -738,52 +733,6 @@ export interface SearchHighlight {
    * The highlight match on the user (owner) of the entity
    */
   user_id?: string | null;
-}
-/**
- * A call-record summary. Intentionally omits the transcript — use
- * [`super::read_call_record::ReadCallRecord`] to fetch it.
- */
-export interface CallRecordSummary {
-  /**
-   * The call's unique identifier.
-   */
-  callId: string;
-  /**
-   * The channel the call belongs to.
-   */
-  channelId: string;
-  /**
-   * The channel's display name, if resolvable.
-   */
-  channelName?: string | null;
-  /**
-   * The user who created the call.
-   */
-  createdBy: string;
-  /**
-   * Call duration in milliseconds. Absent if the call is still active.
-   */
-  durationMs?: number | null;
-  /**
-   * When the call ended. Absent if the call is still active.
-   */
-  endedAt?: string | null;
-  /**
-   * True if the call is currently active.
-   */
-  isActive: boolean;
-  /**
-   * IDs of users who participated in the call.
-   */
-  participants: string[];
-  /**
-   * When the call started.
-   */
-  startedAt: string;
-  /**
-   * The caller's viewer-relative status for this call.
-   */
-  status?: ToolCallStatus | null;
 }
 /**
  * A single channel-message content hit in the unified search response.
@@ -2001,32 +1950,6 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * List recent call records the user can access, ordered by start time descending. Status is relative to the caller. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
- */
-export interface ListCallRecords {
-  /**
-   * Deprecated compatibility filter. true = only calls the user attended; false = only calls the user did not attend; omit to include both. Ignored when status is provided.
-   */
-  attended?: boolean | null;
-  /**
-   * Optional channel id. When provided, only calls from that channel are returned.
-   */
-  channelId?: string | null;
-  /**
-   * Optional viewer-relative status filter. ATTENDED = calls the user joined; MISSED = calls the user did not join while they are in the channel; UNATTENDED = calls the user did not join while they are not in the channel. Prefer this over the deprecated attended filter.
-   */
-  status?: ToolCallStatus | null;
-}
-/**
- * Response for [`ListCallRecords`].
- */
-export interface ListCallRecordsResponse {
-  /**
-   * Call records ordered by start time descending.
-   */
-  records: CallRecordSummary[];
-}
-/**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
  */
 export interface ListCompanies {
@@ -2607,7 +2530,7 @@ export interface ProjectSearchResult {
   score?: number | null;
 }
 /**
- * Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
+ * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
  */
 export interface ReadCallRecord {
   /**

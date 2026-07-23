@@ -1069,35 +1069,6 @@ export const GetThreadResponse = z.object({
   threadId: z.string().uuid(),
 });
 
-export const ListCallRecords = z.object({
-  attended: z.union([z.boolean(), z.null()]).optional(),
-  channelId: z.union([z.string().uuid(), z.null()]).optional(),
-  status: z
-    .union([z.enum(['ATTENDED', 'MISSED', 'UNATTENDED']), z.null()])
-    .optional(),
-});
-
-export const ListCallRecordsResponse = z.object({
-  records: z.array(
-    z.object({
-      callId: z.string().uuid(),
-      channelId: z.string().uuid(),
-      channelName: z.union([z.string(), z.null()]).optional(),
-      createdBy: z.string(),
-      durationMs: z.union([z.number().int(), z.null()]).optional(),
-      endedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
-      isActive: z.boolean(),
-      participants: z.array(z.string()),
-      startedAt: z.string().datetime({ offset: true }),
-      status: z
-        .union([z.enum(['ATTENDED', 'MISSED', 'UNATTENDED']), z.null()])
-        .optional(),
-    })
-  ),
-});
-
 export const ListCompanies = z.object({
   include_hidden: z.union([z.boolean(), z.null()]).default(null),
   limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),

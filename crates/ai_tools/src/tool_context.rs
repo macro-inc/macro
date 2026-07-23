@@ -546,7 +546,7 @@ pub type ToolSoupService = SoupImpl<
     ToolFrecencyService,
     email::domain::ports::ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
-    call::domain::ports::NoOpCallRecordQueryService,
+    ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
     ToolForeignEntityService,
 >;
@@ -641,8 +641,7 @@ pub type ToolCallService = CallServiceImpl<
 pub type ToolCallRecordQueryService = CallRecordQueryServiceImpl<PgCallRepo>;
 
 /// Type alias for the call tool context
-pub type ToolCallToolContext =
-    CallToolContext<ToolCallService, ToolCallRecordQueryService, ToolEntityAccessService>;
+pub type ToolCallToolContext = CallToolContext<ToolCallService, ToolEntityAccessService>;
 
 /// Type alias for the notification reader service used by AI tools.
 pub type ToolNotificationService = notification::domain::service::NotificationReaderService<

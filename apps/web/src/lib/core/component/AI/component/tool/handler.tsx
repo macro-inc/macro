@@ -18,7 +18,6 @@ import {
   deleteImportEntityHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
-import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -70,7 +69,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
-  ListCallRecords: listCallRecordsHandler,
   ListImportEntities: listImportEntitiesHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,

@@ -49,10 +49,6 @@ type ToolParserMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
-  ListCallRecords: {
-    call: types.ListCallRecords;
-    response: types.ListCallRecordsResponse;
-  };
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
@@ -185,10 +181,6 @@ const toolParserMap = {
     response: schemas.GetEntityPropertiesResponse,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
-  ListCallRecords: {
-    call: schemas.ListCallRecords,
-    response: schemas.ListCallRecordsResponse,
-  },
   ListCompanies: {
     call: schemas.ListCompanies,
     response: schemas.ListCompaniesResponse,
@@ -341,10 +333,6 @@ type ToolDataMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
-  ListCallRecords: {
-    call: types.ListCallRecords;
-    response: types.ListCallRecordsResponse;
-  };
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;

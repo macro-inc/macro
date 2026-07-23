@@ -188,7 +188,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        call::domain::service::CallRecordQueryServiceImpl::new(
+            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -321,12 +323,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-    );
     let call_tool_context = call::inbound::toolset::CallToolContext::new(
         call_service,
-        call_query_service,
         (*entity_access_service).clone(),
     );
 
