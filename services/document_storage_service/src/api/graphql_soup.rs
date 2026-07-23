@@ -16,6 +16,9 @@ use complete_graph::{GraphqlAuthorizedUser, GraphqlSoupRequestParts};
 use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 
+#[cfg(test)]
+mod test;
+
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new().route("/soup/graphql", get(get_handler).post(handler))
 }
@@ -62,7 +65,6 @@ async fn subscription_handler(state: ApiContext, request: Request) -> Response {
             .into_response();
     };
 
-    let graphql_parts = clone_request_parts(&parts);
     let protocol = match GraphQLProtocol::from_request_parts(&mut parts, &state).await {
         Ok(protocol) => protocol,
         Err(error) => return error.into_response(),
@@ -72,7 +74,7 @@ async fn subscription_handler(state: ApiContext, request: Request) -> Response {
         Err(error) => return error.into_response(),
     };
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_request_data(&state, macro_user_id, graphql_parts);
+    let data = graphql_request_data(&state, macro_user_id, parts);
 
     upgrade
         .protocols(ALL_WEBSOCKET_PROTOCOLS)
@@ -166,16 +168,6 @@ fn graphql_request_data(
         state.graphql_notification_reader.clone(),
     ));
     data
-}
-
-fn clone_request_parts(parts: &Parts) -> Parts {
-    let mut request = axum::http::Request::new(());
-    *request.method_mut() = parts.method.clone();
-    *request.uri_mut() = parts.uri.clone();
-    *request.version_mut() = parts.version;
-    *request.headers_mut() = parts.headers.clone();
-    *request.extensions_mut() = parts.extensions.clone();
-    request.into_parts().0
 }
 
 fn is_introspection_query(query: &str) -> bool {

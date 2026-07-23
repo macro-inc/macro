@@ -34,6 +34,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupChat {",
         "deletedAt: String",
         "type GraphqlSoupProject {",
+        "type SoupSubscriptionRoot {",
+        "soupUpdates: GraphqlSoupItem!",
     ] {
         assert_sdl_line(&sdl, expected);
     }

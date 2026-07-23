@@ -2621,6 +2621,16 @@ type SoupQueryRoot {
 }
 
 """
+Root entry point for realtime Soup subscriptions.
+"""
+type SoupSubscriptionRoot {
+	"""
+	Subscribe to realtime Soup updates for the authenticated user.
+	"""
+	soupUpdates: GraphqlSoupItem!
+}
+
+"""
 Directs the executor to include this field or fragment only when the `if` argument is true.
 """
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
@@ -2635,5 +2645,6 @@ directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: SoupQueryRoot
 	mutation: PropertiesMutationRoot
+	subscription: SoupSubscriptionRoot
 }
 
