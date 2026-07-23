@@ -16,7 +16,7 @@ use super::{
     models::SoupRealtimeMessage,
     ports::{
         SoupItemReader, SoupRealtimeConsumer, SoupRealtimePublisher, SoupRealtimeService,
-        UserAccessExpander,
+        SoupRealtimeSubscriptionService, UserAccessExpander,
     },
 };
 
@@ -79,6 +79,18 @@ where
                 Err(_) => tracing::trace!("dropping realtime Soup message without subscribers"),
             }
         }
+    }
+}
+
+impl<C> SoupRealtimeSubscriptionService for SoupRealtimeConsumerService<C>
+where
+    C: SoupRealtimeConsumer,
+{
+    fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+        SoupRealtimeConsumerService::subscribe(self, user_id)
     }
 }
 

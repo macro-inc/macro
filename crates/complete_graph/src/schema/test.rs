@@ -472,6 +472,7 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
 struct TestHarness {
     schema: SoupSchema<
         CountingSoupService,
+        NoOpSoupRealtimeSubscriptionService,
         CountingEmailService,
         CountingEntityAccessService,
         FakeAuthorizationService,

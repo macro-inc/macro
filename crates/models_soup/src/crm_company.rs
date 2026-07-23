@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 /// A CRM domain as displayed in Soup. Mirrors the crm crate's
 /// [`CrmDomain`] with a stable wire shape that the FE can rely on.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupCrmDomain {
@@ -33,7 +33,7 @@ impl From<CrmDomain> for SoupCrmDomain {
 /// A CRM company as displayed in Soup. Carries the core company
 /// fields plus display metadata resolved from `crm_domain_directory`
 /// against the primary (earliest-created) domain.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupCrmCompany<T = ()> {

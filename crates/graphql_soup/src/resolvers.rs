@@ -11,15 +11,39 @@ use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
     inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
 };
+use futures::Stream;
 use graphql_common::{extract_part, require_authorized_user};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
+use soup_realtime::domain::ports::SoupRealtimeSubscriptionService;
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    objects::{GroupedSoup, SoupEntityEdges, SoupPage},
+    objects::{GraphqlSoupItem, GroupedSoup, SoupEntityEdges, SoupPage},
 };
+
+/// Subscribe to realtime Soup updates for the authenticated user.
+pub async fn resolve_soup_updates<R, Auth, St, Edges>(
+    service: &R,
+    ctx: &Context<'_>,
+) -> async_graphql::Result<impl Stream<Item = GraphqlSoupItem<Edges>> + Send + 'static>
+where
+    R: SoupRealtimeSubscriptionService,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<St>,
+    St: Clone + Send + Sync + 'static,
+    Edges: SoupEntityEdges,
+{
+    let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
+    let mut receiver = service.subscribe(macro_user_id);
+
+    Ok(async_stream::stream! {
+        while let Some(item) = receiver.recv().await {
+            yield GraphqlSoupItem::from(item.as_ref().clone());
+        }
+    })
+}
 
 /// Resolve Soup items nested into grouping bins for the authenticated user.
 pub async fn resolve_grouped_soup<S, Auth, St, Edges>(

@@ -6,6 +6,8 @@ version = "0.1.0"
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
+async-stream = { workspace = true }
+futures = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
@@ -31,5 +33,6 @@ models_soup = { path = "../models_soup" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

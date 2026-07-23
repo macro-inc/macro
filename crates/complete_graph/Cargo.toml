@@ -27,6 +27,7 @@ macro_authorization = { path = "../macro_authorization", features = [
 ] }
 model-entity = { path = "../model-entity" }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

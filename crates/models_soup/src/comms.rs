@@ -105,7 +105,7 @@ pub struct LatestMessage {
 }
 
 /// A channel as displayed in Soup.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChannel {
     /// Channel metadata and participants.
@@ -124,7 +124,7 @@ pub struct SoupChannel {
 ///
 /// This mirrors the public channel-message API shape so soup consumers can
 /// render a thread root the same way they render a channel timeline message.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChannelThread {
     /// Message id.

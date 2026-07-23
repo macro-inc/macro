@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// A participant in a call record, as displayed in Soup.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupCallRecordParticipant {
@@ -19,7 +19,7 @@ pub struct SoupCallRecordParticipant {
 
 /// A call record as displayed in Soup. Excludes room_name, egress_id,
 /// and transcript — fields that are irrelevant for the soup feed.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupCallRecord<T = ()> {

@@ -4,7 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 /// A foreign entity record as displayed in Soup.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupForeignEntity {

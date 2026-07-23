@@ -19,7 +19,7 @@ use uuid::Uuid;
 mod test;
 
 /// A single item in the Soup feed.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "tag", content = "data")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem<T = ()> {
