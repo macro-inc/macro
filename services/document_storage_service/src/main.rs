@@ -113,7 +113,12 @@ use soup::{
 };
 #[cfg(feature = "graphql")]
 use soup_realtime::{
-    domain::service::SoupRealtimeConsumerService, outbound::soup_consumer::SoupTopicConsumer,
+    domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
+    inbound::kafka_consumer::run_document_update_consumer,
+    outbound::{
+        entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
+        soup_consumer::SoupTopicConsumer, soup_item_reader::SoupRepoItemReader,
+    },
 };
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -876,6 +881,40 @@ async fn main() -> anyhow::Result<()> {
                     );
                 });
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        }
+    });
+
+    #[cfg(feature = "graphql")]
+    tokio::spawn({
+        let brokers = config.kafka_brokers.as_ref().to_string();
+        let entity_access_service = entity_access_service.as_ref().clone();
+        let soup_pool = readonly_pool::ReadOnlyPool(db.clone());
+        let macro_event_broker = macro_event_broker.clone();
+        async move {
+            loop {
+                let fanout_service = SoupRealtimeServiceImpl::new(
+                    EntityAccessExpander::new(entity_access_service.clone()),
+                    SoupRepoItemReader::new(PgSoupRepo::new(soup_pool.clone())),
+                    KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+                );
+                tracing::info!("starting realtime Soup document consumer");
+                let result = run_document_update_consumer(
+                    &brokers,
+                    fanout_service,
+                    std::future::pending::<()>(),
+                )
+                .await;
+                match result {
+                    Ok(()) => {
+                        tracing::error!("realtime Soup document consumer exited unexpectedly")
+                    }
+                    Err(error) => tracing::error!(
+                        error = ?error,
+                        "realtime Soup document consumer exited unexpectedly"
+                    ),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
         }
     });
