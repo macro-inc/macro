@@ -90,7 +90,6 @@ use macro_service_urls::{
 };
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-#[cfg(feature = "graphql")]
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
@@ -111,7 +110,6 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-#[cfg(feature = "graphql")]
 use soup_realtime::{
     domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
     outbound::{
@@ -336,7 +334,6 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
-    #[cfg(feature = "graphql")]
     let graphql_notification_reader: Arc<ai_tools::ToolNotificationService> =
         Arc::new(NotificationReaderService {
             repository: notification::outbound::repository::DbNotificationRepository::new(
@@ -862,13 +859,11 @@ async fn main() -> anyhow::Result<()> {
         foreign_entity_service_for_soup,
     ));
 
-    #[cfg(feature = "graphql")]
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
         SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
             anyhow::anyhow!("failed to create realtime Soup topic consumer: {error:?}")
         })?,
     ));
-    #[cfg(feature = "graphql")]
     tokio::spawn({
         let soup_realtime_service = Arc::clone(&soup_realtime_service);
         async move {
@@ -934,12 +929,10 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         favorites_service,
-        #[cfg(feature = "graphql")]
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
             soup_service,
             soup_realtime_service,
         ),
-        #[cfg(feature = "graphql")]
         graphql_notification_reader,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,

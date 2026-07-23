@@ -95,7 +95,6 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-#[cfg(feature = "graphql")]
 use soup_realtime::{
     domain::service::SoupRealtimeConsumerService, outbound::soup_consumer::SoupTopicConsumer,
 };
@@ -150,13 +149,11 @@ type DssSoupState =
     SoupRouterState<DssSoupService, DssEmailService, EntityAccessService, AuthorizationService>;
 
 /// Realtime Soup consumer service used by GraphQL subscriptions.
-#[cfg(feature = "graphql")]
 pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicConsumer>;
 
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
-#[cfg(feature = "graphql")]
 pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssSoupRealtimeService,
@@ -419,9 +416,7 @@ pub(crate) struct ApiContext {
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
-    #[cfg(feature = "graphql")]
     pub graphql_soup_schema: DssGraphqlSoupSchema,
-    #[cfg(feature = "graphql")]
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,

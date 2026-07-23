@@ -20,19 +20,8 @@ path = "src/doppler_config.rs"
 
 [features]
 connection_gateway = []
-default = [
-  "connection_gateway",
-  "delete_document_worker",
-  "graphql",
-  "location_check",
-]
+default = ["connection_gateway", "delete_document_worker", "location_check"]
 delete_document_worker = []
-graphql = [
-  "dep:async-graphql",
-  "dep:async-graphql-axum",
-  "dep:complete_graph",
-  "dep:soup_realtime",
-]
 local = ["local_auth"]
 local_auth = ["macro_authorization/local_auth"]
 location_check = []
@@ -42,8 +31,8 @@ ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
-async-graphql = { workspace = true, optional = true }
-async-graphql-axum = { version = "7.0.17", optional = true }
+async-graphql = { workspace = true }
+async-graphql-axum = "7.0.17"
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -73,7 +62,7 @@ chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
-complete_graph = { path = "../../crates/complete_graph", optional = true }
+complete_graph = { path = "../../crates/complete_graph" }
 connection = { path = "../../crates/connection", default-features = false, features = [
   "outbound",
 ] }
@@ -115,7 +104,9 @@ lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", features = ["postgres"] }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_axum_utils = { path = "../../crates/macro_axum_utils" }
 macro_config = { path = "../../crates/macro_config" }
@@ -181,7 +172,7 @@ soup = { path = "../../crates/soup", features = [
 soup_realtime = { path = "../../crates/soup_realtime", default-features = false, features = [
   "consumer",
   "outbound",
-], optional = true }
+] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "document",
