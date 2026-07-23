@@ -66,11 +66,9 @@ where
     #[tracing::instrument(skip(self), err)]
     pub async fn run(&self) -> Result<(), Report> {
         loop {
-            let SoupRealtimeMessage { user_id, item } = self
-                .consumer
-                .recv()
-                .await
-                .context("failed to receive realtime Soup message")?;
+            let Ok(SoupRealtimeMessage { user_id, item }) = self.consumer.recv().await else {
+                continue;
+            };
 
             match self.broadcasts.publish(&user_id, Arc::new(item)) {
                 Ok(subscriber_count) => {

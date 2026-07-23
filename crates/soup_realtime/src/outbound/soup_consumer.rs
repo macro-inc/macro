@@ -78,6 +78,7 @@ impl SoupTopicConsumer {
 }
 
 impl SoupRealtimeConsumer for SoupTopicConsumer {
+    #[tracing::instrument(err, skip(self))]
     async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
         SoupTopicConsumer::recv(self).await
     }
