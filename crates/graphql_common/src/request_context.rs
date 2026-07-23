@@ -1,6 +1,14 @@
-use axum::{extract::FromRequestParts, http::request::Parts};
+use std::convert::Infallible;
 
-/// Request-scoped HTTP request parts for a Soup GraphQL query.
+use axum::{
+    extract::FromRequestParts,
+    http::{Request, request::Parts},
+};
+
+#[cfg(test)]
+mod test;
+
+/// Request-scoped HTTP request parts for a Soup GraphQL operation.
 ///
 /// Resolvers run axum `FromRequestParts` extractors against these parts on
 /// demand instead of the embedding service loading everything upfront. This
@@ -13,6 +21,23 @@ use axum::{extract::FromRequestParts, http::request::Parts};
 pub struct GraphqlSoupRequestParts {
     /// Mutable HTTP request parts shared by lazy resolver extractors.
     parts: tokio::sync::Mutex<Parts>,
+}
+
+impl<S> FromRequestParts<S> for GraphqlSoupRequestParts
+where
+    S: Send + Sync,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let mut request = Request::new(());
+        *request.method_mut() = parts.method.clone();
+        *request.uri_mut() = parts.uri.clone();
+        *request.version_mut() = parts.version;
+        *request.headers_mut() = parts.headers.clone();
+        *request.extensions_mut() = parts.extensions.clone();
+        Ok(Self::new(request.into_parts().0))
+    }
 }
 
 impl GraphqlSoupRequestParts {

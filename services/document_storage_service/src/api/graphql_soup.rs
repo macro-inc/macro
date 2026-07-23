@@ -6,8 +6,8 @@ use async_graphql::{
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket};
 use axum::{
     Router,
-    extract::{FromRequest, FromRequestParts, Request, State, WebSocketUpgrade},
-    http::{StatusCode, header, request::Parts},
+    extract::{State, WebSocketUpgrade},
+    http::StatusCode,
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -16,47 +16,54 @@ use complete_graph::{GraphqlAuthorizedUser, GraphqlSoupRequestParts};
 use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 
-#[cfg(test)]
-mod test;
+const GRAPHQL_PATH: &str = "/soup/graphql";
+const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
 
 pub(crate) fn router() -> Router<ApiContext> {
-    Router::new().route("/soup/graphql", get(get_handler).post(handler))
+    Router::new()
+        .route(GRAPHQL_PATH, get(graphiql).post(graphql_handler))
+        .route(GRAPHQL_SUBSCRIPTION_PATH, get(subscription_handler))
 }
 
-async fn get_handler(State(state): State<ApiContext>, request: Request) -> Response {
-    if is_websocket_upgrade(&request) {
-        subscription_handler(state, request).await
-    } else {
-        let path = request.uri().path();
-        Html(
-            GraphiQLSource::build()
-                .endpoint(path)
-                .subscription_endpoint(path)
-                .finish(),
-        )
-        .into_response()
-    }
+async fn graphiql() -> Html<String> {
+    Html(
+        GraphiQLSource::build()
+            .endpoint(GRAPHQL_PATH)
+            .subscription_endpoint(GRAPHQL_SUBSCRIPTION_PATH)
+            .finish(),
+    )
 }
 
-fn is_websocket_upgrade(request: &Request) -> bool {
-    request
-        .headers()
-        .get(header::UPGRADE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.eq_ignore_ascii_case("websocket"))
+async fn graphql_handler(
+    State(state): State<ApiContext>,
+    Cached(auth): Cached<OptionalMacroAuthorizationExtractor<AuthorizationService>>,
+    request_parts: GraphqlSoupRequestParts,
+    request: GraphQLRequest,
+) -> GraphQLResponse {
+    let mut request = request.into_inner();
+    let Some(macro_user_id) = auth.macro_user_id else {
+        if is_introspection_query(&request.query) {
+            return state.graphql_soup_schema.execute(request).await.into();
+        }
+        return async_graphql::Response::from_errors(vec![ServerError::new(
+            "authentication required for GraphQL Soup queries",
+            None,
+        )])
+        .into();
+    };
+
+    let mut data = graphql_context_data(&state, macro_user_id);
+    data.insert(request_parts);
+    request.data = data;
+    state.graphql_soup_schema.execute(request).await.into()
 }
 
-async fn subscription_handler(state: ApiContext, request: Request) -> Response {
-    let (mut parts, _body) = request.into_parts();
-    let auth =
-        match Cached::<OptionalMacroAuthorizationExtractor<AuthorizationService>>::from_request_parts(
-            &mut parts, &state,
-        )
-        .await
-        {
-            Ok(Cached(auth)) => auth,
-            Err(error) => return error.into_response(),
-        };
+async fn subscription_handler(
+    State(state): State<ApiContext>,
+    Cached(auth): Cached<OptionalMacroAuthorizationExtractor<AuthorizationService>>,
+    protocol: GraphQLProtocol,
+    upgrade: WebSocketUpgrade,
+) -> Response {
     let Some(macro_user_id) = auth.macro_user_id else {
         return (
             StatusCode::UNAUTHORIZED,
@@ -65,17 +72,8 @@ async fn subscription_handler(state: ApiContext, request: Request) -> Response {
             .into_response();
     };
 
-    let protocol = match GraphQLProtocol::from_request_parts(&mut parts, &state).await {
-        Ok(protocol) => protocol,
-        Err(error) => return error.into_response(),
-    };
-    let upgrade = match WebSocketUpgrade::from_request_parts(&mut parts, &state).await {
-        Ok(upgrade) => upgrade,
-        Err(error) => return error.into_response(),
-    };
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_request_data(&state, macro_user_id, parts);
-
+    let data = graphql_context_data(&state, macro_user_id);
     upgrade
         .protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
@@ -87,55 +85,7 @@ async fn subscription_handler(state: ApiContext, request: Request) -> Response {
         .into_response()
 }
 
-async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
-    let (mut parts, body) = req.into_parts();
-
-    // Authentication stays eager: it gates execution for non-introspection
-    // queries and primes the `Cached` entry that resolvers extract lazily.
-    let auth =
-        match Cached::<OptionalMacroAuthorizationExtractor<AuthorizationService>>::from_request_parts(
-            &mut parts, &state,
-        )
-        .await
-        {
-            Ok(Cached(auth)) => auth,
-            Err(err) => return err.into_response(),
-        };
-
-    // `GraphQLRequest` consumes a whole request, but the original parts (with
-    // the middleware-populated extensions) must survive for the resolvers, so
-    // parse the body from a shallow copy of method/uri/headers.
-    let mut synthetic = Request::new(body);
-    *synthetic.method_mut() = parts.method.clone();
-    *synthetic.uri_mut() = parts.uri.clone();
-    *synthetic.headers_mut() = parts.headers.clone();
-
-    let mut request = match <GraphQLRequest as FromRequest<()>>::from_request(synthetic, &()).await
-    {
-        Ok(request) => request.into_inner(),
-        Err(rejection) => return rejection.into_response(),
-    };
-
-    let Some(macro_user_id) = auth.macro_user_id else {
-        if is_introspection_query(&request.query) {
-            return GraphQLResponse::from(state.graphql_soup_schema.execute(request).await)
-                .into_response();
-        }
-        return GraphQLResponse::from(async_graphql::Response::from_errors(vec![
-            ServerError::new("authentication required for GraphQL Soup queries", None),
-        ]))
-        .into_response();
-    };
-
-    request.data = graphql_request_data(&state, macro_user_id, parts);
-    GraphQLResponse::from(state.graphql_soup_schema.execute(request).await).into_response()
-}
-
-fn graphql_request_data(
-    state: &ApiContext,
-    macro_user_id: MacroUserIdStr<'static>,
-    parts: Parts,
-) -> Data {
+fn graphql_context_data(state: &ApiContext, macro_user_id: MacroUserIdStr<'static>) -> Data {
     let property_reader = complete_graph::PropertiesEntityPropertyReader::new(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
@@ -151,7 +101,6 @@ fn graphql_request_data(
     );
 
     let mut data = Data::default();
-    data.insert(GraphqlSoupRequestParts::new(parts));
     data.insert(GraphqlAuthorizedUser::new(macro_user_id.clone()));
     data.insert(state.clone());
     data.insert(complete_graph::entity_properties_loader(
