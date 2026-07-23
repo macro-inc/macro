@@ -6,7 +6,7 @@ use async_graphql::{
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket};
 use axum::{
     Router,
-    extract::{State, WebSocketUpgrade},
+    extract::{OriginalUri, State, WebSocketUpgrade},
     http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
     routing::get,
@@ -27,13 +27,16 @@ pub(crate) fn router() -> Router<ApiContext> {
         .route(GRAPHQL_SUBSCRIPTION_PATH, get(subscription_handler))
 }
 
-async fn graphiql() -> Html<String> {
-    Html(
-        GraphiQLSource::build()
-            .endpoint(GRAPHQL_PATH)
-            .subscription_endpoint(GRAPHQL_SUBSCRIPTION_PATH)
-            .finish(),
-    )
+async fn graphiql(OriginalUri(uri): OriginalUri) -> Html<String> {
+    Html(graphiql_source(uri.path()))
+}
+
+fn graphiql_source(endpoint: &str) -> String {
+    let subscription_endpoint = format!("{endpoint}/ws");
+    GraphiQLSource::build()
+        .endpoint(endpoint)
+        .subscription_endpoint(&subscription_endpoint)
+        .finish()
 }
 
 async fn graphql_handler(
