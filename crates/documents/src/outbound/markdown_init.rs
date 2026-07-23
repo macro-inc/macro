@@ -95,10 +95,10 @@ where
                         let result = sync_service_client
                             .initialize_from_snapshot(&document_id, &loro_snapshot)
                             .await;
-                        if let Err(error) = &result {
-                            if attempt < MAX_ATTEMPTS {
-                                tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
-                            }
+                        if let Err(error) = &result
+                            && attempt < MAX_ATTEMPTS
+                        {
+                            tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
                         }
                         result
                     }

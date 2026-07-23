@@ -21,7 +21,10 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::{events::WebhookMacroEvent, ingestion::WebhookEventIngestionService};
+use crate::domain::{
+    events::WebhookMacroEvent,
+    ingestion::{WebhookEventIngestionError, WebhookEventIngestionService},
+};
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
@@ -137,7 +140,7 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                 result
             }
         },
-        |error| error.is_transient(),
+        |error: &WebhookEventIngestionError| error.is_transient(),
     )
     .await;
 
