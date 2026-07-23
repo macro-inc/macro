@@ -1,4 +1,5 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { useIsAuthenticated } from '@core/auth';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
@@ -84,12 +85,13 @@ const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
 
 export function EntityTagsSection(props: EntityTagsSectionProps) {
   const tagsQuery = useTagsQuery();
+  const isAuthenticated = useIsAuthenticated();
 
   return (
     <Show when={TAGGABLE_ENTITY_TYPES.has(props.entityType)}>
       <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
         <Show
-          when={!tagsQuery.isError}
+          when={isAuthenticated() !== false && !tagsQuery.isError}
           fallback={
             <span class="text-xs text-ink-extra-muted">Tags unavailable</span>
           }
