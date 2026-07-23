@@ -386,7 +386,7 @@ function MemberName(props: { memberId: string }) {
 
 function InviteRow(props: {
   invite: TeamInviteDetails;
-  isOwner: boolean;
+  canChange: boolean;
   onCancel: () => void;
 }) {
   const [copied, setCopied] = createSignal(false);
@@ -422,7 +422,7 @@ function InviteRow(props: {
           </div>
         </div>
       </div>
-      <Show when={props.isOwner}>
+      <Show when={props.canChange}>
         <Tooltip label={copied() ? 'Copied' : 'Copy invite link'}>
           <Button
             variant="ghost"
@@ -1382,14 +1382,19 @@ function TeamManagement(props: {
           </Show>
         </SettingsSection>
 
-        <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
+        <Show
+          when={
+            (isOwner() || allowNonAdminInvites()) &&
+            (invitesQuery.data?.invites?.length ?? 0) > 0
+          }
+        >
           <SettingsSection title="Pending invites">
             <SettingsCard>
               <For each={invitesQuery.data?.invites ?? []}>
                 {(invite) => (
                   <InviteRow
                     invite={invite}
-                    isOwner={isOwner()}
+                    canChange={isOwner() || allowNonAdminInvites()}
                     onCancel={() => setShowCancelInviteModal(invite)}
                   />
                 )}
