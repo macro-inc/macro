@@ -309,9 +309,9 @@ export function SplitPanel(props: SplitPanelProps) {
                   // a square, borderless left edge (the ! beats Surface's
                   // inline border shorthand)...
                   'rounded-l-none border-l-0!': tuckedBehindController(),
-                  // ...and the controller squares and removes its right edge,
-                  // leaving no border between the Preview Pair's panels.
-                  'rounded-r-none border-r-0!': hasTuckedViewer(),
+                  // ...and the controller squares its right edge, keeping its
+                  // border as the single seam line between the pair's panels.
+                  'rounded-r-none': hasTuckedViewer(),
                 }
               )}
               depth={isMobile() ? 0 : 1}
