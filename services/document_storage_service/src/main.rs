@@ -888,7 +888,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
-        let soup_pool = readonly_pool::ReadOnlyPool(db.clone());
+        let soup_pool = readonly_pool::ReadOnlyPool(readonly_db.clone());
         let macro_event_broker = macro_event_broker.clone();
         async move {
             loop {
