@@ -10,6 +10,10 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
+// Stable empty default so `data` is never undefined: a shared query that errors
+// with undefined data under an app-shell Suspense boundary would remount-loop.
+const EMPTY_OPTIONS: PropertyOption[] = [];
+
 export function usePropertyOptionsQuery(
   propertyDefinitionId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
@@ -30,6 +34,7 @@ export function usePropertyOptionsQuery(
       },
       enabled: enabled(),
       staleTime: 1000 * 60 * 5, // 5 minutes
+      placeholderData: EMPTY_OPTIONS,
     };
   });
 }

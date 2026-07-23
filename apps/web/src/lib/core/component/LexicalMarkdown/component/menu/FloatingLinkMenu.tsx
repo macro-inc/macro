@@ -3,6 +3,7 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
+import { openExternalUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
 import NewTab from '@phosphor/arrow-square-out.svg';
 import Check from '@phosphor/check-circle.svg';
@@ -169,8 +170,9 @@ export function FloatingLinkMenu(props: {
   };
 
   const openInNewTab = () => {
-    if (!pendingLinkInfo()) return;
-    window.open(pendingLinkInfo()!.url, '_blank');
+    const url = pendingLinkInfo()?.url;
+    if (!url) return;
+    openExternalUrl(url);
   };
 
   const copyLink = () => {

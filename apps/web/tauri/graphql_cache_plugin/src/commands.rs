@@ -12,14 +12,24 @@
 use crate::engine::{
     ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
 };
-use crate::{CacheState, InitializedCache, emit_ops_affected};
+use crate::{
+    CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
+};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::CachedQueryInstance;
+use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
 use cache_sqlite::SqliteStorage;
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
+
+fn parse_record_cursor(cursor: Option<String>) -> Result<Option<RecordCursor>, String> {
+    cursor
+        .map(|value| serde_json::from_value(serde_json::Value::String(value)))
+        .transpose()
+        .map_err(|error| error.to_string())
+}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -83,6 +93,20 @@ pub async fn graphql_cache_read(
         .await
 }
 
+/// Projects normalized records through a named GraphQL fragment.
+#[tauri::command]
+pub async fn graphql_cache_read_records(
+    state: State<'_, CacheState>,
+    document: String,
+    fragment_name: String,
+    cursor: Option<String>,
+    limit: u32,
+) -> Result<SelectedRecordPage, String> {
+    engine_handle(&state)?
+        .read_records(document, fragment_name, parse_record_cursor(cursor)?, limit)
+        .await
+}
+
 /// Normalizes and stores a network response; broadcasts affected operations
 /// to every webview.
 #[tauri::command]
@@ -107,6 +131,7 @@ pub async fn graphql_cache_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_cache_changed(&app);
     Ok(result)
 }
 
@@ -138,6 +163,7 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
+    emit_cache_changed(&app);
     Ok(result)
 }
 
@@ -212,6 +238,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
 ) -> Result<WriteResultWire, String> {
+    let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .commit_optimistic_write(
             transaction_id,
@@ -224,6 +251,8 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_cache_changed(&app);
+    emit_mutation_settled(&app, settlement_transaction_id, "committed", None);
     Ok(result)
 }
 
@@ -235,11 +264,20 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     transaction_id: String,
     lease_owner: String,
     lease_generation: String,
+    error: String,
 ) -> Result<WriteResultWire, String> {
+    let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .rollback_optimistic_write(transaction_id, lease_owner, lease_generation)
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_cache_changed(&app);
+    emit_mutation_settled(
+        &app,
+        settlement_transaction_id,
+        "permanently-failed",
+        Some(error),
+    );
     Ok(result)
 }
 
@@ -253,6 +291,7 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
 ) -> Result<Vec<String>, String> {
     let affected = engine_handle(&state)?.invalidate(keys.clone()).await?;
     emit_ops_affected(&app, &affected, &keys);
+    emit_cache_changed(&app);
     Ok(affected)
 }
 
@@ -267,6 +306,11 @@ pub async fn graphql_cache_teardown(
 
 /// Wipes all cached state (logout).
 #[tauri::command]
-pub async fn graphql_cache_clear(state: State<'_, CacheState>) -> Result<(), String> {
-    engine_handle(&state)?.clear().await
+pub async fn graphql_cache_clear<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+) -> Result<(), String> {
+    engine_handle(&state)?.clear().await?;
+    emit_cache_changed(&app);
+    Ok(())
 }

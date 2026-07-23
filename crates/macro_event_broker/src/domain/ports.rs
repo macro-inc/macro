@@ -1,10 +1,8 @@
 //! Port traits defining the broker's inbound and outbound boundaries.
 
-use std::future::Future;
-
 use macro_event_topics::Topic;
 
-use crate::domain::models::{EventBrokerError, MacroEvent};
+use crate::domain::models::{EventBrokerError, MacroEvent, MessageWrapper};
 
 /// Inbound port: the public API for sending events through the broker.
 ///
@@ -28,11 +26,46 @@ pub trait MacroEventBroker: Send + Sync + 'static {
 /// Kept byte-oriented so payload serialization stays the service's concern and the
 /// port is trivial to mock or stub in tests.
 pub trait EventPublisher: Send + Sync + 'static {
-    /// Publish a raw `payload` to `topic`, keyed by `key`.
+    /// Publishes a raw `payload` to [`T::TOPIC_STR`](Topic::TOPIC_STR), keyed by `key`.
     fn publish<T: Topic>(
         &self,
-        topic: T,
         key: &str,
         payload: &[u8],
     ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;
+}
+
+/// A collection of [`MacroEvent`] types that can decode a broker message.
+pub trait MacroEventCollection: Sized {
+    /// Decodes an event from the supplied broker message.
+    fn decode<T: MessageParts>(message: &T) -> Result<Self, EventBrokerError>;
+
+    /// Lists the statically known topics in this event collection.
+    fn topics() -> &'static [&'static str];
+}
+
+/// Broker message fields needed to decode a [`MacroEvent`].
+pub trait MessageParts {
+    /// Returns the broker message key.
+    fn key(&self) -> Option<&str>;
+
+    /// Returns the serialized event payload.
+    fn payload(&self) -> Option<&[u8]>;
+
+    /// Returns the broker topic name.
+    fn topic(&self) -> &str;
+}
+
+/// Inbound boundary for receiving messages from the event broker.
+pub trait EventConsumer<M: MacroEventCollection>: Send + Sync + 'static {
+    /// The concrete transport-specific message type.
+    type MessageType<'a>: MessageParts
+    where
+        Self: 'a;
+
+    /// Waits for and returns the next broker message.
+    fn recv<'a>(
+        &'a self,
+    ) -> impl Future<Output = Result<MessageWrapper<Self::MessageType<'a>, M>, rootcause::Report>>
+    + Send
+    + 'a;
 }

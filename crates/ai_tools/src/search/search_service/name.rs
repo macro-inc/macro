@@ -9,8 +9,10 @@ use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::tag_sets::{TagFilter, TagMatch};
+use models_search::channel::ChannelNameSearchRequest;
 use models_search::unified::{
-    UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include,
+    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponseItem,
+    entity_filters_from_include,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -18,7 +20,7 @@ use serde::Deserialize;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
+    description = "Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
     title = "NameSearch"
 )]
 pub struct NameSearch {
@@ -110,6 +112,7 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             )?;
             email_filters.link_ids = vec![link.id.to_string()];
         }
+        let tag_filter_active = self.tags.as_ref().is_some_and(|tags| !tags.is_empty());
         let mut tag_sets = None;
         let mut tag_option_ids = Vec::new();
         if let Some(filters) = self.tags.as_deref().filter(|t| !t.is_empty()) {
@@ -130,32 +133,86 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             tag_filter_mode: tag_filter_mode(self.tags_match),
             ..Default::default()
         };
-        let search_request = UnifiedSearchRequest {
+        let non_channel_types = if self.entity_types.is_empty() {
+            vec![
+                UnifiedSearchIndex::Documents,
+                UnifiedSearchIndex::Chats,
+                UnifiedSearchIndex::Emails,
+                UnifiedSearchIndex::Projects,
+                UnifiedSearchIndex::CallRecords,
+            ]
+        } else {
+            self.entity_types
+                .iter()
+                .filter(|entity_type| **entity_type != UnifiedSearchIndex::Channels)
+                .cloned()
+                .collect()
+        };
+        let include_channels = !tag_filter_active
+            && (self.entity_types.is_empty()
+                || self.entity_types.contains(&UnifiedSearchIndex::Channels));
+        let search_request = (!non_channel_types.is_empty()).then(|| UnifiedSearchRequest {
             query: self.name.to_owned(),
             match_type: self.match_type.into(),
-            filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
+            filters: entity_filters_from_include(non_channel_types, base_filters),
             search_on: models_search::SearchOn::Name,
             include_crm: false,
             collapse: None,
-        };
+        });
+        let channel_request = include_channels.then(|| ChannelNameSearchRequest {
+            query: self.name.to_owned(),
+            match_type: self.match_type.into(),
+        });
+        let user_id = (*request_context.user_id).as_ref();
 
-        let response = search_context
-            .search_client
-            .search_unified(
-                (*request_context.user_id).as_ref(),
-                search_request,
-                None,
-                PAGE_SIZE,
-            )
-            .await
-            .map_err(|e| ToolCallError {
-                description: format!("failed to perform name search: {}", e),
-                internal_error: e,
-            })?;
+        let (response, channel_response) = tokio::try_join!(
+            async {
+                let Some(search_request) = search_request else {
+                    return Ok(None);
+                };
+                search_context
+                    .search_client
+                    .search_unified(user_id, search_request, None, PAGE_SIZE)
+                    .await
+                    .map(Some)
+                    .map_err(|e| ToolCallError {
+                        description: format!("failed to perform name search: {e}"),
+                        internal_error: e,
+                    })
+            },
+            async {
+                let Some(channel_request) = channel_request else {
+                    return Ok(None);
+                };
+                search_context
+                    .search_client
+                    .search_channel_names(user_id, channel_request, None, PAGE_SIZE)
+                    .await
+                    .map(Some)
+                    .map_err(|e| ToolCallError {
+                        description: format!("failed to search channel names: {e}"),
+                        internal_error: e,
+                    })
+            },
+        )?;
 
         // Drop the chat the agent is currently running inside so it never
         // surfaces itself in its own search results.
-        let mut results = response.results;
+        let mut results = response
+            .map(|response| response.results)
+            .unwrap_or_default();
+        results.extend(
+            channel_response
+                .into_iter()
+                .flat_map(|response| response.results)
+                .map(UnifiedSearchResponseItem::Channel),
+        );
+        results.sort_by(|a, b| {
+            b.updated_at()
+                .cmp(&a.updated_at())
+                .then_with(|| b.entity_id().cmp(&a.entity_id()))
+        });
+        results.truncate(PAGE_SIZE as usize);
         if let Some(self_chat_id) = search_context.self_chat_id {
             results.retain(|item| item.entity_id() != self_chat_id);
         }

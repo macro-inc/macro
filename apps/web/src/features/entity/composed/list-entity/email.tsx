@@ -1,13 +1,17 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { useEmailLinksQuery } from '@queries/email/link';
+import { useEmailLinksContext } from '@core/context/emailLinks';
 import { cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import { DraftBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { getSnippetHit } from '../../extractors-search/snippet-entity';
-import type { EmailEntity } from '../../types/entity';
+import {
+  type EmailEntity,
+  type EntityData,
+  isEmailEntity,
+} from '../../types/entity';
 
 /**
  * Resolves the linked inbox a thread belongs to, but only when the user has
@@ -16,13 +20,21 @@ import type { EmailEntity } from '../../types/entity';
  * thread shared with the user that isn't one of their own/delegated inboxes.
  */
 export function useOwningInbox(entity: Accessor<EmailEntity | undefined>) {
-  const linksQuery = useEmailLinksQuery();
+  const { links } = useEmailLinksContext();
   return createMemo(() => {
     const linkId = entity()?.linkId;
     if (!linkId) return undefined;
-    const links = linksQuery.data?.links ?? [];
-    if (links.length <= 1) return undefined;
-    return links.find((l) => l.id === linkId);
+    const availableLinks = links();
+    if (availableLinks.length <= 1) return undefined;
+    return availableLinks.find((link) => link.id === linkId);
+  });
+}
+
+/** Keeps inbox attribution reactive when a recycled list row changes entity. */
+export function useOwningInboxForEntity(entity: Accessor<EntityData>) {
+  return useOwningInbox(() => {
+    const current = entity();
+    return isEmailEntity(current) ? current : undefined;
   });
 }
 

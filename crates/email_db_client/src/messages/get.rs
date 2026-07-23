@@ -29,7 +29,7 @@ pub async fn get_message_sender_and_pretty_sender(
     let rows = sqlx::query!(
         r#"
         SELECT
-            m.id as message_id,
+            m.id as "message_id!",
             c.email_address as "sender!",
             COALESCE(c.name, c.email_address) as "pretty_sender!"
         FROM email_messages m

@@ -1,8 +1,10 @@
+use crate::api::context::AuthorizationService;
 use axum::extract::{Path, State};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::BackfillJob;
 use sqlx::PgPool;
@@ -18,6 +20,7 @@ pub struct GetBackfillJobResponse {
 /// Get a backfill job.
 pub async fn handler(
     State(db): State<PgPool>,
+    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
     Path(job_id): Path<Uuid>,
 ) -> Result<Response, Response> {
     let job = email_db_client::backfill::job::get::get_backfill_job(&db, job_id)

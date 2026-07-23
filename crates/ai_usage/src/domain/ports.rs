@@ -58,6 +58,8 @@ pub enum AiFeature {
     AiProjection,
     /// In-document AI editing (the ai-editing-worker).
     AiEditing,
+    /// Import pipeline agent sessions (connector gathers + Notion imports).
+    Import,
 }
 
 /// Resolved price for one completion.

@@ -7,7 +7,17 @@ import type { UnifiedNotification } from './types';
 export function getNotificationAction(n: UnifiedNotification): string {
   return match(n.notification_metadata.tag)
     .with('channel_mention', () => 'mentioned you in')
-    .with('document_mention', () => 'sent a document')
+    .with('document_mention', () => {
+      const meta = n.notification_metadata;
+      if (
+        meta.tag === 'document_mention' &&
+        meta.content.subType?.type === 'task'
+      ) {
+        return 'sent a task';
+      }
+
+      return 'sent a document';
+    })
     .with('mentioned_in_document_comment', () => 'mentioned you in')
     .with('replied_to_document_comment_thread', () => 'replied in')
     .with('commented_on_document', () => 'commented on')

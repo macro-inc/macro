@@ -13,6 +13,11 @@ import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import { getThreadHandler } from './GetThread';
+import {
+  createImportEntityHandler,
+  deleteImportEntityHandler,
+  listImportEntitiesHandler,
+} from './ImportTools';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
@@ -26,6 +31,7 @@ import {
   markNotificationsSeenHandler,
 } from './Notifications';
 import {
+  bulkSetEntityPropertyOptionsHandler,
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
@@ -59,10 +65,13 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  CreateImportEntity: createImportEntityHandler,
+  DeleteImportEntity: deleteImportEntityHandler,
   GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ListCallRecords: listCallRecordsHandler,
+  ListImportEntities: listImportEntitiesHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
@@ -96,6 +105,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SendChannelMessage: sendChannelMessageHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
+  BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,
   TextEditorCodeExecution: textEditorCodeExecutionHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,

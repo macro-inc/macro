@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE \"ChannelSharePermission\"\n                    SET access_level = $3::text::\"AccessLevel\"\n                    WHERE share_permission_id = $1 AND channel_id = $2\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3786782fd5772417722154eab72e8929a3e67f2f10d7e69c20da5b6b262286d6"
+}

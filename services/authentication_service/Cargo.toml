@@ -25,6 +25,7 @@ path = "src/doppler_config.rs"
 default = ["rate_limit"]
 local = []
 rate_limit = []
+return_passwordless_code = []
 
 [dependencies]
 analytics_client = { path = "../../crates/analytics_client" }
@@ -40,9 +41,17 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
+channels = { path = "../../crates/channels", default-features = false, features = [
+  "outbound",
+] }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+contacts = { path = "../../crates/contacts", default-features = false, features = [
+  "outbound",
+] }
 cookie = { workspace = true }
+decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 email = { path = "../../crates/email", features = ["http_client"] }
 doppleganger = { workspace = true }
@@ -50,6 +59,7 @@ email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
 entity_access = { path = "../../crates/entity_access" }
 foreign_entity = { path = "../../crates/foreign_entity" }
+favorites = { path = "../../crates/favorites", features = ["postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = [
@@ -63,6 +73,7 @@ jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 loops_client = { path = "../../crates/loops_client" }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cache_client = { path = "../../crates/macro_cache_client", default-features = false, features = [
   "auth",
@@ -79,13 +90,13 @@ macro_db_client = { path = "../../crates/macro_db_client", default-features = fa
 ] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
   "tracking",
-  "user_permissions",
 ] }
+mention_utils = { path = "../../crates/mention_utils" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
@@ -97,8 +108,6 @@ mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
-models_team = { path = "../../crates/models_team" }
 native_app_service = { path = "../../crates/native_app_service" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification" }
@@ -109,6 +118,7 @@ referral = { path = "../../crates/referral" }
 remote_env_var = { path = "../../crates/remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../../crates/roles_and_permissions" }
+rootcause = { workspace = true }
 rsa = { version = "0.9.10", features = ["getrandom"] }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }

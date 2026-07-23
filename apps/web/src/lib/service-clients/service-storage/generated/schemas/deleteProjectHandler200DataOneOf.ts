@@ -5,11 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Identifiers affected by a recursive project soft deletion.
+ */
 export type DeleteProjectHandler200DataOneOf = {
-  /** The ids of the chats that were marked as deleted */
+  /** Deleted chats. */
   chat_ids: string[];
-  /** The ids of the documents that were marked as deleted */
+  /** Deleted documents. */
   document_ids: string[];
-  /** The ids of the project that were marked as deleted */
+  /** Deleted projects, including the requested root. */
   project_ids: string[];
 };

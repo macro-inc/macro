@@ -6,6 +6,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
@@ -29,7 +30,7 @@ function ReplyActionButton(props: {
       // Button's own Layer would reset it.)
       depth={isMobile() ? 3 : undefined}
       variant="base"
-      aria-label={props.ariaLabel ?? props.label}
+      aria-label={props.ariaLabel}
       class={cn(
         // Island pills when floating in the mobile accessory region.
         'mobile:island mobile:h-8 mobile:rounded-full mobile:border-0'
@@ -67,8 +68,14 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     return email ? inboxIconProps(email) : { email: '' };
   };
 
-  const markDone = () => {
-    ctx.archiveThread();
+  const isDone = () => ctx.isThreadDone();
+
+  const toggleMarkDone = () => {
+    if (isDone()) {
+      ctx.markThreadNotDone();
+    } else {
+      ctx.archiveThread();
+    }
   };
 
   return (
@@ -109,9 +116,16 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
             </div>
 
             <ReplyActionButton
-              icon={CheckIcon}
-              ariaLabel="Mark done"
-              onClick={markDone}
+              icon={(iconProps) => (
+                <Show
+                  when={isDone()}
+                  fallback={<CheckIcon class={iconProps.class} />}
+                >
+                  <CheckBoldIcon class={cn(iconProps.class, 'text-accent')} />
+                </Show>
+              )}
+              ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
+              onClick={toggleMarkDone}
             />
           </div>
         </div>

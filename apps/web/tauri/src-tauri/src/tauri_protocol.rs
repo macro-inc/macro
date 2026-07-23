@@ -1,20 +1,36 @@
-// Wrapper around the upstream tauri protocol handler.
+// Wrapper around the upstream Tauri protocol handler.
 //
 // Adds two behaviors on top of the built-in `tauri://` protocol:
-// 1. Strips the `/app/` base path prefix before asset resolution
-// 2. Checks `BundleRoot` state to serve from an OTA-updated bundle on disk
-//
-// When `BundleRoot` is `None`, the request (with `/app/` stripped) is forwarded
-// to the upstream handler which handles dev proxy, CSP, security headers, etc.
-// When `BundleRoot` is `Some(path)`, files are served directly from disk.
+// 1. Strips the `/app/` base path prefix before embedded asset resolution.
+// 2. Resolves OTA assets through the bundle updater's domain service.
 
 use http::{Response as HttpResponse, StatusCode, header::CONTENT_TYPE};
-use tauri::{Manager, Runtime, UriSchemeResponder};
+use macro_bundle_updater_plugin::domain::{
+    asset_service::{
+        BundleAssetPath, BundleAssetReadError, BundleAssetResolution, BundleAssetResolver,
+        InvalidBundleAssetPath,
+    },
+    ports::BundleAssetRepo,
+};
+use std::time::Duration;
+use tauri::{Runtime, UriSchemeResponder};
 
-use macro_bundle_updater_plugin::inbound::plugin::PluginService;
-use tokio::sync::Mutex;
+const ASSET_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
-type ProtocolHandler = Box<dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync>;
+type ProtocolHandlerFn = dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync;
+type ProtocolHandler = Box<ProtocolHandlerFn>;
+
+#[derive(Debug, PartialEq, Eq)]
+enum RequestPathError {
+    InvalidEncoding,
+    Unsafe(InvalidBundleAssetPath),
+}
+
+enum TimedAssetResolution {
+    Resolved(Result<BundleAssetResolution, BundleAssetReadError>),
+    TaskFailed(tauri::Error),
+    TimedOut,
+}
 
 /// Strip the `/app` or `/app/` prefix used as the frontend base path.
 /// Only strips when `/app` is a complete path segment (not e.g. `/app.css`).
@@ -26,6 +42,29 @@ fn strip_app_prefix(path: &str) -> &str {
         return "";
     }
     path
+}
+
+fn request_asset_path(uri: &http::Uri) -> Result<BundleAssetPath, RequestPathError> {
+    let encoded = uri.path();
+    let bytes = encoded.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let Some(hex) = bytes.get(index + 1..index + 3) else {
+                return Err(RequestPathError::InvalidEncoding);
+            };
+            if !hex.iter().all(u8::is_ascii_hexdigit) {
+                return Err(RequestPathError::InvalidEncoding);
+            }
+            index += 3;
+        } else {
+            index += 1;
+        }
+    }
+    let decoded = urlencoding::decode(encoded).map_err(|_| RequestPathError::InvalidEncoding)?;
+    let path = strip_app_prefix(&decoded);
+    let relative = path.strip_prefix('/').unwrap_or(path);
+    BundleAssetPath::new(relative).map_err(RequestPathError::Unsafe)
 }
 
 /// Rewrite a URI by stripping the `/app/` prefix from the path portion.
@@ -40,141 +79,211 @@ fn rewrite_uri(uri: &str) -> String {
         if let Some(rest) = uri.strip_prefix(prefix) {
             // Only match bare "/app" when rest is empty or starts with a
             // path separator — avoid rewriting "/app.css" etc.
-            if !prefix.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
+            if !prefix.ends_with('/')
+                && !rest.is_empty()
+                && !rest.starts_with('/')
+                && !rest.starts_with('?')
+            {
                 continue;
             }
             let origin = prefix.trim_end_matches("/app/").trim_end_matches("/app");
-            return format!("{}/{}", origin, rest);
+            return format!("{origin}/{rest}");
         }
     }
     uri.to_string()
 }
 
-/// Build the protocol handler that wraps the built-in `tauri://` protocol.
-///
-/// The upstream handler is called for all requests where `BundleRoot` is not set.
-/// When `BundleRoot` is set (after an OTA update), files are served from disk instead.
-pub fn get<R: Runtime>(app_handle: tauri::AppHandle<R>, window_origin: &str) -> ProtocolHandler {
-    let upstream = tauri::protocol::tauri::get(app_handle.clone(), window_origin, None);
+fn respond_status(
+    responder: UriSchemeResponder,
+    status: StatusCode,
+    origin: &str,
+    message: impl Into<Vec<u8>>,
+) {
+    responder.respond(
+        HttpResponse::builder()
+            .status(status)
+            .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+            .header("Access-Control-Allow-Origin", origin)
+            .body(message.into())
+            .expect("valid custom protocol response"),
+    );
+}
+
+fn delegate_to_embedded(
+    upstream: &ProtocolHandlerFn,
+    webview_id: &str,
+    request: http::Request<Vec<u8>>,
+    responder: UriSchemeResponder,
+) {
+    let uri = request.uri().to_string();
+    let rewritten = rewrite_uri(&uri);
+    if rewritten == uri {
+        upstream(webview_id, request, responder);
+        return;
+    }
+
+    let (mut parts, body) = request.into_parts();
+    if let Ok(uri) = rewritten.parse() {
+        parts.uri = uri;
+    }
+    upstream(
+        webview_id,
+        http::Request::from_parts(parts, body),
+        responder,
+    );
+}
+
+async fn resolve_asset_with_timeout<Assets: BundleAssetRepo>(
+    resolver: BundleAssetResolver<Assets>,
+    asset_path: BundleAssetPath,
+    timeout: Duration,
+) -> TimedAssetResolution {
+    // Keep resolution in an independently owned task. If the timeout elapses,
+    // dropping its join handle detaches rather than cancels it, so its route
+    // read lease remains held until any in-flight filesystem read completes.
+    let resolution_task =
+        tauri::async_runtime::spawn(async move { resolver.resolve(&asset_path).await });
+    match tokio::time::timeout(timeout, resolution_task).await {
+        Ok(Ok(resolution)) => TimedAssetResolution::Resolved(resolution),
+        Ok(Err(error)) => TimedAssetResolution::TaskFailed(error),
+        Err(_) => TimedAssetResolution::TimedOut,
+    }
+}
+
+async fn resolve_request<Assets: BundleAssetRepo>(
+    resolver: BundleAssetResolver<Assets>,
+    upstream: &ProtocolHandlerFn,
+    webview_id: String,
+    request: http::Request<Vec<u8>>,
+    responder: UriSchemeResponder,
+    origin: String,
+) {
+    let asset_path = match request_asset_path(request.uri()) {
+        Ok(path) => path,
+        Err(RequestPathError::InvalidEncoding) => {
+            respond_status(
+                responder,
+                StatusCode::BAD_REQUEST,
+                &origin,
+                "invalid percent encoding in asset path",
+            );
+            return;
+        }
+        Err(RequestPathError::Unsafe(_)) => {
+            respond_status(
+                responder,
+                StatusCode::FORBIDDEN,
+                &origin,
+                "asset path escaped bundle root",
+            );
+            return;
+        }
+    };
+
+    let resolution = match resolve_asset_with_timeout(
+        resolver,
+        asset_path.clone(),
+        ASSET_RESOLUTION_TIMEOUT,
+    )
+    .await
+    {
+        TimedAssetResolution::Resolved(Ok(resolution)) => resolution,
+        TimedAssetResolution::Resolved(Err(BundleAssetReadError::OutsideBundleRoot)) => {
+            respond_status(
+                responder,
+                StatusCode::FORBIDDEN,
+                &origin,
+                "resolved asset escaped bundle root",
+            );
+            return;
+        }
+        TimedAssetResolution::Resolved(Err(BundleAssetReadError::Io(error))) => {
+            tracing::error!(error=?error, path=?asset_path.as_path(), "failed to read OTA asset");
+            respond_status(
+                responder,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &origin,
+                "failed to read OTA asset",
+            );
+            return;
+        }
+        TimedAssetResolution::TaskFailed(error) => {
+            tracing::error!(error=?error, path=?asset_path.as_path(), "bundle asset resolver task failed");
+            respond_status(
+                responder,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &origin,
+                "failed to resolve bundle asset",
+            );
+            return;
+        }
+        TimedAssetResolution::TimedOut => {
+            tracing::error!(path=?asset_path.as_path(), "timed out resolving bundle asset");
+            respond_status(
+                responder,
+                StatusCode::GATEWAY_TIMEOUT,
+                &origin,
+                "timed out resolving bundle asset",
+            );
+            return;
+        }
+    };
+
+    match resolution {
+        BundleAssetResolution::Ota {
+            bytes,
+            content_path,
+        } => {
+            let mime = mime_guess::from_path(content_path.as_path())
+                .first_or_octet_stream()
+                .to_string();
+            responder.respond(
+                HttpResponse::builder()
+                    .header(CONTENT_TYPE, mime)
+                    .header("Access-Control-Allow-Origin", origin)
+                    .body(bytes)
+                    .expect("valid OTA asset response"),
+            );
+        }
+        BundleAssetResolution::Embedded => {
+            delegate_to_embedded(&*upstream, &webview_id, request, responder);
+        }
+        BundleAssetResolution::NotFound => {
+            respond_status(
+                responder,
+                StatusCode::NOT_FOUND,
+                &origin,
+                "bundle asset not found",
+            );
+        }
+    }
+}
+
+/// Build the asynchronous protocol handler that wraps Tauri's built-in handler.
+pub fn get<R, Assets>(
+    app_handle: tauri::AppHandle<R>,
+    window_origin: &str,
+    resolver: BundleAssetResolver<Assets>,
+) -> ProtocolHandler
+where
+    R: Runtime,
+    Assets: BundleAssetRepo,
+{
+    let upstream = &*Box::leak(tauri::protocol::tauri::get(app_handle, window_origin, None));
+
     let origin = window_origin.to_string();
 
     Box::new(move |webview_id, request, responder| {
-        let service = app_handle.try_state::<Mutex<PluginService>>();
-        let root_dir_owned = service
-            .as_ref()
-            .and_then(|s| s.try_lock().ok())
-            .and_then(|s| s.bundle_root_path().map(|p| p.to_path_buf()));
-
-        if let Some(ref root_dir) = root_dir_owned {
-            // Serve from the OTA bundle directory on disk
-            let raw_path = request
-                .uri()
-                .to_string()
-                .split(&['?', '#'][..])
-                .next()
-                .unwrap_or_default()
-                .to_string();
-
-            let path = raw_path
-                .strip_prefix("tauri://localhost")
-                .or_else(|| raw_path.strip_prefix("https://tauri.localhost"))
-                .unwrap_or(&raw_path);
-
-            let asset_path = strip_app_prefix(path);
-            // Serve index.html for empty/root paths (SPA fallback)
-            let asset_path = match asset_path {
-                "" | "/" => "index.html",
-                p => p.strip_prefix('/').unwrap_or(p),
-            };
-
-            // Prevent path traversal: canonicalize both paths and verify
-            // the resolved file stays within the bundle root.
-            let canonical_root = match root_dir.canonicalize() {
-                Ok(p) => p,
-                Err(_) => {
-                    responder.respond(
-                        HttpResponse::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .header("Access-Control-Allow-Origin", &*origin)
-                            .body(Vec::new())
-                            .unwrap(),
-                    );
-                    return;
-                }
-            };
-            let file_path = root_dir.join(asset_path);
-            let canonical_file = match file_path.canonicalize() {
-                Ok(p) => p,
-                Err(_) => {
-                    responder.respond(
-                        HttpResponse::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .header("Access-Control-Allow-Origin", &*origin)
-                            .body(Vec::new())
-                            .unwrap(),
-                    );
-                    return;
-                }
-            };
-            if !canonical_file.starts_with(&canonical_root) {
-                responder.respond(
-                    HttpResponse::builder()
-                        .status(StatusCode::FORBIDDEN)
-                        .header("Access-Control-Allow-Origin", &*origin)
-                        .body(Vec::new())
-                        .unwrap(),
-                );
-                return;
-            }
-
-            match std::fs::read(&canonical_file) {
-                Ok(data) => {
-                    let mime = mime_guess::from_path(&file_path)
-                        .first_or_octet_stream()
-                        .to_string();
-                    responder.respond(
-                        HttpResponse::builder()
-                            .header(CONTENT_TYPE, &mime)
-                            .header("Access-Control-Allow-Origin", &*origin)
-                            .body(data)
-                            .unwrap(),
-                    );
-                }
-                Err(_) => {
-                    // SPA fallback: serve index.html for extensionless paths (client-side routes)
-                    let has_extension = std::path::Path::new(asset_path).extension().is_some();
-                    if !has_extension && let Ok(data) = std::fs::read(root_dir.join("index.html")) {
-                        responder.respond(
-                            HttpResponse::builder()
-                                .header(CONTENT_TYPE, "text/html")
-                                .header("Access-Control-Allow-Origin", &*origin)
-                                .body(data)
-                                .unwrap(),
-                        );
-                        return;
-                    }
-                    responder.respond(
-                        HttpResponse::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .header("Access-Control-Allow-Origin", &*origin)
-                            .body(Vec::new())
-                            .unwrap(),
-                    );
-                }
-            }
-        } else {
-            // Strip /app/ prefix and delegate to upstream handler
-            let uri = request.uri().to_string();
-            let rewritten = rewrite_uri(&uri);
-
-            if rewritten != uri {
-                let (mut parts, body) = request.into_parts();
-                parts.uri = rewritten.parse().unwrap_or(parts.uri);
-                let request = http::Request::from_parts(parts, body);
-                upstream(webview_id, request, responder);
-            } else {
-                upstream(webview_id, request, responder);
-            }
-        }
+        tauri::async_runtime::spawn(resolve_request(
+            resolver.clone(),
+            upstream,
+            webview_id.to_owned(),
+            request,
+            responder,
+            origin.clone(),
+        ));
     })
 }
+
+#[cfg(test)]
+mod test;

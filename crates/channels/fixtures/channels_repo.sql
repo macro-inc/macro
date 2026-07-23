@@ -12,6 +12,56 @@
 -- Channel: ch2 (separate channel for isolation tests)
 -- Participants: owner, admin, member (active), left_user (left)
 
+-- Team channels for bulk membership tests.
+INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'team-owner-a', 'team-owner-a@test.com', 'cus_team_a'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'team-owner-b', 'team-owner-b@test.com', 'cus_team_b'),
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'left-user', 'left-user@test.com', 'cus_left_user'),
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'user-d', 'user-d@test.com', 'cus_user_d');
+
+INSERT INTO "User" (id, email, macro_user_id) VALUES
+  ('macro|team-owner-a@test.com', 'team-owner-a@test.com', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+  ('macro|team-owner-b@test.com', 'team-owner-b@test.com', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
+  ('macro|left-user@test.com', 'left-user@test.com', 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+  ('macro|user-d@test.com', 'user-d@test.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd');
+
+INSERT INTO team (id, name, owner_id) VALUES
+  ('11111111-1111-1111-1111-111111111111', 'Team A', 'macro|team-owner-a@test.com'),
+  ('22222222-2222-2222-2222-222222222222', 'Team B', 'macro|team-owner-b@test.com');
+
+-- Team memberships for the channel-list participation tests: left-user is on
+-- Team A (participant of c11/c13, left c12); user-d is on Team B but has never
+-- joined its channel c21. (team_user is unique per user, so one team each.)
+INSERT INTO team_user (user_id, team_id, team_role) VALUES
+  ('macro|left-user@test.com', '11111111-1111-1111-1111-111111111111', 'member'),
+  ('macro|user-d@test.com', '22222222-2222-2222-2222-222222222222', 'member');
+
+INSERT INTO comms_channels (
+  id, name, channel_type, org_id, owner_id, team_id, auto_join_team, created_at, updated_at
+) VALUES
+  ('00000000-0000-0000-0000-000000000c11', 'team-a-auto-active', 'team', NULL,
+   'macro|user-a@test.com', '11111111-1111-1111-1111-111111111111', TRUE,
+   '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00'),
+  ('00000000-0000-0000-0000-000000000c12', 'team-a-auto-left', 'team', NULL,
+   'macro|user-a@test.com', '11111111-1111-1111-1111-111111111111', TRUE,
+   '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00'),
+  ('00000000-0000-0000-0000-000000000c13', 'team-a-manual', 'team', NULL,
+   'macro|user-a@test.com', '11111111-1111-1111-1111-111111111111', FALSE,
+   '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00'),
+  ('00000000-0000-0000-0000-000000000c21', 'team-b-auto', 'team', NULL,
+   'macro|user-b@test.com', '22222222-2222-2222-2222-222222222222', TRUE,
+   '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
+
+INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, left_at) VALUES
+  ('00000000-0000-0000-0000-000000000c11', 'macro|left-user@test.com', 'admin',
+   '2024-01-01 00:00:00+00', NULL),
+  ('00000000-0000-0000-0000-000000000c12', 'macro|left-user@test.com', 'admin',
+   '2024-01-01 00:01:00+00', '2024-01-05 00:00:00+00'),
+  ('00000000-0000-0000-0000-000000000c13', 'macro|left-user@test.com', 'owner',
+   '2024-01-01 00:02:00+00', NULL),
+  ('00000000-0000-0000-0000-000000000c21', 'macro|left-user@test.com', 'member',
+   '2024-01-01 00:03:00+00', NULL);
+
 -- channels
 INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at, updated_at) VALUES
   ('00000000-0000-0000-0000-000000000c01', 'test-channel', 'public', NULL, 'macro|user-a@test.com',

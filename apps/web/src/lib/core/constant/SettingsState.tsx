@@ -37,6 +37,7 @@ export type SettingsTab =
   | 'Agent'
   | 'Bots'
   | 'Team'
+  | 'Tags'
   | 'CRM'
   | 'Connected'
   | 'Email'

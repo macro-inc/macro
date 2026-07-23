@@ -1,5 +1,6 @@
 use constants::INTERNAL_API_KEY_HEADER;
 pub(crate) mod constants;
+pub mod search_channel_name;
 pub mod search_unified;
 
 #[derive(Clone)]

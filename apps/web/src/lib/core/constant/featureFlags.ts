@@ -122,13 +122,36 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
-// Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. Dev/local only for now; override
-// with VITE_ENABLE_EMAIL_SIGNATURES.
-export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
-  'ENABLE_EMAIL_SIGNATURES',
+// Activity timeline: the Activity sidebar entry and the combined Firehose /
+// My Activity view. Keep it dev-only by default while the feature is under
+// development; override with VITE_ENABLE_ACTIVITY for controlled testing.
+export const ENABLE_ACTIVITY = resolveFeatureFlag(
+  'ENABLE_ACTIVITY',
   DEV_MODE_ENV
 );
+
+// Email signatures: the settings editor, the compose / reply / AI-chat signature
+// previews, and the per-message include toggle. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
+export const ENABLE_EMAIL_SIGNATURES_FLAG = 'enable-email-signatures';
+// Honor an explicit VITE_ENABLE_EMAIL_SIGNATURES=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+export const ENABLE_EMAIL_SIGNATURES_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_EMAIL_SIGNATURES') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, { enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE })`.
+ */
+export function ENABLE_EMAIL_SIGNATURES(): boolean {
+  if (ENABLE_EMAIL_SIGNATURES_OVERRIDE !== undefined) {
+    return ENABLE_EMAIL_SIGNATURES_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_SIGNATURES_FLAG) ?? false
+  );
+}
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
@@ -312,6 +335,13 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   true
 );
 
+// Inline AI editing: the floating document AI edit pill and the AI editing
+// tool in the selection formatting menu. Gated by PostHog; use the reactive
+// `useFeatureFlag(INLINE_AI_EDITING_FLAG, { enabledOverride: INLINE_AI_EDITING_OVERRIDE })`.
+export const INLINE_AI_EDITING_FLAG = 'inline-ai-editing';
+export const INLINE_AI_EDITING_OVERRIDE =
+  resolveFeatureFlag('INLINE_AI_EDITING', DEV_MODE_ENV) || undefined;
+
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
   true
@@ -494,18 +524,6 @@ export function ENABLE_NEW_INBOX() {
   return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
 }
 
-export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
-export const ENABLE_TAGS_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
-
-// Narrow rollout gate for the search-view tag surfaces (facet row + row
-// chips), layered on top of enable-tags-fe. PostHog-controlled per
-// environment with a dev-mode default. Override with
-// VITE_ENABLE_TAGS_SEARCH_FE.
-export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
-export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;
-
 // Channel mode where replying and editing do not happen inline, but in a single unified input instead.
 export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
   'UNIFIED_CHANNEL_INPUT',
@@ -517,3 +535,11 @@ export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
 export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
+
+// New split-screen onboarding (/setup): connect tools on the left, pick
+// what to import on the right. Dev-mode default; override with
+// VITE_ENABLE_NEW_ONBOARDING_V3.
+export const ENABLE_NEW_ONBOARDING_V3 = resolveFeatureFlag(
+  'ENABLE_NEW_ONBOARDING_V3',
+  DEV_MODE_ENV
+);

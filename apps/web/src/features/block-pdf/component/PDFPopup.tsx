@@ -3,7 +3,6 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { createMarkdownFile } from '@core/util/create';

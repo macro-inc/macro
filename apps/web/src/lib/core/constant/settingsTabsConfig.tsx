@@ -8,6 +8,7 @@ import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
+import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
@@ -59,6 +60,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
+      { tab: 'Tags', label: 'Tags', icon: TagIcon },
       { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
@@ -98,6 +100,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Agent: 'mcp-server',
   Bots: 'bots',
   Team: 'team',
+  Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
   Email: 'email',
@@ -153,6 +156,7 @@ export const useSettingsTabAvailable = () => {
       case 'Billing':
         return true;
       case 'Team':
+      case 'Tags':
         return true;
       // CRM is still rolling out (Macro-internal only); keep the settings tab
       // behind the same enable-crm gate as every other CRM surface so it never

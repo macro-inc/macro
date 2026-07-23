@@ -9,15 +9,10 @@ use serde::{Deserialize, Serialize};
 pub struct ExampleEventPublisher;
 
 impl EventPublisher for ExampleEventPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        topic: T,
-        key: &str,
-        payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
         println!(
             "publishing topic={} key={} payload={}",
-            topic.as_str(),
+            T::TOPIC_STR,
             key,
             String::from_utf8_lossy(payload)
         );
@@ -118,7 +113,7 @@ impl ExampleConsumerEvent {
     /// Decode one Kafka message into this consumer's event enum.
     pub fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
         match topic {
-            topic if topic == MacroExampleTopic.as_str() => {
+            topic if topic == MacroExampleTopic::TOPIC_STR => {
                 Ok(Self::Example(ExampleMacroEvent::decode(key, payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),

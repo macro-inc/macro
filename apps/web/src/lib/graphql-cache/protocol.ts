@@ -11,6 +11,40 @@
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Opaque exclusive cursor for deterministic normalized-record scans. */
+export type RecordCursor = string;
+
+/** Untyped wire page returned by cache hosts. */
+export type SelectedRecordPageWire = {
+  records: unknown[];
+  nextCursor: RecordCursor | null;
+};
+
+export type ReadRecordsArgs = {
+  /** Serialized generated fragment document. */
+  document: string;
+  /** Root fragment to apply to matching normalized records. */
+  fragmentName: string;
+  cursor?: RecordCursor;
+  limit: number;
+};
+
+export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+
+/** Validates a record-selection page size before crossing a host boundary. */
+export function validateRecordSelectionLimit(limit: number): number {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > MAX_RECORD_SELECTION_PAGE_SIZE
+  ) {
+    throw new RangeError(
+      `record selection limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+    );
+  }
+  return limit;
+}
+
 export type QueryRevalidationWire = {
   query: string;
   operationName?: string;
@@ -89,6 +123,15 @@ export type MutationClaim = {
   generation: string;
 };
 
+/** Final settlement of a previously queued optimistic mutation. */
+export type MutationSettlement =
+  | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'permanently-failed';
+      error: string;
+    };
+
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | {
@@ -155,6 +198,14 @@ export type CacheRequest = { id: number } & (
       transactionId: string;
       leaseOwner: string;
       leaseGeneration: string;
+      error: string;
+    }
+  | {
+      kind: 'read-records';
+      document: string;
+      fragmentName: string;
+      cursor?: RecordCursor;
+      limit: number;
     }
   | {
       kind: 'inspect-query';
@@ -192,15 +243,18 @@ export function isCacheNotice(
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush = {
-  kind: 'ops-affected';
-  opIds: string[];
-  /** Changed entity keys, for diagnostics/advanced consumers. */
-  keys: string[];
-};
+export type CachePush =
+  | {
+      kind: 'ops-affected';
+      opIds: string[];
+      /** Changed entity keys, for diagnostics/advanced consumers. */
+      keys: string[];
+    }
+  | { kind: 'cache-changed' }
+  | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
 
 export function isCachePush(msg: WorkerMessage): msg is CachePush {
-  return 'kind' in msg && msg.kind === 'ops-affected';
+  return 'kind' in msg;
 }

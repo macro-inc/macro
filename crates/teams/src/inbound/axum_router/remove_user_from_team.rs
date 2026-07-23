@@ -1,8 +1,9 @@
 use axum::extract::{Path, State};
 use entity_access::{
     domain::{models::AdminTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::MacroUserTeamExtractor,
+    inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
+use macro_authorization::MacroAuthorizationService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 
@@ -33,9 +34,9 @@ pub struct Param {
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<AdminTeamRole, Eas>,
-    State(state): State<TeamRouterState<T, Eas>>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamRouterState<T, Eas, Auth>>,
     Path(Param { remove_user_id }): Path<Param>,
 ) -> Result<(), RemoveUserFromTeamError> {
     state

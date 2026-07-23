@@ -9,6 +9,7 @@
 mod test;
 
 use crate::domain::{
+    events::WebhookTopicEvent,
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
@@ -27,6 +28,7 @@ use uuid::Uuid;
 
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
+const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -90,6 +92,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
         &self,
         event: Event<ChannelTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.webhooks` event envelope.
+    fn ingest_webhook_event(
+        &self,
+        event: Event<WebhookTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
 /// Webhook event ingestion service implementation.
@@ -139,11 +147,10 @@ where
             entity_id = %event.entity_id,
             accessor_count = tracing::field::Empty,
             workspace_count = tracing::field::Empty,
-            match_count = tracing::field::Empty,
         ),
         err
     )]
-    async fn ingest_normalized_event(
+    async fn resolve_entity_access_and_enqueue(
         &self,
         event: NormalizedWebhookEvent,
         entity_type: EntityType,
@@ -160,6 +167,26 @@ where
             .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
         tracing::Span::current().record("workspace_count", workspace_ids.len());
 
+        self.match_and_enqueue(event, workspace_ids).await
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            event_id = %event.event_id,
+            event_name = %event.event_name,
+            entity_type = %event.entity_type,
+            entity_id = %event.entity_id,
+            workspace_count = workspace_ids.len(),
+            match_count = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn match_and_enqueue(
+        &self,
+        event: NormalizedWebhookEvent,
+        workspace_ids: Vec<String>,
+    ) -> Result<(), WebhookEventIngestionError> {
         let webhooks = self
             .repository
             .list_active_webhooks_matching_event(
@@ -201,6 +228,9 @@ fn normalized_document_event(
         DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
         DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
         DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
+        DocumentTopicEvent::Interaction(metadata) => {
+            ("document.interaction", &metadata.document_id)
+        }
     };
 
     if Uuid::parse_str(entity_id).is_err() {
@@ -263,6 +293,51 @@ fn normalized_channel_event(
     ))
 }
 
+fn normalized_webhook_event(
+    event: &Event<WebhookTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
+    let (event_name, webhook_id, workspace_id) = match &event.event {
+        WebhookTopicEvent::Created(metadata) => (
+            "webhook.created",
+            &metadata.webhook_id,
+            &metadata.workspace_id,
+        ),
+        WebhookTopicEvent::Updated(metadata) => (
+            "webhook.updated",
+            &metadata.webhook_id,
+            &metadata.workspace_id,
+        ),
+        WebhookTopicEvent::Deleted(metadata) => (
+            "webhook.deleted",
+            &metadata.webhook_id,
+            &metadata.workspace_id,
+        ),
+        WebhookTopicEvent::Validated(metadata) => (
+            "webhook.validated",
+            &metadata.webhook_id,
+            &metadata.workspace_id,
+        ),
+    };
+
+    if webhook_id.is_empty() || !webhook_id.starts_with("wh_") {
+        return Err(WebhookEventIngestionError::InvalidEntityId {
+            entity_type: WEBHOOK_ENTITY_TYPE,
+            entity_id: webhook_id.clone(),
+        });
+    }
+
+    let broker_envelope = serde_json::to_value(event)?;
+    let normalized = normalized_event(
+        event.event_id,
+        event.schema_version,
+        event_name,
+        WEBHOOK_ENTITY_TYPE,
+        webhook_id,
+        broker_envelope,
+    );
+    Ok((normalized, workspace_id.clone()))
+}
+
 fn normalized_event(
     event_id: Uuid,
     schema_version: u8,
@@ -295,7 +370,7 @@ where
         event: Event<DocumentTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         let event = normalized_document_event(&event)?;
-        self.ingest_normalized_event(event, EntityType::Document)
+        self.resolve_entity_access_and_enqueue(event, EntityType::Document)
             .await
     }
 
@@ -305,7 +380,16 @@ where
         event: Event<ChannelTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         let event = normalized_channel_event(&event)?;
-        self.ingest_normalized_event(event, EntityType::Channel)
+        self.resolve_entity_access_and_enqueue(event, EntityType::Channel)
             .await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_webhook_event(
+        &self,
+        event: Event<WebhookTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (event, workspace_id) = normalized_webhook_event(&event)?;
+        self.match_and_enqueue(event, vec![workspace_id]).await
     }
 }

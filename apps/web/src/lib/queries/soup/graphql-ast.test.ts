@@ -50,6 +50,53 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('maps channel participation filters into the channel literal', () => {
+    // The inbox signal view pins channelIsParticipant: [true] so it only ever
+    // shows channels the user is in.
+    const input = makeInput({
+      include: {
+        channelDone: false,
+        channelIsParticipant: [true],
+      },
+    });
+
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          channelFilter: {
+            and: {
+              left: { literal: { notificationDone: false } },
+              right: { literal: { isParticipant: true } },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('ORs multiple channel participation states so non-member team channels match', () => {
+    // The Channels → Teams tab queries [true, false]: member channels plus
+    // team channels of the user's teams they haven't joined.
+    const input = makeInput({
+      include: {
+        channelIsParticipant: [true, false],
+      },
+    });
+
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          channelFilter: {
+            or: {
+              left: { literal: { isParticipant: true } },
+              right: { literal: { isParticipant: false } },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('maps cursor requests without resending filters or sort', () => {
     const input = makeGraphqlSoupInput({
       params: { limit: 100, sort_method: 'updated_at' },

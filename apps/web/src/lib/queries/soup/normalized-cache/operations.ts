@@ -162,6 +162,12 @@ export function invalidateAllSoup(): void {
   queryClient.invalidateQueries({
     queryKey: soupKeys.astItems._def,
   });
+  // Expanded single-group caches back grouped views' rows (mail/inbox group
+  // by date); leaving them stale keeps removed rows hidden even after their
+  // parent queries refetch.
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.groupedGroup._def,
+  });
 }
 
 export function hasSoupEntity(entityId: string): boolean {
@@ -336,11 +342,46 @@ export function removeSoupEntitiesFromQueriesReferencing(
 ): SoupTransaction {
   if (referenceIds.length === 0) return { rollback: () => {} };
 
-  const referencesIds = (key: QueryKey) => {
+  return removeSoupEntitiesWhere(entityIds, (key: QueryKey) => {
     const serialized = JSON.stringify(key);
     return referenceIds.some((id) => serialized.includes(id));
-  };
+  });
+}
 
+/**
+ * Serialized-key test for soup queries that exclude done content. The markers
+ * a compiled soup query key can carry: `emailView: 'inbox'` (server-side
+ * inbox scoping of email views, e.g. mail Important/Noise) and compiled
+ * done-filter literals — `NotificationDone` (emails/channels) or `nd`
+ * (documents/chats/folders/foreign entities) with a `false` value, produced
+ * by the `*Done: false` filter presets.
+ */
+function soupQueryExcludesDone(key: QueryKey): boolean {
+  const serialized = JSON.stringify(key);
+  return (
+    serialized.includes('"emailView":"inbox"') ||
+    serialized.includes('"NotificationDone":false') ||
+    serialized.includes('"nd":false')
+  );
+}
+
+/**
+ * Remove entities from soup queries that filter out done content, leaving
+ * them in place everywhere else (e.g. mail "All", which shows done threads).
+ * Use with an entity-level done patch so the remaining rows reflect the new
+ * state.
+ */
+export function removeSoupEntitiesFromDoneFilteredQueries(
+  entityIds: Set<string>
+): SoupTransaction {
+  return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
+}
+
+/** Remove entities from the soup queries whose key matches the predicate. */
+function removeSoupEntitiesWhere(
+  entityIds: Set<string>,
+  referencesIds: (key: QueryKey) => boolean
+): SoupTransaction {
   // Scoped equivalent of cancelSoupQueries (same data !== undefined guard)
   const cancelPredicate = (query: Query) =>
     query.state.data !== undefined && referencesIds(query.queryKey);
@@ -635,6 +676,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
   return match(result)
     .with({ type: 'document' }, (r) => r.document_id)
     .with({ type: 'chat' }, (r) => r.chat_id)
+    .with({ type: 'channel' }, (r) => r.channel_id)
     .with({ type: 'channelMessage' }, (r) => `${r.channel_id}:${r.message_id}`)
     .with({ type: 'email' }, (r) => r.thread_id)
     .with({ type: 'project' }, (r) => r.id)

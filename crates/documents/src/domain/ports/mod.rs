@@ -10,12 +10,13 @@ pub mod markdown;
 use std::future::Future;
 
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
 use super::content::DocumentContent;
+use super::events::InteractionReason;
 use super::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -173,6 +174,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
+
+    /// Get the document ID assigned to a task number within a team.
+    fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
     /// Get user/team data needed to build a branch name for this user and task.
     fn get_branch_name_context(
@@ -345,6 +353,13 @@ pub trait DocumentService: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentBasic, DocumentError>> + Send;
 
+    /// Resolve a team task slug to its document ID.
+    fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
     /// Get a document with metadata, access level, and view location.
     fn get_document(
         &self,
@@ -473,6 +488,14 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         document_id: &str,
         bytes: Vec<u8>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Publishes a `document.interaction` event: a real edit, a peer joining,
+    /// or the last peer leaving.
+    fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
     /// Get the team-share state of a document, resolved against the owner's team.
     fn get_team_share(

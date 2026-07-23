@@ -3,8 +3,8 @@
 //! Connects with the same `KAFKA_BROKERS` env var and environment-driven
 //! transport as [`macro_event_broker::KafkaEventPublisher`] (plaintext for
 //! `ENVIRONMENT=local`, TLS + SASL/OAUTHBEARER with MSK IAM otherwise),
-//! subscribes to [`MacroChannelsTopic`], and prints every channel event it
-//! receives.
+//! subscribes to the [`ChannelMacroEvent`] topic and prints every channel event
+//! it receives.
 //!
 //! The consumer follows the standard poll-loop / worker split: a Kafka poll
 //! loop decodes messages and hands them to a processing task over a bounded
@@ -25,14 +25,12 @@
 
 use anyhow::Context as _;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
-use macro_env::Environment;
-use macro_event_broker::outbound::msk_iam::configure_sasl_iam;
-use macro_event_broker::{EventBrokerError, MacroEvent, MskIamClientContext, Topic as _};
-use macro_event_topics::MacroChannelsTopic;
-use rdkafka::ClientConfig;
-use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
-use rdkafka::error::KafkaResult;
-use rdkafka::message::{BorrowedMessage, Message};
+use kafka_util::{GroupName, KafkaEventConsumer};
+use macro_event_broker::{
+    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
+};
+use rdkafka::consumer::CommitMode;
+use rdkafka::message::Message;
 use tokio::sync::mpsc;
 
 macro_env_var::env_var! {
@@ -41,103 +39,28 @@ macro_env_var::env_var! {
     }
 }
 
-/// Consumer group id for this example. Offsets are committed under this group,
-/// so re-runs resume where the previous run left off.
-const GROUP_ID: &str = "channels-consumer-example";
+/// Consumer group for this example. Offsets are committed under this group, so
+/// re-runs resume where the previous run left off.
+struct ChannelsConsumerGroup;
+
+impl GroupName for ChannelsConsumerGroup {
+    const GROUP_NAME: &'static str = "channels-consumer-example";
+}
 
 /// Bounded capacity of the channel between the poll loop and the processor.
 const CHANNEL_CAPACITY: usize = 128;
 
-/// Consumer-specific event enum for a consumer subscribed to `macro.channels`,
-/// following the pattern in `macro_event_broker/examples/example_event.rs`.
-enum ChannelsConsumerEvent {
-    /// Event received on [`MacroChannelsTopic`].
-    Channels(ChannelMacroEvent),
-}
+macro_event_broker::declare_topics!(DeclaredMacroEvent: ChannelMacroEvent);
 
-impl ChannelsConsumerEvent {
-    /// Decode one Kafka message into this consumer's event enum.
-    fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
-        match topic {
-            topic if topic == MacroChannelsTopic.as_str() => {
-                Ok(Self::Channels(ChannelMacroEvent::decode(key, payload)?))
-            }
-            unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
-        }
-    }
-}
+type ChannelsKafkaAdapter = KafkaConsumerAdapter<ChannelsConsumerGroup, DeclaredMacroEvent>;
+type ChannelsConsumerService = MacroEventConsumerService<DeclaredMacroEvent, ChannelsKafkaAdapter>;
 
 /// A decoded event plus the Kafka coordinates it came from, as handed from the
 /// poll loop to the processor over the channel.
 struct ReceivedEvent {
     partition: i32,
     offset: i64,
-    event: ChannelsConsumerEvent,
-}
-
-/// The underlying consumer, split by transport (mirrors `KafkaEventPublisher`).
-enum ChannelsConsumer {
-    /// Unauthenticated plaintext connection (local docker broker).
-    Plaintext(StreamConsumer),
-    /// TLS + SASL/OAUTHBEARER with AWS MSK IAM auth (deployed clusters).
-    MskIam(StreamConsumer<MskIamClientContext>),
-}
-
-impl ChannelsConsumer {
-    /// Build a consumer for the given brokers, choosing the transport from the
-    /// `ENVIRONMENT` variable exactly like the publisher does.
-    fn from_env(brokers: &str) -> anyhow::Result<Self> {
-        let mut config = ClientConfig::new();
-        config
-            .set("bootstrap.servers", brokers)
-            .set("group.id", GROUP_ID)
-            // Offsets are committed manually after a successful handoff.
-            .set("enable.auto.commit", "false")
-            // Start from the beginning of the topic on the first ever run.
-            .set("auto.offset.reset", "earliest");
-
-        let consumer = match Environment::new_or_prod() {
-            Environment::Local => Self::Plaintext(
-                config
-                    .create()
-                    .context("failed to create plaintext kafka consumer")?,
-            ),
-            Environment::Develop | Environment::Production => {
-                configure_sasl_iam(&mut config);
-                Self::MskIam(
-                    config
-                        .create_with_context(MskIamClientContext::from_env())
-                        .context("failed to create MSK IAM kafka consumer")?,
-                )
-            }
-        };
-
-        Ok(consumer)
-    }
-
-    fn subscribe(&self) -> KafkaResult<()> {
-        let topics = [MacroChannelsTopic.as_str()];
-        match self {
-            Self::Plaintext(consumer) => consumer.subscribe(&topics),
-            Self::MskIam(consumer) => consumer.subscribe(&topics),
-        }
-    }
-
-    /// Receive the next message. `StreamConsumer::recv` is cancel-safe, so it
-    /// can sit in a `select!` without losing messages.
-    async fn recv(&self) -> KafkaResult<BorrowedMessage<'_>> {
-        match self {
-            Self::Plaintext(consumer) => consumer.recv().await,
-            Self::MskIam(consumer) => consumer.recv().await,
-        }
-    }
-
-    fn commit(&self, message: &BorrowedMessage<'_>) -> KafkaResult<()> {
-        match self {
-            Self::Plaintext(consumer) => consumer.commit_message(message, CommitMode::Async),
-            Self::MskIam(consumer) => consumer.commit_message(message, CommitMode::Async),
-        }
-    }
+    event: ChannelMacroEvent,
 }
 
 fn event_type(event: &ChannelTopicEvent) -> &'static str {
@@ -159,7 +82,7 @@ fn event_type(event: &ChannelTopicEvent) -> &'static str {
 /// the body for indexing, notifications, etc.
 async fn process_events(mut events: mpsc::Receiver<ReceivedEvent>) {
     while let Some(received) = events.recv().await {
-        let ChannelsConsumerEvent::Channels(event) = received.event;
+        let event = received.event;
         let envelope = event.event();
 
         println!(
@@ -192,14 +115,16 @@ async fn main() -> anyhow::Result<()> {
 
     let env = ConsumerEnvVars::new().context("KAFKA_BROKERS must be set")?;
 
-    let consumer = ChannelsConsumer::from_env(env.kafka_brokers.as_ref())?;
-    consumer
-        .subscribe()
-        .context("failed to subscribe to channels topic")?;
+    let consumer =
+        KafkaEventConsumer::<ChannelsConsumerGroup>::from_env(env.kafka_brokers.as_ref())?;
+    let consumer = KafkaConsumerAdapter::<ChannelsConsumerGroup, ()>::new(consumer)
+        .subscribe::<DeclaredMacroEvent>()
+        .map_err(|error| anyhow::anyhow!("failed to subscribe to channels topic: {error:?}"))?;
+    let consumer = ChannelsConsumerService::new(consumer);
     println!(
         "listening on topic={} group={} brokers={} (ctrl-c to stop)",
-        MacroChannelsTopic.as_str(),
-        GROUP_ID,
+        DeclaredMacroEvent::topics()[0],
+        ChannelsConsumerGroup::GROUP_NAME,
         env.kafka_brokers.as_ref(),
     );
 
@@ -222,25 +147,13 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let Some(payload) = message.payload() else {
-                    eprintln!(
-                        "skipping message with empty payload at partition {} offset {}",
-                        message.partition(),
-                        message.offset(),
-                    );
-                    let _ = consumer.commit(&message).inspect_err(|e| {
-                        eprintln!("failed to commit offset {}: {e}", message.offset());
-                    });
-                    continue;
-                };
-                let key = String::from_utf8_lossy(message.key().unwrap_or_default());
-
-                match ChannelsConsumerEvent::decode(message.topic(), key.as_ref(), payload) {
-                    Ok(event) => {
+                let kafka_message = message.inner();
+                match message.decode_payload() {
+                    Ok(DeclaredMacroEvent::ChannelMacroEvent(event)) => {
                         events_tx
                             .send(ReceivedEvent {
-                                partition: message.partition(),
-                                offset: message.offset(),
+                                partition: kafka_message.partition(),
+                                offset: kafka_message.offset(),
                                 event,
                             })
                             .await
@@ -250,16 +163,19 @@ async fn main() -> anyhow::Result<()> {
                     // wedging the partition on a poison message.
                     Err(e) => eprintln!(
                         "failed to decode message at partition {} offset {}: {e}",
-                        message.partition(),
-                        message.offset(),
+                        kafka_message.partition(),
+                        kafka_message.offset(),
                     ),
                 }
 
                 // Commit only after the event was handed to the processor:
                 // at-least-once delivery (up to the channel buffer on a crash).
-                let _ = consumer.commit(&message).inspect_err(|e| {
-                    eprintln!("failed to commit offset {}: {e}", message.offset());
-                });
+                let _ = consumer
+                    .inner()
+                    .commit_message(kafka_message, CommitMode::Async)
+                    .inspect_err(|e| {
+                        eprintln!("failed to commit offset {}: {e:?}", kafka_message.offset());
+                    });
             }
         }
     }

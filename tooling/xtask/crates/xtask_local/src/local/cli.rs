@@ -2,6 +2,7 @@
 //! xtask verbs (deps/workflows/...) keep their slice-pattern match in main.rs;
 //! everything else routes here.
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -36,12 +37,20 @@ enum Cmd {
     KafkaProvision(InstanceArgs),
     /// Preflight checks (docker, toolchain, ports, env sources, images).
     DoctorLocal(InstanceArgs),
+    /// Show an instance's endpoints and container states without starting anything.
+    StatusLocal(InstanceArgs),
+    /// Emit host-facing connection env for seeding an instance (eval in a shell).
+    SeedEnv(InstanceArgs),
+    /// Run a seed scenario against an instance's host-facing endpoints.
+    SeedScenario(SeedScenarioArgs),
     /// Stop an instance's containers (keep volumes).
     StopLocal(InstanceArgs),
     /// Drop, recreate, and migrate the instance database.
     ResetLocal(InstanceArgs),
     /// Remove an instance's containers, networks, and volumes.
     DestroyLocal(InstanceArgs),
+    /// Start, seed, and test an isolated local E2E stack.
+    LocalE2e(super::e2e::LocalE2eArgs),
     /// Headless stack orchestration (previews, agents, CI) — no TTY, no
     /// attached dev server; the proxy serves a static frontend bundle.
     #[command(subcommand)]
@@ -129,6 +138,16 @@ pub struct ForceArg {
     pub force: bool,
 }
 
+#[derive(Args, Clone)]
+#[command(trailing_var_arg = true)]
+pub struct SeedScenarioArgs {
+    #[command(flatten)]
+    pub instance: InstanceArgs,
+    /// Arguments forwarded to `seed_cli scenario`.
+    #[arg(required = true, allow_hyphen_values = true)]
+    pub scenario_args: Vec<OsString>,
+}
+
 /// Parse and run a local-orchestration command, or fall back to the legacy
 /// usage message on unknown input.
 pub fn dispatch(raw: &[String], legacy_usage: &str) -> Result<()> {
@@ -174,11 +193,27 @@ fn run(cli: Cli) -> Result<()> {
             super::kafka::provision(&instance)
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
+        Cmd::StatusLocal(a) => {
+            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            super::status::run(&instance)
+        }
+        Cmd::SeedEnv(a) => {
+            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            super::seed_env::emit(&instance)
+        }
+        Cmd::SeedScenario(a) => {
+            let instance = super::instance::Instance::derive(
+                a.instance.instance.as_deref(),
+                a.instance.port_base,
+            )?;
+            super::seed_env::run_scenario(&instance, &a.scenario_args)
+        }
         Cmd::StopLocal(a) => super::stop(&a),
         Cmd::ResetLocal(a) => super::reset(&a),
         Cmd::DestroyLocal(a) => super::destroy(&a),
+        Cmd::LocalE2e(a) => super::e2e::run(&a),
         Cmd::Stack(cmd) => match cmd {
-            StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
+            StackCmd::Up(a) => super::stack::up(Mode::Local, &a).map(|_| ()),
             StackCmd::Update(a) => super::stack::update(&a),
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Down(a) => super::stack::down(&a),
@@ -186,3 +221,6 @@ fn run(cli: Cli) -> Result<()> {
         },
     }
 }
+
+#[cfg(test)]
+mod test;

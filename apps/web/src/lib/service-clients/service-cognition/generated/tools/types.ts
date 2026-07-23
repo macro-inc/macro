@@ -38,6 +38,18 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Canonical entity type accepted when an AI tool targets an entity's properties.
+ */
+export type ToolPropertyTargetEntityType =
+  | 'document'
+  | 'project'
+  | 'chat'
+  | 'thread'
+  | 'channel'
+  | 'call'
+  | 'user'
+  | 'company';
+/**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
  */
@@ -126,6 +138,18 @@ export type ContentType =
   | 'chat-thread'
   | 'chat-message'
   | 'project';
+/**
+ * External systems items can be imported from.
+ */
+export type ImportSource = 'linear' | 'notion' | 'slack';
+/**
+ * Status values accepted by [`CreateImportEntity`].
+ */
+export type CreateImportStatus = 'staged' | 'imported';
+/**
+ * Lifecycle of one import entity.
+ */
+export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
 /**
  * A tag color from the fixed palette.
  */
@@ -315,16 +339,6 @@ export type EntityItem =
       };
       type: 'foreignEntity';
     };
-export type ToolEntityType =
-  | 'document'
-  | 'task'
-  | 'project'
-  | 'chat'
-  | 'thread'
-  | 'channel'
-  | 'call'
-  | 'user'
-  | 'company';
 /**
  * Entity types that can be returned by the list entities AI tool.
  */
@@ -420,6 +434,9 @@ export type TaggedSearchResult1 =
   | (ChannelMessageSearchResponseItem & {
       type: 'channelMessage';
     })
+  | (ChannelNameSearchResponseItem & {
+      type: 'channel';
+    })
   | (ProjectSearchResponseItemWithMetadata & {
       type: 'project';
     })
@@ -451,6 +468,16 @@ export type SendEmailResponse =
         draft_id: string;
       };
     };
+export type ToolEntityType =
+  | 'document'
+  | 'task'
+  | 'project'
+  | 'chat'
+  | 'thread'
+  | 'channel'
+  | 'call'
+  | 'user'
+  | 'company';
 /**
  * Content of a text editor code execution response - either a result or an error
  */
@@ -578,6 +605,77 @@ export interface BashCodeExecutionToolError {
 export interface BashCodeExecutionResponse {
   content: BashCodeExecutionContent;
   tool_use_id: string;
+}
+/**
+ * Apply one multi-select option delta — most often a tag — to many entities in a single call. Use this instead of calling SetEntityProperty once per entity when the user asks to tag or label a set of items at once (e.g. "tag the last 50 emails as Follow-up"). Provide the property_definition_id (a tag set's propertyDefinitionId from ListTags) and the option ids to add and/or remove (a tag's option id from ListTags). The same add_option_ids/remove_option_ids delta is applied to every entity, composing atomically with concurrent edits per entity.
+ *
+ * Only for multi-select or tag properties; for other value types, or a single entity, use SetEntityProperty. Up to 200 entities per call — split larger sets across multiple calls.
+ *
+ * Best-effort: each entity is handled independently. Entities you don't have edit access to are reported with status 'skipped_no_permission' and left unchanged, entities that can't take the property are 'failed', and the rest are 'applied' — one call never fails wholesale because a few entities were not editable. Inspect the per-entity results and the summary to see what happened.
+ */
+export interface BulkSetEntityPropertyOptions {
+  /**
+   * Options to add to every entity (e.g. a tag's option id from ListTags),
+   * deduped against each entity's current value.
+   */
+  add_option_ids?: string[] | null;
+  /**
+   * The entities to update (up to 200). Entities the user can't edit are skipped.
+   */
+  entities: BulkTargetEntity[];
+  /**
+   * The multi-select property definition id changed on every entity — e.g. a
+   * tag set's propertyDefinitionId from ListTags.
+   */
+  property_definition_id: string;
+  /**
+   * Options to remove from every entity. Removing an absent option is a no-op.
+   */
+  remove_option_ids?: string[] | null;
+}
+/**
+ * One entity targeted by a bulk option update.
+ */
+export interface BulkTargetEntity {
+  /**
+   * The id of the entity.
+   */
+  entity_id: string;
+  entity_type: ToolPropertyTargetEntityType;
+}
+/**
+ * Response from the BulkSetEntityPropertyOptions tool.
+ */
+export interface BulkSetEntityPropertyOptionsResponse {
+  /**
+   * Per-entity results, aligned to the requested entities' order.
+   */
+  results: BulkSetEntityPropertyOptionsResult[];
+  /**
+   * Human-readable summary of how many entities were applied/skipped/failed.
+   */
+  summary: string;
+}
+/**
+ * One entity's result in the tool response.
+ */
+export interface BulkSetEntityPropertyOptionsResult {
+  /**
+   * The entity's id this result is for.
+   */
+  entityId: string;
+  /**
+   * The entity's type this result is for.
+   */
+  entityType: string;
+  /**
+   * A human-readable reason, present only when the status is failed.
+   */
+  error?: string | null;
+  /**
+   * One of: applied, skipped_no_permission, failed.
+   */
+  status: string;
 }
 export interface CallRecordMetadata {
   attended: boolean;
@@ -739,6 +837,45 @@ export interface ChannelMessageSearchResponseItem {
    * When the channel message was last updated
    */
   updated_at: string;
+}
+/**
+ * Metadata for a channel fetched from the database
+ */
+export interface ChannelMetadata {
+  created_at: string;
+  interacted_at?: string | null;
+  updated_at: string;
+  viewed_at?: string | null;
+}
+/**
+ * A channel-name search hit.
+ */
+export interface ChannelNameSearchResponseItem {
+  /**
+   * The channel id.
+   */
+  channel_id: string;
+  /**
+   * The type of channel.
+   */
+  channel_type: string;
+  highlight: SearchHighlight;
+  /**
+   * Standardized id field shared by all item types; the channel id.
+   */
+  id: string;
+  /**
+   * Metadata for the channel.
+   */
+  metadata?: ChannelMetadata | null;
+  /**
+   * The channel owner.
+   */
+  owner_id?: string | null;
+  /**
+   * The score of the result.
+   */
+  score?: number | null;
 }
 /**
  * A single message in the tool response.
@@ -1119,6 +1256,74 @@ export interface CreateDocumentResponse {
   documentId: string;
 }
 /**
+ * Track an external item (Linear issue, Notion page, Slack channel) in the import ledger. Use status `staged` to propose an item for import BEFORE creating anything; use status `imported` (with entityId) only to record a Macro entity you already created from the item. The response tells you when the item was already imported by the user or a teammate — in that case do NOT create a duplicate; point the user at the existing entity instead.
+ */
+export interface CreateImportEntity {
+  /**
+   * The id of the Macro entity you created, required when status is `imported`. The entity type is fixed by source: linear → task, notion → md (document), slack → channel.
+   */
+  entityId?: string | null;
+  /**
+   * Stable id of the item in the source system: the Linear issue identifier (e.g. `ENG-142`), the Notion page URL or id, or the Slack channel id (e.g. `C0123456789`, falling back to the channel name).
+   */
+  foreignId: string;
+  /**
+   * Metadata describing the item. Linear: {identifier, title, description?, status?, priority?, assignee?, assignee_email?, url?}. Notion: {title, url?, summary?} — never include page content. Slack: {name, channel_id?, purpose?, participants?: [{name, email?}]}.
+   */
+  metadata: {
+    [k: string]: unknown;
+  };
+  source: ImportSource;
+  status: CreateImportStatus;
+}
+/**
+ * Response from tracking an item.
+ */
+export interface CreateImportEntityResponse {
+  entity: ImportEntityView;
+  /**
+   * What to do with this outcome.
+   */
+  message: string;
+  /**
+   * What happened: `staged`, `recorded_imported`, `already_imported`,
+   * `already_imported_by_teammate`, `previously_declined`, or
+   * `import_in_progress`.
+   */
+  outcome: string;
+}
+/**
+ * Compact row view returned by import tools.
+ */
+export interface ImportEntityView {
+  /**
+   * The Macro entity it became, when imported.
+   */
+  entityId?: string | null;
+  /**
+   * The Macro entity type, when imported.
+   */
+  entityType?: string | null;
+  /**
+   * Stable id in the source system.
+   */
+  foreignId: string;
+  /**
+   * Ledger row id (use with DeleteImportEntity).
+   */
+  id: string;
+  /**
+   * Whether the row belongs to a teammate (team-imported), not the user.
+   */
+  importedByTeammate: boolean;
+  /**
+   * A human label from the metadata (title / channel name).
+   */
+  label: string;
+  source: ImportSource;
+  status: ImportStatus;
+}
+/**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
@@ -1217,6 +1422,28 @@ export interface CrmCompanySearchResponseItem {
    * When the company was last updated (the sort key).
    */
   updatedAt: string;
+}
+/**
+ * Decline a staged import candidate on the user's behalf. The item is remembered as declined so it won't be proposed again; only the user's own staged items can be declined.
+ */
+export interface DeleteImportEntity {
+  /**
+   * The import entity id to decline (from CreateImportEntity or ListImportEntities).
+   */
+  id: string;
+}
+/**
+ * Response from declining a candidate.
+ */
+export interface DeleteImportEntityResponse {
+  /**
+   * Whether the row is now discarded.
+   */
+  discarded: boolean;
+  /**
+   * What happened.
+   */
+  message: string;
 }
 /**
  * Permanently delete a tag from the user's personal set or their team's shared set. This removes the tag from every item it is currently applied to, so it is destructive and cannot be undone — confirm with the user first. Both ids come from a ListTags result: `id` is the tag's option id, and `property_definition_id` is the propertyDefinitionId of the set that contains it. To simply remove a tag from a single item without deleting the tag itself, use SetEntityProperty with remove_option_ids instead.
@@ -1601,14 +1828,14 @@ export interface GetCompanyResponse {
   summary: string;
 }
 /**
- * Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
+ * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
  */
 export interface GetEntityProperties {
   /**
    * The ID of the entity to get properties for.
    */
   entity_id: string;
-  entity_type: ToolEntityType;
+  entity_type: ToolPropertyTargetEntityType;
 }
 /**
  * Response from the GetEntityProperties tool.
@@ -1872,7 +2099,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}.
+   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}. Supports filtering by thread timestamp: {"l":{"ca":{"gte":"<start>"}}} matches created_at, {"l":{"ua":{"gte":"<start>","lt":"<end>"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For "emails from the last 7 days", AND a ua (or ca) gte bound set to 7 days before now, e.g. {"l":{"ua":{"gte":"<7-days-ago-ISO>"}}}.
    */
   ef?: {
     [k: string]: unknown;
@@ -1936,6 +2163,28 @@ export interface ListEntitiesResponse {
    * Human-readable summary of the returned items.
    */
   summary: string;
+}
+/**
+ * List the user's import ledger: staged candidates, in-flight imports, imported items (including ones teammates imported into the team), and declined items. Use this to check what already exists before proposing or creating imports.
+ */
+export interface ListImportEntities {
+  /**
+   * Filter to one source system.
+   */
+  source?: ImportSource | null;
+  /**
+   * Filter to one status: staged, importing, imported, or discarded. Omit for all.
+   */
+  status?: ImportStatus | null;
+}
+/**
+ * Response from listing the ledger.
+ */
+export interface ListImportEntitiesResponse {
+  /**
+   * The visible rows, newest first.
+   */
+  entities: ImportEntityView[];
 }
 /**
  * List the email inboxes the user can read or act on. Returns the caller's primary inbox, any other inboxes they have connected, and any inboxes delegated to them by teammates. Each entry has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is specified), and `isDelegated` (true when the inbox belongs to another user).
@@ -2295,7 +2544,7 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
   /**
@@ -3210,7 +3459,7 @@ export interface SendEmail {
   to: EmailRecipient[];
 }
 /**
- * Set or update a property value on an entity (document, task, project, etc.). Provide the property_definition_id and exactly one value field matching the property's data type.
+ * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
  *
  * For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
  *
@@ -3256,7 +3505,7 @@ export interface SetEntityProperty {
    * For multi entity reference properties.
    */
   entity_refs?: ToolEntityRef[] | null;
-  entity_type: ToolEntityType;
+  entity_type: ToolPropertyTargetEntityType;
   /**
    * For single link properties.
    */

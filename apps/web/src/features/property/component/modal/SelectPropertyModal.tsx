@@ -3,10 +3,7 @@ import { ENABLE_CREATE_PROPERTY } from '@core/constant/featureFlags';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
 import PlusIcon from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
-import {
-  CRM_TEAM_STAGE_DEFINITION_NAME,
-  isReservedPropertyDefinitionName,
-} from '@property/constants';
+import { CRM_TEAM_STAGE_DEFINITION_NAME } from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
@@ -79,14 +76,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
         return toPropertyDefinitionDomain(item);
       })
       .filter(
-        // Reserved internal definitions (`__macro:*` config carriers) and
-        // the CRM-managed team Stage definition must never surface in
+        // The CRM-managed team Stage definition must never surface in
         // property pickers. Tags have their own top-level sidepanel section
         // and picker, so exclude the backing tag definitions here too. The
         // value-type check covers the initial render before the tags query
         // has returned definition ids.
         (property) =>
-          !isReservedPropertyDefinitionName(property.displayName) &&
           property.valueType !== 'TAG' &&
           !tagDefinitionIds.has(property.id) &&
           !(

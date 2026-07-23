@@ -9,6 +9,7 @@ use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
     PersistedOptimisticLayer, StoredMutation,
 };
+use cache_core::record_selection::RecordSelection;
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
 use cache_idb::IdbStorage;
@@ -71,6 +72,45 @@ async fn put_get_delete_roundtrip() {
 
     s.clear().await.unwrap();
     assert!(s.get_batch(&[key("B:2")]).await.unwrap()[0].is_none());
+}
+
+#[wasm_bindgen_test]
+async fn scans_selected_record_types_in_key_order() {
+    let scope = "test-record-scan";
+    IdbStorage::destroy(scope).await.unwrap();
+    let mut storage = IdbStorage::open(scope).await.unwrap();
+    storage
+        .put_batch(vec![
+            (key("TypeB:2"), record("b2")),
+            (key("Other:1"), record("other")),
+            (key("TypeA:2"), record("a2")),
+            (key("TypeA:1"), record("a1")),
+        ])
+        .await
+        .unwrap();
+
+    let first = storage
+        .scan_records(&["TypeB".into(), "TypeA".into()], None, 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        first
+            .iter()
+            .map(|(key, _)| key.0.as_str())
+            .collect::<Vec<_>>(),
+        vec!["TypeA:1", "TypeA:2"]
+    );
+    let second = storage
+        .scan_records(&["TypeA".into(), "TypeB".into()], Some(&first[1].0), 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        second
+            .iter()
+            .map(|(key, _)| key.0.as_str())
+            .collect::<Vec<_>>(),
+        vec!["TypeB:2"]
+    );
 }
 
 #[wasm_bindgen_test]
@@ -156,4 +196,10 @@ async fn engine_over_idb() {
         panic!("expected hit");
     };
     assert_eq!(cached, data);
+
+    let selection =
+        RecordSelection::parse("fragment Item on GraphqlSoupItem { id }", "Item").unwrap();
+    let page = engine.read_records(&selection, None, 10).await.unwrap();
+    assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1"})]);
+    assert!(page.next_cursor.is_none());
 }

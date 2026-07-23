@@ -1,5 +1,9 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { ENABLE_CRM } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_CRM_FLAG,
+  ENABLE_CRM_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { type CrmCompanyEntity, isCrmCompanyEntity } from '@entity';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
@@ -20,6 +24,10 @@ const STALE_TIME = 5 * 60 * 1000;
  * Every other entity type is filtered out by extending `QUERY_FILTERS_BASE`.
  */
 export function useQuickAccessCrmCompaniesQuery() {
+  const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
+    enabledOverride: ENABLE_CRM_OVERRIDE,
+  });
+
   const query = useSoupItemsQuery(
     () => ({
       params: {
@@ -32,7 +40,7 @@ export function useQuickAccessCrmCompaniesQuery() {
         crm_company_filters: undefined,
       },
     }),
-    () => ({ staleTime: STALE_TIME, enabled: ENABLE_CRM() })
+    () => ({ staleTime: STALE_TIME, enabled: crmFlag().enabled })
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(

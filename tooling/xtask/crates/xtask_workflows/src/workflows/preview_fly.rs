@@ -8,9 +8,13 @@
 //! per-PR Fly app `macro-pr-<N>` — which suspends when idle and wakes on
 //! request. The machine pulls the stack images at boot (layer-level dedup
 //! against its persistent /var/lib/docker volume) instead of shipping them
-//! inside the VM image. Runtime secrets reach the machine as a config-scoped
-//! Doppler service token (`DOPPLER_PREVIEW_TOKEN` → Fly secret
-//! `DOPPLER_TOKEN`), which the stack's env layer pulls at boot.
+//! inside the VM image. A brand-new PR's volume is forked from the newest
+//! template volume on `macro-preview-template` (a warm layer store published
+//! by a previous successful deploy, content-addressed by the image
+//! manifest), so first boots pull only deltas instead of ~6GB cold. Runtime
+//! secrets reach the machine as a config-scoped Doppler service token
+//! (`DOPPLER_PREVIEW_TOKEN` → Fly secret `DOPPLER_TOKEN`), which the
+//! stack's env layer pulls at boot.
 //!
 //! NOTE: never a required status check — previews are opt-in by design.
 
@@ -23,6 +27,13 @@ use crate::workflows::{runners, steps, vars};
 
 /// The per-PR Fly app name; also the preview hostname (`<app>.fly.dev`).
 const APP_NAME: &str = "macro-pr-${{ github.event.pull_request.number }}";
+
+/// The app holding template volumes: warm /var/lib/docker layer stores that
+/// new PR apps fork instead of pulling ~6GB of images onto an empty volume.
+/// Machine-less — it exists purely as a volume namespace. Templates are
+/// published by successful deploys and content-addressed by the preload
+/// manifest, so nothing runs when the image set hasn't changed.
+const TEMPLATE_APP: &str = "macro-preview-template";
 
 /// Build the deploy workflow.
 pub fn preview_fly() -> Workflow {
@@ -62,11 +73,20 @@ fn deploy() -> Job {
             "github.event.pull_request.head.repo.full_name == github.repository && \
              contains(github.event.pull_request.labels.*.name, 'preview')",
         ))
-        // Dedicated cache volume pool (nix store + cargo target + snapshots):
-        // see PREVIEW_CACHE_TAG for why sharing the check/test jobs' pool was
-        // measured cold on both layers (different --target = disjoint sccache
-        // keys, and their volumes never carry a cargo target dir).
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::PREVIEW_CACHE_TAG))
+        // linux-mid for the extra cores: five build lanes (zigbuild, compose
+        // image builds, frontend, snapshot bake) genuinely contend on the
+        // 8-core rust-ci shape. The cache volume follows the explicit tag,
+        // not the profile, so this keeps the dedicated preview pool (nix
+        // store + cargo target + snapshots) it has always used: see
+        // PREVIEW_CACHE_TAG for why sharing the check/test jobs' pool was
+        // measured cold on both layers (different --target = disjoint
+        // sccache keys, and their volumes never carry a cargo target dir).
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::PREVIEW_CACHE_TAG))
+        // Backstop against hangs: worst honest case is ~15 min cold builds +
+        // ~6 min cold mirror push + the 30 min flyctl wait cap. Anything past
+        // an hour is a stuck step, not a slow deploy (a hung log fetch once
+        // burned 2h26m of runner before someone cancelled it by hand).
+        .timeout_minutes(60u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
@@ -74,6 +94,7 @@ fn deploy() -> Job {
         )
         .add_env(("FLY_API_TOKEN", vars::FLY_API_TOKEN))
         .add_env(("APP_NAME", APP_NAME))
+        .add_env(("TEMPLATE_APP", TEMPLATE_APP))
         // Init snapshots live on the cache volume: an unchanged key skips the
         // whole infra bake and keeps snapshot bytes (→ VM image layer) stable.
         .add_env((
@@ -107,55 +128,19 @@ fn deploy() -> Job {
                 "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
             ), // v0.0.23
         )
-        // Fail fast: the Docker-built images are the most fragile part of a
-        // fresh bring-up (stale local images mask their rot) and need nothing
-        // from nix/cargo — build them before the expensive toolchain setup so
-        // a broken Dockerfile fails in ~2 minutes, not ~12. This is also the
-        // ONLY thing that builds them now: the infra-only bake never starts
-        // the app layer, so the registry mirror ships exactly what's built here.
-        .add_step(Step::new("Build compose service images (fail fast)").run(
-            "docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
-             search sync_service websocket_service lexical_service ai_editing_worker",
-        ))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
         .add_step(steps::configure_namespace_sccache(
             vars::PREVIEW_SCCACHE_NAME,
         ))
-        .add_step(Step::new("Build service binaries").run(indoc::indoc! {r#"
-                    cargo x zigbuild
-                    sccache --show-stats
-                "#}))
-        .add_step(
-            // xtask_local, not the dependency-free `xtask` launcher (which
-            // just re-invokes cargo — useless in the VM). Deliberately WITHOUT
-            // the `local-stack` feature: the VM restores the baked snapshot,
-            // whose Kafka volume already carries the topics, so it never
-            // provisions Kafka — and skipping rdkafka means no
-            // dynamically-linked librdkafka to ship into the VM. zigbuild,
-            // not a host build: the nix dev shell links the /nix/store ELF
-            // interpreter, which doesn't exist in the VM image (exit 127,
-            // "required file not found").
-            Step::new("Build xtask_local (runs inside the preview VM)").run(
-                "cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local",
-            ),
-        )
-        .add_step(
-            Step::new("Build frontend bundle (same-origin)")
-                .run("bun run --bun build")
-                .working_directory(xtask_paths::repo_dir!("apps/web"))
-                .add_env(("MODE", "development"))
-                .add_env(("NODE_ENV", "production"))
-                .add_env(("VITE_LOCAL_SERVERS", "ALL"))
-                .add_env(("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")),
-        )
-        .add_step(bake_snapshot())
+        .add_step(setup_flyctl())
+        .add_step(build_artifacts())
         .add_step(dump_stack_diagnostics())
         .add_step(stage_context())
-        .add_step(setup_flyctl())
         .add_step(deploy_to_fly())
         .add_step(dump_fly_diagnostics())
         .add_step(dump_boot_timings())
+        .add_step(publish_template_volume())
         .add_step(comment_preview_url())
 }
 
@@ -166,101 +151,286 @@ fn dump_fly_diagnostics() -> Step<Run> {
     Step::new("Dump Fly diagnostics")
         .run(indoc::indoc! {r#"
             flyctl machine list --app "$APP_NAME" || true
-            flyctl logs --app "$APP_NAME" --no-tail || true
+            # `flyctl logs --no-tail` can hang forever on its NATS fetch
+            # (observed: a healthy deploy stuck 1h53m in the timings dump) —
+            # never call it without a timeout.
+            timeout 60 flyctl logs --app "$APP_NAME" --no-tail || true
         "#})
         .if_condition(Expression::new("failure()"))
 }
 
-/// The entrypoint logs how long each boot phase took (image pulls, stack up),
-/// but Fly's log retention is short and nobody looks at a healthy machine —
-/// surface the `[preview]` lines in CI so every deploy records its boot
-/// breakdown next to the deploy timings.
+/// The entrypoint tees every boot-phase timing (image pulls, per-stage stack
+/// up, auth startup) into a volume-backed file precisely so CI can read it
+/// deterministically after a healthy deploy. `flyctl logs --no-tail` used to
+/// serve this and both hung (unbounded NATS fetch) and silently lost the
+/// early boot lines to Fly's short log retention. On a hot update the machine
+/// never reboots, so the file describes the last real boot — the hot path's
+/// own output already streams into the deploy step via `ssh console`.
 fn dump_boot_timings() -> Step<Run> {
-    Step::new("Dump boot timings")
-        .run(r#"flyctl logs --app "$APP_NAME" --no-tail | grep -E '\[preview\]|✓' || true"#)
+    Step::new("Dump boot timings").run(indoc::indoc! {r#"
+        timeout 120 flyctl ssh console --app "$APP_NAME" --quiet \
+          --command 'cat /var/lib/docker/.macro-preview/boot-timings.log' || true
+    "#})
 }
 
-/// A cold `stack up --infra-only` on the runner runs the real init (migrate,
-/// kickstart, Kafka topics, indices) and saves the content-addressed snapshot
-/// the VM restores from. Infra only: the app services need the Doppler-sourced
-/// env to boot, which this runner deliberately lacks — the snapshot captures
-/// only the infra volumes anyway. Via `just` (not the bare `cargo x` alias)
-/// because the justfile enables the `local-stack` feature the Kafka
-/// provisioning needs.
+/// Every build artifact in one step, five lanes in parallel. The lanes are
+/// independent by construction:
 ///
-/// The store lives on the cache volume (MACRO_STACK_SNAPSHOT_DIR) for a
-/// zero-copy hit. Every content-addressed snapshot is also stored as one tar in
-/// Namespace artifact storage, keyed by the same hash. Cache-volume onboarding
-/// misses therefore download the exact snapshot instead of paying for a full
-/// init again. Artifact access is an optimization: download/upload failures
-/// fall back to the existing volume/cold-bake behavior.
+/// - `fly`: app create, template-volume fork kick, and pull-token mint —
+///   nothing here needs build output, and the fork's ~2 min server-side
+///   hydration must start within seconds to finish inside the compose
+///   build instead of gating machine creation.
+/// - `cargo`: service binaries then xtask_local, sequential because they
+///   share the workspace target dir (cargo's build-dir lock would serialize
+///   them anyway). xtask_local deliberately WITHOUT the `local-stack`
+///   feature (the VM restores the baked snapshot so it never provisions
+///   Kafka; skipping rdkafka means no dynamically-linked librdkafka in the
+///   VM) and via zigbuild, not a host build (the nix dev shell links the
+///   /nix/store ELF interpreter, which doesn't exist in the VM image).
+/// - `web`: the same-origin frontend bundle.
+/// - `images`: the compose-built app images (the most fragile part of a
+///   fresh bring-up — a broken Dockerfile still fails the step early via
+///   fail-fast wait), then a best-effort premirror push to the app's Fly
+///   registry so the network transfer overlaps the cargo lane instead of
+///   serializing after it. The deploy step's mirror loop stays
+///   authoritative: its manifest-existence check skips whatever was
+///   premirrored here and pushes the rest (e.g. the bake-built runtime
+///   image).
+/// - `bake`: the init snapshot (see the lane script header for details),
+///   under its own CARGO_TARGET_DIR so its host xtask build doesn't take
+///   the workspace build-dir lock the cargo lane holds.
 ///
-/// The final `snapshot --json` line lands in $RUNNER_TEMP for the stage step,
-/// which ships exactly that key's directory.
-fn bake_snapshot() -> Step<Run> {
-    Step::new("Bake init snapshot").run(indoc::indoc! {r#"
-        set -euo pipefail
-        mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
-        status=$(just stack snapshot --json | tail -n 1)
-        key=$(echo "$status" | jq -r '.key')
-        root=$(echo "$status" | jq -r '.root')
-        artifact="macro-preview/init-snapshots/${key}.tar"
-        archive="$RUNNER_TEMP/init-snapshot-${key}.tar"
-        artifact_hit=
+/// Lanes log to files and are dumped as collapsible groups afterwards;
+/// `wait -n` fails the step on the first lane failure and kills the rest.
+fn build_artifacts() -> Step<Run> {
+    Step::new("Build artifacts (parallel lanes)")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            lanes="$RUNNER_TEMP/lanes"
+            mkdir -p "$lanes"
 
-        # The Namespace cache-volume pool has an onboarding period where a
-        # runner can receive an empty fork. Artifact storage is the durable
-        # fallback: restore into a temporary directory and only publish it to
-        # the live store after validating the embedded manifest through xtask.
-        if ! echo "$status" | jq -e '.present' >/dev/null; then
-          restored="$RUNNER_TEMP/restored-init-snapshot"
-          rm -rf "$restored"
-          mkdir -p "$restored"
-          if nsc artifact download "$artifact" "$archive" \
-              && tar -xf "$archive" -C "$restored" \
-              && [ -f "$restored/$key/manifest.json" ]; then
-            rm -rf "$root/$key"
-            cp -a "$restored/$key" "$root/$key"
-            status=$(just stack snapshot --json | tail -n 1)
-            if echo "$status" | jq -e '.present' >/dev/null; then
-              artifact_hit=1
-              echo "init snapshot artifact hit: $status"
-            else
-              rm -rf "$root/$key"
-              echo "downloaded init snapshot failed validation; baking cold" >&2
+            cat > "$lanes/cargo.sh" <<'LANE'
+            set -euo pipefail
+            cargo x zigbuild
+            sccache --show-stats
+            cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local
+            LANE
+
+            cat > "$lanes/web.sh" <<'LANE'
+            set -euo pipefail
+            cd apps/web
+            export MODE=development NODE_ENV=production
+            export VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin
+            bun run --bun build
+            LANE
+
+            # Instant lane: everything Fly-side that needs no build output.
+            # The template fork must fire within seconds of the job starting —
+            # its ~2 min server-side hydration then finishes inside the compose
+            # build. (It previously sat after the premirror pushes, which put
+            # it at the END of the build phase and re-gated the deploy.)
+            # Entirely best-effort: everything in the fly lane (app create,
+            # fork kick, token mint) has an authoritative fallback in the
+            # deploy step, so a transient Fly API failure must not fail the
+            # build. A child `bash -e` (not a `|| `-guarded function: errexit
+            # is suppressed inside those) keeps its internal fail-fast so a
+            # failed app_id fetch can't mint a garbage token.
+            cat > "$lanes/fly.sh" <<'LANE'
+            set -euo pipefail
+            bash -euo pipefail "$(dirname "$0")/fly-prep.sh" \
+              || echo "fly prep failed (non-fatal): the deploy step falls back" >&2
+            LANE
+
+            cat > "$lanes/fly-prep.sh" <<'LANE'
+            flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
+              || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+              || flyctl status --app "$APP_NAME" >/dev/null
+            # Kick the template-volume fork (see the deploy step's
+            # volume-state block, which stays the authoritative fallback).
+            if ! flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
+                 | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+              tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
+                | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
+                         | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
+              if [ -n "$tpl_src" ]; then
+                curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
+                  -H "Authorization: Bearer $FLY_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
+                  | jq -r '"early template fork: \(.id // "failed") (\(.state // "-"))"' \
+                  || echo "early template fork failed; deploy step will fall back" >&2
+              fi
             fi
-          else
-            echo "init snapshot artifact miss; baking cold" >&2
-          fi
-        fi
+            # Mint the machine's app-scoped read-only registry pull token
+            # (macaroon attenuation, see the deploy step for the why) so the
+            # deploy preamble doesn't pay the round-trips serially.
+            app_id=$(curl -sf https://api.fly.io/graphql \
+              -H "Authorization: Bearer $FLY_API_TOKEN" \
+              -H "content-type: application/json" \
+              -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
+              | jq -re '.data.app.internalNumericId')
+            now=$(date +%s)
+            printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
+              "$app_id" $((now - 60)) $((now + 604800)) \
+              | flyctl tokens attenuate > "$RUNNER_TEMP/registry-pull-token.next"
+            chmod 600 "$RUNNER_TEMP/registry-pull-token.next"
+            mv "$RUNNER_TEMP/registry-pull-token.next" "$RUNNER_TEMP/registry-pull-token"
+            LANE
 
-        if echo "$status" | jq -e '.present' >/dev/null; then
-          echo "init snapshot cache hit: $status"
-          cargo run --quiet --manifest-path Cargo.toml \
-            -p xtask_local --features local-stack -- gen-compose
-          # The cold path builds the runtime image inside `stack up`; on a
-          # hit nothing else does, and the registry mirror needs it in the
-          # local daemon (its pull fallback only covers public images —
-          # macro-local-runtime:dev is not on Docker Hub).
-          cargo run --quiet --manifest-path Cargo.toml \
-            -p xtask_local --features local-stack -- runtime-image
-        else
-          just stack up --infra-only --no-doppler --no-build
-          status=$(just stack snapshot --json | tail -n 1)
-          echo "$status" | jq -e '.present' >/dev/null
-        fi
+            cat > "$lanes/images.sh" <<'LANE'
+            set -euo pipefail
+            docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
+              search sync_service websocket_service lexical_service ai_editing_worker
+            # The image BUILD above is fatal; the premirror below is a pure
+            # optimization with an authoritative fallback (the deploy step's
+            # mirror loop), so its failure only costs a slower push later.
+            bash -euo pipefail "$(dirname "$0")/premirror.sh" \
+              || echo "premirror failed (non-fatal): the deploy step mirrors authoritatively" >&2
+            LANE
 
-        # Seed artifact storage from either a volume hit or a cold bake. Avoid
-        # uploading another version when the artifact already exists; a race
-        # between concurrent PRs is harmless and must not fail the preview.
-        if [ -z "$artifact_hit" ] && ! nsc artifact describe "$artifact" >/dev/null 2>&1; then
-          snap_dir=$(echo "$status" | jq -r '.dir')
-          tar -cf "$archive" -C "$root" "$(basename "$snap_dir")"
-          nsc artifact upload "$archive" "$artifact" --expires_in 720h \
-            || echo "warning: failed to upload init snapshot artifact" >&2
-        fi
-        echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
+            # Premirror: content-addressed refs, identical scheme to the deploy
+            # step's mirror loop, so its manifest-existence check skips these.
+            # Best effort by design — anything skipped here (images only the
+            # bake produces, like macro-local-runtime:dev) is pushed there.
+            # The fly lane created the app long ago; the guard is a fallback.
+            cat > "$lanes/premirror.sh" <<'LANE'
+            flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
+              || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+              || flyctl status --app "$APP_NAME" >/dev/null
+            flyctl auth docker
+            registry="registry.fly.io/$APP_NAME"
+            for img in $(docker compose --project-directory . -p macro \
+                -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+              if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
+                echo "premirror: skipping $img (not local, not pullable)"
+                continue
+              fi
+              id=$(docker image inspect -f '{{.Id}}' "$img")
+              ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
+              docker tag "$img" "$ref"
+              if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
+                for _ in 1 2 3; do
+                  docker push "$ref" && break
+                  echo "premirror push of $ref failed, retrying" >&2
+                  sleep 15
+                done
+              fi
+            done
+            LANE
+
+            # A cold `stack up --infra-only` runs the real init (migrate,
+            # kickstart, Kafka topics, indices) and saves the content-addressed
+            # snapshot the VM restores from. Infra only: the app services need
+            # the Doppler-sourced env to boot, which this runner deliberately
+            # lacks — the snapshot captures only the infra volumes anyway. Via
+            # `just` (not the bare `cargo x` alias) because the justfile
+            # enables the `local-stack` feature the Kafka provisioning needs.
+            # The store lives on the cache volume for a zero-copy hit; every
+            # snapshot is also stored as one tar in Namespace artifact storage
+            # keyed by the same hash, so cache-volume onboarding misses
+            # download the exact snapshot instead of paying for a full init.
+            # Artifact access is an optimization: failures fall back to the
+            # volume/cold-bake behavior. The final `snapshot --json` line lands
+            # in $RUNNER_TEMP for the stage step.
+            cat > "$lanes/bake.sh" <<'LANE'
+            set -euo pipefail
+            export CARGO_TARGET_DIR="$PWD/target/bake"
+            mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
+            status=$(just stack snapshot --json | tail -n 1)
+            key=$(echo "$status" | jq -r '.key')
+            root=$(echo "$status" | jq -r '.root')
+            artifact="macro-preview/init-snapshots/${key}.tar"
+            archive="$RUNNER_TEMP/init-snapshot-${key}.tar"
+            artifact_hit=
+
+            # The Namespace cache-volume pool has an onboarding period where a
+            # runner can receive an empty fork. Artifact storage is the durable
+            # fallback: restore into a temporary directory and only publish it to
+            # the live store after validating the embedded manifest through xtask.
+            if ! echo "$status" | jq -e '.present' >/dev/null; then
+              restored="$RUNNER_TEMP/restored-init-snapshot"
+              rm -rf "$restored"
+              mkdir -p "$restored"
+              if nsc artifact download "$artifact" "$archive" \
+                      && tar -xf "$archive" -C "$restored" \
+                  && [ -f "$restored/$key/manifest.json" ]; then
+                rm -rf "$root/$key"
+                cp -a "$restored/$key" "$root/$key"
+                status=$(just stack snapshot --json | tail -n 1)
+                if echo "$status" | jq -e '.present' >/dev/null; then
+                  artifact_hit=1
+                  echo "init snapshot artifact hit: $status"
+                else
+                  rm -rf "$root/$key"
+                  echo "downloaded init snapshot failed validation; baking cold" >&2
+                fi
+              else
+                echo "init snapshot artifact miss; baking cold" >&2
+              fi
+            fi
+
+            if echo "$status" | jq -e '.present' >/dev/null; then
+              echo "init snapshot cache hit: $status"
+              cargo run --quiet --manifest-path Cargo.toml \
+                -p xtask_local --features local-stack -- gen-compose
+              # The cold path builds the runtime image inside `stack up`; on a
+              # hit nothing else does, and the registry mirror needs it in the
+              # local daemon (its pull fallback only covers public images —
+              # macro-local-runtime:dev is not on Docker Hub).
+              cargo run --quiet --manifest-path Cargo.toml \
+                -p xtask_local --features local-stack -- runtime-image
+            else
+              just stack up --infra-only --no-doppler --no-build
+              status=$(just stack snapshot --json | tail -n 1)
+              echo "$status" | jq -e '.present' >/dev/null
+            fi
+
+            # Seed artifact storage from either a volume hit or a cold bake. Avoid
+            # uploading another version when the artifact already exists; a race
+            # between concurrent PRs is harmless and must not fail the preview.
+            if [ -z "$artifact_hit" ] && ! nsc artifact describe "$artifact" >/dev/null 2>&1; then
+              snap_dir=$(echo "$status" | jq -r '.dir')
+              tar -cf "$archive" -C "$root" "$(basename "$snap_dir")"
+              nsc artifact upload "$archive" "$artifact" --expires_in 720h \
+                || echo "warning: failed to upload init snapshot artifact" >&2
+            fi
+            echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
+            LANE
+
+            declare -a pids=() names=()
+            for name in fly cargo web images bake; do
+              # setsid: each lane leads its own process group so fail-fast
+              # can kill the whole tree (cargo/docker/bun children), not just
+              # the wrapper shell.
+              setsid bash "$lanes/$name.sh" > "$lanes/$name.log" 2>&1 &
+              pids+=($!)
+              names+=("$name")
+            done
+            fail=
+            for _ in "${pids[@]}"; do
+              # Bare `wait -n`: any child; explicit pids would error once a
+              # job has already been reaped.
+              if ! wait -n; then
+                fail=1
+                break
+              fi
+            done
+            if [ -n "$fail" ]; then
+              # Negative pids: signal each lane's whole process group.
+              kill -- "${pids[@]/#/-}" 2>/dev/null || true
+              wait || true
+            fi
+            for i in "${!names[@]}"; do
+              echo "::group::lane: ${names[$i]}"
+              cat "$lanes/${names[$i]}.log" || true
+              echo "::endgroup::"
+            done
+            if [ -n "$fail" ]; then
+              echo "a build lane failed (first failure aborts the rest); see lane logs above" >&2
+              exit 1
+            fi
     "#})
+        .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
 }
 
 /// When the bake dies (typically the backend health gate), the answer is in
@@ -380,21 +550,60 @@ fn deploy_to_fly() -> Step<Run> {
                 || flyctl status --app "$APP_NAME" >/dev/null
             fi
 
+            # Seed a first boot's volume from the newest template volume — a
+            # warm /var/lib/docker layer store published by a previous
+            # successful deploy (see the "Publish template volume" step).
+            # Measured cold, an empty volume costs ~11 min of image pulls at
+            # boot. The images lane normally kicked the fork minutes ago (its
+            # ~2 min server-side hydration overlaps the whole build phase);
+            # this block is the authoritative fallback for a missing or
+            # failed early fork. Cross-app forks need the Machines API:
+            # flyctl resolves volume ids app-locally. The boot manifest check
+            # makes the volume a pure cache, so every failure path here just
+            # falls back to the old empty-volume behavior.
+            vol_state=$(flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
+              | jq -r '[.[] | select(.name == "docker_data")][0].state // empty') || vol_state=
+            if [ -z "$vol_state" ]; then
+              tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
+                | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
+                         | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
+              if [ -n "$tpl_src" ]; then
+                vol_state=$(curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
+                  -H "Authorization: Bearer $FLY_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
+                  | jq -r '.state // empty') || vol_state=
+                if [ -n "$vol_state" ]; then
+                  echo "seeding docker_data from template volume $tpl_src (state: $vol_state)"
+                else
+                  echo "template fork failed; falling back to an empty volume" >&2
+                fi
+              else
+                echo "no template volume available; first boot will pull cold"
+              fi
+            fi
+
             # A read-only, app-scoped, time-boxed pull token so the machine's
             # inner dockerd can pull the mirrored stack images from this app's
             # registry repo — and nothing else (PR code can read machine
             # secrets, so scope matters). The org deploy token can't mint new
             # tokens (createLimitedAccessToken is not authorized), but macaroon
             # attenuation is pure client-side crypto: append an Apps caveat
-            # (numeric app id, mask "r") and a validity window to our own token.
-            app_id=$(curl -sf https://api.fly.io/graphql \
-              -H "Authorization: Bearer $FLY_API_TOKEN" \
-              -H "content-type: application/json" \
-              -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
-              | jq -re '.data.app.internalNumericId')
-            now=$(date +%s)
-            pull_token=$(printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
-              "$app_id" $((now - 60)) $((now + 604800)) | flyctl tokens attenuate)
+            # (numeric app id, mask "r") and a validity window to our own
+            # token. The images lane normally minted it already; fall back to
+            # minting inline when its file is absent.
+            if [ -s "$RUNNER_TEMP/registry-pull-token" ]; then
+              pull_token=$(cat "$RUNNER_TEMP/registry-pull-token")
+            else
+              app_id=$(curl -sf https://api.fly.io/graphql \
+                -H "Authorization: Bearer $FLY_API_TOKEN" \
+                -H "content-type: application/json" \
+                -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
+                | jq -re '.data.app.internalNumericId')
+              now=$(date +%s)
+              pull_token=$(printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
+                "$app_id" $((now - 60)) $((now + 604800)) | flyctl tokens attenuate)
+            fi
 
             snapshot_key=$(jq -r '.key' "$RUNNER_TEMP/preview-snapshot.json")
             runtime_key=$(jq -r '.runtime_key' preview-ctx/deployment.json)
@@ -408,8 +617,12 @@ fn deploy_to_fly() -> Step<Run> {
                 # A suspended preview needs demand before SSH is reachable.
                 curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
                 for _ in $(seq 1 12); do
+                  # `--command` is exec'd directly, NOT run through a shell —
+                  # a bare `if [ -f ...` dies with `exec: "if": not found`, so
+                  # the marker never parsed and every push silently rehydrated
+                  # (~7 min) instead of going hot (~3 min). Hence the sh -c.
                   marker=$(flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
-                    --quiet --command 'if [ -f /var/lib/docker/.macro-preview/deployment.json ]; then cat /var/lib/docker/.macro-preview/deployment.json; else echo __NO_MARKER__; fi' \
+                    --quiet --command 'sh -c "if [ -f /var/lib/docker/.macro-preview/deployment.json ]; then cat /var/lib/docker/.macro-preview/deployment.json; else echo __NO_MARKER__; fi"' \
                     2>/dev/null || true)
                   if echo "$marker" | jq -e \
                       --arg key "$snapshot_key" \
@@ -430,6 +643,20 @@ fn deploy_to_fly() -> Step<Run> {
               fi
             fi
             echo "preview deployment mode: $mode (snapshot $snapshot_key)"
+
+            # Keep the machine in demand for the WHOLE deploy, hot path
+            # included: fly-proxy suspends a machine ~7 min after its last
+            # proxied request, and SSH via hallpass is not proxy traffic — a
+            # hot update with no browser traffic got its VM suspended
+            # mid-session (the frozen `flyctl ssh console` then ate 52 min of
+            # runner until the job timeout). Any response status counts as
+            # traffic, and a request also resumes a suspended machine.
+            (while :; do
+              curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
+              sleep 15
+            done) &
+            keepalive=$!
+            trap 'kill "$keepalive" 2>/dev/null || true' EXIT
 
             flyctl auth docker
             registry="registry.fly.io/$APP_NAME"
@@ -453,10 +680,9 @@ fn deploy_to_fly() -> Step<Run> {
               --env-file "$envfile" \
               config --images | sort -u)
             echo "mirroring images:" $images
-            docker pull alpine:3
+            docker image inspect alpine:3 >/dev/null 2>&1 || docker pull alpine:3
             mkdir -p preview-ctx/preload
             : > preview-ctx/preload/manifest.txt
-            : > "$RUNNER_TEMP/push-refs.txt"
             for img in $images alpine:3; do
               # Images the bake didn't leave in the daemon (snapshot cache hit,
               # or app-layer-only images like proxy/mailpit) get pulled here.
@@ -468,10 +694,14 @@ fn deploy_to_fly() -> Step<Run> {
               ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
               docker tag "$img" "$ref"
               echo "$id $img $ref" >> preview-ctx/preload/manifest.txt
-              if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
-                echo "$ref" >> "$RUNNER_TEMP/push-refs.txt"
-              fi
             done
+            # The existence probes are pure network round-trips (and after the
+            # premirror lane, almost all of them hit) — run them in parallel
+            # instead of ~1s each serially.
+            awk '{print $3}' preview-ctx/preload/manifest.txt \
+              | xargs -P 8 -I {} sh -c \
+                  'docker manifest inspect "{}" >/dev/null 2>&1 || echo "{}"' \
+              > "$RUNNER_TEMP/push-refs.txt"
             echo "pushing $(wc -l < "$RUNNER_TEMP/push-refs.txt") of $(wc -l < preview-ctx/preload/manifest.txt) images"
             # The Fly registry occasionally aborts large uploads ("s3aws:
             # append to zero-size path unsupported") — retry; layers that made
@@ -509,8 +739,11 @@ fn deploy_to_fly() -> Step<Run> {
                 --app "$APP_NAME" --machine "$machine_id" --mode 0600 \
                 || hot_rc=$?
               if [ "$hot_rc" = 0 ]; then
+                # timeout backstop: a suspended-mid-session VM freezes the ssh
+                # client forever (measured: 52 min of hang). 10 min is triple
+                # a normal hot apply; on expiry we fall back to rehydrate.
                 hot_command="/srv/macro/bin/hot-update '$update_image' /tmp/macro-registry-token"
-                flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
+                timeout 600 flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
                   --command "$hot_command" || hot_rc=$?
               fi
               if [ "$hot_rc" = 0 ]; then
@@ -526,9 +759,30 @@ fn deploy_to_fly() -> Step<Run> {
             flyctl secrets set --app "$APP_NAME" --stage \
               "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
               "REGISTRY_PULL_TOKEN=$pull_token"
-            if ! flyctl volumes list --app "$APP_NAME" --json \
-                 | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+            if [ -z "$vol_state" ]; then
+              # No volume and no fork landed (no template, or both fork
+              # attempts failed): the old empty-volume path.
               flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
+            elif [ "$vol_state" != created ]; then
+              # A fork is still hydrating (usually already finished: the
+              # images lane kicked it before the cargo lane even ended). The
+              # volume must reach "created" before a machine can mount it; a
+              # fork that never lands is replaced by an empty volume rather
+              # than failing the deploy.
+              for _ in $(seq 1 60); do
+                vol_state=$(flyctl volumes list --app "$APP_NAME" --json \
+                  | jq -r '[.[] | select(.name == "docker_data")][0].state // empty')
+                [ "$vol_state" = created ] && break
+                sleep 10
+              done
+              echo "seeded volume state: $vol_state"
+              if [ "$vol_state" != created ]; then
+                echo "template fork stuck (state: $vol_state); replacing with an empty volume" >&2
+                vol_id=$(flyctl volumes list --app "$APP_NAME" --json \
+                  | jq -r '[.[] | select(.name == "docker_data")][0].id // empty')
+                [ -z "$vol_id" ] || flyctl volumes destroy "$vol_id" --app "$APP_NAME" --yes || true
+                flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
+              fi
             fi
             # Machines created before the volume existed can't take the mounts
             # config update. A destroyed/partial machine is recreated by deploy.
@@ -541,32 +795,73 @@ fn deploy_to_fly() -> Step<Run> {
             image="$registry:${{ github.sha }}"
             docker build -t "$image" preview-ctx
             push_image "$image"
-            # Keep the machine in demand while it boots: with zero inbound
-            # traffic, fly-proxy counts a health-failing machine as excess
-            # capacity and suspends it mid-boot (observed mid-docker-load).
-            # Any response status counts as traffic, and a request also
-            # resumes an already-suspended machine.
-            (while :; do
-              curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
-              sleep 15
-            done) &
-            keepalive=$!
             # First boot does real work before 8090 opens (pulling the stack
             # images, snapshot restore, compose up, FusionAuth's JVM) —
             # give the health check more runway than flyctl's default wait.
-            rc=0
+            # The step-wide keepalive above holds the machine out of suspend.
             flyctl deploy --app "$APP_NAME" \
               --config infra/preview/fly.toml \
               --image "$image" \
               --wait-timeout 1800 \
-              --yes || rc=$?
-            kill "$keepalive" 2>/dev/null || true
-            exit "$rc"
+              --yes
         "#})
         // Accept the org slug from either a repo variable or a repo secret —
         // it's not sensitive, but people reasonably reach for secrets first.
         .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
         .add_env(("DOPPLER_PREVIEW_TOKEN", vars::DOPPLER_PREVIEW_TOKEN))
+}
+
+/// After a healthy deploy this PR's volume is, by construction, a fully
+/// warmed layer store for exactly the image set in the preload manifest
+/// (bootstrap pulled it, hot-update reconciled it). Publish it as the
+/// org-wide template that future first boots fork, content-addressed by the
+/// manifest's (image id, tag) pairs — registry refs are excluded because
+/// they embed the per-PR app name. An existing volume under the same key
+/// means the image set is unchanged and nothing runs; there is no scheduled
+/// refresh because the cache warms itself on exactly the deploys that
+/// change it. Purely an optimization, hence continue-on-error: the boot
+/// manifest check keeps forks of any template correct, stale or fresh.
+fn publish_template_volume() -> Step<Run> {
+    Step::new("Publish template volume")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            key=$(awk '{print $1, $2}' preview-ctx/preload/manifest.txt \
+              | LC_ALL=C sort | sha256sum | cut -c1-24)
+            vol_name="tpl$key"
+            flyctl status --app "$TEMPLATE_APP" >/dev/null 2>&1 \
+              || flyctl apps create "$TEMPLATE_APP" --org "$FLY_ORG"
+            vols=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null || echo '[]')
+            if echo "$vols" | jq -e --arg n "$vol_name" \
+                'map(select(.name == $n)) | length > 0' >/dev/null; then
+              echo "template $vol_name already exists; image set unchanged"
+            else
+              src=$(flyctl volumes list --app "$APP_NAME" --json \
+                | jq -r '[.[] | select(.name == "docker_data")][0].id // empty')
+              if [ -n "$src" ]; then
+                # Fire-and-forget: hydration is a server-side block copy;
+                # nothing in this run depends on it finishing.
+                curl -sf -X POST "https://api.machines.dev/v1/apps/$TEMPLATE_APP/volumes" \
+                  -H "Authorization: Bearer $FLY_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"$vol_name\",\"region\":\"ewr\",\"source_volume_id\":\"$src\"}" \
+                  | jq -r '"published \(.name) (\(.id), state: \(.state))"' \
+                  || echo "template publish failed (non-fatal)" >&2
+              fi
+            fi
+            # Prune superseded templates: keep the 3 newest, and never touch
+            # anything younger than 2h — it may still be hydrating or serving
+            # as a concurrent deploy's fork source.
+            cutoff=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            echo "$vols" | jq -r --arg cutoff "$cutoff" \
+              '[.[] | select((.name | startswith("tpl")) and .attached_machine_id == null)]
+               | sort_by(.created_at) | reverse | .[3:]
+               | .[] | select(.created_at < $cutoff) | .id' \
+              | while read -r old; do
+                  [ -z "$old" ] || flyctl volumes destroy "$old" --app "$TEMPLATE_APP" --yes || true
+                done
+        "#})
+        .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
+        .continue_on_error(true)
 }
 
 fn comment_preview_url() -> Step<Use> {

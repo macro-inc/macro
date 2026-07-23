@@ -188,6 +188,7 @@ pub async fn link_has_any_message_with(
             JOIN email_contacts c ON c.id = r.contact_id
             WHERE m.link_id = $1
               AND m.is_sent = true
+              AND c.link_id = $1
               AND LOWER(c.email_address) = $2
             UNION ALL
             SELECT 1
@@ -195,6 +196,7 @@ pub async fn link_has_any_message_with(
             JOIN email_contacts c ON c.id = m.from_contact_id
             WHERE m.link_id = $1
               AND m.is_sent = false
+              AND c.link_id = $1
               AND LOWER(c.email_address) = $2
             LIMIT 1
         ) AS "exists!"

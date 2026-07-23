@@ -15,6 +15,8 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -36,20 +38,28 @@ import {
   GoToHotkeys,
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
+import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
+import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { useUserInfoQuery } from '@queries/auth/user-info';
 import { makePersisted } from '@solid-primitives/storage';
-import { type RouteSectionProps, useLocation } from '@solidjs/router';
+import {
+  type RouteSectionProps,
+  useLocation,
+  useNavigate,
+} from '@solidjs/router';
 import { cn } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
@@ -77,10 +87,12 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login/popup`,
   `${ROUTER_BASE_CONCAT}login/popup/success`,
   `${ROUTER_BASE_CONCAT}onboarding`,
+  `${ROUTER_BASE_CONCAT}setup`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}offline`,
   `${ROUTER_BASE_CONCAT}welcome`,
+  `${ROUTER_BASE_CONCAT}mobile-email-signup`,
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
@@ -271,6 +283,39 @@ function CollapsedSidebarIncomingCallWidget(props: {
   );
 }
 
+/**
+ * Sends first-time desktop users into the split-screen onboarding at
+ * /setup. Fires from anywhere in the app (marketing SSO lands on /app, not
+ * /login), but never off auth/full-screen routes — /setup itself included.
+ */
+function NewOnboardingRedirect() {
+  const userInfoQuery = useUserInfoQuery();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  createEffect(() => {
+    if (!ENABLE_NEW_ONBOARDING_V3 || isMobile() || isNativeMobilePlatform()) {
+      return;
+    }
+    const data = userInfoQuery.data;
+    if (data?.authenticated !== true || data.tutorialComplete !== false) {
+      return;
+    }
+    if (AUTH_URLS.includes(location.pathname)) return;
+    // Preserve the deep link the user arrived on (a shared doc, an invite):
+    // /setup carries it as ?next and its finish() returns there instead of
+    // home. Base-relative so navigate() can resolve it against the router.
+    const target =
+      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
+    navigate(
+      target === '/' ? '/setup' : `/setup?next=${encodeURIComponent(target)}`,
+      { replace: true }
+    );
+  });
+
+  return null;
+}
+
 function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
@@ -348,6 +393,9 @@ function LayoutInner(props: RouteSectionProps) {
 
   mountGlobalFocusListener();
 
+  // Route mailto: links (via openExternalUrl) to the in-app email composer.
+  registerMailtoComposerHandler();
+
   attachGlobalDOMScope(document.body);
 
   return (
@@ -359,6 +407,7 @@ function LayoutInner(props: RouteSectionProps) {
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
+          <NewOnboardingRedirect />
           <Show when={!AUTH_URLS.includes(location.pathname)}>
             <GithubReauthenticationPrompt />
             <GmailReauthenticationPrompt />
@@ -382,6 +431,8 @@ function LayoutInner(props: RouteSectionProps) {
           <IosShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
+          <CreateCompanyModal />
+          <CreateContactModal />
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>

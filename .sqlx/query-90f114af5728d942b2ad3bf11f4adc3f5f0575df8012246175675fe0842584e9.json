@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, team_id, source, foreign_id, status, initiator,\n                   metadata, entity_id, entity_type, last_error, created_at, updated_at\n            FROM import_entity\n            WHERE (\n                user_id = $1\n                OR (status = 'imported' AND team_id IS NOT NULL\n                    AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1))\n            )\n            AND ($2::text IS NULL OR source = $2)\n            AND ($3::text IS NULL OR status = $3)\n            ORDER BY (user_id = $1) DESC, created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "foreign_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "initiator",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "90f114af5728d942b2ad3bf11f4adc3f5f0575df8012246175675fe0842584e9"
+}

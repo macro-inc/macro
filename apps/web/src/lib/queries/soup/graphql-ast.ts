@@ -321,6 +321,8 @@ function mapChannelLiteral(literal: unknown): GraphqlChannelLiteralInput {
       return { channelType: mapChannelType(value) };
     case 'Importance':
       return { importance: mapBoolean(value, 'importance') };
+    case 'IsParticipant':
+      return { isParticipant: mapBoolean(value, 'isParticipant') };
     case 'NotificationDone':
       return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'NotificationSeen':

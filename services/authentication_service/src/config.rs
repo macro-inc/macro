@@ -30,9 +30,13 @@ env_vars! {
     pub struct GithubClientSecret;
     pub struct GithubIdpId;
     pub struct StripePriceId;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 }
 
 maybe_env_vars! {
+    /// Browser-reachable FusionAuth origin used for OAuth authorization redirects.
+    pub struct FusionAuthPublicUrl;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -70,6 +74,8 @@ pub struct Config {
     pub fusionauth_client_secret_key: FusionAuthClientSecretKey,
     /// FusionAuth base url
     pub fusionauth_base_url: FusionAuthBaseUrl,
+    /// Browser-reachable FusionAuth URL. Falls back to the API base URL when unset.
+    pub fusionauth_public_url: FusionAuthPublicUrl,
     /// FusionAuth oauth redirect uri
     pub fusionauth_oauth_redirect_uri: FusionAuthOauthRedirectUri,
     /// Google client id
@@ -113,6 +119,8 @@ pub struct Config {
     pub stripe_price_id: StripePriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub kafka_brokers: KafkaBrokers,
 }
 
 impl Config {

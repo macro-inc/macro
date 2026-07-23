@@ -180,6 +180,7 @@ fragment SoupItemFields on GraphqlSoupItem {
 						updatedAt
 						viewedAt
 						interactedAt
+						isParticipant
 						participants {
 							channelId
 							userId

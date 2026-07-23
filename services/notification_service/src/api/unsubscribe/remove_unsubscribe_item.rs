@@ -4,10 +4,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use decode_jwt::DecodedJwt;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 use super::unsubscribe_item::UnsubscribeItemPathParams;
 
@@ -23,15 +23,15 @@ use super::unsubscribe_item::UnsubscribeItemPathParams;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, decoded_jwt))]
+#[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    decoded_jwt: DecodedJwt,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(UnsubscribeItemPathParams { item_type, item_id }): Path<UnsubscribeItemPathParams>,
 ) -> Result<Response, Response> {
     notification_db_client::unsubscribe::item::remove_unsubscribed_item_user(
         &ctx.db,
-        &decoded_jwt.user_context.user_id,
+        &user.user_context.user_id,
         &item_id,
     )
     .await

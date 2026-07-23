@@ -389,7 +389,7 @@ pub struct ListEntities {
 
     /// Email entity AST filter.
     #[schemars(
-        description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}. Supports filtering by thread timestamp: {\"l\":{\"ca\":{\"gte\":\"<start>\"}}} matches created_at, {\"l\":{\"ua\":{\"gte\":\"<start>\",\"lt\":\"<end>\"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For \"emails from the last 7 days\", AND a ua (or ca) gte bound set to 7 days before now, e.g. {\"l\":{\"ua\":{\"gte\":\"<7-days-ago-ISO>\"}}}.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "ef")]
@@ -736,17 +736,28 @@ where
             .map(|sets| sets.applied_tag_by_option_id())
             .unwrap_or_default();
 
-        let items: Vec<EntityItem> = paginated
+        let mut items: Vec<EntityItem> = paginated
             .items
             .into_iter()
             .map(|EnrichedSoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
             .collect();
+
+        retain_excluding_self_chat(&mut items, service_context.self_chat_id);
 
         // Build summary
         let summary = build_summary(&items, has_more, &self.effective_include_types());
 
         Ok(ListEntitiesResponse { items, summary })
     }
+}
+
+/// Drop the chat the agent is currently running inside from `items` so it
+/// never surfaces itself in its own results.
+pub(super) fn retain_excluding_self_chat(items: &mut Vec<EntityItem>, self_chat_id: Option<Uuid>) {
+    let Some(self_chat_id) = self_chat_id else {
+        return;
+    };
+    items.retain(|item| !matches!(item, EntityItem::AiChat { id, .. } if *id == self_chat_id));
 }
 
 async fn fetch_caller_tag_sets<T, E>(

@@ -18,8 +18,8 @@ pub use loaders::{
     PropertiesEntityPropertyReader, entity_properties_loader,
 };
 pub use mutations::{
-    EntityPropertyWriter, NoOpEntityPropertyWriter, PropertiesEntityPropertyWriter,
-    PropertiesMutationRoot,
+    EntityPropertyWriter, GraphqlPropertyTargetEntityType, NoOpEntityPropertyWriter,
+    PropertiesEntityPropertyWriter, PropertiesMutationRoot,
 };
 pub use objects::{
     GraphqlBooleanPropertyValue, GraphqlDatePropertyValue, GraphqlEntityReferencePropertyValue,

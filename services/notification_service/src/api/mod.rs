@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
@@ -22,7 +22,7 @@ pub(crate) mod swagger;
 
 pub async fn setup_and_serve<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
-    ingress_state: NotificationRouterState<S>,
+    ingress_state: NotificationRouterState<S, AuthorizationService>,
 ) -> anyhow::Result<()> {
     let port = state.config.port;
     let env = state.config.environment;
@@ -59,7 +59,7 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
 
 fn api_router<S: ::notification::domain::service::NotificationReader>(
     _state: ApiContext,
-    ingress_state: NotificationRouterState<S>,
+    ingress_state: NotificationRouterState<S, AuthorizationService>,
 ) -> Router<ApiContext> {
     let middleware = {
         ServiceBuilder::new().layer(axum::middleware::from_fn(
@@ -70,7 +70,7 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
     let internal_router = Router::new()
         .nest(
             "/device",
-            ::notification::inbound::http::device::device_router(),
+            ::notification::inbound::http::device::device_router::<S, AuthorizationService>(),
         )
         .nest("/user_notifications", user_notification::router())
         .with_state(ingress_state)

@@ -10,7 +10,11 @@ import type { LatestMessage } from './generated/schemas/latestMessage';
 
 /** Channel metadata with its participants (channel fields flattened to the top level). */
 export type ChannelWithParticipants = Channel & {
+  /** Whether current and future team members automatically join the channel. */
+  auto_join_team: boolean;
   participants: ChannelParticipant[];
+  /** Whether the requesting user is an active participant of the channel. */
+  is_participant: boolean;
 };
 
 /** A channel-list item: channel + participants + latest message + the viewer's read state. */

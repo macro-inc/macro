@@ -33,6 +33,34 @@ fn test_construct_search_result_empty_input() {
 }
 
 #[test]
+fn channel_name_hit_has_top_level_highlight() {
+    let channel_id: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+    let hit = opensearch_client::search::model::SearchHit {
+        entity_id: channel_id,
+        entity_type: SearchEntityType::Channels,
+        score: None,
+        highlight: Highlight {
+            name: Some("<macro_em>acme-h</macro_em>q".to_string()),
+            ..Default::default()
+        },
+        goto: None,
+        updated_at: Some(Utc::now()),
+    };
+    let histories = HashMap::from([(channel_id, create_channel_history(&channel_id.to_string()))]);
+
+    let items = construct_channel_name_items(vec![hit], histories);
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0].highlight.name.as_deref(),
+        Some("<macro_em>acme-h</macro_em>q")
+    );
+    let json = serde_json::to_value(&items[0]).unwrap();
+    assert!(json.get("highlight").is_some());
+    assert!(json.get("channel_message_search_results").is_none());
+}
+
+#[test]
 fn test_construct_search_result_single_channel() {
     let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
     let search_results = vec![opensearch_client::search::model::SearchHit {

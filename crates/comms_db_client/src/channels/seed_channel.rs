@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::activity;
 use anyhow::{Context, Result};
 use channels::domain::models::{ChannelType, ParticipantRole};
@@ -19,6 +22,8 @@ pub struct SeedChannelOptions {
     pub channel_type: ChannelType,
     /// List of participant user IDs (excluding the owner, who is added automatically).
     pub participants: Vec<String>,
+    /// Backing team ID. Required for team channels, null otherwise.
+    pub team_id: Option<Uuid>,
 }
 
 /// Seed a channel with a pre-defined UUID.
@@ -31,15 +36,16 @@ pub async fn seed_channel(db: &Pool<Postgres>, options: SeedChannelOptions) -> R
     // create the channel
     let channel = sqlx::query!(
         r#"
-        INSERT INTO comms_channels (id, name, owner_id, org_id, channel_type)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO comms_channels (id, name, owner_id, org_id, channel_type, team_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
         "#,
         options.channel_id,
         options.name,
         options.owner_id,
         options.org_id,
-        options.channel_type as ChannelType
+        options.channel_type as ChannelType,
+        options.team_id,
     )
     .fetch_one(&mut *transaction)
     .await

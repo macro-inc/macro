@@ -68,6 +68,27 @@ pub struct DocumentDeletedMetadata {
     pub project_id: Option<String>,
 }
 
+/// Why a document interaction was reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InteractionReason {
+    /// A periodic save of pending content changes.
+    Edited,
+    /// The first peer joined the document session.
+    FirstJoin,
+    /// The last connected peer left the document session.
+    LastLeave,
+}
+
+/// Metadata for [`DocumentTopicEvent::Interaction`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentInteractionMetadata {
+    /// The id of the document.
+    pub document_id: String,
+    /// What triggered this interaction.
+    pub reason: InteractionReason,
+}
+
 /// Metadata for [`DocumentTopicEvent::Copied`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentCopiedMetadata {
@@ -105,6 +126,9 @@ pub enum DocumentTopicEvent {
     /// A document was copied.
     #[serde(rename = "document.copied")]
     Copied(DocumentCopiedMetadata),
+    /// A peer joined, left, or a periodic save occurred.
+    #[serde(rename = "document.interaction")]
+    Interaction(DocumentInteractionMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
@@ -140,6 +164,11 @@ impl DocumentMacroEvent {
     /// Build a copied event keyed by the new document id.
     pub fn copied(key: impl Into<String>, metadata: DocumentCopiedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Copied(metadata))
+    }
+
+    /// Build an interaction event keyed by the document id.
+    pub fn interaction(key: impl Into<String>, metadata: DocumentInteractionMetadata) -> Self {
+        Self::new(key, DocumentTopicEvent::Interaction(metadata))
     }
 
     /// Build an event from a topic-specific event variant.

@@ -1,5 +1,3 @@
-import { useRowTagsVisible } from '@app/features/next-soup/soup-view/filters-bar/search/search-tags-flag';
-import { useRowTagFilter } from '@app/features/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
@@ -32,8 +30,12 @@ import {
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
-import { ChannelMessageWideContent, ChannelWideContent } from './channel';
-import { EmailWideContent, useOwningInbox } from './email';
+import {
+  ChannelJoinButton,
+  ChannelMessageWideContent,
+  ChannelWideContent,
+} from './channel';
+import { EmailWideContent, useOwningInboxForEntity } from './email';
 import {
   GithubPullRequestChecksIndicator,
   GithubPullRequestPills,
@@ -44,26 +46,23 @@ function RowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
+  onFilterByTag?: (optionId: string) => void;
 }) {
-  const filterByTag = useRowTagFilter();
   return (
     <EntityRowTags
       entityId={props.entityId}
       entityType={props.entityType}
       properties={props.properties}
-      onFilterByTag={filterByTag}
+      onFilterByTag={props.onFilterByTag}
     />
   );
 }
 
 export function WideLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
-  const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
-  const owningInbox = useOwningInbox(() =>
-    isEmailEntity(props.entity) ? props.entity : undefined
-  );
+  const owningInbox = useOwningInboxForEntity(() => props.entity);
 
   return (
     <Entity.Layout
@@ -160,24 +159,17 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
-        <Show
-          when={
-            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
-          }
-        >
+        <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
               entityType={EntityType.PROJECT}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
-        <Show
-          when={
-            rowTagsVisible() && isDocumentEntity(props.entity) && props.entity
-          }
-        >
+        <Show when={isDocumentEntity(props.entity) && props.entity}>
           {(entity) => {
             const properties = () => {
               const doc = entity();
@@ -190,42 +182,38 @@ export function WideLayout(props: LayoutProps) {
                   isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
                 }
                 properties={properties()}
+                onFilterByTag={soupView?.filterByTag}
               />
             );
           }}
         </Show>
-        <Show
-          when={rowTagsVisible() && isEmailEntity(props.entity) && props.entity}
-        >
+        <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => (
-            // No filter-by-tag affordance. The soup email path does not apply
-            // tag filters, so filtering would leave email rows unfiltered.
-            <EntityRowTags
+            <RowTags
               entityId={entity().id}
               entityType={EntityType.THREAD}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
-        <Show
-          when={rowTagsVisible() && isChatEntity(props.entity) && props.entity}
-        >
+        <Show when={isChatEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
               entityType={EntityType.CHAT}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
-        <Show
-          when={rowTagsVisible() && isCallEntity(props.entity) && props.entity}
-        >
+        <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
               entityType={EntityType.CALL_RECORD}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
@@ -277,6 +265,15 @@ export function WideLayout(props: LayoutProps) {
               />
             </span>
           )}
+        </Show>
+        <Show
+          when={
+            isChannelEntity(props.entity) &&
+            props.entity.isParticipant === false &&
+            props.entity
+          }
+        >
+          {(entity) => <ChannelJoinButton entity={entity()} />}
         </Show>
       </Entity.Slot>
       <Entity.Slot

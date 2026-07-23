@@ -6,6 +6,47 @@ use cool_asserts::assert_matches;
 
 use super::*;
 
+#[test]
+fn allowed_original_urls_are_accepted() {
+    for original_url in [
+        "macro://login",
+        "tauri://localhost/app/login",
+        "http://tauri.localhost/app/login",
+        "https://tauri.localhost/app/login",
+        "http://localhost:3000/app/login",
+        "https://localhost/app/login",
+        "https://dev.macro.com/app/login",
+        "https://macro.com/app/login",
+    ] {
+        let original_url = Url::parse(original_url).expect("test URL should parse");
+        assert!(
+            is_allowed_original_url(&original_url),
+            "{original_url} should be allowed"
+        );
+    }
+}
+
+#[test]
+fn untrusted_original_urls_are_rejected() {
+    for original_url in [
+        "https://example.com/app/login",
+        "https://macro.com.example.com/app/login",
+        "https://staging.macro.com/app/login",
+        "http://macro.com/app/login",
+        "http://dev.macro.com/app/login",
+        "macro://attacker.example",
+        "tauri://example.com/app/login",
+        "http://127.0.0.1:3000/app/login",
+        "javascript:alert('redirected')",
+    ] {
+        let original_url = Url::parse(original_url).expect("test URL should parse");
+        assert!(
+            !is_allowed_original_url(&original_url),
+            "{original_url} should be rejected"
+        );
+    }
+}
+
 #[tokio::test]
 async fn it_works_with_no_params() {
     let request = Request::builder()
@@ -116,7 +157,7 @@ async fn it_works_with_everything() {
 
 #[tokio::test]
 async fn it_works_with_macro_scheme() {
-    let request = Request::builder().uri("https://example.com/login/sso?original_url=macro%3A%2F%2Fapp%2Flogin&idp_name=google&is_mobile=true").body(Body::from(())).unwrap();
+    let request = Request::builder().uri("https://example.com/login/sso?original_url=macro%3A%2F%2Flogin&idp_name=google&is_mobile=true").body(Body::from(())).unwrap();
 
     let extracted = Query::<LoginQueryParams>::from_request(request, &())
         .await
@@ -131,7 +172,7 @@ async fn it_works_with_macro_scheme() {
        referral_code: _
     }) => {
         assert_eq!(idp_name, "google");
-        assert_eq!(original_url.0.as_str(), "macro://app/login");
+        assert_eq!(original_url.0.as_str(), "macro://login");
     });
 }
 

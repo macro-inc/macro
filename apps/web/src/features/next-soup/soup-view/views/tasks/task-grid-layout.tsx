@@ -1,4 +1,4 @@
-import { useRowTagFilter } from '@app/features/next-soup/soup-view/filters-bar/use-row-tag-filter';
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import {
@@ -65,8 +65,8 @@ function buildStubProperty(col: TaskGridColumn): Property {
 }
 
 export function TaskGridLayout(props: LayoutProps) {
+  const soupView = useMaybeSoupView();
   const currentId = useUserId();
-  const filterByTag = useRowTagFilter();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
   const isShared = () => props.entity.ownerId !== currentId();
 
@@ -194,7 +194,7 @@ export function TaskGridLayout(props: LayoutProps) {
             entityId={props.entity.id}
             entityType={EntityType.TASK}
             properties={entity().properties}
-            onFilterByTag={filterByTag}
+            onFilterByTag={soupView?.filterByTag}
             class="ml-auto"
           />
         </Entity.Slot>

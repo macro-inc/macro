@@ -2,8 +2,6 @@ use axum::{
     Router,
     routing::{delete, get, patch, post, put},
 };
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 
 use crate::api::{ApiContext, context::EntityAccessServiceType};
@@ -28,13 +26,13 @@ pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
 pub(in crate::api) mod stripe;
 
-pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
+pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", post(create_user::handler))
-        .merge(router_with_auth(state, jwt_args))
+        .merge(router_with_auth())
 }
 
-fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
+fn router_with_auth() -> Router<ApiContext> {
     Router::new()
         .route("/me", get(get_user_info::handler))
         .route("/me", delete(delete_user::handler))
@@ -50,13 +48,7 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         .route("/link_exists", get(get_user_link_exists::handler))
         .route("/tutorial", patch(patch_tutorial::handler))
         .route("/ai_consent", patch(patch_ai_consent::handler))
-        .route(
-            "/quota",
-            get(get_user_quota::handler).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                macro_middleware::user_permissions::attach_user_permissions::handler,
-            )),
-        )
+        .route("/quota", get(get_user_quota::handler))
         .route(
             "/stripe/checkoutv2",
             post(
@@ -76,12 +68,5 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         .route("/organization", get(get_user_organization::handler))
         .route("/group", patch(patch_user_group::handler))
         .route("/onboarding", patch(patch_user_onboarding::handler))
-        .layer(
-            ServiceBuilder::new()
-                .layer(CookieManagerLayer::new())
-                .layer(axum::middleware::from_fn_with_state(
-                    jwt_args,
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
-        )
+        .layer(CookieManagerLayer::new())
 }

@@ -1,6 +1,7 @@
 import { type EntityData, isTaskEntity } from '@entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
 import type { ItemType } from '@service-storage/client';
 import { match } from 'ts-pattern';
 
@@ -64,9 +65,9 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
 
 export function macroEntityToPropertyEntityType(
   entity: EntityData
-): EntityType {
+): PropertyTargetEntityType {
   return match(entity)
-    .when(isTaskEntity, () => EntityType.TASK)
+    .when(isTaskEntity, () => EntityType.DOCUMENT)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
     .with({ type: 'project' }, () => EntityType.PROJECT)

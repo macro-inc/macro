@@ -4,19 +4,25 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { getImageDimensionsMock, getVideoDimensionsMock, toastFailureMock } =
+  vi.hoisted(() => ({
+    getImageDimensionsMock: vi.fn(),
+    getVideoDimensionsMock: vi.fn(),
+    toastFailureMock: vi.fn(),
+  }));
+
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
+}));
+
+vi.mock('@core/util/media', () => ({
+  getImageDimensions: getImageDimensionsMock,
+  getVideoDimensions: getVideoDimensionsMock,
 }));
 
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { uploadInputAttachments } from '../upload-attachments';
 import { getAttachmentKindFromFile } from '../utils/file-helpers';
-
-const { toastFailureMock } = vi.hoisted(() => {
-  return {
-    toastFailureMock: vi.fn(),
-  };
-});
 
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: {
@@ -26,6 +32,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
 
 describe('uploadInputAttachments', () => {
   beforeEach(() => {
+    getImageDimensionsMock.mockReset();
+    getImageDimensionsMock.mockResolvedValue({ width: 0, height: 0 });
+    getVideoDimensionsMock.mockReset();
+    getVideoDimensionsMock.mockResolvedValue({ width: 0, height: 0 });
     toastFailureMock.mockReset();
   });
 
@@ -88,6 +98,68 @@ describe('uploadInputAttachments', () => {
         id: 'uploaded-image-1',
         name: 'image.png',
         kind: 'image',
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      kind: 'image' as const,
+      name: 'image.png',
+      mimeType: 'image/png',
+      uploadedId: 'uploaded-image-1',
+      getDimensionsMock: getImageDimensionsMock,
+    },
+    {
+      kind: 'video' as const,
+      name: 'clip.mp4',
+      mimeType: 'video/mp4',
+      uploadedId: 'uploaded-video-1',
+      getDimensionsMock: getVideoDimensionsMock,
+    },
+  ])('keeps $kind pending until dimensions are ready', async (media) => {
+    const tracker = createInputAttachmentTracker();
+    const file = new File(['abc'], media.name, { type: media.mimeType });
+    let resolveDimensions:
+      | ((dimensions: { width: number; height: number }) => void)
+      | undefined;
+
+    media.getDimensionsMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDimensions = resolve;
+      })
+    );
+
+    let completed = false;
+    const uploadPromise = uploadInputAttachments({
+      files: [file],
+      tracker,
+      uploadFile: async () => ({
+        failed: false,
+        destination: 'static',
+        id: media.uploadedId,
+      }),
+    }).then(() => {
+      completed = true;
+    });
+
+    await vi.waitFor(() => {
+      expect(media.getDimensionsMock).toHaveBeenCalledOnce();
+    });
+
+    expect(completed).toBe(false);
+    expect(tracker.hasPending()).toBe(true);
+
+    resolveDimensions?.({ width: 1920, height: 1080 });
+    await uploadPromise;
+
+    expect(tracker.attachments()).toEqual([
+      {
+        id: media.uploadedId,
+        name: media.name,
+        kind: media.kind,
+        width: 1920,
+        height: 1080,
       },
     ]);
   });

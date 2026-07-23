@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
-use crate::domain::ports::{EventPublisher, MacroEventBroker};
+use crate::domain::models::{Event, EventBrokerError, MacroEvent, MessageWrapper, TopicEvent};
+use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, MessageParts};
 
 /// A captured publish call: topic, key, and raw payload bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,14 +28,9 @@ struct RecordingPublisher {
 }
 
 impl EventPublisher for RecordingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        topic: T,
-        key: &str,
-        payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
         self.calls.lock().unwrap().push(Published {
-            topic: topic.as_str().to_string(),
+            topic: T::TOPIC_STR.to_string(),
             key: key.to_string(),
             payload: payload.to_vec(),
         });
@@ -48,12 +43,7 @@ struct PendingPublisher {
 }
 
 impl EventPublisher for PendingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        _topic: T,
-        _key: &str,
-        _payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         pending().await
     }
@@ -75,12 +65,7 @@ struct HangingPublisher {
 }
 
 impl EventPublisher for HangingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        _topic: T,
-        _key: &str,
-        _payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         let _drop_guard = PublishDropGuard {
             dropped: Arc::clone(&self.dropped),
@@ -94,26 +79,21 @@ struct FailingPublisher {
 }
 
 impl EventPublisher for FailingPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        _topic: T,
-        _key: &str,
-        _payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.attempted.store(true, Ordering::SeqCst);
         Err(EventBrokerError::Publish("test failure".to_string()))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ExampleCreatedMetadata {
+pub struct ExampleCreatedMetadata {
     name: String,
     count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
-enum ExampleTopicEvent {
+pub enum ExampleTopicEvent {
     #[serde(rename = "example.created")]
     Created(ExampleCreatedMetadata),
 }
@@ -126,7 +106,7 @@ impl TopicEvent for ExampleTopicEvent {
     }
 }
 
-struct ExampleMacroEvent {
+pub struct ExampleMacroEvent {
     key: String,
     event: Event<ExampleTopicEvent>,
 }
@@ -156,6 +136,48 @@ impl MacroEvent for ExampleMacroEvent {
     }
 }
 
+crate::declare_topics!(DeclaredMacroEvent: ExampleMacroEvent);
+
+struct TestMessage {
+    topic: &'static str,
+    key: &'static str,
+    payload: Vec<u8>,
+}
+
+impl MessageParts for TestMessage {
+    fn key(&self) -> Option<&str> {
+        Some(self.key)
+    }
+
+    fn payload(&self) -> Option<&[u8]> {
+        Some(&self.payload)
+    }
+
+    fn topic(&self) -> &str {
+        self.topic
+    }
+}
+
+struct TestEventConsumer {
+    topic: &'static str,
+    key: &'static str,
+    payload: Vec<u8>,
+}
+
+impl EventConsumer<DeclaredMacroEvent> for TestEventConsumer {
+    type MessageType<'a> = TestMessage;
+
+    async fn recv<'a>(
+        &'a self,
+    ) -> Result<MessageWrapper<Self::MessageType<'a>, DeclaredMacroEvent>, rootcause::Report> {
+        Ok(MessageWrapper::new(TestMessage {
+            topic: self.topic,
+            key: self.key,
+            payload: self.payload.clone(),
+        }))
+    }
+}
+
 fn example_event() -> ExampleMacroEvent {
     ExampleMacroEvent::with_event(
         "msg-123",
@@ -167,6 +189,23 @@ fn example_event() -> ExampleMacroEvent {
             }),
         ),
     )
+}
+
+#[tokio::test]
+async fn consumer_service_receives_and_decodes_typed_event() {
+    let event = example_event();
+    let consumer = TestEventConsumer {
+        topic: MacroExampleTopic::TOPIC_STR,
+        key: "msg-123",
+        payload: serde_json::to_vec(event.event()).expect("event serializes"),
+    };
+    let service = MacroEventConsumerService::<DeclaredMacroEvent, _>::new(consumer);
+
+    let message = service.recv().await.expect("message is received");
+    let decoded = message.decode_payload().expect("associated topic decodes");
+    let DeclaredMacroEvent::ExampleMacroEvent(decoded) = decoded;
+    assert_eq!(decoded.key(), "msg-123");
+    assert_eq!(decoded.event(), event.event());
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,7 +264,7 @@ async fn dispatch_serializes_and_routes() {
     let calls = service.publisher.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
-    assert_eq!(call.topic, MacroExampleTopic.as_str());
+    assert_eq!(call.topic, MacroExampleTopic::TOPIC_STR);
     assert_eq!(call.key, "msg-123");
     assert_eq!(call.payload, expected_payload);
 }

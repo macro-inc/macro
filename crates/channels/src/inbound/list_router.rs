@@ -1,9 +1,20 @@
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
-use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
+use axum::{
+    Json, Router,
+    extract::{FromRef, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+};
 use frecency::domain::models::AggregateFrecency;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::Serialize;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -20,33 +31,48 @@ use crate::domain::{
 const DEFAULT_CHANNEL_LIST_LIMIT: u32 = 100;
 
 /// Router state for legacy channel-list endpoints.
-pub struct ChannelListRouterState<S> {
+pub struct ChannelListRouterState<S, Auth> {
     /// Inner channel list service.
     pub inner: Arc<S>,
+    /// State for request authorization.
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S> Clone for ChannelListRouterState<S> {
+impl<S, Auth> Clone for ChannelListRouterState<S, Auth> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S: ChannelListService> ChannelListRouterState<S> {
-    /// Build router state from a channel list service.
-    pub fn new(s: S) -> Self {
-        Self { inner: Arc::new(s) }
+impl<S, Auth> ChannelListRouterState<S, Auth> {
+    /// Build router state from a channel list service and authorization state.
+    pub fn new(s: S, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+        Self {
+            inner: Arc::new(s),
+            authorization_state,
+        }
+    }
+}
+
+impl<S, Auth> FromRef<ChannelListRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &ChannelListRouterState<S, Auth>) -> Self {
+        state.authorization_state.clone()
     }
 }
 
 /// Legacy `/channels` and `/activity` list routes.
-pub fn channel_list_router<S: ChannelListService, T: Send + Sync + 'static>(
-    s: ChannelListRouterState<S>,
-) -> Router<T> {
+pub fn channel_list_router<S, Auth, T>(s: ChannelListRouterState<S, Auth>) -> Router<T>
+where
+    S: ChannelListService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+{
     Router::new()
-        .route("/channels", get(get_channels_handler))
-        .route("/activity", get(get_activity_handler))
+        .route("/channels", get(get_channels_handler::<S, Auth>))
+        .route("/activity", get(get_activity_handler::<S, Auth>))
         .with_state(s)
 }
 
@@ -80,10 +106,14 @@ impl IntoResponse for ChannelListRouterErr {
         (status = 500, body=String),
     )
 )]
-async fn get_channels_handler<S: ChannelListService>(
-    State(service): State<ChannelListRouterState<S>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
-) -> Result<Json<Vec<ApiChannelWithLatest>>, ChannelListRouterErr> {
+async fn get_channels_handler<S, Auth>(
+    State(service): State<ChannelListRouterState<S, Auth>>,
+    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+) -> Result<Json<Vec<ApiChannelWithLatest>>, ChannelListRouterErr>
+where
+    S: ChannelListService,
+    Auth: MacroAuthorizationService,
+{
     let res = service
         .inner
         .get_channels(GetChannelsRequest {
@@ -116,10 +146,14 @@ async fn get_channels_handler<S: ChannelListService>(
     (status = 500, body=String),
 ))]
 /// Handle legacy channel activity list requests.
-pub async fn get_activity_handler<S: ChannelListService>(
-    State(service): State<ChannelListRouterState<S>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
-) -> Result<Json<Vec<ApiActivity>>, ChannelListRouterErr> {
+pub async fn get_activity_handler<S, Auth>(
+    State(service): State<ChannelListRouterState<S, Auth>>,
+    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+) -> Result<Json<Vec<ApiActivity>>, ChannelListRouterErr>
+where
+    S: ChannelListService,
+    Auth: MacroAuthorizationService,
+{
     let res = service
         .inner
         .get_activities(macro_user_id)
@@ -188,6 +222,8 @@ pub struct ChannelWithParticipants {
     pub channel: Channel,
     /// Active participants.
     pub participants: Vec<ChannelParticipant>,
+    /// Whether the requesting user is an active participant of the channel.
+    pub is_participant: bool,
 }
 
 /// Channel list response item.
@@ -212,6 +248,7 @@ impl ApiChannelWithLatest {
         Self {
             channel: ChannelWithParticipants {
                 channel: Channel::new_from_domain(value.channel.channel),
+                is_participant: value.channel.is_participant,
                 participants: value
                     .channel
                     .participants
@@ -245,6 +282,8 @@ pub struct Channel {
     pub org_id: Option<u32>,
     /// id of the team this channel belongs to
     pub team_id: Option<Uuid>,
+    /// whether team members automatically join the channel
+    pub auto_join_team: bool,
     /// timestamp of when the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the channel was last updated
@@ -262,6 +301,7 @@ impl Channel {
             channel_type: ChannelType::new_from_domain(value.channel_type),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
+            auto_join_team: value.auto_join_team,
             created_at: value.created_at,
             updated_at: value.updated_at,
             owner_id: value.owner_id,

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use std::borrow::Cow;
 
 use axum::http::{
@@ -59,7 +62,11 @@ fn is_allowed_origin(origin: &str) -> bool {
         return true;
     }
 
-    if let Some(port_str) = origin.strip_prefix("http://localhost:")
+    // `localhost` and `*.localhost` (loopback-reserved per RFC 6761; used
+    // locally to give each seeded persona its own cookie jar per hostname).
+    if let Some(rest) = origin.strip_prefix("http://")
+        && let Some((host, port_str)) = rest.rsplit_once(':')
+        && (host == "localhost" || host.ends_with(".localhost"))
         && let Ok(port) = port_str.parse::<u16>()
     {
         return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);

@@ -171,9 +171,7 @@ export function SplitPanel(props: SplitPanelProps) {
    */
   const tuckedBehindController = createMemo(() => {
     return (
-      !isMobile() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isViewerSplit()
+      !isMobile() && !props.handle.isSpotLight() && props.handle.isViewerSplit()
     );
   });
 

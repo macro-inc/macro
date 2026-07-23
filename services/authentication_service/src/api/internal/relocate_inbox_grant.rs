@@ -8,10 +8,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 const GMAIL_IDP_NAME: &str = "google_gmail";
 
@@ -47,10 +47,10 @@ pub struct RelocateInboxGrantResponse {
 /// password reset all resolve to it by email/identity. Links are only ever created while
 /// the user is active, so an existing deactivated stub is reactivated for the duration
 /// of the relink and deactivated again afterwards.
-#[tracing::instrument(skip(ctx, _valid_access))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _valid_access: ValidInternalKey,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(RelocateInboxGrantRequest {
         email,
         owner_fusionauth_user_id,

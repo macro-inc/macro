@@ -12,6 +12,10 @@ type ToolParserMap = {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
+  BulkSetEntityPropertyOptions: {
+    call: types.BulkSetEntityPropertyOptions;
+    response: types.BulkSetEntityPropertyOptionsResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -20,7 +24,15 @@ type ToolParserMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateImportEntity: {
+    call: types.CreateImportEntity;
+    response: types.CreateImportEntityResponse;
+  };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteImportEntity: {
+    call: types.DeleteImportEntity;
+    response: types.DeleteImportEntityResponse;
+  };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
@@ -48,6 +60,10 @@ type ToolParserMap = {
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
+  };
+  ListImportEntities: {
+    call: types.ListImportEntities;
+    response: types.ListImportEntitiesResponse;
   };
   ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
@@ -129,6 +145,10 @@ const toolParserMap = {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
   },
+  BulkSetEntityPropertyOptions: {
+    call: schemas.BulkSetEntityPropertyOptions,
+    response: schemas.BulkSetEntityPropertyOptionsResponse,
+  },
   ContentSearch: {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
@@ -137,7 +157,15 @@ const toolParserMap = {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
   },
+  CreateImportEntity: {
+    call: schemas.CreateImportEntity,
+    response: schemas.CreateImportEntityResponse,
+  },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  DeleteImportEntity: {
+    call: schemas.DeleteImportEntity,
+    response: schemas.DeleteImportEntityResponse,
+  },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
   DisplayResults: {
     call: schemas.DisplayResults,
@@ -168,6 +196,10 @@ const toolParserMap = {
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListImportEntities: {
+    call: schemas.ListImportEntities,
+    response: schemas.ListImportEntitiesResponse,
   },
   ListInboxes: {
     call: schemas.ListInboxes,
@@ -272,6 +304,10 @@ type ToolDataMap = {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
+  BulkSetEntityPropertyOptions: {
+    call: types.BulkSetEntityPropertyOptions;
+    response: types.BulkSetEntityPropertyOptionsResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -280,7 +316,15 @@ type ToolDataMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateImportEntity: {
+    call: types.CreateImportEntity;
+    response: types.CreateImportEntityResponse;
+  };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteImportEntity: {
+    call: types.DeleteImportEntity;
+    response: types.DeleteImportEntityResponse;
+  };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
@@ -308,6 +352,10 @@ type ToolDataMap = {
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
+  };
+  ListImportEntities: {
+    call: types.ListImportEntities;
+    response: types.ListImportEntitiesResponse;
   };
   ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };

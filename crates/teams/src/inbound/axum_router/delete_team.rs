@@ -1,8 +1,9 @@
 use axum::extract::State;
 use entity_access::{
     domain::{models::OwnerTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::MacroUserTeamExtractor,
+    inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{model::DeleteTeamError, team_repo::TeamService};
@@ -24,9 +25,9 @@ use super::TeamRouterState;
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<OwnerTeamRole, Eas>,
-    State(state): State<TeamRouterState<T, Eas>>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: MacroUserTeamExtractorV2<OwnerTeamRole, Eas, Auth>,
+    State(state): State<TeamRouterState<T, Eas, Auth>>,
 ) -> Result<(), DeleteTeamError> {
     state
         .service

@@ -3,12 +3,18 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import FunnelIcon from '@phosphor/funnel-simple.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn, Layer } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
+import {
+  type EditableTag,
+  TagEditorDialog,
+  type TagEditorDialogMode,
+} from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
 import {
   buildTaggedItemsSplitContent,
@@ -27,6 +33,7 @@ function TagChip(props: {
   tag: ResolvedTag;
   docTags: ReturnType<typeof useDocTags>;
   canEdit: boolean;
+  onEdit: (tag: ResolvedTag) => void;
 }) {
   const split = useSplitLayout();
   const panel = useSplitPanel();
@@ -74,6 +81,11 @@ function TagChip(props: {
               onClick={viewTaggedItems}
             />
             <Show when={props.canEdit}>
+              <MenuItem
+                icon={PencilIcon}
+                text="Edit tag"
+                onClick={() => props.onEdit(props.tag)}
+              />
               <MenuItem icon={XIcon} text="Remove tag" onClick={removeTag} />
             </Show>
           </ContextMenuContent>
@@ -81,6 +93,23 @@ function TagChip(props: {
       </ContextMenu>
     </Layer>
   );
+}
+
+function editableTagFromResolved(
+  docTags: ReturnType<typeof useDocTags>,
+  tag: ResolvedTag
+): EditableTag | undefined {
+  const set = docTags.tagSets().find((tagSet) => tagSet.scope === tag.scope);
+  const option = set?.options.find(
+    (candidate) => candidate.id === tag.optionId
+  );
+  if (!set?.definition || !option) return undefined;
+
+  return {
+    scope: tag.scope,
+    propertyDefinitionId: set.definition.id,
+    option,
+  };
 }
 
 export function TagsRow(props: {
@@ -92,12 +121,26 @@ export function TagsRow(props: {
   const docTags = useDocTags(props.entityId, props.entityType);
   const triggerVariant = () => props.triggerVariant ?? 'icon';
   const hasTags = () => docTags.appliedTags().length > 0;
+  const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
+    null
+  );
+
+  const openEdit = (tag: ResolvedTag) => {
+    const editable = editableTagFromResolved(docTags, tag);
+    if (!editable) return;
+    setEditorMode({ type: 'edit', tag: editable });
+  };
 
   return (
     <div class="flex flex-wrap items-center gap-1.5">
       <For each={docTags.appliedTags()}>
         {(tag) => (
-          <TagChip tag={tag} docTags={docTags} canEdit={props.canEdit} />
+          <TagChip
+            tag={tag}
+            docTags={docTags}
+            canEdit={props.canEdit}
+            onEdit={openEdit}
+          />
         )}
       </For>
       <Show
@@ -138,6 +181,14 @@ export function TagsRow(props: {
           </Match>
         </Switch>
       </Show>
+      <TagEditorDialog
+        open={editorMode() !== null}
+        mode={editorMode()}
+        teamAvailable={Boolean(
+          docTags.tagSets().some((set) => set.scope === 'team')
+        )}
+        onClose={() => setEditorMode(null)}
+      />
     </div>
   );
 }

@@ -12,7 +12,11 @@ use email::inbound::axum::draft_router::draft_router;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .merge(draft_router(state.email_service.clone()))
+        .merge(draft_router::<
+            ApiContext,
+            crate::api::context::EmailSvc,
+            crate::api::context::AuthorizationService,
+        >())
         .nest("/scheduled", scheduled::router())
         .route("/{id}", delete(delete::handler))
         .route("/{id}/attachments", post(add_attachment::handler))
@@ -29,7 +33,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             delete(remove_forwarded_attachment::handler),
         )
         .layer(axum::middleware::from_fn_with_state(
-            state.email_service,
+            state.clone(),
             crate::api::middleware::link::attach_link_context,
         ))
 }

@@ -22,11 +22,13 @@ use ai_projections::inbound::axum_router::upsert_projection::{
     ProjectionStateResponse, UpsertProjectionRequest,
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
+use import::inbound::axum_router::{self as import_api, RunImportRequest};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
 };
 use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
+use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
@@ -84,6 +86,12 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             memory_api::get_memory_handler,
+            import_api::get_state_handler,
+            import_api::run_import_handler,
+            import_api::retry_gather_handler,
+            import_api::dismiss_run_handler,
+            onboarding_api::get_state_handler,
+            onboarding_api::complete_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
             ai_projections::inbound::axum_router::upsert_projection::handler::<crate::api::context::DcsAiProjectionService>,
@@ -172,6 +180,28 @@ use utoipa::OpenApi;
                 // Memory
                 MemoryResponse,
                 MemoryErrorBody,
+
+                // Import pipeline
+                import::domain::models::ImportState,
+                import::domain::models::ImportEntity,
+                import::domain::models::ImportRun,
+                import::domain::models::ImportSource,
+                import::domain::models::ImportStatus,
+                import::domain::models::Initiator,
+                import::domain::models::RunStatus,
+                import::domain::models::LinearIssueMeta,
+                import::domain::models::NotionDocMeta,
+                import::domain::models::SlackChannelMeta,
+                import::domain::models::SlackParticipant,
+                import::domain::service::RunImportOutcome,
+                RunImportRequest,
+
+                // Onboarding
+                onboarding::domain::models::OnboardingState,
+                onboarding::domain::models::OnboardingRow,
+                onboarding::domain::models::OnboardingStatus,
+                onboarding::domain::models::ConnectedServer,
+                CompleteOnboardingRequest,
 
                 // AI cost
                 ai_usage_api::UsageRequest,

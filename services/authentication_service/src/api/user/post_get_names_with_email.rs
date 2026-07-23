@@ -1,15 +1,16 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::user::get_user_name::get_user_names_with_email;
 use macro_user_id::user_id::MacroUserId;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 
 use model::response::ErrorResponse;
-use model::user::{UserContext, UserNames};
+use model::user::UserNames;
 use non_empty::NonEmpty;
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
@@ -29,10 +30,10 @@ pub struct GetNamesWithEmailRequestBody {
             (status = 500, body=ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<GetNamesWithEmailRequestBody>,
 ) -> Result<Json<UserNames>, (StatusCode, String)> {
     let user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase>>> = NonEmpty::new(
@@ -52,11 +53,15 @@ pub async fn handler(
         )
     })?;
 
-    let user_names = get_user_names_with_email(&ctx.db, &user_context.user_id, user_profile_ids)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to get user names with email");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+    let user_names = get_user_names_with_email(
+        &ctx.db,
+        authorization.macro_user_id.as_ref(),
+        user_profile_ids,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "failed to get user names with email");
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
     Ok(Json(UserNames { names: user_names }))
 }

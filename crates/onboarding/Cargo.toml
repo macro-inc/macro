@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "onboarding"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+import = { path = "../import" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
+macro_user_id = { path = "../macro_user_id" }
+mcp_client = { path = "../mcp_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

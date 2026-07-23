@@ -9,6 +9,7 @@ use crate::domain::ports::SoupService;
 use ai_toolset::AsyncToolCollection;
 use email::domain::ports::EmailService;
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub use list_entities::{EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy};
 
@@ -18,6 +19,10 @@ pub struct SoupToolContext<T: SoupService, E: EmailService> {
     pub service: Arc<T>,
     /// The email service instance for resolving email links
     pub email_service: Arc<E>,
+    /// Entity id of the chat this request belongs to, when the request is an
+    /// interactive chat session. `None` for every other feature, in which
+    /// case nothing is excluded from the results.
+    pub self_chat_id: Option<Uuid>,
 }
 
 impl<T: SoupService, E: EmailService> Clone for SoupToolContext<T, E> {
@@ -25,6 +30,7 @@ impl<T: SoupService, E: EmailService> Clone for SoupToolContext<T, E> {
         Self {
             service: self.service.clone(),
             email_service: self.email_service.clone(),
+            self_chat_id: self.self_chat_id,
         }
     }
 }
@@ -35,6 +41,7 @@ impl<T: SoupService, E: EmailService> SoupToolContext<T, E> {
         Self {
             service: Arc::new(service),
             email_service: Arc::new(email_service),
+            self_chat_id: None,
         }
     }
 }

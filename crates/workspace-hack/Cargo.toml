@@ -51,7 +51,6 @@ fastrand = { version = "2" }
 flate2 = { version = "1", features = ["zlib-rs"] }
 foldhash = { version = "0.2" }
 form_urlencoded = { version = "1" }
-futures = { version = "0.3" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-executor = { version = "0.3" }
@@ -124,7 +123,7 @@ time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
-tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
@@ -175,7 +174,6 @@ fastrand = { version = "2" }
 flate2 = { version = "1", features = ["zlib-rs"] }
 foldhash = { version = "0.2" }
 form_urlencoded = { version = "1" }
-futures = { version = "0.3" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-executor = { version = "0.3" }
@@ -253,7 +251,7 @@ time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
-tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }

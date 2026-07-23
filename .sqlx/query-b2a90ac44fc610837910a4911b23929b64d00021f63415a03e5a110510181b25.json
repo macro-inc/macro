@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    c.id as entity_id,\n                    c.name,\n                    c.updated_at\n                FROM comms_channels c\n                INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id\n                WHERE cp.user_id = $1\n                    AND cp.left_at IS NULL\n                    AND c.id = ANY($2::uuid[])\n                    AND (\n                        $3::timestamptz IS NULL\n                        OR (c.updated_at, c.id) < ($3, $4)\n                    )\n                    AND (\n                        NULLIF(BTRIM(c.name), '') IS NULL\n                        OR c.name ~* $5\n                    )\n                ORDER BY c.updated_at DESC, c.id DESC\n                LIMIT $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Timestamptz",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "b2a90ac44fc610837910a4911b23929b64d00021f63415a03e5a110510181b25"
+}

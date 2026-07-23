@@ -7,6 +7,13 @@ interface EmailHotkeyHandlers {
   forwardFocusedMessage: () => boolean;
   blockSender: () => boolean;
   markDone: () => boolean;
+  markNotDone: () => boolean;
+  /** Gates which of Mark done / Mark as not done is active. */
+  isThreadDone: () => boolean;
+  markUnread: () => boolean;
+  markRead: () => boolean;
+  /** Gates which of Mark as unread / Mark as read is active. */
+  isThreadMarkedUnread: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
   navigateToPreviousMessage: () => boolean;
@@ -52,6 +59,34 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.markDone,
     hotkeyToken: TOKENS.entity.action.markDone,
     displayPriority: 10,
+    condition: () => !handlers.isThreadDone(),
+  });
+  registerHotkey({
+    hotkey: 'shift+e',
+    scopeId,
+    description: 'Mark as not done',
+    keyDownHandler: handlers.markNotDone,
+    hotkeyToken: TOKENS.entity.action.markNotDone,
+    displayPriority: 10,
+    condition: () => handlers.isThreadDone(),
+  });
+  registerHotkey({
+    hotkey: 'u',
+    scopeId,
+    description: 'Mark as unread',
+    keyDownHandler: handlers.markUnread,
+    hotkeyToken: TOKENS.entity.action.markUnread,
+    displayPriority: 9,
+    condition: () => !handlers.isThreadMarkedUnread(),
+  });
+  registerHotkey({
+    hotkey: 'shift+u',
+    scopeId,
+    description: 'Mark as read',
+    keyDownHandler: handlers.markRead,
+    hotkeyToken: TOKENS.entity.action.markRead,
+    displayPriority: 9,
+    condition: () => handlers.isThreadMarkedUnread(),
   });
   registerHotkey({
     scopeId: scopeId,

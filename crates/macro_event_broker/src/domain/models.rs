@@ -1,8 +1,12 @@
 //! Domain models for the event broker.
 
+use std::marker::PhantomData;
+
 use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
+
+use crate::domain::ports::{MacroEventCollection, MessageParts};
 
 /// Event payload enum for a single [`Topic`].
 ///
@@ -64,9 +68,9 @@ impl<E: TopicEvent> Event<E> {
         Ok(serde_json::from_slice(payload)?)
     }
 
-    /// Kafka topic this event belongs to.
-    pub fn topic(&self) -> E::Topic {
-        E::Topic::default()
+    /// Broker topic this event belongs to.
+    pub fn topic(&self) -> &'static str {
+        E::Topic::TOPIC_STR
     }
 }
 
@@ -79,9 +83,9 @@ pub trait MacroEvent: Send + Sync {
     /// Topic-specific event enum carried by this macro event.
     type EventPayload: TopicEvent;
 
-    /// Kafka topic this event should be published to.
-    fn topic(&self) -> <Self::EventPayload as TopicEvent>::Topic {
-        <<Self as MacroEvent>::EventPayload as TopicEvent>::Topic::default()
+    /// Broker topic this event should be published to.
+    fn topic(&self) -> &'static str {
+        <Self::EventPayload as TopicEvent>::Topic::TOPIC_STR
     }
 
     /// Kafka message key used for partitioning and compaction.
@@ -110,9 +114,25 @@ pub enum EventBrokerError {
     /// The event payload could not be serialized to or deserialized from JSON.
     #[error("failed to serialize or deserialize event payload")]
     Serialization(#[from] serde_json::Error),
+    /// The consumed broker message did not include a key.
+    #[error("event broker message is missing a key")]
+    MissingMessageKey,
+    /// The consumed broker message did not include a payload.
+    #[error("event broker message is missing a payload")]
+    MissingMessagePayload,
     /// The Kafka topic name is not handled by a consumer-specific event enum.
     #[error("unknown event topic: {0}")]
     UnknownTopic(String),
+    /// The event envelope schema version is not supported by its typed payload.
+    #[error("unsupported schema version {actual} for topic {topic}; expected {expected}")]
+    UnsupportedSchemaVersion {
+        /// Topic carrying the event.
+        topic: &'static str,
+        /// Schema version declared by the typed event payload.
+        expected: u8,
+        /// Schema version found in the decoded envelope.
+        actual: u8,
+    },
     /// The broker rejected or failed to deliver the message.
     #[error("failed to publish event: {0}")]
     Publish(String),
@@ -131,6 +151,106 @@ impl From<rootcause::Report> for EventBrokerError {
     fn from(report: rootcause::Report) -> Self {
         EventBrokerError::Internal(report)
     }
+}
+
+/// A broker message paired with the type of event collection it can decode.
+pub struct MessageWrapper<T, M> {
+    inner: T,
+    marker: PhantomData<M>,
+}
+
+impl<T, M> MessageWrapper<T, M> {
+    /// Wraps the transport-specific message.
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner,
+            marker: PhantomData,
+        }
+    }
+
+    /// Borrows the transport-specific message.
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
+
+    /// Returns the transport-specific message.
+    pub fn into_inner(self) -> T {
+        self.inner
+    }
+}
+
+impl<T: MessageParts, M: MacroEventCollection> MessageWrapper<T, M> {
+    /// Decodes the message into one of the declared event types.
+    pub fn decode_payload(&self) -> Result<M, EventBrokerError> {
+        M::decode(&self.inner)
+    }
+}
+
+/// Declares the [`MacroEvent`] types accepted by a consumer.
+///
+/// The first identifier names the generated event collection enum. Each
+/// identifier after the colon becomes a variant and must implement
+/// [`MacroEvent`]. The generated enum implements topic-based decoding.
+///
+/// ```text
+/// declare_topics!(ConsumerEvents: DocumentMacroEvent, ChannelMacroEvent);
+/// ```
+#[macro_export]
+macro_rules! declare_topics {
+    ($collection:ident: $($event:ident),+ $(,)?) => {
+        #[doc = concat!(
+            "An event decoded from one of the topics declared for `",
+            stringify!($collection),
+            "`."
+        )]
+        pub enum $collection {
+            $(
+                #[doc = concat!("A decoded `", stringify!($event), "` event.")]
+                $event($event),
+            )+
+        }
+
+        impl $crate::MacroEventCollection for $collection {
+            fn decode<T: $crate::MessageParts>(
+                message: &T,
+            ) -> Result<Self, $crate::EventBrokerError> {
+                $(
+                    let expected_topic =
+                        <<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as $crate::Topic>::TOPIC_STR;
+                    if message.topic() == expected_topic {
+                        let key = message
+                            .key()
+                            .ok_or($crate::EventBrokerError::MissingMessageKey)?;
+                        let payload = message
+                            .payload()
+                            .ok_or($crate::EventBrokerError::MissingMessagePayload)?;
+                        let event = <$event as $crate::MacroEvent>::decode(key, payload)?;
+                        let envelope = <$event as $crate::MacroEvent>::event(&event);
+                        let expected = $crate::TopicEvent::schema_version(&envelope.event);
+                        let actual = envelope.schema_version;
+                        if actual != expected {
+                            return Err($crate::EventBrokerError::UnsupportedSchemaVersion {
+                                topic: expected_topic,
+                                expected,
+                                actual,
+                            });
+                        }
+                        return Ok($collection::$event(event));
+                    }
+                )+
+
+                Err($crate::EventBrokerError::UnknownTopic(message.topic().to_owned()))
+            }
+
+            fn topics() -> &'static [&'static str] {
+                &[
+                    $(
+                        <<<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::Topic as $crate::Topic>::TOPIC_STR,
+                    )+
+                ]
+            }
+        }
+    };
 }
 
 #[cfg(test)]

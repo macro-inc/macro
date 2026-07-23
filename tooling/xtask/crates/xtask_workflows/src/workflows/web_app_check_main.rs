@@ -12,8 +12,9 @@ use crate::workflows::{
 };
 
 /// All the real web jobs share one mid-size Namespace profile with a dedicated
-/// cache tag, so the frontend caches (Nix store, bun cache, gen-api sccache)
-/// live on their own volume — see [`vars::WEB_CI_CACHE_TAG`].
+/// cache tag, so the frontend's Nix/Bun/Cargo state lives on its own volume.
+/// The `gen-api` Rust objects use [`vars::WEB_SCCACHE_NAME`] through Namespace's
+/// official remote sccache.
 fn web_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
@@ -66,7 +67,10 @@ fn typescript() -> Job {
         .add_step(steps::mount_web_cache_volume(true))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(steps::pin_sccache_dir())
+        .add_step(steps::configure_namespace_sccache_when(
+            vars::WEB_SCCACHE_NAME,
+            "needs.path-check.outputs.api_changed == 'true'",
+        ))
         .add_step(generate_api_types())
         .add_step(show_sccache_stats())
         .add_step(check_types())

@@ -36,15 +36,7 @@ import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-sol
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  Button,
-  cn,
-  Dialog,
-  Dropdown,
-  Panel,
-  ToggleSwitch,
-  Tooltip,
-} from '@ui';
+import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -57,7 +49,6 @@ import {
   Switch,
 } from 'solid-js';
 import { Transition } from 'solid-transition-group';
-import { formatAssetUrl, loadEntryAssetInfo } from './entryAssetInfo';
 import {
   SettingsCard,
   SettingsPage,
@@ -720,15 +711,11 @@ type BundleDebugInfo = {
 
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [showBuildInfo, setShowBuildInfo] = createSignal(false);
   const [bundleDebugInfo] = createResource(() =>
     invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
       console.error('[bundle-update] get_bundle_debug_info failed', error);
       return null;
     })
-  );
-  const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
-    open ? loadEntryAssetInfo() : null
   );
 
   return (
@@ -736,103 +723,9 @@ function BundleVersionRow() {
       {(info) => (
         <>
           <Row label="Version">
-            <button
-              type="button"
-              class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              onClick={() => setShowBuildInfo(true)}
-            >
-              {info().bundleBuild} (
-              {info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
-              {info().nativeBuild}
-            </button>
+            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'}
+            ) - {info().nativeBuild}
           </Row>
-          <Dialog
-            open={showBuildInfo()}
-            onOpenChange={setShowBuildInfo}
-            position="center"
-            class="w-120"
-          >
-            <Panel active depth={2} class="rounded-xl">
-              <Panel.Header class="px-6">
-                <Dialog.Title class="text-ink text-sm font-semibold">
-                  App Debug Info
-                </Dialog.Title>
-              </Panel.Header>
-              <Panel.Body class="p-6 font-sans flex flex-col gap-4">
-                <div class="grid gap-2 text-sm">
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Selected bundle</span>
-                    <span class="text-ink">
-                      {info().bundleBuild} (
-                      {info().source === 'embedded' ? 'app' : 'ota'})
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Native build</span>
-                    <span class="text-ink">{info().nativeBuild}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Runtime entry</span>
-                    <span
-                      class={cn(
-                        'text-right break-all',
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : formatAssetUrl(entryAssetInfo()?.loadedEntryUrl)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Fresh index entry</span>
-                    <span
-                      class={cn(
-                        'text-right break-all',
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : formatAssetUrl(entryAssetInfo()?.freshIndexEntryUrl)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Matches</span>
-                    <span
-                      class={cn(
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : entryAssetInfo()?.matches == null
-                          ? 'unknown'
-                          : entryAssetInfo()?.matches
-                            ? 'true'
-                            : 'false'}
-                    </span>
-                  </div>
-                  <Show when={entryAssetInfo()?.error}>
-                    {(error) => (
-                      <div class="flex items-center justify-between gap-4">
-                        <span class="text-ink-muted">Error</span>
-                        <span class="text-right text-failure break-all">
-                          {error()}
-                        </span>
-                      </div>
-                    )}
-                  </Show>
-                </div>
-              </Panel.Body>
-            </Panel>
-          </Dialog>
         </>
       )}
     </Show>

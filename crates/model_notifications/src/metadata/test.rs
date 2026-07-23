@@ -570,6 +570,44 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
     assert_eq!(title, "Helper Bot mentioned you in #general");
 }
 
+fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMentionMetadata {
+    DocumentMentionMetadata {
+        document_name: "Q3 plan".to_string(),
+        owner: uid("macro|owner@macro.com"),
+        file_type: Some("md".to_string()),
+        sub_type,
+        channel: ChannelMentionMetadata {
+            message_id: Uuid::nil().to_string(),
+            message_content: "check this out".to_string(),
+            has_attachments: false,
+            thread_id: None,
+            sender_display_name: None,
+            common: CommonChannelMetadata {
+                channel_type: ChannelType::Public,
+                channel_name: "general".to_string(),
+            },
+            sender_profile_picture_url: None,
+        },
+    }
+}
+
+#[test]
+fn document_mention_title_says_task_for_task_sub_type() {
+    let task = document_mention(Some(NotificationDocumentSubType::Task));
+    let doc = document_mention(None);
+
+    assert_eq!(
+        task.format_title(Some(uid("macro|sender@macro.com")))
+            .unwrap(),
+        "sender@macro.com sent a task"
+    );
+    assert_eq!(
+        doc.format_title(Some(uid("macro|sender@macro.com")))
+            .unwrap(),
+        "sender@macro.com sent a document"
+    );
+}
+
 #[test]
 fn channel_message_send_legacy_json_deserializes_with_required_sender() {
     let legacy: ChannelMessageSendMetadata = serde_json::from_value(serde_json::json!({

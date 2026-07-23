@@ -14,7 +14,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import type { TimelineRow } from './collapse';
 import { EntityEventRow } from './entity-event-row';
-import { mapMyActivityEntity, mapSharedEmailEntity } from './entity-events';
+import { mapEmailActivityEntity, mapMyActivityEntity } from './entity-events';
 import {
   createNotificationTimelineFeed,
   createSoupTimelineFeed,
@@ -68,6 +68,10 @@ const myActionsItemFilter: SoupApiItemFilter = (item) =>
 
 const emailOnlyItemFilter: SoupApiItemFilter = (item) =>
   item.tag === 'emailThread';
+
+/** Firehose email gate: threads only, and only signal (`is_signal`) ones. */
+const signalEmailItemFilter: SoupApiItemFilter = (item) =>
+  item.tag === 'emailThread' && item.data.isImportant;
 
 /**
  * A notification row (or collapsed run of them). Single notifications render
@@ -147,9 +151,9 @@ function MyActivityPane(props: { trailing?: JSX.Element }) {
  * Notifications supply the per-event records — every channel message (with
  * its text), thread replies, mentions, document comments, task assignments,
  * calls, and GitHub PR events (opened/merged/closed, reviews, comments).
- * CRM-shared email threads are merged in from soup so team email traffic
- * (visibility inherited from CRM permissions) shows up even though it never
- * notifies this user directly.
+ * Email activity is merged in from soup, filtered to signal threads only:
+ * the user's inbox arrivals plus CRM-shared team threads (visibility
+ * inherited from CRM permissions), which never notify this user directly.
  */
 function FirehosePane(props: { trailing?: JSX.Element }) {
   const resolveChannel = useChannelLookup();
@@ -159,14 +163,29 @@ function FirehosePane(props: { trailing?: JSX.Element }) {
     // is history, so fetch both and merge.
     createNotificationTimelineFeed({}),
     createNotificationTimelineFeed({ done: true }),
+    // Email activity, signal only (`emailImportance` compiles to the
+    // classifier's per-thread `is_signal` flag — the same definition as the
+    // inbox Signal tab). Two feeds because Shared scoping is disjoint:
+    // CRM-shared team threads, and the user's own inbox arrivals, which
+    // used to come from `new_email` notifications that carry no
+    // signal/noise flag.
     createSoupTimelineFeed({
       query: () =>
         defineQueryFilters({
-          include: { emailShared: 'only' },
+          include: { emailShared: 'only', emailImportance: true },
           emailView: 'all',
         }),
-      map: mapSharedEmailEntity,
-      itemFilter: emailOnlyItemFilter,
+      map: mapEmailActivityEntity,
+      itemFilter: signalEmailItemFilter,
+    }),
+    createSoupTimelineFeed({
+      query: () =>
+        defineQueryFilters({
+          include: { emailShared: 'exclude', emailImportance: true },
+          emailView: 'inbox',
+        }),
+      map: mapEmailActivityEntity,
+      itemFilter: signalEmailItemFilter,
     }),
   ]);
 

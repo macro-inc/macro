@@ -1,14 +1,14 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::email::messages::BATCH_UPDATE_MESSAGE_LIMIT;
 use anyhow::Context;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use email_service::pubsub::publish_email_event;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::service;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
@@ -43,10 +43,10 @@ pub struct UpdateLabelBatchResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     Json(body): Json<UpdateLabelBatchRequest>,
 ) -> Result<Response, Response> {
     if body.message_ids.is_empty() || body.message_ids.len() > BATCH_UPDATE_MESSAGE_LIMIT {
@@ -66,7 +66,7 @@ pub async fn handler(
     // delegated inboxes); a single label op targets messages in one inbox.
     let link = email_db_client::links::get::fetch_owned_link_for_message(
         &ctx.db,
-        &user_context.user_id,
+        &authorization.user_context.user_id,
         body.message_ids[0],
     )
     .await
@@ -119,7 +119,7 @@ pub async fn handler(
     let db_messages = email_db_client::messages::get_simple_messages::get_simple_messages_batch(
         &ctx.db,
         &body.message_ids,
-        &user_context.fusion_user_id,
+        &authorization.user_context.fusion_user_id,
     )
     .await
     .map_err(|e| {
@@ -186,7 +186,7 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_read_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &user_context.fusion_user_id,
+                    &authorization.user_context.fusion_user_id,
                     !is_adding,
                 )
                 .await
@@ -195,7 +195,7 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_starred_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &user_context.fusion_user_id,
+                    &authorization.user_context.fusion_user_id,
                     is_adding,
                 )
                 .await

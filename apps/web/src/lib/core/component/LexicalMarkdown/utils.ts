@@ -1069,6 +1069,21 @@ export function $insertNodesAndSplitList(nodes: LexicalNode[]) {
   }
   const matchingParent = $findMatchingParent(node, $isListItemNode);
   if (!matchingParent) {
+    const topLevelElement = node.getTopLevelElement();
+    if (
+      anchor.offset === 0 &&
+      topLevelElement &&
+      topLevelElement.isEmpty() &&
+      topLevelElement === $getRoot().getFirstChild() &&
+      topLevelElement === $getRoot().getLastChild()
+    ) {
+      // Inserting via $insertNodes here would delete this lone empty
+      // block once the new (non-mergeable, e.g. decorator) nodes are
+      // placed after it, leaving no element for the cursor to land in.
+      // Insert before it instead so it survives as a place to type.
+      $getRoot().splice(0, 0, nodes);
+      return;
+    }
     $insertNodes(nodes);
     nodes.at(-1)?.selectEnd();
     return;

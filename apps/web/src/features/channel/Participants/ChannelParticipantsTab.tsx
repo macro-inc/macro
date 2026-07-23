@@ -1,19 +1,23 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useChannelType } from '@core/context/channels';
+import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { idToEmail } from '@core/user';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { usePatchChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { ParticipantRole } from '@service-storage/generated/schemas/participantRole';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ChannelBotsPanel } from './ChannelBotsPanel';
 import { ChannelJoinLinkButton } from './ChannelJoinLinkButton';
+import { ChannelTeamSettingsPanel } from './ChannelTeamSettingsPanel';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';
@@ -27,15 +31,48 @@ export function ChannelParticipantsTab(props: {
 }) {
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
+  const channel = useChannel(props.channelId);
   const channelType = useChannelType(props.channelId);
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
+  const currentTeamQuery = useCurrentTeamQuery();
+  const patchChannelMutation = usePatchChannelMutation();
   const addParticipantsMutation = useAddParticipantsMutation();
   const removeParticipantsMutation = useRemoveParticipantsMutation();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
-  const canAddParticipants = () => channelType() === ChannelType.private;
+  const currentParticipant = () =>
+    participants().find((participant) => participant.user_id === userId());
+  const canManageChannel = () => {
+    const role = currentParticipant()?.role;
+    return role === ParticipantRole.owner || role === ParticipantRole.admin;
+  };
+  const pendingPatch = () =>
+    patchChannelMutation.isPending ? patchChannelMutation.variables : undefined;
+  const isTeamChannel = () =>
+    channelType() === ChannelType.team ||
+    pendingPatch()?.convert_to_team_channel === true;
+  const autoJoinTeam = () => {
+    const pendingAutoJoin = pendingPatch()?.auto_join_team;
+    return typeof pendingAutoJoin === 'boolean'
+      ? pendingAutoJoin
+      : (channel()?.auto_join_team ?? false);
+  };
+  const supportsTeamSettings = () =>
+    channelType() === ChannelType.private ||
+    channelType() === ChannelType.public ||
+    channelType() === ChannelType.team;
+  const currentTeam = () => currentTeamQuery.data?.team;
+  const canConvertToTeam = () => !isTeamChannel() && !!currentTeam();
+  const conversionUnavailableReason = () => {
+    if (isTeamChannel() || currentTeam()) return undefined;
+    return currentTeamQuery.isLoading
+      ? 'Checking your team membership…'
+      : 'You need to belong to a team before converting this channel.';
+  };
+  const canAddParticipants = () =>
+    channelType() === ChannelType.private || channelType() === ChannelType.team;
   const isEditable = () => canAddParticipants();
 
   const filteredParticipants = () => {
@@ -73,6 +110,23 @@ export function ChannelParticipantsTab(props: {
     });
   };
 
+  const convertToTeamChannel = () => {
+    if (!canManageChannel() || !canConvertToTeam()) return;
+    patchChannelMutation.mutate({
+      channelId: props.channelId,
+      channel_name: channel()?.name,
+      convert_to_team_channel: true,
+    });
+  };
+
+  const updateAutoJoinTeam = (enabled: boolean) => {
+    if (!canManageChannel() || channelType() !== ChannelType.team) return;
+    patchChannelMutation.mutate({
+      channelId: props.channelId,
+      auto_join_team: enabled,
+    });
+  };
+
   const openDirectMessage = (participantId: string) => {
     getOrCreateDmMutation.mutate(
       { recipient_id: participantId },
@@ -102,6 +156,17 @@ export function ChannelParticipantsTab(props: {
           </Panel.Toolbar>
           <Panel.Body>
             <div class="flex h-full flex-col">
+              <Show when={canManageChannel() && supportsTeamSettings()}>
+                <ChannelTeamSettingsPanel
+                  isTeamChannel={isTeamChannel()}
+                  autoJoinTeam={autoJoinTeam()}
+                  canConvertToTeam={canConvertToTeam()}
+                  conversionUnavailableReason={conversionUnavailableReason()}
+                  disabled={patchChannelMutation.isPending}
+                  onConvertToTeam={convertToTeamChannel}
+                  onAutoJoinTeamChange={updateAutoJoinTeam}
+                />
+              </Show>
               <Show when={isEditable()}>
                 <div class="px-6 py-3 border-b border-edge-muted shrink-0">
                   <ParticipantsAddPanel

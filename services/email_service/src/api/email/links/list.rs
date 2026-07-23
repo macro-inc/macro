@@ -1,11 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::api;
 use utoipa::ToSchema;
 
@@ -16,15 +15,12 @@ use thiserror::Error;
 pub enum ListLinksError {
     #[error("Database error")]
     DatabaseError(anyhow::Error),
-    #[error("Invalid macro user id")]
-    InvalidMacroId,
 }
 
 impl IntoResponse for ListLinksError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             ListLinksError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            ListLinksError::InvalidMacroId => StatusCode::BAD_REQUEST,
         };
 
         (status_code, self.to_string()).into_response()
@@ -51,17 +47,17 @@ pub struct ListLinksResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, ListLinksError> {
-    let macro_id = MacroUserIdStr::parse_from_str(&user_context.user_id)
-        .map_err(|_| ListLinksError::InvalidMacroId)?;
-
-    let inboxes = email_db_client::links::get::fetch_inbox_details_for_macro_id(&ctx.db, &macro_id)
-        .await
-        .map_err(ListLinksError::DatabaseError)?;
+    let inboxes = email_db_client::links::get::fetch_inbox_details_for_macro_id(
+        &ctx.db,
+        &authorization.macro_user_id,
+    )
+    .await
+    .map_err(ListLinksError::DatabaseError)?;
 
     let links = inboxes
         .into_iter()

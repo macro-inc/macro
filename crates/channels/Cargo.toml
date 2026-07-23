@@ -25,8 +25,8 @@ attachment = [
 inbound = [
   "dep:axum",
   "dep:entity_access",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/inbound",
   "models_pagination/axum",
@@ -63,7 +63,7 @@ outbound = [
   "macro_user_id/sqlx",
   "ports",
 ]
-ports = ["dep:tokio", "macro_event_broker/ports"]
+ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -83,6 +83,9 @@ frecency = { path = "../frecency", optional = true }
 futures = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 item_filters = { path = "../item_filters", optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
@@ -90,7 +93,6 @@ macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
 non_empty = { path = "../non_empty", optional = true }
@@ -118,13 +120,14 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }
-macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
 macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
+rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tower = { workspace = true }

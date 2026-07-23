@@ -13,5 +13,6 @@ pub mod normalize;
 pub mod query_inspection;
 mod query_path;
 pub mod queue;
+pub mod record_selection;
 pub mod store;
 pub mod value;

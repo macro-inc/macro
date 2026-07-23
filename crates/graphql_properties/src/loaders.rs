@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use entity_access::domain::models::ViewAccessLevel;
@@ -7,17 +7,20 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use rootcause::markers::{Cloneable, Dynamic};
 
-/// Map a shared entity type to its properties-domain representation.
-fn property_entity_type(
-    entity_type: model_entity::EntityType,
-) -> Option<models_properties::EntityType> {
+/// Whether the canonical entity type supports property targets.
+fn is_property_target(entity_type: model_entity::EntityType) -> bool {
     use model_entity::EntityType;
-    match entity_type {
-        EntityType::EmailThread => Some(models_properties::EntityType::Thread),
-        EntityType::CrmCompany => Some(models_properties::EntityType::Company),
-        EntityType::Call | EntityType::ChannelMessage | EntityType::ForeignEntity => None,
-        other => models_properties::EntityType::from_str(other.as_ref()).ok(),
-    }
+    matches!(
+        entity_type,
+        EntityType::Document
+            | EntityType::EmailThread
+            | EntityType::CrmCompany
+            | EntityType::Call
+            | EntityType::Chat
+            | EntityType::Channel
+            | EntityType::Project
+            | EntityType::User
+    )
 }
 
 /// Reader used by GraphQL property edges.
@@ -96,24 +99,19 @@ where
         // skipped and keep their empty property list.
         let mut receipts = Vec::with_capacity(keys.len());
         for key in keys {
-            let Some(entity_type) = property_entity_type(key.entity_type) else {
+            if !is_property_target(key.entity_type) {
                 continue;
-            };
+            }
             let access_receipt = self
                 .entity_access_service
                 .generate_entity_access_receipt::<ViewAccessLevel>(
                     user_id,
                     None,
                     &key.entity_id,
-                    properties::access_entity_type(entity_type),
+                    key.entity_type,
                 )
                 .await;
-            match access_receipt.and_then(|receipt| {
-                properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
-                    receipt,
-                    entity_type,
-                )
-            }) {
+            match access_receipt {
                 Ok(receipt) => receipts.push(receipt),
                 Err(err) => {
                     tracing::debug!(
@@ -136,16 +134,14 @@ where
             .await
             .map_err(|err| rootcause::report!(err))?;
 
-        // Merge back under the original loader keys: the batch result is keyed
-        // by the normalized entity type, which for alias keys ("email",
-        // "email_thread", "crm_company") differs from the requested key.
+        // Merge back under the original canonical loader keys.
         for key in keys {
-            let Some(entity_type) = property_entity_type(key.entity_type) else {
+            if !is_property_target(key.entity_type) {
                 continue;
-            };
-            let batch_key = properties::EntityPropertiesKey {
+            }
+            let batch_key = properties::PropertyTargetKey {
                 entity_id: key.entity_id.to_string(),
-                entity_type,
+                entity_type: key.entity_type,
             };
             if let Some(properties) = properties_by_entity.get(&batch_key) {
                 result.insert(key.clone(), properties.clone());

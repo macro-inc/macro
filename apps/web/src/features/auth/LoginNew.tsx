@@ -39,7 +39,12 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { sendEmailCode, useResetEmailCode } from './EmailForm';
+import {
+  autoLoginCode,
+  sendEmailCode,
+  sentEmailCode,
+  useResetEmailCode,
+} from './EmailForm';
 import { Stage } from './Shared';
 import { useSsoLogin } from './useSsoLogin';
 
@@ -161,14 +166,32 @@ function EmailFormNew(props: {
 }) {
   const [isPasswordLogin, setIsPasswordLogin] = createSignal(false);
   const submission = useSubmission(sendEmailCode);
+  const send = useAction(sendEmailCode);
   const [searchParams] = useSearchParams();
   const searchParamsEmail = untrack(() => {
     const email = searchParams.email;
     if (typeof email === 'string') return email;
   });
 
+  // Dev builds auto-start the flow for `?email=` links (the seeder prints
+  // them per persona); combined with the local backend returning the code,
+  // opening the link logs straight in.
   createEffect(() => {
-    if (submission.result === true) {
+    if (
+      import.meta.env.DEV &&
+      searchParamsEmail &&
+      !submission.pending &&
+      !submission.result &&
+      !submission.error
+    ) {
+      const formData = new FormData();
+      formData.append('email', searchParamsEmail);
+      send(formData);
+    }
+  });
+
+  createEffect(() => {
+    if (sentEmailCode(submission.result)) {
       props.setStage(Stage.Verify);
     } else if (submission.result === 'isPasswordLogin') {
       setIsPasswordLogin(true);
@@ -246,6 +269,23 @@ function VerifyFormNew(props: {
   const submit = useAction(verifyCode);
 
   const email = () => emailSubmission.input?.[0].get('email') as string;
+
+  // Local backends return the code with the email step; submit it
+  // automatically so seeded persona logins are one click.
+  createEffect(() => {
+    const code = autoLoginCode(emailSubmission.result);
+    if (
+      code &&
+      !submission.pending &&
+      !submission.result &&
+      !submission.error
+    ) {
+      const formData = new FormData();
+      formData.append('email', email());
+      formData.append('one-time-code', code);
+      submit(formData);
+    }
+  });
 
   createEffect(() => {
     if (!showResendCode()) {

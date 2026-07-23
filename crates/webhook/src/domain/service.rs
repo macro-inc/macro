@@ -1,6 +1,10 @@
 //! Webhook service implementation.
 
 use super::{
+    events::{
+        WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata,
+        WebhookValidatedMetadata,
+    },
     models::{
         CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
         WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
@@ -9,6 +13,7 @@ use super::{
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
 use chrono::Utc;
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::net::IpAddr;
 use url::Url;
@@ -22,19 +27,21 @@ const VALIDATION_EVENT_NAME: &str = "webhook.validation.test";
 
 /// Webhook service implementation.
 #[derive(Debug, Clone)]
-pub struct WebhookServiceImpl<R, V> {
+pub struct WebhookServiceImpl<R, V, B> {
     repo: R,
     validation_client: V,
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    event_broker: B,
 }
 
-impl<R, V> WebhookServiceImpl<R, V> {
+impl<R, V, B> WebhookServiceImpl<R, V, B> {
     /// Create a webhook service that requires public HTTPS endpoints.
-    pub fn new(repo: R, validation_client: V) -> Self {
+    pub fn new(repo: R, validation_client: V, event_broker: B) -> Self {
         Self::new_with_endpoint_scheme_policy(
             repo,
             validation_client,
             WebhookEndpointSchemePolicy::HttpsOnly,
+            event_broker,
         )
     }
 
@@ -43,11 +50,13 @@ impl<R, V> WebhookServiceImpl<R, V> {
         repo: R,
         validation_client: V,
         endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+        event_broker: B,
     ) -> Self {
         Self {
             repo,
             validation_client,
             endpoint_scheme_policy,
+            event_broker,
         }
     }
 }
@@ -239,11 +248,18 @@ fn validation_response(
     }
 }
 
-impl<R, V> WebhookServiceImpl<R, V>
+impl<R, V, B> WebhookServiceImpl<R, V, B>
 where
     R: WebhookRepo,
     V: WebhookValidationClient,
+    B: MacroEventBroker,
 {
+    fn publish_webhook_event(&self, event: &WebhookMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error=?error, "failed to schedule webhook lifecycle event");
+        }));
+    }
+
     async fn workspace_id_for_scope(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -306,10 +322,11 @@ where
     }
 }
 
-impl<R, V> WebhookService for WebhookServiceImpl<R, V>
+impl<R, V, B> WebhookService for WebhookServiceImpl<R, V, B>
 where
     R: WebhookRepo,
     V: WebhookValidationClient,
+    B: MacroEventBroker + Clone,
 {
     async fn create_webhook(
         &self,
@@ -321,6 +338,11 @@ where
         let workspace_id = self
             .workspace_id_for_scope(caller.clone(), request.scope)
             .await?;
+        let created_by_user_id = caller.clone();
+        let mut header_names = request.headers.as_ref().map_or_else(Vec::new, |headers| {
+            headers.keys().cloned().collect::<Vec<_>>()
+        });
+        header_names.sort();
 
         let signing_secret = generate_signing_secret(&caller);
         let headers = serde_json::to_value(request.headers.clone().unwrap_or_default())
@@ -331,6 +353,23 @@ where
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
         webhook.is_valid = false;
+
+        self.publish_webhook_event(&WebhookMacroEvent::created(
+            webhook.id.clone(),
+            WebhookCreatedMetadata {
+                webhook_id: webhook.id.clone(),
+                workspace_id: webhook.workspace_id.clone(),
+                created_by_user_id,
+                name: webhook.name.clone(),
+                endpoint_url: webhook.endpoint_url.clone(),
+                status: webhook.status,
+                is_valid: webhook.is_valid,
+                filters: webhook.filters.clone(),
+                header_names,
+                created_at: webhook.created_at,
+            },
+        ));
+
         Ok(webhook)
     }
 
@@ -341,10 +380,17 @@ where
         request: PatchWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
         let webhook = self
-            .load_authorized_webhook(caller, webhook_id.clone())
+            .load_authorized_webhook(caller.clone(), webhook_id.clone())
             .await?;
         validate_patch_request(&request, self.endpoint_scheme_policy)?;
-        let reset_validity = request.endpoint_url.is_some() || request.headers.is_some();
+
+        let requested_name = request.name.clone();
+        let requested_endpoint_url = request.endpoint_url.clone();
+        let requested_filters = request.filters.clone();
+        let headers_updated = request.headers.is_some();
+        let requested_status = request.status;
+        let previous_status = requested_status.map(|_| webhook.status);
+        let reset_validity = requested_endpoint_url.is_some() || headers_updated;
 
         let patched = self
             .repo
@@ -353,15 +399,34 @@ where
             .map_err(|err| WebhookError::Repo(err.into()))?
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
 
-        if !reset_validity {
-            return Ok(patched);
-        }
+        let final_webhook = if reset_validity {
+            self.repo
+                .set_webhook_validity(patched.id, false)
+                .await
+                .map_err(|err| WebhookError::Repo(err.into()))?
+                .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?
+        } else {
+            patched
+        };
 
-        self.repo
-            .set_webhook_validity(patched.id, false)
-            .await
-            .map_err(|err| WebhookError::Repo(err.into()))?
-            .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))
+        self.publish_webhook_event(&WebhookMacroEvent::updated(
+            final_webhook.id.clone(),
+            WebhookUpdatedMetadata {
+                webhook_id: final_webhook.id.clone(),
+                workspace_id: final_webhook.workspace_id.clone(),
+                actor_user_id: caller,
+                name: requested_name,
+                endpoint_url: requested_endpoint_url,
+                filters: requested_filters,
+                headers_updated,
+                status: requested_status,
+                previous_status,
+                is_valid: final_webhook.is_valid,
+                updated_at: final_webhook.updated_at,
+            },
+        ));
+
+        Ok(final_webhook)
     }
 
     async fn validate_webhook(
@@ -370,20 +435,32 @@ where
         webhook_id: WebhookId,
     ) -> Result<ValidateWebhookResponse, WebhookError> {
         let webhook = self
-            .load_authorized_webhook(caller, webhook_id.clone())
+            .load_authorized_webhook(caller.clone(), webhook_id.clone())
             .await?;
+        let workspace_id = webhook.workspace_id.clone();
         let result = self
             .validation_client
             .validate_webhook(webhook)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
-        let is_valid = result.is_valid;
 
         self.repo
-            .set_webhook_validity(webhook_id.clone(), is_valid)
+            .set_webhook_validity(webhook_id.clone(), result.is_valid)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
+
+        self.publish_webhook_event(&WebhookMacroEvent::validated(
+            webhook_id.clone(),
+            WebhookValidatedMetadata {
+                webhook_id: webhook_id.clone(),
+                workspace_id,
+                actor_user_id: caller,
+                is_valid: result.is_valid,
+                response_status: result.response_status,
+                message: result.message.clone(),
+            },
+        ));
 
         Ok(validation_response(webhook_id, result))
     }
@@ -394,14 +471,23 @@ where
         webhook_id: WebhookId,
     ) -> Result<(), WebhookError> {
         let webhook = self
-            .load_authorized_webhook(caller, webhook_id.clone())
+            .load_authorized_webhook(caller.clone(), webhook_id)
             .await?;
 
         self.repo
-            .delete_webhook(webhook.id)
+            .delete_webhook(webhook.id.clone())
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
+
+        self.publish_webhook_event(&WebhookMacroEvent::deleted(
+            webhook.id.clone(),
+            WebhookDeletedMetadata {
+                webhook_id: webhook.id,
+                workspace_id: webhook.workspace_id,
+                actor_user_id: caller,
+            },
+        ));
 
         Ok(())
     }

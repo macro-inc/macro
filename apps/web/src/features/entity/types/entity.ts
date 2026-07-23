@@ -97,6 +97,13 @@ export type ChannelEntity = EntityBase & {
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
+  /**
+   * Whether the viewer is an active participant of the channel. `false` only
+   * for team channels of the viewer's teams they haven't joined (surfaced in
+   * the Channels → Teams tab with a Join affordance); absent means the row
+   * predates the flag and is treated as joined.
+   */
+  isParticipant?: boolean;
   latestMessage?: ChannelEntityLatestMessage;
   latestRootMessage?: ChannelEntityLatestMessage;
   target?: ChannelEntityTarget;
@@ -370,6 +377,17 @@ export const isChannelEntity = (
   entity: EntityData
 ): entity is ChannelEntity => {
   return entity.type === 'channel';
+};
+
+/**
+ * A channel the viewer can see but is not a participant of (a team channel of
+ * their team they haven't joined). These rows render a Join affordance and
+ * are not navigable — the viewer can't read the channel until they join.
+ *
+ * Deliberately not a type guard: a `false` result still includes channels.
+ */
+export const isNonMemberChannelEntity = (entity: EntityData): boolean => {
+  return isChannelEntity(entity) && entity.isParticipant === false;
 };
 
 export const isChannelMessageEntity = (

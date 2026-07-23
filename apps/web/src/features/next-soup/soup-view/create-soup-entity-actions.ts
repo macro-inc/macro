@@ -24,8 +24,11 @@ import {
   makeFavoriteAction,
   makeHideCompanyAction,
   makeMarkDoneAction,
+  makeMarkNotDoneAction,
+  makeMarkReadAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
+  makeMarkUnreadAction,
   makeMoveToProjectAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
@@ -92,6 +95,13 @@ export function createSoupEntityActions(): {
     notificationSource: () => notificationSource,
   });
 
+  const markNotDone = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
+  });
+
+  const markRead = makeMarkReadAction();
+  const markUnread = makeMarkUnreadAction();
+
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
   });
@@ -136,14 +146,46 @@ export function createSoupEntityActions(): {
     if (
       activeTab &&
       isListViewID(activeListView) &&
-      canExecuteMarkDoneOnView(activeListView, activeTab) &&
-      canExecuteAll(markDone.canExecute)
+      canExecuteMarkDoneOnView(activeListView, activeTab)
+    ) {
+      // A fully-done selection (e.g. archived threads in mail "All") gets the
+      // reverse action; anything else gets Mark Done.
+      if (canExecuteAll(markNotDone.canExecute)) {
+        topItems.push({
+          id: 'mark-not-done',
+          label: 'Mark Not Done',
+          hotkeyToken: TOKENS.entity.action.markNotDone,
+          onClick: handle(markNotDone.executeWithSoup),
+        });
+      } else if (canExecuteAll(markDone.canExecute)) {
+        topItems.push({
+          id: 'mark-done',
+          label: 'Mark Done',
+          hotkeyToken: TOKENS.entity.action.markDone,
+          onClick: handle(markDone.executeWithSoup),
+        });
+      }
+    }
+
+    // Read-state toggle for email selections: a fully-read selection gets
+    // Mark Unread; anything with an unread thread gets Mark Read (which
+    // skips the already-read ones).
+    if (canExecuteAll(markUnread.canExecute)) {
+      topItems.push({
+        id: 'mark-unread',
+        label: 'Mark Unread',
+        hotkeyToken: TOKENS.entity.action.markUnread,
+        onClick: handle(markUnread.executeWithSoup),
+      });
+    } else if (
+      entities.every((e) => e.type === 'email') &&
+      entities.some(markRead.canExecute)
     ) {
       topItems.push({
-        id: 'mark-done',
-        label: 'Mark Done',
-        hotkeyToken: TOKENS.entity.action.markDone,
-        onClick: handle(markDone.executeWithSoup),
+        id: 'mark-read',
+        label: 'Mark Read',
+        hotkeyToken: TOKENS.entity.action.markRead,
+        onClick: handle(markRead.executeWithSoup),
       });
     }
 

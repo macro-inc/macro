@@ -16,9 +16,15 @@ import type { TimelineFeed, TimelineItem } from './timeline-types';
 
 const PAGE_SIZE = 50;
 
-/** Notification event types that are plumbing rather than team activity. */
+/**
+ * Notification event types the timeline skips: plumbing rather than team
+ * activity, plus email arrivals — notifications carry no signal/noise flag
+ * client-side, so Firehose sources email activity from signal-filtered soup
+ * feeds instead (`Importance(true)` compiles to the thread's `is_signal`).
+ */
 const EXCLUDED_NOTIFICATION_TAGS: ReadonlySet<string> = new Set([
   'inbox_reauth_required',
+  'new_email',
 ]);
 
 /**

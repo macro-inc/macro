@@ -28,6 +28,7 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
+import { SoupRowMetadataProvider } from '@app/features/next-soup/soup-view/soup-row-metadata-provider';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/features/next-soup/soup-view/soup-view-file-dropzone';
@@ -89,6 +90,7 @@ import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
+  isNonMemberChannelEntity,
   ListEntity,
   ListLayoutProvider,
   type ProjectEntity,
@@ -130,7 +132,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
-import { useSearchTagsFlag } from './filters-bar/search/search-tags-flag';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
@@ -336,23 +337,6 @@ export const SoupView = (props: SoupViewProps) => {
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
 
-  const searchTags = useSearchTagsFlag();
-
-  // The search view must not initialize with tag filters while the rollout
-  // flag is off. Raw readers (soup AST body, search request, WS insert guard)
-  // consume queryFilters directly, so restored or param-provided tag filters
-  // have to be stripped at the source, not scrubbed after the fact.
-  const stripGatedTagFilters = (
-    query: Query | undefined
-  ): Query | undefined => {
-    if (contentId !== 'search' || searchTags()) return query;
-    if (!query?.include?.tagFilters?.length) return query;
-    const include = { ...query.include };
-    delete include.tagFilters;
-    delete include.tagFilterMode;
-    return { ...query, include };
-  };
-
   const persistedFilters = entryState?.['search.filters'] as Query | undefined;
 
   const persistedPredicates = entryState?.['search.predicates'] as
@@ -406,11 +390,9 @@ export const SoupView = (props: SoupViewProps) => {
     init = true;
     batch(() => {
       soupView.initialize({
-        initialQuery: stripGatedTagFilters(
-          initialCrmView
-            ? (initialCrmView.filters as Query | undefined)
-            : (persistedFilters ?? props.initialFilters)
-        ),
+        initialQuery: initialCrmView
+          ? (initialCrmView.filters as Query | undefined)
+          : (persistedFilters ?? props.initialFilters),
         initialClientFilters: initialCrmView
           ? (initialCrmView.clientFilters ?? {})
           : (persistedPredicates ?? props.initialClientFilters),
@@ -747,7 +729,20 @@ interface SoupViewListProps {
   scopeId?: string;
 }
 
-export const SoupViewList = (props: SoupViewListProps) => {
+/**
+ * Complete soup-list composition boundary. Exported consumers receive the
+ * shared metadata contexts required by every row and row-owned overlay.
+ */
+export const SoupViewList = (props: SoupViewListProps) => (
+  <SoupRowMetadataProvider>
+    <SoupViewListContent
+      customScrollbarHidden={props.customScrollbarHidden}
+      scopeId={props.scopeId}
+    />
+  </SoupRowMetadataProvider>
+);
+
+const SoupViewListContent = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
   const {
     soup,
@@ -938,6 +933,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
     const entity = (
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
+
+    // Channels the viewer hasn't joined can't be read: no preview, no
+    // navigation — the row's Join button is the only affordance.
+    if (isNonMemberChannelEntity(entity)) return;
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
@@ -1532,8 +1531,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 };
 
-const DEFAULT_ITEM_SIZE = 10;
 const DEFAULT_OVERSCAN = 5;
+const DEFAULT_ITEM_SIZE_ESTIMATE = 40;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
@@ -1556,7 +1555,6 @@ const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
 
-  const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
@@ -1627,8 +1625,12 @@ const SoupList = (props: SoupListProps) => {
           ref={registerVirtualizerHandler}
           startMargin={topInset()}
           data={props.rows}
-          itemSize={itemSize()}
-          bufferSize={overscan() * itemSize()}
+          // Leave itemSize unset for heterogeneous lists so Virtua measures
+          // larger rows; 40px is only the default overscan estimate.
+          itemSize={props.itemSize}
+          bufferSize={
+            overscan() * (props.itemSize ?? DEFAULT_ITEM_SIZE_ESTIMATE)
+          }
           onScroll={handleScroll}
         >
           {(row, i) => props.children(row, i)}

@@ -24,7 +24,7 @@ use entity_access::{
     },
     inbound::axum_extractors::{
         CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor,
-        ChannelAccessLevelExtractorV2,
+        ChannelAccessLevelExtractor,
     },
 };
 use macro_authorization::{
@@ -289,7 +289,7 @@ pub async fn get_or_create_call_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractorV2<MemberParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
@@ -327,7 +327,7 @@ pub async fn check_active_call_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractorV2<MemberParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
 ) -> Result<axum::response::Response, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;

@@ -120,6 +120,12 @@ services:
     environment:
       - OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL=http://document-storage-service:8080
       - OVERRIDE_AI_EDITING_WORKER_URL=http://ai-editing-worker:8933
+      # The import pipeline (and chat's CreateDocument) create documents from
+      # inside DCS, which initializes content through lexical + sync.
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
+      # Import/ai-projection completions push gateway nudges from inside DCS.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
     networks:
       databases:
       services:
@@ -398,6 +404,7 @@ services:
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
+      - DSS_INTERNAL_AUTH_KEY=${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}
     networks:
       services:
         aliases:

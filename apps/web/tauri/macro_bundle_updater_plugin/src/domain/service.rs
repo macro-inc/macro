@@ -1,13 +1,15 @@
 use crate::domain::{
+    bundle_routes::{BundleRoutes, BundleSource, BundleSourceKind},
     models::{
-        BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
+        AppInfo, BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
         NativeUpdateRequiredStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
         UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
     },
-    ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
+    ports::{AutoUpdateService, FsRepo, SystemQuery, TaskSpawner, UpdateRepo},
 };
 use rootcause::{Report, prelude::ResultExt, report};
 use std::{
+    marker::PhantomData,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -20,8 +22,10 @@ pub struct Service<Fs: FsRepo> {
     handle: WorkerHandle,
     fs_repo: Fs,
     embedded_bundle_build: u64,
+    native_build: u64,
     bundle_root: BundleRoot,
-    reload_pending: bool,
+    bundle_routes: BundleRoutes,
+    pending_reload_bundle_build: Option<u64>,
     reload_dispatched_at: Option<Instant>,
 }
 
@@ -46,10 +50,12 @@ type StartTx = tokio::sync::mpsc::Sender<WorkerCommand>;
 /// Worker receives on this to know when to run the checker loop.
 type StartRx = tokio::sync::mpsc::Receiver<WorkerCommand>;
 
-struct Worker<U, Fs, Q> {
+struct Worker<U, Fs, Q, S> {
     update_repo: U,
     fs_repo: Fs,
     system_query: Q,
+    bundle_routes: BundleRoutes,
+    _task_spawner: PhantomData<S>,
     status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
     start_rx: StartRx,
 }
@@ -64,8 +70,13 @@ struct WorkerHandle {
 const ENTRYPOINT_NAME: &str = "index.html";
 const PENDING_BUNDLE_ROOT_FILE: &str = "pending_bundle_root";
 
-impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
-    fn new_handle(update_repo: U, fs_repo: Fs, system_query: Q) -> WorkerHandle {
+impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q, S> {
+    fn new_handle(
+        update_repo: U,
+        fs_repo: Fs,
+        system_query: Q,
+        bundle_routes: BundleRoutes,
+    ) -> WorkerHandle {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
         let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
 
@@ -73,6 +84,8 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             update_repo,
             fs_repo,
             system_query,
+            bundle_routes,
+            _task_spawner: PhantomData::<S>,
             status_tx: status_tx.clone(),
             start_rx,
         }
@@ -85,19 +98,20 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         }
     }
 
-    fn run_background(mut self) {
-        tauri::async_runtime::spawn(async move {
+    fn run_background(self) {
+        S::spawn(async move {
+            let mut worker = self;
             // Run the checker loop once on startup, then again each time we
             // receive a restart signal from the main thread.
-            while let Some(command) = self.start_rx.recv().await {
+            while let Some(command) = worker.start_rx.recv().await {
                 if matches!(command, WorkerCommand::Restart) {
                     // Reset status to Idle for the new run.
-                    if self.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
+                    if worker.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
                         break;
                     }
                 }
 
-                self.run_check_loop().await;
+                worker.run_check_loop().await;
             }
         });
     }
@@ -149,11 +163,17 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
     ) -> Result<UpdateStatus, Report<UpdateError>> {
         match status {
             UpdateStatus::Idle => {
-                let app_info = self
+                let native_app_info = self
                     .system_query
-                    .get_system_info()
+                    .get_native_app_info()
                     .await
                     .context(UpdateError::Other)?;
+                let app_info = AppInfo {
+                    current_bundle_build: self.bundle_routes.active_identity().await.bundle_build,
+                    native_build: native_app_info.native_build,
+                    arch: native_app_info.arch,
+                    target: native_app_info.target,
+                };
 
                 Ok(UpdateStatus::CheckingForDownload(app_info))
             }
@@ -177,7 +197,10 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                             )
                             .await
                         {
-                            return Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }));
+                            return Ok(UpdateStatus::Completed(CompletedStatus {
+                                bundle_build: update.bundle_build,
+                                entrypoint,
+                            }));
                         }
                         Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
                             bundle: update,
@@ -188,14 +211,12 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                             reason: clear.reason,
                         }))
                     }
-                    Some(BundleAction::NativeUpdateRequired(required)) => {
-                        Ok(UpdateStatus::NativeUpdateRequired(
-                            NativeUpdateRequiredStatus {
-                                bundle_build: required.bundle_build,
-                                min_native_build: required.min_native_build,
-                            },
-                        ))
-                    }
+                    Some(BundleAction::NativeUpdateRequired(required)) => Ok(
+                        UpdateStatus::NativeUpdateRequired(NativeUpdateRequiredStatus {
+                            bundle_build: required.bundle_build,
+                            min_native_build: required.min_native_build,
+                        }),
+                    ),
                     None => Ok(UpdateStatus::NoUpdateNeeded),
                 }
             }
@@ -248,7 +269,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 let (req, rx) = status.update.into_download_request(&download_filename);
 
                 let status_tx = self.status_tx.clone();
-                tokio::task::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
+                S::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
                     UpdateStatus::DownloadingBundle(download) => {
                         download.progress = progress;
                         true
@@ -284,7 +305,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
                 let status_tx = self.status_tx.clone();
-                tokio::task::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
+                S::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
                     UpdateStatus::UnzippingBundle(zip) => {
                         zip.progress = progress;
                         true
@@ -299,7 +320,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     unzip_status.expected_bundle_build,
                     unzip_status.expected_min_native_build,
                     self.system_query
-                        .get_system_info()
+                        .get_native_app_info()
                         .await
                         .context(UpdateError::Other)?
                         .native_build,
@@ -327,7 +348,10 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 }
                 let mut entrypoint = bundle_dir;
                 entrypoint.push(ENTRYPOINT_NAME);
-                Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }))
+                Ok(UpdateStatus::Completed(CompletedStatus {
+                    bundle_build: unzip_status.expected_bundle_build,
+                    entrypoint,
+                }))
             }
             UpdateStatus::Completed(x) => Ok(UpdateStatus::Completed(x)),
         }
@@ -487,19 +511,28 @@ async fn glue_channels<F>(
 
 impl<Fs: FsRepo> Service<Fs> {
     /// Create a new service, spawning the background update worker.
-    pub fn new<U: UpdateRepo, Q: SystemQuery>(
+    pub fn new<U: UpdateRepo, Q: SystemQuery, S: TaskSpawner>(
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
         embedded_bundle_build: u64,
+        native_build: u64,
+        bundle_routes: BundleRoutes,
     ) -> Self {
-        let handle = Worker::new_handle(update_repo, fs_repo.clone(), system_query);
+        let handle = Worker::<U, Fs, Q, S>::new_handle(
+            update_repo,
+            fs_repo.clone(),
+            system_query,
+            bundle_routes.clone(),
+        );
         Service {
             handle,
             fs_repo,
             embedded_bundle_build,
+            native_build,
             bundle_root: BundleRoot::new(),
-            reload_pending: false,
+            bundle_routes,
+            pending_reload_bundle_build: None,
             reload_dispatched_at: None,
         }
     }
@@ -513,13 +546,22 @@ impl<Fs: FsRepo> Service<Fs> {
         if !self.current_bundle_is_usable(native_build).await {
             tracing::warn!("Clearing unusable persisted bundle root");
             let _ = self.clear_bundle_root(cache_dir).await;
+            self.cleanup_old_bundles(cache_dir, None).await;
         }
-        if self.bundle_root.path().is_some() {
+        if let Some(path) = self.bundle_root.path()
+            && let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await
+        {
+            self.bundle_routes
+                .restore(BundleSource::ota(manifest.bundle_build, path.to_path_buf()))
+                .await;
             if let Err(e) = self.clear_pending_bundle(cache_dir).await {
                 tracing::warn!(error=?e, "Failed to clear stale pending bundle marker");
             }
             return false;
         }
+        self.bundle_routes
+            .restore(BundleSource::embedded(self.embedded_bundle_build))
+            .await;
 
         self.restore_pending_completed_update(cache_dir, native_build)
             .await
@@ -528,6 +570,11 @@ impl<Fs: FsRepo> Service<Fs> {
     /// Bundle build embedded in this native app.
     pub fn embedded_bundle_build(&self) -> u64 {
         self.embedded_bundle_build
+    }
+
+    /// Native build of the running application.
+    pub fn native_build(&self) -> u64 {
+        self.native_build
     }
 
     /// Get the current bundle root path, if an OTA update has been applied.
@@ -541,7 +588,7 @@ impl<Fs: FsRepo> Service<Fs> {
     /// The worker remains in `Completed` until the reloaded webview acknowledges
     /// that it mounted with the new bundle root.
     pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<ApplyUpdateResult, Report> {
-        if self.reload_pending {
+        if self.pending_reload_bundle_build.is_some() {
             return Ok(if self.reload_dispatched_at.is_some() {
                 ApplyUpdateResult::ReloadAlreadyDispatched
             } else {
@@ -554,46 +601,43 @@ impl<Fs: FsRepo> Service<Fs> {
             matches!(status.as_ref(), Ok(UpdateStatus::ClearRequired(_)))
         };
         if should_clear {
-            self.clear_bundle_root(cache_dir).await?;
-            self.reload_pending = true;
-            self.reload_dispatched_at = None;
-            return Ok(ApplyUpdateResult::ReloadNeeded);
+            return Ok(self.revert_to_embedded(cache_dir).await?);
         }
 
-        let entrypoint = {
+        let completed = {
             let status = self.status().borrow();
             match status.as_ref() {
-                Ok(UpdateStatus::Completed(bundle_location)) => bundle_location.entrypoint.clone(),
+                Ok(UpdateStatus::Completed(completed)) => completed.clone(),
                 _ => return Ok(ApplyUpdateResult::NoUpdate),
             }
         };
 
+        let bundle_build = completed.bundle_build;
+        let entrypoint = completed.entrypoint;
         let bundle_dir = entrypoint
             .parent()
             .ok_or_else(|| report!("entrypoint {entrypoint:?} has no parent directory"))?
             .to_path_buf();
 
-        self.set_bundle_root(bundle_dir.clone(), cache_dir).await?;
+        self.set_bundle_root(bundle_dir.clone(), bundle_build, cache_dir)
+            .await?;
         self.clear_pending_bundle(cache_dir).await?;
-        self.reload_pending = true;
+        self.pending_reload_bundle_build = Some(bundle_build);
         self.reload_dispatched_at = None;
-
-        // Remove old bundle directories now that we've switched to the new one
-        self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
 
         Ok(ApplyUpdateResult::ReloadNeeded)
     }
 
     /// Record that the pending reload was successfully dispatched to the webview.
     pub fn mark_update_reload_dispatched(&mut self) {
-        if self.reload_pending {
+        if self.pending_reload_bundle_build.is_some() {
             self.reload_dispatched_at = Some(Instant::now());
         }
     }
 
     /// Clear a pending reload dispatch marker after dispatch failed synchronously.
     pub fn unmark_update_reload_dispatched(&mut self) -> bool {
-        if !self.reload_pending || self.reload_dispatched_at.is_none() {
+        if self.pending_reload_bundle_build.is_none() || self.reload_dispatched_at.is_none() {
             return false;
         }
 
@@ -603,7 +647,7 @@ impl<Fs: FsRepo> Service<Fs> {
 
     /// Allow a stale pending reload dispatch to be attempted again.
     pub fn allow_update_reload_retry(&mut self) -> bool {
-        if !self.reload_pending || self.reload_dispatched_at.is_none() {
+        if self.pending_reload_bundle_build.is_none() || self.reload_dispatched_at.is_none() {
             return false;
         }
 
@@ -622,13 +666,29 @@ impl<Fs: FsRepo> Service<Fs> {
     ///
     /// Returns `Ok(true)` if a pending reload was acknowledged and the updater
     /// worker was nudged to check again, or `Ok(false)` when no reload was pending.
-    pub fn acknowledge_update_reload(&mut self) -> Result<bool, Report> {
-        if !self.reload_pending {
+    pub async fn acknowledge_update_reload(
+        &mut self,
+        cache_dir: &Path,
+        loaded_bundle_build: u64,
+    ) -> Result<bool, Report> {
+        let Some(expected_bundle_build) = self.pending_reload_bundle_build else {
+            return Ok(false);
+        };
+        if loaded_bundle_build != expected_bundle_build {
+            tracing::warn!(
+                loaded_bundle_build,
+                expected_bundle_build,
+                "Ignoring bundle reload acknowledgement from a stale document"
+            );
             return Ok(false);
         }
 
+        self.bundle_routes.finish_transition().await;
+        let active_root = self.bundle_root.path().map(Path::to_path_buf);
+        self.cleanup_old_bundles(cache_dir, active_root.as_deref())
+            .await;
         self.restart_run_after_reload_ack()?;
-        self.reload_pending = false;
+        self.pending_reload_bundle_build = None;
         self.reload_dispatched_at = None;
         Ok(true)
     }
@@ -639,12 +699,16 @@ impl<Fs: FsRepo> Service<Fs> {
     async fn set_bundle_root(
         &mut self,
         path: PathBuf,
+        bundle_build: u64,
         cache_dir: &Path,
     ) -> Result<(), std::io::Error> {
         // Persist first — only commit in-memory if the write succeeds.
-        let new_root = BundleRoot::from_path(path);
+        let new_root = BundleRoot::from_path(path.clone());
         new_root.persist(cache_dir, &self.fs_repo).await?;
         self.bundle_root = new_root;
+        self.bundle_routes
+            .transition_to(BundleSource::ota(bundle_build, path))
+            .await;
         Ok(())
     }
 
@@ -734,7 +798,10 @@ impl<Fs: FsRepo> Service<Fs> {
         if let Err(e) = self
             .handle
             .status_tx
-            .send(Ok(UpdateStatus::Completed(CompletedStatus { entrypoint })))
+            .send(Ok(UpdateStatus::Completed(CompletedStatus {
+                bundle_build: manifest.bundle_build,
+                entrypoint,
+            })))
         {
             tracing::warn!(error=?e, "[bundle-update] failed to restore pending bundle status");
             return false;
@@ -743,34 +810,53 @@ impl<Fs: FsRepo> Service<Fs> {
         true
     }
 
-    /// Clear the bundle root and remove all downloaded bundles.
-    pub async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
-        self.clear_pending_bundle(cache_dir).await?;
-        for name in self.fs_repo.list_dir_names(cache_dir).await {
-            if name.parse::<u64>().is_ok() {
-                let _ = self.fs_repo.remove_dir_all(&cache_dir.join(&name)).await;
-            }
+    /// Revert to the embedded bundle and request a webview reload.
+    pub async fn revert_to_embedded(
+        &mut self,
+        cache_dir: &Path,
+    ) -> Result<ApplyUpdateResult, std::io::Error> {
+        if self.pending_reload_bundle_build.is_some() {
+            return Ok(if self.reload_dispatched_at.is_some() {
+                ApplyUpdateResult::ReloadAlreadyDispatched
+            } else {
+                ApplyUpdateResult::ReloadNeeded
+            });
         }
-        self.bundle_root.clear();
-        self.bundle_root.persist(cache_dir, &self.fs_repo).await
+        self.clear_bundle_root(cache_dir).await?;
+        self.pending_reload_bundle_build = Some(self.embedded_bundle_build);
+        self.reload_dispatched_at = None;
+        Ok(ApplyUpdateResult::ReloadNeeded)
     }
 
-    /// Read the bundle build from `bundle-manifest.json` inside the current bundle root.
+    /// Clear the active bundle root while retaining OTA files needed by the
+    /// currently loaded document until reload acknowledgement.
+    async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
+        self.clear_pending_bundle(cache_dir).await?;
+        let cleared_bundle_root = BundleRoot::new();
+        cleared_bundle_root
+            .persist(cache_dir, &self.fs_repo)
+            .await?;
+        self.bundle_root = cleared_bundle_root;
+        self.bundle_routes
+            .transition_to(BundleSource::embedded(self.embedded_bundle_build))
+            .await;
+        Ok(())
+    }
+
+    /// Return the active OTA bundle build, if the embedded bundle is not active.
     pub async fn bundle_build(&self) -> Option<u64> {
-        self.bundle_root
-            .manifest(&self.fs_repo)
-            .await
-            .map(|manifest| manifest.bundle_build)
+        let identity = self.bundle_routes.active_identity().await;
+        (identity.source == BundleSourceKind::Ota).then_some(identity.bundle_build)
     }
 
     /// Remove all numeric bundle subdirectories under `dir` except `keep`.
-    async fn cleanup_old_bundles(&self, dir: &Path, keep: &Path) {
+    async fn cleanup_old_bundles(&self, dir: &Path, keep: Option<&Path>) {
         for name in self.fs_repo.list_dir_names(dir).await {
             if name.parse::<u64>().is_err() {
                 continue;
             }
             let path = dir.join(&name);
-            if path == keep {
+            if keep.is_some_and(|keep| path == keep) {
                 continue;
             }
             if let Err(e) = self.fs_repo.remove_dir_all(&path).await {
@@ -877,12 +963,16 @@ impl<Fs: FsRepo> Service<Fs> {
 }
 
 #[cfg(test)]
+mod persistence_test;
+#[cfg(test)]
+mod reload_test;
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::{
         models::{
             AppInfo, Arch, BundleAction, BundleClear, BundleNativeUpdateRequired, BundleUpdate,
-            DownloadBundleError, DownloadBundleRequest, Target, UnzipError,
+            DownloadBundleError, DownloadBundleRequest, NativeAppInfo, Target, UnzipError,
         },
         ports::AutoUpdateService,
     };
@@ -924,7 +1014,7 @@ mod tests {
     }
 
     #[derive(Clone, Default)]
-    struct FakeFs {
+    pub(super) struct FakeFs {
         state: Arc<StdMutex<FakeFsState>>,
     }
 
@@ -935,6 +1025,7 @@ mod tests {
         removed_dirs: Vec<PathBuf>,
         unzip_target: Option<PathBuf>,
         checksum_should_fail: bool,
+        remove_file_failure: Option<PathBuf>,
     }
 
     impl FakeFs {
@@ -955,7 +1046,11 @@ mod tests {
             self.state.lock().unwrap().unzip_target = Some(path.into());
         }
 
-        fn file_exists(&self, path: impl AsRef<Path>) -> bool {
+        pub(super) fn fail_remove_file(&self, path: impl Into<PathBuf>) {
+            self.state.lock().unwrap().remove_file_failure = Some(path.into());
+        }
+
+        pub(super) fn file_exists(&self, path: impl AsRef<Path>) -> bool {
             self.state.lock().unwrap().files.contains_key(path.as_ref())
         }
 
@@ -1075,8 +1170,21 @@ mod tests {
         }
 
         async fn remove_file(&self, path: &Path) -> Result<(), std::io::Error> {
-            self.state.lock().unwrap().files.remove(path);
+            let mut state = self.state.lock().unwrap();
+            if state.remove_file_failure.as_deref() == Some(path) {
+                return Err(std::io::Error::other("remove failed"));
+            }
+            state.files.remove(path);
             Ok(())
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    struct TestTaskSpawner;
+
+    impl TaskSpawner for TestTaskSpawner {
+        fn spawn(task: impl Future<Output = ()> + Send + 'static) {
+            drop(tokio::spawn(task));
         }
     }
 
@@ -1120,9 +1228,8 @@ mod tests {
     }
 
     impl SystemQuery for FakeSystemQuery {
-        async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
-            Ok(AppInfo {
-                current_bundle_build: 0,
+        async fn get_native_app_info(&self) -> Result<NativeAppInfo, rootcause::Report> {
+            Ok(NativeAppInfo {
                 native_build: *self.native_build.lock().unwrap(),
                 arch: Arch::Aarch64,
                 target: Target::Ios,
@@ -1166,7 +1273,7 @@ mod tests {
         )
     }
 
-    fn cache_dir() -> PathBuf {
+    pub(super) fn cache_dir() -> PathBuf {
         PathBuf::from("/cache")
     }
 
@@ -1176,7 +1283,7 @@ mod tests {
         )
     }
 
-    fn seed_bundle(
+    pub(super) fn seed_bundle(
         fs: &FakeFs,
         cache_dir: &Path,
         dir_name: &str,
@@ -1193,7 +1300,7 @@ mod tests {
         dir
     }
 
-    fn seed_persisted_bundle_root(fs: &FakeFs, cache_dir: &Path, bundle_dir: &Path) {
+    pub(super) fn seed_persisted_bundle_root(fs: &FakeFs, cache_dir: &Path, bundle_dir: &Path) {
         fs.write_file(
             cache_dir.join("bundle_root"),
             bundle_dir.to_string_lossy().to_string(),
@@ -1210,15 +1317,22 @@ mod tests {
     fn service_with_network(network_type: &str) -> (Service<FakeFs>, FakeSystemQuery) {
         let system_query = FakeSystemQuery::new(network_type);
         let (update_repo, _) = fake_update_repo(Some(BundleAction::Update(bundle_update())), true);
-        let service = Service::new(update_repo, FakeFs::default(), system_query.clone(), 0);
+        let service = Service::new::<_, _, TestTaskSpawner>(
+            update_repo,
+            FakeFs::default(),
+            system_query.clone(),
+            0,
+            0,
+            BundleRoutes::new(0),
+        );
         (service, system_query)
     }
 
-    fn service_with_status(status: UpdateStatus) -> (Service<FakeFs>, StartRx) {
+    pub(super) fn service_with_status(status: UpdateStatus) -> (Service<FakeFs>, StartRx) {
         service_with_status_fs_and_embedded_build(status, FakeFs::default(), 0)
     }
 
-    fn service_with_status_and_fs(
+    pub(super) fn service_with_status_and_fs(
         status: UpdateStatus,
         fs_repo: FakeFs,
     ) -> (Service<FakeFs>, StartRx) {
@@ -1241,8 +1355,10 @@ mod tests {
                 },
                 fs_repo,
                 embedded_bundle_build,
+                native_build: 0,
                 bundle_root: BundleRoot::new(),
-                reload_pending: false,
+                bundle_routes: BundleRoutes::new(embedded_bundle_build),
+                pending_reload_bundle_build: None,
                 reload_dispatched_at: None,
             },
             start_rx,
@@ -1254,7 +1370,7 @@ mod tests {
         update: Option<BundleAction>,
         update_dir: PathBuf,
         native_build: u64,
-    ) -> Worker<FakeUpdateRepo, FakeFs, FakeSystemQuery> {
+    ) -> Worker<FakeUpdateRepo, FakeFs, FakeSystemQuery, TestTaskSpawner> {
         let (status_tx, _status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
         let (_start_tx, start_rx) = tokio::sync::mpsc::channel(1);
         let (update_repo, _) = fake_update_repo(update, false);
@@ -1266,6 +1382,8 @@ mod tests {
                 update_dir,
                 native_build,
             ),
+            bundle_routes: BundleRoutes::new(0),
+            _task_spawner: PhantomData::<TestTaskSpawner>,
             status_tx,
             start_rx,
         }
@@ -1296,11 +1414,12 @@ mod tests {
 
     fn completed_status() -> UpdateStatus {
         UpdateStatus::Completed(CompletedStatus {
+            bundle_build: 1,
             entrypoint: PathBuf::from("/tmp/macro-bundle-test/1/index.html"),
         })
     }
 
-    fn clear_required_status() -> UpdateStatus {
+    pub(super) fn clear_required_status() -> UpdateStatus {
         UpdateStatus::ClearRequired(ClearRequiredStatus {
             reason: "bundle_revoked".to_string(),
         })
@@ -1479,6 +1598,7 @@ mod tests {
         seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(
             UpdateStatus::Completed(CompletedStatus {
+                bundle_build: 20,
                 entrypoint: bundle_dir.join(ENTRYPOINT_NAME),
             }),
             fs.clone(),
@@ -1525,7 +1645,7 @@ mod tests {
 
         assert!(matches!(
             status,
-            UpdateStatus::Completed(CompletedStatus { entrypoint })
+            UpdateStatus::Completed(CompletedStatus { entrypoint, .. })
                 if entrypoint == bundle_dir.join(ENTRYPOINT_NAME)
         ));
     }
@@ -1810,8 +1930,10 @@ mod tests {
             },
             fs_repo: FakeFs::default(),
             embedded_bundle_build: 0,
+            native_build: 0,
             bundle_root: BundleRoot::new(),
-            reload_pending: false,
+            bundle_routes: BundleRoutes::new(0),
+            pending_reload_bundle_build: None,
             reload_dispatched_at: None,
         };
 
@@ -1838,14 +1960,27 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &active_dir);
         let (mut service, _start_rx) =
             service_with_status_and_fs(clear_required_status(), fs.clone());
-        service.bundle_root = BundleRoot::from_path(active_dir);
+        service.bundle_root = BundleRoot::from_path(active_dir.clone());
+        service
+            .bundle_routes
+            .restore(BundleSource::ota(20, active_dir))
+            .await;
 
         let applied = service.apply_update(&cache_dir).await.unwrap();
 
         assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
-        assert!(service.reload_pending);
+        assert_eq!(service.pending_reload_bundle_build, Some(0));
         assert!(service.bundle_root_path().is_none());
         assert!(!fs.file_exists(cache_dir.join("bundle_root")));
+        assert!(fs.dir_exists(cache_dir.join("1")));
+        assert!(fs.dir_exists(cache_dir.join("2")));
+
+        assert!(
+            service
+                .acknowledge_update_reload(&cache_dir, 0)
+                .await
+                .unwrap()
+        );
         assert!(!fs.dir_exists(cache_dir.join("1")));
         assert!(!fs.dir_exists(cache_dir.join("2")));
         assert!(fs.dir_exists(cache_dir.join("logs")));
@@ -1863,7 +1998,7 @@ mod tests {
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
         assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
-        assert!(service.reload_pending);
+        assert_eq!(service.pending_reload_bundle_build, Some(1));
         assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),
@@ -1871,8 +2006,13 @@ mod tests {
         ));
         assert!(start_rx.try_recv().is_err());
 
-        assert!(service.acknowledge_update_reload().unwrap());
-        assert!(!service.reload_pending);
+        assert!(
+            service
+                .acknowledge_update_reload(Path::new("/tmp"), 1)
+                .await
+                .unwrap()
+        );
+        assert_eq!(service.pending_reload_bundle_build, None);
         assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),
@@ -1887,7 +2027,7 @@ mod tests {
     #[tokio::test]
     async fn apply_update_requests_reload_while_dispatch_is_pending() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
-        service.reload_pending = true;
+        service.pending_reload_bundle_build = Some(1);
 
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
@@ -1951,25 +2091,35 @@ mod tests {
         );
     }
 
-    #[test]
-    fn acknowledge_update_reload_returns_false_without_pending_reload() {
+    #[tokio::test]
+    async fn acknowledge_update_reload_returns_false_without_pending_reload() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
 
-        assert!(!service.acknowledge_update_reload().unwrap());
+        assert!(
+            !service
+                .acknowledge_update_reload(Path::new("/tmp"), 0)
+                .await
+                .unwrap()
+        );
     }
 
-    #[test]
-    fn acknowledge_update_reload_treats_full_command_queue_as_acknowledged() {
+    #[tokio::test]
+    async fn acknowledge_update_reload_treats_full_command_queue_as_acknowledged() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
-        service.reload_pending = true;
+        service.pending_reload_bundle_build = Some(0);
         service
             .handle
             .start_tx
             .try_send(WorkerCommand::Continue)
             .unwrap();
 
-        assert!(service.acknowledge_update_reload().unwrap());
-        assert!(!service.reload_pending);
+        assert!(
+            service
+                .acknowledge_update_reload(Path::new("/tmp"), 0)
+                .await
+                .unwrap()
+        );
+        assert_eq!(service.pending_reload_bundle_build, None);
         assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),

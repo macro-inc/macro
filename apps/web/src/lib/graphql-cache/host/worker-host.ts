@@ -10,8 +10,12 @@ import {
   type ClaimedMutation,
   isCachePush,
   type MutationClaim,
+  type MutationSettlement,
   type OptimisticWriteResult,
+  type ReadRecordsArgs,
   type ReadResult,
+  type SelectedRecordPageWire,
+  validateRecordSelectionLimit,
   type WorkerMessage,
   type WriteResult,
 } from '../protocol';
@@ -44,6 +48,8 @@ export interface WorkerHostOptions {
    * operation that may already have completed durably.
    */
   requestTimeoutMs?: number;
+  /** Reports an asynchronous durable-storage initialization failure. */
+  onInitializationError?: (error: Error) => void;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
@@ -56,6 +62,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const pending = new Map<number, Pending>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
+  const cacheChangeSubscribers = new Set<() => void>();
+  const settlementSubscribers = new Set<
+    (settlement: MutationSettlement) => void
+  >();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let nextRequestId = 1;
@@ -66,6 +76,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const onMessage = (event: MessageEvent<WorkerMessage>) => {
     const msg = event.data;
     if (isCachePush(msg)) {
+      if (msg.kind === 'cache-changed') {
+        for (const cb of cacheChangeSubscribers) cb();
+        return;
+      }
+      if (msg.kind === 'mutation-settled') {
+        for (const cb of settlementSubscribers) cb(msg.settlement);
+        return;
+      }
       const prefix = `${clientId}:`;
       const opKeys = msg.opIds
         .filter((id) => id.startsWith(prefix))
@@ -119,7 +137,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
       const entry: Pending = { resolve, reject };
-      if (msg.kind === 'read' || msg.kind === 'inspect-query') {
+      if (
+        msg.kind === 'read' ||
+        msg.kind === 'read-records' ||
+        msg.kind === 'inspect-query'
+      ) {
         entry.timer = setTimeout(() => {
           if (pending.delete(id)) {
             reject(new Error(`cache worker timeout: ${msg.kind}`));
@@ -136,6 +158,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     scope: options.scope,
     hotCapacity: options.hotCapacity,
   });
+  void (async () => {
+    try {
+      await ready;
+    } catch (error) {
+      options.onInitializationError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  })();
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
@@ -151,6 +182,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
       })) as ReadResult;
+    },
+
+    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
+      const limit = validateRecordSelectionLimit(args.limit);
+      await ready;
+      return (await request({
+        kind: 'read-records',
+        document: args.document,
+        fragmentName: args.fragmentName,
+        cursor: args.cursor,
+        limit,
+      })) as SelectedRecordPageWire;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
@@ -246,7 +289,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async rollbackOptimisticWrite(
       transactionId: string,
-      claim: MutationClaim
+      claim: MutationClaim,
+      error: string
     ): Promise<WriteResult> {
       await ready;
       return (await request({
@@ -254,6 +298,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         transactionId,
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
+        error,
       })) as WriteResult;
     },
 
@@ -277,6 +322,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    dispose,
+    onCacheChanged(cb: () => void): () => void {
+      cacheChangeSubscribers.add(cb);
+      return () => cacheChangeSubscribers.delete(cb);
+    },
+
+    onMutationSettled(
+      cb: (settlement: MutationSettlement) => void
+    ): () => void {
+      settlementSubscribers.add(cb);
+      return () => settlementSubscribers.delete(cb);
+    },
+
+    dispose() {
+      affectedSubscribers.clear();
+      cacheChangeSubscribers.clear();
+      settlementSubscribers.clear();
+      dispose();
+    },
   };
 }

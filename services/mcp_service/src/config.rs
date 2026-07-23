@@ -9,7 +9,12 @@ use anyhow::Context;
 use database_env_vars::DatabaseUrl;
 pub use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
-use macro_env_var::env_vars;
+use macro_env_var::{env_vars, maybe_env_vars};
+
+maybe_env_vars! {
+    /// Browser-reachable FusionAuth origin used for OAuth authorization redirects.
+    pub struct FusionauthPublicUrl;
+}
 
 env_vars! {
     /// Auth key used by the document storage / search / lexical clients.
@@ -78,6 +83,8 @@ pub struct Config {
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     pub mcp_public_url: McpPublicUrl,
     pub fusionauth_base_url: FusionauthBaseUrl,
+    /// Browser-reachable FusionAuth URL. Falls back to the API base URL when unset.
+    pub fusionauth_public_url: FusionauthPublicUrl,
     pub fusionauth_client_id: FusionauthClientId,
     pub fusionauth_tenant_id: FusionauthTenantId,
     pub fusionauth_api_key_secret_key: FusionauthApiKeySecretKey,

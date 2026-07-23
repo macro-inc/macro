@@ -94,6 +94,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/saved_views/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/channels/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/documents/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/foreign_entity/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/stream/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_project_utils/.env

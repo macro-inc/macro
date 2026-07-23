@@ -1,5 +1,6 @@
 //! PostgreSQL implementation for properties repository.
 
+use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
@@ -299,6 +300,22 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self, updates), err)]
+    async fn bulk_update_entity_property_options(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        updates: &[crate::domain::model::EntityPropertyOptionUpdate],
+    ) -> Result<Vec<crate::domain::model::EntityPropertyOptionSelection>, Self::Err> {
+        entity_property_queries::bulk_update_entity_property_options(
+            &self.pool,
+            entity_id,
+            entity_type,
+            updates,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self))]
     async fn link_parent_task(
         &self,
@@ -417,6 +434,14 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_reference: &EntityReference,
     ) -> Result<(), Self::Err> {
         entity_property_queries::delete_entity_properties(&self.pool, entity_reference).await
+    }
+
+    #[tracing::instrument(skip(self, document_ids), fields(document_count = document_ids.len()), err)]
+    async fn get_document_sub_types(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, DocumentSubType>, Self::Err> {
+        metadata_queries::get_document_sub_types(&self.pool, document_ids).await
     }
 
     #[tracing::instrument(skip(self), err)]

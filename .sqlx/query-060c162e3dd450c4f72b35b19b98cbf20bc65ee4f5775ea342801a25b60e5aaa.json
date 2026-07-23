@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO import_entity (user_id, source, foreign_id, status, initiator, metadata,\n                                       entity_id, entity_type, team_id)\n            VALUES ($1, $2, $3, 'imported', $4, $5, $6, $7, $8)\n            ON CONFLICT (user_id, source, foreign_id) DO UPDATE\n            SET status = 'imported', metadata = EXCLUDED.metadata,\n                entity_id = EXCLUDED.entity_id, entity_type = EXCLUDED.entity_type,\n                team_id = EXCLUDED.team_id, last_error = NULL, updated_at = NOW()\n            WHERE import_entity.status <> 'imported'\n            RETURNING id, user_id, team_id, source, foreign_id, status, initiator,\n                      metadata, entity_id, entity_type, last_error, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "foreign_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "initiator",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "060c162e3dd450c4f72b35b19b98cbf20bc65ee4f5775ea342801a25b60e5aaa"
+}

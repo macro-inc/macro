@@ -1,5 +1,6 @@
 use ai_tools::{
-    NoOpConnectionService, NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
+    NoOpConnectionService, NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue,
+    ToolServiceContext,
 };
 use channels::{
     domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
@@ -235,6 +236,7 @@ pub async fn build_tool_service_context(
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(
             pool.clone(),

@@ -1,10 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use axum::{Router, http::Request};
 use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_user::UserContext;
 use models_pagination::{CreatedAt, Paginated, Query};
 use reqwest::StatusCode;
 use rootcause::Report;
@@ -28,11 +35,55 @@ use crate::domain::{
 
 use super::NotificationRouterState;
 
-/// A mock `NotificationReader` that panics on all methods.
-/// Tests that reject at the extractor level will never reach these methods.
-struct UnreachableService;
+const VALID_BEARER_TOKEN: &str = "valid-token";
+const VALID_AUTHORIZATION_HEADER: &str = "Bearer valid-token";
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
+const VALID_USER_ID: &str = "macro|user@example.com";
 
-impl NotificationReader for UnreachableService {
+#[derive(Clone)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, token: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        if token != VALID_BEARER_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(UserContext {
+            user_id: VALID_USER_ID.to_string(),
+            fusion_user_id: "fusion-user-id".to_string(),
+            organization_id: None,
+            permissions: None,
+        })
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        let Some(user_id) = claims.user_id else {
+            return Ok(None);
+        };
+
+        Ok(Some(UserContext {
+            user_id,
+            fusion_user_id: claims.fusion_user_id.unwrap_or_default(),
+            organization_id: claims.organization_id,
+            permissions: None,
+        }))
+    }
+}
+
+/// A mock `NotificationReader` that only permits reading preferences for the test user.
+/// Tests that reject at the extractor level will not reach any methods.
+struct AuthenticationTestService;
+
+impl NotificationReader for AuthenticationTestService {
     fn update_notifications(
         &self,
         _req: UpdateNotificationsRequest,
@@ -115,9 +166,12 @@ impl NotificationReader for UnreachableService {
 
     fn get_disabled_notification_types(
         &self,
-        _user_id: MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send {
-        async { unreachable!("should not be called") }
+        async move {
+            assert_eq!(user_id.to_string(), VALID_USER_ID);
+            Ok(Vec::new())
+        }
     }
 
     fn disable_notification_type(
@@ -142,18 +196,21 @@ static BLOCKABLE: std::sync::LazyLock<HashSet<&'static str>> =
 
 fn test_router() -> Router {
     let hmac_key = Hmac::<Sha256>::new_from_slice(b"test-key").unwrap();
+    let authorization_state = MacroAuthorizationState::new(Arc::new(FakeAuthorizationService));
     let state = NotificationRouterState::new(
-        UnreachableService,
+        AuthenticationTestService,
         &BLOCKABLE,
         hmac_key,
-        JwtValidationArgs::new_testing(),
+        authorization_state,
     );
 
-    let device_router = super::device::device_router::<UnreachableService>();
+    let device_router =
+        super::device::device_router::<AuthenticationTestService, FakeAuthorizationService>();
     Router::new()
         .nest(
             "/user_notifications",
-            super::router::<UnreachableService, serde_json::Value>(),
+            super::router::<AuthenticationTestService, FakeAuthorizationService, serde_json::Value>(
+            ),
         )
         .nest("/device", device_router)
         .with_state(state)
@@ -161,12 +218,24 @@ fn test_router() -> Router {
 
 /// Send a request to the router and return the status code.
 async fn status(router: &Router, method: &str, uri: &str, body: Option<&str>) -> StatusCode {
-    let builder = Request::builder().uri(uri).method(method);
-    let builder = if body.is_some() {
-        builder.header("content-type", "application/json")
-    } else {
-        builder
-    };
+    status_with_headers(router, method, uri, body, &[]).await
+}
+
+/// Send a request with headers to the router and return the status code.
+async fn status_with_headers(
+    router: &Router,
+    method: &str,
+    uri: &str,
+    body: Option<&str>,
+    headers: &[(&'static str, &'static str)],
+) -> StatusCode {
+    let mut builder = Request::builder().uri(uri).method(method);
+    for &(name, value) in headers {
+        builder = builder.header(name, value);
+    }
+    if body.is_some() {
+        builder = builder.header("content-type", "application/json");
+    }
     let req = builder
         .body(axum::body::Body::from(body.unwrap_or_default().to_string()))
         .unwrap();
@@ -180,19 +249,14 @@ async fn status_with_bad_token(
     uri: &str,
     body: Option<&str>,
 ) -> StatusCode {
-    let builder = Request::builder()
-        .uri(uri)
-        .method(method)
-        .header("authorization", "Bearer invalid.jwt.token");
-    let builder = if body.is_some() {
-        builder.header("content-type", "application/json")
-    } else {
-        builder
-    };
-    let req = builder
-        .body(axum::body::Body::from(body.unwrap_or_default().to_string()))
-        .unwrap();
-    router.clone().oneshot(req).await.unwrap().status()
+    status_with_headers(
+        router,
+        method,
+        uri,
+        body,
+        &[("authorization", "Bearer invalid.jwt.token")],
+    )
+    .await
 }
 
 // -- No token tests ---------------------------------------------------------
@@ -433,6 +497,59 @@ async fn invalid_token_unregister_device() {
     );
 }
 
+// -- Valid authorization tests ----------------------------------------------
+
+#[tokio::test]
+async fn valid_bearer_token_reaches_per_user_handler() {
+    let router = test_router();
+    assert_eq!(
+        status_with_headers(
+            &router,
+            "GET",
+            "/user_notifications/preferences",
+            None,
+            &[("authorization", VALID_AUTHORIZATION_HEADER)],
+        )
+        .await,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn valid_internal_key_and_acting_user_reach_per_user_handler() {
+    let router = test_router();
+    assert_eq!(
+        status_with_headers(
+            &router,
+            "GET",
+            "/user_notifications/preferences",
+            None,
+            &[
+                (INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY),
+                (INTERNAL_MACRO_USER_ID_HEADER, VALID_USER_ID),
+            ],
+        )
+        .await,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn internal_request_without_acting_user_is_unauthorized() {
+    let router = test_router();
+    assert_eq!(
+        status_with_headers(
+            &router,
+            "GET",
+            "/user_notifications/preferences",
+            None,
+            &[(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)],
+        )
+        .await,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
 // -- Presigned disable preference tests -------------------------------------
 
 /// A mock `NotificationReader` that returns `Ok(())` for `disable_notification_type`
@@ -551,17 +668,18 @@ const NOTIFICATION_BASE_URL: &str = "https://notifications.macro.com";
 
 fn presigned_router() -> Router {
     let hmac_key = Hmac::<Sha256>::new_from_slice(HMAC_KEY).unwrap();
+    let authorization_state = MacroAuthorizationState::new(Arc::new(FakeAuthorizationService));
     let state = NotificationRouterState::new(
         PresignedTestService,
         &BLOCKABLE,
         hmac_key,
-        JwtValidationArgs::new_testing(),
+        authorization_state,
     );
 
     Router::new()
         .nest(
             "/user_notifications",
-            super::router::<PresignedTestService, serde_json::Value>(),
+            super::router::<PresignedTestService, FakeAuthorizationService, serde_json::Value>(),
         )
         .with_state(state)
 }

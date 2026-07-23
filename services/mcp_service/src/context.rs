@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ai_tools::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpScheduleContext,
-    NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
+    NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use channels::{
@@ -38,9 +38,6 @@ use mcp_auth_proxy::{
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
-use roles_and_permissions::{
-    domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
-};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use soup::domain::service::SoupImpl;
@@ -56,7 +53,6 @@ pub struct McpContext {
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
     pub mcp_public_host: String,
-    pub user_roles_and_permissions_service: UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
 }
 
 pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
@@ -111,16 +107,11 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
         .context("MCP_PUBLIC_URL has no host")?
         .to_owned();
 
-    let roles_repository = MacroDB::new(db.clone());
-    let user_roles_and_permissions_service =
-        UserRolesAndPermissionsServiceImpl::new(roles_repository.clone(), roles_repository);
-
     Ok(McpContext {
         jwt_args,
         tool_context,
         auth_proxy,
         mcp_public_host,
-        user_roles_and_permissions_service,
     })
 }
 
@@ -336,6 +327,7 @@ async fn build_tool_context(
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(
             db.clone(),
@@ -382,6 +374,11 @@ async fn build_auth_proxy(
     .await
     .context("failed to load Google client secret")?;
 
+    let fusionauth_public_url = config
+        .fusionauth_public_url
+        .value()
+        .unwrap_or(config.fusionauth_base_url.as_ref())
+        .to_owned();
     let fusionauth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id.as_ref().to_owned(),
         fusionauth_api_key.as_ref().to_owned(),
@@ -391,7 +388,8 @@ async fn build_auth_proxy(
         mcp_oauth_redirect_uri,
         config.google_client_id.as_ref().to_owned(),
         google_client_secret.as_ref().to_owned(),
-    );
+    )
+    .with_public_url(fusionauth_public_url);
 
     let auth_provider = FusionAuthOAuthProvider::new(fusionauth_client)
         .await

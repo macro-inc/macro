@@ -50,7 +50,7 @@ test.describe('local channel actions', () => {
 
     await openReplyInput(messageRow);
     await expect(
-      page.locator(`[data-inline-input-container-id="${message.message_id}"]`)
+      page.locator(`[data-input-id="thread-reply-input-${message.message_id}"]`)
     ).toContainText('Send a reply', { timeout: 10_000 });
   });
 });

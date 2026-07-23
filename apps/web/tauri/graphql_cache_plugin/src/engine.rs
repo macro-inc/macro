@@ -16,6 +16,7 @@ use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
+use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
 use serde::Serialize;
@@ -204,6 +205,25 @@ impl EngineHandle {
                 ReadResult::Miss => ReadResultWire::Miss,
             })
             .map_err(|e| e.to_string())
+    }
+
+    /// Projects normalized records through a named GraphQL fragment.
+    pub async fn read_records(
+        &self,
+        document: String,
+        fragment_name: String,
+        cursor: Option<RecordCursor>,
+        limit: u32,
+    ) -> Result<SelectedRecordPage, String> {
+        let selection = RecordSelection::parse(&document, &fragment_name)
+            .map_err(|error| error.to_string())?;
+        self.inner
+            .lock()
+            .await
+            .engine
+            .read_records(&selection, cursor.as_ref(), limit as usize)
+            .await
+            .map_err(|error| error.to_string())
     }
 
     /// Enumerates cached variants of one generated query field.

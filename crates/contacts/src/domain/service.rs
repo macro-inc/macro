@@ -1,5 +1,7 @@
 use crate::domain::models::graph::{UndirectedGraph, Vertex};
-use crate::domain::models::messages::ContactsNodes;
+use crate::domain::models::messages::{
+    ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
+};
 use crate::domain::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
     ContactsOutboxService, ContactsRepository, ContactsService,
@@ -36,26 +38,41 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
         Ok(res)
     }
 
-    /// Processes a contacts SQS message by computing all pairwise connections
-    /// from the user list and persisting them.
+    /// Processes either the existing complete-graph message or a separate
+    /// explicit-relationships message.
     #[instrument(err, skip(self))]
     pub(crate) async fn process_message(
         &self,
-        msg: ContactsNodes,
+        msg: ContactsMessage,
     ) -> Result<(), rootcause::Report> {
-        let connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)> = {
-            let graph = UndirectedGraph::new(msg.users.iter().map(Vertex::new)).complete();
-            graph
-                .inner()
-                .edges()
-                .map(|e| (e.a().data().clone(), e.b().data().clone()))
-                .collect()
+        let (users, connections) = match msg {
+            ContactsMessage::Nodes(ContactsNodes { users }) => {
+                let graph = UndirectedGraph::new(users.iter().map(Vertex::new)).complete();
+                let connections = graph
+                    .inner()
+                    .edges()
+                    .map(|edge| (edge.a().data().clone(), edge.b().data().clone()))
+                    .collect();
+                (users, connections)
+            }
+            ContactsMessage::Connections(ContactConnections { connections }) => {
+                let users = connections
+                    .iter()
+                    .flat_map(|connection| [&connection.first, &connection.second])
+                    .cloned()
+                    .collect();
+                let connections = connections
+                    .into_iter()
+                    .map(|connection| (connection.first, connection.second))
+                    .collect();
+                (users, connections)
+            }
         };
 
         self.repository.create_connections(connections).await?;
 
         self.notifier
-            .invalidate_contacts_for_users(msg.users.into_iter().collect())
+            .invalidate_contacts_for_users(users.into_iter().collect())
             .await?;
         Ok(())
     }
@@ -70,16 +87,15 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
     }
 
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
-        self.process_message(nodes).await
+        self.process_message(ContactsMessage::Nodes(nodes)).await
     }
 }
 
 /// Queue-backed implementation of [`ContactsIngress`].
 ///
-/// Serialises the user set into a [`ContactsMessage`] and publishes it through
-/// the provided [`ContactsIngressQueue`]. The heavy lifting (computing pairwise
-/// connections, persisting them) is done by the contacts service worker that
-/// consumes from that queue.
+/// Serialises complete-graph or explicit-relationship messages and publishes
+/// them through the provided [`ContactsIngressQueue`]. Persistence is handled
+/// by the contacts service worker that consumes from that queue.
 pub struct SqsContactsIngress<Q> {
     /// The queue used to publish contacts messages.
     pub queue: Q,
@@ -90,7 +106,16 @@ impl<Q: ContactsIngressQueue> ContactsIngress for SqsContactsIngress<Q> {
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), Report> {
-        self.queue.publish(ContactsNodes { users }).await
+        self.queue.publish_nodes(ContactsNodes { users }).await
+    }
+
+    async fn enqueue_contact_connections(
+        &self,
+        connections: Vec<ContactConnection>,
+    ) -> Result<(), Report> {
+        self.queue
+            .publish_connections(ContactConnections::new(connections))
+            .await
     }
 }
 
