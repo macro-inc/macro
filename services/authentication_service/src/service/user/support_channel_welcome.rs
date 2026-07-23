@@ -72,10 +72,9 @@ Julia",
         user_mention(&jacob)?,
         user_mention(&teo)?,
     );
-    let mentions = [&new_user, &jacob, &teo]
-        .into_iter()
-        .map(SimpleMention::user)
-        .collect();
+    // Keep Jacob and Teo visually mentioned in the welcome copy without notifying them. Julia is
+    // the sender, so the channel notification policy excludes her automatically.
+    let mentions = [&new_user].into_iter().map(SimpleMention::user).collect();
 
     gateway
         .post_message(

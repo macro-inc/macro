@@ -34,7 +34,7 @@ fn user_id(email: &str) -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
-async fn posts_welcome_as_julia_with_valid_user_mentions() {
+async fn posts_welcome_as_julia_and_notifies_only_the_new_user() {
     let channel_id = Uuid::new_v4();
     let gateway = RecordingGateway::default();
 
@@ -62,11 +62,7 @@ async fn posts_welcome_as_julia_with_valid_user_mentions() {
     );
     assert_eq!(
         posted.request.mentions,
-        vec![
-            SimpleMention::user(&user_id("new.user@example.com")),
-            SimpleMention::user(&user_id("jacob@macro.com")),
-            SimpleMention::user(&user_id("teo@macro.com")),
-        ]
+        vec![SimpleMention::user(&user_id("new.user@example.com"))]
     );
     assert_eq!(posted.request.thread_id, None);
     assert!(posted.request.attachments.is_empty());
