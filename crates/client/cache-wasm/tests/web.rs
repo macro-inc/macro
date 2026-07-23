@@ -11,7 +11,17 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { nextCursor hasMore items { __typename id } } }
+    user {
+        id
+        soup(input: $input) {
+            nextCursor
+            hasMore
+            items {
+                __typename
+                id
+            }
+        }
+    }
 }"#;
 
 fn js(json: serde_json::Value) -> JsValue {
@@ -27,7 +37,14 @@ async fn write_then_read_through_js_boundary() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let data = serde_json::json!({
-        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}] } }
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "nextCursor": null,
+                "hasMore": false,
+                "items": [{ "__typename": "GraphqlSoupDocument", "id": "doc-1" }]
+            }
+        }
     });
 
     // Miss first.
@@ -58,6 +75,10 @@ async fn write_then_read_through_js_boundary() {
     assert!(!write["changed"].as_array().unwrap().is_empty());
     assert_eq!(write["affectedOps"], serde_json::json!(["tab1:1"]));
     assert_eq!(write["reset"], serde_json::json!(false));
+
+    let identity = JsFuture::from(engine.bound_identity()).await.unwrap();
+    let identity: Option<String> = serde_wasm_bindgen::from_value(identity).unwrap();
+    assert_eq!(identity.as_deref(), Some("user-1"));
 
     // Hit now; data is a plain JS object round-tripped exactly.
     let read = JsFuture::from(engine.read_query(
@@ -92,6 +113,33 @@ async fn write_then_read_through_js_boundary() {
             .unwrap();
     let affected: Vec<String> = serde_wasm_bindgen::from_value(affected).unwrap();
     assert_eq!(affected, vec!["tab1:1".to_string()]);
+
+    // External invalidation keeps the shared cold-tier record, while local
+    // mutation invalidation removes it from both tiers.
+    let read = JsFuture::from(engine.read_query(
+        Some("tab1:1".into()),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(vars.clone()),
+    ))
+    .await
+    .unwrap();
+    let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
+    assert_eq!(read["kind"], "hit");
+
+    JsFuture::from(engine.delete_keys(vec!["GraphqlSoupDocument:doc-1".to_string()]))
+        .await
+        .unwrap();
+    let read = JsFuture::from(engine.read_query(
+        Some("tab1:1".into()),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(vars),
+    ))
+    .await
+    .unwrap();
+    let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
+    assert_eq!(read["kind"], "miss");
 
     // Lifecycle: close the connection, then deletion completes (would hang
     // on a live connection without versionchange auto-close).

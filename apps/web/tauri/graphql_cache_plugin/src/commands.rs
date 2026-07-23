@@ -295,6 +295,19 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
     Ok(affected)
 }
 
+/// Deletes stale durable records after a server mutation returns only entity
+/// references and broadcasts the affected registered operations.
+#[tauri::command]
+pub async fn graphql_cache_delete_records<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    keys: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let affected = engine_handle(&state)?.delete_records(keys.clone()).await?;
+    emit_ops_affected(&app, &affected, &keys);
+    Ok(affected)
+}
+
 /// Unregisters an operation (urql teardown).
 #[tauri::command]
 pub async fn graphql_cache_teardown(
