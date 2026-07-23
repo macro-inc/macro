@@ -7,7 +7,8 @@ use crate::domain::{
 use agent::types::{AssistantMessagePart, ChatMessageContent};
 use ai_toolset::{AsyncToolCollection, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -92,17 +93,32 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetChatResponse> {
-        let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
-        let (chat, access_level) = tokio::join!(
-            self.repo.get_chat(chat_id),
-            self.repo.get_access_level(user_id.to_owned(), chat_id),
-        );
+        // Anonymous public-link viewers hold an Unauthenticated receipt: there
+        // is no user to look up an access level for, so report the level the
+        // receipt was granted with (the chat's public access level).
+        if let EntityAccessAuth::Authenticated(user_id) = entity_access_receipt.auth() {
+            let (chat, access_level) = tokio::join!(
+                self.repo.get_chat(chat_id),
+                self.repo.get_access_level(user_id.to_owned(), chat_id),
+            );
+
+            return Ok(GetChatResponse {
+                chat: chat?,
+                user_access_level: access_level?,
+            });
+        }
+
+        let chat = self.repo.get_chat(chat_id).await?;
+        let user_access_level = match entity_access_receipt.entity_permission() {
+            EntityPermission::AccessLevel { access_level } => *access_level,
+            _ => AccessLevel::View,
+        };
 
         Ok(GetChatResponse {
-            chat: chat?,
-            user_access_level: access_level?,
+            chat,
+            user_access_level,
         })
     }
 
