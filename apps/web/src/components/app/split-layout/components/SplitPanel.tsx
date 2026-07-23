@@ -80,7 +80,7 @@ export function SplitPanel(props: SplitPanelProps) {
       const content = props.handle.content();
       return !isListViewID(content.id);
     },
-    isPreviewSplit: () => props.handle.isPreviewSplit(),
+    isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -173,7 +173,7 @@ export function SplitPanel(props: SplitPanelProps) {
     return (
       !isMobile() &&
       !props.handle.isSpotLight() &&
-      props.handle.isPreviewSplit()
+      props.handle.isViewerSplit()
     );
   });
 
@@ -202,7 +202,7 @@ export function SplitPanel(props: SplitPanelProps) {
 
     const peerId = props.handle.isControllerSplit()
       ? manager.viewerOf(props.split.id)
-      : props.handle.isPreviewSplit()
+      : props.handle.isViewerSplit()
         ? manager.controllerOf(props.split.id)
         : undefined;
     if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;

@@ -102,6 +102,9 @@ export const useEntityActionHotkeys = (
 
   const openNextEntity = (entity: EntityData) => {
     if (!splitHandle) return;
+    // Preview Controllers are synchronized centrally by executeWithSoup so
+    // every mark-done entry point, including menus and swipe, behaves alike.
+    if (splitHandle.isPreviewEngaged()) return;
     const handleContent = splitHandle.content().type;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, {

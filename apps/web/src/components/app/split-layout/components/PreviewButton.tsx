@@ -12,7 +12,7 @@ export function PreviewButton() {
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
 
-  const isViewer = () => panel.handle.isPreviewSplit();
+  const isViewer = () => panel.handle.isViewerSplit();
   const previewEngaged = () => panel.handle.isPreviewEngaged();
   const canEngage = () => panel.handle.canEngagePreview();
 

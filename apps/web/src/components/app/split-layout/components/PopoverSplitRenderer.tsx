@@ -77,7 +77,7 @@ function PopoverSplitModal(props: {
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
-    isPreviewSplit: () => false,
+    isViewerSplit: () => false,
     isControllerSplit: () => false,
     replace: () => {},
     removeFromHistory: () => {},

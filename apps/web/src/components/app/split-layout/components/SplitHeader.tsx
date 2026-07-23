@@ -182,7 +182,7 @@ function SplitCloseButton() {
   // A Viewer has no close affordance or close hotkey: it closes with its
   // Controller, when its Preview Pair dissolves (external navigation or the
   // Controller leaving its list view), or via the preview toggle.
-  const isPreviewViewer = () => context.handle.isPreviewSplit();
+  const isPreviewViewer = () => context.handle.isViewerSplit();
 
   return (
     <Show when={layout.manager.splits().length > 1 && !isPreviewViewer()}>

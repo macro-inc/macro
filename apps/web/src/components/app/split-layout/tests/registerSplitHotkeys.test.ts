@@ -52,7 +52,7 @@ describe('registerSplitHotkeys', () => {
       splitName: () => 'Test',
       getSplitCount: () => 2,
       isNotUnifiedList: () => true,
-      isPreviewSplit: () => isPreviewSplit,
+      isViewerSplit: () => isPreviewSplit,
     });
 
     const closeRegistration = vi.mocked(registerHotkey).mock.calls[0]?.[0];

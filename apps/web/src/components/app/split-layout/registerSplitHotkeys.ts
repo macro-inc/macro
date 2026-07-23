@@ -18,7 +18,7 @@ export function registerSplitHotkeys(args: {
   splitName: () => string;
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
-  isPreviewSplit: () => boolean;
+  isViewerSplit: () => boolean;
 }) {
   const {
     splitHotkeyScope,
@@ -31,7 +31,7 @@ export function registerSplitHotkeys(args: {
     splitName,
     getSplitCount,
     isNotUnifiedList,
-    isPreviewSplit,
+    isViewerSplit: isPreviewSplit,
     goHome,
   } = args;
   registerHotkey({

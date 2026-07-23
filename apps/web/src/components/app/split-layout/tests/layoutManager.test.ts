@@ -516,9 +516,9 @@ describe('layoutManager', () => {
         expect(manager.viewerOf(controllerId)).toBe(viewerId);
         expect(manager.controllerOf(viewerId)).toBe(controllerId);
         expect(manager.getSplit(controllerId)?.isControllerSplit()).toBe(true);
-        expect(manager.getSplit(controllerId)?.isPreviewSplit()).toBe(false);
+        expect(manager.getSplit(controllerId)?.isViewerSplit()).toBe(false);
         expect(manager.getSplit(viewerId)?.isControllerSplit()).toBe(false);
-        expect(manager.getSplit(viewerId)?.isPreviewSplit()).toBe(true);
+        expect(manager.getSplit(viewerId)?.isViewerSplit()).toBe(true);
         expect(manager.previewPairs()).toEqual([{ controllerId, viewerId }]);
         expect(manager.splits()[1].content).toMatchObject({
           type: 'component',
@@ -554,7 +554,7 @@ describe('layoutManager', () => {
 
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.previewControllerWidth(controllerId)).toBe(880);
+        expect(manager.previewControllerWidth(controllerId)).toBe(1050);
 
         dispose();
       });
@@ -586,7 +586,7 @@ describe('layoutManager', () => {
           id: 'project-viewer',
         });
         expect(manager.viewerOf(controller.id)).toBe(viewer.id);
-        expect(viewer.isPreviewSplit()).toBe(true);
+        expect(viewer.isViewerSplit()).toBe(true);
         expect(viewer.canEngagePreview()).toBe(false);
 
         viewer.engagePreview();

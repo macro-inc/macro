@@ -474,7 +474,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   isSpotLight: () => boolean;
   isPopover: () => boolean;
   /** Whether this split is the Viewer side of a Preview Pair. */
-  isPreviewSplit: () => boolean;
+  isViewerSplit: () => boolean;
   /** Whether this split is the Controller side of a Preview Pair. */
   isControllerSplit: () => boolean;
   displayName: () => string;
@@ -1082,7 +1082,7 @@ export function createSplitLayout(
       isActive: () => currentSplit.id === state.activeSplitId,
       isSpotLight: () => state.spotlightId === currentSplit.id,
       isPopover: () => state.popovers.has(currentSplit.id),
-      isPreviewSplit: () => controllerOf(currentSplit.id) !== undefined,
+      isViewerSplit: () => controllerOf(currentSplit.id) !== undefined,
       isControllerSplit: () => viewerOf(currentSplit.id) !== undefined,
       toggleSpotlight: (force?: boolean) => {
         toggleSpotlightSplit(currentSplit.id, force);

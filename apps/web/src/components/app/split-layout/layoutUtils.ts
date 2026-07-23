@@ -115,7 +115,7 @@ export function useSplitPanel() {
  * trigger delayed autofocus in content that is already mounted.
  */
 export function useCanAutofocusSplitContent() {
-  return !useSplitPanel()?.handle.isPreviewSplit();
+  return !useSplitPanel()?.handle.isViewerSplit();
 }
 
 /**

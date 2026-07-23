@@ -1411,7 +1411,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {
                                         if (isKeypressActive()) return;
-                                        if (isNewInboxEnabled()) return;
+                                        if (panel.handle.isPreviewEngaged())
+                                          return;
                                         soup.focus.setIndex(row.index);
                                       }}
                                       showUnrollNotifications={

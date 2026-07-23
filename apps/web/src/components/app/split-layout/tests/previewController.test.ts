@@ -24,7 +24,7 @@ describe('preview controller content', () => {
     ).toBe(440);
     expect(
       previewControllerWidthForContent({ type: 'component', id: 'mail' })
-    ).toBe(880);
+    ).toBe(1050);
     expect(
       previewControllerWidthForContent({ type: 'component', id: 'companies' })
     ).toBe(880);

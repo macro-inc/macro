@@ -4,6 +4,7 @@ import {
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   type MarkEntitiesDoneContext,
+  openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
@@ -265,6 +266,13 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     if (nextRow) {
       soup.focus.set(nextRow.id);
+      const controller = splitPanel?.handle;
+      if (controller?.isPreviewEngaged()) {
+        void openEntityInSplitFromUnifiedList(nextRow.original, {
+          splitHandle: controller,
+          mergeHistory: true,
+        });
+      }
       onNavigate?.(nextRow.original);
     }
 
