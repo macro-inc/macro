@@ -5,7 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { Model } from '@core/component/AI/constant/model';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import { fetchAndCacheChat } from '@queries/cognition/chat-data';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { err, ok } from 'neverthrow';
@@ -25,9 +25,7 @@ export const definition = defineBlock({
     if (source.type === 'dss') {
       // Fetch the chat from dcs
       const chatId = source.id;
-      const res = await loadResult(
-        cognitionApiServiceClient.getChat({ chat_id: chatId })
-      );
+      const res = await loadResult(fetchAndCacheChat(chatId));
       if (res.isErr()) return err(res.error);
       const chat = res.value;
 
