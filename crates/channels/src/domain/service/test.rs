@@ -285,6 +285,9 @@ struct FakeMutationRepo {
 struct FakeMutationRepoState {
     channel_id: Uuid,
     channel_type: ChannelType,
+    channel_team_id: Option<Uuid>,
+    user_team_id: Option<Uuid>,
+    user_team_id_lookups: usize,
     join_code: Option<Uuid>,
     message: MutatedMessage,
     owner: String,
@@ -295,6 +298,7 @@ struct FakeMutationRepoState {
     patched_content: Option<String>,
     activity_upserts: usize,
     removed_participants: Vec<String>,
+    channel_patches: Vec<(PatchChannelRequest, Option<Uuid>)>,
     created_mentions: Vec<SimpleMention>,
     synced_mentions: Vec<SimpleMention>,
 }
@@ -318,6 +322,9 @@ impl FakeMutationRepo {
             state: Arc::new(Mutex::new(FakeMutationRepoState {
                 channel_id,
                 channel_type: ChannelType::Private,
+                channel_team_id: None,
+                user_team_id: None,
+                user_team_id_lookups: 0,
                 join_code: None,
                 owner: sender.to_string(),
                 message,
@@ -345,6 +352,7 @@ impl FakeMutationRepo {
                 patched_content: None,
                 activity_upserts: 0,
                 removed_participants: vec![],
+                channel_patches: vec![],
                 created_mentions: vec![],
                 synced_mentions: vec![],
             })),
@@ -465,7 +473,7 @@ impl ChannelRepo for FakeMutationRepo {
             name: Some("Project".to_string()),
             channel_type: state.channel_type,
             org_id: None,
-            team_id: None,
+            team_id: state.channel_team_id,
         })
     }
 
@@ -485,7 +493,7 @@ impl ChannelRepo for FakeMutationRepo {
             name: Some("Project".to_string()),
             channel_type: state.channel_type,
             org_id: None,
-            team_id: None,
+            team_id: state.channel_team_id,
         }))
     }
 
@@ -519,6 +527,15 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn user_has_team(&self, _user_id: String, _team_id: Uuid) -> Result<bool, Self::Err> {
         Ok(true)
+    }
+
+    async fn get_user_team_id(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state.user_team_id_lookups += 1;
+        Ok(state.user_team_id)
     }
 
     async fn create_channel(
@@ -589,8 +606,14 @@ impl ChannelRepo for FakeMutationRepo {
         &self,
         _channel_id: Uuid,
         _user_id: String,
-        _req: PatchChannelRequest,
+        team_id: Option<Uuid>,
+        req: PatchChannelRequest,
     ) -> Result<(), Self::Err> {
+        self.state
+            .lock()
+            .unwrap()
+            .channel_patches
+            .push((req, team_id));
         Ok(())
     }
 
@@ -2114,6 +2137,8 @@ async fn patch_channel_dispatches_channel_updated() {
         channel_id,
         PatchChannelRequest {
             channel_name: Some("Renamed".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: None,
         },
     )
     .await
@@ -2137,12 +2162,172 @@ async fn noop_patch_channel_dispatches_nothing() {
     svc.patch_channel(
         sender("macro|sender@test.com"),
         channel_id,
-        PatchChannelRequest { channel_name: None },
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: None,
+            auto_join_team: None,
+        },
     )
     .await
     .unwrap();
 
     assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn patch_channel_conversion_uses_the_users_team() {
+    let channel_id = Uuid::new_v4();
+    let team_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    repo.state.lock().unwrap().user_team_id = Some(team_id);
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 1);
+    assert_eq!(state.channel_patches.len(), 1);
+    assert_eq!(state.channel_patches[0].1, Some(team_id));
+    assert_eq!(
+        state.channel_patches[0].0.convert_to_team_channel,
+        Some(true)
+    );
+}
+
+#[tokio::test]
+async fn patch_channel_conversion_requires_the_user_to_have_a_team() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .patch_channel(
+            sender("macro|sender@test.com"),
+            channel_id,
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: Some(true),
+                auto_join_team: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::BadRequest(_)));
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 1);
+    assert!(state.channel_patches.is_empty());
+}
+
+#[tokio::test]
+async fn patch_channel_rejects_enabling_auto_join_on_a_non_team_channel() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .patch_channel(
+            sender("macro|sender@test.com"),
+            channel_id,
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: None,
+                auto_join_team: Some(true),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::BadRequest(_)));
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 0);
+    assert!(state.channel_patches.is_empty());
+}
+
+#[tokio::test]
+async fn patch_team_channel_auto_join_uses_its_existing_team() {
+    let channel_id = Uuid::new_v4();
+    let team_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.channel_type = ChannelType::Team;
+        state.channel_team_id = Some(team_id);
+    }
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: None,
+            auto_join_team: Some(true),
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 0);
+    assert_eq!(state.channel_patches.len(), 1);
+    assert_eq!(state.channel_patches[0].1, Some(team_id));
+    assert_eq!(state.channel_patches[0].0.auto_join_team, Some(true));
+}
+
+#[tokio::test]
+async fn patch_channel_allows_disabling_auto_join_without_a_team() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: None,
+            auto_join_team: Some(false),
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 0);
+    assert_eq!(state.channel_patches.len(), 1);
+    assert_eq!(state.channel_patches[0].1, None);
+    assert_eq!(state.channel_patches[0].0.auto_join_team, Some(false));
 }
 
 #[tokio::test]

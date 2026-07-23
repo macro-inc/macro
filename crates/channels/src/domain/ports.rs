@@ -266,6 +266,12 @@ pub trait ChannelRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Fetch the team a user belongs to, if any.
+    fn get_user_team_id<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
     /// Create a channel and return its complete active participant set.
     fn create_channel<'a>(
         &self,
@@ -311,10 +317,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Patch a channel.
+    ///
+    /// `team_id` is the channel's effective team after any requested conversion.
     fn patch_channel(
         &self,
         channel_id: Uuid,
         user_id: String,
+        team_id: Option<Uuid>,
         req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 

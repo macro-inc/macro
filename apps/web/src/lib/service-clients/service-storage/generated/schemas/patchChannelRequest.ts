@@ -4,12 +4,18 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PatchChannelRequestAutoJoinTeam } from './patchChannelRequestAutoJoinTeam';
 import type { PatchChannelRequestChannelName } from './patchChannelRequestChannelName';
+import type { PatchChannelRequestConvertToTeamChannel } from './patchChannelRequestConvertToTeamChannel';
 
 /**
  * Request to patch a channel.
  */
 export interface PatchChannelRequest {
+  /** Whether team members should automatically join the channel. */
+  auto_join_team?: PatchChannelRequestAutoJoinTeam;
   /** New channel name. */
   channel_name?: PatchChannelRequestChannelName;
+  /** Whether to convert the channel into a team channel. */
+  convert_to_team_channel?: PatchChannelRequestConvertToTeamChannel;
 }

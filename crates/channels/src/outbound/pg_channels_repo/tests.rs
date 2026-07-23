@@ -2,6 +2,7 @@ use crate::domain::models::{
     AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
     CreateChannelRequest, CreateEntityMentionOptions, GetChannelsParams, GetChannelsRequest,
     GetThreadReplyRowsRequest, MessagePageDirection, NotificationFilters, ParticipantRole,
+    PatchChannelRequest,
 };
 use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -36,6 +37,7 @@ const TEAM_A_AUTO_ACTIVE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000
 const TEAM_A_AUTO_LEFT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c12);
 const TEAM_A_MANUAL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c13);
 const TEAM_B_AUTO: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c21);
+const TEAM_OWNER_A: &str = "macro|team-owner-a@test.com";
 const MSG1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
 const MSG2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
 const MSG3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
@@ -321,6 +323,123 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
         enabled_channel_id.participant_user_ids,
         vec![macro_user_id(LEFT_USER), macro_user_id(USER_A)]
     );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let user_id = macro_user_id(TEAM_OWNER_A);
+    sqlx::query!(
+        r#"
+        INSERT INTO team_user (user_id, team_id, team_role)
+        VALUES ($1, $2, 'admin'::team_role)
+        "#,
+        TEAM_OWNER_A,
+        TEAM_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role)
+        VALUES ($1, $2, 'admin'::comms_participant_role)
+        "#,
+        CH1,
+        TEAM_OWNER_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(repo.get_user_team_id(&user_id).await.unwrap(), Some(TEAM_A));
+
+    repo.patch_channel(
+        CH1,
+        TEAM_OWNER_A.to_string(),
+        Some(TEAM_A),
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: Some(true),
+        },
+    )
+    .await
+    .unwrap();
+
+    let channel = sqlx::query!(
+        r#"
+        SELECT
+            channel_type AS "channel_type: ChannelType",
+            team_id,
+            auto_join_team
+        FROM comms_channels
+        WHERE id = $1
+        "#,
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(channel.channel_type, ChannelType::Team);
+    assert_eq!(channel.team_id, Some(TEAM_A));
+    assert!(channel.auto_join_team);
+
+    let rejoined_team_member = sqlx::query!(
+        r#"
+        SELECT role AS "role: ParticipantRole", left_at
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+        CH1,
+        LEFT_USER,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rejoined_team_member.role, ParticipantRole::Member);
+    assert!(rejoined_team_member.left_at.is_none());
+
+    let participant_count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    repo.patch_channel(
+        CH1,
+        TEAM_OWNER_A.to_string(),
+        Some(TEAM_A),
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: None,
+            auto_join_team: Some(false),
+        },
+    )
+    .await
+    .unwrap();
+
+    let auto_join_team = sqlx::query_scalar!(
+        "SELECT auto_join_team FROM comms_channels WHERE id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let participant_count_after = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!auto_join_team);
+    assert_eq!(participant_count_after, participant_count);
 }
 
 #[sqlx::test(

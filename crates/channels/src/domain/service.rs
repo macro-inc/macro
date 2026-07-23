@@ -474,9 +474,35 @@ where
                 "cannot change channel_name for direct message channels".to_string(),
             ));
         }
+
+        let convert_to_team_channel = req.convert_to_team_channel == Some(true);
+        let team_id = if convert_to_team_channel && info.channel_type != ChannelType::Team {
+            Some(
+                self.repo
+                    .get_user_team_id(&actor)
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                    .ok_or_else(|| {
+                        ChannelMutationErr::BadRequest(
+                            "cannot convert channel because the user does not belong to a team"
+                                .to_string(),
+                        )
+                    })?,
+            )
+        } else {
+            info.team_id
+        };
+
+        let is_team_channel = info.channel_type == ChannelType::Team || convert_to_team_channel;
+        if req.auto_join_team == Some(true) && (!is_team_channel || team_id.is_none()) {
+            return Err(ChannelMutationErr::BadRequest(
+                "auto-join is only available for team channels".to_string(),
+            ));
+        }
+
         let channel_name = req.channel_name.clone();
         self.repo
-            .patch_channel(channel_id, actor.as_ref().to_string(), req)
+            .patch_channel(channel_id, actor.as_ref().to_string(), team_id, req)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         if channel_name.is_some() {

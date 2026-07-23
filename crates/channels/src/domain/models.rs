@@ -768,6 +768,10 @@ pub struct GetOrCreateChannelResponse {
 pub struct PatchChannelRequest {
     /// New channel name.
     pub channel_name: Option<String>,
+    /// Whether to convert the channel into a team channel.
+    pub convert_to_team_channel: Option<bool>,
+    /// Whether team members should automatically join the channel.
+    pub auto_join_team: Option<bool>,
 }
 
 /// New attachment to add to a channel message.
@@ -1295,6 +1299,8 @@ pub struct ChannelListItem {
     pub org_id: Option<i64>,
     /// Team id.
     pub team_id: Option<Uuid>,
+    /// Whether team members automatically join the channel.
+    pub auto_join_team: bool,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Update timestamp.
