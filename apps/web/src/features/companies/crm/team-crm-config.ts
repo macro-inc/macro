@@ -197,7 +197,7 @@ export function useCrmPermissions() {
     permissions,
     isLoading,
     /** Can edit CRM data at all (platform rule: any team member). */
-    canEditCrm: createMemo(() => role() !== undefined),
+    canEditCrm: () => role() !== undefined,
     canEditStages: createMemo(() =>
       roleSatisfies(role(), permissions().editStages)
     ),
