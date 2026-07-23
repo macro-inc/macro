@@ -422,6 +422,14 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
+// Persist soup filters, predicates and tabs across reloads. PostHog controls
+// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+export const ENABLE_SOUP_FILTER_PERSISTENCE_FLAG =
+  'enable-soup-filter-persistence';
+export const ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_SOUP_FILTER_PERSISTENCE'
+);
+
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 

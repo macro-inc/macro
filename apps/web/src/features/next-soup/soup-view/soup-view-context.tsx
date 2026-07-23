@@ -41,6 +41,7 @@ import {
   scopeChannelNotificationsForEntity,
 } from '@app/features/next-soup/utils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useEntryState } from '@components/app/split-layout/entry-state';
@@ -51,6 +52,8 @@ import {
   ENABLE_GRAPHQL_SOUP_OVERRIDE,
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
+  ENABLE_SOUP_FILTER_PERSISTENCE_FLAG,
+  ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -221,6 +224,11 @@ const [persistedPredicates, setPersistedPredicates] = makePersisted(
   { name: 'soup-view-predicates' }
 );
 
+const [persistedActiveTabs, setPersistedActiveTabs] = makePersisted(
+  createSignal<Partial<Record<ListView, string>>>({}),
+  { name: 'soup-view-active-tabs' }
+);
+
 const isQueryState = (value: unknown): value is QueryState =>
   typeof value === 'object' &&
   value !== null &&
@@ -281,6 +289,12 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const queryClient = useQueryClient();
+  const soupFilterPersistenceFF = useFeatureFlag(
+    ENABLE_SOUP_FILTER_PERSISTENCE_FLAG,
+    { enabledOverride: ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE }
+  );
+  const filterPersistenceEnabled = () => soupFilterPersistenceFF().enabled;
+
   const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
     enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
   });
@@ -294,11 +308,6 @@ export const SoupViewContextProvider: FlowComponent<
     if (content.type !== 'component') return;
     return isListViewID(content.id) ? content.id : undefined;
   });
-
-  const [activeTab, setActiveTab] = makePersisted(
-    useEntryState<string | undefined>('soup.tab', { default: undefined }),
-    { name: 'soup-view-active-tab' }
-  );
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
@@ -325,15 +334,17 @@ export const SoupViewContextProvider: FlowComponent<
   const initialView = activeListView();
   const initialTab = initialView
     ? ((initialEntryState?.['soup.tab'] as string | undefined) ??
-      activeTab() ??
+      (filterPersistenceEnabled()
+        ? persistedActiveTabs()[initialView]
+        : undefined) ??
       VIEW_TAB_PRESETS[initialView].default)
     : undefined;
   const initialPersistedQuery =
-    initialView && initialTab
+    filterPersistenceEnabled() && initialView && initialTab
       ? persistedQueryFor(initialView, initialTab)
       : undefined;
   const initialPersistedPredicates =
-    initialView && initialTab
+    filterPersistenceEnabled() && initialView && initialTab
       ? persistedPredicatesFor(initialView, initialTab)
       : undefined;
 
@@ -393,6 +404,8 @@ export const SoupViewContextProvider: FlowComponent<
   // Keep filters per list view and tab so refreshing or returning to a tab
   // restores its refinements without leaking them into another view or tab.
   const persistQueryFilters = () => {
+    if (!filterPersistenceEnabled()) return;
+
     const view = activeListView();
     if (!view) return;
 
@@ -438,6 +451,8 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const restorePersistedQueryFilters = (tabId: string): boolean => {
+    if (!filterPersistenceEnabled()) return false;
+
     const view = activeListView();
     if (!view) return false;
 
@@ -449,6 +464,8 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const restorePersistedPredicates = (tabId: string): boolean => {
+    if (!filterPersistenceEnabled()) return false;
+
     const view = activeListView();
     if (!view) return false;
 
@@ -464,23 +481,35 @@ export const SoupViewContextProvider: FlowComponent<
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
-  const [assigneeFilter, setAssigneeFilter] = makePersisted(
+  const [assigneeFilter, setAssigneeFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.assigneeFilter', { default: [] }),
-    { name: 'soup-view-assignee-filter' }
+    {
+      enabled: filterPersistenceEnabled,
+      name: 'soup-view-assignee-filter',
+    }
   );
-  const [ownerFilter, setOwnerFilter] = makePersisted(
+  const [ownerFilter, setOwnerFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.ownerFilter', { default: [] }),
-    { name: 'soup-view-owner-filter' }
+    {
+      enabled: filterPersistenceEnabled,
+      name: 'soup-view-owner-filter',
+    }
   );
-  const [stageFilter, setStageFilter] = makePersisted(
+  const [stageFilter, setStageFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.stageFilter', { default: [] }),
-    { name: 'soup-view-stage-filter' }
+    {
+      enabled: filterPersistenceEnabled,
+      name: 'soup-view-stage-filter',
+    }
   );
-  const [inboxFilter, setInboxFilter] = makePersisted(
+  const [inboxFilter, setInboxFilter] = makeFlaggedPersisted(
     useEntryState<string[] | undefined>(INBOX_FILTER_ENTRY_KEY, {
       default: undefined,
     }),
-    { name: 'soup-view-inbox-filter' }
+    {
+      enabled: filterPersistenceEnabled,
+      name: 'soup-view-inbox-filter',
+    }
   );
 
   // Expose the mail view's inbox filter to consumers outside the split tree
@@ -499,11 +528,30 @@ export const SoupViewContextProvider: FlowComponent<
       onCleanup(dispose);
     }
   });
+  const [activeTab, setActiveTab] = useEntryState<string | undefined>(
+    'soup.tab',
+    { default: initialTab }
+  );
+
+  createEffect(
+    on(
+      () => [activeListView(), activeTab()] as const,
+      ([view, tabId]) => {
+        if (!filterPersistenceEnabled() || !view || !tabId) return;
+
+        setPersistedActiveTabs((current) => ({
+          ...current,
+          [view]: tabId,
+        }));
+      }
+    )
+  );
+
   createEffect(
     on(
       () => [soup.predicates.andIds(), soup.predicates.orIds()] as const,
       ([and, or]) => {
-        if (!enabled()) return;
+        if (!enabled() || !filterPersistenceEnabled()) return;
 
         const view = activeListView();
         if (!view) return;
@@ -521,14 +569,52 @@ export const SoupViewContextProvider: FlowComponent<
     )
   );
 
+  // PostHog can resolve after this provider mounts. Hydrate query-backed
+  // state once on the disabled -> enabled transition; entry state remains the
+  // higher-priority source when navigating through split history.
+  let filterPersistenceHydrated = filterPersistenceEnabled();
+  createEffect(
+    on(filterPersistenceEnabled, (persistenceEnabled) => {
+      if (!persistenceEnabled || filterPersistenceHydrated) return;
+      filterPersistenceHydrated = true;
+
+      const view = activeListView();
+      if (!view) return;
+
+      const entryState = panel.handle.currentEntryState();
+      const tabId =
+        (entryState?.['soup.tab'] as string | undefined) ??
+        persistedActiveTabs()[view] ??
+        activeTab() ??
+        VIEW_TAB_PRESETS[view].default;
+      const query =
+        entryState && 'search.filters' in entryState
+          ? undefined
+          : persistedQueryFor(view, tabId);
+      const predicates =
+        entryState && 'search.predicates' in entryState
+          ? undefined
+          : persistedPredicatesFor(view, tabId);
+
+      batch(() => {
+        setActiveTab(tabId);
+        if (query) queryFilters.replace(query);
+        if (predicates) soup.predicates.set(predicates);
+      });
+    })
+  );
+
   // List/board display mode — per-entry state so back/forward restores the
   // mode the user left each entry with.
   const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
     default: 'board',
   });
-  const [readFilter, setReadFilter] = makePersisted(
+  const [readFilter, setReadFilter] = makeFlaggedPersisted(
     useEntryState<ReadFilter>('soup.readFilter', { default: 'unread' }),
-    { name: 'soup-view-read-filter' }
+    {
+      enabled: filterPersistenceEnabled,
+      name: 'soup-view-read-filter',
+    }
   );
 
   // Date grouping is done client-side (see the date branch in `rows()`): the
@@ -699,18 +785,24 @@ export const SoupViewContextProvider: FlowComponent<
       const view = activeListView();
       const tabId = view
         ? ((entryState?.['soup.tab'] as string | undefined) ??
-          activeTab() ??
+          (filterPersistenceEnabled()
+            ? persistedActiveTabs()[view]
+            : undefined) ??
           VIEW_TAB_PRESETS[view].default)
         : undefined;
       if (tabId) setActiveTab(tabId);
 
       const persistedQuery =
-        view && tabId ? persistedQueryFor(view, tabId) : undefined;
+        filterPersistenceEnabled() && view && tabId
+          ? persistedQueryFor(view, tabId)
+          : undefined;
       const entryPredicates = entryState?.['search.predicates'] as
         | SetPredicatesInput<string>
         | undefined;
       const savedPredicates =
-        view && tabId ? persistedPredicatesFor(view, tabId) : undefined;
+        filterPersistenceEnabled() && view && tabId
+          ? persistedPredicatesFor(view, tabId)
+          : undefined;
 
       queryFilters.replace(
         entryQuery ?? persistedQuery ?? options.initialQuery ?? null
