@@ -46,6 +46,7 @@ channels = { path = "../../crates/channels", default-features = false, features 
 ] }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts", default-features = false, features = [
   "outbound",
 ] }

@@ -2,6 +2,20 @@ use std::sync::Arc;
 
 use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
+use channels::{
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
+    outbound::{
+        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+        contacts_dispatcher::ContactsChannelDispatcher,
+        notification_sender::NotificationChannelSender,
+        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        sqs_search_indexer::SqsChannelSearchIndexer,
+    },
+};
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
@@ -38,8 +52,19 @@ use sqlx::PgPool;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
-pub(crate) type ChannelServiceType = channels::domain::service::ChannelServiceImpl<
-    channels::outbound::pg_channels_repo::PgChannelsRepo,
+pub(crate) type ChannelServiceType = ChannelServiceImpl<
+    PgChannelsRepo,
+    SpawnedChannelEventDispatcher<
+        ChannelSideEffectService<
+            PgChannelSideEffectContext,
+            ConnectionGatewayChannelRealtimePublisher,
+            NotificationChannelSender<NotificationIngressType>,
+            SqsChannelSearchIndexer,
+            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            MacroEventBrokerService<KafkaEventPublisher>,
+        >,
+    >,
+    PgChannelReferenceSharePermissions<EntityAccessServiceType>,
 >;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<

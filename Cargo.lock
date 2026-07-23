@@ -969,6 +969,7 @@ dependencies = [
  "channels",
  "chrono",
  "comms_db_client",
+ "connection_gateway_client",
  "contacts",
  "cookie",
  "cool_asserts",
