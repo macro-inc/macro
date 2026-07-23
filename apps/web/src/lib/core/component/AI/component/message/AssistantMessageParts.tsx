@@ -65,8 +65,13 @@ type RenderItem =
 /**
  * Tools rendered outside the standard grouped activity chrome own their full
  * presentation. The dashboard renders as a full-bleed view, not a tool row.
+ * SendEmail suspends the chat on a user-interactive compose UI (send/cancel),
+ * so it must stay visible rather than being collapsed inside a tool group.
  */
-const STANDALONE_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
+const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
+  'DisplayResults',
+  'SendEmail',
+]);
 
 export function AssistantMessageParts(props: {
   parts: AssistantMessagePart[];
@@ -163,8 +168,8 @@ export function AssistantMessageParts(props: {
       const part = keyedParts().partsByKey.get(key);
       if (!part) return;
 
-      // Standalone tools (e.g. the dashboard) break out of the tool group and
-      // render full-bleed on their own.
+      // Standalone tools (e.g. the dashboard, or SendEmail's interactive
+      // compose UI) break out of the tool group and render on their own.
       if (part.type === 'toolCall' && STANDALONE_TOOLS.has(part.name)) {
         flushActivityGroup();
         orderedKeys.push(key);
