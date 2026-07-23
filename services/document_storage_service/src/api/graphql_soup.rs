@@ -1,6 +1,6 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use async_graphql::{
-    Data, ServerError,
+    Data,
     http::{ALL_WEBSOCKET_PROTOCOLS, GraphiQLSource},
 };
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket};
@@ -41,18 +41,7 @@ async fn graphql_handler(
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut request = request.into_inner();
-    let Some(macro_user_id) = auth.macro_user_id else {
-        if is_introspection_query(&request.query) {
-            return state.graphql_soup_schema.execute(request).await.into();
-        }
-        return async_graphql::Response::from_errors(vec![ServerError::new(
-            "authentication required for GraphQL Soup queries",
-            None,
-        )])
-        .into();
-    };
-
-    let mut data = graphql_context_data(&state, macro_user_id);
+    let mut data = graphql_context_data(&state, auth.macro_user_id);
     data.insert(request_parts);
     request.data = data;
     state.graphql_soup_schema.execute(request).await.into()
@@ -73,7 +62,7 @@ async fn subscription_handler(
     };
 
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_context_data(&state, macro_user_id);
+    let data = graphql_context_data(&state, Some(macro_user_id));
     upgrade
         .protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
@@ -85,7 +74,16 @@ async fn subscription_handler(
         .into_response()
 }
 
-fn graphql_context_data(state: &ApiContext, macro_user_id: MacroUserIdStr<'static>) -> Data {
+fn graphql_context_data(
+    state: &ApiContext,
+    macro_user_id: Option<MacroUserIdStr<'static>>,
+) -> Data {
+    let mut data = Data::default();
+    data.insert(state.clone());
+
+    let Some(macro_user_id) = macro_user_id else {
+        return data;
+    };
     let property_reader = complete_graph::PropertiesEntityPropertyReader::new(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
@@ -100,9 +98,7 @@ fn graphql_context_data(state: &ApiContext, macro_user_id: MacroUserIdStr<'stati
         state.entity_access_service.clone(),
     );
 
-    let mut data = Data::default();
     data.insert(GraphqlAuthorizedUser::new(macro_user_id.clone()));
-    data.insert(state.clone());
     data.insert(complete_graph::entity_properties_loader(
         macro_user_id.clone(),
         property_reader,
@@ -117,8 +113,4 @@ fn graphql_context_data(state: &ApiContext, macro_user_id: MacroUserIdStr<'stati
         state.graphql_notification_reader.clone(),
     ));
     data
-}
-
-fn is_introspection_query(query: &str) -> bool {
-    query.contains("__schema") || query.contains("__type")
 }
