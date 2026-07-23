@@ -40,12 +40,14 @@ entire cache in browser memory. With 10s of thousands of cached objects
 7. **Async reads** — a disk-backed cache cannot offer graphcache's
    synchronous `readQuery`. urql's exchange model (wonka streams) tolerates
    async reads fine; imperative consumers get a Promise-based API.
-8. **Schema awareness** — `GraphqlSoupEntity` is a 9-variant union; the cache
-   needs possible-types metadata and per-type key config (e.g.
-   `GraphqlSoupChannelMessage.messageId`, embedded non-keyable types like the variants of
+8. **Schema awareness** — `GraphqlSoupEntity` is a 9-implementor interface;
+   the cache needs possible-types metadata and per-type key config (e.g.
+   `GraphqlSoupChannelMessage.id`, embedded non-keyable types like
    `GraphqlPropertyValue`). Schema lives in-repo
    (`static_assets/schema.graphql`) → embed metadata at build time, no
-   runtime introspection.
+   runtime introspection. Lightweight channel-message previews are embedded
+   under `GraphqlSoupChannelMessagePreview` without an `id` field; only rich
+   thread rows use the normalized `GraphqlSoupChannelMessage` identity.
 9. **External write API** — no GraphQL subscriptions exist; updates arrive
    via websocket-service. Expose `writeFragment` / `invalidate(entityKey)` so
    websocket handlers can patch records and trigger re-execution.
@@ -76,6 +78,18 @@ entire cache in browser memory. With 10s of thousands of cached objects
     name a field `id` when it is a global identity — hence
     `GraphqlProperty.propertyDefinitionId` and
     `GraphqlSoupChannelMessage.id`); the build fails on malformed shapes.
+    Soup pages return entities directly: `frecencyScore` is a per-entity
+    fact shared by every view through the normalized record, and the only
+    per-view state is list membership and order, which live in each page's
+    own `items` list. Optimistic membership moves patch those reference
+    lists, while entity-field mutations update the shared records.
+
+    The normalized entity contract lives on `GraphqlSoupEntity`, not only on
+    its concrete implementations: `id`, `entityType`, `displayName`,
+    `metadata`, `properties`, `notifications`, `isFavorited`, and
+    `viewerPermission`. Queries can select shared relationships once at the
+    interface level. Content remains concrete/domain-specific because its
+    GraphQL shape and loading policy differ by entity type.
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.
 13. **Durable optimistic mutations** — optimistic GraphQL mutations are
@@ -268,7 +282,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - Schema metadata codegen from `static_assets/schema.graphql`
   (`build.rs`; key policy derived via the presence-of-id convention, build
   fails on malformed shapes).
-- Normalize/denormalize for the real `Soup` query shape, union + fragment
+- Normalize/denormalize for the real `Soup` query shape, abstract types + fragment
   handling, alias-aware storage, canonical-args field keys.
 - Dependency index, LRU hot tier, in-memory Storage impl, engine with
   batch-fetch read loop and changed-key/affected-ops write results.

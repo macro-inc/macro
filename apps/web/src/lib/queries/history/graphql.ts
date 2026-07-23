@@ -17,7 +17,7 @@ const graphqlHistorySelection = selectRecords(
 );
 
 type GraphqlHistoryRecord = GraphqlHistoryItemFieldsFragment;
-type GraphqlHistoryEntity = GraphqlHistoryRecord['entity'];
+type GraphqlHistoryEntity = GraphqlHistoryRecord;
 type GraphqlDocumentHistoryEntity = Extract<
   GraphqlHistoryEntity,
   { __typename: 'GraphqlSoupDocument' }
@@ -28,16 +28,14 @@ function transformDocumentSubType(
 ): DocumentHistoryItem['subType'] {
   if (!subType) return subType;
 
-  switch (subType.kind.toLowerCase()) {
-    case 'task':
+  switch (subType.__typename) {
+    case 'GraphqlTaskSubType':
       return {
         type: 'task',
-        is_completed: subType.isCompleted ?? false,
+        is_completed: subType.isCompleted,
       };
-    case 'snippet':
+    case 'GraphqlSnippetSubType':
       return { type: 'snippet' };
-    default:
-      return undefined;
   }
 }
 
@@ -45,7 +43,7 @@ function transformDocumentSubType(
 export function transformGraphqlHistoryItem(
   record: GraphqlHistoryRecord
 ): HistoryItem | undefined {
-  const entity = record.entity;
+  const entity = record;
   switch (entity.__typename) {
     case 'GraphqlSoupDocument': {
       const subType = transformDocumentSubType(entity.subType);
@@ -99,7 +97,7 @@ export function transformGraphqlHistoryItem(
 }
 
 function getSortTimestamp(record: GraphqlHistoryRecord): number {
-  const entity = record.entity;
+  const entity = record;
   switch (entity.__typename) {
     case 'GraphqlSoupDocument':
     case 'GraphqlSoupChat':
