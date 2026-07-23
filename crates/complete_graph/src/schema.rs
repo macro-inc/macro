@@ -25,6 +25,7 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, NoopMacroAuthJwtValidator,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use soup::domain::ports::{NoOpSoupService, SoupService};
 use soup_realtime::domain::ports::{
     NoOpSoupRealtimeSubscriptionService, SoupRealtimeSubscriptionService,
@@ -124,6 +125,7 @@ pub struct SoupSubscriptionRoot<R, Auth, St, NR, PR, ER> {
     /// Realtime Soup service used by user-scoped subscriptions.
     service: R,
     /// Associates the root with authorization, state, and edge reader types.
+    #[allow(clippy::type_complexity)]
     _marker: PhantomData<fn() -> (Auth, St, NR, PR, ER)>,
 }
 
@@ -145,6 +147,8 @@ pub struct GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER> {
     service: S,
     /// Associates the user object with its adapter and reader types.
     _marker: ServicesMarker<E, EAS, Auth, St, NR, PR, ER>,
+    /// The [MacroUserIdStr] of the resolving user
+    user_id: MacroUserIdStr<'static>,
 }
 
 /// Build a GraphQL schema for Soup suitable for SDL export or introspection.
@@ -262,11 +266,17 @@ where
     ER: SoupEmailContentEdgeReader,
 {
     /// The authenticated user.
-    async fn user(&self) -> GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER> {
-        GraphqlUser {
+    async fn user(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER>> {
+        let user_id = require_authorized_user::<Auth, St>(ctx).await?;
+
+        Ok(GraphqlUser {
             service: self.service.clone(),
             _marker: PhantomData,
-        }
+            user_id,
+        })
     }
 }
 
@@ -310,9 +320,8 @@ where
     ER: SoupEmailContentEdgeReader,
 {
     /// Stable id of the authenticated user.
-    async fn id(&self, ctx: &Context<'_>) -> async_graphql::Result<async_graphql::ID> {
-        let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
-        Ok(async_graphql::ID(macro_user_id.to_string()))
+    async fn id(&self) -> async_graphql::ID {
+        async_graphql::ID(self.user_id.to_string())
     }
 
     /// Fetch Soup items nested into grouping bins.
