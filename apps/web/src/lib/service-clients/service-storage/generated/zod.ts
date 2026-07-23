@@ -1981,7 +1981,9 @@ export const createChannelScopedBotBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Team owner. Omit for a user-owned bot.'),
+      .describe(
+        'Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.'
+      ),
     token_expires_at: zod.iso
       .datetime({})
       .nullish()

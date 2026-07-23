@@ -12662,7 +12662,7 @@
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Team owner. Omit for a user-owned bot."
+            "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
           },
           "token_expires_at": {
             "type": ["string", "null"],
