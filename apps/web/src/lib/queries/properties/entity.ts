@@ -119,11 +119,11 @@ function optimisticUpdateSoupEntityProperties(
   }[]
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
-  // channel / call / foreign entities are property-less.
+  // channel / foreign entity / channel thread rows are property-less; call
+  // records carry properties (tags) and are handled like documents.
   if (
     !current ||
     current.tag === 'channel' ||
-    current.tag === 'call' ||
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
     !current.data.properties
