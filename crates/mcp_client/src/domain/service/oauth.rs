@@ -72,13 +72,15 @@ impl<S, R> OAuthService<S, R> {
                 scopes: creds.scopes.clone(),
             })
         } else {
+            let scopes = crate::domain::provider_registry::dcr_default_scopes(server_url);
+            let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
             let config = auth_manager
-                .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
+                .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &scope_refs)
                 .await?;
             Ok(ResolvedClient {
                 client_id: config.client_id,
                 client_secret: config.client_secret,
-                scopes: vec![],
+                scopes,
             })
         }
     }
