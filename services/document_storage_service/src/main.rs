@@ -879,7 +879,6 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    #[cfg(feature = "graphql")]
     tokio::spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
