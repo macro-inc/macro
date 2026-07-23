@@ -56,6 +56,13 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Check whether a user is an administrator or owner of a team.
+    fn user_can_administer_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Patch an active bot.
     fn patch_bot(
         &self,
@@ -133,14 +140,14 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
 
 /// Bot service.
 pub trait BotService: Clone + Send + Sync + 'static {
-    /// Create a bot owned by the caller or one of their teams.
+    /// Create a bot owned by the caller or a team they administer.
     fn create_bot(
         &self,
         caller: MacroUserIdStr<'static>,
         req: CreateBotRequest,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
 
-    /// Create a bot owned by the caller and scoped to a channel.
+    /// Create a bot owned by the caller or a team they administer and scoped to a channel.
     fn create_channel_scoped_bot(
         &self,
         caller: MacroUserIdStr<'static>,

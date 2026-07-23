@@ -444,6 +444,30 @@ impl BotRepo for PgBotsRepo {
         Ok(is_active)
     }
 
+    async fn user_can_administer_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        let can_administer = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM team_user
+                WHERE user_id = $1
+                  AND team_id = $2
+                  AND team_role IN ('admin'::team_role, 'owner'::team_role)
+            ) AS "can_administer!"
+            "#,
+            caller.as_ref(),
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check team administration permission")?;
+        Ok(can_administer)
+    }
+
     async fn patch_bot(
         &self,
         bot_id: BotId,

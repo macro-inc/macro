@@ -76,7 +76,7 @@ where
         if let Some(team_id) = team_id {
             if !self
                 .repo
-                .user_has_team(caller.clone(), team_id)
+                .user_can_administer_team(caller.clone(), team_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?
             {
