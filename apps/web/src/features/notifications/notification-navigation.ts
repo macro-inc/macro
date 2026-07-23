@@ -64,7 +64,7 @@ function openSplitIfNotOpen(
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     const isSourcesViewer =
-      options.sourceHandle?.isPreviewEngaged() &&
+      options.sourceHandle?.isControllerSplit() &&
       options.sourceHandle.viewerId() === existing.id;
     if (!isSourcesViewer) existing.activate();
   } else {

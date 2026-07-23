@@ -59,7 +59,6 @@ import {
 } from '@app/features/next-soup/utils';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
@@ -134,6 +133,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
+import { useSoupPreviewAvailability } from './use-soup-preview-availability';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
 export const DefaultGroupHeader = (
@@ -333,6 +333,24 @@ export const SoupView = (props: SoupViewProps) => {
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
   const isNewInboxEnabled = useIsNewInboxEnabled();
+  const hasPreviewItems = useSoupPreviewAvailability({
+    rows: soupView.rows,
+    isLoading: soupView.source.isLoading,
+    splitHandle: panel.handle,
+  });
+  const openFocusedEntityInPreview = () => {
+    const focusedRow = soup.focus.row();
+    if (
+      !focusedRow ||
+      focusedRow.getIsGrouped() ||
+      focusedRow.getIsLoadMore()
+    ) {
+      return;
+    }
+    void openEntityInSplitFromUnifiedList(focusedRow.original, {
+      splitHandle: panel.handle,
+    });
+  };
 
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
@@ -449,15 +467,19 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Inbox starts in preview mode. Only on fresh arrivals — back/forward
-  // re-visits keep whatever the user last chose for this split — and never
-  // for a split that is itself some controller's viewer (e.g. goHome inside
-  // the viewer). engagePreviewMode no-ops on mobile and when already engaged.
-  onMount(() => {
+  // A fresh Inbox starts in preview mode once its initial result settles, but
+  // only when it has an entity to show. Resolve this once so manually exiting
+  // preview mode is not undone by later Soup updates.
+  let initialInboxPreviewResolved = false;
+  createEffect(() => {
+    if (initialInboxPreviewResolved || soupView.source.isLoading()) return;
+    initialInboxPreviewResolved = true;
     if (contentId !== 'inbox') return;
     if (panel.handle.lastNavigationCause() !== 'fresh') return;
-    if (globalSplitManager()?.controllerOf(panel.handle.id)) return;
+    if (panel.handle.isViewerSplit()) return;
+    if (!hasPreviewItems()) return;
     panel.handle.engagePreview();
+    if (panel.handle.isControllerSplit()) openFocusedEntityInPreview();
   });
 
   onMount(() => {
@@ -690,7 +712,11 @@ export const SoupView = (props: SoupViewProps) => {
           </SplitHeaderRight>
         </Show>
       </div>
-      <SoupFiltersBar variant={props.filterBarVariant} />
+      <SoupFiltersBar
+        variant={props.filterBarVariant}
+        hasPreviewItems={hasPreviewItems()}
+        onPreviewEngage={openFocusedEntityInPreview}
+      />
       <Show when={applyDefaultCrmView}>
         <CrmDefaultViewLoader />
       </Show>
@@ -944,7 +970,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    if (panel.handle.isPreviewEngaged() && type === 'entity') {
+    if (panel.handle.isControllerSplit() && type === 'entity') {
       if (preventDuplicatePreviewEntityOpen(entity, panel.handle)) return;
 
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
@@ -1410,7 +1436,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {
                                         if (isKeypressActive()) return;
-                                        if (panel.handle.isPreviewEngaged())
+                                        if (panel.handle.isControllerSplit())
                                           return;
                                         soup.focus.setIndex(row.index);
                                       }}

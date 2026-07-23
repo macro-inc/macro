@@ -100,7 +100,6 @@ function PopoverSplitModal(props: {
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
-    isPreviewEngaged: () => false,
     canEngagePreview: () => false,
     engagePreview: () => {},
     disengagePreview: () => {},

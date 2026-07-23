@@ -509,7 +509,6 @@ describe('layoutManager', () => {
         const { manager, controllerId } = setup();
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.isPreviewEngaged(controllerId)).toBe(true);
         expect(manager.previewControllerWidth(controllerId)).toBe(440);
         expect(manager.splits()).toHaveLength(2);
         const viewerId = manager.splits()[1].id;
@@ -912,7 +911,7 @@ describe('layoutManager', () => {
           type: 'component',
           id: 'channels',
         });
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
 
         // Command-menu-style entity selection dissolves the Preview Pair the
         // same way.
@@ -927,7 +926,7 @@ describe('layoutManager', () => {
           type: 'md',
           id: 'doc-k',
         });
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
 
         dispose();
       });
@@ -977,7 +976,6 @@ describe('layoutManager', () => {
 
         manager.removeSplit(viewerId);
         expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
         expect(manager.previewPairs()).toEqual([]);
 
         // Subsequent navigation replaces the controller normally.
@@ -1006,7 +1004,7 @@ describe('layoutManager', () => {
         manager.getSplit(controllerId)!.replace({
           next: { type: 'md', id: 'doc-x' },
         });
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.splits()).toHaveLength(1);
 
         dispose();
@@ -1026,7 +1024,7 @@ describe('layoutManager', () => {
         manager.getSplit(controllerId)!.replace({
           next: { type: 'md', id: 'doc-x' },
         });
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.splits()).toHaveLength(1);
         expect(manager.getSplit(viewerId)).toBeUndefined();
 
@@ -1045,7 +1043,7 @@ describe('layoutManager', () => {
         const viewerId = manager.viewerOf(controllerId)!;
 
         manager.getSplit(controllerId)!.close();
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.previewPairs()).toEqual([]);
         expect(manager.getSplit(controllerId)).toBeUndefined();
         expect(manager.getSplit(viewerId)).toBeUndefined();
@@ -1074,7 +1072,6 @@ describe('layoutManager', () => {
         expect(manager.splits()).toHaveLength(1);
         expect(manager.splits()[0].id).toBe(controllerId);
         expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
 
         dispose();
       });
@@ -1091,7 +1088,7 @@ describe('layoutManager', () => {
         const viewerId = manager.viewerOf(controllerId)!;
 
         manager.disengagePreviewMode(controllerId);
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.previewControllerWidth(controllerId)).toBeUndefined();
         expect(manager.getSplit(viewerId)).toBeUndefined();
 
@@ -1121,7 +1118,7 @@ describe('layoutManager', () => {
 
         manager.unlinkPreviewPair(controllerId);
 
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.previewControllerWidth(controllerId)).toBeUndefined();
         expect(manager.getSplit(controllerId)).toBeDefined();
         expect(manager.getSplit(viewerId)).toBeDefined();
@@ -1202,7 +1199,7 @@ describe('layoutManager', () => {
         expect(manager.canEngagePreview(controllerId)).toBe(false);
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.splits()).toHaveLength(1);
 
         dispose();
@@ -1219,7 +1216,7 @@ describe('layoutManager', () => {
         expect(manager.canEngagePreview(controllerId)).toBe(false);
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.isPreviewEngaged(controllerId)).toBe(false);
+        expect(manager.viewerOf(controllerId)).toBeUndefined();
         expect(manager.splits()).toHaveLength(1);
 
         dispose();

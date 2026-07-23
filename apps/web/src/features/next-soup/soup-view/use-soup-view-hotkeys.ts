@@ -189,11 +189,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hotkey: ['cmd+enter'],
     scopeId,
     description: 'Focus Preview',
-    condition: () => splitHandle.isPreviewEngaged(),
+    condition: () => splitHandle.isControllerSplit(),
     keyDownHandler: () => {
       const manager = globalSplitManager();
       const viewerId = splitHandle.viewerId();
-      if (splitHandle.isPreviewEngaged() && viewerId && manager) {
+      if (splitHandle.isControllerSplit() && viewerId && manager) {
         manager.activateSplit(viewerId);
         manager.returnFocus();
         return true;

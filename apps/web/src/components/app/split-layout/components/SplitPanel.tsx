@@ -256,7 +256,6 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile
               // search overlay paints over it.
               'relative size-full mobile:isolate': !props.handle.isSpotLight(),
-              'z-10': hasTuckedViewer(),
             }}
             style={{
               '--split-header-height': `${

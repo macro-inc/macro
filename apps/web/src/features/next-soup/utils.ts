@@ -589,7 +589,7 @@ export const openEntityInSplitFromUnifiedList = async (
   const referredFrom = options.referredFrom ?? sourceListView;
 
   let splitContent: SplitContent = { ...content, params };
-  if (splitHandle?.isPreviewEngaged()) {
+  if (splitHandle?.isControllerSplit()) {
     splitContent = withPreviewSourceEntityId(splitContent, entity.id);
   }
 

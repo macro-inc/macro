@@ -8,16 +8,26 @@ import { Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 /** Toggle Preview mode for eligible Controller content outside a Viewer. */
-export function PreviewButton() {
+export function PreviewButton(
+  props: {
+    disabled?: boolean;
+    disabledLabel?: string;
+    onEngage?: () => void;
+  } = {}
+) {
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
 
   const isViewer = () => panel.handle.isViewerSplit();
-  const previewEngaged = () => panel.handle.isPreviewEngaged();
-  const canEngage = () => panel.handle.canEngagePreview();
+  const isController = () => panel.handle.isControllerSplit();
+  const canEngage = () => !props.disabled && panel.handle.canEngagePreview();
+  const unavailableLabel = () =>
+    props.disabled
+      ? (props.disabledLabel ?? 'Preview unavailable')
+      : 'No space for preview';
 
   const togglePreview = () => {
-    if (previewEngaged()) {
+    if (isController()) {
       panel.handle.disengagePreview();
       return;
     }
@@ -25,6 +35,7 @@ export function PreviewButton() {
 
     analytics.track('preview_panel_use');
     panel.handle.engagePreview();
+    if (panel.handle.isControllerSplit()) props.onEngage?.();
   };
 
   registerHotkey({
@@ -43,7 +54,7 @@ export function PreviewButton() {
     <Show when={!isViewer()}>
       <Tooltip
         hotkey={canEngage() ? TOKENS.unifiedList.togglePreview : undefined}
-        label={canEngage() ? 'Preview' : 'No space for preview'}
+        label={canEngage() ? 'Preview' : unavailableLabel()}
       >
         <Button
           onClick={togglePreview}
@@ -53,7 +64,7 @@ export function PreviewButton() {
           class="bg-surface"
           disabled={!canEngage()}
         >
-          {previewEngaged() ? <EyeSlashIcon /> : <EyeIcon />}
+          {isController() ? <EyeSlashIcon /> : <EyeIcon />}
           <span>Preview</span>
         </Button>
       </Tooltip>

@@ -292,7 +292,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     if (nextRow) {
       soup.focus.set(nextRow.id);
       const controller = splitPanel?.handle;
-      if (controller?.isPreviewEngaged()) {
+      if (controller?.isControllerSplit()) {
         void openEntityInSplitFromUnifiedList(nextRow.original, {
           splitHandle: controller,
           mergeHistory: true,

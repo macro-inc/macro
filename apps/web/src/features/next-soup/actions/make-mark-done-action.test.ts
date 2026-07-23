@@ -7,7 +7,7 @@ import type { SoupState } from '../create-soup-state';
 
 const mocks = vi.hoisted(() => ({
   controller: {
-    isPreviewEngaged: vi.fn(() => true),
+    isControllerSplit: vi.fn(() => true),
   },
   mutateAsync: vi.fn(async () => {}),
   openEntityInSplitFromUnifiedList: vi.fn(async () => {}),
@@ -100,7 +100,7 @@ function createAction() {
 
 describe('makeMarkDoneAction', () => {
   beforeEach(() => {
-    mocks.controller.isPreviewEngaged.mockReturnValue(true);
+    mocks.controller.isControllerSplit.mockReturnValue(true);
     mocks.mutateAsync.mockClear();
     mocks.openEntityInSplitFromUnifiedList.mockClear();
   });
@@ -123,7 +123,7 @@ describe('makeMarkDoneAction', () => {
   });
 
   it('does not open the next entity when the split is not a Controller', async () => {
-    mocks.controller.isPreviewEngaged.mockReturnValue(false);
+    mocks.controller.isControllerSplit.mockReturnValue(false);
     const { soup } = createSoup();
     const { action, dispose } = createAction();
 

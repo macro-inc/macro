@@ -179,7 +179,7 @@ export function CompanyKanban() {
 
   const openCompany = (entity: EntityData, event: MouseEvent) => {
     if (
-      panel.handle.isPreviewEngaged() &&
+      panel.handle.isControllerSplit() &&
       preventDuplicatePreviewEntityOpen(entity, panel.handle)
     ) {
       return;

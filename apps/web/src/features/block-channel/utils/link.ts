@@ -75,7 +75,7 @@ export async function navigateToChannelMessage(
     // The channel already showing in the source's own viewer is a plain
     // retarget; activating it would pull focus out of the controller.
     const isSourcesViewer =
-      options?.sourceHandle?.isPreviewEngaged() &&
+      options?.sourceHandle?.isControllerSplit() &&
       options.sourceHandle.viewerId() === existing.id;
     if (!isSourcesViewer) existing.activate();
   } else {

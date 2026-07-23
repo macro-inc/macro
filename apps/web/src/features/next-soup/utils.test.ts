@@ -146,7 +146,7 @@ describe('preview history source', () => {
     const openWithSplit = vi.fn();
     const controller = {
       content: () => ({ type: 'component', id: 'inbox' }),
-      isPreviewEngaged: () => true,
+      isControllerSplit: () => true,
       viewerId: () => 'viewer-1',
     } as unknown as SplitHandle;
     setGlobalSplitManager({

@@ -18,7 +18,11 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { createMemo, createSignal, Show } from 'solid-js';
 
-export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
+export function SoupFiltersBar(props: {
+  variant?: 'default' | 'tag';
+  hasPreviewItems: boolean;
+  onPreviewEngage: () => void;
+}) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
 
@@ -72,7 +76,11 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <PreviewButton />
+        <PreviewButton
+          disabled={!props.hasPreviewItems}
+          disabledLabel="No items to preview"
+          onEngage={props.onPreviewEngage}
+        />
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
       <Show when={!isSearchView() && !isTagView()}>

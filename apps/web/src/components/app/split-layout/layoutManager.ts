@@ -422,9 +422,6 @@ export type SplitManager = {
   /** Preserve both splits while unlinking their Preview Pair. */
   unlinkPreviewPair: (controllerId: SplitId) => void;
 
-  /** Whether preview mode is engaged on this split. Reactive. */
-  isPreviewEngaged: (controllerId: SplitId) => boolean;
-
   /** The automatic-redistribution preference for a Controller. Reactive. */
   previewControllerWidth: (
     controllerId: SplitId,
@@ -522,8 +519,6 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * Returns `undefined` if no state has been captured.
    */
   currentEntryState: () => EntryState | undefined;
-  /** Whether preview mode is engaged on this split. Reactive. */
-  isPreviewEngaged: () => boolean;
   /** Whether preview mode can engage on this split (room for a viewer). */
   canEngagePreview: () => boolean;
   /** Engage preview mode on this split (see SplitManager.engagePreviewMode). */
@@ -1146,7 +1141,6 @@ export function createSplitLayout(
         const c = live.content as { state?: EntryState };
         return c.state;
       },
-      isPreviewEngaged: () => isPreviewEngaged(currentSplit.id),
       canEngagePreview: () => canEngagePreview(currentSplit.id),
       engagePreview: () => engagePreviewMode(currentSplit.id),
       disengagePreview: () => disengagePreviewMode(currentSplit.id),
@@ -1275,7 +1269,7 @@ export function createSplitLayout(
     ) {
       return false;
     }
-    if (isPreviewEngaged(controllerId)) return true;
+    if (viewerOf(controllerId) !== undefined) return true;
     return adoptableViewerFor(controllerId) !== undefined || canAppendSplit();
   }
 
@@ -1402,14 +1396,11 @@ export function createSplitLayout(
     if (viewerId) removeSplit(viewerId);
   }
 
-  const isPreviewEngaged = (id: SplitId) =>
-    state.previewPairs[id] !== undefined;
-
   const previewControllerWidth = (
     controllerId: SplitId,
     viewportWidth?: number
   ) => {
-    if (!isPreviewEngaged(controllerId)) return undefined;
+    if (viewerOf(controllerId) === undefined) return undefined;
     const content = findSplitById(controllerId)?.content;
     return content
       ? previewControllerWidthForContent(content, viewportWidth)
@@ -1481,7 +1472,10 @@ export function createSplitLayout(
     if (!split) return;
 
     // Controller side: ineligible content breaks the Preview Pair.
-    if (isPreviewEngaged(id) && !isPreviewControllerContent(split.content)) {
+    if (
+      viewerOf(id) !== undefined &&
+      !isPreviewControllerContent(split.content)
+    ) {
       disengagePreviewMode(id);
     }
   }
@@ -1933,7 +1927,6 @@ export function createSplitLayout(
     canEngagePreview,
     disengagePreviewMode,
     unlinkPreviewPair,
-    isPreviewEngaged,
     previewControllerWidth,
     viewerOf,
     controllerOf,

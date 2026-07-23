@@ -71,7 +71,7 @@ export const useSoupNavigationHotkeys = (
   onCleanup(() => openInViewerDebounced.clear());
 
   const openEntity = (entity: EntityData) => {
-    if (splitHandle.isPreviewEngaged()) {
+    if (splitHandle.isControllerSplit()) {
       openInViewerDebounced(entity);
       return;
     }
@@ -92,7 +92,7 @@ export const useSoupNavigationHotkeys = (
     const next = soup.navigate.by(offset, {
       skip: (row) => {
         if (
-          !splitHandle.isPreviewEngaged() ||
+          !splitHandle.isControllerSplit() ||
           row.getIsGrouped() ||
           row.getIsLoadMore()
         ) {
