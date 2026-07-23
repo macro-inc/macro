@@ -113,6 +113,16 @@ jobs:
           exit 0
         fi
 
+        # A diff touching only `.sqlx/` needs no tests at all — without this it would
+        # fall through to the empty-filter "run everything" fallback below. `none()`
+        # selects zero tests, which `--no-tests=pass` treats as success. The `-s` guard
+        # keeps an empty changed-files list (unknown merge-base) on the full-suite path.
+        if [ -s /tmp/changed-files ] && ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
+          echo "Only .sqlx changes detected; running no tests"
+          echo "nextest_filter=none()" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         filterset="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
 
         if [ -z "$filterset" ]; then
