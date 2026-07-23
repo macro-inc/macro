@@ -5,18 +5,12 @@ inputs:
     description: Install Playwright and cache
     required: false
     default: ''
-  sccache-bucket:
-    description: Optional S3 bucket for shared sccache storage.
-    required: false
-    default: ''
 
 runs:
   using: composite
   steps:
     - name: Setup Nix dev shell
       uses: ./.github/actions/setup-nix-dev-shell
-      with:
-        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Setup bunfig.toml
       shell: bash

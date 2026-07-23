@@ -88,10 +88,10 @@ pub fn setup_nix() -> Step<Use> {
 }
 
 /// Enter the repo's Nix dev shell (toolchain, mold, just, the sccache binary,
-/// and `RUSTC_WRAPPER=sccache`) without configuring an external Nix binary
-/// cache. We pass no S3 bucket; jobs that compile Rust can follow this with
-/// [`configure_namespace_sccache`] to use Namespace's official remote cache.
-/// Requires [`setup_nix`] first.
+/// and `RUSTC_WRAPPER=sccache`) without selecting an sccache provider or
+/// configuring an external Nix binary cache. Jobs that compile Rust can follow
+/// this with [`configure_namespace_sccache`] to use Namespace's official remote
+/// cache. Requires [`setup_nix`] first.
 pub fn setup_dev_shell() -> Step<Use> {
     uses_local(
         "Setup Nix dev shell",
@@ -233,8 +233,8 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
 }
 
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
-/// We pass no S3 bucket; jobs that run `gen-api` follow this with
-/// [`configure_namespace_sccache`]. Requires [`setup_nix`] first.
+/// Jobs that run `gen-api` follow this with [`configure_namespace_sccache`].
+/// Requires [`setup_nix`] first.
 pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     uses_local(
         name,
