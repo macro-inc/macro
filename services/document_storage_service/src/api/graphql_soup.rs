@@ -40,11 +40,12 @@ async fn graphql_handler(
     request_parts: GraphqlSoupRequestParts,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
-    let mut request = request.into_inner();
-    let mut data = graphql_context_data(&state, auth.macro_user_id);
-    data.insert(request_parts);
-    request.data = data;
-    state.graphql_soup_schema.execute(request).await.into()
+    let request = graphql_query_context_data(request.into_inner(), &state, auth.macro_user_id);
+    state
+        .graphql_soup_schema
+        .execute(request.data(request_parts))
+        .await
+        .into()
 }
 
 async fn subscription_handler(
@@ -62,7 +63,7 @@ async fn subscription_handler(
     };
 
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_context_data(&state, Some(macro_user_id));
+    let data = graphql_subscription_context_data(state, macro_user_id);
     upgrade
         .protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
@@ -74,16 +75,24 @@ async fn subscription_handler(
         .into_response()
 }
 
-fn graphql_context_data(
+fn graphql_subscription_context_data(state: ApiContext, user: MacroUserIdStr<'static>) -> Data {
+    let mut data = Data::default();
+    data.insert(state);
+    data.insert(user);
+    data
+}
+
+fn graphql_query_context_data(
+    req: async_graphql::Request,
     state: &ApiContext,
     macro_user_id: Option<MacroUserIdStr<'static>>,
-) -> Data {
-    let mut data = Data::default();
-    data.insert(state.clone());
+) -> async_graphql::Request {
+    let req = req.data(state.clone());
 
     let Some(macro_user_id) = macro_user_id else {
-        return data;
+        return req;
     };
+
     let property_reader = complete_graph::PropertiesEntityPropertyReader::new(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
@@ -98,19 +107,18 @@ fn graphql_context_data(
         state.entity_access_service.clone(),
     );
 
-    data.insert(GraphqlAuthorizedUser::new(macro_user_id.clone()));
-    data.insert(complete_graph::entity_properties_loader(
-        macro_user_id.clone(),
-        property_reader,
-    ));
-    data.insert(complete_graph::email_content_loader(
-        macro_user_id.clone(),
-        email_content_reader,
-    ));
-    data.insert(property_writer);
-    data.insert(complete_graph::entity_notifications_loader(
-        macro_user_id,
-        state.graphql_notification_reader.clone(),
-    ));
-    data
+    req.data(GraphqlAuthorizedUser::new(macro_user_id.clone()))
+        .data(complete_graph::entity_properties_loader(
+            macro_user_id.clone(),
+            property_reader,
+        ))
+        .data(complete_graph::email_content_loader(
+            macro_user_id.clone(),
+            email_content_reader,
+        ))
+        .data(property_writer)
+        .data(complete_graph::entity_notifications_loader(
+            macro_user_id,
+            state.graphql_notification_reader.clone(),
+        ))
 }
