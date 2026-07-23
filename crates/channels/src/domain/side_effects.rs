@@ -8,6 +8,7 @@ use crate::domain::{
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
+    mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
         MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
@@ -439,11 +440,14 @@ where
     async fn handle(&self, event: ChannelEvent) {
         let contact_sync_users = contact_sync_users_for_event(&event);
         let broker_events = broker_events_for_event(&event);
+        let mention_broker_events = mention_broker_events_for_event(&event);
 
         match event {
             ChannelEvent::ChannelCreated { .. } => {}
             ChannelEvent::ChannelUpdated { .. } => {}
             ChannelEvent::ParticipantsRemoved { .. } => {}
+            ChannelEvent::EntityMentionCreated { .. } => {}
+            ChannelEvent::EntityMentionDeleted { .. } => {}
             ChannelEvent::ChannelDeleted { channel_id, .. } => {
                 self.search.remove_message(channel_id, None).await;
             }
@@ -614,6 +618,14 @@ where
                 .send_event(&broker_event)
                 .inspect_err(|e| {
                     tracing::error!(error=?e, "failed to publish channel event");
+                });
+        }
+        for mention_event in mention_broker_events {
+            let _ = self
+                .macro_event_broker
+                .send_event(&mention_event)
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish mention event");
                 });
         }
     }
@@ -1378,6 +1390,44 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             },
         )],
         ChannelEvent::ReactionChanged { .. } | ChannelEvent::TypingChanged { .. } => Vec::new(),
+        ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
+            Vec::new()
+        }
+    }
+}
+
+/// Map an internal channel event to the wire events published to the
+/// `macro.mentions` topic.
+///
+/// Channel messages publish on-send only (`message.sent`, no on-delete for
+/// message mentions); generic entity mentions (e.g. docs) publish on-create
+/// and on-delete (`mention.created`/`mention.deleted`).
+fn mention_broker_events_for_event(event: &ChannelEvent) -> Vec<MentionMacroEvent> {
+    match event {
+        ChannelEvent::MessagePosted {
+            message, mentions, ..
+        } => mentions
+            .iter()
+            .map(|mention| {
+                MentionMacroEvent::message_sent(MentionMetadata {
+                    source: EntityRef {
+                        id: message.id.to_string(),
+                        kind: "message".to_string(),
+                    },
+                    mentioned: EntityRef {
+                        id: mention.entity_id.clone(),
+                        kind: mention.entity_type.clone(),
+                    },
+                })
+            })
+            .collect(),
+        ChannelEvent::EntityMentionCreated { mention } => {
+            vec![MentionMacroEvent::created(mention.into())]
+        }
+        ChannelEvent::EntityMentionDeleted { mention } => {
+            vec![MentionMacroEvent::deleted(mention.into())]
+        }
+        _ => Vec::new(),
     }
 }
 

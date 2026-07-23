@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::{
     events::MessageChangedNotificationContext,
-    models::{BotId, ParticipantRole, Sender},
+    models::{BotId, EntityMention, ParticipantRole, Sender},
     ports::{
         ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
         ChannelSearchIndexer, ChannelSideEffectContext,
@@ -1369,4 +1369,139 @@ fn broker_events_skip_reaction_changes() {
     });
 
     assert!(events.is_empty());
+}
+
+fn entity_mention(entity_type: &str, entity_id: &str) -> EntityMention {
+    EntityMention {
+        id: Uuid::new_v4(),
+        source_entity_type: "document".to_string(),
+        source_entity_id: "doc-1".to_string(),
+        entity_type: entity_type.to_string(),
+        entity_id: entity_id.to_string(),
+        user_id: Some("macro|alice@example.com".to_string()),
+        created_at: Utc::now(),
+    }
+}
+
+#[test]
+fn broker_events_skip_entity_mention_events() {
+    assert!(
+        broker_events_for_event(&ChannelEvent::EntityMentionCreated {
+            mention: entity_mention("bot", "bot-1"),
+        })
+        .is_empty()
+    );
+    assert!(
+        broker_events_for_event(&ChannelEvent::EntityMentionDeleted {
+            mention: entity_mention("bot", "bot-1"),
+        })
+        .is_empty()
+    );
+}
+
+#[test]
+fn mention_broker_events_map_message_posted_mentions() {
+    use macro_event_broker::MacroEvent as _;
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let now = Utc::now();
+
+    let events = mention_broker_events_for_event(&ChannelEvent::MessagePosted {
+        channel_id,
+        metadata: ChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "Project".to_string(),
+        },
+        participants: Vec::new(),
+        message: MutatedMessage {
+            id: message_id,
+            channel_id,
+            thread_id: None,
+            sender_id: Sender::new_from_user(user("alice@example.com")),
+            triggered_by: None,
+            content: "@bot @doc-1".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: None,
+            deleted_at: None,
+        },
+        mentions: vec![
+            SimpleMention {
+                entity_type: "bot".to_string(),
+                entity_id: "bot-1".to_string(),
+            },
+            SimpleMention {
+                entity_type: "document".to_string(),
+                entity_id: "doc-1".to_string(),
+            },
+        ],
+        has_attachments: false,
+        attachments: Vec::new(),
+        nonce: None,
+        notification_policy: PostMessageNotificationPolicy::Default,
+    });
+
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].key(), "bot-1");
+    assert_eq!(events[1].key(), "doc-1");
+    let envelope = serde_json::to_value(events[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "mention.message_sent");
+    assert_eq!(envelope["metadata"]["source"]["kind"], "message");
+    assert_eq!(envelope["metadata"]["source"]["id"], message_id.to_string());
+    assert_eq!(envelope["metadata"]["mentioned"]["kind"], "bot");
+    assert_eq!(envelope["metadata"]["mentioned"]["id"], "bot-1");
+}
+
+#[test]
+fn mention_broker_events_map_entity_mention_created_and_deleted() {
+    use macro_event_broker::MacroEvent as _;
+    let mention = entity_mention("bot", "bot-1");
+
+    let created = mention_broker_events_for_event(&ChannelEvent::EntityMentionCreated {
+        mention: mention.clone(),
+    });
+    assert_eq!(created.len(), 1);
+    assert_eq!(created[0].key(), "bot-1");
+    let envelope = serde_json::to_value(created[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "mention.created");
+    assert_eq!(envelope["metadata"]["source"]["kind"], "document");
+    assert_eq!(envelope["metadata"]["source"]["id"], "doc-1");
+    assert_eq!(envelope["metadata"]["mentioned"]["kind"], "bot");
+    assert_eq!(envelope["metadata"]["mentioned"]["id"], "bot-1");
+
+    let deleted = mention_broker_events_for_event(&ChannelEvent::EntityMentionDeleted { mention });
+    assert_eq!(deleted.len(), 1);
+    let envelope = serde_json::to_value(deleted[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "mention.deleted");
+}
+
+#[test]
+fn mention_broker_events_skip_unrelated_events() {
+    let events = mention_broker_events_for_event(&ChannelEvent::ReactionChanged {
+        channel_id: Uuid::new_v4(),
+        actor: Sender::new_from_user(user("alice@example.com")),
+        message_id: Uuid::new_v4(),
+        reactions: Vec::new(),
+        recipients: Vec::new(),
+        nonce: None,
+    });
+    assert!(events.is_empty());
+}
+
+#[tokio::test]
+async fn handle_publishes_mention_events_alongside_channel_events() {
+    let broker = TestEventBroker::default();
+    let service = broker_service(broker.clone());
+
+    service
+        .handle(ChannelEvent::EntityMentionCreated {
+            mention: entity_mention("bot", "bot-1"),
+        })
+        .await;
+
+    let published = broker.published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.mentions");
+    assert_eq!(published[0].key, "bot-1");
+    assert_eq!(published[0].envelope["event_type"], "mention.created");
 }

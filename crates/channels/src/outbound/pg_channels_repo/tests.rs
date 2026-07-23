@@ -2439,18 +2439,26 @@ async fn delete_entity_mention_by_id_removes_only_targeted_row(
         .create_entity_mention(mention_opts("doc-3", "user", "user-w", None))
         .await?;
 
-    assert!(repo.delete_entity_mention_by_id(target.id).await?);
+    let deleted = repo
+        .delete_entity_mention_by_id(target.id)
+        .await?
+        .expect("deleted row should be returned");
+    assert_eq!(deleted.id, target.id);
     assert!(repo.get_entity_mention_by_id(target.id).await?.is_none());
     assert!(repo.get_entity_mention_by_id(other.id).await?.is_some());
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn delete_entity_mention_by_id_returns_false_when_missing(
+async fn delete_entity_mention_by_id_returns_none_when_missing(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
-    assert!(!repo.delete_entity_mention_by_id(Uuid::new_v4()).await?);
+    assert!(
+        repo.delete_entity_mention_by_id(Uuid::new_v4())
+            .await?
+            .is_none()
+    );
     Ok(())
 }
 

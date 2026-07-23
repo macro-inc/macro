@@ -4,6 +4,7 @@
   "macro.documents",
   "macro.email",
   "macro.example",
+  "macro.mentions",
   "macro.projects",
   "macro.soup",
   "macro.teams",

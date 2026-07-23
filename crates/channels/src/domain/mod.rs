@@ -5,6 +5,8 @@ pub mod events;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;
+/// Kafka event models for the `macro.mentions` topic.
+pub mod mention_events;
 /// Domain models for channel messages.
 pub mod models;
 #[cfg(feature = "ports")]

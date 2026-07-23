@@ -764,8 +764,11 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(None)
     }
 
-    async fn delete_entity_mention_by_id(&self, _id: Uuid) -> Result<bool, Self::Err> {
-        Ok(false)
+    async fn delete_entity_mention_by_id(
+        &self,
+        _id: Uuid,
+    ) -> Result<Option<EntityMention>, Self::Err> {
+        Ok(None)
     }
 
     async fn patch_message_attachments(

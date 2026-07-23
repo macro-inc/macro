@@ -3400,18 +3400,23 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(mention)
     }
 
-    async fn delete_entity_mention_by_id(&self, id: Uuid) -> Result<bool, Self::Err> {
-        let result = sqlx::query!(
+    async fn delete_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<EntityMention>, Self::Err> {
+        let mention = sqlx::query_as!(
+            EntityMention,
             r#"
             DELETE FROM comms_entity_mentions
             WHERE id = $1
+            RETURNING id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at
             "#,
             id,
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .context("failed to delete entity mention")?;
-        Ok(result.rows_affected() > 0)
+        Ok(mention)
     }
 
     async fn patch_message_attachments(

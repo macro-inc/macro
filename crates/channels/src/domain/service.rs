@@ -1930,11 +1930,16 @@ where
         &self,
         options: CreateEntityMentionOptions,
     ) -> Result<EntityMention, ChannelMutationErr> {
-        self.repo
+        let mention = self
+            .repo
             .create_entity_mention(options)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMutationErr::Repo)
+            .map_err(ChannelMutationErr::Repo)?;
+        self.events.dispatch(ChannelEvent::EntityMentionCreated {
+            mention: mention.clone(),
+        });
+        Ok(mention)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1951,10 +1956,17 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_entity_mention(&self, id: Uuid) -> Result<bool, ChannelMutationErr> {
-        self.repo
+        let mention = self
+            .repo
             .delete_entity_mention_by_id(id)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMutationErr::Repo)
+            .map_err(ChannelMutationErr::Repo)?;
+        let deleted = mention.is_some();
+        if let Some(mention) = mention {
+            self.events
+                .dispatch(ChannelEvent::EntityMentionDeleted { mention });
+        }
+        Ok(deleted)
     }
 }

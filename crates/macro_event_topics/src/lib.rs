@@ -63,4 +63,6 @@ topics! {
     MacroEmailTopic => "macro.email",
     /// Webhook configuration lifecycle events (created / updated / deleted / validated).
     MacroWebhooksTopic => "macro.webhooks",
+    /// Entity mention events (created / deleted) across channels and docs.
+    MacroMentionsTopic => "macro.mentions",
 }
