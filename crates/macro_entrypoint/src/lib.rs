@@ -146,9 +146,10 @@ impl MacroEntrypoint {
                     tree_tracing: Some(level),
                 },
             ) => {
+                let rust_log_filter = rust_log_env_filter();
                 let subscriber = Registry::default()
-                    .with(RootcauseLayer)
-                    .with(HierarchicalLayer::new(level));
+                    .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
+                    .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
                 InitializedEntrypoint {
                     tracer_provider: None,
