@@ -16,7 +16,7 @@ use model_user::UserContext;
 use rootcause::Report;
 
 use super::*;
-use crate::GraphqlSoupRequestParts;
+use crate::GraphqlRequestParts;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
 
@@ -105,7 +105,7 @@ async fn execute(
     };
     let schema = Schema::build(TestQuery, EmptyMutation, EmptySubscription).finish();
     let request = async_graphql::Request::new(query)
-        .data(GraphqlSoupRequestParts::new(parts))
+        .data(GraphqlRequestParts::new(parts))
         .data(state);
 
     schema.execute(request).await

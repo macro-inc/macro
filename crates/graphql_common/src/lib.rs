@@ -28,4 +28,4 @@ pub use property_filter::{
     GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr, GraphqlPropertiesLiteral,
     GraphqlPropertyEntityType, GraphqlPropertyMatchValue,
 };
-pub use request_context::GraphqlSoupRequestParts;
+pub use request_context::GraphqlRequestParts;

@@ -11,7 +11,7 @@ use entity_access::domain::models::{
     AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
     EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
-use graphql_common::GraphqlSoupRequestParts;
+use graphql_common::GraphqlRequestParts;
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
@@ -34,6 +34,7 @@ const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone)]
 struct TestRealtimeSubscriptionService {
+    #[allow(clippy::type_complexity)]
     receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>>>>>,
     subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
 }
@@ -577,7 +578,7 @@ impl TestHarness {
         parts: axum::http::request::Parts,
     ) -> async_graphql::Response {
         let request = async_graphql::Request::new(query)
-            .data(GraphqlSoupRequestParts::new(parts))
+            .data(GraphqlRequestParts::new(parts))
             .data(self.state.clone());
         self.schema.execute(request).await
     }

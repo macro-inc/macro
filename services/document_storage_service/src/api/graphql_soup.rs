@@ -7,12 +7,12 @@ use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, Graph
 use axum::{
     Router,
     extract::{State, WebSocketUpgrade},
-    http::StatusCode,
+    http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use axum_extra::extract::Cached;
-use complete_graph::GraphqlSoupRequestParts;
+use complete_graph::GraphqlRequestParts;
 use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -37,13 +37,13 @@ async fn graphiql() -> Html<String> {
 async fn graphql_handler(
     State(state): State<ApiContext>,
     Cached(auth): Cached<OptionalMacroAuthorizationExtractor<AuthorizationService>>,
-    request_parts: GraphqlSoupRequestParts,
+    request_parts: Parts,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let request = graphql_query_context_data(request.into_inner(), &state, auth.macro_user_id);
     state
         .graphql_soup_schema
-        .execute(request.data(request_parts))
+        .execute(request.data(GraphqlRequestParts::new(request_parts)))
         .await
         .into()
 }

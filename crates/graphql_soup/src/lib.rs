@@ -13,7 +13,7 @@ mod objects;
 /// Top-level Soup query resolver.
 mod resolvers;
 
-pub use graphql_common::{GraphqlSoupEntityType, GraphqlSoupRequestParts};
+pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use objects::{
     GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelThread, GraphqlSoupChat,
