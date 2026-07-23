@@ -116,6 +116,15 @@ describe('createSplitFocusTracker', () => {
     dispose();
   });
 
+  it('cancels pending debounced focus when its owner is disposed', () => {
+    const { dispose } = mountFreshLoad({ withPreviewPair: true });
+
+    dispose();
+    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('keeps fresh-load focus on the last split when it is not a Viewer', () => {
     const { dispose, manager, panelRefs } = mountFreshLoad({
       withPreviewPair: false,

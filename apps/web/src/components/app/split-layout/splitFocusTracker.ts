@@ -1,6 +1,6 @@
 import { activeElement } from '@app/signal/focus';
 import { splitContainerSelector } from '@core/dom-selectors';
-import { type Accessor, createEffect, on } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
   SplitEvent,
   type SplitEventWithType,
@@ -144,6 +144,13 @@ export function createSplitFocusTracker(props: {
   let focusTimeout: ReturnType<typeof setTimeout> | undefined;
   let activateTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastProgrammaticActivation = 0;
+
+  // Disposal must cancel pending debounced work so it cannot focus stale
+  // panels or activate splits on a torn-down manager after unmount.
+  onCleanup(() => {
+    clearTimeout(focusTimeout);
+    clearTimeout(activateTimeout);
+  });
 
   /** Listens for explicit events from layoutManager that might trigger focus changes */
   createEffect(
