@@ -7,17 +7,7 @@ use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
 use channels::{
-    domain::{
-        list_service::ChannelListServiceImpl,
-        service::NoopChannelContactsDispatcher,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
-    },
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
 };
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -431,29 +421,8 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized chat tool context");
 
-    // Wire channel message posting to real side effects (notifications,
-    // realtime, search indexing) so AI/agent flows that post channel messages
-    // through this host (e.g. document cognition tools) notify mentioned
-    // users the same way the in-app Macro AI channel bot does. Contact-graph
-    // sync is intentionally a no-op here: this host doesn't have a contacts
-    // ingress client wired.
-    let channel_gateway_client = Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-        internal_api_key.clone(),
-        ConnectionGatewayUrl::new()?.to_string(),
-    ));
-    let channel_side_effects = ChannelSideEffectService::new(
-        PgChannelSideEffectContext::new(db.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(channel_gateway_client),
-        NotificationChannelSender::new(notification_ingress_service.clone()),
-        SqsChannelSearchIndexer::new(Arc::new(sqs_client.clone())),
-        NoopChannelContactsDispatcher,
-    )
-    .with_macro_event_broker(macro_event_broker.clone());
-    let channel_tool_context = ai_tools::build_channel_tool_context_with_dispatcher(
-        db.clone(),
-        Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
-        lexical_client.clone(),
-    );
+    let channel_tool_context =
+        ai_tools::build_channel_tool_context(db.clone(), lexical_client.clone());
     let recorder = ai_usage::pg_recorder(db.clone());
 
     // The import pipeline: staged/imported external items, gather jobs over
