@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
@@ -6,6 +7,7 @@ import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { cn, Layer } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -19,6 +21,11 @@ import { ContinueButton, SkipButton } from './shared';
 /** How often the step re-checks for freshly-linked inboxes while visible. */
 const LINKS_POLL_MS = 5_000;
 
+/** The inbox count at the moment a connect was started — the web OAuth
+ * round-trip reloads the page, so detecting "a link landed" after the
+ * return needs a pre-redirect baseline that survives the reload. */
+const CONNECT_BASELINE_KEY = 'onboarding-flow-email-baseline';
+
 /**
  * Step 1 — connect Google accounts, in the same card chrome as the
  * connector rows. A Google-SSO signup arrives with its inbox already linked
@@ -27,10 +34,14 @@ const LINKS_POLL_MS = 5_000;
  * the flow's persisted step brings the user back here with the new inbox in
  * the list.
  */
-export function EmailStep(props: { onContinue: () => void }) {
+export function EmailStep(props: {
+  onContinue: () => void;
+  onSkip: () => void;
+}) {
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
+  const analytics = useAnalytics();
   const [connecting, setConnecting] = createSignal<string>();
 
   // The links query is cached with a long stale time; a connect that just
@@ -67,9 +78,30 @@ export function EmailStep(props: { onContinue: () => void }) {
       : ['Connect another email']
   );
 
+  // A link landing while the step is visible (poll/other tab) — or found on
+  // return from the full-page OAuth redirect via the persisted baseline.
+  createEffect(() => {
+    const count = linksQuery.data?.links.length;
+    if (count === undefined) return;
+    const raw = sessionStorage.getItem(CONNECT_BASELINE_KEY);
+    if (raw === null) return;
+    const baseline = Number(raw);
+    if (Number.isFinite(baseline) && count > baseline) {
+      analytics.track('onboarding_v4_email_connected', {
+        connected_count: count,
+      });
+    }
+    if (count !== baseline) sessionStorage.removeItem(CONNECT_BASELINE_KEY);
+  });
+
   const connect = async (slot: string) => {
     if (connecting() !== undefined) return;
     setConnecting(slot);
+    analytics.track('onboarding_v4_email_connect_clicked', { slot });
+    sessionStorage.setItem(
+      CONNECT_BASELINE_KEY,
+      String(linksQuery.data?.links.length ?? 0)
+    );
     try {
       await startAddInbox();
     } finally {
@@ -156,7 +188,7 @@ export function EmailStep(props: { onContinue: () => void }) {
 
       <Show
         when={links().length > 0}
-        fallback={<SkipButton onClick={props.onContinue} />}
+        fallback={<SkipButton onClick={props.onSkip} />}
       >
         <ContinueButton onClick={props.onContinue} />
       </Show>

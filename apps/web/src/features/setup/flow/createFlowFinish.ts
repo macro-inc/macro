@@ -1,5 +1,6 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
@@ -19,13 +20,30 @@ import { FLOW_NEXT_STORAGE_KEY, FLOW_STEP_STORAGE_KEY } from './shared';
  * link the redirect preserved (`?next=`), or home. Imports never block the
  * exit; auto-import keeps landing rows server-side.
  */
-export function createFlowFinish() {
+export function createFlowFinish(options?: {
+  /** Extra analytics context stamped onto `onboarding_v4_completed`. */
+  completionRollup?: () => {
+    emails_connected: number;
+    connectors_connected: string[];
+  };
+}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const userInfoQuery = useUserInfoQuery();
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
+  const analytics = useAnalytics();
   const [finishing, setFinishing] = createSignal(false);
+
+  const trackCompleted = (plan: 'free' | 'premium', planSkipped: boolean) => {
+    analytics.track('onboarding_v4_completed', {
+      plan,
+      plan_skipped: planSkipped,
+      emails_connected: 0,
+      connectors_connected: [],
+      ...options?.completionRollup?.(),
+    });
+  };
 
   // Same-app relative paths only.
   const sanitizeNext = (value: unknown): string | undefined =>
@@ -81,11 +99,12 @@ export function createFlowFinish() {
   };
 
   /** Finish on the free plan (or a skipped plan step) and enter the app. */
-  const finishFree = async () => {
+  const finishFree = async (planSkipped = false) => {
     if (finishing()) return;
     setFinishing(true);
     try {
       if (await completeFlow()) {
+        trackCompleted('free', planSkipped);
         navigate(afterTarget(), { replace: true });
       }
     } finally {
@@ -104,6 +123,7 @@ export function createFlowFinish() {
     setFinishing(true);
     try {
       if (!(await completeFlow())) return;
+      trackCompleted('premium', false);
       try {
         // Same success convention as the legacy onboarding checkout:
         // /welcome bounces authenticated users into the app.

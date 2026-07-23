@@ -1,10 +1,13 @@
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
 import LogoIcon from '@icon/macro-logo.svg';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { useImportQuery } from '@queries/import';
+import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useOnboardingQuery } from '@queries/onboarding';
 import { useNavigate } from '@solidjs/router';
 import { cn } from '@ui';
@@ -56,9 +59,12 @@ interface StepDef {
 }
 
 interface StepControls {
+  /** Advance after finishing the step (tracked as completed). */
   next: () => void;
+  /** Advance without finishing the step (tracked as skipped). */
+  skip: () => void;
   finishing: () => boolean;
-  finishFree: () => void;
+  finishFree: (planSkipped: boolean) => void;
   finishPremium: (tier: 'premium') => void;
 }
 
@@ -128,6 +134,7 @@ function buildSteps(): StepDef[] {
             features={copy.features}
             gatherHint={copy.gatherHint}
             onContinue={controls.next}
+            onSkip={controls.skip}
           />
         ),
       },
@@ -140,7 +147,9 @@ function buildSteps(): StepDef[] {
       title: 'Connect your Google accounts',
       subtitle:
         'Macro builds one unified memory across everything you do. Connecting work and personal brings your email, docs, and calendar together — so nothing lives in a silo.',
-      render: (controls) => <EmailStep onContinue={controls.next} />,
+      render: (controls) => (
+        <EmailStep onContinue={controls.next} onSkip={controls.skip} />
+      ),
     },
     ...connectorSteps,
     {
@@ -148,7 +157,9 @@ function buildSteps(): StepDef[] {
       title: 'Set up your team',
       subtitle:
         'Macro is designed as a multiplayer tool — your unified memory gets sharper with every teammate who joins.',
-      render: (controls) => <TeamStep onContinue={controls.next} />,
+      render: (controls) => (
+        <TeamStep onContinue={controls.next} onSkip={controls.skip} />
+      ),
     },
     {
       // A breather while gathers and email processing land — pure theater
@@ -224,6 +235,12 @@ function FlowContent() {
   // Mounted for the whole flow so gather results stream in before the
   // summary step (gateway pushes + polling warm the shared cache).
   useImportQuery({ enabled: needsOnboarding });
+  // Read only from event handlers/effects (never in render, so neither can
+  // suspend this boundary): the analytics rollup and the signup-method
+  // inference below.
+  const linksQuery = useEmailLinksQuery();
+  const serversQuery = useMcpServersQuery({ neverSuspend: true });
+  const analytics = useAnalytics();
 
   const steps = buildSteps();
 
@@ -258,8 +275,39 @@ function FlowContent() {
     }
   });
 
+  // The flow entered (or resumed after a reload / OAuth round-trip): a
+  // Google SSO signup arrives with its Gmail inbox already linked, an
+  // email-code signup with none, so the first links payload tells us how
+  // they signed up. One event per mount.
+  let startedTracked = false;
+  createEffect(() => {
+    if (startedTracked || !needsOnboarding()) return;
+    const links = linksQuery.data?.links;
+    if (!links) return;
+    startedTracked = true;
+    analytics.track('onboarding_v4_started', {
+      signup_method: links.length > 0 ? 'google' : 'email_code',
+      entry_step: currentStep().key,
+    });
+  });
+
+  // Every step the user lands on, including the first.
+  createEffect(() => {
+    if (!needsOnboarding()) return;
+    analytics.track('onboarding_v4_step', {
+      step: currentStep().key,
+      index: stepIndex(),
+      state: 'viewed',
+    });
+  });
+
   // Forward-only: there is no back.
-  const next = () => {
+  const advance = (state: 'completed' | 'skipped') => {
+    analytics.track('onboarding_v4_step', {
+      step: currentStep().key,
+      index: stepIndex(),
+      state,
+    });
     const index = Math.min(stepIndex() + 1, steps.length - 1);
     setStepIndex(index);
     sessionStorage.setItem(
@@ -268,11 +316,19 @@ function FlowContent() {
     );
   };
 
-  const finish = createFlowFinish();
+  const finish = createFlowFinish({
+    completionRollup: () => ({
+      emails_connected: linksQuery.data?.links.length ?? 0,
+      connectors_connected: (serversQuery.data ?? [])
+        .filter((server) => server.authenticated)
+        .map((server) => server.server_name.toLowerCase()),
+    }),
+  });
   const controls: StepControls = {
-    next,
+    next: () => advance('completed'),
+    skip: () => advance('skipped'),
     finishing: finish.finishing,
-    finishFree: () => void finish.finishFree(),
+    finishFree: (planSkipped) => void finish.finishFree(planSkipped),
     finishPremium: (tier) => void finish.finishPremium(tier),
   };
 

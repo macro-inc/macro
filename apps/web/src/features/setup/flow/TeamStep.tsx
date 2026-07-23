@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useEmail } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import CheckIcon from '@phosphor/check.svg';
@@ -41,12 +42,28 @@ import {
  *   domain and same-domain contacts suggested as invites (free-mail domains
  *   get the plain create + invite form).
  */
-export function TeamStep(props: { onContinue: () => void }) {
+export function TeamStep(props: {
+  onContinue: () => void;
+  onSkip: () => void;
+}) {
+  const analytics = useAnalytics();
   const teamsQuery = useUserTeamsQuery();
   const invitesQuery = useUserInvitesQuery();
 
   const team = createMemo(() => teamsQuery.data?.[0]);
   const invites = createMemo(() => invitesQuery.data?.invites ?? []);
+
+  // Arriving already on a team (domain auto-join at signup). One-shot on
+  // the FIRST resolved teams payload, so a create/join that happens later
+  // in this step doesn't also read as auto-joined.
+  let membershipReported = false;
+  createEffect(() => {
+    if (membershipReported || teamsQuery.data === undefined) return;
+    membershipReported = true;
+    if (teamsQuery.data.length > 0) {
+      analytics.track('onboarding_v4_team', { action: 'already_on_team' });
+    }
+  });
 
   return (
     <Show
@@ -57,11 +74,9 @@ export function TeamStep(props: { onContinue: () => void }) {
     >
       <Show
         when={invites().length === 0}
-        fallback={
-          <InvitesPanel invites={invites()} onContinue={props.onContinue} />
-        }
+        fallback={<InvitesPanel invites={invites()} onSkip={props.onSkip} />}
       >
-        <CreateTeamForm onContinue={props.onContinue} />
+        <CreateTeamForm onContinue={props.onContinue} onSkip={props.onSkip} />
       </Show>
     </Show>
   );
@@ -93,9 +108,14 @@ function OnTeamPanel(props: { name?: string; onContinue: () => void }) {
 /** Pending team invites — join one and move on. */
 function InvitesPanel(props: {
   invites: TeamInviteDetails[];
-  onContinue: () => void;
+  onSkip: () => void;
 }) {
-  const joinTeam = useJoinTeamMutation();
+  const analytics = useAnalytics();
+  const joinTeam = useJoinTeamMutation({
+    onSuccess: () => {
+      analytics.track('onboarding_v4_team', { action: 'joined_invite' });
+    },
+  });
 
   return (
     <div class="flex flex-col gap-3">
@@ -117,7 +137,7 @@ function InvitesPanel(props: {
           </div>
         )}
       </For>
-      <SkipButton onClick={props.onContinue} />
+      <SkipButton onClick={props.onSkip} />
     </div>
   );
 }
@@ -127,7 +147,8 @@ const SUGGESTION_CAP = 6;
 
 /** Create a team: pre-derived name + same-domain invite suggestions when the
  * user has a custom domain; the plain form otherwise. */
-function CreateTeamForm(props: { onContinue: () => void }) {
+function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
+  const analytics = useAnalytics();
   const email = useEmail();
   const contacts = useContacts();
   const createTeam = useCreateTeamWithInvitesMutation();
@@ -185,6 +206,7 @@ function CreateTeamForm(props: { onContinue: () => void }) {
     if (createTeam.isPending || name().trim().length === 0) return;
     // The mutation owns its own toasts; advance only when it lands, stay
     // put (form intact) when it fails.
+    const invitesSent = validInvites().length;
     try {
       await createTeam.mutateAsync({
         name: name().trim(),
@@ -193,6 +215,11 @@ function CreateTeamForm(props: { onContinue: () => void }) {
     } catch {
       return;
     }
+    analytics.track('onboarding_v4_team', {
+      action: 'created',
+      invites_sent: invitesSent,
+      used_domain_suggestion: customDomain() !== undefined,
+    });
     props.onContinue();
   };
 
@@ -269,7 +296,7 @@ function CreateTeamForm(props: { onContinue: () => void }) {
         disabled={name().trim().length === 0 || createTeam.isPending}
         onClick={() => void create()}
       />
-      <SkipButton onClick={props.onContinue} />
+      <SkipButton onClick={props.onSkip} />
     </div>
   );
 }

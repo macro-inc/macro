@@ -4,7 +4,7 @@ import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
+import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useEmailLinks } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
@@ -126,7 +126,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     // return straight to it. Landing in mail settings would mount the app
     // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
     if (
-      ENABLE_NEW_ONBOARDING_V3 &&
+      ENABLE_ONBOARDING_V4 &&
       !isMobile() &&
       !isNativeMobilePlatform() &&
       userInfoQuery.data?.tutorialComplete === false

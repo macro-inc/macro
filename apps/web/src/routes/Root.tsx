@@ -35,7 +35,7 @@ import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
+import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -435,7 +435,7 @@ const ROUTES: RouteDefinition[] = [
     component: () =>
       isNativeMobilePlatform() ? (
         <MobileOnboarding />
-      ) : !ENABLE_NEW_ONBOARDING_V3 ? (
+      ) : !ENABLE_ONBOARDING_V4 ? (
         <Navigate href="/login" />
       ) : (
         <OnboardingFlow />
@@ -448,7 +448,7 @@ const ROUTES: RouteDefinition[] = [
     // users on /login and native users on the MobileOnboarding screen.
     path: '/setup',
     component: () =>
-      ENABLE_NEW_ONBOARDING_V3 ? <SetupRedirect /> : <Navigate href="/" />,
+      ENABLE_ONBOARDING_V4 ? <SetupRedirect /> : <Navigate href="/" />,
   },
   {
     path: '/team-invite',
@@ -585,7 +585,7 @@ function InitialInteractiveOnboardingModal() {
     open() &&
     // The new split-screen onboarding replaces this modal on desktop; the
     // Layout redirect sends first-time users to /setup instead.
-    (!ENABLE_NEW_ONBOARDING_V3 || isMobile()) &&
+    (!ENABLE_ONBOARDING_V4 || isMobile()) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());

@@ -16,14 +16,14 @@ import { SkipButton } from './shared';
  */
 export function PlanStep(props: {
   finishing: boolean;
-  onFree: () => void;
+  onFree: (planSkipped: boolean) => void;
   onPremium: (tier: Exclude<PlanTier, 'free'>) => void;
 }) {
   const [selected, setSelected] = createSignal<PlanTier>('free');
 
   const finish = () => {
     const tier = selected();
-    if (tier === 'free') props.onFree();
+    if (tier === 'free') props.onFree(false);
     else props.onPremium(tier);
   };
 
@@ -94,7 +94,7 @@ export function PlanStep(props: {
         <SkipButton
           label="Decide later"
           disabled={props.finishing}
-          onClick={props.onFree}
+          onClick={() => props.onFree(true)}
         />
       </div>
     </div>
