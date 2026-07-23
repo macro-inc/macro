@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH outcome AS (\n                SELECT\n                    COUNT(*) FILTER (WHERE status = 'imported')\n                        = CARDINALITY($3::uuid[])::bigint AS succeeded\n                FROM import_entity\n                WHERE user_id = $1 AND id = ANY($3::uuid[])\n            )\n            UPDATE import_run\n            SET status = (CASE\n                    WHEN outcome.succeeded THEN 'completed'\n                    ELSE 'failed'\n                END)::import_run_status,\n                error = CASE\n                    WHEN outcome.succeeded THEN NULL\n                    ELSE 'one or more automatic imports failed'\n                END,\n                updated_at = NOW()\n            FROM outcome\n            WHERE user_id = $1 AND source = $2 AND status = 'importing'\n            RETURNING import_run.status::text AS \"status!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6335355244b0d3b14781c6983127a65b3ef3e669b837ffa239d5b8d74dc7ef8c"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT source, status, auto_import, error, updated_at\n            FROM import_run WHERE user_id = $1\n            ORDER BY source\n            ",
+  "query": "\n            SELECT source, status::text AS \"status!\", auto_import, error, updated_at\n            FROM import_run WHERE user_id = $1\n            ORDER BY source\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "status",
+        "name": "status!",
         "type_info": "Text"
       },
       {
@@ -36,11 +36,11 @@
     },
     "nullable": [
       false,
-      false,
+      null,
       false,
       true,
       false
     ]
   },
-  "hash": "6b6bce59ed506e0cb8eb5236766fa1fd71c9b572d04442ba6588f02864dc92fd"
+  "hash": "192b53847ed98ebf7e5506cf99eff776fed05fb7926d8fba33b31ff8b49fa1c3"
 }

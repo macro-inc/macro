@@ -513,7 +513,7 @@ impl ImportRepo for PgImportRepo {
         let rows = sqlx::query_as!(
             ImportRunDbRow,
             r#"
-            SELECT source, status, auto_import, error, updated_at
+            SELECT source, status::text AS "status!", auto_import, error, updated_at
             FROM import_run WHERE user_id = $1
             ORDER BY source
             "#,
@@ -539,7 +539,7 @@ impl ImportRepo for PgImportRepo {
             VALUES ($1, $2, 'running', $4)
             ON CONFLICT (user_id, source) DO UPDATE
             SET status = 'running', error = NULL, updated_at = NOW()
-            WHERE import_run.status = ANY($3::text[])
+            WHERE import_run.status::text = ANY($3::text[])
             "#,
             user.as_ref(),
             source.as_ref(),
@@ -562,7 +562,9 @@ impl ImportRepo for PgImportRepo {
         let result = sqlx::query!(
             r#"
             UPDATE import_run
-            SET status = $3, error = $4, updated_at = NOW()
+            SET status = $3::text::import_run_status,
+                error = $4,
+                updated_at = NOW()
             WHERE user_id = $1 AND source = $2 AND status = 'running'
             "#,
             user.as_ref(),
@@ -587,8 +589,9 @@ impl ImportRepo for PgImportRepo {
         let result = sqlx::query!(
             r#"
             UPDATE import_run
-            SET status = $4, updated_at = NOW()
-            WHERE user_id = $1 AND source = $2 AND status = ANY($3::text[])
+            SET status = $4::text::import_run_status, updated_at = NOW()
+            WHERE user_id = $1 AND source = $2
+              AND status::text = ANY($3::text[])
             "#,
             user.as_ref(),
             source.as_ref(),
@@ -664,10 +667,10 @@ impl ImportRepo for PgImportRepo {
                 WHERE user_id = $1 AND id = ANY($3::uuid[])
             )
             UPDATE import_run
-            SET status = CASE
+            SET status = (CASE
                     WHEN outcome.succeeded THEN 'completed'
                     ELSE 'failed'
-                END,
+                END)::import_run_status,
                 error = CASE
                     WHEN outcome.succeeded THEN NULL
                     ELSE 'one or more automatic imports failed'
@@ -675,7 +678,7 @@ impl ImportRepo for PgImportRepo {
                 updated_at = NOW()
             FROM outcome
             WHERE user_id = $1 AND source = $2 AND status = 'importing'
-            RETURNING import_run.status
+            RETURNING import_run.status::text AS "status!"
             "#,
             user.as_ref(),
             source.as_ref(),
@@ -721,7 +724,9 @@ impl ImportRepo for PgImportRepo {
                   )
             )
             UPDATE import_run run
-            SET status = CASE WHEN settled.failed THEN 'failed' ELSE 'completed' END,
+            SET status = (
+                    CASE WHEN settled.failed THEN 'failed' ELSE 'completed' END
+                )::import_run_status,
                 error = CASE
                     WHEN settled.failed THEN 'one or more automatic imports failed'
                     ELSE NULL
