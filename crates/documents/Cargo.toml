@@ -62,7 +62,7 @@ outbound = [
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:tokio"]
+ports = ["dep:tokio", "dep:tokio-retry"]
 service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
@@ -110,6 +110,7 @@ s3_key = { path = "../s3_key" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
+tokio-retry = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }

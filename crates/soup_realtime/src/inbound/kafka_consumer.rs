@@ -18,6 +18,7 @@ use model_entity::{Entity, EntityType};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use crate::domain::{
     ports::{SoupItemReader, SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
@@ -41,6 +42,12 @@ macro_event_broker::declare_topics!(DeclaredMacroEvent: DocumentMacroEvent);
 const MAX_SERVICE_ATTEMPTS: u32 = 5;
 /// Delay before the first retry; each subsequent delay doubles.
 const SERVICE_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
+
+fn service_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take((MAX_SERVICE_ATTEMPTS - 1) as usize)
+}
 
 fn entity_from_document_event(event: &DocumentMacroEvent) -> Option<Entity<'static>> {
     match &event.event().event {
@@ -109,37 +116,38 @@ async fn notify_with_retry<S: SoupRealtimeService>(
     partition: i32,
     offset: i64,
 ) -> Result<(), Report> {
-    let mut delay = SERVICE_RETRY_BASE_DELAY;
-    let mut attempt = 1u32;
-
-    loop {
-        tracing::trace!(attempt, "notifying realtime Soup recipients");
-        match service.notify_users(entity.clone()).await {
-            Ok(()) => {
-                tracing::trace!(attempt, "realtime Soup recipients notified");
-                return Ok(());
+    let mut attempt = 0u32;
+    Retry::start(service_retry_strategy(), || {
+        attempt += 1;
+        let entity = entity.clone();
+        async move {
+            tracing::trace!(attempt, "notifying realtime Soup recipients");
+            let result = service.notify_users(entity).await;
+            match &result {
+                Ok(()) => tracing::trace!(attempt, "realtime Soup recipients notified"),
+                Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {
+                    let delay = SERVICE_RETRY_BASE_DELAY * 2u32.pow(attempt - 1);
+                    tracing::warn!(
+                        error = ?error,
+                        attempt,
+                        delay_secs = delay.as_secs_f32(),
+                        "realtime Soup fan-out failed, retrying"
+                    );
+                }
+                Err(_) => {}
             }
-            Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {
-                tracing::warn!(
-                    error = ?error,
-                    attempt,
-                    delay_secs = delay.as_secs_f32(),
-                    "realtime Soup fan-out failed, retrying"
-                );
-                tokio::time::sleep(delay).await;
-                delay *= 2;
-                attempt += 1;
-            }
-            Err(error) => {
-                return Err(error
-                    .context(format!(
-                        "realtime Soup fan-out failed after {MAX_SERVICE_ATTEMPTS} attempts \
-                         (partition {partition} offset {offset})"
-                    ))
-                    .into_dynamic());
-            }
+            result
         }
-    }
+    })
+    .await
+    .map_err(|error| {
+        error
+            .context(format!(
+                "realtime Soup fan-out failed after {MAX_SERVICE_ATTEMPTS} attempts \
+                 (partition {partition} offset {offset})"
+            ))
+            .into_dynamic()
+    })
 }
 
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {

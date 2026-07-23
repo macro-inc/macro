@@ -9,6 +9,7 @@ consumer = [
   "dep:kafka_util",
   "dep:rdkafka",
   "dep:tokio",
+  "dep:tokio-retry",
   "ingestion",
   "macro_event_broker/outbound",
 ]
@@ -82,6 +83,7 @@ sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"], optional = true }
+tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
