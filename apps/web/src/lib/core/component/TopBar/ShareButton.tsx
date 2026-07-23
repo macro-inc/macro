@@ -92,6 +92,9 @@ import { openLoginModal } from './LoginButton';
 
 false && clickOutside;
 
+const isPublicLinkDisabledForItem = (itemType: ItemType): boolean =>
+  itemType === 'email' || itemType === 'project';
+
 interface IShareDialogContext {
   isOpen: Accessor<boolean>;
   open: () => void;
@@ -295,7 +298,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       tabs.push({ value: 'people', label: 'People' });
     if (
       props.userPermissions === Permissions.OWNER &&
-      props.itemType !== 'email'
+      !isPublicLinkDisabledForItem(props.itemType)
     )
       tabs.push({ value: 'link', label: 'Link' });
     return tabs;
@@ -1130,7 +1133,7 @@ export function ShareModal(props: ShareModalProps) {
               <Show
                 when={
                   props.userPermissions === Permissions.OWNER &&
-                  props.itemType !== 'email'
+                  !isPublicLinkDisabledForItem(props.itemType)
                 }
               >
                 <Panel depth={2} class="rounded-xl">
