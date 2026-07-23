@@ -14,6 +14,7 @@ import type { Awareness } from './awareness';
 import { BroadcastChannelChatter, type Chatter, noopChatter } from './chatter';
 import { logSyncService } from './logger';
 import {
+  LoroManagerError,
   LoroStateTag,
   type StateUpdate,
   type SyncEngineManager,
@@ -77,7 +78,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private chatter?: Chatter;
   private chatterUnsub?: () => void;
   private lifecycleGeneration = 0;
-  private convergence?: { generation: number; promise: Promise<void> };
+  private convergence?: {
+    generation: number;
+    promise: Promise<void>;
+    rerunRequested: boolean;
+  };
 
   constructor({
     loroManager,
@@ -294,6 +299,20 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const importResult = this.loroManager.importUpdate(update);
       await Promise.resolve();
       if (importResult.isErr()) {
+        const pendingOnly = importResult.error.every(
+          (e) => e.code === LoroManagerError.ImportPending
+        );
+        if (pendingOnly) {
+          // The update arrived ahead of its causal deps; Loro holds it and
+          // applies it once the gap fills. Pull the gap from the server
+          // instead of resetting. No rerun: if the gap's ops haven't reached
+          // the server yet (e.g. another tab's unflushed WAL), rerunning
+          // would poll in a tight loop; the held ops apply whenever the deps
+          // arrive through any channel.
+          this.log('info', 'engine: remote update pending on missing ops');
+          void this.convergeFromServer();
+          return;
+        }
         this.log('error', 'engine: failed to import remote update, resetting', {
           err: importResult,
         });
@@ -322,7 +341,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           'info',
           'engine: reconnect, requesting updates since current version'
         );
-        void this.convergeFromServer();
+        void this.convergeFromServer({ rerunIfInFlight: true });
         break;
     }
   }
@@ -332,25 +351,35 @@ export class SyncEngine<S extends GenericRootSchema, D> {
    *
    * Snapshot sources are intentionally transport-agnostic and first-wins, so
    * this anti-entropy step is what makes optimistic, IDB, and S3 seeds converge
-   * to server truth. Calls within one engine lifecycle are coalesced.
+   * to server truth. Calls within one engine lifecycle are coalesced;
+   * `rerunIfInFlight` additionally queues one fresh pass after the in-flight
+   * one settles, so a reconnect is never absorbed into an attempt that goes
+   * on to exhaust its retries.
    */
-  private convergeFromServer(): Promise<void> {
+  private convergeFromServer({
+    rerunIfInFlight = false,
+  }: {
+    rerunIfInFlight?: boolean;
+  } = {}): Promise<void> {
     const generation = this.lifecycleGeneration;
     if (!this.isActiveGeneration(generation)) return Promise.resolve();
 
-    if (this.convergence?.generation === generation) {
-      return this.convergence.promise;
+    const inFlight = this.convergence;
+    if (inFlight?.generation === generation) {
+      if (rerunIfInFlight) inFlight.rerunRequested = true;
+      return inFlight.promise;
     }
 
     const since = this.loroManager.doc.version();
     const promise = this.requestAndHandleUpdatesSince(since, 1, generation);
-    this.convergence = { generation, promise };
-    const clearConvergence = () => {
-      if (this.convergence?.promise === promise) {
-        this.convergence = undefined;
-      }
+    const record = { generation, promise, rerunRequested: false };
+    this.convergence = record;
+    const settle = () => {
+      if (this.convergence !== record) return;
+      this.convergence = undefined;
+      if (record.rerunRequested) void this.convergeFromServer();
     };
-    void promise.then(clearConvergence, clearConvergence);
+    void promise.then(settle, settle);
     return promise;
   }
 
@@ -379,6 +408,15 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         );
         await this.requestAndHandleUpdatesSince(since, attempt + 1, generation);
       }
+      return;
+    }
+
+    if (updates.value.length === 0) {
+      // Nothing to converge. Zero bytes are not a valid Loro payload (real
+      // sources encode "no new ops" as a non-empty update), so importing them
+      // would throw and trigger a reset — the noop live source used by
+      // non-propagating AI edit sessions answers with exactly this.
+      this.log('debug', 'engine: requestUpdatesSince ok, empty update');
       return;
     }
 

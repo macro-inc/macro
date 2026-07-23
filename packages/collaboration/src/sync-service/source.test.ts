@@ -145,6 +145,21 @@ describe('SyncServiceSource', () => {
     expect(events).toEqual([{ type: 'update', update: bytes }]);
   });
 
+  it('drops events arriving after the last listener detaches instead of buffering', () => {
+    const ws = new FakeSocket();
+    const src = new SyncServiceSource(ws, 'doc1');
+    const events: SyncSourceEvent[] = [];
+    const unsubscribe = src.listen((e) => events.push(e));
+    unsubscribe();
+
+    ws.deliver(remote.update(new Uint8Array([7]))); // engine stopped — dropped
+
+    const eventsAfterRestart: SyncSourceEvent[] = [];
+    src.listen((e) => eventsAfterRestart.push(e));
+    expect(events).toEqual([]);
+    expect(eventsAfterRestart).toEqual([]);
+  });
+
   it('pushUpdate resolves false before initial sync', async () => {
     const ws = new FakeSocket();
     const src = new SyncServiceSource(ws, 'doc1');

@@ -1,6 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import { logSyncService } from './logger';
-import type { LoroManager } from './manager';
+import { type LoroManager, LoroManagerError } from './manager';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
 
@@ -100,6 +100,20 @@ export async function loadCachedState<S extends GenericRootSchema>(
   for (const entry of pending) {
     const importResult = loroManager.importUpdate(entry.update);
     if (importResult.isErr()) {
+      const pendingOnly = importResult.error.every(
+        (e) => e.code === LoroManagerError.ImportPending
+      );
+      if (pendingOnly) {
+        // Loro holds the entry until its causal gap fills, so keep replaying:
+        // a later WAL entry may fill the gap, and held ops apply on their own.
+        logSyncService({
+          documentId: 'unknown',
+          level: 'warn',
+          context: { misc: { entryId: entry.id } },
+          message: 'snapshot-store: WAL entry pending during cold load',
+        });
+        continue;
+      }
       // Stop replaying. Skipped entries are safe: delivered ones are on the
       // server (server sync will bring them back) and undelivered ones are
       // still in the WAL (next edit or reconnect will flush them).

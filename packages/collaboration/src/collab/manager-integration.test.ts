@@ -144,6 +144,48 @@ describe('LoroManager seed + converge — two-client merge', () => {
     dispose();
   });
 
+  it('two clients seeded from the same snapshot converge after concurrent edits', async () => {
+    await createRoot(async (dispose) => {
+      const initialSnapshotX = await buildSnapshot([{ id: 'p1', text: 'X ' }]);
+      const server = new TestServer();
+      server.applyUpdate(initialSnapshotX);
+
+      const clientA = createLoroManager(TEST_SCHEMA, {
+        documentId: 'test-doc-a',
+      });
+      await clientA.ingest({ kind: 'dss', snapshot: initialSnapshotX });
+
+      const clientB = createLoroManager(TEST_SCHEMA, {
+        documentId: 'test-doc-b',
+      });
+      await clientB.ingest({ kind: 'dss', snapshot: initialSnapshotX });
+
+      await clientA.syncToLoro({
+        paragraphs: [{ id: 'p1', text: 'X edit-A ' }],
+      });
+      pushToServer(clientA, server);
+
+      await clientB.syncToLoro({
+        paragraphs: [{ id: 'p1', text: 'X edit-B ' }],
+      });
+      pushToServer(clientB, server);
+
+      // Both clients pull the full server state
+      clientA.doc.import(server.doc.export({ mode: 'update' }));
+      clientB.doc.import(server.doc.export({ mode: 'update' }));
+
+      const textA = paragraphTexts(clientA)[0]!;
+      const textB = paragraphTexts(clientB)[0]!;
+
+      expect(textA).toContain('X');
+      expect(textA).toContain('edit-A');
+      expect(textA).toContain('edit-B');
+      expect(textA).toEqual(textB);
+
+      dispose();
+    });
+  });
+
   it('reports a causally pending update instead of treating it as a no-op', async () => {
     await createRoot(async (dispose) => {
       const source = new LoroDoc();

@@ -5,7 +5,7 @@ import {
   WebSocketServer,
 } from 'ws';
 import type { RawUpdate } from '../collab/shared';
-import { type WALEntry, type WALStore, WALSyncer } from '../collab/wal';
+import { InMemoryWALStore, WALSyncer } from '../collab/wal';
 import { WebsocketConnectionState } from '../websocket';
 import { FromPeer, FromRemote } from './generated/schema';
 import { createSyncSocket, type SyncWebsocket } from './socket';
@@ -14,47 +14,9 @@ import { SyncServiceSource } from './source';
 const ACK_TIMEOUT_MS = 75;
 const STALE_RETRIES = 3;
 
-class MemoryWALStore implements WALStore<RawUpdate> {
-  private entries: WALEntry<RawUpdate>[] = [];
-  private nextId = 0;
-
-  async append(update: RawUpdate): Promise<void> {
-    this.entries.push({
-      id: this.nextId++,
-      update,
-      delivered: false,
-      createdAt: Date.now(),
-    });
-  }
-
-  async getAll(): Promise<WALEntry<RawUpdate>[]> {
-    return this.entries.map((entry) => ({ ...entry }));
-  }
-
-  async markDelivered(ids: number[]): Promise<void> {
-    const delivered = new Set(ids);
-    this.entries = this.entries.map((entry) =>
-      delivered.has(entry.id) ? { ...entry, delivered: true } : entry
-    );
-  }
-
-  async pruneDelivered(): Promise<void> {
-    this.entries = this.entries.filter((entry) => !entry.delivered);
-  }
-
-  async pruneExpired(): Promise<number> {
-    return 0;
-  }
-
-  async count(): Promise<number> {
-    return this.entries.length;
-  }
-}
-
 type ReceivedUpdate = {
   id: string;
   updates: Uint8Array[];
-  receivedAt: number;
 };
 
 function bytes(data: RawData): Uint8Array {
@@ -92,7 +54,6 @@ function handleServerConnection(
     received.push({
       id: message.value.id,
       updates: message.value.updates,
-      receivedAt: performance.now(),
     });
 
     if (acknowledgeUpdates) {
@@ -164,7 +125,7 @@ describe('sync retry amplification', () => {
       expect(socket!.connectionState).not.toBe(WebsocketConnectionState.Open);
     });
 
-    const store = new MemoryWALStore();
+    const store = new InMemoryWALStore<RawUpdate>();
     const wal = new WALSyncer<RawUpdate>(
       store,
       (updates) => source!.pushUpdate(updates),
@@ -199,13 +160,14 @@ describe('sync retry amplification', () => {
       { timeout: 5_000 }
     );
 
+    // Every send is the same single WAL entry under a distinct message id:
+    // the stale retries drained plus one fresh copy, and nothing more — a
+    // regression that re-amplified retries would push extra messages here.
+    expect(received).toHaveLength(STALE_RETRIES + 1);
     expect(new Set(received.map(({ id }) => id)).size).toBe(STALE_RETRIES + 1);
     for (const message of received) {
       expect(message.updates).toEqual([update]);
     }
-    expect(received.at(-1)!.receivedAt - received[0]!.receivedAt).toBeLessThan(
-      250
-    );
 
     wal.destroy();
   }, 10_000);

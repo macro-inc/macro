@@ -90,8 +90,11 @@ export class SyncServiceSource implements LiveSyncSource {
   private readonly newId: () => string;
   private readonly ackTimeoutMs: number;
   private readonly listeners = new Set<(event: SyncSourceEvent) => void>();
-  /** Events that arrive before any listener attaches; flushed on `listen()`. */
+  /** Events that arrive before the first listener attaches; flushed on
+   *  `listen()`. Once a listener has attached, listener-less windows (e.g. a
+   *  stopped engine) drop events instead — see `emit`. */
   private readonly buffered: SyncSourceEvent[] = [];
+  private hasEverHadListener = false;
   /** Pending request/response waiters, matched against each incoming message. */
   private readonly waiters = new Set<MessageWaiter>();
   private initialSyncReceived = false;
@@ -154,6 +157,7 @@ export class SyncServiceSource implements LiveSyncSource {
     this.initialSyncPromise;
 
   public listen: LiveSyncSource['listen'] = (listener) => {
+    this.hasEverHadListener = true;
     this.listeners.add(listener);
     // Flush anything that arrived before the first listener attached.
     if (this.buffered.length > 0) {
@@ -249,7 +253,11 @@ export class SyncServiceSource implements LiveSyncSource {
 
   private emit(event: SyncSourceEvent) {
     if (this.listeners.size === 0) {
-      this.buffered.push(event);
+      // Buffer only the pre-first-listen window (source construction → engine
+      // start). After a listener has detached (engine stopped), drop events —
+      // buffering here is unbounded, and a restarted engine converges from
+      // the server instead of replaying a stale backlog.
+      if (!this.hasEverHadListener) this.buffered.push(event);
       return;
     }
     for (const listener of this.listeners) listener(event);
