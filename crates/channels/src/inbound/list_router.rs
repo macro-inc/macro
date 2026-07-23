@@ -282,6 +282,8 @@ pub struct Channel {
     pub org_id: Option<u32>,
     /// id of the team this channel belongs to
     pub team_id: Option<Uuid>,
+    /// whether team members automatically join the channel
+    pub auto_join_team: bool,
     /// timestamp of when the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the channel was last updated
@@ -299,6 +301,7 @@ impl Channel {
             channel_type: ChannelType::new_from_domain(value.channel_type),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
+            auto_join_team: value.auto_join_team,
             created_at: value.created_at,
             updated_at: value.updated_at,
             owner_id: value.owner_id,

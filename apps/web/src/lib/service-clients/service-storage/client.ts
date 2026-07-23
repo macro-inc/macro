@@ -655,11 +655,11 @@ export const storageServiceClient = {
   },
 
   async patchChannel(args: WithChannelId & PatchChannelRequest) {
-    const { channel_id, channel_name } = args;
+    const { channel_id, ...request } = args;
     return (
       await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ channel_name }),
+        body: JSON.stringify(request),
       })
     ).map((result) => result);
   },

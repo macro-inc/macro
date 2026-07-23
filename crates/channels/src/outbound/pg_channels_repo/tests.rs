@@ -15,7 +15,10 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Cursor, CursorVal, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use uuid::Uuid;
 
 const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
@@ -123,6 +126,12 @@ async fn channel_list_flags_active_participation(pool: Pool<Postgres>) {
         HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL, TEAM_B_AUTO])
     );
     assert!(channels.iter().all(|c| c.is_participant));
+    let auto_join_by_id: HashMap<_, _> = channels
+        .iter()
+        .map(|channel| (channel.channel.id, channel.channel.auto_join_team))
+        .collect();
+    assert_eq!(auto_join_by_id.get(&TEAM_A_AUTO_ACTIVE), Some(&true));
+    assert_eq!(auto_join_by_id.get(&TEAM_A_MANUAL), Some(&false));
 }
 
 #[sqlx::test(
