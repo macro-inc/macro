@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -87,12 +87,15 @@ fn error_response(e: OnboardingError) -> Response {
     ),
     tag = "onboarding"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
 pub async fn get_state_handler<T: OnboardingService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Response {
-    match service.get_state(user.macro_user_id).await {
+    match service
+        .get_state(user.authorization.user.macro_user_id)
+        .await
+    {
         Ok(state) => Json(state).into_response(),
         Err(e) => error_response(e),
     }
@@ -110,13 +113,16 @@ pub async fn get_state_handler<T: OnboardingService, Auth: MacroAuthorizationSer
     ),
     tag = "onboarding"
 )]
-#[tracing::instrument(skip(service, user, body), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id))]
 pub async fn complete_handler<T: OnboardingService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<CompleteOnboardingRequest>,
 ) -> Response {
-    match service.complete(user.macro_user_id, body.skipped).await {
+    match service
+        .complete(user.authorization.user.macro_user_id, body.skipped)
+        .await
+    {
         Ok(row) => Json(row).into_response(),
         Err(e) => error_response(e),
     }

@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use serde::Deserialize;
 use std::str::FromStr;
@@ -107,12 +107,12 @@ fn unknown_source_response(source: &str) -> Response {
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
 pub async fn get_state_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Response {
-    match service.state(user.macro_user_id).await {
+    match service.state(user.authorization.user.macro_user_id).await {
         Ok(state) => Json(state).into_response(),
         Err(e) => error_response(e),
     }
@@ -129,14 +129,18 @@ pub async fn get_state_handler<T: ImportService, Auth: MacroAuthorizationService
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user, body), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id))]
 pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<RunImportRequest>,
 ) -> Response {
     match service
-        .run_import(user.macro_user_id, body.import_ids, body.discard_ids)
+        .run_import(
+            user.authorization.user.macro_user_id,
+            body.import_ids,
+            body.discard_ids,
+        )
         .await
     {
         Ok(outcome) => Json(outcome).into_response(),
@@ -156,16 +160,19 @@ pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationServic
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
 pub async fn retry_gather_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(source): Path<String>,
 ) -> Response {
     let Ok(source) = ImportSource::from_str(&source) else {
         return unknown_source_response(&source);
     };
-    match service.retry_gather(user.macro_user_id, source).await {
+    match service
+        .retry_gather(user.authorization.user.macro_user_id, source)
+        .await
+    {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => error_response(e),
     }
@@ -183,16 +190,19 @@ pub async fn retry_gather_handler<T: ImportService, Auth: MacroAuthorizationServ
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
 pub async fn dismiss_run_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(source): Path<String>,
 ) -> Response {
     let Ok(source) = ImportSource::from_str(&source) else {
         return unknown_source_response(&source);
     };
-    match service.dismiss_run(user.macro_user_id, source).await {
+    match service
+        .dismiss_run(user.authorization.user.macro_user_id, source)
+        .await
+    {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => error_response(e),
     }

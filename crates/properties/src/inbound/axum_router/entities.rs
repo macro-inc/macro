@@ -793,14 +793,12 @@ pub async fn bulk_update_entities_property_options<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<BulkUpdateEntitiesPropertyOptionsRequest>,
 ) -> Result<Json<BulkUpdateEntitiesPropertyOptionsResponse>, BulkUpdateEntitiesPropertyOptionsErr> {
     tracing::info!("bulk updating property options across entities");
 
+    let user = user.authorization.user.macro_user_id;
     validate_bulk_entities_option_request(&request)?;
 
     let BulkUpdateEntitiesPropertyOptionsRequest {
