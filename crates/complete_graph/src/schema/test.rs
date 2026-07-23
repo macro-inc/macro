@@ -11,7 +11,7 @@ use entity_access::domain::models::{
     AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
     EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
-use graphql_common::{GraphqlAuthorizedUser, GraphqlSoupRequestParts};
+use graphql_common::GraphqlSoupRequestParts;
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
@@ -609,7 +609,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     let request = async_graphql::Request::new(
         "subscription { soupUpdates { id entityType entity { __typename ... on GraphqlSoupDocument { id name } } } }",
     )
-    .data(GraphqlAuthorizedUser::new(user_id.clone()));
+    .data(user_id.clone());
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 

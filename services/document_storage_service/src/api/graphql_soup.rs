@@ -12,7 +12,7 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
-use complete_graph::{GraphqlAuthorizedUser, GraphqlSoupRequestParts};
+use complete_graph::GraphqlSoupRequestParts;
 use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -107,7 +107,7 @@ fn graphql_query_context_data(
         state.entity_access_service.clone(),
     );
 
-    req.data(GraphqlAuthorizedUser::new(macro_user_id.clone()))
+    req.data(macro_user_id.clone())
         .data(complete_graph::entity_properties_loader(
             macro_user_id.clone(),
             property_reader,
