@@ -167,8 +167,6 @@ export const createSoupState = <TId extends string = FilterID>(
     if (nextIndex < 0) lastFocusedRowId = undefined;
   };
 
-  const [previewEntity, setPreviewEntity] = createSignal<string | undefined>();
-
   const [collapseEntityCallback, setCollapseEntityCallback] = createSignal<
     ((entityId: string) => Promise<void>) | undefined
   >(undefined);
@@ -379,9 +377,6 @@ export const createSoupState = <TId extends string = FilterID>(
       at: getRowAt,
       indexOf,
     },
-
-    previewEntity,
-    setPreviewEntity,
 
     collapseEntity: {
       callback: collapseEntityCallback,

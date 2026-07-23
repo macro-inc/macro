@@ -4,7 +4,6 @@ import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -149,7 +148,6 @@ function ChatInner(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
-  const isPreview = !!useMaybePreviewPanel();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
@@ -373,7 +371,7 @@ function ChatInner(props: {
                 onSend={onSend}
                 onStop={onStop}
                 autoFocusOnMount={
-                  !isPreview && canAutofocusSplitContent && !navigatedFromJK()
+                  canAutofocusSplitContent && !navigatedFromJK()
                 }
               />
             </div>

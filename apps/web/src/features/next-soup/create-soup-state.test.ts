@@ -403,24 +403,6 @@ describe('createSoupState', () => {
     });
   });
 
-  describe('previewEntity', () => {
-    it('should manage preview entity state', () => {
-      createRoot((dispose) => {
-        const state = createSoupState();
-
-        expect(state.previewEntity()).toBeUndefined();
-
-        state.setPreviewEntity('entity-1');
-        expect(state.previewEntity()).toBe('entity-1');
-
-        state.setPreviewEntity(undefined);
-        expect(state.previewEntity()).toBeUndefined();
-
-        dispose();
-      });
-    });
-  });
-
   describe('selection', () => {
     it('should expose selection state', () => {
       createRoot((dispose) => {

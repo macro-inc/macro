@@ -52,7 +52,6 @@ export function SplitPanel(props: SplitPanelProps) {
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const [previewState, setPreviewState] = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -216,7 +215,6 @@ export function SplitPanel(props: SplitPanelProps) {
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
         value={{
-          previewState: [previewState, setPreviewState],
           isPanelActive: () => props.active,
           handle: props.handle,
           setContentOffsetTop,
@@ -332,9 +330,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
                   isMobile() && 'hidden',
-                  (!previewState() ||
-                    isListViewID(props.handle.content().id)) &&
-                    'border-b-0' /* List views draw the preview border below their filter bar instead (see SoupView). */
+                  'border-b-0'
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />

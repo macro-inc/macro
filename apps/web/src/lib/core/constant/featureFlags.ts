@@ -265,12 +265,6 @@ const _ENABLE_SOUP_FROM_FILTER = resolveFeatureFlag(
   false
 );
 
-export const ENABLE_PREVIEW = resolveFeatureFlag('ENABLE_PREVIEW', true);
-export const ENABLE_PROJECT_VIEW_PREVIEW = resolveFeatureFlag(
-  'ENABLE_PROJECT_VIEW_PREVIEW',
-  true
-);
-
 const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
   'ENABLE_DOCK_NOTITIFCATIONS',
   DEV_MODE_ENV

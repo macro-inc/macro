@@ -1,4 +1,3 @@
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
@@ -16,8 +15,6 @@ export const makeHideCompanyAction = (options: MakeHideCompanyOptions) => {
   const canExecute = (entity: EntityData): boolean =>
     entity.type === 'crm_company';
 
-  const previewPanel = useMaybePreviewPanel();
-
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const entity = entities[0];
     if (entity?.type !== 'crm_company') return;
@@ -27,8 +24,6 @@ export const makeHideCompanyAction = (options: MakeHideCompanyOptions) => {
     const currentIndex = soup.focus.index();
     const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
-    const inPreview = previewPanel !== undefined;
-
     const hidden = entity.hidden;
 
     soup.selection.clear();
@@ -41,7 +36,7 @@ export const makeHideCompanyAction = (options: MakeHideCompanyOptions) => {
       toast.failure(hidden ? 'Failed to unhide' : 'Failed to hide');
     }
 
-    await restoreSoupFocus(nextRow?.id, inPreview);
+    await restoreSoupFocus(nextRow?.id);
   };
 
   return { canExecute, executeWithSoup };

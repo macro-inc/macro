@@ -135,8 +135,6 @@ interface SoupViewContextValues {
   featuredIds: Accessor<string[]>;
   items: Accessor<SoupEntity[]>;
   rows: Accessor<SoupRow[]>;
-  previewOpen: Accessor<boolean>;
-  setPreviewOpen: Setter<boolean>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
   queryFilters: QueryStore;
@@ -207,7 +205,6 @@ export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
   const soup = props.soup ?? createSoupState();
-  const [previewOpen, setPreviewOpen] = createSignal(false);
   const [enabled, setEnabled] = createSignal(props.initialEnabled ?? false);
   const [config, setConfig] = createSignal<SoupViewInitializeOptions>({
     initialQuery: props.initialQuery,
@@ -1161,8 +1158,6 @@ export const SoupViewContextProvider: FlowComponent<
     },
     items,
     rows,
-    previewOpen,
-    setPreviewOpen,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
     searchPaused: sourceSearchPaused,

@@ -1,5 +1,4 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
@@ -39,12 +38,8 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     });
   };
 
-  const previewPanel = useMaybePreviewPanel();
-
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const firstEntity = entities[0];
-
-    const inPreview = previewPanel !== undefined;
 
     openBulkEditModal({
       view: 'rename',
@@ -56,13 +51,13 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id, inPreview);
+        restoreSoupFocus(firstEntity?.id);
       },
       onCancel: () => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id, inPreview);
+        restoreSoupFocus(firstEntity?.id);
       },
     });
   };

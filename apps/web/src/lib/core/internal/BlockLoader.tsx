@@ -1,11 +1,10 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { SplitPanelContext } from '@components/app/split-layout/context';
 import type { OwnedBlockHandle } from '@core/orchestrator';
 import { useQueryClient } from '@queries/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
-import { createEffect, type JSX, onCleanup, useContext } from 'solid-js';
+import { createEffect, type JSX, onCleanup } from 'solid-js';
 import {
   type BlockDefinition,
   type BlockName,
@@ -64,9 +63,6 @@ export function BlockLoader<
   const setEditPermissionEnabled = blockEditPermissionEnabledSignal.set;
   const setHandle = blockHandleSignal.set;
   const isNested = useIsNestedBlock();
-  const splitPanelContext = useContext(SplitPanelContext);
-  // NOTE: not reactive but PreviewPanel component manually creates a true signal for the context provider
-  const isPreview = splitPanelContext?.previewState?.[0]() ?? false;
   const analytics = useAnalytics();
 
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
@@ -138,7 +134,7 @@ Check that the load function does not return a preload source when the intent is
     const data = result.value;
     setError(null);
 
-    if (!isNested && !isPreview && data) {
+    if (!isNested && data) {
       // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
       import('./trackBlockOpened').then(({ track }) => {
         track({
