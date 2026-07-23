@@ -204,6 +204,7 @@ deny = [
     "native_app_server",         # Dev tooling only
     "notification_sandbox",      # This is not production code its just tooling
     "projects",                  # Dev logging only
+    "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
     "tracing-panic",             # External crate allowed to use tracing-subscriber
