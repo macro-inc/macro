@@ -69,7 +69,7 @@ async fn posts_welcome_as_julia_and_notifies_only_the_new_user() {
     assert_eq!(posted.request.nonce, None);
     assert_eq!(
         posted.request.notification_policy,
-        PostMessageNotificationPolicy::Default
+        PostMessageNotificationPolicy::MentionsOnly
     );
     assert_eq!(posted.request.triggered_by, None);
 }

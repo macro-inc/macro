@@ -440,6 +440,74 @@ async fn silent_message_posted_skips_notifications_only() {
 }
 
 #[tokio::test]
+async fn mentions_only_message_posted_skips_first_message_invite() {
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let sender = user("julia@example.com");
+    let mentioned = user("new-user@example.com");
+    let jacob = user("jacob@example.com");
+    let teo = user("teo@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeSearch::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let participants = [&sender, &mentioned, &jacob, &teo]
+        .into_iter()
+        .map(|user_id| ChannelParticipant {
+            channel_id,
+            user_id: user_id.as_ref().to_string(),
+            role: ParticipantRole::Member,
+            joined_at: now,
+            left_at: None,
+        })
+        .collect();
+
+    service
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Macro Support".to_string(),
+            },
+            participants,
+            message: MutatedMessage {
+                id: message_id,
+                channel_id,
+                thread_id: None,
+                sender_id: Sender::new_from_user(sender),
+                triggered_by: None,
+                content: "welcome".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: vec![SimpleMention::user(&mentioned)],
+            has_attachments: false,
+            attachments: Vec::new(),
+            nonce: None,
+            notification_policy: PostMessageNotificationPolicy::MentionsOnly,
+        })
+        .await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    assert_eq!(notification_effects.len(), 1);
+    let ChannelNotificationEffect::UserMention { recipient_ids, .. } = &notification_effects[0]
+    else {
+        panic!("expected only a user mention notification");
+    };
+    assert_eq!(recipient_ids, &HashSet::from([mentioned]));
+}
+
+#[tokio::test]
 async fn message_changed_with_posted_notification_context_sends_notification() {
     let channel_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();

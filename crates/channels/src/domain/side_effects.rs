@@ -517,6 +517,7 @@ where
                         mentions: notification.mentions,
                         has_attachments: notification.has_attachments,
                         bot_profile,
+                        notification_policy: PostMessageNotificationPolicy::Default,
                     })
                     .await;
                 }
@@ -662,7 +663,7 @@ where
 
         self.search.index_message(channel_id, message.id).await;
         self.dispatch_bot_triggers(channel_id, &message, &mentions);
-        if notification_policy == PostMessageNotificationPolicy::Default {
+        if notification_policy != PostMessageNotificationPolicy::Silent {
             self.send_message_posted_notifications(PostedMessageNotificationInputs {
                 channel_id,
                 metadata,
@@ -671,6 +672,7 @@ where
                 mentions,
                 has_attachments,
                 bot_profile,
+                notification_policy,
             })
             .await;
         }
@@ -711,6 +713,7 @@ where
             mentions,
             has_attachments,
             bot_profile,
+            notification_policy,
         } = inputs;
         let resolved_sender = if let Some(user_id) = message.sender_id.as_user() {
             let user_id = user_id.clone();
@@ -757,6 +760,10 @@ where
             .await;
         self.send_document_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
+
+        if notification_policy == PostMessageNotificationPolicy::MentionsOnly {
+            return;
+        }
 
         if let Some(thread_id) = message.thread_id {
             self.send_reply_notification(
@@ -1116,6 +1123,7 @@ struct PostedMessageNotificationInputs {
     mentions: Vec<SimpleMention>,
     has_attachments: bool,
     bot_profile: Option<BotSenderProfile>,
+    notification_policy: PostMessageNotificationPolicy,
 }
 
 /// Sender identity and avatar resolved for notification delivery.
