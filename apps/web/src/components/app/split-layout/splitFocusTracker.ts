@@ -118,7 +118,13 @@ export function createSplitFocusTracker(props: {
     switch (event.type) {
       case SplitEvent.Insert: {
         if (event.activate === false) break;
-        const splitId = event.splitId;
+        // A fresh load replays its last Insert event once this tracker
+        // mounts, and the last URL split is often a restored Preview Pair's
+        // Viewer. The Viewer displays content passively while its Controller
+        // owns the keyboard (restorePreviewPair already returned activation
+        // to it), so initial focus follows the Controller too.
+        const splitId =
+          props.splitManager.controllerOf(event.splitId) ?? event.splitId;
         focusSplitById(splitId);
         break;
       }
