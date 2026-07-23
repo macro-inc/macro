@@ -4,7 +4,7 @@ use opentelemetry::trace::TraceContextExt as _;
 use opentelemetry::trace::{SpanId, TraceId};
 use opentelemetry_sdk::trace::InMemorySpanExporter;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Once};
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use tracing_subscriber::fmt::MakeWriter;
 
@@ -42,6 +42,35 @@ fn test_tracer_provider() -> (InMemorySpanExporter, SdkTracerProvider) {
         .with_simple_exporter(exporter.clone())
         .build();
     (exporter, provider)
+}
+
+#[test]
+fn rootcause_tracing_subscriber_captures_span_chain() {
+    static INSTALL_ROOTCAUSE_HOOKS: Once = Once::new();
+    INSTALL_ROOTCAUSE_HOOKS.call_once(install_rootcause_hooks);
+
+    let subscriber = Registry::default().with(RootcauseLayer);
+    let output = tracing::subscriber::with_default(subscriber, || {
+        let request = tracing::info_span!("handle_request", request_id = "req-123");
+        let _request_guard = request.enter();
+        let document = tracing::info_span!("load_document", document_id = 42);
+        let _document_guard = document.enter();
+
+        rootcause::report!("document load failed").to_string()
+    });
+
+    assert!(output.contains("document load failed"));
+    assert!(output.contains("Tracing spans"));
+
+    let document_span = "load_document{document_id=42}";
+    let request_span = "handle_request{request_id=\"req-123\"}";
+    assert!(output.contains(document_span), "{output}");
+    assert!(output.contains(request_span), "{output}");
+    assert!(
+        output.find(document_span) < output.find(request_span),
+        "span chain should be ordered from the innermost span outward: {output}"
+    );
+    assert!(!output.contains("Span values missing"), "{output}");
 }
 
 #[test]

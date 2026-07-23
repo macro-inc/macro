@@ -12,6 +12,8 @@ use macro_env_var::{env_vars, maybe_env_vars};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
+use rootcause::hooks::Hooks;
+use rootcause_tracing::{RootcauseLayer, SpanCollector};
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt,
 };
@@ -54,6 +56,13 @@ fn otel_trace_filter(value: Option<&str>) -> EnvFilter {
     EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .parse_lossy(value.unwrap_or(""))
+}
+
+fn install_rootcause_hooks() {
+    Hooks::new()
+        .report_creation_hook(SpanCollector::new())
+        .install()
+        .expect("failed to install rootcause tracing hooks");
 }
 
 /// unit struct which defines the behaviour for instantiation
@@ -106,16 +115,22 @@ impl MacroEntrypoint {
     pub fn init(self) -> InitializedEntrypoint {
         let _ = dotenvy::dotenv();
         std::panic::set_hook(Box::new(tracing_panic::panic_hook));
+        install_rootcause_hooks();
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
-                tracing_subscriber::fmt()
+                let fmt_layer = tracing_subscriber::fmt::layer()
                     .with_ansi(true)
-                    .with_env_filter(rust_log_env_filter())
                     .with_file(true)
                     .with_line_number(true)
                     .pretty()
+                    .with_filter(rust_log_env_filter());
+
+                Registry::default()
+                    .with(RootcauseLayer)
+                    .with(fmt_layer)
                     .init();
+
                 InitializedEntrypoint {
                     tracer_provider: None,
                 }
@@ -126,7 +141,9 @@ impl MacroEntrypoint {
                     tree_tracing: Some(level),
                 },
             ) => {
-                let subscriber = Registry::default().with(HierarchicalLayer::new(level));
+                let subscriber = Registry::default()
+                    .with(RootcauseLayer)
+                    .with(HierarchicalLayer::new(level));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
                 InitializedEntrypoint {
                     tracer_provider: None,
@@ -161,7 +178,11 @@ impl MacroEntrypoint {
                     .event_format(datadog_fmt::DatadogFormat { inner: json_format })
                     .with_filter(rust_log_env_filter());
 
-                Registry::default().with(fmt_layer).with(otel_layer).init();
+                Registry::default()
+                    .with(RootcauseLayer)
+                    .with(fmt_layer)
+                    .with(otel_layer)
+                    .init();
 
                 InitializedEntrypoint {
                     tracer_provider: Some(tracer_provider),

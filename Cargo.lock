@@ -8379,6 +8379,8 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "rootcause",
+ "rootcause-tracing",
  "serde_json",
  "tracing",
  "tracing-opentelemetry",
@@ -12067,6 +12069,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d0df4f84d119d09b5c9c9e8db0fe9bfb5b47b04d0bb95b0763cf81bd9baa559"
 dependencies = [
  "triomphe",
+]
+
+[[package]]
+name = "rootcause-tracing"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3128c7019d8e7814a832aaa712fe55314d1fa0f0ec53e593bc1b4410962db94"
+dependencies = [
+ "rootcause",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
