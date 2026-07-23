@@ -114,7 +114,6 @@ use soup::{
 #[cfg(feature = "graphql")]
 use soup_realtime::{
     domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
-    inbound::kafka_consumer::run_document_update_consumer,
     outbound::{
         entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
         soup_consumer::SoupTopicConsumer, soup_item_reader::SoupRepoItemReader,
@@ -899,12 +898,9 @@ async fn main() -> anyhow::Result<()> {
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
                 tracing::info!("starting realtime Soup document consumer");
-                let result = run_document_update_consumer(
-                    &brokers,
-                    fanout_service,
-                    std::future::pending::<()>(),
-                )
-                .await;
+                let result = fanout_service
+                    .run_document_update_consumer(&brokers, std::future::pending::<()>())
+                    .await;
                 match result {
                     Ok(()) => {
                         tracing::error!("realtime Soup document consumer exited unexpectedly")
