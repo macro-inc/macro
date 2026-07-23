@@ -421,6 +421,9 @@ pub async fn handler(
         .unwrap_or_default();
 
     let filters = req.filters.unwrap_or_default();
+
+    let filters = simple_channel::filter_channels(&ctx, user_id.as_ref(), None, &filters)?;
+
     if filters.channel_ids.is_empty() {
         return Err(SearchError::NoChannelIds);
     }
