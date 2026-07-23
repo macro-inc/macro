@@ -424,6 +424,24 @@ pub async fn handler(
     if filters.channel_ids.is_empty() {
         return Err(SearchError::NoChannelIds);
     }
+
+    let channel_ids = simple_channel::filter_channels(
+        &ctx,
+        user_id.as_ref(),
+        authorization.user_context.organization_id,
+        &filters,
+    )
+    .await?
+    .channel_ids;
+
+    if channel_ids.is_empty() {
+        return Ok(Json(ChannelSearchResponse {
+            results: vec![],
+            next_cursor: None,
+            total_count: 0,
+        }));
+    }
+
     let sort_mode = match req.sort {
         ChannelSortTimestamp::Message => ChannelSortMode::Message,
         ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
@@ -435,7 +453,7 @@ pub async fn handler(
         match_type: req.match_type.to_string(),
         cursor: cursor_option,
         terms,
-        channel_ids: filters.channel_ids,
+        channel_ids: channel_ids.into_iter().map(|id| id.to_string()).collect(),
         thread_ids: filters.thread_ids,
         mentions: filters.mentions,
         sender_ids: filters.sender_ids,
