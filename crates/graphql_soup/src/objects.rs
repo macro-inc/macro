@@ -1,5 +1,6 @@
-use async_graphql::{ID, Json, Object, ObjectType, SimpleObject, Union};
-use graphql_common::GraphqlSoupEntityType;
+use async_graphql::{Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject};
+use graphql_common::{GraphqlEntityType, GraphqlSoupEntityType};
+use graphql_permission::GraphqlEntityPermission;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
@@ -24,22 +25,61 @@ use uuid::Uuid;
 /// The concrete edge object is supplied by the schema composition crate and
 /// flattened into each Soup entity's GraphQL fields.
 pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
+    /// GraphQL property object supplied by the property adapter.
+    type Property: OutputType;
+
+    /// GraphQL notification object supplied by the notification adapter.
+    type Notification: OutputType;
+
     /// Construct the common/global edge object for a Soup entity.
     /// This is for edges that apply to all soup entities, e.g. notifications
     fn from_entity(entity: model_entity::Entity<'static>) -> Self;
+
+    /// Construct common/global edges for a channel message whose viewer
+    /// permission is inherited from its parent channel.
+    fn from_channel_message(message_id: Uuid, channel_id: Uuid) -> Self {
+        let _ = channel_id;
+        Self::from_entity(
+            model_entity::EntityType::ChannelMessage.with_entity_string(message_id.to_string()),
+        )
+    }
 
     /// Additional fields attached only to email-thread entities.
     type EmailThreadEdges: ObjectType + Clone + Send + Sync + 'static;
 
     /// Construct the email-thread-specific edge object.
     fn email_thread_edges(email_thread_id: Uuid) -> Self::EmailThreadEdges;
+
+    /// Resolve properties assigned to this entity.
+    fn resolve_properties(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = async_graphql::Result<Vec<Self::Property>>> + Send;
+
+    /// Resolve notifications associated with this entity.
+    fn resolve_notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = async_graphql::Result<Vec<Self::Notification>>> + Send;
+
+    /// Resolve whether the authenticated viewer has favorited this entity.
+    fn resolve_is_favorited(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = async_graphql::Result<bool>> + Send;
+
+    /// Resolve the authenticated viewer's effective permission.
+    fn resolve_viewer_permission(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = async_graphql::Result<Option<GraphqlEntityPermission>>> + Send;
 }
 
 /// Page returned by `Query.soup`.
 #[derive(SimpleObject)]
 pub struct SoupPage<E: SoupEntityEdges> {
     /// Items in the current page.
-    items: Vec<GraphqlSoupItem<E>>,
+    items: Vec<GraphqlSoupEntity<E>>,
     /// Opaque cursor for the next page, if one exists.
     next_cursor: Option<String>,
     /// Whether more items are available after this page.
@@ -50,7 +90,11 @@ impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<SoupItem<()>>> for SoupPage<
     fn from(page: PaginatedOpaqueCursor<SoupItem<()>>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
-            items: page.items.into_iter().map(GraphqlSoupItem::from).collect(),
+            items: page
+                .items
+                .into_iter()
+                .map(GraphqlSoupEntity::from)
+                .collect(),
             next_cursor: page.next_cursor,
             has_more,
         }
@@ -61,7 +105,11 @@ impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<EnrichedSoupItem>> for SoupP
     fn from(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
-            items: page.items.into_iter().map(GraphqlSoupItem::from).collect(),
+            items: page
+                .items
+                .into_iter()
+                .map(GraphqlSoupEntity::from)
+                .collect(),
             next_cursor: page.next_cursor,
             has_more,
         }
@@ -86,7 +134,7 @@ impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for Grouped
                     next_cursor: bin.next_cursor().map(ToOwned::to_owned),
                     items: bin
                         .into_items()
-                        .map(|item| GraphqlSoupItem::from(item.map_extra(|_| ())))
+                        .map(|item| GraphqlSoupEntity::from(item.map_extra(|_| ())))
                         .collect(),
                 })
                 .collect(),
@@ -104,83 +152,128 @@ pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// Opaque cursor for the next page in this bin, if one exists.
     next_cursor: Option<String>,
     /// Items in this bin, ordered by their index within the group.
-    items: Vec<GraphqlSoupItem<E>>,
+    items: Vec<GraphqlSoupEntity<E>>,
 }
 
-/// GraphQL Soup item envelope.
-pub struct GraphqlSoupItem<E: SoupEntityEdges> {
-    /// The unique identifier.
-    id: String,
-    /// The entity type.
-    entity_type: GraphqlSoupEntityType,
-    /// The frecency score.
-    frecency_score: f64,
-    /// The expanded Soup entity.
-    entity: GraphqlSoupEntity<E>,
-}
-
-/// GraphQL representation of the soup item.
-#[Object(name = "GraphqlSoupItem")]
-impl<E> GraphqlSoupItem<E>
+impl<E> From<EnrichedSoupItem> for GraphqlSoupEntity<E>
 where
     E: SoupEntityEdges,
 {
-    /// The unique identifier.
-    async fn id(&self) -> ID {
-        ID(self.id.clone())
-    }
-
-    /// The entity type.
-    async fn entity_type(&self) -> GraphqlSoupEntityType {
-        self.entity_type
-    }
-
-    /// The frecency score.
-    async fn frecency_score(&self) -> f64 {
-        self.frecency_score
-    }
-
-    /// The expanded Soup entity.
-    async fn entity(&self) -> &GraphqlSoupEntity<E> {
-        &self.entity
-    }
-}
-
-impl<E: SoupEntityEdges> From<SoupItem<()>> for GraphqlSoupItem<E> {
-    fn from(item: SoupItem<()>) -> Self {
-        let entity_ref = item.entity();
-        Self {
-            id: entity_ref.entity_id.into_owned(),
-            entity_type: GraphqlSoupEntityType::from(entity_ref.entity_type),
-            frecency_score: 0.0,
-            entity: GraphqlSoupEntity::from(item),
-        }
-    }
-}
-
-impl<E: SoupEntityEdges> From<EnrichedSoupItem> for GraphqlSoupItem<E> {
     fn from(item: EnrichedSoupItem) -> Self {
         let EnrichedSoupItem {
             item,
             frecency_score,
             ..
         } = item;
-        let item = item.map_extra(|_| ());
-        let entity_ref = item.entity();
+        let score = frecency_score.map(|f| f.data.frecency_score);
+        Self::from(item.map_extra(|_| ())).with_frecency(score)
+    }
+}
 
+impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
+    /// Attach the viewer's frecency score for this entity.
+    fn with_frecency(mut self, score: Option<f64>) -> Self {
+        match &mut self {
+            Self::Document(entity) => entity.2 = score,
+            Self::Chat(entity) => entity.2 = score,
+            Self::Project(entity) => entity.2 = score,
+            Self::EmailThread(entity) => entity.2 = score,
+            Self::Channel(entity) => entity.2 = score,
+            Self::ChannelMessage(entity) => entity.2 = score,
+            Self::Call(entity) => entity.2 = score,
+            Self::CrmCompany(entity) => entity.2 = score,
+            Self::ForeignEntity(entity) => entity.2 = score,
+        }
+        self
+    }
+}
+
+/// Reference to another canonical entity embedded in entity metadata.
+#[derive(SimpleObject)]
+pub struct GraphqlEntityRef {
+    /// Referenced entity kind.
+    entity_type: GraphqlEntityType,
+    /// Referenced canonical identifier.
+    entity_id: ID,
+}
+
+impl GraphqlEntityRef {
+    /// Construct an embedded entity reference.
+    fn new(entity_type: impl Into<GraphqlEntityType>, entity_id: impl ToString) -> Self {
         Self {
-            id: entity_ref.entity_id.into_owned(),
-            entity_type: GraphqlSoupEntityType::from(entity_ref.entity_type),
-            frecency_score: frecency_score
-                .map(|f| f.data.frecency_score)
-                .unwrap_or_default(),
-            entity: GraphqlSoupEntity::from(item),
+            entity_type: entity_type.into(),
+            entity_id: ID(entity_id.to_string()),
         }
     }
 }
 
-/// GraphQL union over expanded Soup entity variants.
-#[derive(Union)]
+/// Metadata shared by every canonical Soup entity.
+#[derive(SimpleObject)]
+pub struct GraphqlEntityMetadata {
+    /// Owning user, when applicable.
+    owner_id: Option<String>,
+    /// Parent project, channel, or team, when applicable.
+    parent: Option<GraphqlEntityRef>,
+    /// Creation timestamp in RFC 3339 form.
+    created_at: Option<String>,
+    /// Last-update timestamp in RFC 3339 form.
+    updated_at: Option<String>,
+    /// Last-viewed timestamp in RFC 3339 form.
+    viewed_at: Option<String>,
+    /// Soft-deletion timestamp in RFC 3339 form.
+    deleted_at: Option<String>,
+}
+
+/// Common GraphQL interface over canonical Soup entity variants.
+#[derive(Interface)]
+#[graphql(
+    field(name = "id", ty = "ID", desc = "The canonical entity identifier."),
+    field(
+        name = "entity_type",
+        ty = "GraphqlSoupEntityType",
+        desc = "The canonical entity type."
+    ),
+    field(
+        name = "display_name",
+        ty = "Option<String>",
+        desc = "The user-facing entity name, when available."
+    ),
+    field(
+        name = "metadata",
+        ty = "GraphqlEntityMetadata",
+        desc = "Metadata shared across entity variants."
+    ),
+    field(
+        name = "properties",
+        method = "interface_properties",
+        ty = "Vec<E::Property>",
+        desc = "Properties assigned to this entity that the viewer may access."
+    ),
+    field(
+        name = "notifications",
+        method = "interface_notifications",
+        ty = "Vec<E::Notification>",
+        desc = "Notifications associated with this entity for the current viewer."
+    ),
+    field(
+        name = "isFavorited",
+        method = "interface_is_favorited",
+        ty = "bool",
+        desc = "Whether the current viewer has favorited this entity."
+    ),
+    field(
+        name = "viewerPermission",
+        method = "interface_viewer_permission",
+        ty = "Option<GraphqlEntityPermission>",
+        desc = "The current viewer's effective permission for this entity."
+    ),
+    field(
+        name = "frecencyScore",
+        method = "frecency_score",
+        ty = "Option<f64>",
+        desc = "The viewer's frecency score for this entity, when loaded."
+    )
+)]
 pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     /// Document entity.
     Document(GraphqlSoupDocument<E>),
@@ -192,8 +285,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     EmailThread(GraphqlSoupEmailThread<E>),
     /// Channel entity.
     Channel(GraphqlSoupChannel<E>),
-    /// Channel thread entity.
-    ChannelThread(GraphqlSoupChannelThread<E>),
+    /// Canonical channel-message entity.
+    ChannelMessage(GraphqlSoupChannelMessage<E>),
     /// Call entity.
     Call(GraphqlSoupCall<E>),
     /// CRM company entity.
@@ -212,65 +305,62 @@ where
                 let edges = E::from_entity(
                     model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
                 );
-                Self::Document(GraphqlSoupDocument(item, edges))
+                Self::Document(GraphqlSoupDocument(item, edges, None))
             }
             SoupItem::Chat(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::Chat.with_entity_string(item.id.to_string()),
                 );
-                Self::Chat(GraphqlSoupChat(item, edges))
+                Self::Chat(GraphqlSoupChat(item, edges, None))
             }
             SoupItem::Project(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::Project.with_entity_string(item.id.to_string()),
                 );
-                Self::Project(GraphqlSoupProject(item, edges))
+                Self::Project(GraphqlSoupProject(item, edges, None))
             }
             SoupItem::EmailThread(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::EmailThread
                         .with_entity_string(item.thread.id.to_string()),
                 );
-                Self::EmailThread(GraphqlSoupEmailThread(item, edges))
+                Self::EmailThread(GraphqlSoupEmailThread(item, edges, None))
             }
             SoupItem::Channel(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::Channel
                         .with_entity_string(item.channel.channel.id.0.to_string()),
                 );
-                Self::Channel(GraphqlSoupChannel(item, edges))
+                Self::Channel(GraphqlSoupChannel(item, edges, None))
             }
             SoupItem::ChannelThread(item) => {
-                let edges = E::from_entity(
-                    model_entity::EntityType::ChannelMessage
-                        .with_entity_string(item.id.to_string()),
-                );
-                Self::ChannelThread(GraphqlSoupChannelThread(item, edges))
+                let edges = E::from_channel_message(item.id, item.channel_id);
+                Self::ChannelMessage(GraphqlSoupChannelMessage(item, edges, None))
             }
             SoupItem::Call(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::Call.with_entity_string(item.call_id.to_string()),
                 );
-                Self::Call(GraphqlSoupCall(item, edges))
+                Self::Call(GraphqlSoupCall(item, edges, None))
             }
             SoupItem::CrmCompany(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
                 );
-                Self::CrmCompany(GraphqlSoupCrmCompany(item, edges))
+                Self::CrmCompany(GraphqlSoupCrmCompany(item, edges, None))
             }
             SoupItem::ForeignEntity(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::ForeignEntity.with_entity_string(item.id.to_string()),
                 );
-                Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges))
+                Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges, None))
             }
         }
     }
 }
 
 /// GraphQL document entity.
-pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument<()>, E);
+pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup document.
 #[Object(name = "GraphqlSoupDocument")]
@@ -281,6 +371,31 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Document
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common document metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            parent: self
+                .0
+                .project_id
+                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: self.0.deleted_at.map(|ts| ts.to_rfc3339()),
+        }
     }
 
     /// The name.
@@ -336,6 +451,11 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
 
 /// GraphQL representation of the soup document sub type.
@@ -363,7 +483,7 @@ impl From<&SoupDocumentSubType> for GraphqlSoupDocumentSubType {
 }
 
 /// GraphQL chat entity.
-pub struct GraphqlSoupChat<E: SoupEntityEdges>(SoupChat<()>, E);
+pub struct GraphqlSoupChat<E: SoupEntityEdges>(SoupChat<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup chat.
 #[Object(name = "GraphqlSoupChat")]
@@ -374,6 +494,31 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Chat
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common chat metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            parent: self
+                .0
+                .project_id
+                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: self.0.deleted_at.map(|ts| ts.to_rfc3339()),
+        }
     }
 
     /// The name.
@@ -421,10 +566,15 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
 
 /// GraphQL project entity.
-pub struct GraphqlSoupProject<E: SoupEntityEdges>(SoupProject<()>, E);
+pub struct GraphqlSoupProject<E: SoupEntityEdges>(SoupProject<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup project.
 #[Object(name = "GraphqlSoupProject")]
@@ -435,6 +585,31 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Project
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common project metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            parent: self
+                .0
+                .parent_id
+                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: self.0.deleted_at.map(|ts| ts.to_rfc3339()),
+        }
     }
 
     /// The name.
@@ -476,6 +651,11 @@ where
     /// The edges.
     async fn edges(&self) -> E {
         self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
     }
 }
 
@@ -590,7 +770,11 @@ impl From<&SoupAttachment> for GraphqlSoupEmailAttachment {
 }
 
 /// GraphQL email thread entity.
-pub struct GraphqlSoupEmailThread<E: SoupEntityEdges>(SoupEnrichedEmailThreadPreview<()>, E);
+pub struct GraphqlSoupEmailThread<E: SoupEntityEdges>(
+    SoupEnrichedEmailThreadPreview<()>,
+    E,
+    Option<f64>,
+);
 
 /// GraphQL representation of the soup email thread.
 #[Object(name = "GraphqlSoupEmailThread")]
@@ -601,6 +785,33 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.thread.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::EmailThread
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        self.0.thread.name.clone()
+    }
+
+    /// Common email-thread metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.thread.owner_id.as_ref().to_owned()),
+            parent: self
+                .0
+                .thread
+                .project_id
+                .as_ref()
+                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+            created_at: Some(self.0.thread.created_at.to_rfc3339()),
+            updated_at: Some(self.0.thread.updated_at.to_rfc3339()),
+            viewed_at: self.0.thread.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: None,
+        }
     }
 
     /// The identifier of the provider.
@@ -736,6 +947,11 @@ where
         self.1.clone()
     }
 
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+
     /// the email thread edge
     #[graphql(flatten)]
     async fn email_thread_edges(&self) -> E::EmailThreadEdges {
@@ -779,58 +995,78 @@ impl GraphqlSoupChannelParticipant {
     }
 }
 
-/// GraphQL channel message summary.
-pub struct GraphqlSoupChannelMessage(ChannelMessage);
+/// Embedded, non-normalized channel-message preview.
+///
+/// This exposes `messageId`, not `id`, so partial preview data cannot
+/// overwrite a canonical channel-message record in normalized caches.
+pub struct GraphqlSoupChannelMessagePreview {
+    /// Partial message projection returned with a channel.
+    message: ChannelMessage,
+    /// Parent channel identity omitted by the REST preview projection.
+    channel_id: Uuid,
+}
 
-// NOTE: `id` (not `messageId`) — objects exposing `id: ID!` are treated as
-// normalized entities by clients' caches (presence-of-id convention).
+impl GraphqlSoupChannelMessagePreview {
+    /// Construct an embedded preview with its parent channel identity.
+    fn new(message: ChannelMessage, channel_id: Uuid) -> Self {
+        Self {
+            message,
+            channel_id,
+        }
+    }
+}
 
 /// GraphQL representation of the soup channel message.
 #[Object]
-impl GraphqlSoupChannelMessage {
-    /// The unique identifier.
-    async fn id(&self) -> ID {
-        ID(self.0.message_id.to_string())
+impl GraphqlSoupChannelMessagePreview {
+    /// The projected message identifier.
+    async fn message_id(&self) -> ID {
+        ID(self.message.message_id.to_string())
+    }
+
+    /// The parent channel identifier.
+    async fn channel_id(&self) -> ID {
+        ID(self.channel_id.to_string())
     }
 
     /// The identifier of the thread.
     async fn thread_id(&self) -> Option<ID> {
-        self.0.thread_id.map(|id| ID(id.to_string()))
+        self.message.thread_id.map(|id| ID(id.to_string()))
     }
 
     /// The identifier of the sender.
     async fn sender_id(&self) -> &str {
-        &self.0.sender_id
+        &self.message.sender_id
     }
 
     /// The content.
     async fn content(&self) -> &str {
-        &self.0.content
+        &self.message.content
     }
 
     /// The created timestamp in RFC 3339 format.
     async fn created_at(&self) -> String {
-        self.0.created_at.to_rfc3339()
+        self.message.created_at.to_rfc3339()
     }
 
     /// The updated timestamp in RFC 3339 format.
     async fn updated_at(&self) -> String {
-        self.0.updated_at.to_rfc3339()
+        self.message.updated_at.to_rfc3339()
     }
 
     /// The deleted timestamp in RFC 3339 format.
     async fn deleted_at(&self) -> Option<String> {
-        self.0.deleted_at.map(|ts| ts.to_rfc3339())
+        self.message.deleted_at.map(|ts| ts.to_rfc3339())
     }
 
     /// The mentions.
     async fn mentions(&self) -> &[String] {
-        &self.0.mentions
+        &self.message.mentions
     }
 }
 
 /// GraphQL channel entity.
-pub struct GraphqlSoupChannel<E: SoupEntityEdges>(SoupChannel, E);
+pub struct GraphqlSoupChannel<E: SoupEntityEdges>(SoupChannel, E, Option<f64>);
 
 impl<E: SoupEntityEdges> GraphqlSoupChannel<E> {
     /// Return the stable GraphQL name for a channel type.
@@ -853,6 +1089,33 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.channel.channel.id.0.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Channel
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        self.0.channel.channel.name.clone()
+    }
+
+    /// Common channel metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.channel.channel.owner_id.as_ref().to_owned()),
+            parent: self
+                .0
+                .channel
+                .channel
+                .team_id
+                .map(|id| GraphqlEntityRef::new(GraphqlEntityType::Team, id)),
+            created_at: Some(self.0.channel.channel.created_at.to_rfc3339()),
+            updated_at: Some(self.0.channel.channel.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: None,
+        }
     }
 
     /// The name.
@@ -937,21 +1200,23 @@ where
     }
 
     /// The latest message.
-    async fn latest_message(&self) -> Option<GraphqlSoupChannelMessage> {
+    async fn latest_message(&self) -> Option<GraphqlSoupChannelMessagePreview> {
+        let channel_id = self.0.channel.channel.id.0;
         self.0
             .latest_message
             .latest_message
             .clone()
-            .map(GraphqlSoupChannelMessage)
+            .map(|message| GraphqlSoupChannelMessagePreview::new(message, channel_id))
     }
 
     /// The latest non thread message.
-    async fn latest_non_thread_message(&self) -> Option<GraphqlSoupChannelMessage> {
+    async fn latest_non_thread_message(&self) -> Option<GraphqlSoupChannelMessagePreview> {
+        let channel_id = self.0.channel.channel.id.0;
         self.0
             .latest_message
             .latest_non_thread_message
             .clone()
-            .map(GraphqlSoupChannelMessage)
+            .map(|message| GraphqlSoupChannelMessagePreview::new(message, channel_id))
     }
 
     #[graphql(flatten)]
@@ -959,20 +1224,56 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
 
-/// GraphQL channel thread entity.
-pub struct GraphqlSoupChannelThread<E: SoupEntityEdges>(SoupChannelThread, E);
+/// Canonical GraphQL channel-message entity represented by a top-level Soup
+/// thread row.
+pub struct GraphqlSoupChannelMessage<E: SoupEntityEdges>(SoupChannelThread, E, Option<f64>);
 
 /// GraphQL representation of the soup channel thread.
-#[Object(name = "GraphqlSoupChannelThread")]
-impl<E> GraphqlSoupChannelThread<E>
+#[Object(name = "GraphqlSoupChannelMessage")]
+impl<E> GraphqlSoupChannelMessage<E>
 where
     E: SoupEntityEdges,
 {
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::ChannelMessage
+    }
+
+    /// Channel messages do not have a separate display name.
+    async fn display_name(&self) -> Option<String> {
+        None
+    }
+
+    /// The message content.
+    async fn content(&self) -> &str {
+        &self.0.content
+    }
+
+    /// Common channel-message metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.sender_id.clone()),
+            parent: Some(GraphqlEntityRef::new(
+                GraphqlSoupEntityType::Channel,
+                self.0.channel_id,
+            )),
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: self.0.deleted_at.map(|ts| ts.to_rfc3339()),
+        }
     }
 
     /// The identifier of the channel.
@@ -983,11 +1284,6 @@ where
     /// The identifier of the sender.
     async fn sender_id(&self) -> &str {
         &self.0.sender_id
-    }
-
-    /// The content.
-    async fn content(&self) -> &str {
-        &self.0.content
     }
 
     /// The created timestamp in RFC 3339 format.
@@ -1015,6 +1311,11 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
 
 /// GraphQL representation of the soup call participant.
@@ -1039,7 +1340,7 @@ impl From<&SoupCallRecordParticipant> for GraphqlSoupCallParticipant {
 }
 
 /// GraphQL call entity.
-pub struct GraphqlSoupCall<E: SoupEntityEdges>(SoupCallRecord<()>, E);
+pub struct GraphqlSoupCall<E: SoupEntityEdges>(SoupCallRecord<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup call.
 #[Object(name = "GraphqlSoupCall")]
@@ -1050,6 +1351,34 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.call_id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Call
+    }
+
+    /// User-visible call name.
+    async fn display_name(&self) -> Option<String> {
+        self.0
+            .custom_name
+            .clone()
+            .or_else(|| self.0.channel_name.clone())
+    }
+
+    /// Common call metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.created_by.clone()),
+            parent: Some(GraphqlEntityRef::new(
+                GraphqlSoupEntityType::Channel,
+                self.0.channel_id,
+            )),
+            created_at: Some(self.0.started_at.to_rfc3339()),
+            updated_at: self.0.ended_at.map(|ts| ts.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
     }
 
     /// The identifier of the channel.
@@ -1147,10 +1476,15 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
 
 /// GraphQL CRM company entity.
-pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E);
+pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup crm company.
 #[Object(name = "GraphqlSoupCrmCompany")]
@@ -1161,6 +1495,31 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::CrmCompany
+    }
+
+    /// User-visible company name.
+    async fn display_name(&self) -> Option<String> {
+        self.0.name.clone()
+    }
+
+    /// Common CRM-company metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            parent: Some(GraphqlEntityRef::new(
+                GraphqlEntityType::Team,
+                self.0.team_id,
+            )),
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: None,
+        }
     }
 
     /// The identifier of the team.
@@ -1217,10 +1576,15 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
 
 /// GraphQL foreign entity.
-pub struct GraphqlSoupForeignEntity<E: SoupEntityEdges>(SoupForeignEntity, E);
+pub struct GraphqlSoupForeignEntity<E: SoupEntityEdges>(SoupForeignEntity, E, Option<f64>);
 
 /// GraphQL representation of the soup foreign entity.
 #[Object(name = "GraphqlSoupForeignEntity")]
@@ -1231,6 +1595,28 @@ where
     /// The unique identifier.
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::ForeignEntity
+    }
+
+    /// Foreign entities do not expose a common display name.
+    async fn display_name(&self) -> Option<String> {
+        None
+    }
+
+    /// Common foreign-entity metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
     }
 
     /// The identifier of the foreign entity.
@@ -1253,8 +1639,8 @@ where
         &self.0.stored_for_auth_entity
     }
 
-    /// The metadata.
-    async fn metadata(&self) -> Json<Value> {
+    /// Source-specific metadata.
+    async fn source_metadata(&self) -> Json<Value> {
         Json(self.0.metadata.clone())
     }
 
@@ -1273,4 +1659,64 @@ where
     async fn edges(&self) -> E {
         self.1.clone()
     }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
 }
+
+/// Implement interface-only dispatch methods for fields whose concrete
+/// GraphQL definitions are supplied by the flattened edge object.
+macro_rules! impl_common_interface_edges {
+    ($($entity:ident),+ $(,)?) => {
+        $(
+            impl<E: SoupEntityEdges> $entity<E> {
+                /// Resolve shared properties through the composed edge adapter.
+                async fn interface_properties(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<Vec<E::Property>> {
+                    self.1.resolve_properties(ctx).await
+                }
+
+                /// Resolve shared notifications through the composed edge adapter.
+                async fn interface_notifications(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<Vec<E::Notification>> {
+                    self.1.resolve_notifications(ctx).await
+                }
+
+                /// Resolve shared favorite state through the composed edge adapter.
+                async fn interface_is_favorited(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<bool> {
+                    self.1.resolve_is_favorited(ctx).await
+                }
+
+                /// Resolve shared viewer permission through the composed edge adapter.
+                async fn interface_viewer_permission(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
+                    self.1.resolve_viewer_permission(ctx).await
+                }
+
+            }
+        )+
+    };
+}
+
+impl_common_interface_edges!(
+    GraphqlSoupDocument,
+    GraphqlSoupChat,
+    GraphqlSoupProject,
+    GraphqlSoupEmailThread,
+    GraphqlSoupChannel,
+    GraphqlSoupChannelMessage,
+    GraphqlSoupCall,
+    GraphqlSoupCrmCompany,
+    GraphqlSoupForeignEntity,
+);

@@ -21,7 +21,7 @@ mod property_filter;
 mod request_context;
 
 pub use authorization::require_authorized_user;
-pub use entity_type::GraphqlSoupEntityType;
+pub use entity_type::{GraphqlEntityType, GraphqlSoupEntityType};
 pub use extract::extract_part;
 pub use filter_input::{IntoFilterExpr, optional_tree, parse_id, parse_macro_user_id, parse_uuid};
 pub use property_filter::{

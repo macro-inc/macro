@@ -18,7 +18,10 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 graphql_common = { path = "../graphql_common" }
 graphql_email = { path = "../graphql_email" }
+graphql_entity_mutation = { path = "../graphql_entity_mutation" }
+graphql_favorite = { path = "../graphql_favorite" }
 graphql_notification = { path = "../graphql_notification" }
+graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_soup = { path = "../graphql_soup" }
 macro_authorization = { path = "../macro_authorization", features = [

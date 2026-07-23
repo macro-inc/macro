@@ -1,4 +1,122 @@
 """
+Channel-specific entry inside the otherwise common share-policy model.
+"""
+input ChannelSharePolicyInput {
+	"""
+	Requested change.
+	"""
+	operation: GraphqlSharePolicyOperation!
+	"""
+	Channel receiving or losing access.
+	"""
+	channelId: ID!
+	"""
+	Access level for add/replace operations.
+	"""
+	accessLevel: GraphqlEntityAccessLevel
+}
+
+"""
+Mutation root combining property-specific and capability-oriented entity
+mutations without coupling either domain adapter to the other.
+"""
+type CompleteMutationRoot {
+	"""
+	Set or attach one property on an entity.
+	"""
+	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
+	"""
+	Rename heterogeneous entities in one request.
+	"""
+	renameEntities(inputs: [RenameEntityInput!]!): EntityMutationPayload!
+	"""
+	Move heterogeneous entities to a project or to the root.
+	"""
+	moveEntities(inputs: [MoveEntityInput!]!): EntityMutationPayload!
+	"""
+	Update public and channel share policies across supported entity kinds.
+	"""
+	updateEntitySharePolicies(inputs: [UpdateEntitySharePolicyInput!]!): EntityMutationPayload!
+	"""
+	Soft-delete entities with a reversible trash lifecycle.
+	"""
+	trashEntities(entities: [EntityRefInput!]!): EntityMutationPayload!
+	"""
+	Restore reversibly deleted entities.
+	"""
+	restoreEntities(entities: [EntityRefInput!]!): EntityMutationPayload!
+	"""
+	Irreversibly delete entities.
+	"""
+	deleteEntitiesPermanently(entities: [EntityRefInput!]!): EntityMutationPayload!
+	"""
+	Duplicate supported entities.
+	"""
+	duplicateEntities(inputs: [DuplicateEntityInput!]!): EntityMutationPayload!
+	"""
+	Add or remove an entity from the actor's favorites.
+	"""
+	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+}
+
+"""
+One entity duplication in a batch.
+"""
+input DuplicateEntityInput {
+	"""
+	Source entity to duplicate.
+	"""
+	entity: EntityRefInput!
+	"""
+	Optional display name for the new entity.
+	"""
+	displayName: String
+}
+
+"""
+Batch mutation payload. Results preserve input order and allow partial
+success across independently stored entity kinds.
+"""
+type EntityMutationPayload {
+	"""
+	Per-input mutation outcomes.
+	"""
+	results: [GraphqlEntityMutationResult!]!
+}
+
+"""
+Canonical entity reference accepted by unified mutations.
+"""
+input EntityRefInput {
+	"""
+	Entity kind.
+	"""
+	type: GraphqlEntityType!
+	"""
+	Entity identifier in that kind's canonical namespace.
+	"""
+	id: ID!
+}
+
+"""
+Shared public/channel share-policy update.
+"""
+input EntitySharePolicyInput {
+	"""
+	Whether public access should be enabled.
+	"""
+	isPublic: Boolean
+	"""
+	Public access level when public access is enabled.
+	"""
+	publicAccessLevel: GraphqlEntityAccessLevel
+	"""
+	Channel access entries to add, remove, or replace.
+	"""
+	channelSharePermissions: [ChannelSharePolicyInput!]
+}
+
+"""
 A Boolean property value.
 """
 type GraphqlBooleanPropertyValue {
@@ -174,6 +292,24 @@ input GraphqlChannelLiteral @oneOf {
 	The notification seen option.
 	"""
 	notificationSeen: Boolean
+}
+
+"""
+Channel role resolved for the current viewer.
+"""
+enum GraphqlChannelParticipantRole {
+	"""
+	Channel owner.
+	"""
+	OWNER
+	"""
+	Channel administrator.
+	"""
+	ADMIN
+	"""
+	Channel member.
+	"""
+	MEMBER
 }
 
 """
@@ -729,6 +865,28 @@ enum GraphqlEmailView {
 }
 
 """
+Item access level resolved for the current viewer.
+"""
+enum GraphqlEntityAccessLevel {
+	"""
+	Read-only access.
+	"""
+	VIEW
+	"""
+	Comment access.
+	"""
+	COMMENT
+	"""
+	Edit access.
+	"""
+	EDIT
+	"""
+	Owner access.
+	"""
+	OWNER
+}
+
+"""
 GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
@@ -775,6 +933,185 @@ input GraphqlEntityFilterAst {
 }
 
 """
+Metadata shared by every canonical Soup entity.
+"""
+type GraphqlEntityMetadata {
+	"""
+	Owning user, when applicable.
+	"""
+	ownerId: String
+	"""
+	Parent project, channel, or team, when applicable.
+	"""
+	parent: GraphqlEntityRef
+	"""
+	Creation timestamp in RFC 3339 form.
+	"""
+	createdAt: String
+	"""
+	Last-update timestamp in RFC 3339 form.
+	"""
+	updatedAt: String
+	"""
+	Last-viewed timestamp in RFC 3339 form.
+	"""
+	viewedAt: String
+	"""
+	Soft-deletion timestamp in RFC 3339 form.
+	"""
+	deletedAt: String
+}
+
+"""
+User-safe per-entity mutation error.
+"""
+type GraphqlEntityMutationError {
+	"""
+	Machine-readable error category.
+	"""
+	code: GraphqlEntityMutationErrorCode!
+	"""
+	User-safe explanation.
+	"""
+	message: String!
+}
+
+"""
+Stable machine-readable mutation error code.
+"""
+enum GraphqlEntityMutationErrorCode {
+	"""
+	Operation is unavailable for the requested entity kind.
+	"""
+	UNSUPPORTED_OPERATION
+	"""
+	Input violates a domain constraint.
+	"""
+	INVALID_INPUT
+	"""
+	Actor lacks the required capability.
+	"""
+	FORBIDDEN
+	"""
+	Entity was not found.
+	"""
+	NOT_FOUND
+	"""
+	Mutation conflicts with current state.
+	"""
+	CONFLICT
+	"""
+	Internal failure.
+	"""
+	INTERNAL
+}
+
+"""
+Embedded canonical entity reference returned by mutation payloads.
+
+`entityId` is deliberately not named `id`: this object references another
+entity and must not itself become a normalized cache record.
+"""
+type GraphqlEntityMutationRef {
+	"""
+	Entity kind.
+	"""
+	type: GraphqlEntityType!
+	"""
+	Canonical entity id.
+	"""
+	entityId: ID!
+}
+
+"""
+Result for one requested entity in a batch.
+"""
+type GraphqlEntityMutationResult {
+	"""
+	Whether this item succeeded.
+	"""
+	success: Boolean!
+	"""
+	Original reference supplied by the caller.
+	"""
+	requested: GraphqlEntityMutationRef!
+	"""
+	Updated or newly created entity reference.
+	"""
+	entity: GraphqlEntityMutationRef
+	"""
+	Records known to have changed, including containers and any cascade
+	descendants exposed by the delegated domain service.
+	"""
+	affectedEntities: [GraphqlEntityMutationRef!]!
+	"""
+	Per-item failure, if any.
+	"""
+	error: GraphqlEntityMutationError
+}
+
+"""
+Permission held by the current viewer for an entity.
+
+One of `accessLevel`, `channelRole`, or `teamRole` is populated as selected
+by `kind`; view-only channel access has no accompanying role field.
+"""
+type GraphqlEntityPermission {
+	"""
+	The permission model represented by this value.
+	"""
+	kind: GraphqlEntityPermissionKind!
+	"""
+	Item access level when `kind` is `ACCESS_LEVEL`.
+	"""
+	accessLevel: GraphqlEntityAccessLevel
+	"""
+	Channel participant role when `kind` is `CHANNEL_ROLE`.
+	"""
+	channelRole: GraphqlChannelParticipantRole
+	"""
+	Team membership role when `kind` is `TEAM_ROLE`.
+	"""
+	teamRole: GraphqlTeamRole
+}
+
+"""
+The shape of an entity permission.
+"""
+enum GraphqlEntityPermissionKind {
+	"""
+	Item-style view/comment/edit/owner access.
+	"""
+	ACCESS_LEVEL
+	"""
+	View-only channel access without active participant membership.
+	"""
+	CHANNEL_VIEW_ONLY
+	"""
+	Channel participant membership.
+	"""
+	CHANNEL_ROLE
+	"""
+	Team membership.
+	"""
+	TEAM_ROLE
+}
+
+"""
+Reference to another canonical entity embedded in entity metadata.
+"""
+type GraphqlEntityRef {
+	"""
+	Referenced entity kind.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Referenced canonical identifier.
+	"""
+	entityId: ID!
+}
+
+"""
 Input identifying an entity referenced by a property value.
 """
 input GraphqlEntityReferenceInput {
@@ -800,6 +1137,64 @@ type GraphqlEntityReferencePropertyValue {
 	The referenced entities.
 	"""
 	references: [GraphqlPropertyEntityReference!]!
+}
+
+"""
+Canonical entity types accepted by cross-entity APIs.
+"""
+enum GraphqlEntityType {
+	"""
+	Document entity.
+	"""
+	DOCUMENT
+	"""
+	Chat entity.
+	"""
+	CHAT
+	"""
+	Project entity.
+	"""
+	PROJECT
+	"""
+	Email thread entity.
+	"""
+	EMAIL_THREAD
+	"""
+	Channel entity.
+	"""
+	CHANNEL
+	"""
+	Channel message entity.
+	"""
+	CHANNEL_MESSAGE
+	"""
+	Call entity.
+	"""
+	CALL
+	"""
+	CRM company entity.
+	"""
+	CRM_COMPANY
+	"""
+	Foreign entity.
+	"""
+	FOREIGN_ENTITY
+	"""
+	User entity.
+	"""
+	USER
+	"""
+	Team entity.
+	"""
+	TEAM
+	"""
+	Static file entity.
+	"""
+	STATIC_FILE
+	"""
+	CRM contact entity.
+	"""
+	CRM_CONTACT
 }
 
 """
@@ -1314,6 +1709,24 @@ input GraphqlSetPropertyValue @oneOf {
 }
 
 """
+Operation applied to one channel share-policy entry.
+"""
+enum GraphqlSharePolicyOperation {
+	"""
+	Add an entry.
+	"""
+	ADD
+	"""
+	Remove an entry.
+	"""
+	REMOVE
+	"""
+	Replace an existing entry.
+	"""
+	REPLACE
+}
+
+"""
 GraphQL input representing the shared email filter.
 """
 enum GraphqlSharedEmailFilter {
@@ -1372,17 +1785,29 @@ type GraphqlSoupBin {
 	"""
 	Items in this bin, ordered by their index within the group.
 	"""
-	items: [GraphqlSoupItem!]!
+	items: [GraphqlSoupEntity!]!
 }
 
 """
 GraphQL representation of the soup call.
 """
-type GraphqlSoupCall {
+type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible call name.
+	"""
+	displayName: String
+	"""
+	Common call metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The identifier of the channel.
 	"""
@@ -1451,6 +1876,18 @@ type GraphqlSoupCall {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
@@ -1474,11 +1911,23 @@ type GraphqlSoupCallParticipant {
 """
 GraphQL representation of the soup channel.
 """
-type GraphqlSoupChannel {
+type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common channel metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The name.
 	"""
@@ -1534,11 +1983,11 @@ type GraphqlSoupChannel {
 	"""
 	The latest message.
 	"""
-	latestMessage: GraphqlSoupChannelMessage
+	latestMessage: GraphqlSoupChannelMessagePreview
 	"""
 	The latest non thread message.
 	"""
-	latestNonThreadMessage: GraphqlSoupChannelMessage
+	latestNonThreadMessage: GraphqlSoupChannelMessagePreview
 	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
@@ -1547,16 +1996,102 @@ type GraphqlSoupChannel {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+GraphQL representation of the soup channel thread.
+"""
+type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Channel messages do not have a separate display name.
+	"""
+	displayName: String
+	"""
+	The message content.
+	"""
+	content: String!
+	"""
+	Common channel-message metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The identifier of the channel.
+	"""
+	channelId: ID!
+	"""
+	The identifier of the sender.
+	"""
+	senderId: String!
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	The effective updated timestamp in RFC 3339 format.
+	"""
+	effectiveUpdatedAt: String!
+	"""
+	The reply count.
+	"""
+	replyCount: Int!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
 GraphQL representation of the soup channel message.
 """
-type GraphqlSoupChannelMessage {
+type GraphqlSoupChannelMessagePreview {
 	"""
-	The unique identifier.
+	The projected message identifier.
 	"""
-	id: ID!
+	messageId: ID!
+	"""
+	The parent channel identifier.
+	"""
+	channelId: ID!
 	"""
 	The identifier of the thread.
 	"""
@@ -1614,59 +2149,25 @@ type GraphqlSoupChannelParticipant {
 }
 
 """
-GraphQL representation of the soup channel thread.
-"""
-type GraphqlSoupChannelThread {
-	"""
-	The unique identifier.
-	"""
-	id: ID!
-	"""
-	The identifier of the channel.
-	"""
-	channelId: ID!
-	"""
-	The identifier of the sender.
-	"""
-	senderId: String!
-	"""
-	The content.
-	"""
-	content: String!
-	"""
-	The created timestamp in RFC 3339 format.
-	"""
-	createdAt: String!
-	"""
-	The updated timestamp in RFC 3339 format.
-	"""
-	updatedAt: String!
-	"""
-	The effective updated timestamp in RFC 3339 format.
-	"""
-	effectiveUpdatedAt: String!
-	"""
-	The reply count.
-	"""
-	replyCount: Int!
-	"""
-	Properties assigned to this entity that the authenticated user may view.
-	"""
-	properties: [GraphqlProperty!]!
-	"""
-	Notifications associated with this entity for the authenticated user.
-	"""
-	notifications: [GraphqlSoupNotification!]!
-}
-
-"""
 GraphQL representation of the soup chat.
 """
-type GraphqlSoupChat {
+type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common chat metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The name.
 	"""
@@ -1707,16 +2208,40 @@ type GraphqlSoupChat {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
 GraphQL representation of the soup crm company.
 """
-type GraphqlSoupCrmCompany {
+type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible company name.
+	"""
+	displayName: String
+	"""
+	Common CRM-company metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The identifier of the team.
 	"""
@@ -1761,16 +2286,40 @@ type GraphqlSoupCrmCompany {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
 GraphQL representation of the soup document.
 """
-type GraphqlSoupDocument {
+type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common document metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The name.
 	"""
@@ -1815,6 +2364,18 @@ type GraphqlSoupDocument {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
@@ -2066,11 +2627,23 @@ type GraphqlSoupEmailParticipant {
 """
 GraphQL representation of the soup email thread.
 """
-type GraphqlSoupEmailThread {
+type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common email-thread metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The identifier of the provider.
 	"""
@@ -2168,15 +2741,64 @@ type GraphqlSoupEmailThread {
 	"""
 	notifications: [GraphqlSoupNotification!]!
 	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+	"""
 	The newest non-draft content message in this thread.
 	"""
 	latestContentMessage: GraphqlSoupEmailMessage
 }
 
 """
-GraphQL union over expanded Soup entity variants.
+Common GraphQL interface over canonical Soup entity variants.
 """
-union GraphqlSoupEntity = GraphqlSoupDocument | GraphqlSoupChat | GraphqlSoupProject | GraphqlSoupEmailThread | GraphqlSoupChannel | GraphqlSoupChannelThread | GraphqlSoupCall | GraphqlSoupCrmCompany | GraphqlSoupForeignEntity
+interface GraphqlSoupEntity {
+	"""
+	The canonical entity identifier.
+	"""
+	id: ID!
+	"""
+	The canonical entity type.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	The user-facing entity name, when available.
+	"""
+	displayName: String
+	"""
+	Metadata shared across entity variants.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	Properties assigned to this entity that the viewer may access.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the current viewer.
+	"""
+	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the current viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The current viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
 
 """
 GraphQL representation of Soup entity types.
@@ -2203,9 +2825,9 @@ enum GraphqlSoupEntityType {
 	"""
 	CHANNEL
 	"""
-	Channel thread entity.
+	Channel message entity.
 	"""
-	CHANNEL_THREAD
+	CHANNEL_MESSAGE
 	"""
 	Call entity.
 	"""
@@ -2218,32 +2840,28 @@ enum GraphqlSoupEntityType {
 	Foreign entity.
 	"""
 	FOREIGN_ENTITY
-	"""
-	User entity.
-	"""
-	USER
-	"""
-	Team entity.
-	"""
-	TEAM
-	"""
-	Static file entity.
-	"""
-	STATIC_FILE
-	"""
-	CRM contact entity.
-	"""
-	CRM_CONTACT
 }
 
 """
 GraphQL representation of the soup foreign entity.
 """
-type GraphqlSoupForeignEntity {
+type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Foreign entities do not expose a common display name.
+	"""
+	displayName: String
+	"""
+	Common foreign-entity metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The identifier of the foreign entity.
 	"""
@@ -2261,9 +2879,9 @@ type GraphqlSoupForeignEntity {
 	"""
 	storedForAuthEntity: String!
 	"""
-	The metadata.
+	Source-specific metadata.
 	"""
-	metadata: JSON!
+	sourceMetadata: JSON!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -2280,28 +2898,18 @@ type GraphqlSoupForeignEntity {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
-}
-
-"""
-GraphQL representation of the soup item.
-"""
-type GraphqlSoupItem {
 	"""
-	The unique identifier.
+	Whether the authenticated viewer has favorited this entity.
 	"""
-	id: ID!
+	isFavorited: Boolean!
 	"""
-	The entity type.
+	The authenticated viewer's effective permission for this entity.
 	"""
-	entityType: GraphqlSoupEntityType!
+	viewerPermission: GraphqlEntityPermission
 	"""
-	The frecency score.
+	The viewer's frecency score for this entity, when loaded.
 	"""
-	frecencyScore: Float!
-	"""
-	The expanded Soup entity.
-	"""
-	entity: GraphqlSoupEntity!
+	frecencyScore: Float
 }
 
 """
@@ -2361,11 +2969,23 @@ type GraphqlSoupNotification {
 """
 GraphQL representation of the soup project.
 """
-type GraphqlSoupProject {
+type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common project metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The name.
 	"""
@@ -2402,6 +3022,18 @@ type GraphqlSoupProject {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
@@ -2412,6 +3044,24 @@ type GraphqlStringPropertyValue {
 	The stored string.
 	"""
 	value: String!
+}
+
+"""
+Team role resolved for the current viewer.
+"""
+enum GraphqlTeamRole {
+	"""
+	Team owner.
+	"""
+	OWNER
+	"""
+	Team administrator.
+	"""
+	ADMIN
+	"""
+	Team member.
+	"""
+	MEMBER
 }
 
 """
@@ -2430,6 +3080,10 @@ type GraphqlUser {
 	Fetch a page of Soup items using the existing Soup filter AST format.
 	"""
 	soup(input: SoupInput!): SoupPage!
+	"""
+	Fetch one canonical expanded entity independently of a Soup view.
+	"""
+	entity(entityType: GraphqlSoupEntityType!, id: ID!): GraphqlSoupEntity
 }
 
 """
@@ -2502,13 +3156,31 @@ A scalar that can represent any JSON value.
 scalar JSON
 
 """
-Mutations for assigning and updating entity properties.
+One entity move in a batch.
 """
-type PropertiesMutationRoot {
+input MoveEntityInput {
 	"""
-	Set or attach one property on an entity.
+	Entity to move.
 	"""
-	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
+	entity: EntityRefInput!
+	"""
+	Destination project id. Omit or pass null to move to the root.
+	"""
+	projectId: ID
+}
+
+"""
+One entity rename in a batch.
+"""
+input RenameEntityInput {
+	"""
+	Entity to rename.
+	"""
+	entity: EntityRefInput!
+	"""
+	New user-visible display name.
+	"""
+	displayName: String!
 }
 
 """
@@ -2599,7 +3271,7 @@ type SoupPage {
 	"""
 	Items in the current page.
 	"""
-	items: [GraphqlSoupItem!]!
+	items: [GraphqlSoupEntity!]!
 	"""
 	Opaque cursor for the next page, if one exists.
 	"""
@@ -2627,7 +3299,21 @@ type SoupSubscriptionRoot {
 	"""
 	Subscribe to realtime Soup updates for the authenticated user.
 	"""
-	soupUpdates: GraphqlSoupItem!
+	soupUpdates: GraphqlSoupEntity!
+}
+
+"""
+One share-policy update in a batch.
+"""
+input UpdateEntitySharePolicyInput {
+	"""
+	Entity whose share policy should change.
+	"""
+	entity: EntityRefInput!
+	"""
+	New public/channel policy values.
+	"""
+	policy: EntitySharePolicyInput!
 }
 
 """
@@ -2644,7 +3330,7 @@ Directs the executor to skip this field or fragment when the `if` argument is tr
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: SoupQueryRoot
-	mutation: PropertiesMutationRoot
+	mutation: CompleteMutationRoot
 	subscription: SoupSubscriptionRoot
 }
 

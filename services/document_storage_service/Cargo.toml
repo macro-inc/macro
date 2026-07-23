@@ -55,9 +55,13 @@ cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
 channels = { path = "../../crates/channels", features = [
+  "entity_mutation",
   "inbound",
   "outbound",
 ] }
+chat = { path = "../../crates/chat", default-features = false, features = [
+  "outbound",
+], optional = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
@@ -81,6 +85,7 @@ entity_access = { path = "../../crates/entity_access", features = [
   "schema",
 ] }
 entity_access_management = { path = "../../crates/entity_access_management" }
+entity_mutation = { path = "../../crates/entity_mutation", optional = true }
 favorites = { path = "../../crates/favorites", features = [
   "inbound",
   "postgres",
@@ -157,6 +162,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true }
+rootcause = { workspace = true, optional = true }
 s3_key = { path = "../../crates/s3_key" }
 saved_views = { path = "../../crates/saved_views" }
 schemars = { workspace = true }

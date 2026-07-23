@@ -16,9 +16,9 @@ mod resolvers;
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use objects::{
-    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelThread, GraphqlSoupChat,
-    GraphqlSoupCrmCompany, GraphqlSoupDocument, GraphqlSoupDocumentSubType, GraphqlSoupEmailThread,
-    GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupItem, GraphqlSoupProject, GroupedSoup,
-    SoupEntityEdges, SoupPage,
+    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
+    GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
+    GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
+    GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupEntityEdges, SoupPage,
 };
-pub use resolvers::{resolve_grouped_soup, resolve_soup, resolve_soup_updates};
+pub use resolvers::{resolve_entity, resolve_grouped_soup, resolve_soup, resolve_soup_updates};

@@ -85,9 +85,9 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
-};
+#[cfg(feature = "delete_document_worker")]
+use macro_service_urls::AiEditingWorkerUrl;
+use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
@@ -135,6 +135,8 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 mod api;
 mod config;
 mod model;
+#[cfg(feature = "graphql")]
+mod outbound;
 mod service;
 
 maybe_env_vars! {
@@ -443,6 +445,13 @@ async fn main() -> anyhow::Result<()> {
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
+
+    #[cfg(feature = "graphql")]
+    let chat_mutation_service =
+        Arc::new(chat::domain::service::ChatServiceImpl::new_without_tools(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            entity_access_management_service.clone(),
+        ));
 
     let project_service = Arc::new(ProjectServiceImpl::new(
         PgProjectRepo::new(db.clone()),
@@ -966,6 +975,26 @@ async fn main() -> anyhow::Result<()> {
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
+    let redis_sha_client = Arc::new(Redis::new(redis_client));
+
+    #[cfg(feature = "graphql")]
+    let graphql_entity_mutation_service: Arc<dyn entity_mutation::EntityMutationService> =
+        Arc::new(service::entity_mutation::DssEntityMutationService::new(
+            document_service.clone(),
+            chat_mutation_service,
+            channels_service.clone(),
+            call_service.clone(),
+            Arc::new(email_service.clone()),
+            project_service.clone(),
+            entity_access_service.clone(),
+            favorites_service.clone(),
+            Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
+                db.clone(),
+                redis_sha_client.clone(),
+                sqs_client.clone(),
+            )),
+        ));
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
@@ -988,11 +1017,13 @@ async fn main() -> anyhow::Result<()> {
             soup_realtime_service,
         ),
         graphql_notification_reader,
+        #[cfg(feature = "graphql")]
+        graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
-        redis_client: Arc::new(Redis::new(redis_client)),
+        redis_client: redis_sha_client,
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,

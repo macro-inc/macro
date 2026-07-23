@@ -1,0 +1,17 @@
+[package]
+name = "graphql_favorite"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader"] }
+favorites = { path = "../favorites", default-features = false, features = [
+  "ports",
+] }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+rootcause = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

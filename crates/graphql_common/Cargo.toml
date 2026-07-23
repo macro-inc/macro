@@ -5,7 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-async-graphql = { workspace = true }
+async-graphql = { workspace = true, features = ["dataloader"] }
+async-trait = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 filter_ast = { path = "../filter_ast" }
@@ -14,6 +15,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
+rootcause = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

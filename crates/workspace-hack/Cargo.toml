@@ -17,7 +17,6 @@ publish = false
 [dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
-async-graphql = { version = "7", features = ["dataloader"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
@@ -139,7 +138,6 @@ zeroize = { version = "1", features = ["derive"] }
 [build-dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
-async-graphql = { version = "7", features = ["dataloader"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
