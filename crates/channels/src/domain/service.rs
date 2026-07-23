@@ -14,9 +14,9 @@ use crate::domain::{
         WithChannelId,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMentionExtractor,
-        ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
-        ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
+        ChannelAttachmentsPage, ChannelContactsDispatcher, ChannelEventDispatcher,
+        ChannelMentionExtractor, ChannelMessagesErr, ChannelMessagesQueryResult,
+        ChannelMutationErr, ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
 };
 use bot_id::BotIdStr;
@@ -67,6 +67,22 @@ impl ChannelReferenceSharePermissions for NoopChannelReferenceSharePermissions {
         _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
         _items: Vec<ReferencedShareItem>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+}
+
+/// No-op contacts dispatcher used by hosts that don't have a contacts ingress
+/// client wired (e.g. hosts that only need channel notifications/realtime).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelContactsDispatcher;
+
+impl ChannelContactsDispatcher for NoopChannelContactsDispatcher {
+    type Err = anyhow::Error;
+
+    async fn enqueue_contacts(
+        &self,
+        _users: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), Self::Err> {
         Ok(())
     }
