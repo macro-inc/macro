@@ -156,15 +156,16 @@ async fn fetch_teardown_token(ctx: &LinkManagerContext, link: &Link) -> Option<S
                     &ctx.auth_service_client,
                 )
                 .await;
-                if let Err(error) = &result {
-                    if !is_forbidden_error(error) && attempt < MAX_ATTEMPTS {
-                        tracing::warn!(error=?error, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
-                    }
+                if let Err(error) = &result
+                    && !is_forbidden_error(error)
+                    && attempt < MAX_ATTEMPTS
+                {
+                    tracing::warn!(error=?error, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
                 }
                 result
             }
         },
-        |error| !is_forbidden_error(error),
+        |error: &anyhow::Error| !is_forbidden_error(error),
     )
     .await;
 
