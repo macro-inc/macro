@@ -3,6 +3,9 @@
 //! EventBridge-triggered job pages through the table and tears down CRM rows
 //! for contacts that no longer have any messages on the link.
 
+#[cfg(test)]
+mod test;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
@@ -55,6 +58,8 @@ pub struct CrmCleanupPubsubMessage {
 pub enum CrmCleanupJobStatus {
     Init,
     InProgress,
+    // Fanout complete: every candidate in the snapshot has been dispatched.
+    // ProcessCandidate messages may still be in flight or retrying.
     Complete,
     Failed,
 }
@@ -66,7 +71,9 @@ pub struct CrmCleanupJob {
     pub status: CrmCleanupJobStatus,
     // Candidate row count at kickoff, for observability
     pub total_candidates: i64,
-    // Number of candidates dispatched as ProcessCandidate messages so far
+    // Number of candidates dispatched as ProcessCandidate messages so far.
+    // Observability only: redelivered lister pages re-count, so this can
+    // exceed total_candidates.
     pub dispatched_count: i64,
     // MAX(crm_cleanup_candidates.id) at kickoff; the job only processes ids <= this
     pub max_candidate_id: i64,

@@ -5,6 +5,12 @@ use models_email::email::service::crm_cleanup::{
 };
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
+/// An active job whose `updated_at` hasn't moved for this long is considered
+/// stranded (e.g. its lister exhausted retries into the DLQ) and gets failed
+/// so it can't block future nights. A healthy job's `updated_at` advances
+/// with every dispatched page, and a full run takes minutes, not hours.
+const STALE_ACTIVE_JOB_MAX_AGE_HOURS: i64 = 12;
+
 /// Nightly kickoff, delivered by EventBridge as a static payload: snapshots
 /// the candidate table, creates the job row, and enqueues the first
 /// `ListCandidates` message.
@@ -12,8 +18,9 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// Idempotent under duplicate fires and redeliveries: `create_job` no-ops
 /// against the one-active-job unique index, and an existing job still in
 /// `Init` (a previous kickoff died before enqueueing its lister) is resumed
-/// rather than skipped, so a stranded job can't dangle as active and block
-/// future nights.
+/// rather than skipped. An active job that has sat untouched for
+/// [`STALE_ACTIVE_JOB_MAX_AGE_HOURS`] is failed and replaced, so a job
+/// stranded by retry exhaustion can't block cleanup forever.
 #[tracing::instrument(skip(ctx), err)]
 pub async fn start_job(ctx: &CrmCleanupContext) -> Result<(), ProcessingError> {
     // Freeze the working set: candidates inserted after this point get higher
@@ -61,13 +68,41 @@ pub async fn start_job(ctx: &CrmCleanupContext) -> Result<(), ProcessingError> {
                     })
                 })?;
 
-            match active.status {
-                // A previous kickoff created the job but died before
-                // enqueueing its lister — resume it.
-                CrmCleanupJobStatus::Init => active,
-                _ => {
-                    tracing::warn!(job_id = %active.id, status = %active.status, "An active crm cleanup job already exists; skipping kickoff");
+            let age = chrono::Utc::now() - active.updated_at;
+            if age > chrono::Duration::hours(STALE_ACTIVE_JOB_MAX_AGE_HOURS) {
+                // Stranded job (its lister likely DLQ'd): fail it and start
+                // fresh so the one-active-job index doesn't block cleanup.
+                tracing::warn!(job_id = %active.id, status = %active.status, age_hours = age.num_hours(), "Active crm cleanup job is stale; failing it and starting a new one");
+                job::set_job_status(&ctx.db, active.id, CrmCleanupJobStatus::Failed)
+                    .await
+                    .map_err(|e| {
+                        ProcessingError::Retryable(DetailedError {
+                            reason: FailureReason::DatabaseQueryFailed,
+                            source: e.context("Failed to fail stale crm cleanup job"),
+                        })
+                    })?;
+
+                let fresh = job::create_job(&ctx.db, count, max_id).await.map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to create replacement crm cleanup job"),
+                    })
+                })?;
+                let Some(fresh) = fresh else {
+                    // A concurrent kickoff won the replacement race.
+                    tracing::warn!("Another kickoff created the replacement job; skipping");
                     return Ok(());
+                };
+                fresh
+            } else {
+                match active.status {
+                    // A previous kickoff created the job but died before
+                    // enqueueing its lister — resume it.
+                    CrmCleanupJobStatus::Init => active,
+                    _ => {
+                        tracing::warn!(job_id = %active.id, status = %active.status, "An active crm cleanup job already exists; skipping kickoff");
+                        return Ok(());
+                    }
                 }
             }
         }
