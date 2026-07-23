@@ -108,8 +108,14 @@ export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { queryFilters, setActiveTab, activeTab, assigneeFilter } =
-    useSoupView();
+  const {
+    queryFilters,
+    restorePersistedQueryFilters,
+    restorePersistedPredicates,
+    setActiveTab,
+    activeTab,
+    assigneeFilter,
+  } = useSoupView();
   const user = useUserContext();
   const isTeamAdmin = useIsTeamAdmin();
 
@@ -195,8 +201,12 @@ export const useApplyPreset = () => {
 
     batch(() => {
       setActiveTab(tabId);
-      queryFilters.replace(nextFilters);
-      soup.predicates.set(nextClientFilters);
+      if (!restorePersistedQueryFilters(tabId)) {
+        queryFilters.replace(nextFilters);
+      }
+      if (!restorePersistedPredicates(tabId)) {
+        soup.predicates.set(nextClientFilters);
+      }
       soup.grouping.setActiveGroupId(preset.groupBy);
     });
     return true;
