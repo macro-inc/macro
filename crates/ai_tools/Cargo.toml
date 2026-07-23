@@ -26,6 +26,10 @@ dateparser.workspace = true
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
+connection_gateway_client = { path = "../connection_gateway_client" }
+contacts = { path = "../contacts", default-features = false, features = [
+  "outbound",
+] }
 crm = { path = "../crm" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
@@ -69,7 +73,7 @@ serde.workspace = true
 serde_json.workspace = true
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
-sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail", "search"] }
 teams = { path = "../teams", default-features = false, features = ["ai_tools", "outbound"] }
 sqlx.workspace = true
 strum.workspace = true
