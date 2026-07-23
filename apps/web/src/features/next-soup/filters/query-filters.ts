@@ -1,3 +1,4 @@
+import { soupItemMatchesTagFilter } from '@app/constants/list-views';
 import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
@@ -203,16 +204,32 @@ function queryIncludeToRequestBody(query: Query): SoupBody {
  * id filters of every entity type the query never references — so an item whose
  * type is out of scope (e.g. a newly created task inserted into an email-scoped
  * widget) carries a real id against a `[NIL_UUID]` filter and is rejected, the
- * same way the server would never return it.
+ * same way the server would never return it. An active tag filter is enforced
+ * too, reusing {@link soupItemMatchesTagFilter} (the same gate the soup view
+ * applies), so a newly created untagged item never leaks into a tag-scoped list.
  *
- * Refinements the server also applies but this does not — tags/properties, date
- * ranges, seen/done, importance, `documentWhere`, `emailView`, and every
- * `exclude` clause — are treated permissively: a matching item is never
- * rejected for them, so inserts that DO belong still appear optimistically.
+ * Refinements the server also applies but this does not — non-tag
+ * properties, date ranges, seen/done, importance, `documentWhere`, `emailView`,
+ * and every `exclude` clause — are treated permissively: a matching item is
+ * never rejected for them, so inserts that DO belong still appear optimistically.
  */
 export function soupItemMatchesQuery(item: SoupApiItem, query: Query): boolean {
-  return filterSoupItemByRequestBody(
-    item,
-    queryIncludeToRequestBody(defineQueryFilters(query))
+  if (
+    !filterSoupItemByRequestBody(
+      item,
+      queryIncludeToRequestBody(defineQueryFilters(query))
+    )
+  ) {
+    return false;
+  }
+
+  const tagOptionIds = (query.include?.tagFilters ?? []).map((t) => t.value);
+  return (
+    tagOptionIds.length === 0 ||
+    soupItemMatchesTagFilter(
+      item,
+      tagOptionIds,
+      query.include?.tagFilterMode ?? 'any'
+    )
   );
 }

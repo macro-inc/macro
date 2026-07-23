@@ -6,6 +6,17 @@ import { soupItemMatchesQuery } from './query-filters';
 const documentItem = (id: string, overrides: object = {}): SoupApiItem =>
   ({ tag: 'document', data: { id, ...overrides } }) as unknown as SoupApiItem;
 
+const taggedTaskItem = (id: string, optionIds: string[]): SoupApiItem =>
+  documentItem(id, {
+    subType: { type: 'task' },
+    properties: optionIds.map((optionId) => ({
+      value: { type: 'SelectOption', value: [optionId] },
+    })),
+  });
+
+const taskItem = (id: string): SoupApiItem =>
+  documentItem(id, { subType: { type: 'task' } });
+
 const emailItem = (id: string): SoupApiItem =>
   ({ tag: 'emailThread', data: { id } }) as unknown as SoupApiItem;
 
@@ -75,5 +86,47 @@ describe('soupItemMatchesQuery', () => {
 
     expect(soupItemMatchesQuery(documentItem('doc-1'), query)).toBe(false);
     expect(soupItemMatchesQuery(emailItem('thread-1'), query)).toBe(false);
+  });
+
+  it('enforces an active tag filter within the scoped type', () => {
+    // A task list scoped to a single tag option: a freshly created untagged
+    // task is in-type but must not leak into a tag-scoped list.
+    const query: Query = {
+      include: {
+        subType: ['task'],
+        tagFilters: [{ propertyId: 'def-1', type: 'select', value: 'opt-1' }],
+      },
+    };
+
+    expect(
+      soupItemMatchesQuery(taggedTaskItem('doc-tagged', ['opt-1']), query)
+    ).toBe(true);
+    expect(soupItemMatchesQuery(taskItem('doc-untagged'), query)).toBe(false);
+    expect(
+      soupItemMatchesQuery(taggedTaskItem('doc-other-tag', ['opt-2']), query)
+    ).toBe(false);
+  });
+
+  it('requires every option under tagFilterMode "all"', () => {
+    const query: Query = {
+      include: {
+        subType: ['task'],
+        tagFilterMode: 'all',
+        tagFilters: [
+          { propertyId: 'def-1', type: 'select', value: 'opt-1' },
+          { propertyId: 'def-2', type: 'select', value: 'opt-2' },
+        ],
+      },
+    };
+
+    expect(
+      soupItemMatchesQuery(
+        taggedTaskItem('doc-both', ['opt-1', 'opt-2']),
+        query
+      )
+    ).toBe(true);
+    expect(
+      soupItemMatchesQuery(taggedTaskItem('doc-one', ['opt-1']), query)
+    ).toBe(false);
   });
 });
