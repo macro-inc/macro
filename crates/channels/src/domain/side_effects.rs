@@ -746,6 +746,7 @@ where
                 &message,
                 resolved_sender,
                 mentions,
+                notification_policy == PostMessageNotificationPolicy::Default,
             )
             .await
         {
@@ -794,6 +795,7 @@ where
         message: &MutatedMessage,
         resolved_sender: ResolvedNotificationSender,
         mentions: Vec<SimpleMention>,
+        resolve_invite_recipients: bool,
     ) -> anyhow::Result<PostedMessageNotificationContext> {
         let ResolvedNotificationSender {
             sender,
@@ -805,7 +807,10 @@ where
             .await
             .map_err(Into::into)?;
         let is_first_top_level_message = message_count <= 1 && message.thread_id.is_none();
-        let existing_user_ids = if is_first_top_level_message && sender.as_user().is_some() {
+        let existing_user_ids = if resolve_invite_recipients
+            && is_first_top_level_message
+            && sender.as_user().is_some()
+        {
             let participant_ids: Vec<_> = participants
                 .iter()
                 .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())

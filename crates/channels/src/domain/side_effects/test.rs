@@ -16,6 +16,7 @@ type RemovedMessages = Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>;
 #[derive(Clone)]
 struct FakeContext {
     message_count: i64,
+    fail_existing_user_lookup: bool,
     document_mentions: Vec<ChannelDocumentMention>,
     bot_profile: Option<BotSenderProfile>,
     bot_profile_lookup_count: Arc<Mutex<usize>>,
@@ -26,6 +27,7 @@ impl Default for FakeContext {
     fn default() -> Self {
         Self {
             message_count: 2,
+            fail_existing_user_lookup: false,
             document_mentions: Vec::new(),
             bot_profile: Some(BotSenderProfile {
                 name: "Test Bot".to_string(),
@@ -48,6 +50,9 @@ impl ChannelSideEffectContext for FakeContext {
         &self,
         user_ids: Vec<MacroUserIdStr<'static>>,
     ) -> Result<HashSet<String>, Self::Err> {
+        if self.fail_existing_user_lookup {
+            anyhow::bail!("existing-user lookup failed");
+        }
         Ok(user_ids
             .into_iter()
             .map(|user_id| user_id.as_ref().to_string())
@@ -440,7 +445,7 @@ async fn silent_message_posted_skips_notifications_only() {
 }
 
 #[tokio::test]
-async fn mentions_only_message_posted_skips_first_message_invite() {
+async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let sender = user("julia@example.com");
@@ -451,6 +456,7 @@ async fn mentions_only_message_posted_skips_first_message_invite() {
     let service = ChannelSideEffectService::new(
         FakeContext {
             message_count: 1,
+            fail_existing_user_lookup: true,
             ..FakeContext::default()
         },
         FakeRealtime::default(),
