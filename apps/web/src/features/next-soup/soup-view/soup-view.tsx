@@ -417,6 +417,7 @@ export const SoupView = (props: SoupViewProps) => {
         initialSearchText: initialCrmView
           ? (initialCrmView.searchText ?? '')
           : (persistedSearchText ?? props.initialSearchText),
+        preferInitialFilters: initialCrmView !== undefined,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
