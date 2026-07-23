@@ -17,7 +17,7 @@ type ResizeSolver = {
     config: {
       minSize?: number;
       maxSize?: number;
-      redistributionMaxSize?: number;
+      redistributionPreferredSize?: number;
     }
   ) => void;
   solve: () => LayoutResult;
@@ -154,10 +154,74 @@ function initPanel(panel: PanelConfig): Panel {
     ...panel,
     minSize: panel.minSize ?? 0,
     maxSize: panel.maxSize ?? Infinity,
-    redistributionMaxSize: panel.redistributionMaxSize ?? Infinity,
     target: panel.target || { kind: 'auto' },
     share: 0,
   };
+}
+
+/**
+ * Pin automatic-layout preferences when the remaining panels can absorb the
+ * leftover space. Preferences yield to every panel's minimum size, while
+ * manual resize solves ignore them entirely.
+ */
+function applyRedistributionPreferences(
+  panels: Panel[],
+  usable: number
+): Panel[] {
+  if (usable <= 0) return panels;
+
+  const preferredPanels = panels.flatMap((panel) => {
+    const preferred = panel.redistributionPreferredSize;
+    if (preferred === undefined || !Number.isFinite(preferred)) return [];
+    const size = Math.min(Math.max(preferred, panel.minSize), panel.maxSize);
+    return [{ panel, size }];
+  });
+  if (preferredPanels.length === 0) return panels;
+
+  const preferredIds = new Set(preferredPanels.map(({ panel }) => panel.id));
+  const remainingPanels = panels.filter((panel) => !preferredIds.has(panel.id));
+  const remainingMin = sumArray(remainingPanels.map((panel) => panel.minSize));
+  const availableForPreferred = usable - remainingMin;
+  const preferredMin = sumArray(
+    preferredPanels.map(({ panel }) => panel.minSize)
+  );
+  if (availableForPreferred + EPSILON < preferredMin) return panels;
+
+  const preferredTotal = sumArray(preferredPanels.map(({ size }) => size));
+  const overflow = Math.max(0, preferredTotal - availableForPreferred);
+  if (overflow > 0) {
+    const shrinkable = sumArray(
+      preferredPanels.map(({ panel, size }) => size - panel.minSize)
+    );
+    if (shrinkable > 0) {
+      for (const target of preferredPanels) {
+        const room = target.size - target.panel.minSize;
+        target.size -= overflow * (room / shrinkable);
+      }
+    }
+  }
+
+  const resolvedPreferredTotal = sumArray(
+    preferredPanels.map(({ size }) => size)
+  );
+  const remainingMax = sumArray(remainingPanels.map((panel) => panel.maxSize));
+  // Avoid leaving a gap when no other panel can absorb the remaining space.
+  if (resolvedPreferredTotal + remainingMax + EPSILON < usable) return panels;
+
+  const preferredSizeById = new Map(
+    preferredPanels.map(({ panel, size }) => [panel.id, size])
+  );
+  return panels.map((panel) => {
+    const preferred = preferredSizeById.get(panel.id);
+    return preferred === undefined
+      ? panel
+      : {
+          ...panel,
+          minSize: preferred,
+          maxSize: preferred,
+          share: preferred / usable,
+        };
+  });
 }
 
 /**
@@ -222,21 +286,7 @@ export function createResizeSolver(params: {
     const usable = getUsable(ps.length, params.size(), params.gutter());
     const solvePanels =
       solveKind === 'automatic'
-        ? (() => {
-            const automaticallyConstrained = ps.map((panel) => ({
-              ...panel,
-              maxSize: Math.max(
-                panel.minSize,
-                Math.min(panel.maxSize, panel.redistributionMaxSize)
-              ),
-            }));
-            const totalMax = sumArray(
-              automaticallyConstrained.map((panel) => panel.maxSize)
-            );
-            // Never leave empty space when every panel has a finite
-            // redistribution maximum. Fall back to the hard constraints.
-            return totalMax + EPSILON >= usable ? automaticallyConstrained : ps;
-          })()
+        ? applyRedistributionPreferences(ps, usable)
         : ps;
 
     // run the solve to get pixel values
@@ -359,7 +409,7 @@ export function createResizeSolver(params: {
     config: {
       minSize?: number;
       maxSize?: number;
-      redistributionMaxSize?: number;
+      redistributionPreferredSize?: number;
     }
   ) {
     const panel = panelData[id];
@@ -379,10 +429,10 @@ export function createResizeSolver(params: {
         changed = true;
       }
     }
-    if ('redistributionMaxSize' in config) {
-      const next = config.redistributionMaxSize ?? Infinity;
-      if (panel.redistributionMaxSize !== next) {
-        panel.redistributionMaxSize = next;
+    if ('redistributionPreferredSize' in config) {
+      const next = config.redistributionPreferredSize;
+      if (panel.redistributionPreferredSize !== next) {
+        panel.redistributionPreferredSize = next;
         changed = true;
       }
     }

@@ -425,8 +425,11 @@ export type SplitManager = {
   /** Whether preview mode is engaged on this split. Reactive. */
   isPreviewEngaged: (controllerId: SplitId) => boolean;
 
-  /** The automatic-redistribution max for a preview controller. Reactive. */
-  previewControllerWidth: (controllerId: SplitId) => number | undefined;
+  /** The automatic-redistribution preference for a Controller. Reactive. */
+  previewControllerWidth: (
+    controllerId: SplitId,
+    viewportWidth?: number
+  ) => number | undefined;
 
   /** The Controller's live Viewer id, if one exists. Reactive. */
   viewerOf: (controllerId: SplitId) => SplitId | undefined;
@@ -1295,10 +1298,7 @@ export function createSplitLayout(
     ) {
       return false;
     }
-    if (
-      !isPreviewControllerContent(controller.content) ||
-      isPreviewControllerContent(viewer.content)
-    ) {
+    if (!isPreviewControllerContent(controller.content)) {
       return false;
     }
 
@@ -1382,9 +1382,9 @@ export function createSplitLayout(
     }
     linkPreviewPair(controllerId, viewerId);
 
-    // The controller's configured width is enforced declaratively as a
-    // redistribution-only maximum (see SplitLayoutContainer). Direct gutter
-    // drags remain unconstrained by it.
+    // The Controller's configured width is enforced declaratively as an
+    // automatic-redistribution preference and maximum (see
+    // SplitLayoutContainer). Direct gutter drags remain unconstrained by it.
   }
 
   function unlinkPreviewPair(controllerId: SplitId) {
@@ -1405,10 +1405,15 @@ export function createSplitLayout(
   const isPreviewEngaged = (id: SplitId) =>
     state.previewPairs[id] !== undefined;
 
-  const previewControllerWidth = (controllerId: SplitId) => {
+  const previewControllerWidth = (
+    controllerId: SplitId,
+    viewportWidth?: number
+  ) => {
     if (!isPreviewEngaged(controllerId)) return undefined;
     const content = findSplitById(controllerId)?.content;
-    return content ? previewControllerWidthForContent(content) : undefined;
+    return content
+      ? previewControllerWidthForContent(content, viewportWidth)
+      : undefined;
   };
 
   const viewerOf = (controllerId: SplitId): SplitId | undefined => {
@@ -1462,13 +1467,14 @@ export function createSplitLayout(
   }
 
   /**
-   * A Preview Pair consists of a Controller and a Viewer. The Controller hosts
-   * controller-capable content; the Viewer hosts everything else. Content
-   * changes that reach a Preview Pair member outside
-   * `openWithSplit` (direct `handle.replace`, history back/forward, URL
-   * reconcile) can violate that; when they do, the Preview Pair is unlinked. A
-   * Viewer left showing only the placeholder is closed along with it; any
-   * other split stays open as a normal split.
+   * A Preview Pair consists of an eligible Controller and its Viewer. A block
+   * such as a project may be eligible to act as a Controller while also being
+   * valid Viewer content; the live pair assignment, rather than content type,
+   * determines its role.
+   *
+   * Content changes that reach the Controller outside `openWithSplit` (direct
+   * `handle.replace`, history back/forward, URL reconcile) can make it
+   * ineligible; when they do, the Preview Pair closes.
    */
   function enforcePreviewPairContentInvariant(id: SplitId) {
     const split = findSplitById(id);
@@ -1477,14 +1483,6 @@ export function createSplitLayout(
     // Controller side: ineligible content breaks the Preview Pair.
     if (isPreviewEngaged(id) && !isPreviewControllerContent(split.content)) {
       disengagePreviewMode(id);
-      return;
-    }
-
-    // Viewer side: controller-capable content breaks the Preview Pair (the
-    // split keeps its content and lives on as a normal split).
-    const controllerId = controllerOf(id);
-    if (controllerId && isPreviewControllerContent(split.content)) {
-      unlinkPreviewPair(controllerId);
     }
   }
 
@@ -1757,7 +1755,6 @@ export function createSplitLayout(
           }
         } else if (
           explicitSourceId === previewPair.controllerId &&
-          !isPreviewControllerContent(content) &&
           (!options.preferNewSplit || !canAppendSplit())
         ) {
           options = {

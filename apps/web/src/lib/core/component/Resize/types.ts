@@ -17,7 +17,7 @@ export type Panel = {
   id: PanelId;
   minSize: number;
   maxSize: number;
-  redistributionMaxSize: number;
+  redistributionPreferredSize?: number;
   share: number;
   target: PanelSizeSpec;
 };
@@ -26,7 +26,7 @@ export type PanelConfig = {
   id: PanelId;
   minSize?: number;
   maxSize?: number;
-  redistributionMaxSize?: number;
+  redistributionPreferredSize?: number;
   target?: PanelSizeSpec;
 };
 
@@ -45,7 +45,7 @@ export type ResizeZoneCtx = {
     config: {
       minSize?: number;
       maxSize?: number;
-      redistributionMaxSize?: number;
+      redistributionPreferredSize?: number;
     }
   ) => void;
   gutterSize: () => number;

@@ -82,7 +82,7 @@ describe('createResizeSolver', () => {
     });
   });
 
-  describe('redistributionMaxSize', () => {
+  describe('redistributionPreferredSize', () => {
     it('waits until another panel can absorb the redistributed space', async () => {
       const { solver, dispose } = createRoot((dispose) => ({
         dispose,
@@ -97,7 +97,9 @@ describe('createResizeSolver', () => {
       await Promise.resolve();
 
       solver.addPanel({ id: 'controller', minSize: 100 });
-      solver.updatePanel('controller', { redistributionMaxSize: 440 });
+      solver.updatePanel('controller', {
+        redistributionPreferredSize: 440,
+      });
       expect(solver.solve().sizes.get('controller')).toBe(1600);
 
       solver.addPanel({ id: 'viewer', minSize: 100 });
@@ -106,7 +108,7 @@ describe('createResizeSolver', () => {
       dispose();
     });
 
-    it('caps automatic redistribution without constraining manual resizing', async () => {
+    it('restores the preference after automatic redistribution without constraining manual resizing', async () => {
       const { solver, dispose } = createRoot((dispose) => ({
         dispose,
         solver: createResizeSolver({
@@ -123,7 +125,7 @@ describe('createResizeSolver', () => {
       solver.addPanel({ id: 'controller', minSize: 100 });
       solver.addPanel({ id: 'viewer', minSize: 100 });
       solver.addPanel({ id: 'adjacent', minSize: 100 });
-      solver.updatePanel('controller', { redistributionMaxSize: 440 });
+      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
 
       expect(solver.solve().sizes.get('controller')).toBe(440);
 
@@ -132,6 +134,58 @@ describe('createResizeSolver', () => {
 
       solver.dropPanel('adjacent');
       expect(solver.solve().sizes.get('controller')).toBe(440);
+
+      dispose();
+    });
+
+    it('grows beyond an equal share when the preferred size fits', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 8,
+          size: () => 2000,
+          panels: [],
+        }),
+      }));
+
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'controller', minSize: 400 });
+      solver.updatePanel('controller', {
+        redistributionPreferredSize: 1200,
+      });
+      solver.addPanel({ id: 'viewer', minSize: 400 });
+
+      expect(solver.solve().sizes.get('controller')).toBe(1200);
+
+      solver.moveHandle(0, 100);
+      expect(solver.solve().sizes.get('controller')).toBe(1300);
+
+      dispose();
+    });
+
+    it('yields to the neighboring panel minimum', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 8,
+          size: () => 1600,
+          panels: [],
+        }),
+      }));
+
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'controller', minSize: 400 });
+      solver.updatePanel('controller', {
+        redistributionPreferredSize: 1200,
+      });
+      solver.addPanel({ id: 'viewer', minSize: 400 });
+
+      expect(solver.solve().sizes.get('controller')).toBe(1192);
+      expect(solver.solve().sizes.get('viewer')).toBe(400);
 
       dispose();
     });

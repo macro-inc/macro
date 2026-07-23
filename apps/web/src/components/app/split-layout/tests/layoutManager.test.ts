@@ -560,6 +560,60 @@ describe('layoutManager', () => {
       });
     });
 
+    it('allows a Project block to control unless it is already a Viewer', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'project', id: 'project-controller' },
+        ]);
+        const controller = manager.getSplit(manager.splits()[0].id)!;
+
+        expect(controller.canEngagePreview()).toBe(true);
+        controller.engagePreview();
+
+        const viewerId = controller.viewerId()!;
+        const viewer = manager.getSplit(viewerId)!;
+        manager.openWithSplit(
+          { type: 'project', id: 'project-viewer' },
+          { referredFrom: null, handle: controller }
+        );
+
+        expect(controller.content()).toMatchObject({
+          type: 'project',
+          id: 'project-controller',
+        });
+        expect(viewer.content()).toMatchObject({
+          type: 'project',
+          id: 'project-viewer',
+        });
+        expect(manager.viewerOf(controller.id)).toBe(viewer.id);
+        expect(viewer.isPreviewSplit()).toBe(true);
+        expect(viewer.canEngagePreview()).toBe(false);
+
+        viewer.engagePreview();
+        expect(manager.previewPairs()).toEqual([
+          { controllerId: controller.id, viewerId: viewer.id },
+        ]);
+
+        dispose();
+      });
+    });
+
+    it('caps the Companies controller width at 70vw', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'companies' },
+        ]);
+        const controllerId = manager.splits()[0].id;
+
+        manager.engagePreviewMode(controllerId);
+
+        expect(manager.previewControllerWidth(controllerId, 1000)).toBe(700);
+        expect(manager.previewControllerWidth(controllerId, 1600)).toBe(880);
+
+        dispose();
+      });
+    });
+
     it('creates a distinct empty viewer for each preview controller', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
@@ -1155,7 +1209,7 @@ describe('layoutManager', () => {
       });
     });
 
-    it('cannot engage a non-list split as a preview controller', () => {
+    it('cannot engage ineligible content as a preview controller', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
           { type: 'md', id: 'doc-1' },

@@ -9,6 +9,7 @@ import { splitContainerSelector } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { tabTitleSignal } from '@core/signal/tabTitle';
+import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { cn } from '@ui';
 import {
@@ -245,6 +246,7 @@ function createSplitFocusTracker(props: {
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const viewportSize = useWindowSize();
   const previewQuery = () => location.query[PREVIEW_QUERY_PARAM];
   const decodedLayout = createMemo(() =>
     loadRestorablePreviewLayout(props.pairs, previewQuery(), {
@@ -329,11 +331,13 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                         <Resize.Panel
                           id={id}
                           minSize={400}
-                          // Automatic redistribution caps an engaged controller
-                          // at its list view's configured width. This is not a
-                          // hard max: the gutter can still be dragged past it.
-                          redistributionMaxSize={splitManager.previewControllerWidth(
-                            id
+                          // Automatic redistribution targets an engaged
+                          // Controller at its configured preferred width.
+                          // This is not a hard max: the gutter can still be
+                          // dragged past it.
+                          redistributionPreferredSize={splitManager.previewControllerWidth(
+                            id,
+                            viewportSize.width
                           )}
                           index={index()}
                         >
