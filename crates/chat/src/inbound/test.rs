@@ -2,6 +2,7 @@ use axum::Extension;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
+use entity_access::domain::models::TeamRole;
 use http_body_util::BodyExt;
 use macro_authorization::{
     InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
@@ -423,7 +424,7 @@ impl EntityAccessService for MockAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> std::result::Result<(EntityPermission, uuid::Uuid), AccessError> {
+    ) -> std::result::Result<(EntityPermission, uuid::Uuid, TeamRole), AccessError> {
         unimplemented!("chat test mock does not support CRM entity access")
     }
 

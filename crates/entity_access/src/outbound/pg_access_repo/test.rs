@@ -2,7 +2,7 @@ use super::PgAccessRepository;
 use crate::domain::{
     models::{
         AccessError, AccessLevel, BotId, ChannelRoleResult, CrmEntityAccess, EntityType,
-        ParticipantRole,
+        ParticipantRole, TeamRole,
     },
     ports::AccessRepository,
 };
@@ -225,8 +225,9 @@ async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
         (
             TEAM_MEMBER,
             Some(CrmEntityAccess {
-                access_level: AccessLevel::View,
+                access_level: AccessLevel::Edit,
                 team_id: team_alpha,
+                team_role: TeamRole::Member,
             }),
         ),
         (
@@ -234,6 +235,7 @@ async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
             Some(CrmEntityAccess {
                 access_level: AccessLevel::Edit,
                 team_id: team_alpha,
+                team_role: TeamRole::Admin,
             }),
         ),
         (
@@ -241,6 +243,7 @@ async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
             Some(CrmEntityAccess {
                 access_level: AccessLevel::Owner,
                 team_id: team_alpha,
+                team_role: TeamRole::Owner,
             }),
         ),
     ];
@@ -273,6 +276,7 @@ async fn crm_company_access_hides_from_member_when_hidden(pool: PgPool) -> anyho
         Some(CrmEntityAccess {
             access_level: AccessLevel::Edit,
             team_id: team_alpha,
+            team_role: TeamRole::Admin,
         }),
     );
     assert_eq!(
@@ -281,6 +285,7 @@ async fn crm_company_access_hides_from_member_when_hidden(pool: PgPool) -> anyho
         Some(CrmEntityAccess {
             access_level: AccessLevel::Owner,
             team_id: team_alpha,
+            team_role: TeamRole::Owner,
         }),
     );
     Ok(())
@@ -349,8 +354,9 @@ async fn crm_contact_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
         (
             TEAM_MEMBER,
             Some(CrmEntityAccess {
-                access_level: AccessLevel::View,
+                access_level: AccessLevel::Edit,
                 team_id: team_alpha,
+                team_role: TeamRole::Member,
             }),
         ),
         (
@@ -358,6 +364,7 @@ async fn crm_contact_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
             Some(CrmEntityAccess {
                 access_level: AccessLevel::Edit,
                 team_id: team_alpha,
+                team_role: TeamRole::Admin,
             }),
         ),
         (
@@ -365,6 +372,7 @@ async fn crm_contact_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
             Some(CrmEntityAccess {
                 access_level: AccessLevel::Owner,
                 team_id: team_alpha,
+                team_role: TeamRole::Owner,
             }),
         ),
     ];
@@ -398,6 +406,7 @@ async fn crm_contact_access_hidden_contact_blocks_member(pool: PgPool) -> anyhow
         Some(CrmEntityAccess {
             access_level: AccessLevel::Edit,
             team_id: team_alpha,
+            team_role: TeamRole::Admin,
         }),
     );
     Ok(())

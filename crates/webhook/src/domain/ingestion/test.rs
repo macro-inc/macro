@@ -26,7 +26,7 @@ use documents::domain::events::{
 };
 use entity_access::domain::models::{
     AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission, RequiredPermission,
-    UserTeamInfo,
+    TeamRole, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use serde_json::Value;
@@ -144,7 +144,7 @@ impl EntityAccessService for MockAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         unimplemented!("not used by webhook event ingestion")
     }
 

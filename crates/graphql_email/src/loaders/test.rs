@@ -1,3 +1,4 @@
+use entity_access::domain::models::TeamRole;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -111,7 +112,7 @@ impl EntityAccessService for TestAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         Err(AccessError::Internal)
     }
 

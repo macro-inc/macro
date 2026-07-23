@@ -45,6 +45,7 @@ pub async fn get_crm_contact_access(
         team_role_to_access_level(r.role, r.hidden).map(|access_level| CrmEntityAccess {
             access_level,
             team_id: r.team_id,
+            team_role: r.role,
         })
     }))
 }

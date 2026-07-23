@@ -26,6 +26,9 @@ pub struct CrmEntityAccess {
     pub access_level: AccessLevel,
     /// The team that owns the entity.
     pub team_id: Uuid,
+    /// The role the user holds on the owning team. Hidden-row visibility
+    /// keys on this (admin/owner) rather than on the access level.
+    pub team_role: TeamRole,
 }
 
 /// The role a user has within a channel.

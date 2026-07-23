@@ -270,11 +270,12 @@ impl AccessRepository for MockRepo {
         _company_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<CrmEntityAccess>, AccessError> {
-        // Owning team is irrelevant to these access-level tests; pair with nil.
+        // Owning team / role are irrelevant to these access-level tests.
         Ok(
             (*self.crm_company_access.lock().await).map(|access_level| CrmEntityAccess {
                 access_level,
                 team_id: Uuid::nil(),
+                team_role: TeamRole::Member,
             }),
         )
     }
@@ -284,11 +285,12 @@ impl AccessRepository for MockRepo {
         _contact_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<CrmEntityAccess>, AccessError> {
-        // Owning team is irrelevant to these access-level tests; pair with nil.
+        // Owning team / role are irrelevant to these access-level tests.
         Ok(
             (*self.crm_contact_access.lock().await).map(|access_level| CrmEntityAccess {
                 access_level,
                 team_id: Uuid::nil(),
+                team_role: TeamRole::Member,
             }),
         )
     }

@@ -1,3 +1,4 @@
+use crate::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::FromRef;
@@ -124,7 +125,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         panic!("unexpected get_crm_entity_permission_with_team call")
     }
 

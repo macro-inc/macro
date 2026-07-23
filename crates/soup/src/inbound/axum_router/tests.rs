@@ -449,7 +449,11 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         _entity_id: &str,
         _entity_type: entity_access::domain::models::EntityType,
     ) -> Result<
-        (entity_access::domain::models::EntityPermission, uuid::Uuid),
+        (
+            entity_access::domain::models::EntityPermission,
+            uuid::Uuid,
+            entity_access::domain::models::TeamRole,
+        ),
         entity_access::domain::models::AccessError,
     > {
         unimplemented!()

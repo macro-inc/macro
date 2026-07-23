@@ -1,3 +1,4 @@
+use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -177,7 +178,7 @@ impl EntityAccessService for FakeEntityAccessService {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
@@ -188,7 +189,18 @@ impl EntityAccessService for FakeEntityAccessService {
             });
 
         match self.result {
-            PermissionResult::Allowed(permission) => Ok((permission, uuid(TEAM_ID))),
+            // Pair the permission with the team role that would have
+            // produced it (owner → Owner, edit → Admin, else Member).
+            PermissionResult::Allowed(permission) => {
+                let team_role = if permission.allows_access_level(AccessLevel::Owner) {
+                    TeamRole::Owner
+                } else if permission.allows_access_level(AccessLevel::Edit) {
+                    TeamRole::Admin
+                } else {
+                    TeamRole::Member
+                };
+                Ok((permission, uuid(TEAM_ID), team_role))
+            }
             PermissionResult::Unauthorized => Err(AccessError::Unauthorized),
         }
     }

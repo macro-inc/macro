@@ -195,7 +195,8 @@ pub trait CrmService: Clone + Send + Sync + 'static {
 
     /// Toggle `email_sync` for the company addressed by `access`. Purely
     /// a visibility/permission flag — populate continues to write CRM
-    /// rows regardless. See
+    /// rows regardless. Requires an admin/owner role on the receipt;
+    /// returns [`CrmError::AdminRoleRequired`] otherwise. See
     /// [`crate::domain::companies_repo::CompaniesRepository::set_email_sync`].
     fn set_email_sync(
         &self,
@@ -208,7 +209,8 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// contact (`hidden = TRUE`), un-hide soft-restores them (`hidden =
     /// FALSE`). Contact rows and `crm_contact_sources` are preserved
     /// across the cycle. Hide additionally forces `email_sync = false`;
-    /// un-hide leaves `email_sync` as-is. See
+    /// un-hide leaves `email_sync` as-is. Requires an admin/owner role on
+    /// the receipt; returns [`CrmError::AdminRoleRequired`] otherwise. See
     /// [`crate::domain::companies_repo::CompaniesRepository::set_company_hidden`].
     fn set_company_hidden(
         &self,
@@ -218,7 +220,8 @@ pub trait CrmService: Clone + Send + Sync + 'static {
 
     /// Toggle the `hidden` flag on the contact addressed by `access`.
     /// Hiding is a display-only opt-out and does not affect
-    /// populate/depopulate.
+    /// populate/depopulate. Requires an admin/owner role on the receipt;
+    /// returns [`CrmError::AdminRoleRequired`] otherwise.
     fn set_contact_hidden(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
@@ -694,6 +697,9 @@ where
         access: &CrmCompanyReceipt<EditAccessLevel>,
         email_sync: bool,
     ) -> Result<(), CrmError> {
+        if !access.has_admin_role() {
+            return Err(CrmError::AdminRoleRequired);
+        }
         let team_id = access.team_id();
         let company_id = access.company_id()?;
         self.companies_repository
@@ -707,6 +713,9 @@ where
         access: &CrmCompanyReceipt<EditAccessLevel>,
         hidden: bool,
     ) -> Result<(), CrmError> {
+        if !access.has_admin_role() {
+            return Err(CrmError::AdminRoleRequired);
+        }
         let team_id = access.team_id();
         let company_id = access.company_id()?;
         self.companies_repository
@@ -720,6 +729,9 @@ where
         access: &CrmContactReceipt<EditAccessLevel>,
         hidden: bool,
     ) -> Result<(), CrmError> {
+        if !access.has_admin_role() {
+            return Err(CrmError::AdminRoleRequired);
+        }
         let team_id = access.team_id();
         let contact_id = access.contact_id()?;
         self.companies_repository
