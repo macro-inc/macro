@@ -49,13 +49,21 @@ function fetchWithCredentials<
   );
 }
 
-let tokenPromise: Promise<
-  Result<void, ResultError<FetchWithTokenErrorCode>[]>
-> | null = null;
+type TokenResult = Result<void, ResultError<FetchWithTokenErrorCode>[]>;
 
-export async function fetchToken(): Promise<
-  Result<void, ResultError<FetchWithTokenErrorCode>[]>
-> {
+let tokenPromise: Promise<TokenResult> | null = null;
+
+// Once /jwt/refresh fails because the session is not authenticated (400/401),
+// cache that failure so subsequent 401s short-circuit instead of each firing
+// another doomed refresh. An anonymous visitor on a public link otherwise
+// triggers one refresh per authenticated app-chrome query. Cleared by
+// unsetTokenPromise, which the login flows call on a session change.
+let refreshUnavailable: TokenResult | null = null;
+
+export async function fetchToken(): Promise<TokenResult> {
+  if (refreshUnavailable != null) {
+    return refreshUnavailable;
+  }
   if (tokenPromise == null) {
     tokenPromise = (async () => {
       try {
@@ -72,7 +80,15 @@ export async function fetchToken(): Promise<
         );
 
         if (result.isErr()) {
-          return err(result.error);
+          const failure = err(result.error);
+          if (
+            result.error.some(
+              (e) => e.code === 'HTTP_ERROR' || e.code === 'UNAUTHORIZED'
+            )
+          ) {
+            refreshUnavailable = failure;
+          }
+          return failure;
         }
 
         return ok(undefined);
@@ -165,4 +181,5 @@ export async function fetchWithToken<
  */
 export function unsetTokenPromise() {
   tokenPromise = null;
+  refreshUnavailable = null;
 }

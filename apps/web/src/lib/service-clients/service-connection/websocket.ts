@@ -1,7 +1,7 @@
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken, unsetTokenPromise } from '@core/util/fetchWithToken';
+import { fetchToken } from '@core/util/fetchWithToken';
 import {
   ArrayQueue,
   createSocketEffect,
@@ -34,8 +34,6 @@ async function resolveWsUrl() {
 
     return `${wsHost}/?macro-api-token=${apiToken}`;
   }
-  // Clear any cached token promise to force a fresh refresh on reconnect
-  unsetTokenPromise();
   await fetchToken();
   return wsHost;
 }
