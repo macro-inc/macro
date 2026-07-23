@@ -241,6 +241,21 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Set the display name for the contact addressed by `access`
+    /// (`crm_contacts.name` — already team-scoped, so unlike company
+    /// renames no global directory is involved). Any team member who
+    /// can see the contact may rename it — the same access model as
+    /// [`CrmService::set_company_name`]; the receipt's role decides
+    /// whether a hidden contact is reachable. The name is validated
+    /// like the creation flows (non-blank, within a sane length;
+    /// [`CrmError::InvalidRequest`] otherwise). See
+    /// [`crate::domain::companies_repo::CompaniesRepository::set_contact_name`].
+    fn set_contact_name(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+        name: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
     /// Batched authorization probe for a CRM-scoped email query. See
     /// [`CompaniesRepository::crm_scope_precheck`].
     fn crm_scope_precheck(
@@ -757,6 +772,20 @@ where
             .await
     }
 
+    #[tracing::instrument(skip(self, access), err)]
+    async fn set_contact_name(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+        name: &str,
+    ) -> Result<(), CrmError> {
+        let name = validate_display_name(name)?;
+        let team_id = access.team_id();
+        let contact_id = access.contact_id()?;
+        self.companies_repository
+            .set_contact_name(&team_id, &contact_id, name, access.include_hidden())
+            .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn crm_scope_precheck(
         &self,
@@ -1071,6 +1100,14 @@ impl CrmService for NoOpCrmService {
         _hidden: bool,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_contact_hidden")
+    }
+
+    async fn set_contact_name(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+        _name: &str,
+    ) -> Result<(), CrmError> {
+        unimplemented!("NoOpCrmService.set_contact_name")
     }
 
     async fn crm_scope_precheck(

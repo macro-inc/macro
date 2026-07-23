@@ -414,6 +414,25 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Set `crm_contacts.name` for `contact_id`, scoped to `team_id`
+    /// via the contact's company. Unlike company names there is no
+    /// global directory involved — `name` is already a team-scoped
+    /// column — so this is a plain overwrite. `include_hidden` mirrors
+    /// the read paths ([`get_contact_for_team`]): `false` (member)
+    /// callers can't reach a hidden contact or a contact under a
+    /// hidden company. Returns [`CrmError::ContactNotFoundForTeam`]
+    /// when the contact doesn't exist, belongs to another team, or is
+    /// hidden from the caller.
+    ///
+    /// [`get_contact_for_team`]: CompaniesRepository::get_contact_for_team
+    fn set_contact_name(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        name: &str,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
     /// Batched authorization probe for a CRM-scoped email query. Returns
     /// per-input status the email service maps into typed `EmailErr`
     /// variants (`CrmDomainNotFound`, `CrmDomainNotPermitted`,

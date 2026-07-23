@@ -17,5 +17,6 @@ mod populate_contact;
 mod set_company_hidden;
 mod set_company_name;
 mod set_contact_hidden;
+mod set_contact_name;
 mod set_email_sync;
 mod team_settings;

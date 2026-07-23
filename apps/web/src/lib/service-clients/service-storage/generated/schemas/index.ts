@@ -830,6 +830,7 @@ export * from './saveDocumentResponseDataPresignedUrl';
 export * from './setCompanyHiddenRequest';
 export * from './setCompanyNameRequest';
 export * from './setContactHiddenRequest';
+export * from './setContactNameRequest';
 export * from './setDocumentTeamShareRequest';
 export * from './setEmailSyncRequest';
 export * from './setPropertyValue';

@@ -152,6 +152,18 @@ pub(super) async fn fetch_company_custom_name(
     Ok(row.map(|(n,)| n))
 }
 
+pub(super) async fn fetch_contact_name(
+    pool: &PgPool,
+    contact_id: Uuid,
+) -> sqlx::Result<Option<Option<String>>> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as(r#"SELECT name FROM crm_contacts WHERE id = $1"#)
+            .bind(contact_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(n,)| n))
+}
+
 pub(super) async fn fetch_company_hidden(
     pool: &PgPool,
     company_id: Uuid,
