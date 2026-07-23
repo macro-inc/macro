@@ -57,10 +57,4 @@ export type ResizeZoneCtx = {
   show: (id: PanelId) => void;
   isHidden: (id: PanelId) => boolean;
   reset: () => void;
-  /**
-   * Programmatically resize a panel to the given pixel size, moving its
-   * adjacent handle with the same constraint solving as a drag. Neighbor
-   * min/max sizes may clamp the result.
-   */
-  resizePanel: (id: PanelId, px: number) => void;
 };

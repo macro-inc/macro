@@ -54,6 +54,21 @@ describe('Preview Pair URL state', () => {
     });
   });
 
+  it('restores a Preview Pair whose Viewer is itself controller-eligible', () => {
+    // A Project controlling another Project is a valid runtime pair
+    // (canLinkPreviewPair only constrains the Controller), so it must survive
+    // a URL round trip.
+    const segments = ['project', 'proj-controller', 'project', 'proj-viewer'];
+
+    expect(loadRestorablePreviewLayout(segments, '0')).toEqual({
+      contents: [
+        { type: 'project', id: 'proj-controller' },
+        { type: 'project', id: 'proj-viewer' },
+      ],
+      previewPairs: [{ controllerIndex: 0 }],
+    });
+  });
+
   it('restores multiple non-overlapping Preview Pairs', () => {
     const segments = [
       'component',

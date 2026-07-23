@@ -32,6 +32,7 @@ import {
   type EntityData,
   emailQueryKeyExcludesDone,
   getSnippetHit,
+  isChannelEntity,
   isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
@@ -526,9 +527,31 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
-  // Channels the viewer hasn't joined can't be read; the row's Join button is
+  // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
+  // the Join prompt in the Viewer; otherwise the row's inline Join button is
   // the only affordance.
-  if (isNonMemberChannelEntity(entity)) return;
+  if (isNonMemberChannelEntity(entity)) {
+    if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
+      const joinPromptContent = withPreviewSourceEntityId(
+        {
+          type: 'component',
+          id: 'non-member-channel',
+          params: {
+            channelId: entity.id,
+            channelName: entity.name,
+            memberCount: entity.participantIds?.length ?? 0,
+          },
+        },
+        entity.id
+      );
+      splitManager.openWithSplit(joinPromptContent, {
+        referredFrom: options.referredFrom,
+        activate: true,
+        handle: splitHandle,
+      });
+    }
+    return;
+  }
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {

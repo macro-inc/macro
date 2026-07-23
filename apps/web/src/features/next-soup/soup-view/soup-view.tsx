@@ -960,17 +960,26 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
 
-    // Channels the viewer hasn't joined can't be read: no preview, no
-    // navigation — the row's Join button is the only affordance.
-    if (isNonMemberChannelEntity(entity)) return;
-
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
-      openEntityInNewTab({ entity, location });
+      // Channels the viewer hasn't joined can't be opened; the row's inline
+      // Join button (or, in preview, the Viewer's Join prompt) is the only
+      // affordance.
+      if (!isNonMemberChannelEntity(entity)) {
+        openEntityInNewTab({ entity, location });
+      }
       return;
     }
 
-    if (panel.handle.isControllerSplit() && type === 'entity') {
+    // Plain click while engaged as a Controller previews into the Viewer;
+    // shift+click falls through to open a fresh split instead. Non-member
+    // channels flow through to openEntityInSplitFromUnifiedList, which shows the
+    // Viewer's Join prompt when previewing and otherwise no-ops.
+    if (
+      panel.handle.isControllerSplit() &&
+      type === 'entity' &&
+      !event.shiftKey
+    ) {
       if (preventDuplicatePreviewEntityOpen(entity, panel.handle)) return;
 
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
@@ -983,7 +992,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         location,
         splitHandle: panel.handle,
         referredFrom: currentView(),
-        // no openInNewSplit: even shift+click lands in the viewer while engaged
       });
       return;
     }

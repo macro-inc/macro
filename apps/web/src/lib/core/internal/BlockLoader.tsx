@@ -4,7 +4,7 @@ import { useQueryClient } from '@queries/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
-import { createEffect, type JSX, onCleanup } from 'solid-js';
+import { createEffect, type JSX, onCleanup, useContext } from 'solid-js';
 import {
   type BlockDefinition,
   type BlockName,
@@ -13,6 +13,7 @@ import {
   type LoadFunction,
   useIsNestedBlock,
 } from '../block';
+import { BlockOpenTrackingDelayContext } from '../context/blockOpenTracking';
 import {
   blockEditPermissionEnabledSignal,
   blockErrorSignal,
@@ -63,6 +64,9 @@ export function BlockLoader<
   const setEditPermissionEnabled = blockEditPermissionEnabledSignal.set;
   const setHandle = blockHandleSignal.set;
   const isNested = useIsNestedBlock();
+  // Snapshot at mount so later presentation changes do not alter how an
+  // already-mounted block is tracked.
+  const openTrackingDelayMs = useContext(BlockOpenTrackingDelayContext);
   const analytics = useAnalytics();
 
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
@@ -101,8 +105,14 @@ Check that the load function does not return a preload source when the intent is
     }
   });
 
+  let openTrackTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(openTrackTimer));
+
   createEffect(() => {
     const result = getResult();
+    // Any content change supersedes a still-pending "opened" track.
+    clearTimeout(openTrackTimer);
+
     if (!result) {
       setData(undefined);
       setFile(undefined);
@@ -135,20 +145,28 @@ Check that the load function does not return a preload source when the intent is
     setError(null);
 
     if (!isNested && data) {
-      // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
-      import('./trackBlockOpened').then(({ track }) => {
-        track({
-          itemId: props.id,
-          blockName: data.__block,
-          client: useQueryClient,
+      const trackOpened = () => {
+        // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
+        import('./trackBlockOpened').then(({ track }) => {
+          track({
+            itemId: props.id,
+            blockName: data.__block,
+            client: useQueryClient,
+          });
         });
-      });
 
-      analytics.pageView(data.__block);
-      analytics.track('open_entity', {
-        entityType: data.__block,
-        entityId: props.id,
-      });
+        analytics.pageView(data.__block);
+        analytics.track('open_entity', {
+          entityType: data.__block,
+          entityId: props.id,
+        });
+      };
+
+      if (openTrackingDelayMs > 0) {
+        openTrackTimer = setTimeout(trackOpened, openTrackingDelayMs);
+      } else {
+        trackOpened();
+      }
     }
 
     setData(() => data);

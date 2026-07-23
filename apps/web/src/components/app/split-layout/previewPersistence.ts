@@ -66,10 +66,11 @@ function validPreviewPairsForContents(
     const controller = contents[previewPair.controllerIndex];
     const viewer = contents[viewerIndex];
     if (!controller || !viewer) continue;
-    if (
-      !isPreviewControllerContent(controller) ||
-      isPreviewControllerContent(viewer)
-    ) {
+    // Only the Controller's content type is constrained — a Viewer may itself
+    // be controller-eligible (e.g. a Project controlling another Project),
+    // matching the runtime's canLinkPreviewPair. Double-role assignment is
+    // prevented by claimedIndices below.
+    if (!isPreviewControllerContent(controller)) {
       continue;
     }
     if (

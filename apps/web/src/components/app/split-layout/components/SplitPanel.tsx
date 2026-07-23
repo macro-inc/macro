@@ -5,6 +5,7 @@ import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isSoloSettings } from '@core/constant/SettingsState';
+import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -45,6 +46,12 @@ type SplitPanelProps = {
   active: boolean;
   index: number;
 };
+
+/**
+ * A Preview Pair Viewer displays content passively. Only record it as opened
+ * after the user lingers, so keyboard scanning does not mark every row viewed.
+ */
+const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
 
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
@@ -343,7 +350,15 @@ export function SplitPanel(props: SplitPanelProps) {
                   >
                     <Suspense>
                       <SoupViewContextProvider soup={nextSoup}>
-                        <Dynamic component={props.split.mount.element} />
+                        <BlockOpenTrackingDelayContext.Provider
+                          value={
+                            props.handle.isViewerSplit()
+                              ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
+                              : 0
+                          }
+                        >
+                          <Dynamic component={props.split.mount.element} />
+                        </BlockOpenTrackingDelayContext.Provider>
                       </SoupViewContextProvider>
                     </Suspense>
                   </div>
