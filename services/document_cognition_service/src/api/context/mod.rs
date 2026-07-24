@@ -60,7 +60,11 @@ pub type DcsAttachmentProvider = AttachmentProvider<
 >;
 
 /// Type alias for the message service wired to concrete DCS services.
-pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider>;
+pub type DcsMessageService = MessageServiceImpl<
+    PgChatRepo,
+    DcsAttachmentProvider,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+>;
 
 #[cfg(test)]
 mod test;
