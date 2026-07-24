@@ -71,8 +71,6 @@ interface MessageWaiter {
 export interface SyncServiceSourceOptions {
   /** ID generator for update messages; overridable so tests can match acks. */
   newId?: () => string;
-  /** Update acknowledgement timeout. Defaults to the production timeout. */
-  ackTimeoutMs?: number;
   /**
    * Connection status accessor. Defaults to a plain read of the socket state;
    * the browser injects a reactive Solid signal so UI tracks status changes.
@@ -88,7 +86,6 @@ export class SyncServiceSource implements LiveSyncSource {
 
   private readonly ws: SyncSocket;
   private readonly newId: () => string;
-  private readonly ackTimeoutMs: number;
   private readonly listeners = new Set<(event: SyncSourceEvent) => void>();
   /** Events that arrive before the first listener attaches; flushed on
    *  `listen()`. Once a listener has attached, listener-less windows (e.g. a
@@ -108,7 +105,6 @@ export class SyncServiceSource implements LiveSyncSource {
     this.ws = ws;
     this.documentId = documentId;
     this.newId = options.newId ?? (() => crypto.randomUUID());
-    this.ackTimeoutMs = options.ackTimeoutMs ?? TIMEOUTS.ACK;
     if (options.status) this.status = options.status;
 
     logSyncService({
@@ -179,7 +175,7 @@ export class SyncServiceSource implements LiveSyncSource {
     // can't be missed.
     const acked = this.awaitMessage(
       (message) => message.isRemoteUpdateAck() && message.value.id === id,
-      this.ackTimeoutMs
+      TIMEOUTS.ACK
     ).then(
       () => true,
       () => false
