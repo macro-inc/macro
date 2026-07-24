@@ -46,6 +46,11 @@ Share-permission payloads are also excluded: a PATCH that changes share
 permissions is represented only by the `share_permission_updated: bool` flag
 on `chat.updated`.
 
+`owner` and `actor_user_id` are Macro user IDs serialized as
+`macro|<email address>`; they embed the owning or acting user's email and must
+be treated as personal data. This matches identifiers already published on the
+`macro.documents` and `macro.teams` topics.
+
 ## Excluded flows and known gaps
 
 Only the successful mutations in the table produce these events. Read/list
