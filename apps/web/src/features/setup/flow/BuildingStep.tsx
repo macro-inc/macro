@@ -1,12 +1,8 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
-/**
- * The breather between team setup and the summary: the block-loading brand
- * animation with cycling phrases, holding ~15 seconds while gathers and
- * inbox processing land server-side, then auto-advancing. Pure theater —
- * nothing here waits on real work (the summary streams live state anyway).
- */
+/** The breather before the summary: brand animation + cycling phrases for
+ * ~15s, then auto-advance. Pure theater — nothing waits on real work. */
 
 const BUILDING_PHRASES = [
   'Building your unified workspace…',

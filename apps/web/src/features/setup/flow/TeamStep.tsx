@@ -32,16 +32,8 @@ import {
   SkipButton,
 } from './shared';
 
-/**
- * Step 6 — set up your team. Three scenarios:
- *
- * - Already on a team (domain auto-join at signup, or a processed invite):
- *   show it and move on.
- * - Pending invites: offer to join.
- * - Otherwise create one — with the name pre-derived from a custom email
- *   domain and same-domain contacts suggested as invites (free-mail domains
- *   get the plain create + invite form).
- */
+/** Set up your team: already a member → confirmation, pending invites →
+ * join, otherwise create (with domain-derived prefill + suggestions). */
 export function TeamStep(props: {
   onContinue: () => void;
   onSkip: () => void;
@@ -53,8 +45,7 @@ export function TeamStep(props: {
   const team = createMemo(() => teamsQuery.data?.[0]);
   const invites = createMemo(() => invitesQuery.data?.invites ?? []);
 
-  // Arriving already on a team (domain auto-join at signup). One-shot on
-  // the FIRST resolved teams payload, so a create/join that happens later
+  // One-shot on the FIRST resolved teams payload, so a create/join later
   // in this step doesn't also read as auto-joined.
   let membershipReported = false;
   createEffect(() => {
@@ -93,8 +84,8 @@ function OnTeamPanel(props: { name?: string; onContinue: () => void }) {
         <p class="text-sm font-medium text-ink">
           You're on {props.name ?? 'your team'}
         </p>
-        {/* Neutral copy: this panel shows after domain auto-join, after
-            accepting an invite, AND (optimistically) mid team-create. */}
+        {/* Copy must stay true for auto-join, invite-accept, and the
+            optimistic mid-create flash alike. */}
         <p class="max-w-xs text-xs text-ink-muted leading-snug">
           Your team is set up — everything your teammates bring into Macro is
           shared with you.
@@ -154,16 +145,14 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
   const createTeam = useCreateTeamWithInvitesMutation();
   const onboardingQuery = useOnboardingQuery();
 
-  // The server judges whether the account domain can back a domain team,
-  // with the same list the teams service uses for auto-join/claiming — so
-  // this form never suggests a domain team the server would refuse.
+  // Server-judged with the same list the teams service uses for
+  // auto-join/claiming, so we never suggest a team the server would refuse.
   const customDomain = () =>
     onboardingQuery.data?.suggested_team_domain ?? undefined;
 
   const [name, setName] = createSignal('');
   const [nameTouched, setNameTouched] = createSignal(false);
-  // Prefill from the server's judgment once it arrives — but never over
-  // something the user typed.
+  // Prefill once the suggestion arrives, never over a typed name.
   createEffect(() => {
     const domain = customDomain();
     if (domain && !nameTouched()) setName(deriveTeamName(domain));
@@ -177,8 +166,6 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
       (value) => isPlausibleEmail(value) && value !== email()
     );
 
-  // People under the same custom domain, from the user's Google contacts —
-  // one click adds them to the invite list.
   const suggestions = createMemo(() => {
     const suffix = customDomain();
     if (!suffix) return [];
@@ -204,8 +191,7 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
 
   const create = async () => {
     if (createTeam.isPending || name().trim().length === 0) return;
-    // The mutation owns its own toasts; advance only when it lands, stay
-    // put (form intact) when it fails.
+    // The mutation owns its toasts; stay put (form intact) on failure.
     const invitesSent = validInvites().length;
     try {
       await createTeam.mutateAsync({

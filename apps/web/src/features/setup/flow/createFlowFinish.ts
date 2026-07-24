@@ -13,12 +13,10 @@ import { createEffect, createSignal } from 'solid-js';
 import { FLOW_NEXT_STORAGE_KEY, FLOW_STEP_STORAGE_KEY } from './shared';
 
 /**
- * The "leave onboarding" workflow: reaching the end of the flow (paying or
- * skipping the plan step) marks onboarding complete server-side — which
- * discards leftover onboarding-staged import candidates — plus the legacy
- * tutorial done (suppressing the old modal), then lands in the app: the deep
- * link the redirect preserved (`?next=`), or home. Imports never block the
- * exit; auto-import keeps landing rows server-side.
+ * The "leave onboarding" workflow: mark onboarding + the legacy tutorial
+ * complete, then land in the app (the preserved `?next=` deep link, or
+ * home). Imports never block the exit; auto-import keeps landing rows
+ * server-side.
  */
 export function createFlowFinish(options?: {
   /** Extra analytics context stamped onto `onboarding_v4_completed`. */
@@ -53,35 +51,30 @@ export function createFlowFinish(options?: {
       ? value
       : undefined;
 
-  // The email step's OAuth round-trip leaves and re-enters the app, and its
-  // callback returns to bare /onboarding — persist the deep link so it
-  // survives the trip.
+  // The inbox-OAuth callback returns to bare /onboarding — persist the
+  // deep link so it survives the round-trip.
   createEffect(() => {
     const next = sanitizeNext(searchParams.next);
     if (next) sessionStorage.setItem(FLOW_NEXT_STORAGE_KEY, next);
   });
 
-  // Where to land after the flow: the live ?next, the persisted one, or home.
   const afterTarget = () =>
     sanitizeNext(searchParams.next) ??
     sanitizeNext(sessionStorage.getItem(FLOW_NEXT_STORAGE_KEY)) ??
     '/';
 
   /**
-   * Mark the flow complete and verify it stuck. NewOnboardingRedirect keys
-   * off userInfo.tutorialComplete: navigating before the cache reflects the
-   * PATCH would bounce straight back here. Refetch and verify — if the PATCH
-   * failed (allSettled hides it) or the refetch missed, stay put and let the
-   * user retry.
+   * Mark the flow complete and verify it stuck: NewOnboardingRedirect keys
+   * off tutorialComplete, so navigating before the cache reflects the PATCH
+   * would bounce straight back here.
    */
   const completeFlow = async (): Promise<boolean> => {
     const [onboardingResult] = await Promise.allSettled([
       completeOnboarding.mutateAsync({ skipped: false }),
       completeTutorial.mutateAsync(),
     ]);
-    // Both halves must land: exiting with the row still active would leave
-    // onboarding-staged import candidates undiscarded and the flow
-    // resumable after the user believes it finished.
+    // Exiting with the row still active would leave staged candidates
+    // undiscarded and the flow resumable after the user thinks it's done.
     if (onboardingResult.status === 'rejected') {
       toast.failure("Couldn't finish setup — please try again");
       return false;
@@ -113,10 +106,8 @@ export function createFlowFinish(options?: {
   };
 
   /**
-   * Finish on a paid tier: complete the flow first (the checkout round-trip
+   * Finish on a paid tier: complete the flow FIRST (the checkout round-trip
    * must not bounce back into onboarding), then hand the page to Stripe.
-   * If checkout can't start, the user still lands in the app — they can
-   * upgrade from settings anytime.
    */
   const finishPremium = async (tier: PaidPlanTier) => {
     if (finishing()) return;
@@ -125,7 +116,6 @@ export function createFlowFinish(options?: {
       if (!(await completeFlow())) return;
       trackCompleted('premium', false);
       try {
-        // Same success convention as the legacy onboarding checkout:
         // /welcome bounces authenticated users into the app.
         const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
         const checkoutUrl = await stripeServiceClient.createCheckoutSession({

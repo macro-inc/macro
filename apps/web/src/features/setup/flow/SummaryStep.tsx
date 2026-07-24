@@ -21,24 +21,18 @@ import {
 import { SOURCE_SECTIONS, type SourceSection } from '../selection';
 import { ContinueButton } from './shared';
 
-/**
- * Step 7 — what's landing in the workspace. Auto-import is on for every
- * gather this flow starts, so there is nothing to accept here: one card per
- * source renders live progress (gateway pushes + polling), plus an email
- * card for the inbox/contacts processing that runs in the background.
- */
+/** What's landing in the workspace: auto-import owns the accepting, so the
+ * cards just render live progress (gateway pushes + polling). */
 export function SummaryStep(props: { onContinue: () => void }) {
   const importQuery = useImportQuery();
   const retryGather = useRetryGatherMutation();
   const linksQuery = useEmailLinksQuery();
   const contacts = useContacts();
 
-  // All inboxes on the account — shared links carry the owner's macro_id,
-  // so an ownership filter would hide inboxes connected during onboarding.
+  // No ownership filter — shared links carry the owner's macro_id.
   const links = createMemo(() => linksQuery.data?.links ?? []);
 
-  // Live backfill progress summed across the user's inboxes (the
-  // connection-gateway store); undefined until any inbox reports.
+  // Undefined until any inbox reports backfill progress.
   const emailProgress = createMemo(() => {
     let completed = 0;
     let total = 0;
@@ -126,18 +120,14 @@ export function SummaryStep(props: { onContinue: () => void }) {
   );
 }
 
-/** Row counts by status — derived once per entities change. */
 interface StatusCounts {
   staged: number;
   importing: number;
   imported: number;
 }
 
-/**
- * One source's summary card. Unlike the old /setup SourceImportCard there is
- * no accept toggle — auto-import owns the accepting — so the status blurb
- * narrates the pipeline instead: gathering → importing → in your workspace.
- */
+/** One source's card: no accept toggle (auto-import owns accepting), the
+ * blurb narrates gathering → importing → in your workspace. */
 function AutoImportCard(props: {
   definition: SourceSection;
   run: ImportRun | undefined;

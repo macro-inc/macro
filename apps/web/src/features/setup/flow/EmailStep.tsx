@@ -26,14 +26,8 @@ const LINKS_POLL_MS = 5_000;
  * return needs a pre-redirect baseline that survives the reload. */
 const CONNECT_BASELINE_KEY = 'onboarding-flow-email-baseline';
 
-/**
- * Step 1 — connect Google accounts, in the same card chrome as the
- * connector rows. A Google-SSO signup arrives with its inbox already linked
- * (shown connected); the step's job is pushing for a second one. Connecting
- * runs the real add-inbox flow, which on web is a full-page OAuth redirect —
- * the flow's persisted step brings the user back here with the new inbox in
- * the list.
- */
+/** Connect Google accounts. On web the add-inbox flow is a full-page OAuth
+ * redirect; the flow's persisted step brings the user back here. */
 export function EmailStep(props: {
   onContinue: () => void;
   onSkip: () => void;
@@ -44,10 +38,8 @@ export function EmailStep(props: {
   const analytics = useAnalytics();
   const [connecting, setConnecting] = createSignal<string>();
 
-  // The links query is cached with a long stale time; a connect that just
-  // completed (this tab's OAuth round-trip, or another tab) must show up
-  // the moment the user is back. Refresh on arrival and keep checking
-  // while the step is visible.
+  // The links query has a long stale time; a connect that just completed
+  // (this tab or another) must show up the moment the user is back.
   onMount(() => {
     void invalidateEmailLinks();
     const interval = setInterval(
@@ -57,10 +49,9 @@ export function EmailStep(props: {
     onCleanup(() => clearInterval(interval));
   });
 
-  // Every inbox on the account, own primary first. No macro_id ownership
-  // filter: linking a mailbox that belongs to another Macro user creates a
-  // SHARED link carrying the owner's macro_id — filtering would hide an
-  // inbox the user just connected.
+  // No macro_id ownership filter: linking a mailbox owned by another Macro
+  // user creates a SHARED link carrying the owner's macro_id — filtering
+  // would hide an inbox the user just connected.
   const links = createMemo(() => {
     const uid = userId();
     return [...(linksQuery.data?.links ?? [])].sort(
@@ -70,16 +61,14 @@ export function EmailStep(props: {
     );
   });
 
-  // Nothing connected yet → pitch primary + secondary side by side; once
-  // anything is connected the pitch collapses to one row.
   const connectSlots = createMemo(() =>
     links().length === 0
       ? ['Connect primary account', 'Connect secondary account']
       : ['Connect another email']
   );
 
-  // A link landing while the step is visible (poll/other tab) — or found on
-  // return from the full-page OAuth redirect via the persisted baseline.
+  // Detects a landed link via the persisted pre-redirect baseline (the
+  // OAuth round-trip reloads the page, so in-memory state won't survive).
   createEffect(() => {
     const count = linksQuery.data?.links.length;
     if (count === undefined) return;

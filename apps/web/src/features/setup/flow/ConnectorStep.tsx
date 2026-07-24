@@ -7,14 +7,8 @@ import { createEffect, createMemo, Show } from 'solid-js';
 import { ConnectorRow } from '../ConnectorsSection';
 import { ContinueButton, FeatureList, SkipButton } from './shared';
 
-/**
- * Steps 2–5 — one connector per page: a Linear-style explainer of what
- * connecting does, then the same connector card /setup used. OAuth runs in
- * a popup; the polled servers query flips the card to Connected when it
- * completes. For import sources the server starts a gather with auto-import
- * the moment OAuth lands, so by the summary step there's already something
- * to show.
- */
+/** One connector per page. OAuth runs in a popup; the polled servers query
+ * flips the card, and the server starts an auto-importing gather on it. */
 export function ConnectorStep(props: {
   server: FeaturedMcpServer;
   /** What connecting actually does, one row per point. */
@@ -26,8 +20,7 @@ export function ConnectorStep(props: {
   onSkip: () => void;
 }) {
   // Poll: OAuth completes in a popup, and if this window never blurs no
-  // focus-refetch would ever flip the step. neverSuspend keeps the polling
-  // query from re-suspending the flow's boundary.
+  // focus-refetch would ever flip the step.
   const serversQuery = useMcpServersQuery({
     refetchInterval: 4_000,
     neverSuspend: true,
@@ -37,8 +30,6 @@ export function ConnectorStep(props: {
   );
   const authenticated = () => record()?.authenticated ?? false;
 
-  // OAuth completes in a popup, so a false→true flip while mounted IS the
-  // moment this connector got connected from its step.
   const analytics = useAnalytics();
   let wasAuthenticated: boolean | undefined;
   createEffect(() => {
@@ -54,10 +45,8 @@ export function ConnectorStep(props: {
 
   return (
     <div class="flex flex-col gap-3">
-      {/* While the servers query is still on its neverSuspend placeholder,
-          an already-connected server would render as unconnected and
-          clickable — a click then fires a duplicate add + a pointless OAuth
-          popup. Hold a quiet checking row until real data lands. */}
+      {/* On the placeholder, an already-connected server would render as
+          unconnected and clickable (duplicate add + pointless popup). */}
       <Show
         when={!serversQuery.isPlaceholderData}
         fallback={

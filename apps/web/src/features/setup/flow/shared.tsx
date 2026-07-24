@@ -3,12 +3,6 @@ import CheckIcon from '@phosphor/check.svg';
 import { Button, Layer } from '@ui';
 import { For, onCleanup, onMount } from 'solid-js';
 
-/*
- * Shared bits for the onboarding flow steps: the card's form controls and
- * the small pure helpers (email plausibility, free-mail detection, team
- * name derivation).
- */
-
 /** Where the flow persists its current step, so full-page OAuth round-trips
  * (adding a Gmail inbox, Stripe checkout aborts) resume where they left. */
 export const FLOW_STEP_STORAGE_KEY = 'onboarding-flow-step';
@@ -46,11 +40,9 @@ export function FormInput(props: {
   let inputEl: HTMLInputElement | undefined;
   onMount(() => {
     if (!props.autoFocus) return;
-    // The Stepper's outin Transition resolves this step's JSX (firing
-    // onMount) before attaching it to the document, so the input is still
-    // detached here. Poll until it's connected, then focus — and stop on
-    // unmount, or a node discarded before ever attaching would keep the
-    // rAF loop (and itself) alive forever.
+    // The Stepper's outin Transition mounts this JSX before attaching it to
+    // the document, so poll until connected — cancelled on unmount, or a
+    // node discarded before attaching would keep the rAF loop alive.
     let cancelled = false;
     onCleanup(() => {
       cancelled = true;
@@ -78,12 +70,9 @@ export function FormInput(props: {
 }
 
 /**
- * Backdrop for the welcome surfaces (login + onboarding), matching the
- * marketing hero: a soft wash glowing from top-center into the page
- * background (theme-aware via the ink/surface tokens — in dark mode this is
- * the lighter-charcoal gradient), with an SVG film-grain tile screen-blended
- * over the whole page. Both layers are pointer-transparent; content sits at
- * z-10, between the wash (z-0) and the grain (z-20).
+ * Marketing-hero backdrop: an ink/surface wash plus a film-grain tile.
+ * Both layers are pointer-transparent; page content must sit at z-10,
+ * between the wash (z-0) and the grain (z-20).
  */
 export function NoiseBackground() {
   return (
@@ -104,10 +93,7 @@ export function NoiseBackground() {
   );
 }
 
-/**
- * Linear-style integration explainer: a bordered card listing what
- * connecting actually does, one row per point with a quiet check.
- */
+/** Bordered card listing what connecting a tool actually does. */
 export function FeatureList(props: { features: string[] }) {
   return (
     <Layer depth={2}>

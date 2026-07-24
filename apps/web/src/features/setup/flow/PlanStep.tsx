@@ -9,11 +9,8 @@ import { Button, cn } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 import { SkipButton } from './shared';
 
-/**
- * Step 8 — free vs paid, side by side with equal weight. This is the last
- * step: continuing (either tier) or skipping marks onboarding complete and
- * leaves the flow — skippers land exactly where finishers do.
- */
+/** Free vs paid. The last step: continuing or skipping marks onboarding
+ * complete; skippers land exactly where finishers do. */
 export function PlanStep(props: {
   finishing: boolean;
   onFree: (planSkipped: boolean) => void;

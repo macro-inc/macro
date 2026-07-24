@@ -37,13 +37,10 @@ import { TeamStep } from './TeamStep';
 
 /**
  * The full-screen onboarding flow new users land in after signup (desktop
- * `/onboarding`). Forward-only with per-step skips; every step drives the
- * real machinery — add-inbox OAuth, connector OAuth, gathers with
- * auto-import, team create/join — and the server orchestrates the rest
- * (reads of an active onboarding start due gather runs, connector OAuth
- * completions hook in instantly). Finishing the last step marks onboarding
- * complete. Replaces the old split-screen `/setup` surface, reusing its
- * import primitives and queries.
+ * `/onboarding`, also rendered in place on /login). Forward-only with
+ * per-step skips; the server orchestrates imports (reads of an active
+ * onboarding start due gather runs with auto-import). Finishing the last
+ * step marks onboarding complete.
  */
 
 interface StepDef {
@@ -162,8 +159,7 @@ function buildSteps(): StepDef[] {
       ),
     },
     {
-      // A breather while gathers and email processing land — pure theater
-      // over the block-loading logo, auto-advancing into the summary.
+      // Pure theater while gathers land; auto-advances into the summary.
       key: 'building',
       noDot: true,
       render: (controls) => <BuildingStep onDone={controls.next} />,
@@ -202,11 +198,8 @@ function StepFallback() {
 }
 
 export function OnboardingFlow() {
-  // The flow owns its Suspense boundary: it renders under the app's root
-  // <Suspense>, so any query suspending here would otherwise blank the
-  // ENTIRE app. The polling queries carry placeholderData so they can never
-  // re-suspend; this boundary contains genuine first-load waits (user info,
-  // email links, teams).
+  // Own boundary: a query suspending here would otherwise blank the whole
+  // app through the root <Suspense>.
   return (
     <Suspense
       fallback={
@@ -224,20 +217,15 @@ function FlowContent() {
   const navigate = useNavigate();
   const userInfoQuery = useUserInfoQuery();
   // Reading the onboarding state creates the flow's row and starts gather
-  // runs — it must NEVER fire for someone who already onboarded (a veteran
-  // hitting an old /setup bookmark would get imports started against their
-  // live workspace). Gate both queries on actually needing onboarding.
+  // runs — it must never fire for someone who already onboarded.
   const needsOnboarding = () =>
     userInfoQuery.data?.authenticated === true &&
     userInfoQuery.data.tutorialComplete === false;
-  // Polling keeps gather runs starting as connectors come online.
   const onboardingQuery = useOnboardingQuery({ enabled: needsOnboarding });
-  // Mounted for the whole flow so gather results stream in before the
-  // summary step (gateway pushes + polling warm the shared cache).
+  // Mounted for the whole flow so gather results are warm by the summary.
   useImportQuery({ enabled: needsOnboarding });
-  // Read only from event handlers/effects (never in render, so neither can
-  // suspend this boundary): the analytics rollup and the signup-method
-  // inference below.
+  // Analytics inputs; read only from handlers/effects so they never
+  // suspend this boundary.
   const linksQuery = useEmailLinksQuery();
   const serversQuery = useMcpServersQuery({ neverSuspend: true });
   const analytics = useAnalytics();
@@ -248,11 +236,9 @@ function FlowContent() {
   const currentStep = createMemo(() => steps[stepIndex()]);
   const userId = () => userInfoQuery.data?.userId;
 
-  // Resume where a full-page OAuth round-trip (add-inbox) left off — but
-  // only for the user who saved the step. sessionStorage is per-tab, not
-  // per-user: a second account logging in on the same tab (or a fresh user
-  // after a test run) must start at the beginning, not on the previous
-  // user's step. One-shot, once the session's user is known.
+  // Resume where a full-page OAuth round-trip left off — only for the user
+  // who saved the step: sessionStorage is per-tab, and a different account
+  // logging in on the same tab must not inherit the previous user's step.
   let restored = false;
   createEffect(() => {
     const uid = userId();
@@ -270,15 +256,12 @@ function FlowContent() {
       const index = steps.findIndex((step) => step.key === saved.step);
       if (index !== -1) setStepIndex(index);
     } catch {
-      // Pre-scoping plain-string values (or garbage) — drop them.
       sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
     }
   });
 
-  // The flow entered (or resumed after a reload / OAuth round-trip): a
-  // Google SSO signup arrives with its Gmail inbox already linked, an
-  // email-code signup with none, so the first links payload tells us how
-  // they signed up. One event per mount.
+  // A Google SSO signup arrives with its Gmail inbox already linked, an
+  // email-code signup with none — the first links payload is the signal.
   let startedTracked = false;
   createEffect(() => {
     if (startedTracked || !needsOnboarding()) return;
@@ -291,7 +274,6 @@ function FlowContent() {
     });
   });
 
-  // Every step the user lands on, including the first.
   createEffect(() => {
     if (!needsOnboarding()) return;
     analytics.track('onboarding_v4_step', {
@@ -333,12 +315,9 @@ function FlowContent() {
   };
 
   // Heal a half-landed finish: NewOnboardingRedirect keys off
-  // userInfo.tutorialComplete while this flow keys off the onboarding row,
-  // and completing them is not atomic. A user whose row is completed but
-  // whose tutorial flag never stuck would otherwise ping-pong forever
-  // (Layout bounces them in, this effect bounces them out — "too many
-  // redirects"). Fired at most once per mount; if the PATCH keeps failing
-  // the user just stays in the flow, whose own finish retries both.
+  // tutorialComplete while this flow keys off the onboarding row, and the
+  // two are not completed atomically — row completed + flag stuck false
+  // would ping-pong between Layout and this flow forever.
   const completeTutorial = useCompleteTutorialMutation();
   const [healingTutorial, setHealingTutorial] = createSignal(false);
   const healTutorial = () => {
@@ -352,11 +331,8 @@ function FlowContent() {
       .catch(() => {});
   };
 
-  // Redirect out when there is nothing to onboard: unauthenticated, already
-  // onboarded (tutorial flag not false — direct visits by veteran users), or
-  // completed-but-flag-stuck (heal it first, or Layout would bounce straight
-  // back in). finishing() guards the window between our own complete call
-  // and the checkout redirect.
+  // Redirect out when there is nothing to onboard. finishing() guards the
+  // window between our own complete call and the checkout redirect.
   createEffect(() => {
     const info = userInfoQuery.data;
     if (info?.authenticated === false) {
@@ -423,10 +399,9 @@ function FlowContent() {
               <For each={steps}>
                 {(step) => (
                   <Stepper.Step>
-                    {/* Each step owns a boundary: a first-load query
-                        suspending inside the Stepper's Transition would
-                        otherwise drop the entering node entirely (blank
-                        step until refresh). */}
+                    {/* Per-step boundary: a first-load query suspending
+                        inside the Stepper's Transition would drop the
+                        entering node entirely. */}
                     <Suspense fallback={<StepFallback />}>
                       {step.render(controls)}
                     </Suspense>
@@ -435,9 +410,6 @@ function FlowContent() {
               </For>
             </Stepper>
 
-            {/* Step dots — forward-only progress: the current step carries
-                the single accent, done steps are ink, upcoming faint.
-                Chromeless transition steps (building) get no dot. */}
             <Show when={!currentStep().noDot}>
               <div class="flex gap-1.5">
                 <Index each={steps.filter((step) => !step.noDot)}>

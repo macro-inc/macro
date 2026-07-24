@@ -20,11 +20,9 @@ export function OtpInput(props: {
   const [focused, setFocused] = createSignal(false);
 
   onMount(() => {
-    // The Stepper's outin Transition resolves this step's JSX (firing
-    // onMount) before attaching it to the document, so the input is still
-    // detached here. Poll until it's connected, then focus — and stop on
-    // unmount, or a node discarded before ever attaching would keep the
-    // rAF loop (and itself) alive forever.
+    // The Stepper's outin Transition mounts this JSX before attaching it to
+    // the document, so poll until connected — cancelled on unmount, or a
+    // node discarded before attaching would keep the rAF loop alive.
     let cancelled = false;
     onCleanup(() => {
       cancelled = true;
@@ -39,11 +37,8 @@ export function OtpInput(props: {
 
   const activeIndex = () => Math.min(props.value.length, length() - 1);
 
-  // Sanitize in JS, not with maxLength: a native maxLength counts the RAW
-  // pasted characters, so a code copied as "123 456" would be truncated to
-  // "123 45" before the separator is stripped, silently dropping digits.
-  // Writing the cleaned value back also keeps stray non-digits from
-  // lingering in the (invisible) input.
+  // No native maxLength: it counts raw pasted characters, so "123 456"
+  // would truncate before the separator is stripped and drop a digit.
   const handleInput = (el: HTMLInputElement) => {
     const value = el.value.replace(/\D/g, '').slice(0, length());
     if (el.value !== value) el.value = value;
@@ -60,6 +55,8 @@ export function OtpInput(props: {
         type="text"
         inputMode="numeric"
         autocomplete="one-time-code"
+        data-1p-ignore
+        data-lpignore="true"
         value={props.value}
         disabled={props.disabled}
         onInput={(e) => handleInput(e.currentTarget)}
