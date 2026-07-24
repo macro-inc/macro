@@ -20,8 +20,11 @@ const OWNER: &str = "macro|owner@example.com";
 struct StubChatRepo {
     metadata_project_id: Option<String>,
     fail_create: bool,
+    fail_copy_chat: bool,
     fail_delete: bool,
+    fail_permanently_delete: bool,
     fail_patch: bool,
+    fail_revert_delete: bool,
 }
 
 impl StubChatRepo {
@@ -82,10 +85,16 @@ impl ChatRepo for StubChatRepo {
         _source_chat_id: &str,
         _args: CopyChatArgs,
     ) -> Result<String> {
+        if self.fail_copy_chat {
+            return Err(Self::repo_err());
+        }
         Ok(NEW_CHAT_ID.to_string())
     }
 
     async fn revert_delete(&self, _chat_id: &str, _project_id: Option<&str>) -> Result<()> {
+        if self.fail_revert_delete {
+            return Err(Self::repo_err());
+        }
         Ok(())
     }
 
@@ -101,6 +110,9 @@ impl ChatRepo for StubChatRepo {
     }
 
     async fn permanently_delete(&self, _chat_id: &str) -> Result<()> {
+        if self.fail_permanently_delete {
+            return Err(Self::repo_err());
+        }
         Ok(())
     }
 
@@ -452,8 +464,11 @@ async fn failing_repo_calls_emit_no_events() {
     let service = build_service(
         StubChatRepo {
             fail_create: true,
+            fail_copy_chat: true,
             fail_delete: true,
+            fail_permanently_delete: true,
             fail_patch: true,
+            fail_revert_delete: true,
             ..StubChatRepo::default()
         },
         broker.clone(),
@@ -471,13 +486,21 @@ async fn failing_repo_calls_emit_no_events() {
             .await
             .is_err()
     );
+    assert!(service.copy_chat(view_receipt(CHAT_ID)).await.is_err());
     assert!(service.delete(owner_receipt(CHAT_ID)).await.is_err());
+    assert!(
+        service
+            .permanently_delete(owner_receipt(CHAT_ID))
+            .await
+            .is_err()
+    );
     assert!(
         service
             .patch(owner_receipt(CHAT_ID), patch_args(false))
             .await
             .is_err()
     );
+    assert!(service.revert_delete(owner_receipt(CHAT_ID)).await.is_err());
 
     assert!(broker.events().is_empty());
 }
@@ -501,11 +524,19 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
             .await
             .is_ok()
     );
+    assert!(service.copy_chat(view_receipt(CHAT_ID)).await.is_ok());
     assert!(service.delete(owner_receipt(CHAT_ID)).await.is_ok());
+    assert!(
+        service
+            .permanently_delete(owner_receipt(CHAT_ID))
+            .await
+            .is_ok()
+    );
     assert!(
         service
             .patch(owner_receipt(CHAT_ID), patch_args(true))
             .await
             .is_ok()
     );
+    assert!(service.revert_delete(owner_receipt(CHAT_ID)).await.is_ok());
 }
