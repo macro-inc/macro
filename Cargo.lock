@@ -5195,11 +5195,11 @@ dependencies = [
 name = "entity_mutation"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "entity_access",
  "macro_user_id",
  "model-entity",
  "models_permissions",
+ "rootcause",
  "tracing",
  "workspace-hack",
 ]

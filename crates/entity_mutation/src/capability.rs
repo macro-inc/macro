@@ -14,24 +14,12 @@
 //! (containers, cascade descendants); the router attributes outcomes to the
 //! requested entity.
 
-use std::collections::HashSet;
-
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, RequiredPermission};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
-use crate::{EntityMutationError, EntityRef};
-
-/// Build affected project refs from optional container ids, skipping empty
-/// ids and duplicates.
-pub fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<EntityRef> {
-    let mut seen = HashSet::new();
-    ids.into_iter()
-        .flatten()
-        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
-        .map(|id| EntityRef::new(model_entity::EntityType::Project, id))
-        .collect()
-}
+use crate::EntityMutationErrorCode;
 
 /// Rename an entity's user-visible display name.
 pub trait RenameEntity {
@@ -41,10 +29,32 @@ pub trait RenameEntity {
     /// Rename the entity, returning any additionally affected records.
     fn rename_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> impl Future<Output = Result<Vec<EntityRef>, EntityMutationError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+}
+
+/// The payload to move an entity
+pub enum MoveEntityRequest<R: RequiredPermission> {
+    /// we are moving the entity to "root" i.e. not a project
+    MoveToRoot {
+        /// the entity to move
+        entity: Entity<'static>,
+        /// the access to the entity
+        receipt: EntityAccessReceipt<R>,
+    },
+    /// we are moving the entity to a project
+    MoveToProject {
+        /// the entity to move
+        entity: Entity<'static>,
+        /// the access to the entity
+        receipt: EntityAccessReceipt<R>,
+        /// the project id
+        project_id: String,
+        /// the access to the project
+        project_receipt: EntityAccessReceipt<EditAccessLevel>,
+    },
 }
 
 /// Move an entity into a project, or to the root.
@@ -57,11 +67,8 @@ pub trait MoveEntity {
     /// the receipt along for domains that consume it.
     fn move_entity(
         &self,
-        entity: EntityRef,
-        receipt: EntityAccessReceipt<Self::Receipt>,
-        project_id: Option<String>,
-        project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
-    ) -> impl Future<Output = Result<Vec<EntityRef>, EntityMutationError>> + Send;
+        req: MoveEntityRequest<Self::Receipt>,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
 }
 
 /// Update an entity's public and channel share policy.
@@ -72,10 +79,10 @@ pub trait UpdateEntitySharePolicy {
     /// Apply the share-policy update, returning affected records.
     fn update_share_policy(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> impl Future<Output = Result<Vec<EntityRef>, EntityMutationError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
 }
 
 /// Soft-delete an entity with a reversible trash lifecycle.
@@ -86,9 +93,9 @@ pub trait TrashEntity {
     /// Trash the entity, returning affected records (containers, cascades).
     fn trash_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<EntityRef>, EntityMutationError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
 }
 
 /// Restore a reversibly deleted entity.
@@ -99,9 +106,9 @@ pub trait RestoreEntity {
     /// Restore the entity, returning affected records.
     fn restore_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<EntityRef>, EntityMutationError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
 }
 
 /// Irreversibly delete an entity.
@@ -112,9 +119,9 @@ pub trait DeleteEntityPermanently {
     /// Permanently delete the entity, returning affected records.
     fn delete_entity_permanently(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<EntityRef>, EntityMutationError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
 }
 
 /// Duplicate an entity.
@@ -125,9 +132,9 @@ pub trait DuplicateEntity {
     /// Duplicate the entity, returning the newly created entity.
     fn duplicate_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
-    ) -> impl Future<Output = Result<EntityRef, EntityMutationError>> + Send;
+    ) -> impl Future<Output = Result<Entity<'static>, EntityMutationErrorCode>> + Send;
 }
