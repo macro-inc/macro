@@ -184,8 +184,17 @@ function SplitCloseButton() {
   // Controller leaving its list view), or via the preview toggle.
   const isPreviewViewer = () => context.handle.isViewerSplit();
 
+  // A Preview Pair occupies two split slots but is a single logical split: its
+  // Viewer isn't independently closable. Subtract one slot per pair so that
+  // when the only splits open are a single Preview Pair, the Controller hides
+  // its close button — just like a lone split does.
+  const hasMultipleSplits = createMemo(
+    () =>
+      layout.manager.splits().length - layout.manager.previewPairs().length > 1
+  );
+
   return (
-    <Show when={layout.manager.splits().length > 1 && !isPreviewViewer()}>
+    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
       <Button
         class="p-1 rounded-lg"
         label={label()}
