@@ -1,5 +1,5 @@
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
+use model_entity::Entity;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 /// Authenticated actor performing an entity mutation.
@@ -102,9 +102,4 @@ impl EntityMutationErrorCode {
     pub fn conflict<C, O, T>(err: rootcause::Report<C, O, T>) -> Self {
         EntityMutationErrorCode::Conflict(Sentinel(()))
     }
-}
-
-pub enum MutationOutcome<T> {
-    Patched(T),
-    Deleted(Entity<'static>),
 }

@@ -63,12 +63,12 @@ fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'st
 async fn chat_project_id<S: ChatService>(
     service: &S,
     owner_receipt: &EntityAccessReceipt<OwnerAccessLevel>,
-) -> Result<Option<String>, EntityMutationErrorCode> {
+) -> Option<String> {
     let view_receipt = owner_receipt
         .clone()
         .try_into_requirement::<ViewAccessLevel>()
-        .map_err(access_error)?;
-    Ok(service.get_metadata(view_receipt).await?.project_id)
+        .ok()?;
+    service.get_metadata(view_receipt).await.ok()?.project_id
 }
 
 impl<R, ToolSetContext, Eam> RenameEntity for ChatServiceImpl<R, ToolSetContext, Eam>
@@ -117,7 +117,7 @@ where
                 ..
             } => (receipt, Some(project_id)),
         };
-        let old_project_id = chat_project_id(self, &receipt).await?;
+        let old_project_id = chat_project_id(self, &receipt).await;
         self.patch(
             receipt,
             PatchChatArgs {
@@ -170,7 +170,7 @@ where
         _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
     ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
-        let project_id = chat_project_id(self, &receipt).await?;
+        let project_id = chat_project_id(self, &receipt).await;
         self.delete(receipt).await?;
         Ok(project_refs([project_id]))
     }
@@ -188,7 +188,7 @@ where
         _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
     ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
-        let project_id = chat_project_id(self, &receipt).await?;
+        let project_id = chat_project_id(self, &receipt).await;
         self.revert_delete(receipt).await?;
         Ok(project_refs([project_id]))
     }
@@ -206,7 +206,7 @@ where
         _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
     ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
-        let project_id = chat_project_id(self, &receipt).await?;
+        let project_id = chat_project_id(self, &receipt).await;
         self.permanently_delete(receipt).await?;
         Ok(project_refs([project_id]))
     }

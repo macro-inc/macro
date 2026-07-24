@@ -132,6 +132,7 @@ where
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
     ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+        require_archived_call(self, &receipt, "update sharing for").await?;
         self.edit_call_record(
             receipt,
             EditCallRecordRequest {
