@@ -66,6 +66,8 @@ outbound = [
 entity_mutation = [
   "dep:entity_access",
   "dep:entity_mutation",
+  "dep:model-entity",
+  "dep:rootcause",
   "entity_access/ports",
   "ports",
 ]

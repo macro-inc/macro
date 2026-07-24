@@ -71,6 +71,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
+rootcause = { workspace = true }
 pgvector = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

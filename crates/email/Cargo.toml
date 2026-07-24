@@ -75,6 +75,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

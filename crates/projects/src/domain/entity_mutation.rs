@@ -1,16 +1,18 @@
 //! Unified entity-mutation capability impls for projects.
 
+use std::collections::HashSet;
+
 use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationError, EntityRef, MoveEntity, RenameEntity,
-    RestoreEntity, TrashEntity, UpdateEntitySharePolicy, capability::project_refs,
+    DeleteEntityPermanently, EntityMutationErrorCode, MoveEntity, RenameEntity, RestoreEntity,
+    TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest,
 };
 use macro_event_broker::MacroEventBroker;
 use model::project::{BasicProject, request::PatchProjectRequestV2};
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 use super::{
@@ -22,42 +24,55 @@ use super::{
     service::ProjectServiceImpl,
 };
 
-impl From<ProjectError> for EntityMutationError {
+impl From<ProjectError> for EntityMutationErrorCode {
     fn from(error: ProjectError) -> Self {
         match error {
-            ProjectError::NotFound(_) => Self::not_found("project not found"),
-            ProjectError::Unauthorized => Self::forbidden("insufficient project permission"),
-            ProjectError::UnauthorizedWithMessage(message) => Self::forbidden(message),
-            ProjectError::BadRequest(message) => Self::invalid(message),
-            ProjectError::NameTooLong { max } => {
-                Self::invalid(format!("display name exceeds {max} characters"))
+            error @ ProjectError::NotFound(_) => Self::not_found(rootcause::report!(error)),
+            error @ (ProjectError::Unauthorized | ProjectError::UnauthorizedWithMessage(_)) => {
+                Self::forbidden(rootcause::report!(error))
             }
-            ProjectError::CannotModifyDeleted => Self::conflict("cannot modify a deleted project"),
-            ProjectError::RecursiveNesting => Self::invalid("project move would create a cycle"),
-            error @ ProjectError::Internal(_) => Self::internal(&error),
+            error @ (ProjectError::BadRequest(_)
+            | ProjectError::NameTooLong { .. }
+            | ProjectError::RecursiveNesting) => Self::invalid(rootcause::report!(error)),
+            error @ ProjectError::CannotModifyDeleted => Self::conflict(rootcause::report!(error)),
+            error @ ProjectError::Internal(_) => Self::internal(rootcause::report!(error)),
         }
     }
 }
 
 /// Map an access-domain error onto the public mutation vocabulary.
-fn access_error(error: AccessError) -> EntityMutationError {
+fn access_error(error: AccessError) -> EntityMutationErrorCode {
     match error {
-        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-            EntityMutationError::forbidden("insufficient permission for entity mutation")
+        error @ (AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
+            EntityMutationErrorCode::forbidden(rootcause::report!(error))
         }
-        AccessError::NotFound(_) => EntityMutationError::not_found("entity not found"),
-        AccessError::BadRequest(message) => EntityMutationError::invalid(message),
+        error @ AccessError::NotFound(_) => {
+            EntityMutationErrorCode::not_found(rootcause::report!(error))
+        }
+        error @ AccessError::BadRequest(_) => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
         error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
-            EntityMutationError::internal(&error)
+            EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
+}
+
+/// Build affected project entities from optional container ids.
+fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
+    let mut seen = HashSet::new();
+    ids.into_iter()
+        .flatten()
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .map(|id| EntityType::Project.with_entity_string(id))
+        .collect()
 }
 
 /// Fetch project metadata; access is enforced separately via receipts.
 async fn basic_project<S: ProjectService>(
     service: &S,
-    entity: &EntityRef,
-) -> Result<BasicProject, EntityMutationError> {
+    entity: &Entity<'static>,
+) -> Result<BasicProject, EntityMutationErrorCode> {
     Ok(service
         .internal_get_basic_project(&entity.entity_id)
         .await?)
@@ -78,10 +93,10 @@ where
 
     async fn rename_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let parent_id = project.parent_id.clone();
         self.edit_project(
@@ -113,11 +128,17 @@ where
 
     async fn move_entity(
         &self,
-        entity: EntityRef,
-        receipt: EntityAccessReceipt<Self::Receipt>,
-        project_id: Option<String>,
-        _project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+        let (entity, receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
+            MoveEntityRequest::MoveToProject {
+                entity,
+                receipt,
+                project_id,
+                project_receipt: _,
+            } => (entity, receipt, Some(project_id)),
+        };
         let project = basic_project(self, &entity).await?;
         let old_parent_id = project.parent_id.clone();
         // Moving requires ownership at the API surface; the edit call itself
@@ -157,10 +178,10 @@ where
 
     async fn update_share_policy(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let receipt = receipt
             .try_into_requirement::<EditAccessLevel>()
@@ -194,9 +215,9 @@ where
 
     async fn trash_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let actor = receipt
             .get_authenticated_user()
@@ -225,9 +246,9 @@ where
 
     async fn restore_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let parent_id = project.parent_id.clone();
         self.revert_delete_project(receipt, project).await?;
@@ -251,9 +272,9 @@ where
 
     async fn delete_entity_permanently(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let parent_id = project.parent_id.clone();
         self.permanently_delete_project(receipt, project).await?;
@@ -265,7 +286,7 @@ where
 fn refs(
     entity_type: EntityType,
     ids: impl IntoIterator<Item = String>,
-) -> impl Iterator<Item = EntityRef> {
+) -> impl Iterator<Item = Entity<'static>> {
     ids.into_iter()
-        .map(move |id| EntityRef::new(entity_type, id))
+        .map(move |id| entity_type.with_entity_string(id))
 }

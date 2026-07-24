@@ -1,13 +1,16 @@
 //! Unified entity-mutation capability impls for chats.
 
+use std::collections::HashSet;
+
 use entity_access::domain::models::{
-    AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    AccessError, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_mutation::{
-    DeleteEntityPermanently, DuplicateEntity, EntityMutationError, EntityRef, MoveEntity,
-    RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy, capability::project_refs,
+    DeleteEntityPermanently, DuplicateEntity, EntityMutationErrorCode, MoveEntity, RenameEntity,
+    RestoreEntity, TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 use crate::domain::{
@@ -17,36 +20,50 @@ use crate::domain::{
 
 use super::chat::ChatServiceImpl;
 
-impl From<ChatErr> for EntityMutationError {
+impl From<ChatErr> for EntityMutationErrorCode {
     fn from(error: ChatErr) -> Self {
         match error {
-            ChatErr::NotFound => Self::not_found("chat not found"),
-            ChatErr::BadRequest(message) => Self::invalid(message),
+            error @ ChatErr::NotFound => Self::not_found(rootcause::report!(error)),
+            error @ ChatErr::BadRequest(_) => Self::invalid(rootcause::report!(error)),
             ChatErr::Access(error) => access_error(error),
-            error @ ChatErr::Unknown(_) => Self::internal(&error),
+            error @ ChatErr::Unknown(_) => Self::internal(rootcause::report!(error)),
         }
     }
 }
 
 /// Map an access-domain error onto the public mutation vocabulary.
-fn access_error(error: AccessError) -> EntityMutationError {
+fn access_error(error: AccessError) -> EntityMutationErrorCode {
     match error {
-        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-            EntityMutationError::forbidden("insufficient permission for entity mutation")
+        error @ (AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
+            EntityMutationErrorCode::forbidden(rootcause::report!(error))
         }
-        AccessError::NotFound(_) => EntityMutationError::not_found("entity not found"),
-        AccessError::BadRequest(message) => EntityMutationError::invalid(message),
+        error @ AccessError::NotFound(_) => {
+            EntityMutationErrorCode::not_found(rootcause::report!(error))
+        }
+        error @ AccessError::BadRequest(_) => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
         error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
-            EntityMutationError::internal(&error)
+            EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
+}
+
+/// Build affected project entities from optional container ids.
+fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
+    let mut seen = HashSet::new();
+    ids.into_iter()
+        .flatten()
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .map(|id| EntityType::Project.with_entity_string(id))
+        .collect()
 }
 
 /// Resolve the chat's containing project for affected-record reporting.
 async fn chat_project_id<S: ChatService>(
     service: &S,
     owner_receipt: &EntityAccessReceipt<OwnerAccessLevel>,
-) -> Result<Option<String>, EntityMutationError> {
+) -> Result<Option<String>, EntityMutationErrorCode> {
     let view_receipt = owner_receipt
         .clone()
         .try_into_requirement::<ViewAccessLevel>()
@@ -63,10 +80,10 @@ where
 
     async fn rename_entity(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         self.patch(
             receipt,
             PatchChatArgs {
@@ -89,11 +106,17 @@ where
 
     async fn move_entity(
         &self,
-        _entity: EntityRef,
-        receipt: EntityAccessReceipt<Self::Receipt>,
-        project_id: Option<String>,
-        _project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+        let (receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { receipt, .. } => (receipt, None),
+            MoveEntityRequest::MoveToProject {
+                receipt,
+                project_id,
+                project_receipt: _,
+                ..
+            } => (receipt, Some(project_id)),
+        };
         let old_project_id = chat_project_id(self, &receipt).await?;
         self.patch(
             receipt,
@@ -118,10 +141,10 @@ where
 
     async fn update_share_policy(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         self.patch(
             receipt,
             PatchChatArgs {
@@ -144,9 +167,9 @@ where
 
     async fn trash_entity(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project_id = chat_project_id(self, &receipt).await?;
         self.delete(receipt).await?;
         Ok(project_refs([project_id]))
@@ -162,9 +185,9 @@ where
 
     async fn restore_entity(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project_id = chat_project_id(self, &receipt).await?;
         self.revert_delete(receipt).await?;
         Ok(project_refs([project_id]))
@@ -180,9 +203,9 @@ where
 
     async fn delete_entity_permanently(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project_id = chat_project_id(self, &receipt).await?;
         self.permanently_delete(receipt).await?;
         Ok(project_refs([project_id]))
@@ -198,17 +221,17 @@ where
 
     async fn duplicate_entity(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         _user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
-    ) -> Result<EntityRef, EntityMutationError> {
+    ) -> Result<Entity<'static>, EntityMutationErrorCode> {
         if display_name.is_some() {
-            return Err(EntityMutationError::invalid(
-                "chat duplication does not yet accept a custom display name",
-            ));
+            return Err(EntityMutationErrorCode::invalid(rootcause::report!(
+                "chat duplication does not yet accept a custom display name".to_string()
+            )));
         }
         let id = self.copy_chat(receipt).await?;
-        Ok(EntityRef::new(model_entity::EntityType::Chat, id))
+        Ok(EntityType::Chat.with_entity_string(id))
     }
 }

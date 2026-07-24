@@ -3,7 +3,8 @@
 use entity_access::domain::models::{
     AdminParticipantRole, EntityAccessReceipt, OwnerParticipantRole, RequiredPermission,
 };
-use entity_mutation::{DeleteEntityPermanently, EntityMutationError, EntityRef, RenameEntity};
+use entity_mutation::{DeleteEntityPermanently, EntityMutationErrorCode, RenameEntity};
+use model_entity::Entity;
 use uuid::Uuid;
 
 use super::{
@@ -12,32 +13,34 @@ use super::{
     service::ChannelServiceImpl,
 };
 
-impl From<ChannelMutationErr> for EntityMutationError {
+impl From<ChannelMutationErr> for EntityMutationErrorCode {
     fn from(error: ChannelMutationErr) -> Self {
         match error {
-            ChannelMutationErr::BadRequest(message) => Self::invalid(message),
-            ChannelMutationErr::Unauthorized(_) => Self::forbidden("insufficient channel role"),
-            ChannelMutationErr::NotFound(_) => Self::not_found("channel not found"),
-            error => Self::internal(&error),
+            error @ ChannelMutationErr::BadRequest(_) => Self::invalid(rootcause::report!(error)),
+            error @ (ChannelMutationErr::Unauthorized(_) | ChannelMutationErr::Forbidden(_)) => {
+                Self::forbidden(rootcause::report!(error))
+            }
+            error @ ChannelMutationErr::NotFound(_) => Self::not_found(rootcause::report!(error)),
+            error => Self::internal(rootcause::report!(error)),
         }
     }
 }
 
 /// Parse the channel id, rejecting non-UUID identifiers.
-fn channel_uuid(entity: &EntityRef) -> Result<Uuid, EntityMutationError> {
+fn channel_uuid(entity: &Entity<'static>) -> Result<Uuid, EntityMutationErrorCode> {
     Uuid::parse_str(&entity.entity_id)
-        .map_err(|_| EntityMutationError::invalid("entity id must be a UUID"))
+        .map_err(|error| EntityMutationErrorCode::invalid(rootcause::report!(error)))
 }
 
 /// Convert the authenticated receipt holder into a channel sender.
 fn sender_from_receipt<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
-) -> Result<Sender, EntityMutationError> {
+) -> Result<Sender, EntityMutationErrorCode> {
     receipt
         .get_authenticated_user()
         .cloned()
         .map(Sender::new_from_user)
-        .map_err(|_| EntityMutationError::forbidden("authenticated user required"))
+        .map_err(|error| EntityMutationErrorCode::forbidden(rootcause::report!(error)))
 }
 
 impl<R, E, P, M> RenameEntity for ChannelServiceImpl<R, E, P, M>
@@ -48,10 +51,10 @@ where
 
     async fn rename_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let channel_id = channel_uuid(&entity)?;
         let sender = sender_from_receipt(&receipt)?;
         self.patch_channel(
@@ -76,9 +79,9 @@ where
 
     async fn delete_entity_permanently(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let channel_id = channel_uuid(&entity)?;
         let sender = sender_from_receipt(&receipt)?;
         self.delete_channel(sender, channel_id).await?;

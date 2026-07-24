@@ -1,19 +1,32 @@
 //! Unified entity-mutation capability impls for email threads.
 
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
-use entity_mutation::{EntityMutationError, EntityRef, MoveEntity, capability::project_refs};
+use std::collections::HashSet;
+
+use entity_access::domain::models::EditAccessLevel;
+use entity_mutation::{EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest};
+use model_entity::{Entity, EntityType};
 
 use super::EmailServiceImpl;
 use crate::domain::{models::EmailErr, ports::EmailService};
 
-impl From<EmailErr> for EntityMutationError {
+impl From<EmailErr> for EntityMutationErrorCode {
     fn from(error: EmailErr) -> Self {
         match error {
-            EmailErr::ThreadNotFound => Self::not_found("email thread not found"),
-            EmailErr::Unauthorized => Self::forbidden("insufficient email thread permission"),
-            error => Self::internal(&error),
+            error @ EmailErr::ThreadNotFound => Self::not_found(rootcause::report!(error)),
+            error @ EmailErr::Unauthorized => Self::forbidden(rootcause::report!(error)),
+            error => Self::internal(rootcause::report!(error)),
         }
     }
+}
+
+/// Build affected project entities from optional container ids.
+fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
+    let mut seen = HashSet::new();
+    ids.into_iter()
+        .flatten()
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .map(|id| EntityType::Project.with_entity_string(id))
+        .collect()
 }
 
 impl<T, U, E, CS, Eam, B> MoveEntity for EmailServiceImpl<T, U, E, CS, Eam, B>
@@ -24,11 +37,17 @@ where
 
     async fn move_entity(
         &self,
-        _entity: EntityRef,
-        receipt: EntityAccessReceipt<Self::Receipt>,
-        project_id: Option<String>,
-        project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+        let (receipt, project_id, project_receipt) = match request {
+            MoveEntityRequest::MoveToRoot { receipt, .. } => (receipt, None, None),
+            MoveEntityRequest::MoveToProject {
+                receipt,
+                project_id,
+                project_receipt,
+                ..
+            } => (receipt, Some(project_id), Some(project_receipt)),
+        };
         let old_project_id = self.update_thread_project(receipt, project_receipt).await?;
         Ok(project_refs([old_project_id, project_id]))
     }

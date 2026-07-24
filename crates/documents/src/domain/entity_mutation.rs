@@ -4,15 +4,18 @@
 //! document service's own methods, preconditions, and errors, so the
 //! composition layer routes without translating.
 
+use std::collections::HashSet;
+
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_mutation::{
-    DuplicateEntity, EntityMutationError, EntityRef, MoveEntity, RenameEntity, TrashEntity,
-    UpdateEntitySharePolicy, capability::project_refs,
+    DuplicateEntity, EntityMutationErrorCode, MoveEntity, RenameEntity, TrashEntity,
+    UpdateEntitySharePolicy, capability::MoveEntityRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 use connection::domain::ports::ConnectionService;
@@ -26,35 +29,44 @@ use super::{
     service::DocumentServiceImpl,
 };
 
-impl From<DocumentError> for EntityMutationError {
+impl From<DocumentError> for EntityMutationErrorCode {
     fn from(error: DocumentError) -> Self {
         match error {
-            DocumentError::NotFound(_) | DocumentError::Gone => {
-                Self::not_found("document not found")
+            error @ (DocumentError::NotFound(_) | DocumentError::Gone) => {
+                Self::not_found(rootcause::report!(error))
             }
-            DocumentError::Unauthorized => Self::forbidden("insufficient document permission"),
-            DocumentError::Conflict(message) => Self::conflict(message),
-            DocumentError::BadRequest(message) => Self::invalid(message),
-            DocumentError::NameTooLong { max } => {
-                Self::invalid(format!("display name exceeds {max} characters"))
+            error @ DocumentError::Unauthorized => Self::forbidden(rootcause::report!(error)),
+            error @ DocumentError::Conflict(_) => Self::conflict(rootcause::report!(error)),
+            error @ (DocumentError::BadRequest(_) | DocumentError::NameTooLong { .. }) => {
+                Self::invalid(rootcause::report!(error))
             }
-            error => Self::internal(&error),
+            error => Self::internal(rootcause::report!(error)),
         }
     }
+}
+
+/// Build affected project entities from optional container ids.
+fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
+    let mut seen = HashSet::new();
+    ids.into_iter()
+        .flatten()
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .map(|id| EntityType::Project.with_entity_string(id))
+        .collect()
 }
 
 /// Fetch a document and reject the mutation if it is trashed.
 async fn live_document<S: DocumentService>(
     service: &S,
-    entity: &EntityRef,
+    entity: &Entity<'static>,
     action: &str,
-) -> Result<DocumentBasic, EntityMutationError> {
+) -> Result<DocumentBasic, EntityMutationErrorCode> {
     let document = service
         .internal_get_basic_document(&entity.entity_id)
         .await?;
     if document.deleted_at.is_some() {
-        return Err(EntityMutationError::conflict(format!(
-            "cannot {action} a deleted document"
+        return Err(EntityMutationErrorCode::conflict(rootcause::report!(
+            format!("cannot {action} a deleted document")
         )));
     }
     Ok(document)
@@ -76,10 +88,10 @@ where
 
     async fn rename_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let document = live_document(self, &entity, "rename").await?;
         self.edit_document(
             receipt,
@@ -112,11 +124,17 @@ where
 
     async fn move_entity(
         &self,
-        entity: EntityRef,
-        receipt: EntityAccessReceipt<Self::Receipt>,
-        project_id: Option<String>,
-        _project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+        let (entity, receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
+            MoveEntityRequest::MoveToProject {
+                entity,
+                receipt,
+                project_id,
+                project_receipt: _,
+            } => (entity, receipt, Some(project_id)),
+        };
         let document = live_document(self, &entity, "move").await?;
         let old_project_id = document.project_id.clone().map(|id| id.to_string());
         self.edit_document(
@@ -151,10 +169,10 @@ where
 
     async fn update_share_policy(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let document = live_document(self, &entity, "update sharing for").await?;
         self.edit_document(
             receipt,
@@ -187,9 +205,9 @@ where
 
     async fn trash_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let project_id = self
             .internal_get_basic_document(&entity.entity_id)
             .await?
@@ -216,20 +234,20 @@ where
 
     async fn duplicate_entity(
         &self,
-        entity: EntityRef,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
-    ) -> Result<EntityRef, EntityMutationError> {
+    ) -> Result<Entity<'static>, EntityMutationErrorCode> {
         let document = self.internal_get_basic_document(&entity.entity_id).await?;
         let display_name =
             display_name.unwrap_or_else(|| format!("{} copy", document.document_name));
         let response = self
             .copy_document(receipt, document, user_id, display_name, None, None)
             .await?;
-        Ok(EntityRef::new(
-            model_entity::EntityType::Document,
-            response.document_metadata.metadata.document_id,
-        ))
+        Ok(
+            EntityType::Document
+                .with_entity_string(response.document_metadata.metadata.document_id),
+        )
     }
 }

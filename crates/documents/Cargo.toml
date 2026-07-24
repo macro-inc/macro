@@ -107,6 +107,7 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+rootcause = { workspace = true }
 s3_key = { path = "../s3_key" }
 
 # Async runtime (for ports)
@@ -158,7 +159,6 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
-rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tower = { workspace = true }

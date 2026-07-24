@@ -4,8 +4,9 @@ use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, ViewAccessLevel,
 };
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationError, EntityRef, RenameEntity, UpdateEntitySharePolicy,
+    DeleteEntityPermanently, EntityMutationErrorCode, RenameEntity, UpdateEntitySharePolicy,
 };
+use model_entity::Entity;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 use super::{
@@ -21,30 +22,34 @@ use crate::domain::ports::{
     VoiceRepository,
 };
 
-impl From<CallError> for EntityMutationError {
+impl From<CallError> for EntityMutationErrorCode {
     fn from(error: CallError) -> Self {
         match error {
-            CallError::NotFound(_) => Self::not_found("call not found"),
-            CallError::Auth | CallError::NotInCall => {
-                Self::forbidden("insufficient call permission")
+            error @ CallError::NotFound(_) => Self::not_found(rootcause::report!(error)),
+            error @ (CallError::Auth | CallError::NotInCall) => {
+                Self::forbidden(rootcause::report!(error))
             }
-            CallError::InvalidRequest(message) => Self::invalid(message),
-            CallError::AlreadyInCall(_) => Self::conflict(error.to_string()),
-            error @ CallError::Internal(_) => Self::internal(&error),
+            error @ CallError::InvalidRequest(_) => Self::invalid(rootcause::report!(error)),
+            error @ CallError::AlreadyInCall(_) => Self::conflict(rootcause::report!(error)),
+            error @ CallError::Internal(_) => Self::internal(rootcause::report!(error)),
         }
     }
 }
 
 /// Map an access-domain error onto the public mutation vocabulary.
-fn access_error(error: AccessError) -> EntityMutationError {
+fn access_error(error: AccessError) -> EntityMutationErrorCode {
     match error {
-        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-            EntityMutationError::forbidden("insufficient permission for entity mutation")
+        error @ (AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
+            EntityMutationErrorCode::forbidden(rootcause::report!(error))
         }
-        AccessError::NotFound(_) => EntityMutationError::not_found("entity not found"),
-        AccessError::BadRequest(message) => EntityMutationError::invalid(message),
+        error @ AccessError::NotFound(_) => {
+            EntityMutationErrorCode::not_found(rootcause::report!(error))
+        }
+        error @ AccessError::BadRequest(_) => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
         error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
-            EntityMutationError::internal(&error)
+            EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
 }
@@ -54,14 +59,14 @@ async fn require_archived_call<S: CallService>(
     service: &S,
     edit_receipt: &EntityAccessReceipt<EditAccessLevel>,
     operation: &str,
-) -> Result<(), EntityMutationError> {
+) -> Result<(), EntityMutationErrorCode> {
     let view_receipt = edit_receipt
         .clone()
         .try_into_requirement::<ViewAccessLevel>()
         .map_err(access_error)?;
     if service.get_call_record(view_receipt).await?.is_active {
-        return Err(EntityMutationError::conflict(format!(
-            "cannot {operation} an active call"
+        return Err(EntityMutationErrorCode::conflict(rootcause::report!(
+            format!("cannot {operation} an active call")
         )));
     }
     Ok(())
@@ -86,10 +91,10 @@ where
 
     async fn rename_entity(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         require_archived_call(self, &receipt, "rename").await?;
         self.edit_call_record(
             receipt,
@@ -123,10 +128,10 @@ where
 
     async fn update_share_policy(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         self.edit_call_record(
             receipt,
             EditCallRecordRequest {
@@ -159,9 +164,9 @@ where
 
     async fn delete_entity_permanently(
         &self,
-        _entity: EntityRef,
+        _entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         require_archived_call(self, &receipt, "permanently delete").await?;
         self.delete_call_record(receipt).await?;
         Ok(Vec::new())
