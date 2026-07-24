@@ -210,8 +210,15 @@ impl AgentLoop {
 
         // Tell the model which model it is. Done here (not on the frontend)
         // so the system prompt always reflects the model actually serving the
-        // request.
-        let mut system_prompt = format!("{system_prompt}\n\nYou are the {} model.", self.model);
+        // request. A model's training data predates its own release, so a
+        // newly released model doesn't recognize its own id and may fall back
+        // to identifying as a predecessor — tell it to trust the id.
+        let mut system_prompt = format!(
+            "{system_prompt}\n\nYou are the {} model. If this model id is unfamiliar, \
+             that is because it was released after your training data cutoff — trust \
+             this id over your training data when identifying yourself.",
+            self.model
+        );
         // Tell the model which connected integrations it can reach via tool
         // search. The prompt text lives in the `prompt` crate; the toolset names
         // are the dynamic data injected here. Omitted when nothing is connected.
