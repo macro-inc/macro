@@ -75,9 +75,14 @@ function registerBlameTooltipPlugin(
       props.setState({ hovering: false, nodeId: null });
       return;
     }
+    const root = editor.getRootElement();
+    if (!root) {
+      props.setState({ hovering: false, nodeId: null });
+      return;
+    }
     props.setState({
       hovering: true,
-      x: e.clientX,
+      x: root.getBoundingClientRect().left,
       y: e.clientY,
       nodeId,
     });
@@ -93,11 +98,13 @@ function registerBlameTooltipPlugin(
         root.addEventListener('pointermove', handlePointerMove);
         root.addEventListener('pointerleave', dismiss);
         root.addEventListener('pointerdown', dismiss);
+        root.addEventListener('beforeinput', dismiss);
       }
       if (prevRoot) {
         prevRoot.removeEventListener('pointermove', handlePointerMove);
         prevRoot.removeEventListener('pointerleave', dismiss);
         prevRoot.removeEventListener('pointerdown', dismiss);
+        prevRoot.removeEventListener('beforeinput', dismiss);
       }
     })
   );

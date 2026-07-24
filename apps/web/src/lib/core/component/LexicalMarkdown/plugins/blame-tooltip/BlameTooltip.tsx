@@ -36,6 +36,7 @@ export function BlameTooltip(props: {
   documentId: string;
 }) {
   const [visible, setVisible] = createSignal(false);
+  const [positioned, setPositioned] = createSignal(false);
   let shownAtX = 0;
   let shownAtY = 0;
   let showTimer: ReturnType<typeof setTimeout> | null = null;
@@ -50,6 +51,7 @@ export function BlameTooltip(props: {
   const hide = () => {
     if (showTimer) clearTimeout(showTimer);
     showTimer = null;
+    setPositioned(false);
     setVisible(false);
   };
 
@@ -82,10 +84,19 @@ export function BlameTooltip(props: {
     <Show when={visible() && query.data?.userId ? query.data : undefined}>
       {(b) => (
         <div
-          class="fixed z-50 text-xs text-ink-secondary/70 pointer-events-none"
+          ref={(el) => {
+            queueMicrotask(() => {
+              if (!el.isConnected) return;
+              if (el.getBoundingClientRect().left < 0) return hide();
+              setPositioned(true);
+            });
+          }}
+          class="fixed z-50 rounded-md bg-surface px-2 py-1 text-xs text-ink-secondary/70 pointer-events-none"
           style={{
-            left: `${props.state.x + 12}px`,
+            left: `${props.state.x - 12}px`,
             top: `${props.state.y + 12}px`,
+            transform: 'translateX(-100%)',
+            visibility: positioned() ? 'visible' : 'hidden',
           }}
         >
           <UserLine userId={b().userId!} editedAt={b().editedAt} />
