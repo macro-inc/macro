@@ -51,9 +51,7 @@ pub enum ExampleTopicEvent {
 impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroExampleTopic`].

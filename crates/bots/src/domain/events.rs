@@ -90,9 +90,7 @@ pub enum BotTopicEvent {
 impl TopicEvent for BotTopicEvent {
     type Topic = MacroBotsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable lifecycle event for [`MacroBotsTopic`], keyed by bot id.
