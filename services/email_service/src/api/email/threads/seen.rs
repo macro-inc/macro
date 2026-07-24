@@ -108,42 +108,42 @@ pub async fn seen_handler(
         })
         .collect();
 
-    if unread_messages.is_empty() {
-        // Nothing to mark as read
-        return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
-    }
-
     let message_db_ids: Vec<Uuid> = unread_messages.iter().map(|m| m.db_id).collect();
 
     let mut tx = ctx.db.begin().await?;
 
     let transaction_result = async {
-        // Update thread read status
+        // Write the denormalized thread flag even when no message carries the UNREAD
+        // label. Soup reads this flag, so a thread whose labels were already stripped
+        // while the flag stayed false would otherwise never recover: it reads unread
+        // forever and every later call to this endpoint short-circuits.
         email_db_client::threads::update::update_thread_read_status(
             &mut *tx, thread_id, link.id, true,
         )
         .await
         .context("Failed to update thread read status")?;
 
-        // Update messages read status
-        email_db_client::messages::update::update_message_read_status_batch(
-            &mut *tx,
-            message_db_ids.clone(),
-            &authorization.authorization.user.user_context.fusion_user_id,
-            true,
-        )
-        .await
-        .context("Failed to update message read status")?;
+        if !message_db_ids.is_empty() {
+            // Update messages read status
+            email_db_client::messages::update::update_message_read_status_batch(
+                &mut *tx,
+                message_db_ids.clone(),
+                link.id,
+                true,
+            )
+            .await
+            .context("Failed to update message read status")?;
 
-        // Remove UNREAD label from messages in DB
-        email_db_client::labels::delete::delete_message_labels_batch(
-            &mut *tx,
-            &message_db_ids,
-            system_labels::UNREAD,
-            link.id,
-        )
-        .await
-        .context("Failed to remove 'UNREAD' label from messages")?;
+            // Remove UNREAD label from messages in DB
+            email_db_client::labels::delete::delete_message_labels_batch(
+                &mut *tx,
+                &message_db_ids,
+                system_labels::UNREAD,
+                link.id,
+            )
+            .await
+            .context("Failed to remove 'UNREAD' label from messages")?;
+        }
 
         anyhow::Ok(())
     }
@@ -160,6 +160,11 @@ pub async fn seen_handler(
             }
             return Err(SeenThreadError::QueryError(e));
         }
+    }
+
+    if unread_messages.is_empty() {
+        // No message changed state, so there is nothing to announce or sync upstream.
+        return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
     }
 
     publish_email_event(
