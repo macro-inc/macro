@@ -23,14 +23,19 @@ export function useSplitLayout() {
       return;
     }
 
+    // Navigation issued from inside a split panel (links, mentions, references)
+    // carries that panel as its source; callers outside any panel (sidebar,
+    // command menu) stay handle-less, which is what marks "external navigation"
+    // for Preview Pair routing. A popover's SplitPanelContext handle is a stub
+    // whose replace() is a no-op, so treat popover sources as handle-less too
+    // and let same-split navigation fall back to the active split.
+    const requestedHandle = options?.handle ?? splitPanelContext?.handle;
+    const handle = requestedHandle?.isPopover() ? undefined : requestedHandle;
+
     return splitManager.openWithSplit(content, {
       ...options,
       preferNewSplit,
-      // Navigation issued from inside a split panel (links, mentions,
-      // references) carries that panel as its source; callers outside any
-      // panel (sidebar, command menu) stay handle-less, which is what marks
-      // "external navigation" for Preview Pair routing.
-      handle: options?.handle ?? splitPanelContext?.handle,
+      handle,
     });
   }
 
