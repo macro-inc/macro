@@ -653,6 +653,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_state,
         import_service,
         onboarding_service,
+        macro_event_broker: macro_event_broker.clone(),
     })
     .await
     .context("failed to setup and serve api")?;

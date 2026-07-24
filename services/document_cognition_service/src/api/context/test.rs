@@ -308,7 +308,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 ),
                 0,
             )
-            .with_macro_event_broker(macro_event_broker),
+            .with_macro_event_broker(macro_event_broker.clone()),
         ),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
@@ -535,6 +535,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         },
         import_service: import_service.clone(),
         onboarding_service,
+        macro_event_broker,
     };
     Arc::new(api_context)
 }
