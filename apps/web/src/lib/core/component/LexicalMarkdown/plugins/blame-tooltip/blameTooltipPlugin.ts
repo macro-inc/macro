@@ -75,14 +75,9 @@ function registerBlameTooltipPlugin(
       props.setState({ hovering: false, nodeId: null });
       return;
     }
-    const root = editor.getRootElement();
-    if (!root) {
-      props.setState({ hovering: false, nodeId: null });
-      return;
-    }
     props.setState({
       hovering: true,
-      x: root.getBoundingClientRect().left,
+      x: e.clientX,
       y: e.clientY,
       nodeId,
     });
