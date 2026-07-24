@@ -822,6 +822,10 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # Local dev shells favor reusable sccache artifacts across JJ
+              # workspaces. CI derivations do not inherit devShell attributes.
+              CARGO_INCREMENTAL = "0";
+              SCCACHE_CACHE_SIZE = "30G";
               # rdkafka's ssl-vendored feature exists for the Lambda
               # derivations (see lambdaCommonArgs); local builds keep using
               # the Nix openssl instead of vendoring, which would need perl
