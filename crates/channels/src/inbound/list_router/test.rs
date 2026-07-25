@@ -70,12 +70,13 @@ impl ChannelListService for FakeChannelListService {
         request: GetChannelsRequest,
     ) -> Result<Vec<ChannelWithLatest>, Report> {
         let (cursor_id, _) = request.query.vals();
+        let limit = request.limit.map_or(usize::MAX, |limit| limit as usize);
         self.tracker.record(ServiceCall::GetChannels {
             user_id: request.macro_id.to_string(),
             limit: request.limit,
             cursor_id: cursor_id.copied(),
         });
-        Ok(self.channels.clone())
+        Ok(self.channels.iter().take(limit).cloned().collect())
     }
 
     async fn get_activities(&self, user_id: MacroUserIdStr<'_>) -> Result<Vec<Activity>, Report> {
@@ -167,7 +168,7 @@ async fn valid_bearer_credentials_pass_user_id_to_channel_list_service() {
         tracker.calls(),
         vec![ServiceCall::GetChannels {
             user_id: BEARER_USER_ID.to_string(),
-            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
+            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT.saturating_add(1)),
             cursor_id: None,
         }]
     );
@@ -189,7 +190,7 @@ async fn standard_internal_credentials_pass_acting_user_to_channel_list_service(
         tracker.calls(),
         vec![ServiceCall::GetChannels {
             user_id: ACTING_USER_ID.to_string(),
-            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
+            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT.saturating_add(1)),
             cursor_id: None,
         }]
     );
@@ -244,10 +245,28 @@ async fn channel_list_returns_an_opaque_cursor_page_and_honors_limit() {
         tracker.calls(),
         vec![ServiceCall::GetChannels {
             user_id: BEARER_USER_ID.to_string(),
-            limit: Some(1),
+            limit: Some(2),
             cursor_id: None,
         }]
     );
+}
+
+#[tokio::test]
+async fn channel_list_omits_cursor_when_a_full_page_exhausts_results() {
+    let channel_id = Uuid::from_u128(1);
+    let (router, _) = test_router_with_channels(None, vec![list_channel(channel_id, 1)]);
+
+    let response = router
+        .oneshot(bearer_request("/channels?limit=1", VALID_BEARER_TOKEN))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(page["items"].as_array().unwrap().len(), 1);
+    assert_eq!(page["items"][0]["id"], channel_id.to_string());
+    assert!(page["next_cursor"].is_null());
 }
 
 #[tokio::test]
@@ -282,7 +301,7 @@ async fn channel_list_passes_the_next_page_cursor_to_the_service() {
         tracker.calls(),
         vec![ServiceCall::GetChannels {
             user_id: BEARER_USER_ID.to_string(),
-            limit: Some(25),
+            limit: Some(26),
             cursor_id: Some(cursor_id),
         }]
     );

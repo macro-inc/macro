@@ -135,7 +135,9 @@ where
         .inner
         .get_channels(GetChannelsRequest {
             macro_id: user.macro_user_id.clone(),
-            limit: Some(limit),
+            // Fetch one extra row so pagination can distinguish a full final
+            // page from a page with more results.
+            limit: Some(limit.saturating_add(1)),
             include_frecency: true,
             query: cursor
                 .into_query(SimpleSortMethod::UpdatedAt, ())
@@ -144,6 +146,7 @@ where
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 
+    let has_more = res.len() > limit as usize;
     let Paginated {
         items, next_cursor, ..
     } = res
@@ -158,7 +161,7 @@ where
             .into_iter()
             .map(ApiChannelWithLatest::new_from_domain)
             .collect(),
-        next_cursor,
+        next_cursor: next_cursor.filter(|_| has_more),
     }))
 }
 
