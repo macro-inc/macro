@@ -124,9 +124,11 @@ pub const NOTION_IMPORT_SYSTEM: &str = "You are importing Notion pages the user 
     `<col>` tags.\n\
     7. Read the fetched page's `properties` map. Put properties named Tags, Tag, Labels, or \
     Label into `tags`. Put other useful, non-title values into `properties` with the closest \
-    supported type: boolean, date (ISO-8601), number, string, select, or link. Omit empty, \
-    computed, rollup, relation, and unsupported values rather than flattening them into the \
-    document body. If the fetch says it was truncated, fetch every available \
+    supported type: boolean, date (ISO-8601), number, string, select, or link. For select and \
+    link values, set `multi` from the fetched source shape: arrays are multi-valued even when \
+    they contain only one item; scalar values are not. Omit empty, computed, rollup, relation, \
+    and unsupported values rather than flattening them into the document body. If the fetch \
+    says it was truncated, fetch every available \
     `unknown_block_id` and replace its `<unknown>` placeholder with that fetched subtree. If a \
     subtree is inaccessible, remove its placeholder; never guess its contents.\n\
     8. Immediately call `FinalizeImport` with the page's `import_id`, `name`, \

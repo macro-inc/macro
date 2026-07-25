@@ -101,6 +101,19 @@ fn notion_import_turns_scale_with_pages_and_cap() {
 }
 
 #[test]
+fn notion_import_failure_reason_preserves_the_actual_error() {
+    let failure = Err(anyhow::anyhow!("notion fetch was truncated"));
+    assert_eq!(
+        notion_import_failure_reason(&failure),
+        "notion fetch was truncated"
+    );
+    assert_eq!(
+        notion_import_failure_reason(&Ok(())),
+        "the import job did not finish this item"
+    );
+}
+
+#[test]
 fn slack_gather_lists_channels_with_an_explicit_empty_query() {
     let prompt = prompts::gather_system(ImportSource::Slack);
 
@@ -176,6 +189,46 @@ fn notion_fetch_accepts_structured_markdown_and_resource_arrays() {
 }
 
 #[test]
+fn notion_property_cardinality_comes_from_the_source_shape() {
+    let parsed = parse_notion_fetch_result(serde_json::json!({
+        "title": "Roadmap",
+        "text": "# Roadmap",
+        "properties": {
+            "Topics": ["Planning"],
+            "Homepage": "https://notion.so/home",
+            "References": ["https://notion.so/spec"]
+        }
+    }));
+
+    assert_eq!(
+        parsed.properties.values,
+        vec![
+            ImportedDocumentProperty {
+                name: "Homepage".into(),
+                value: ImportedDocumentPropertyValue::Link {
+                    urls: vec!["https://notion.so/home".into()],
+                    multi: false,
+                },
+            },
+            ImportedDocumentProperty {
+                name: "References".into(),
+                value: ImportedDocumentPropertyValue::Link {
+                    urls: vec!["https://notion.so/spec".into()],
+                    multi: true,
+                },
+            },
+            ImportedDocumentProperty {
+                name: "Topics".into(),
+                value: ImportedDocumentPropertyValue::Select {
+                    values: vec!["Planning".into()],
+                    multi: true,
+                },
+            },
+        ]
+    );
+}
+
+#[test]
 fn notion_fetch_unwraps_hosted_mcp_page_content_and_properties() {
     let response = serde_json::json!({
         "metadata": {"type": "page"},
@@ -238,14 +291,16 @@ fn notion_page_references_become_external_markdown_links() {
 <ancestor-4-page url="https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410" title="Parent"/>
 </ancestor-path>
 See <mention-page url="https://notion.so/roadmap">Roadmap</mention-page>.
-<page url="https://notion.so/spec">Product spec</page>"#;
+<page url="https://notion.so/spec">Product spec</page>
+<page url="https://notion.so/draft">Plan \ [draft]</page>"#;
 
     assert_eq!(
         normalize_notion_markdown(input),
         "[Notion page](https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1)\n\
 [Parent](https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410)\n\
 See [Roadmap](https://notion.so/roadmap).\n\
-[Product spec](https://notion.so/spec)"
+[Product spec](https://notion.so/spec)\n\
+[Plan \\\\ \\[draft\\]](https://notion.so/draft)"
     );
 }
 
@@ -263,6 +318,7 @@ fn notion_prompt_imports_only_source_backed_body_content() {
     assert!(prompt.contains("inferred or invented"));
     assert!(prompt.contains("Remove every `<database>`"));
     assert!(prompt.contains("skip the whole page"));
+    assert!(prompt.contains("arrays are multi-valued even when"));
     assert!(!prompt.contains("staged summary plus the backlink"));
 }
 

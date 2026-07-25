@@ -48,6 +48,9 @@ use system_properties::{
 };
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
 
+#[cfg(test)]
+mod test;
+
 pub use ai_toolset::RequestContext;
 
 /// Type alias for the frecency service implementation
@@ -1032,23 +1035,28 @@ impl ToolEntityCreator {
             }
         }
 
+        if imported.values.is_empty() {
+            return;
+        }
+
+        let mut definitions = match service
+            .list_property_definitions(
+                None,
+                Some(user),
+                false,
+                Some(models_properties::EntityType::Document),
+            )
+            .await
+        {
+            Ok(definitions) => definitions,
+            Err(e) => {
+                tracing::warn!(document_id, error = ?e, "failed to list imported document properties");
+                return;
+            }
+        };
+
         for property in &imported.values {
             let (data_type, stored_type, multi) = imported_property_type(&property.value);
-            let definitions = match service
-                .list_property_definitions(
-                    None,
-                    Some(user),
-                    false,
-                    Some(models_properties::EntityType::Document),
-                )
-                .await
-            {
-                Ok(definitions) => definitions,
-                Err(e) => {
-                    tracing::warn!(document_id, property = %property.name, error = ?e, "failed to list imported document properties");
-                    continue;
-                }
-            };
             let same_name = definitions
                 .iter()
                 .find(|definition| definition.display_name.eq_ignore_ascii_case(&property.name));
@@ -1072,7 +1080,10 @@ impl ToolEntityCreator {
                     .create_property_definition(user, None, &request)
                     .await
                 {
-                    Ok(definition) => definition,
+                    Ok(definition) => {
+                        definitions.push(definition.clone());
+                        definition
+                    }
                     Err(e) => {
                         // A concurrent import may have won the unique-name
                         // race. Re-read once before giving up.
@@ -1096,6 +1107,7 @@ impl ToolEntityCreator {
                             tracing::warn!(document_id, property = %property.name, error = ?e, "failed to create imported document property");
                             continue;
                         };
+                        definitions.push(definition.clone());
                         definition
                     }
                 }
@@ -1122,7 +1134,7 @@ impl ToolEntityCreator {
                         value: value.clone(),
                     })
                 }
-                import::domain::ports::ImportedDocumentPropertyValue::Link { urls } => {
+                import::domain::ports::ImportedDocumentPropertyValue::Link { urls, .. } => {
                     if multi {
                         Some(SetPropertyValue::MultiLink { urls: urls.clone() })
                     } else {
@@ -1131,7 +1143,7 @@ impl ToolEntityCreator {
                             .map(|url| SetPropertyValue::Link { url })
                     }
                 }
-                import::domain::ports::ImportedDocumentPropertyValue::Select { values } => {
+                import::domain::ports::ImportedDocumentPropertyValue::Select { values, .. } => {
                     let mut options = service
                         .get_property_options(definition.id, user, None)
                         .await
@@ -1223,20 +1235,18 @@ fn imported_property_type(
         Imported::Date { .. } => (PropertyDataType::Date, DataType::Date, false),
         Imported::Number { .. } => (PropertyDataType::Number, DataType::Number, false),
         Imported::String { .. } => (PropertyDataType::String, DataType::String, false),
-        Imported::Select { values } => (
+        Imported::Select { multi, .. } => (
             PropertyDataType::SelectString {
                 options: Vec::new(),
-                multi: values.len() > 1,
+                multi: *multi,
             },
             DataType::SelectString,
-            values.len() > 1,
+            *multi,
         ),
-        Imported::Link { urls } => (
-            PropertyDataType::Link {
-                multi: urls.len() > 1,
-            },
+        Imported::Link { multi, .. } => (
+            PropertyDataType::Link { multi: *multi },
             DataType::Link,
-            urls.len() > 1,
+            *multi,
         ),
     }
 }

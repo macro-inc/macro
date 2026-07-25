@@ -22,17 +22,17 @@ fn structured_tool_results_are_preserved() {
 
 #[test]
 fn unstructured_text_results_remain_strings() {
-    let result = CallToolResult::success(vec![Content::text("first"), Content::text(" second")]);
+    let result = CallToolResult::success(vec![Content::text("first"), Content::text("second")]);
 
-    assert_eq!(tool_result_value(result), json!("first second"));
+    assert_eq!(tool_result_value(result), json!("first\nsecond"));
 }
 
 #[test]
 fn embedded_text_resources_are_not_discarded() {
-    let result = CallToolResult::success(vec![Content::embedded_text(
-        "notion://page/abc",
-        "# Page content",
-    )]);
+    let result = CallToolResult::success(vec![
+        Content::text("# Page"),
+        Content::embedded_text("notion://page/abc", "Page content"),
+    ]);
 
-    assert_eq!(tool_result_value(result), json!("# Page content"));
+    assert_eq!(tool_result_value(result), json!("# Page\nPage content"));
 }

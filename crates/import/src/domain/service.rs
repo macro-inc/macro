@@ -80,6 +80,14 @@ fn notion_import_max_turns(pages: usize) -> usize {
     (2 * pages + 6).min(40)
 }
 
+fn notion_import_failure_reason(outcome: &anyhow::Result<()>) -> String {
+    outcome
+        .as_ref()
+        .err()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| "the import job did not finish this item".to_string())
+}
+
 /// Pushes an "import state changed" nudge to the user's connected clients.
 /// A closure so this crate stays free of gateway dependencies; hosts without
 /// a gateway just don't set it.
@@ -731,8 +739,8 @@ where
         let _ = outcome.as_ref().inspect_err(|e| {
             tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
         });
-        self.fail_unfinished(user, &[row.id], "the import job did not finish this item")
-            .await;
+        let failure_reason = notion_import_failure_reason(&outcome);
+        self.fail_unfinished(user, &[row.id], &failure_reason).await;
         outcome
     }
 
@@ -1590,6 +1598,7 @@ fn imported_notion_properties(
                     "__NO__" => Some(ImportedDocumentPropertyValue::Boolean { value: false }),
                     _ if is_web_url(value) => Some(ImportedDocumentPropertyValue::Link {
                         urls: vec![value.to_string()],
+                        multi: false,
                     }),
                     _ => Some(ImportedDocumentPropertyValue::String {
                         value: value.to_string(),
@@ -1607,9 +1616,15 @@ fn imported_notion_properties(
                 if strings.is_empty() {
                     None
                 } else if strings.iter().all(|value| is_web_url(value)) {
-                    Some(ImportedDocumentPropertyValue::Link { urls: strings })
+                    Some(ImportedDocumentPropertyValue::Link {
+                        urls: strings,
+                        multi: true,
+                    })
                 } else {
-                    Some(ImportedDocumentPropertyValue::Select { values: strings })
+                    Some(ImportedDocumentPropertyValue::Select {
+                        values: strings,
+                        multi: true,
+                    })
                 }
             }
             serde_json::Value::Null | serde_json::Value::Object(_) => None,
@@ -1943,10 +1958,8 @@ fn notion_page_link(attrs: &str, body_label: Option<std::borrow::Cow<'_, str>>) 
                 .map(str::trim)
                 .filter(|label| !label.is_empty())
         })
-        .unwrap_or("Notion page")
-        .replace('[', "\\[")
-        .replace(']', "\\]");
-    format!("[{label}]({url})")
+        .unwrap_or("Notion page");
+    format!("[{}]({url})", escape_markdown_link_label(label))
 }
 
 fn notion_media_link(attrs: &str, body_label: &str) -> String {

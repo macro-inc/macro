@@ -1,5 +1,6 @@
 import TrayArrowDown from '@phosphor-icons/core/regular/tray-arrow-down.svg';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
@@ -42,21 +43,17 @@ export const importNotionPageHandler = createToolRenderer({
   render: (ctx) => {
     const [isExpanded, setIsExpanded] = createSignal(false);
     const hasResponse = () => ctx.response !== undefined;
-    const status = () => {
-      switch (ctx.response?.data.outcome) {
-        case 'imported':
-          return 'Imported';
-        case 'already_imported':
-        case 'already_imported_by_teammate':
-          return 'Already imported';
-        case 'previously_declined':
-          return 'Previously declined';
-        case 'import_in_progress':
-          return 'Importing';
-        default:
-          return undefined;
-      }
-    };
+    const status = () =>
+      match(ctx.response?.data.outcome)
+        .with('imported', () => 'Imported')
+        .with(
+          'already_imported',
+          'already_imported_by_teammate',
+          () => 'Already imported'
+        )
+        .with('previously_declined', () => 'Previously declined')
+        .with('import_in_progress', () => 'Importing')
+        .otherwise(() => undefined);
 
     return (
       <BaseTool

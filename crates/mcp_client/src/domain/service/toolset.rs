@@ -72,7 +72,7 @@ fn text_content(result: &CallToolResult) -> String {
                 })
         })
         .collect::<Vec<_>>()
-        .join("")
+        .join("\n")
 }
 
 fn tool_result_value(result: CallToolResult) -> serde_json::Value {

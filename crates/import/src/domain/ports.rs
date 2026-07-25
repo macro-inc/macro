@@ -304,11 +304,15 @@ pub enum ImportedDocumentPropertyValue {
     Select {
         /// Imported option labels.
         values: Vec<String>,
+        /// Whether the source property accepts multiple options.
+        multi: bool,
     },
     /// One or more URLs.
     Link {
         /// Imported URLs.
         urls: Vec<String>,
+        /// Whether the source property accepts multiple links.
+        multi: bool,
     },
 }
 
