@@ -10,6 +10,7 @@ mod generated;
 pub mod keepalive;
 mod metrics;
 mod mutex;
+mod otel;
 mod secrets;
 #[cfg(feature = "search-service")]
 mod sps;
@@ -49,6 +50,7 @@ fn inner_start() {
                 performance_layer()
                     .with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default()),
             )
+            .with(otel::OtelLayer)
             .init();
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -64,7 +66,24 @@ fn start() {
 }
 
 #[event(fetch)]
-async fn fetch(req: worker::Request, env: Env, _ctx: Context) -> Result<worker::Response> {
+async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::Response> {
     use crate::cf_worker::router;
-    router(env, req).await
+    use tracing::Instrument;
+
+    otel::configure(&env);
+    let traceparent = otel::traceparent_from_request(&req);
+    let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
+    let method = req.method().to_string();
+    let path = req.path();
+    let span = tracing::info_span!(
+        "request",
+        http.method = %method,
+        http.path = %path,
+        trace.remote_id = %remote_id,
+        trace.remote_parent = %remote_parent,
+    );
+
+    let res = router(env.clone(), req).instrument(span).await;
+    otel::flush_into(&env, |export| ctx.wait_until(export));
+    res
 }

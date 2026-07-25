@@ -8,7 +8,10 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import { cn, Scroll } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -88,7 +91,7 @@ export function ComposeBody(props: {
 
   const logComposeBody = (event: string, details?: Record<string, unknown>) => {
     if (!props.debugName) return;
-    logger.log(`[ComposeBody] ${event}`, {
+    logger.info(`[ComposeBody] ${event}`, {
       debugName: props.debugName,
       ...details,
     });

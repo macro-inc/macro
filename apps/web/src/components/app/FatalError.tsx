@@ -1,4 +1,7 @@
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import ResetIcon from '@phosphor/arrow-clockwise.svg';
 import HomeIcon from '@phosphor/house.svg';
 import { Button, Dialog, Surface } from '@ui';

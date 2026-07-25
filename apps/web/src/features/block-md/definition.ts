@@ -5,6 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
+import { ThrownResultError } from '@core/util/result';
 import {
   fetchDocumentLocation,
   waitForDocumentSyncServiceReady,
@@ -14,6 +15,12 @@ import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import MarkdownBlock from './component/Block';
+import {
+  endDocumentSpan,
+  registerDocumentSpan,
+  resumeDocumentSpan,
+  startDocumentSpan,
+} from './observability';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
 
 export const definition = defineBlock({
@@ -38,30 +45,84 @@ export const definition = defineBlock({
         });
       }
 
+      let rootSpan = resumeDocumentSpan(documentId);
+      if (!rootSpan) {
+        rootSpan = startDocumentSpan('doc.open');
+        rootSpan.setAttr('doc.type', 'md');
+        rootSpan.setAttr('document.id', documentId);
+        registerDocumentSpan(documentId, rootSpan);
+      }
+      const loadSpan = rootSpan.span('doc.load');
+      const bundleSpan = loadSpan.span('doc.load.bundle');
+      const locationSpan = loadSpan.span('doc.load.location');
+
+      const loadBundle = () =>
+        bundleSpan
+          .run(() => fetchDocumentLoadBundle(documentId))
+          .then((result) => {
+            if (result.isErr()) {
+              bundleSpan.error(new ThrownResultError(result.error));
+            }
+            bundleSpan.end();
+            return result;
+          });
+
+      // The location span covers the sync-service readiness wait too, so it
+      // reflects when the document actually became loadable.
+      const loadLocation = () =>
+        locationSpan.run(async () => {
+          const result = await loadResult(
+            fetchDocumentLocation({ documentId })
+          );
+          if (result.isErr()) {
+            locationSpan.error(new ThrownResultError(result.error));
+            locationSpan.end();
+            return result;
+          }
+          let location = result.value;
+          if (
+            location.type === 'presignedUrl' &&
+            location.content.state === 'pending'
+          ) {
+            location = await waitForDocumentSyncServiceReady({
+              documentId,
+            }).catch((error) => {
+              console.error(
+                'Failed waiting for markdown sync-service location',
+                error
+              );
+              return location;
+            });
+            locationSpan.setAttr('location.pending', true);
+            locationSpan.end();
+            return ok(location);
+          }
+          locationSpan.end();
+          return ok(location);
+        });
+
       const [maybeBundle, maybeLocation] = await Promise.all([
-        fetchDocumentLoadBundle(documentId),
-        loadResult(fetchDocumentLocation({ documentId })),
+        loadBundle(),
+        loadLocation(),
       ]);
-      if (maybeBundle.isErr()) return err(maybeBundle.error);
+      if (maybeBundle.isErr()) {
+        loadSpan.error('load bundle failed');
+        rootSpan.error('load bundle failed');
+        loadSpan.end();
+        endDocumentSpan(documentId);
+        return err(maybeBundle.error);
+      }
       const { token, documentMetadata, userAccessLevel } = maybeBundle.value;
 
-      if (maybeLocation.isErr()) return err(maybeLocation.error);
-
-      let location = maybeLocation.value;
-      if (
-        location.type === 'presignedUrl' &&
-        location.content.state === 'pending'
-      ) {
-        location = await waitForDocumentSyncServiceReady({ documentId }).catch(
-          (error) => {
-            console.error(
-              'Failed waiting for markdown sync-service location',
-              error
-            );
-            return location;
-          }
-        );
+      if (maybeLocation.isErr()) {
+        loadSpan.error('load location failed');
+        rootSpan.error('load location failed');
+        loadSpan.end();
+        endDocumentSpan(documentId);
+        return err(maybeLocation.error);
       }
+
+      const location = maybeLocation.value;
 
       // Markdown initialization and lifecycle persistence are backend-owned.
       // If a markdown document still resolves to object storage here, opening
@@ -73,6 +134,10 @@ export const definition = defineBlock({
           documentId,
           location.content
         );
+        loadSpan.error('markdown document not in sync-service');
+        rootSpan.error('markdown document not in sync-service');
+        loadSpan.end();
+        endDocumentSpan(documentId);
         return LoadErrors.INVALID;
       }
 
@@ -98,6 +163,7 @@ export const definition = defineBlock({
         metadata: documentMetadata,
       });
 
+      loadSpan.end();
       return ok({
         dssFile: fileWithoutBlob,
         userAccessLevel,

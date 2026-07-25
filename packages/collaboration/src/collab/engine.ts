@@ -1,4 +1,5 @@
 import { type InferType, SyncDirection } from '@loro-mirror/core';
+import type { Attributes } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
@@ -20,6 +21,7 @@ import {
 } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
+import { peerCounterAttr, telemetrySpan } from './telemetry';
 
 // SnapshotStore in the engine is always Loro updates — RawUpdate.
 type LoroSnapshotStore = SnapshotStore<RawUpdate>;
@@ -31,6 +33,15 @@ const SNAPSHOT_INTERVAL_MS = 5_000;
 
 const REQUEST_UPDATES_MAX_ATTEMPTS = 3;
 const REQUEST_UPDATES_RETRY_DELAY_MS = 2_000;
+
+/** A version vector as a compact `peer:counter` span attribute. */
+function vvAttr(vv: VersionVector): string {
+  try {
+    return peerCounterAttr(vv.toJSON().entries());
+  } catch {
+    return 'unavailable';
+  }
+}
 
 export type EngineBindings<S extends GenericRootSchema> = {
   onRemoteState: (state: InferType<S>) => void;
@@ -100,7 +111,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private log(
     level: Parameters<typeof logSyncService>[0]['level'],
     message: string,
-    extra?: Record<string, unknown>
+    extra?: Attributes
   ) {
     logSyncService({
       documentId: this.syncs.live.documentId,
@@ -178,7 +189,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
       if (syncResult.isErr()) {
         this.log('error', 'syncStateToLoro: failed, resetting engine', {
-          err: syncResult,
+          err: JSON.stringify(syncResult.error),
         });
         this.reset();
       }
@@ -204,7 +215,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (snapshot.isErr()) {
         this.log('error', 'engine.reset: failed to get snapshot', {
-          err: snapshot.error,
+          err: String(snapshot.error),
         });
         return;
       }
@@ -212,7 +223,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const resetResult = await this.loroManager.reset(snapshot.value);
       if (resetResult.isErr()) {
         this.log('error', 'engine.reset: loro manager reset failed', {
-          err: resetResult,
+          err: JSON.stringify(resetResult.error),
         });
         return;
       }
@@ -275,19 +286,32 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 
   private async handleRemoteUpdate(update: RawUpdate) {
-    await this.syncLock.runExclusive(async () => {
-      this.log('debug', 'engine: handling remote update');
-      const importResult = this.loroManager.importUpdate(update);
-      await Promise.resolve();
-      if (importResult.isErr()) {
-        this.log('error', 'engine: failed to import remote update, resetting', {
-          err: importResult,
-        });
-        this.reset();
-        return;
-      }
-      this.log('debug', 'engine: remote update imported ok');
-    });
+    await this.syncLock.runExclusive(() =>
+      telemetrySpan(this.syncs.live.documentId, 'edit.apply', async (span) => {
+        // The receive side of the Teo→Hutch chain: did the op apply, and did it
+        // actually change the doc (didChange=false ⇒ converged but nothing new)?
+        span.setAttr('update.bytes', update.length);
+        this.log('debug', 'engine: handling remote update');
+        const importResult = this.loroManager.importUpdate(update);
+        await Promise.resolve();
+        if (importResult.isErr()) {
+          this.log(
+            'error',
+            'engine: failed to import remote update, resetting',
+            {
+              err: JSON.stringify(importResult.error),
+            }
+          );
+          span.error(importResult.error);
+          span.setAttr('outcome', 'reset');
+          this.reset();
+          return;
+        }
+        span.setAttr('outcome', 'applied');
+        span.setAttr('did_change', importResult.value);
+        this.log('debug', 'engine: remote update imported ok');
+      })
+    );
   }
 
   private handleSourceEvent(event: SyncSourceEvent) {
@@ -317,13 +341,24 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     since: VersionVector,
     attempt = 1
   ) {
+    // The catch-up flow: "give me everything after the version I hold".
+    // The span shows the anchor version, what came back, and whether it
+    // applied — the trail for "client was stale and (never) reconciled".
+    const span = telemetrySpan(this.syncs.live.documentId, 'doc.sync.catchup');
+    span.setAttr('since.version', vvAttr(since));
+    span.setAttr('attempt', attempt);
     this.log('debug', `engine: requestUpdatesSince (attempt ${attempt})`);
     const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
       this.log('error', 'engine: requestUpdatesSince failed', {
-        err: 'error' in updates ? updates.error : 'update is undefined',
+        err: updates.isErr() ? String(updates.error) : 'update is undefined',
       });
-      if (updates.isErr() && attempt < REQUEST_UPDATES_MAX_ATTEMPTS) {
+      const retrying =
+        updates.isErr() && attempt < REQUEST_UPDATES_MAX_ATTEMPTS;
+      span.error(updates.isErr() ? updates.error : 'update is undefined');
+      span.setAttr('outcome', retrying ? 'retrying' : 'failed');
+      span.end();
+      if (retrying) {
         await new Promise((resolve) =>
           setTimeout(resolve, REQUEST_UPDATES_RETRY_DELAY_MS)
         );
@@ -333,7 +368,10 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
 
     this.log('debug', 'engine: requestUpdatesSince ok, applying update');
-    this.handleRemoteUpdate(updates.value);
+    await this.handleRemoteUpdate(updates.value);
+    span.setAttr('outcome', 'applied');
+    span.setAttr('update.bytes', updates.value.length);
+    span.end();
   }
 }
 

@@ -112,6 +112,16 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
         uri strip_prefix /sync
         reverse_proxy sync-service:8787
     }
+    # Analytics/telemetry proxy worker (PostHog and OTLP traces/logs).
+    # No prefix strip: the worker itself routes on the /i/{ph,dd,otlp} prefix,
+    # and it listens on 8098, not the :8080 the generated routes assume.
+    # Set CF-Connecting-IP (absent without Cloudflare's edge in front) so the
+    # worker's rate-limit keying has a client IP instead of erroring.
+    handle /i/* {
+        reverse_proxy analytics-proxy:8098 {
+            header_up CF-Connecting-IP {http.request.remote.host}
+        }
+    }
 
 "#;
 

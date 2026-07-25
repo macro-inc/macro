@@ -9,7 +9,7 @@ use bebop::Record;
 use loro::{ExportMode, awareness::EphemeralStore};
 use matchit::Router;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{Instrument, debug, error, info, instrument, trace, warn};
 use worker::{
     Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
     ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
@@ -26,6 +26,7 @@ use crate::{
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
     mutex::Mutex,
+    otel,
     state::DocumentState,
     storage::{
         SessionStorage, backends::durable_kv::DurableKVStorage, get_snapshot_storage,
@@ -344,6 +345,7 @@ impl DocumentSyncSession {
         match (
             *matched.value,
             matched.params.get("document_id").inspect(|document_id| {
+                tracing::Span::current().record("document.id", *document_id);
                 trace!(route =? matched.value, document_id = document_id, "matched route");
             }),
         ) {
@@ -647,6 +649,14 @@ impl DocumentSyncSession {
             self.state
                 .accept_websocket_with_tags(&pair.server, &[&ws_id]);
 
+            // Attach the connect request's raw trace context so later
+            // `websocket_message` spans (post-hibernation too) can join it.
+            if let Some(traceparent) = otel::traceparent_value(&req) {
+                _ = pair.server.serialize_attachment(traceparent).inspect_err(
+                    |e| warn!(error = ?e, "failed to attach traceparent to websocket"),
+                );
+            }
+
             let ws_meta = WebSocketMetadata {
                 user_id: claims.user_id,
                 access_level: claims.access_level,
@@ -667,6 +677,9 @@ impl DocumentSyncSession {
                 .and_then(|state| state.export_shallow_snapshot());
 
             if let Ok(snapshot) = snapshot {
+                // Size of the initial sync this connect sent — the server end
+                // of the client's `doc.sync.initial-sync` span.
+                tracing::Span::current().record("snapshot.bytes", snapshot.len());
                 websocket::send_initial_sync(
                     &pair.server,
                     snapshot.as_slice(),
@@ -909,11 +922,23 @@ impl DurableObject for DocumentSyncSession {
                 .with_cors(&cors(set_allow_origin.as_deref()))?
                 .empty());
         }
-        let res = self
-            .inner_fetch(req)
-            .await
-            .context("DurableObject::fetch error")?;
-        res.with_cors(&cors(set_allow_origin.as_deref()))
+        otel::configure(&self.env);
+        let traceparent = otel::traceparent_from_request(&req);
+        let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
+        let path = req.path();
+        let span = tracing::info_span!(
+            "do.request",
+            http.path = %path,
+            document.id = tracing::field::Empty,
+            snapshot.bytes = tracing::field::Empty,
+            trace.remote_id = %remote_id,
+            trace.remote_parent = %remote_parent,
+        );
+
+        let res = self.inner_fetch(req).instrument(span).await;
+        otel::flush_into(&self.env, |export| self.state.wait_until(export));
+        res.context("DurableObject::fetch error")?
+            .with_cors(&cors(set_allow_origin.as_deref()))
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
@@ -921,7 +946,7 @@ impl DurableObject for DocumentSyncSession {
         const PING: &str = "ping";
         let binary_message = match msg {
             WebSocketIncomingMessage::String(message) => {
-                // TODO do keepalive?
+                // Heartbeat: deliberately unspanned to keep it out of traces.
                 if message == PING {
                     ws.send_with_str(PONG).ok();
                 } else {
@@ -932,24 +957,58 @@ impl DurableObject for DocumentSyncSession {
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
 
-        websocket::process_message(
-            &ws,
-            &self.document_id().await?,
-            &*self.document_state().await?,
-            &*self.session_storage().await?,
-            &self.awareness,
-            binary_message,
-            self.msg_buffer.clone(),
-            self,
-        )
-        .await
-        .context("failed to process websocket message")?;
+        otel::configure(&self.env);
+        let traceparent = ws
+            .deserialize_attachment::<String>()
+            .ok()
+            .flatten()
+            .and_then(|s| otel::TraceParent::parse(&s));
+        let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
+        let span = tracing::info_span!(
+            "ws.message",
+            document.id = tracing::field::Empty,
+            ws.id = tracing::field::Empty,
+            message.type = tracing::field::Empty,
+            peer.id = tracing::field::Empty,
+            op.id = tracing::field::Empty,
+            broadcast.targets = tracing::field::Empty,
+            update.bytes = tracing::field::Empty,
+            response.bytes = tracing::field::Empty,
+            trace.remote_id = %remote_id,
+            trace.remote_parent = %remote_parent,
+        );
 
-        bump_alarm(&self.state)
+        let res: Result<()> = async {
+            let document_id = self.document_id().await?;
+            let current = tracing::Span::current();
+            current.record("document.id", document_id.as_str());
+            if let Ok(ws_id) = get_ws_id_from_tags(&self.state.get_tags(&ws)) {
+                current.record("ws.id", ws_id.as_str());
+            }
+            websocket::process_message(
+                &ws,
+                &document_id,
+                &*self.document_state().await?,
+                &*self.session_storage().await?,
+                &self.awareness,
+                binary_message,
+                self.msg_buffer.clone(),
+                self,
+            )
             .await
-            .context("failed to keep document alive")?;
+            .context("failed to process websocket message")?;
 
-        Ok(())
+            bump_alarm(&self.state)
+                .await
+                .context("failed to keep document alive")?;
+
+            Ok(())
+        }
+        .instrument(span)
+        .await;
+
+        otel::flush_into(&self.env, |export| self.state.wait_until(export));
+        res
     }
 
     /// Save document if needed

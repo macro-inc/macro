@@ -22,8 +22,6 @@ on:
         required: true
       DD_API_KEY:
         required: true
-      DD_WEB_APP_TOKEN:
-        required: true
       SEGMENT_WRITE_KEY:
         required: true
       POSTHOG_API_KEY:
@@ -68,8 +66,6 @@ jobs:
     - name: Build
       run: just build-${{ inputs.environment }}
       env:
-        VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
-        VITE_DD_HASH: ${{ github.sha }}
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web

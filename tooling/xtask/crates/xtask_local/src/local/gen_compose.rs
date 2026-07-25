@@ -33,12 +33,14 @@ pub const CADDY_IMAGE: &str = "caddy:2-alpine";
 /// Base-compose services that bind fixed host ports but aren't in our inventory
 /// (reached via the proxy / container network, not the host). For named
 /// instances we drop their host-port bindings so concurrent stacks don't collide
-/// on 8787/6969/8096/8100.
+/// on 8787/6969/8096/8100/8933.
 const AUX_HOST_PORT_SERVICES: &[&str] = &[
     "sync_service",
     "websocket_service",
     "lexical_service",
     "static_file_cdn",
+    "ai_editing_worker",
+    "analytics_proxy",
 ];
 
 /// The host directory bind-mounted into FusionAuth at

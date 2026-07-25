@@ -1,7 +1,10 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import { onCleanup, onMount, untrack } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
@@ -143,16 +146,14 @@ export function registerHotkey(
   };
 
   if (!scopeId) {
-    logger.error('Scope ID is required for hotkey registration.', {
-      error: new Error('No scope ID provided'),
+    logger.error(new Error('Scope ID is required for hotkey registration.'), {
       scopeId,
     });
     return noopDisposer;
   }
   const scopeNode = hotkeyScopeTree.get(scopeId);
   if (!scopeNode) {
-    logger.error('Scope ID not found.', {
-      error: new Error('Scope ID not found'),
+    logger.error(new Error('Scope ID not found.'), {
       scopeId,
     });
     return noopDisposer;
@@ -173,15 +174,12 @@ export function registerHotkey(
       existingHotkeys.length !== hotkeys?.length ||
       !existingHotkeys.every((el, i) => el === hotkeys[i])
     ) {
-      logger.log(
+      logger.warn(
         `Hotkey token "${hotkeyToken}" is already registered with a different command. ` +
           `Existing: ${existingCommand.description}, New: ${description}. ` +
           `This is likely a bug, please fix it. `,
         {
-          level: 'warn',
-          error: new Error(
-            'Hotkey token already registered with a different command'
-          ),
+          error: 'Hotkey token already registered with a different command',
         }
       );
     }
@@ -192,15 +190,13 @@ export function registerHotkey(
   if (providedCommandScopeId) {
     const existingScope = hotkeyScopeTree.get(providedCommandScopeId);
     if (!existingScope) {
-      logger.error('Provided command scope ID not found.', {
-        error: new Error('Provided command scope ID not found'),
+      logger.error(new Error('Provided command scope ID not found.'), {
         providedCommandScopeId,
       });
       return noopDisposer;
     }
     if (existingScope.type !== 'command') {
-      logger.error('Provided scope is not a command scope.', {
-        error: new Error('Provided scope is not a command scope'),
+      logger.error(new Error('Provided scope is not a command scope.'), {
         providedCommandScopeId,
         scopeType: existingScope.type,
       });
@@ -246,11 +242,10 @@ export function registerHotkey(
     hotkeys?.forEach((h) => {
       const existingHandlers = scopeNode.hotkeyCommands.get(h);
       if (existingHandlers && existingHandlers.length > 0) {
-        logger.log(
+        logger.warn(
           `Hotkey ${h} already registered in scope ${scopeId}. Previous hotkey is being overwritten.`,
           {
-            level: 'warn',
-            error: new Error('Hotkey already registered in scope'),
+            error: 'Hotkey already registered in scope',
           }
         );
       }
@@ -656,8 +651,7 @@ export function useHotKeyRoot() {
     }
     const isEditableFocused = isEditableInput(document.activeElement);
     if (!currentScopeId) {
-      return logger.error(`Could not find current hotkey scope.`, {
-        error: new Error('Could not find current hotkey scope'),
+      return logger.error(new Error('Could not find current hotkey scope.'), {
         currentScopeId,
       });
     }

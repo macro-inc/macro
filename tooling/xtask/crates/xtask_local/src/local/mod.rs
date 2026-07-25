@@ -167,6 +167,13 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         instance.name()
     ));
 
+    // Before `prepare` (which resolves env and reads the OTLP port to decide
+    // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
+    // the same auto-wiring as a collector started manually beforehand.
+    if let Some(backend) = args.traces {
+        ensure_tracing_backend(&stage, backend)?;
+    }
+
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a
     // clean slate. That makes the command unconditionally idempotent — no
@@ -222,7 +229,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         stage.note("frontend disabled (--no-frontend)");
         None
     } else {
-        frontend::start(&stage, &instance, mode)?
+        frontend::start(&stage, &instance, mode, args.traces.is_some())?
     };
 
     summary::print(mode, &instance, &env);
@@ -590,7 +597,93 @@ fn bring_up_app(
         }
         up.arg("proxy");
     }
-    stage.run("Starting services (docker compose up -d)", &mut up)
+    stage.run("Starting services (docker compose up -d)", &mut up)?;
+    connect_tracing_network(instance);
+    Ok(())
+}
+
+/// Start the requested trace collector (`--traces`) under its own compose
+/// project, the same one a developer would use manually — see
+/// `docker/docker-compose.yml`'s `jaeger`/`datadog-agent` services. Global and
+/// idempotent (like `start_localstack`): one collector per machine, shared
+/// across instances, left running across `run_local` invocations.
+fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<()> {
+    // A keyed backend with a missing key accepts telemetry locally and drops
+    // every payload at the vendor intake (403), which looks like "traces are
+    // broken" rather than "key is missing" — so fail loud up front.
+    if let Some(var) = backend.required_env()
+        && std::env::var(var).map(|v| v.is_empty()).unwrap_or(true)
+    {
+        anyhow::bail!(
+            "--traces {} requires the {var} env var to be set (export it in \
+             the shell you run this from)",
+            backend.compose_profile()
+        );
+    }
+    let compose = repo_root().join("docker/docker-compose.yml");
+    let mut up = Command::new("docker");
+    up.arg("compose")
+        .arg("--project-directory")
+        .arg(repo_root())
+        .arg("-f")
+        .arg(&compose)
+        .arg("--profile")
+        .arg(backend.compose_profile())
+        .arg("up")
+        .arg("-d")
+        .arg("--remove-orphans")
+        .arg(backend.compose_service());
+    stage.run(
+        &format!("Starting {} trace collector", backend.compose_profile()),
+        &mut up,
+    )?;
+
+    // `up -d` returns once the container starts, not once it's accepting
+    // connections; `env_layer::resolve` (which runs right after this, in
+    // `prepare`) needs the OTLP port live NOW to decide whether to wire
+    // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of racing.
+    for _ in 0..50 {
+        if summary::port_open(4318) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    anyhow::bail!(
+        "{} trace collector did not come up on port 4318 in time",
+        backend.compose_profile()
+    )
+}
+
+/// If the global trace collector (Jaeger or the Datadog agent) is running,
+/// attach it to this instance's `services` network under the `otel-collector`
+/// alias that the injected `OTEL_EXPORTER_OTLP_ENDPOINT` points at (see
+/// `env_layer::resolve`). The collectors are started under their own compose
+/// project (`docker/docker-compose.yml`, profiles `jaeger`/`datadog`), and
+/// Compose prefixes networks per project — so without this, instance
+/// containers can't resolve `otel-collector` and span exports fail with DNS
+/// errors. Best-effort: "already connected" (rerun) and other failures are
+/// ignored, they only mean traces don't flow.
+fn connect_tracing_network(instance: &Instance) {
+    if !summary::port_open(4318) {
+        return;
+    }
+    // Find the collector container (Jaeger or Datadog agent — both publish the
+    // OTLP HTTP port) by that port rather than assuming a container name, in
+    // case it was started under a different project.
+    let Some(collector) = Command::new("docker")
+        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|name| !name.is_empty())
+    else {
+        return;
+    };
+    let _ = Command::new("docker")
+        .args(["network", "connect", "--alias", "otel-collector"])
+        .arg(format!("{}_services", instance.project_name()))
+        .arg(collector)
+        .output();
 }
 
 /// Restart the given services' containers so they re-exec their freshly built

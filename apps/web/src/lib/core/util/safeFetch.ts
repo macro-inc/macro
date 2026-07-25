@@ -1,7 +1,133 @@
+import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
+// Only the OTel API package (tiny, dependency-free) — never the SDK. Until a
+// Telemetry initializes the provider, while the tracer and propagator below
+// context manager and propagator below are all no-ops, so untraced users pay
+// nothing beyond a URL parse per request.
+import {
+  context,
+  propagation,
+  type Span,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import { err, ok, type Result } from 'neverthrow';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
+
+/**
+ * Origins that may receive trace headers: Macro's own service hosts (direct
+ * or via the local reverse proxy), the sync-service worker, and the app's own
+ * origin. `traceparent` must never go to third-party origins — it leaks trace
+ * ids and can break CORS preflights.
+ */
+const tracedOrigins: ReadonlySet<string> = (() => {
+  const origins = new Set<string>();
+  for (const host of [
+    ...Object.values(SERVER_HOSTS),
+    SYNC_SERVICE_HOSTS.worker,
+  ]) {
+    try {
+      origins.add(new URL(host).origin);
+    } catch {
+      // Not a parseable URL; skip.
+    }
+  }
+  if (typeof window !== 'undefined') origins.add(window.location.origin);
+  return origins;
+})();
+
+function isTracedOrigin(url: URL): boolean {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  return tracedOrigins.has(url.origin);
+}
+
+function requestUrl(input: RequestInfo): URL | undefined {
+  const raw = typeof input === 'string' ? input : input.url;
+  try {
+    return new URL(
+      raw,
+      typeof window === 'undefined' ? undefined : window.location.origin
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The app-wide HTTP tracing chokepoint: every request through
+ * {@link safeFetch} (and its wrappers `fetchWithToken` / `fetchWithAuth`)
+ * becomes an `http <METHOD> <path>` client span, parented to the ambient
+ * OTel context (e.g. a `Transaction.run` root; a root span when nothing
+ * is active). Macro-origin requests also get a `traceparent` header so the
+ * backend's request span joins the same trace.
+ */
+// The proxy tracer resolves against whatever provider registers later.
+const tracer = trace.getTracer('web-app');
+
+function recordSpanError(span: Span, error: unknown): void {
+  const exception =
+    error instanceof Error ||
+    typeof error === 'string' ||
+    (typeof error === 'object' && error !== null && 'message' in error)
+      ? (error as Error | string)
+      : String(error);
+  span.recordException(exception);
+  span.setStatus({
+    code: SpanStatusCode.ERROR,
+    message:
+      typeof exception === 'string' ? exception : (exception.message ?? ''),
+  });
+}
+
+function tracedFetch(
+  input: RequestInfo,
+  init: RequestInit & { headers: Record<string, string> }
+): Promise<Response> {
+  const url = requestUrl(input);
+  if (!url) return platformFetch(input, init);
+  const method = (init.method ?? 'GET').toUpperCase();
+  return tracer.startActiveSpan(
+    `http ${method} ${url.pathname}`,
+    {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        'http.method': method,
+        // Path only: query strings can carry tokens.
+        'http.url': `${url.origin}${url.pathname}`,
+      },
+    },
+    async (span) => {
+      try {
+        // Inject inside the span's context so the backend's request span
+        // parents under this http span, not the flow root.
+        if (isTracedOrigin(url)) {
+          propagation.inject(context.active(), init.headers);
+        }
+        const response = await platformFetch(input, init);
+        span.setAttribute('http.status_code', response.status);
+        if (!response.ok) {
+          // An error response has no JS exception, so record a synthetic
+          // one: the message says what failed, and the (async) stack shows
+          // which call path issued the request.
+          const message = `HTTP ${response.status} for ${method} ${url.pathname}`;
+          recordSpanError(span, {
+            name: 'HttpError',
+            message,
+            stack: new Error(message).stack,
+          });
+        }
+        return response;
+      } catch (error) {
+        recordSpanError(span, error);
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
 
 /**
  * Base error codes for fetch operations.
@@ -170,7 +296,7 @@ export async function safeFetch<
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
     try {
-      const response = await platformFetch(input, {
+      const response = await tracedFetch(input, {
         ...fetchInit,
         headers: {
           ...(fetchInit?.method !== 'GET' &&

@@ -43,7 +43,10 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {

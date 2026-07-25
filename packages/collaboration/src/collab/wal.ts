@@ -1,7 +1,9 @@
+import type { Span } from '@macro-inc/observability';
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import { logSyncService, type WalContext } from './logger';
 import type { RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
+import { telemetrySpan } from './telemetry';
 
 export type WALEntry<T> = {
   id: number;
@@ -323,6 +325,13 @@ export class WALSyncer<T> {
       const undelivered = entries.filter((e) => !e.delivered);
       if (undelivered.length === 0) return; // nothing to do
 
+      // Span duration = how long the batch took to be acked; outcome tells you
+      // whether edits are stranded undelivered (the WAL side of a stuck sync).
+      const span: Span | undefined = this.label
+        ? telemetrySpan(this.label, 'wal.flush')
+        : undefined;
+      span?.setAttr('wal.dirty', undelivered.length);
+
       if (this.label)
         logSyncService({
           documentId: this.label,
@@ -331,10 +340,21 @@ export class WALSyncer<T> {
           message: `WAL flush: pushing ${undelivered.length} entries`,
         });
 
-      const delivered = await this.push(undelivered.map((e) => e.update));
+      let delivered: boolean;
+      try {
+        delivered = await this.push(undelivered.map((e) => e.update));
+      } catch (e) {
+        span?.error(e);
+        span?.setAttr('outcome', 'error');
+        span?.end();
+        throw e;
+      }
 
       if (delivered) {
         await this.store.markDelivered(undelivered.map((e) => e.id));
+        span?.setAttr('outcome', 'delivered');
+        span?.setAttr('wal.delivered', undelivered.length);
+        span?.end();
         if (this.label)
           logSyncService({
             documentId: this.label,
@@ -343,6 +363,11 @@ export class WALSyncer<T> {
             message: `WAL flush: delivered ${undelivered.length} entries`,
           });
       } else {
+        // Undelivered edits stranded in the WAL — record as an error so the
+        // span always exports (successes may be sampled).
+        span?.error('push not acked; entries remain undelivered');
+        span?.setAttr('outcome', 'not_acked');
+        span?.end();
         if (this.label)
           logSyncService({
             documentId: this.label,

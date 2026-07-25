@@ -96,6 +96,15 @@ pub async fn process_message(
         message = tracing::field::display(&message),
         "process websocket message"
     );
+    let msg_type = match &message {
+        FromPeer::PeerRegisterId { .. } => "register_id",
+        FromPeer::PeerUpdate { .. } => "update",
+        FromPeer::PeerAwareness { .. } => "awareness",
+        FromPeer::PeerRequestSince { .. } => "request_since",
+        FromPeer::PeerRequestSnapshot { .. } => "request_snapshot",
+        FromPeer::Unknown => "unknown",
+    };
+    tracing::Span::current().record("message.type", msg_type);
     match message {
         // Handle peer id registration
         // This registers a peer id to the owner of the current websocket
@@ -108,6 +117,14 @@ pub async fn process_message(
         // Should extract binary update and broadcast it to all other connected peers
         // Should also store the update in the operation log to be applied to the remote doc
         FromPeer::PeerUpdate { updates, id } => {
+            // Same id the client stamps on its `edit.push` span (`op.id`), so
+            // the client send and this server processing — separate traces —
+            // correlate by attribute in the tracing backend.
+            tracing::Span::current().record("op.id", id);
+            tracing::Span::current().record(
+                "update.bytes",
+                updates.iter().map(|u| u.len()).sum::<usize>(),
+            );
             if !Wsm::new(dss, ws).can_edit().await? {
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
@@ -115,6 +132,9 @@ pub async fn process_message(
 
             let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
             let peer_id = peer_ids.first().copied();
+            if let Some(peer_id) = peer_id {
+                tracing::Span::current().record("peer.id", peer_id);
+            }
             let now_ms = web_time::SystemTime::now()
                 .duration_since(web_time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as i64)
@@ -151,6 +171,12 @@ pub async fn process_message(
                 ws.send_with_bytes(serialized).context("failed to send")?;
             }
 
+            // Peers receiving the rebroadcast (everyone but the sender). The
+            // count is the key Teo/Hutch diagnostic: if it excludes a peer the
+            // DO thinks isn't connected, that's the dropped-update bug.
+            let sockets = dss.get_websockets();
+            let targets: Vec<&WebSocket> = sockets.iter().filter(|w| w != &ws).collect();
+            tracing::Span::current().record("broadcast.targets", targets.len());
             for update in &updates {
                 // broadcast each update to other peers
                 let message = FromRemote::RemoteUpdate {
@@ -159,7 +185,7 @@ pub async fn process_message(
                 let mut buf = buf.lock("serialize RemoteUpdate in PeerUpdate handler");
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;
-                for w in dss.get_websockets().iter().filter(|w| w != &ws) {
+                for w in &targets {
                     // A dead peer socket must not abort delivery to the
                     // remaining peers.
                     if let Err(e) = w.send_with_bytes(serialized) {
@@ -191,6 +217,8 @@ pub async fn process_message(
             let update = document_state
                 .export_updates_since(&decoded)
                 .context("failed to export updates")?;
+            // Server end of the client's `doc.sync.catchup` span.
+            tracing::Span::current().record("response.bytes", update.len());
 
             // Echo the client's *original* vv bytes back, not a re-encoded copy.
             // The client correlates the response by byte-exact match on the vv it
@@ -211,6 +239,7 @@ pub async fn process_message(
         // Peer is requesting a snapshot from the remote
         FromPeer::PeerRequestSnapshot {} => {
             let snapshot = document_state.export_shallow_snapshot()?;
+            tracing::Span::current().record("response.bytes", snapshot.len());
 
             let message = FromRemote::RemoteSnapshot {
                 snapshot: SliceWrapper::Raw(&snapshot),

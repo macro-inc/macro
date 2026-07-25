@@ -1,6 +1,11 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
+import {
+  endTrackedDocumentSpan,
+  registerDocumentSpan,
+  startDocumentSpan,
+} from '@block-md/observability';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
@@ -50,6 +55,7 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
+import type { Span } from '@macro-inc/observability';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
@@ -71,9 +77,11 @@ const createBlock = async (spec: {
   createFn: () => Promise<string | undefined>;
   loading?: boolean;
   shouldInsert?: boolean;
+  /** Active creation span; registered by document id after creation. */
+  span?: Span;
 }) => {
   const { openWithSplit } = useSplitLayout();
-  const { blockName, createFn, loading } = spec;
+  const { blockName, createFn, loading, span } = spec;
 
   setCreateMenuOpen(false, false);
 
@@ -95,9 +103,14 @@ const createBlock = async (spec: {
 
   const id = await createFn();
   if (!id) {
+    span?.setAttr('error', true);
+    span?.end();
     split?.goBack();
     return;
   }
+
+  span?.setAttr('document.id', id);
+  if (span) registerDocumentSpan(id, span);
 
   // If we are creating a new markdown document "from scratch" then we can let
   // them instantly start editing
@@ -132,6 +145,8 @@ const createBlock = async (spec: {
       }
     );
   }
+
+  span?.event('doc.navigated');
 };
 
 const createComponent = async (spec: {
@@ -170,20 +185,33 @@ export function runCreateAction(
   const source = options.source ?? 'create_menu';
 
   switch (blockName) {
-    case 'md':
-      createBlock({
-        blockName: 'md',
-        loading: true,
-        createFn: () =>
-          createMarkdownFile({
-            title: '',
-            content: '',
-            projectId: undefined,
-            source,
-          }),
-        shouldInsert,
-      });
+    case 'md': {
+      const span = startDocumentSpan('doc.create');
+      span.setAttr('doc.type', 'md');
+      span.setAttr('doc.source', source);
+      void span
+        .run(() =>
+          createBlock({
+            blockName: 'md',
+            loading: true,
+            span,
+            createFn: () =>
+              createMarkdownFile({
+                title: '',
+                content: '',
+                projectId: undefined,
+                source,
+              }),
+            shouldInsert,
+          })
+        )
+        .catch((error) => {
+          span.error(error);
+          endTrackedDocumentSpan(span);
+          throw error;
+        });
       return;
+    }
     case 'canvas':
       createBlock({
         blockName: 'canvas',

@@ -81,8 +81,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
-              DD_WEB_APP_TOKEN:
-                required: true
               SEGMENT_WRITE_KEY:
                 required: true
               POSTHOG_API_KEY:
@@ -125,8 +123,6 @@ fn build() -> Step<Run> {
     Step::new("Build")
         .run("just build-${{ inputs.environment }}")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("VITE_DD_WEB_APP_TOKEN", vars::DD_WEB_APP_TOKEN))
-        .add_env(Env::new("VITE_DD_HASH", "${{ github.sha }}"))
         .add_env(Env::new("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY))
         .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
 }

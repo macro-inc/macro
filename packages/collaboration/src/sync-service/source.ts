@@ -10,6 +10,7 @@ import {
   SyncSourceStatus,
   type TimeoutError,
 } from '../collab/source';
+import { telemetrySpan } from '../collab/telemetry';
 import { arrayEquals } from '../internal/compare';
 import {
   WebsocketConnectionState,
@@ -167,18 +168,29 @@ export class SyncServiceSource implements LiveSyncSource {
     if (updates.length === 0) return true;
 
     const id = this.newId();
-    // Attach the ack listener before sending so an ack that races back early
-    // can't be missed.
-    const acked = this.awaitMessage(
-      (message) => message.isRemoteUpdateAck() && message.value.id === id,
-      TIMEOUTS.ACK
-    ).then(
-      () => true,
-      () => false
-    );
+    // Span duration = ack latency; outcome distinguishes a lost edit (timeout)
+    // from a delivered one — the send side of the Teo→Hutch chain.
+    return telemetrySpan(this.documentId, 'edit.push', async (span) => {
+      span.setAttr('op.id', id);
+      span.setAttr('update.count', updates.length);
+      // Attach the ack listener before sending so an ack that races back early
+      // can't be missed.
+      const acked = this.awaitMessage(
+        (message) => message.isRemoteUpdateAck() && message.value.id === id,
+        TIMEOUTS.ACK
+      ).then(
+        () => true,
+        () => false
+      );
 
-    this.ws.send(FromPeer.fromPeerUpdate({ updates, id }));
-    return acked;
+      this.ws.send(FromPeer.fromPeerUpdate({ updates, id }));
+      const result = await acked;
+      // A timeout is a potentially-lost edit — record it as an error so the
+      // span always exports (successes may be sampled).
+      if (!result) span.error(`update ${id} not acked within ack timeout`);
+      span.setAttr('outcome', result ? 'acked' : 'timeout');
+      return result;
+    });
   };
 
   public pushAwareness = (awareness: RawUpdate): void => {
@@ -339,7 +351,7 @@ export class SyncServiceSource implements LiveSyncSource {
         logSyncService({
           documentId: this.documentId,
           level: 'warn',
-          context: { misc: { error } },
+          context: { misc: { error: String(error) } },
           message: 'sync source: reconnect initial sync timed out',
         });
         // Heartbeat is already running, so the connection remains monitored

@@ -78,6 +78,13 @@ pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv) {
         row("kafka", format!("localhost:{}", instance.port(Port::Kafka)));
     }
 
+    if let Some(url) = traces_url() {
+        row("traces", url);
+    }
+    if let Some(url) = dd_logs_url() {
+        row("dd logs", url);
+    }
+
     let repo_root = super::repo_root();
     let base_compose = repo_root.join("docker/docker-compose.yml");
     let override_compose = instance.artifact_dir().join("docker-compose.override.yml");
@@ -100,4 +107,50 @@ pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv) {
     };
     row("stop", stop);
     println!();
+}
+
+/// The trace viewer for the OTel spans the web app emits, if one is running.
+///
+/// The viewers are global (fixed ports, one per machine, started manually via
+/// compose profiles — see `docker/docker-compose.yml`), so this probes rather
+/// than consulting the instance: the Jaeger UI on 16686, else a Datadog agent
+/// on the OTLP port 4318, whose traces land in the Datadog APM UI under the
+/// `env:` its compose profile sets (`DD_ENV`, default `local`).
+fn traces_url() -> Option<String> {
+    if port_open(16686) {
+        return Some("http://localhost:16686".into());
+    }
+    if port_open(4318) {
+        return Some(format!(
+            "https://us5.datadoghq.com/apm/traces?query=env%3A{}",
+            dd_env()
+        ));
+    }
+    None
+}
+
+/// The Datadog Logs Explorer for the OTel log records the web app emits —
+/// only when the Datadog agent is the running collector (Jaeger has no log
+/// UI; its OTLP logs are dropped).
+fn dd_logs_url() -> Option<String> {
+    if port_open(16686) || !port_open(4318) {
+        return None;
+    }
+    Some(format!(
+        "https://us5.datadoghq.com/logs?query=env%3A{}",
+        dd_env()
+    ))
+}
+
+fn dd_env() -> String {
+    std::env::var("DD_ENV").unwrap_or_else(|_| "local".into())
+}
+
+/// Whether something is listening on `port` on localhost.
+pub(super) fn port_open(port: u16) -> bool {
+    std::net::TcpStream::connect_timeout(
+        &([127, 0, 0, 1], port).into(),
+        std::time::Duration::from_millis(150),
+    )
+    .is_ok()
 }

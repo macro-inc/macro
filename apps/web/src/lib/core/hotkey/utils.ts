@@ -1,5 +1,8 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import { createEffect, createMemo } from 'solid-js';
 import {
   macOptionReverse,
@@ -347,12 +350,10 @@ export function getActiveCommandByToken(
           commandScope.originalParentScopeId
         );
         if (!originalParentScope) {
-          logger.error('Original parent scope not found for command scope:', {
-            error: new Error(
-              'Original parent scope not found for command scope'
-            ),
-            commandScopeId: commandScope?.scopeId,
-          });
+          logger.error(
+            new Error('Original parent scope not found for command scope'),
+            { commandScopeId: commandScope?.scopeId }
+          );
           return [];
         }
 

@@ -1,5 +1,6 @@
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { ThrownResultError } from '@core/util/result';
 import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
   buildDiffState,
@@ -98,7 +99,7 @@ export function HistoryProvider(props: {
     () => (isOpen() ? props.documentId() : undefined),
     async (documentId) => {
       const result = await syncServiceClient.getSnapshot({ documentId });
-      if (result.isErr()) throw new Error(String(result.error));
+      if (result.isErr()) throw new ThrownResultError(result.error);
       const doc = new LoroDoc();
       doc.import(result.value);
       return doc;

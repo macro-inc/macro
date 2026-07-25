@@ -8,7 +8,10 @@ import {
   type SafeFetchInit,
   safeFetch,
 } from '@core/util/safeFetch';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import { makePersisted } from '@solid-primitives/storage';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';

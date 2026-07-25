@@ -55,6 +55,7 @@ import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
+import { Telemetry } from '@macro-inc/observability';
 import {
   BrowserNotificationModal,
   createNotificationSource,
@@ -62,10 +63,6 @@ import {
   usePlatformNotificationState,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
-import {
-  clearUser as clearDatadogUser,
-  setUser as setDatadogUser,
-} from '@observability';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
@@ -448,16 +445,12 @@ function UserInfoSideEffects() {
   let identified = false;
   createEffect(
     on(userInfo, (user) => {
-      // Keep Datadog log user context in sync with auth state: set on every
-      // authenticated load (the logs SDK doesn't persist across reloads), and
-      // clear on logout so logs aren't attributed to a signed-out user. Logout
-      // flips userInfo client-side, and on native mobile it's an SPA navigation
-      // with no page reload, so this effect is what clears it there.
-      if (user?.authenticated) {
-        setDatadogUser({ id: user.id, email: user.email });
-      } else {
-        clearDatadogUser();
-      }
+      // Keep telemetry user context in sync with auth state: set on every
+      // authenticated load, and clear on logout so spans and logs aren't
+      // attributed to a signed-out user. Logout flips userInfo client-side,
+      // and on native mobile it's an SPA navigation with no page reload, so
+      // this effect is what clears it there.
+      Telemetry.config.setUser(user?.authenticated ? user.id : undefined);
 
       if (!user || !user.authenticated) return;
 

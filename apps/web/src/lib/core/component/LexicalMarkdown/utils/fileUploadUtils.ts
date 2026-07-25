@@ -11,7 +11,10 @@ import {
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
+const logger = Telemetry;
+
 import { fileExtension } from '@service-storage/util/filename';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -131,9 +134,7 @@ async function onFilesReady(
         const item = await documentUploadToItem(result);
         if (!item) {
           toast.failure('Document upload failed or timed out');
-          logger.error('Document upload failed or timed out', {
-            cause: new Error(),
-          });
+          logger.error(new Error('Document upload failed or timed out'));
           continue;
         }
         uploadedItemIds.push(item.id);
@@ -149,9 +150,7 @@ async function onFilesReady(
       const item = await documentUploadToItem(result);
       if (!item) {
         toast.failure('Folder upload failed or timed out');
-        logger.error('Folder upload failed or timed out', {
-          cause: new Error(),
-        });
+        logger.error(new Error('Folder upload failed or timed out'));
         continue;
       }
       uploadedItemIds.push(item.id);

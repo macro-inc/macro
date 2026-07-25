@@ -13,6 +13,7 @@ use std::{
 };
 
 use http::{HeaderValue, Request, Response};
+use opentelemetry::trace::TraceContextExt;
 use tokio::time::MissedTickBehavior;
 use tower::{
     ServiceBuilder,
@@ -22,9 +23,50 @@ use tower_http::{
     ServiceBuilderExt,
     classify::{ServerErrorsAsFailures, SharedClassifier},
     request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
-    trace::{DefaultMakeSpan, DefaultOnRequest, OnFailure, OnResponse, TraceLayer},
+    trace::{DefaultOnRequest, MakeSpan, OnFailure, OnResponse, TraceLayer},
 };
 use tracing::{Level, Span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+/// [`DefaultMakeSpan`](tower_http::trace::DefaultMakeSpan) (with headers), plus
+/// W3C trace-context propagation: when the request carries a valid
+/// `traceparent` (e.g. from the web app's OTel flow tracing), the request span
+/// becomes a child of that remote span instead of a fresh trace root, joining
+/// the frontend and backend into one distributed trace. Requires a global
+/// text-map propagator (registered by `macro_entrypoint`); without one,
+/// extraction yields an invalid context and every span stays a root, exactly as
+/// before.
+#[derive(Debug, Clone, Default)]
+pub struct MakeSpanWithRemoteParent;
+
+impl<B> MakeSpan<B> for MakeSpanWithRemoteParent {
+    fn make_span(&mut self, request: &Request<B>) -> Span {
+        // Same field shape as DefaultMakeSpan (minus headers: Debug-formatting
+        // the whole header map on every request is pure overhead now that the
+        // span exports), but at INFO where tower-http defaults to DEBUG:
+        // services run RUST_LOG=info, which would disable the span entirely --
+        // and a disabled request span exports nothing and can't anchor remote
+        // parentage, so handler spans would fall out of the distributed trace
+        // as fresh roots.
+        let span = tracing::span!(
+            Level::INFO,
+            "request",
+            method = %request.method(),
+            uri = %request.uri(),
+            version = ?request.version(),
+        );
+        let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.extract(&opentelemetry_http::HeaderExtractor(request.headers()))
+        });
+        // Fails only when the span is disabled or no otel layer is registered
+        // (e.g. local runs without an exporter) — the span then simply stays a
+        // root, which is the pre-propagation behavior.
+        if parent.span().span_context().is_valid() {
+            let _ = span.set_parent(parent);
+        }
+        span
+    }
+}
 
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
@@ -141,7 +183,7 @@ type ServiceBuilderAlias = ServiceBuilder<
         Stack<
             TraceLayer<
                 SharedClassifier<ServerErrorsAsFailures>,
-                DefaultMakeSpan,
+                MakeSpanWithRemoteParent,
                 DefaultOnRequest,
                 CustomOnResponse,
                 tower_http::trace::DefaultOnBodyChunk,
@@ -198,7 +240,7 @@ impl MacroRequestIdAndTracingLayer {
             .set_x_request_id(RequestIdBuilder::default())
             .layer(
                 TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                    .make_span_with(MakeSpanWithRemoteParent)
                     .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
                     .on_failure(CustomOnFailure),
             )
