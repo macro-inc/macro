@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'document'\n            AND source_id = ANY($2)\n\n            UNION ALL\n            -- Source 2: items share permission\n            SELECT\n                \"publicAccessLevel\"::text AS access_level\n            FROM \"SharePermission\"\n            WHERE \"isPublic\" = true\n            AND \"publicAccessLevel\" IS NOT NULL\n            AND id IN (\n                SELECT \"sharePermissionId\" FROM \"DocumentPermission\" WHERE \"documentId\" = $3\n            )\n\n            UNION ALL\n            -- Source 3: the document is an email attachment — access to the source\n            -- thread grants the same access level on the attachment document.\n            SELECT\n                tea.access_level::text\n            FROM document_email de\n            JOIN email_attachments ea ON ea.id = de.email_attachment_id\n            JOIN email_messages m ON m.id = ea.message_id\n            JOIN entity_access tea ON tea.entity_id = m.thread_id\n                AND tea.entity_type = 'email_thread'\n                AND tea.source_id = ANY($2)\n            WHERE de.document_id = $3\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "99da2764a75ac041d4798999f5db185d220d681b0661377ec12f83eca226d546"
+}
