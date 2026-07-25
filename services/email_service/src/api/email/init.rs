@@ -1,4 +1,5 @@
 use crate::api::ApiContext;
+use crate::api::context::AuthorizationService;
 use crate::utils::extract_email_with_response;
 use anyhow::Context;
 use authentication_service_client::error::AuthServiceClientError;
@@ -13,10 +14,10 @@ use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_service::pubsub::publish_email_event;
 use email_utils::token_cache_key::TokenCacheKey;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
-use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
@@ -191,16 +192,16 @@ pub struct InitParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_extractor), fields(user_id=user_extractor.user_context.user_id, fusionauth_user_id=user_extractor.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<InitParams>,
-    user_extractor: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, InitError> {
     // Init runs on every authentication, so its expected no-op outcomes (400s)
     // must not error-log. The span skips the auto err event and the result is
     // classified here, inside the span, where user fields still attach.
-    let result = init_user(ctx, query, user_extractor).await;
+    let result = init_user(ctx, query, authorization).await;
     if let Err(e) = &result {
         let status = e.status_code();
         if status.is_server_error() {
@@ -220,13 +221,10 @@ async fn init_user(
         link_id,
         force_share,
     }): Query<InitParams>,
-    user_extractor: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, InitError> {
-    let MacroUserExtractor {
-        macro_user_id,
-        user_context,
-        ..
-    } = user_extractor;
+    let macro_user_id = authorization.authorization.user.macro_user_id.clone();
+    let user_context = authorization.authorization.user.user_context.clone();
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());
@@ -673,8 +671,7 @@ async fn init_user(
             is_primary: link.is_primary,
             connected_at: link.created_at,
         }),
-    )
-    .await;
+    );
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {
@@ -723,7 +720,7 @@ async fn init_user(
         .into_response())
 }
 
-/// Rejects a connect when this Gmail identity already has 3+ recent backfill jobs in
+/// Rejects a connect when this Gmail identity already has 10+ recent backfill jobs in
 /// the last 24h (`@macro.com` is exempt). Enforced before the link and Gmail watch are
 /// created so a rejected connect never has to tear down a half-provisioned inbox.
 async fn enforce_backfill_rate_limit(
@@ -738,7 +735,7 @@ async fn enforce_backfill_rate_limit(
     .await
     .context("Failed to fetch recent backfill jobs")?;
 
-    if recent_jobs.len() >= 3 && !email_address.ends_with("@macro.com") {
+    if recent_jobs.len() >= 10 && !email_address.ends_with("@macro.com") {
         return Err(InitError::TooManyJobs);
     }
 

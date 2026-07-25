@@ -58,6 +58,10 @@ pub enum ChannelLiteral {
     ChannelType(ChannelTypeFilter),
     /// this node value filters by channel importance. false short-circuits to match nothing.
     Importance(bool),
+    /// this node value filters by whether the requesting user is an active participant
+    /// of the channel. Its presence widens the candidate set to team channels of the
+    /// user's teams that they have not joined.
+    IsParticipant(bool),
     /// this node value filters by notification done state for channels.
     NotificationDone(bool),
     /// this node value filters by notification seen state for channels.
@@ -79,6 +83,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             sender_ids,
             channel_types,
             importance,
+            is_participant,
             notification_filters,
         } = filter_request;
 
@@ -117,6 +122,8 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             .try_expand(|r| r.map(ChannelLiteral::ChannelType), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(ChannelLiteral::Importance(imp)));
+        let is_participant_node =
+            is_participant.map(|val| Expr::Literal(ChannelLiteral::IsParticipant(val)));
         let notification_done_node = notification_filters
             .done
             .map(|done| Expr::Literal(ChannelLiteral::NotificationDone(done)));
@@ -133,6 +140,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             sender_ids,
             channel_type_nodes,
             importance_node,
+            is_participant_node,
             notification_done_node,
             notification_seen_node,
         ]

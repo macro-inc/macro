@@ -36,6 +36,7 @@ import { PasteNode } from './nodes/PasteNode';
 import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
+import { TagMentionNode } from './nodes/TagMentionNode';
 import { ThemeMentionNode } from './nodes/ThemeMentionNode';
 import { UnknownMentionNode } from './nodes/UnknownMentionNode';
 import { UnlinkedTextNode } from './nodes/UnlinkedTextNode';
@@ -103,6 +104,7 @@ export const SupportedNodeTypes = [
   ClassedBlockNode,
   WatermarkNode,
   ThemeMentionNode,
+  TagMentionNode,
   UnknownMentionNode,
   AwaitNode,
 ] as const;

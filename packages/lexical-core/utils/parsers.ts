@@ -59,6 +59,17 @@ export function parsePullRequestMentions(text: string): string {
   });
 }
 
+export function parseTagMentions(text: string): string {
+  return text.replace(/<m-tag>(.*?)<\/m-tag>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.name ? `#${data.name}` : '';
+    } catch {
+      return '';
+    }
+  });
+}
+
 export function parseLinks(text: string): string {
   return text.replace(/<m-link>(.*?)<\/m-link>/g, (_, json) => {
     try {
@@ -131,11 +142,13 @@ export function markdownToPlainText(markdown: string): string {
   return parseLinks(
     parseDocumentCards(
       parseSnapshots(
-        parsePullRequestMentions(
-          parseDocumentMentions(
-            parseGroupMentions(
-              parseDateMentions(
-                parseContactMentions(parseUserMentions(markdown))
+        parseTagMentions(
+          parsePullRequestMentions(
+            parseDocumentMentions(
+              parseGroupMentions(
+                parseDateMentions(
+                  parseContactMentions(parseUserMentions(markdown))
+                )
               )
             )
           )
@@ -215,16 +228,22 @@ function snapshotToEmbeddingText(encoded: string): string {
  * `\n`; any tags nested in cells are handled by the leaf passes afterwards.
  */
 function flattenTables(text: string): string {
-  return text.replace(/<m-table>(.*?)<\/m-table>/gs, (_, table: string) =>
-    [...table.matchAll(/<m-table-row>(.*?)<\/m-table-row>/gs)]
-      .map((row) =>
-        [...row[1].matchAll(/<m-table-cell>(.*?)<\/m-table-cell>/gs)]
-          .map((cell) =>
-            cell[1].replace(/\\n/g, ' ').replaceAll('<br>', ' ').trim()
-          )
-          .join(' | ')
-      )
-      .join('\n')
+  return text.replace(
+    /<m-table(?:\s[^>]*)?>(.*?)<\/m-table>/gs,
+    (_, table: string) =>
+      [...table.matchAll(/<m-table-row(?:\s[^>]*)?>(.*?)<\/m-table-row>/gs)]
+        .map((row) =>
+          [
+            ...row[1].matchAll(
+              /<m-table-cell(?:\s[^>]*)?>(.*?)<\/m-table-cell>/gs
+            ),
+          ]
+            .map((cell) =>
+              cell[1].replace(/\\n/g, ' ').replaceAll('<br>', ' ').trim()
+            )
+            .join(' | ')
+        )
+        .join('\n')
   );
 }
 
@@ -311,6 +330,9 @@ export function markdownToEmbeddingText(markdown: string): string {
     text,
     'm-group-mention',
     (data) => `@${data.groupAlias || ''}`
+  );
+  text = replaceJsonTag(text, 'm-tag', (data) =>
+    data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');

@@ -3,6 +3,7 @@ import { test, describe, beforeAll, expect } from "vitest";
 import {
   connectToDocumentForTesting,
   createTestUser,
+  getTokenForDocument,
   setupMiniflare,
 } from "./utils";
 import { FromPeer, FromRemote } from "../bebop/generated/schema";
@@ -14,6 +15,18 @@ beforeAll(async () => {
 });
 
 describe("should respect permissions", () => {
+  test("should reject a WebSocket token issued for a different document", async () => {
+    const token = getTokenForDocument("authorized-document", "test-user", "owner");
+
+    const response = await mf.dispatchFetch(
+      `http://localhost:8787/document/unauthorized-document/connect?token=${token}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.webSocket).toBeNull();
+  });
+
   test("should not allow view only user to push updates", async () => {
     const userA = await createTestUser(mf, "test", {
       userId: "view-only-user",

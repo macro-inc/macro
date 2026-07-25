@@ -4,6 +4,7 @@ import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -19,12 +20,15 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
+  ENABLE_ACTIVITY,
   ENABLE_CRM,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import { EmptyStatePanel } from '@ui';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -157,6 +161,34 @@ registerComponent(
   })
 );
 
+const ActivityView = lazy(() =>
+  import('@app/features/activity-timeline/activity-view').then((module) => ({
+    default: module.ActivityView,
+  }))
+);
+
+registerComponent(
+  'activity',
+  withAuth(() => {
+    // Keep the registration so direct navigation and restored splits can
+    // recover safely without loading the data-owning Activity view.
+    if (!ENABLE_ACTIVITY) {
+      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    }
+    usePageViewTracking('activity');
+    return <ActivityView />;
+  })
+);
+
+// The Activity tab briefly shipped as two separate views; restored splits
+// may still reference their ids.
+registerComponent('firehose', () => (
+  <RedirectSplit to={{ type: 'component', id: 'activity' }} />
+));
+registerComponent('my-activity', () => (
+  <RedirectSplit to={{ type: 'component', id: 'activity' }} />
+));
+
 registerComponent(
   'agents',
   withAuth(() => {
@@ -280,7 +312,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the CRM feature is off so direct navigation /
     // restored splits redirect instead of throwing in resolveComponent.
-    if (!ENABLE_CRM) {
+    if (!ENABLE_CRM()) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');
@@ -351,13 +383,64 @@ registerComponent(
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
+// Placeholder a Preview Pair's Viewer opens before its Controller has
+// navigated anywhere (see layoutManager engagePreviewMode).
+registerComponent('preview-empty', () => {
+  const panel = useSplitPanelOrThrow();
+  onMount(() => panel.handle.setDisplayName('Preview'));
+  return (
+    <EmptyStatePanel
+      graphic={EmptyStatePreviewIcon}
+      title="No content selected"
+      description="Select an item from the connected list to preview it here"
+      centered
+    />
+  );
+});
+// Join prompt for a channel the viewer can see but hasn't joined, shown in a
+// Preview Pair's Viewer when the controlling list focuses such a row (see
+// openEntityInSplitFromUnifiedList). Params don't round-trip through the URL,
+// so a restored split has none — fall back to the placeholder and let the
+// controller's focus→preview effect re-open the real prompt.
+registerComponent('non-member-channel', (params) => {
+  const panel = useSplitPanelOrThrow();
+  const channelId =
+    typeof params?.channelId === 'string' ? params.channelId : undefined;
+  if (!channelId) {
+    return <RedirectSplit to={{ type: 'component', id: 'preview-empty' }} />;
+  }
+  const channelName =
+    typeof params?.channelName === 'string' ? params.channelName : 'Channel';
+  const memberCount =
+    typeof params?.memberCount === 'number' ? params.memberCount : 0;
+  onMount(() => panel.handle.setDisplayName(channelName));
+  return (
+    <NonMemberChannelPreview
+      channelId={channelId}
+      channelName={channelName}
+      memberCount={memberCount}
+      // Join landed — hand the Viewer off to the real channel block in place.
+      onJoined={() =>
+        panel.handle.replace({ next: { type: 'channel', id: channelId } })
+      }
+    />
+  );
+});
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  return <EmailCompose draftID={params?.draftID} />;
+  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  const toParam = new URLSearchParams(window.location.search).get('to');
+  const initialTo =
+    params?.initialTo ??
+    toParam
+      ?.split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+  return <EmailCompose draftID={params?.draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');

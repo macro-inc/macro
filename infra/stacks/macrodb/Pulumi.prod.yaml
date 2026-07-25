@@ -8,8 +8,8 @@ config:
   macrodb:storage_type: gp3
   macrodb:storage_iops: 12000
   macrodb:storage_throughput: 500
-  macrodb:allocated_storage: 1500
-  macrodb:max_allocated_storage: 2000
+  macrodb:allocated_storage: 2000
+  macrodb:max_allocated_storage: 2500
   macrodb:ca_cert_identifier: rds-ca-rsa2048-g1
   macrodb:kms_key_id: arn:aws:kms:us-east-1:569036502058:key/6a0ba9c2-b8ab-4a65-b0f2-6f8f39ccda72
   macrodb:performance_insights_retention_days: 7

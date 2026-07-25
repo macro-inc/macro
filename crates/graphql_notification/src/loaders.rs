@@ -8,23 +8,51 @@ use notification::domain::models::{
 };
 use rootcause::markers::{Cloneable, Dynamic};
 
-fn notification_item_type(
-    entity_type: model_entity::EntityType,
-) -> Result<NotificationItemType, rootcause::Report> {
+/// Tests for notification entity mapping and batching.
+#[cfg(test)]
+mod test;
+
+/// Map a shared entity type to the notification domain's item type.
+///
+/// Some Soup entities, such as CRM companies, do not have a corresponding
+/// notification type. Those entities have an empty notification edge rather
+/// than failing the whole DataLoader batch.
+fn notification_item_type(entity_type: model_entity::EntityType) -> Option<NotificationItemType> {
     use model_entity::EntityType;
     match entity_type {
-        EntityType::EmailThread => Ok(NotificationItemType::Email),
-        EntityType::ChannelMessage => Ok(NotificationItemType::Message),
-        EntityType::Channel => Ok(NotificationItemType::Channel),
-        EntityType::Document => Ok(NotificationItemType::Document),
-        EntityType::Project => Ok(NotificationItemType::Project),
-        EntityType::Chat => Ok(NotificationItemType::Chat),
-        EntityType::Call => Ok(NotificationItemType::Call),
-        EntityType::ForeignEntity => Ok(NotificationItemType::Github),
-        other => Err(rootcause::report!(
-            "unsupported notification entity type {other}"
-        )),
+        EntityType::EmailThread => Some(NotificationItemType::Email),
+        EntityType::ChannelMessage => Some(NotificationItemType::Message),
+        EntityType::Channel => Some(NotificationItemType::Channel),
+        EntityType::Document => Some(NotificationItemType::Document),
+        EntityType::Project => Some(NotificationItemType::Project),
+        EntityType::Chat => Some(NotificationItemType::Chat),
+        EntityType::Call => Some(NotificationItemType::Call),
+        EntityType::ForeignEntity => Some(NotificationItemType::Github),
+        EntityType::User
+        | EntityType::Team
+        | EntityType::StaticFile
+        | EntityType::CrmCompany
+        | EntityType::CrmContact => None,
     }
+}
+
+/// Build notification-service references for the subset of entities that can
+/// own notifications.
+fn notification_refs(
+    keys: &[model_entity::Entity<'static>],
+) -> Vec<(model_entity::Entity<'static>, NotificationEntityRef)> {
+    keys.iter()
+        .filter_map(|key| {
+            let entity_type = notification_item_type(key.entity_type)?;
+            Some((
+                key.clone(),
+                NotificationEntityRef {
+                    entity_type,
+                    id: key.entity_id.to_string(),
+                },
+            ))
+        })
+        .collect()
 }
 
 /// Reader used by GraphQL notification edges.
@@ -61,18 +89,10 @@ where
             .map(|key| (key, Vec::new()))
             .collect::<HashMap<_, _>>();
 
-        let requested_refs = keys
-            .iter()
-            .map(|key| {
-                Ok((
-                    key.clone(),
-                    NotificationEntityRef {
-                        entity_type: notification_item_type(key.entity_type)?,
-                        id: key.entity_id.to_string(),
-                    },
-                ))
-            })
-            .collect::<Result<Vec<_>, rootcause::Report>>()?;
+        let requested_refs = notification_refs(&keys);
+        if requested_refs.is_empty() {
+            return Ok(result);
+        }
 
         let entity_refs = requested_refs
             .iter()
@@ -113,7 +133,9 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
 
 /// DataLoader for entity notification edges.
 pub struct EntityNotificationsLoader<R> {
+    /// User whose notifications are loaded.
     user_id: MacroUserIdStr<'static>,
+    /// Notification reader used to fulfill batches.
     reader: R,
 }
 

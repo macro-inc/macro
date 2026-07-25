@@ -13,7 +13,7 @@ use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::{
     CallStatus,
-    ast::{LiteralTree, call::CallLiteral},
+    ast::{LiteralTree, call::CallLiteral, properties::PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::SharePermissionV2;
@@ -62,6 +62,8 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
         Expr::Literal(CallLiteral::Attended(_)) => {}
         // Speaker is transcript-segment-only; soup's call list ignores it.
         Expr::Literal(CallLiteral::Speaker(_)) => {}
+        // Tag/property conditions are handled by `extract_tag_option_ids`.
+        Expr::Literal(CallLiteral::Property(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
             collect_channel_ids(b, ids);
@@ -80,6 +82,61 @@ fn extract_call_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
     ids
 }
 
+/// Extract tag option ids (select-option UUIDs) from `CallLiteral::Property`
+/// literals. Tags are def-less: a call matches if any of its property values
+/// contains one of these option ids, mirroring the search-service tag filter.
+/// Structure (AND/OR/NOT) is flattened — soup only folds in a positive OR of
+/// tag literals, so a flat "any of" match is exact.
+fn extract_tag_option_ids(filter: &LiteralTree<CallLiteral>) -> Vec<String> {
+    let Some(expr) = filter else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    collect_tag_option_ids(expr, &mut ids);
+    ids
+}
+
+fn collect_tag_option_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<String>) {
+    match expr {
+        Expr::Literal(CallLiteral::Property(lit)) => {
+            if let PropertyMatchValue::SelectOption(option_id) = &lit.value {
+                ids.push(option_id.to_string());
+            }
+        }
+        Expr::Literal(_) => {}
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_tag_option_ids(a, ids);
+            collect_tag_option_ids(b, ids);
+        }
+        Expr::Not(inner) => collect_tag_option_ids(inner, ids),
+    }
+}
+
+/// Whether the tag filter requires ALL of its options rather than ANY. The
+/// tag filter is folded in as an OR of tag literals for ANY and an AND of tag
+/// literals for ALL (matching the search index's `match_all_tags`), so an
+/// `And` joining two tag-bearing branches marks ALL. A single option reads as
+/// ANY, which is equivalent.
+fn tag_filter_requires_all(filter: &LiteralTree<CallLiteral>) -> bool {
+    fn contains_tag(expr: &Expr<CallLiteral>) -> bool {
+        match expr {
+            Expr::Literal(CallLiteral::Property(_)) => true,
+            Expr::Literal(_) => false,
+            Expr::And(a, b) | Expr::Or(a, b) => contains_tag(a) || contains_tag(b),
+            Expr::Not(inner) => contains_tag(inner),
+        }
+    }
+    fn walk(expr: &Expr<CallLiteral>) -> bool {
+        match expr {
+            Expr::And(a, b) => (contains_tag(a) && contains_tag(b)) || walk(a) || walk(b),
+            Expr::Or(a, b) => walk(a) || walk(b),
+            Expr::Not(inner) => walk(inner),
+            Expr::Literal(_) => false,
+        }
+    }
+    filter.as_ref().is_some_and(|expr| walk(expr))
+}
+
 fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::CallId(id)) => ids.push(*id),
@@ -87,6 +144,7 @@ fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
         Expr::Literal(CallLiteral::Status(_)) => {}
         Expr::Literal(CallLiteral::Attended(_)) => {}
         Expr::Literal(CallLiteral::Speaker(_)) => {}
+        Expr::Literal(CallLiteral::Property(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_call_ids(a, ids);
             collect_call_ids(b, ids);
@@ -210,7 +268,8 @@ fn status_set_for_expr(expr: &Expr<CallLiteral>) -> Option<CallStatusSet> {
         Expr::Literal(CallLiteral::Attended(false)) => Some(CallStatusSet::not_participant()),
         Expr::Literal(CallLiteral::CallId(_))
         | Expr::Literal(CallLiteral::ChannelId(_))
-        | Expr::Literal(CallLiteral::Speaker(_)) => None,
+        | Expr::Literal(CallLiteral::Speaker(_))
+        | Expr::Literal(CallLiteral::Property(_)) => None,
         Expr::And(a, b) => match (status_set_for_expr(a), status_set_for_expr(b)) {
             (Some(left), Some(right)) => Some(left.intersect(right)),
             (Some(status_set), None) | (None, Some(status_set)) => Some(status_set),
@@ -1098,6 +1157,7 @@ impl CallRepository for PgCallRepo {
             tx.commit().await?;
             return Ok(Some(CallRecord {
                 call_id: active.id,
+                user_access_level: None,
                 channel_id: active.channel_id,
                 room_name: active.room_name,
                 created_by: active.created_by,
@@ -1183,6 +1243,7 @@ impl CallRepository for PgCallRepo {
         tx.commit().await?;
         Ok(Some(CallRecord {
             call_id: archived.id,
+            user_access_level: None,
             channel_id: archived.channel_id,
             room_name: archived.room_name,
             created_by: archived.created_by,
@@ -1329,6 +1390,9 @@ impl CallRepository for PgCallRepo {
             .map(call_status_sql_value)
             .map(str::to_string)
             .collect();
+        let tag_option_ids = extract_tag_option_ids(filter);
+        let has_tag_filter = !tag_option_ids.is_empty();
+        let match_all_tags = tag_filter_requires_all(filter);
 
         let rows = sqlx::query!(
             r#"
@@ -1382,6 +1446,25 @@ impl CallRepository for PgCallRepo {
                 )
                 AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
                 AND ($5::bool IS FALSE OR c.id = ANY($6))
+                AND ($9::bool IS FALSE OR (
+                    ($11::bool IS FALSE AND EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = c.id::text
+                          AND ep.entity_type = 'CALL_RECORD'
+                          AND jsonb_typeof(ep.values -> 'value') = 'array'
+                          AND jsonb_exists_any(ep.values -> 'value', $10::text[])
+                    ))
+                    OR ($11::bool IS TRUE AND $10::text[] <@ (
+                        SELECT COALESCE(array_agg(elem), ARRAY[]::text[])
+                        FROM (
+                            SELECT values FROM entity_properties
+                            WHERE entity_id = c.id::text
+                              AND entity_type = 'CALL_RECORD'
+                              AND jsonb_typeof(values -> 'value') = 'array'
+                        ) ep
+                        CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
+                    ))
+                ))
                 UNION ALL
                 SELECT
                     cr.id AS call_id,
@@ -1421,6 +1504,25 @@ impl CallRepository for PgCallRepo {
                 )
                 AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
                 AND ($5::bool IS FALSE OR cr.id = ANY($6))
+                AND ($9::bool IS FALSE OR (
+                    ($11::bool IS FALSE AND EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = cr.id::text
+                          AND ep.entity_type = 'CALL_RECORD'
+                          AND jsonb_typeof(ep.values -> 'value') = 'array'
+                          AND jsonb_exists_any(ep.values -> 'value', $10::text[])
+                    ))
+                    OR ($11::bool IS TRUE AND $10::text[] <@ (
+                        SELECT COALESCE(array_agg(elem), ARRAY[]::text[])
+                        FROM (
+                            SELECT values FROM entity_properties
+                            WHERE entity_id = cr.id::text
+                              AND entity_type = 'CALL_RECORD'
+                              AND jsonb_typeof(values -> 'value') = 'array'
+                        ) ep
+                        CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
+                    ))
+                ))
             )
             SELECT
                 call_id as "call_id!",
@@ -1452,6 +1554,9 @@ impl CallRepository for PgCallRepo {
             &call_ids,
             has_status_filter,
             &status_filter_values,
+            has_tag_filter,
+            &tag_option_ids,
+            match_all_tags,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1509,6 +1614,7 @@ impl CallRepository for PgCallRepo {
 
             records.push(CallRecord {
                 call_id: row.call_id,
+                user_access_level: None,
                 channel_id: row.channel_id,
                 room_name: row.room_name,
                 created_by: row.created_by,

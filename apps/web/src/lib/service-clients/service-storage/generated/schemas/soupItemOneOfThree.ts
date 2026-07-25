@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupChat } from './soupChat';
+import type { SoupChatSoupPropertiesField } from './soupChatSoupPropertiesField';
 import type { SoupItemOneOfThreeTag } from './soupItemOneOfThreeTag';
 
 /**
@@ -12,6 +12,6 @@ import type { SoupItemOneOfThreeTag } from './soupItemOneOfThreeTag';
  */
 export type SoupItemOneOfThree = {
   /** Chat item. */
-  data: SoupChat;
+  data: SoupChatSoupPropertiesField;
   tag: SoupItemOneOfThreeTag;
 };

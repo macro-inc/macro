@@ -16,7 +16,19 @@ const TASK_PRIORITY_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.PRIORITY.LOW, label: 'Low' },
 ] as const;
 
-export const COMPANY_STAGE_OPTIONS = [
+// Retired from the default stage set, but companies may still carry these
+// values — labels stay resolvable and stage filters still offer them.
+const LEGACY_STAGE_IDS: ReadonlySet<string> = new Set([
+  PROPERTY_OPTION_IDS.STAGE.QUALIFIED,
+  PROPERTY_OPTION_IDS.STAGE.TRIAL,
+  PROPERTY_OPTION_IDS.STAGE.NEGOTIATION,
+]);
+
+/**
+ * Every system stage option in canonical pipeline order — fixes the
+ * display order of stage filters/columns when legacy stages are shown.
+ */
+export const ALL_COMPANY_STAGE_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STAGE.LEAD, label: 'Lead' },
   { value: PROPERTY_OPTION_IDS.STAGE.QUALIFIED, label: 'Qualified' },
   { value: PROPERTY_OPTION_IDS.STAGE.DEMO, label: 'Demo' },
@@ -26,10 +38,17 @@ export const COMPANY_STAGE_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STAGE.CHURNED, label: 'Churned' },
 ] as const;
 
+/** The default (non-legacy) stage set, in canonical order. */
+export const COMPANY_STAGE_OPTIONS = ALL_COMPANY_STAGE_OPTIONS.filter(
+  (option) => !LEGACY_STAGE_IDS.has(option.value)
+);
+
 const PROPERTY_OPTION_LABELS: Record<string, string> = {
   ...Object.fromEntries(TASK_STATUS_OPTIONS.map((o) => [o.value, o.label])),
   ...Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label])),
-  ...Object.fromEntries(COMPANY_STAGE_OPTIONS.map((o) => [o.value, o.label])),
+  ...Object.fromEntries(
+    ALL_COMPANY_STAGE_OPTIONS.map((o) => [o.value, o.label])
+  ),
 };
 
 export const getPropertyOptionLabel = (

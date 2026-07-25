@@ -5,6 +5,9 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import type { FieldFilters } from '@app/features/next-soup/filters/filter-store/types';
+import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { ListEntityMetadataQueryProvider } from '@entity';
 import { CollapsibleList } from '@entity/components/CollapsibleList';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
 import type { EntityData } from '@entity/types/entity';
@@ -32,10 +35,9 @@ import { SURFACE, TEXT } from '../tokens';
  * task pills read `entity.properties`. Both come from the soup item query: we
  * compile the widget's source into a soup AST and let `useSoupAstItemsQuery`
  * return ready-to-render `EntityData[]` (properties pre-attached). The only
- * provider `ListEntity` needs for the wide layout is `ListLayoutProvider`
- * (width detection); `Entity.Properties` brings its own `PropertiesProvider`,
- * and the split-panel / soup-view contexts are read optionally so they degrade
- * gracefully when absent. We render inside the gallery's split-panel anyway.
+ * composition root supplies responsive layout and shared row metadata; leaf
+ * rows remain query-free. `Entity.Properties` brings its own
+ * `PropertiesProvider`, and the split-panel / soup-view contexts are optional.
  *
  *  - `items` mode: resolve the supplied refs → EntityData via an id-filtered AST.
  *  - `query` mode: drive the same query straight from `source.query`.
@@ -50,12 +52,22 @@ type IdFieldName = {
     : never;
 }[keyof FieldFilters];
 
-/** Map a schema `EntityRef.type` onto the soup `FieldFilters` id field. */
+/**
+ * Map a schema `EntityRef.type` onto the soup `FieldFilters` id field.
+ *
+ * Both `email` and `email_thread` are mapped here: `EntityData`/`ListEntities`
+ * tag emails as `'email'` everywhere else in the app (see
+ * `@entity/types/entity`'s `EmailEntity`), so that's what the AI actually
+ * echoes back from prior tool results into a `list` widget's refs, but
+ * `email_thread` is also a legal `EntityType` value (see `@core/types`) —
+ * keep both so neither spelling gets silently dropped.
+ */
 const ID_FIELD_BY_TYPE: Partial<Record<EntityRef['type'], IdFieldName>> = {
   document: 'documentId',
   chat: 'chatId',
   channel: 'channelId',
   project: 'folderId',
+  email: 'threadId',
   email_thread: 'threadId',
   call: 'callId',
   foreign_entity: 'foreignEntityRecordId',
@@ -98,12 +110,19 @@ const GROUP_BY_BY_NAME: Record<
  * so it must sit in a flush container, NOT a bordered/`divide-y` card, or the
  * pill ends up boxed in by per-row dividers. `hideCheckbox` drops the
  * multi-select checkbox (read-only embed), leaving just the icon / unread dot.
+ *
+ * Clicking opens the entity in a split, exactly like the real unified list
+ * (`soup-view.tsx`) and the other standalone `ListEntity` embeds (e.g.
+ * `ContactEmailsSection`) — via `openEntityInSplitFromUnifiedList`, which
+ * dispatches per `entity.type` and works for every type here already,
+ * `email` included.
  */
 function Row(props: { entity: EntityData }) {
   return (
     <ListEntity
       entity={props.entity as WithNotification<EntityData>}
       hideCheckbox
+      onClick={() => openEntityInSplitFromUnifiedList(props.entity, {})}
     />
   );
 }
@@ -122,11 +141,23 @@ function Rows(props: {
   // and return nothing — which is the correct "No items." outcome anyway.
   // `groupBy` orders the returned entities by the requested facet (the grouped
   // select flattens groups into `data.entities` in group order).
-  const itemsQuery = useSoupAstItemsQuery(() => ({
-    params: { limit: 200 },
-    body: compileQuery(query()),
-    groupBy: props.groupBy ? GROUP_BY_BY_NAME[props.groupBy] : undefined,
-  }));
+  const itemsQuery = useSoupAstItemsQuery(
+    () => ({
+      params: { limit: 200 },
+      body: compileQuery(query()),
+      groupBy: props.groupBy ? GROUP_BY_BY_NAME[props.groupBy] : undefined,
+    }),
+    () => {
+      // Unlike the soup view, this query has no client `itemFilter`, so the
+      // normalized cache would prepend ANY optimistically/WS-inserted entity
+      // into it (a new task landing in an email-scoped list, etc.). Gate inserts
+      // on the same `Query` that produced the AST so only matching items appear.
+      const source = query();
+      return {
+        meta: { itemFilter: (item) => soupItemMatchesQuery(item, source) },
+      };
+    }
+  );
 
   const entities = createMemo<EntityData[]>(() => {
     const all = itemsQuery.data?.entities ?? [];
@@ -155,51 +186,53 @@ function Rows(props: {
 
 export function List(props: ListProps) {
   return (
-    <ListLayoutProvider ref={() => undefined}>
-      <div class="flex w-full min-w-0 flex-col gap-2">
-        {/* Group header, soup-style: bold title above the card. */}
-        <Show when={props.title}>
-          {(title) => (
-            <div
-              class={cn(
-                'flex items-center gap-2 px-1 text-sm font-semibold',
-                TEXT.primary
-              )}
-            >
-              {title()}
-            </div>
-          )}
-        </Show>
-
-        {/*
-         * Flush row container (mirrors SoupView's unified list): no
-         * per-row dividers/borders. Each `ListEntity` brings its own
-         * rounded inset highlight pill (`mx-1`), so the card just needs a
-         * hair of vertical padding for the pills to breathe — adding
-         * `divide-y`/per-row borders here would box those highlights in.
-         */}
-        <div
-          class={cn(
-            'overflow-hidden rounded-lg border py-1',
-            SURFACE.borderMuted
-          )}
-        >
-          {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
-          <Suspense
-            fallback={
-              <div class={cn('px-3 py-6 text-center text-sm', TEXT.tertiary)}>
-                Loading…
+    <ListEntityMetadataQueryProvider>
+      <ListLayoutProvider ref={() => undefined}>
+        <div class="flex w-full min-w-0 flex-col gap-2">
+          {/* Group header, soup-style: bold title above the card. */}
+          <Show when={props.title}>
+            {(title) => (
+              <div
+                class={cn(
+                  'flex items-center gap-2 px-1 text-sm font-semibold',
+                  TEXT.primary
+                )}
+              >
+                {title()}
               </div>
-            }
+            )}
+          </Show>
+
+          {/*
+           * Flush row container (mirrors SoupView's unified list): no
+           * per-row dividers/borders. Each `ListEntity` brings its own
+           * rounded inset highlight pill (`mx-1`), so the card just needs a
+           * hair of vertical padding for the pills to breathe — adding
+           * `divide-y`/per-row borders here would box those highlights in.
+           */}
+          <div
+            class={cn(
+              'overflow-hidden rounded-lg border py-1',
+              SURFACE.borderMuted
+            )}
           >
-            <Rows
-              source={props.source}
-              limit={props.limit}
-              groupBy={props.groupBy}
-            />
-          </Suspense>
+            {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
+            <Suspense
+              fallback={
+                <div class={cn('px-3 py-6 text-center text-sm', TEXT.tertiary)}>
+                  Loading…
+                </div>
+              }
+            >
+              <Rows
+                source={props.source}
+                limit={props.limit}
+                groupBy={props.groupBy}
+              />
+            </Suspense>
+          </div>
         </div>
-      </div>
-    </ListLayoutProvider>
+      </ListLayoutProvider>
+    </ListEntityMetadataQueryProvider>
   );
 }

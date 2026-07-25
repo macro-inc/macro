@@ -383,7 +383,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       recent: () => ({
         filters: defineQueryFilters({
-          include: { channelImportance: true },
+          // Recent only shows channels the user is a participant of.
+          include: {
+            channelImportance: true,
+            channelIsParticipant: [true],
+          },
         }),
         clientFilters: { and: ['channels'] },
       }),
@@ -395,6 +399,9 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       teams: () => ({
         filters: defineQueryFilters({
+          // Both membership states: team channels of the user's teams they
+          // haven't joined are listed too, with a Join affordance on the row.
+          include: { channelIsParticipant: [true, false] },
           exclude: { channelType: ['direct_message'] },
         }),
         clientFilters: { and: ['teams'] },

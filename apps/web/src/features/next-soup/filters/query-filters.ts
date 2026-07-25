@@ -1,7 +1,13 @@
+import { soupItemMatchesTagFilter } from '@app/constants/list-views';
 import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
-import { type CallStatus, callStatusFromAttended } from './filter-store/types';
+import { defineQueryFilters } from './filter-store/compile';
+import {
+  type CallStatus,
+  callStatusFromAttended,
+  type Query,
+} from './filter-store/types';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -148,4 +154,105 @@ export function filterSoupItemByRequestBody(
         )
     )
     .exhaustive();
+}
+
+/**
+ * Map a filter-store {@link Query}'s `include` clause onto the request-body
+ * filter shape {@link filterSoupItemByRequestBody} understands. Only the id and
+ * scoping fields that matcher reads are mapped; everything else is left off (see
+ * {@link soupItemMatchesQuery}).
+ */
+function queryIncludeToRequestBody(query: Query): SoupBody {
+  const include = query.include ?? {};
+  return {
+    document_filters: {
+      document_ids: include.documentId,
+      owners: include.documentOwnerId,
+      sub_types: include.subType,
+    },
+    chat_filters: { chat_ids: include.chatId },
+    channel_filters: {
+      channel_ids: include.channelId,
+      thread_ids: include.channelMessageThreadId,
+    },
+    channel_thread_filters: {
+      thread_ids: include.channelThreadId,
+      root_sender_ids: include.channelThreadRootSenderId,
+    },
+    project_filters: { project_ids: include.folderId },
+    email_filters: { email_thread_ids: include.threadId },
+    call_filters: {
+      call_ids: include.callId,
+      status: include.callStatus,
+      attended: include.callAttended,
+    },
+    crm_company_filters: { company_ids: include.crmCompanyId },
+    foreign_entity_filters: {
+      ids: include.foreignEntityRecordId,
+      foreign_entity_sources: include.foreignEntitySource,
+    },
+  };
+}
+
+/**
+ * Whether a soup item satisfies a filter-store {@link Query}, mirroring the
+ * include-side entity/id/owner scoping the server AST enforces. Used to gate
+ * optimistic and websocket cache inserts for queries that drive a list from a
+ * raw `Query` (e.g. the dynamic-UI `list` widget) rather than a soup view.
+ *
+ * The query is first run through {@link defineQueryFilters}, which nil-fills the
+ * id filters of every entity type the query never references — so an item whose
+ * type is out of scope (e.g. a newly created task inserted into an email-scoped
+ * widget) carries a real id against a `[NIL_UUID]` filter and is rejected, the
+ * same way the server would never return it. An active tag filter is enforced
+ * too, reusing {@link soupItemMatchesTagFilter} (the same gate the soup view
+ * applies), so a newly created untagged item never leaks into a tag-scoped list.
+ *
+ * Refinements the server also applies but this does not — non-tag
+ * properties, date ranges, seen/done, importance, `documentWhere`, `emailView`,
+ * and every `exclude` clause — are treated permissively: a matching item is
+ * never rejected for them, so inserts that DO belong still appear optimistically.
+ */
+export function soupItemMatchesQuery(item: SoupApiItem, query: Query): boolean {
+  if (
+    !filterSoupItemByRequestBody(
+      item,
+      queryIncludeToRequestBody(defineQueryFilters(query))
+    )
+  ) {
+    return false;
+  }
+
+  const tagOptionIds = (query.include?.tagFilters ?? []).map((t) => t.value);
+  return (
+    tagOptionIds.length === 0 ||
+    soupItemMatchesTagFilter(
+      item,
+      tagOptionIds,
+      query.include?.tagFilterMode ?? 'any'
+    )
+  );
+}
+
+/**
+ * Whether a soup item belongs to a given project, mirroring the parent/project
+ * scoping the folder-contents soup query sends to the server: `projectId` on
+ * documents and chats, `parentId` on child projects. Used to gate optimistic
+ * and websocket cache inserts into a folder view so an entity created or opened
+ * outside the folder never flashes into its contents before the server refetch
+ * corrects it.
+ *
+ * Types whose soup item carries no project (emails, channels, calls, …) stay
+ * permissive — membership can't be decided from the item, and an insert that
+ * does belong should still appear optimistically.
+ */
+export function soupItemMatchesProjectMembership(
+  item: SoupApiItem,
+  projectId: string
+): boolean {
+  return match(item)
+    .with({ tag: 'document' }, ({ data }) => data.projectId === projectId)
+    .with({ tag: 'chat' }, ({ data }) => data.projectId === projectId)
+    .with({ tag: 'project' }, ({ data }) => data.parentId === projectId)
+    .otherwise(() => true);
 }

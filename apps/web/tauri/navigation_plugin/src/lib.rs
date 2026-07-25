@@ -2,7 +2,7 @@ use crate::scheme::MacroScheme;
 use logger::Logger;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, path::PathBuf, sync::Arc};
-use tauri::{Manager, Runtime, plugin::Plugin};
+use tauri::{Emitter, Manager, Runtime, plugin::Plugin};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
@@ -12,20 +12,6 @@ mod tests;
 pub mod scheme;
 
 #[derive(Debug, Clone)]
-struct InternalUrl<'a>(Cow<'a, Url>);
-
-impl<'a> InternalUrl<'a> {
-    /// attempts to remap the internal url to a different path if required
-    /// if no remap is required, returns None.
-    /// the frontend sometimes tries to navigate to urls which are invalid in a tauri context
-    /// via setting window.location.href to e.g. '/app/login' when tauri would expect '/#/app/login'
-    /// this function returns the correctly remaped url if it exists.
-    fn remap_path(&self) -> Option<InternalUrl<'static>> {
-        None
-    }
-}
-
-#[derive(Debug, Clone)]
 struct ExternalUrl<'a>(Cow<'a, Url>);
 
 /// Possible outcomes when trying to perform on_navigation
@@ -33,15 +19,23 @@ struct ExternalUrl<'a>(Cow<'a, Url>);
 enum NavigationOutput<'a> {
     /// This is an external [Url] which will be opened in a browser
     External(ExternalUrl<'a>),
-    /// This is a valid internal [Url]
-    Internal(InternalUrl<'a>),
-    /// The frontend attempted to navigate to an internal [Url]
-    /// which is invalid in a Tauri context.
-    InternalTransformed {
-        #[expect(dead_code)]
-        original: InternalUrl<'a>,
-        remapped: InternalUrl<'static>,
-    },
+    /// A [Url] on one of the webview's own origins (`tauri://localhost`,
+    /// the dev server, ...) — the webview is allowed to load it directly.
+    /// This is what permits the SPA's own page loads.
+    Internal,
+    /// A link to content inside the Macro app whose literal [Url] points at
+    /// the remote website (e.g. `https://macro.com/app/...`). The webview
+    /// must not load it — that would replace the running SPA with the live
+    /// site — so the navigation is cancelled and re-emitted as a `navigate`
+    /// event for the SPA router to handle in-place.
+    AppLink(MacroScheme),
+}
+
+/// Payload of the `navigate` event consumed by the frontend router bridge.
+#[derive(Clone, Serialize, Debug)]
+pub struct NavigatePayload<'a> {
+    pub path: &'a str,
+    pub query: &'a str,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -53,6 +47,7 @@ pub enum Platform {
 #[derive(Clone)]
 pub struct MacroNavigationPlugin {
     internal_domains: Arc<[Url]>,
+    app_link_hosts: &'static [&'static str],
     allowed_file_prefix: Option<PathBuf>,
 }
 
@@ -77,8 +72,16 @@ impl MacroNavigationPlugin {
                 .iter()
                 .map(|s| s.parse())
                 .collect::<Result<Arc<_>, _>>()?,
+            app_link_hosts: &[],
             allowed_file_prefix: None,
         })
+    }
+
+    /// hosts whose `/app` urls are routed through the SPA router
+    /// via the `navigate` event instead of loading the remote site
+    pub fn with_app_link_hosts(mut self, hosts: &'static [&'static str]) -> Self {
+        self.app_link_hosts = hosts;
+        self
     }
 
     pub fn with_allowed_file_prefix(mut self, prefix: PathBuf) -> Self {
@@ -88,21 +91,40 @@ impl MacroNavigationPlugin {
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
     fn get_destination<'a>(&self, url: &'a Url) -> NavigationOutput<'a> {
-        let internal = match self.as_internal_url(url) {
-            Ok(internal) => internal,
-            Err(external) => return NavigationOutput::External(external),
-        };
-        match internal.remap_path() {
-            Some(remapped) => NavigationOutput::InternalTransformed {
-                original: internal,
-                remapped,
-            },
-            None => NavigationOutput::Internal(internal),
+        // checked before the allowlist: app link hosts (e.g. dev.macro.com)
+        // are not necessarily allowlisted webview domains
+        if let Some(scheme) = self.as_app_link(url) {
+            return NavigationOutput::AppLink(scheme);
+        }
+        match self.as_internal_url(url) {
+            Ok(()) => NavigationOutput::Internal,
+            Err(external) => NavigationOutput::External(external),
         }
     }
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
-    fn as_internal_url<'a>(&self, url: &'a Url) -> Result<InternalUrl<'a>, ExternalUrl<'a>> {
+    fn as_app_link(&self, url: &Url) -> Option<MacroScheme> {
+        if !matches!(url.scheme(), "http" | "https") {
+            return None;
+        }
+        let domain = url.domain()?;
+        let domain = domain.strip_prefix("www.").unwrap_or(domain);
+        if !self
+            .app_link_hosts
+            .iter()
+            .any(|host| domain.eq_ignore_ascii_case(host))
+        {
+            return None;
+        }
+        let path = url.path();
+        if path != "/app" && !path.starts_with("/app/") {
+            return None;
+        }
+        MacroScheme::from_url(url).ok()
+    }
+
+    #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
+    fn as_internal_url<'a>(&self, url: &'a Url) -> Result<(), ExternalUrl<'a>> {
         let is_allowed_domain = self.internal_domains.iter().any(|cur| {
             cur.scheme().eq(url.scheme())
                 && cur.domain().eq(&url.domain())
@@ -124,7 +146,7 @@ impl MacroNavigationPlugin {
             });
 
         if is_allowed_domain || is_allowed_file {
-            Ok(InternalUrl(Cow::Borrowed(url)))
+            Ok(())
         } else {
             Err(ExternalUrl(Cow::Borrowed(url)))
         }
@@ -203,12 +225,18 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
                 });
                 false
             }
-            NavigationOutput::Internal(_internal_url) => true,
-            NavigationOutput::InternalTransformed {
-                original: _,
-                remapped,
-            } => {
-                webview.navigate(remapped.0.into_owned()).ok();
+            NavigationOutput::Internal => true,
+            NavigationOutput::AppLink(scheme) => {
+                webview
+                    .app_handle()
+                    .emit(
+                        "navigate",
+                        NavigatePayload {
+                            path: scheme.path(),
+                            query: scheme.query().unwrap_or_default(),
+                        },
+                    )
+                    .log_and_consume();
                 false
             }
         }

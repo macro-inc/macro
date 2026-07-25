@@ -1,6 +1,7 @@
 //! Bot service implementation.
 
 use super::{
+    events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
         AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
         CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
@@ -10,19 +11,21 @@ use super::{
     tokens,
 };
 use chrono::{DateTime, Utc};
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Bot service implementation.
 #[derive(Debug, Clone)]
-pub struct BotServiceImpl<R> {
+pub struct BotServiceImpl<R, B> {
     repo: R,
+    event_broker: B,
 }
 
-impl<R> BotServiceImpl<R> {
+impl<R, B> BotServiceImpl<R, B> {
     /// Create a bot service.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+    pub fn new(repo: R, event_broker: B) -> Self {
+        Self { repo, event_broker }
     }
 }
 
@@ -49,10 +52,22 @@ fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) 
             .is_none_or(|expires_at| expires_at > now)
 }
 
-impl<R> BotServiceImpl<R>
+struct ValidatedBotToken {
+    bot: AuthenticatedBot,
+    token_id: Uuid,
+}
+
+impl<R, B> BotServiceImpl<R, B>
 where
     R: BotRepo,
+    B: MacroEventBroker,
 {
+    fn publish_bot_event(&self, event: &BotMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error=?error, "failed to schedule bot lifecycle event");
+        }));
+    }
+
     async fn owner_for_request(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -61,7 +76,7 @@ where
         if let Some(team_id) = team_id {
             if !self
                 .repo
-                .user_has_team(caller.clone(), team_id)
+                .user_can_administer_team(caller.clone(), team_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?
             {
@@ -113,7 +128,7 @@ where
     async fn authenticate_candidate(
         &self,
         candidate: Option<BotTokenCandidate>,
-    ) -> Result<AuthenticatedBot, BotError> {
+    ) -> Result<ValidatedBotToken, BotError> {
         let Some(candidate) = candidate else {
             return Err(BotError::Unauthorized);
         };
@@ -123,19 +138,22 @@ where
             return Err(BotError::Unauthorized);
         }
 
-        let token_id = candidate.token.id;
-        let bot = candidate.bot;
+        let authenticated = ValidatedBotToken {
+            bot: candidate.bot,
+            token_id: candidate.token.id,
+        };
         self.repo
-            .mark_token_used(token_id)
+            .mark_token_used(authenticated.token_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        Ok(bot)
+        Ok(authenticated)
     }
 }
 
-impl<R> BotService for BotServiceImpl<R>
+impl<R, B> BotService for BotServiceImpl<R, B>
 where
     R: BotRepo,
+    B: MacroEventBroker + Clone,
 {
     async fn create_bot(
         &self,
@@ -144,11 +162,28 @@ where
     ) -> Result<Bot, BotError> {
         validate_handle(&req.handle)?;
         let owner = self.owner_for_request(caller.clone(), req.team_id).await?;
+        let created_by_user_id = caller.clone();
 
-        self.repo
+        let bot = self
+            .repo
             .create_owned_bot(owner, caller, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))
+            .map_err(|err| BotError::Repo(err.into()))?;
+
+        self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
+            bot_id: bot.id,
+            kind: bot.kind,
+            owner: bot.owner.clone().expect("owned bot must have an owner"),
+            name: bot.name.clone(),
+            handle: bot.handle.clone(),
+            description: bot.description.clone(),
+            avatar_url: bot.avatar_url.clone(),
+            created_by_user_id,
+            channel_id: None,
+            created_at: bot.created_at,
+        }));
+
+        Ok(bot)
     }
 
     async fn create_channel_scoped_bot(
@@ -159,6 +194,7 @@ where
     ) -> Result<CreateChannelScopedBotResponse, BotError> {
         validate_handle(&req.handle)?;
         let owner = self.owner_for_request(caller.clone(), req.team_id).await?;
+        let created_by_user_id = caller.clone();
         let generated_token = tokens::generate_token();
         let (bot, token) = self
             .repo
@@ -166,6 +202,19 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
         let bot_token = token.token.clone();
+
+        self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
+            bot_id: bot.id,
+            kind: bot.kind,
+            owner: bot.owner.clone().expect("owned bot must have an owner"),
+            name: bot.name.clone(),
+            handle: bot.handle.clone(),
+            description: bot.description.clone(),
+            avatar_url: bot.avatar_url.clone(),
+            created_by_user_id,
+            channel_id: Some(channel_id),
+            created_at: bot.created_at,
+        }));
 
         Ok(CreateChannelScopedBotResponse {
             bot,
@@ -195,15 +244,33 @@ where
         bot_id: BotId,
         req: PatchBotRequest,
     ) -> Result<Bot, BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
+        self.ensure_manageable(caller.clone(), bot_id).await?;
         if let Some(handle) = &req.handle {
             validate_handle(handle)?;
         }
-        self.repo
+        let requested_name = req.name.clone();
+        let requested_handle = req.handle.clone();
+        let requested_description = req.description.clone();
+        let requested_avatar_url = req.avatar_url.clone();
+        let bot = self
+            .repo
             .patch_bot(bot_id, req)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
-            .ok_or_else(|| BotError::NotFound("bot not found".to_string()))
+            .ok_or_else(|| BotError::NotFound("bot not found".to_string()))?;
+
+        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
+            bot_id: bot.id,
+            owner: bot.owner.clone().expect("owned bot must have an owner"),
+            actor_user_id: caller,
+            name: requested_name,
+            handle: requested_handle,
+            description: requested_description,
+            avatar_url: requested_avatar_url,
+            updated_at: bot.updated_at,
+        }));
+
+        Ok(bot)
     }
 
     async fn delete_bot(
@@ -211,17 +278,23 @@ where
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> Result<(), BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
-        if self
+        let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
+        if !self
             .repo
             .delete_bot(bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
-            Ok(())
-        } else {
-            Err(BotError::NotFound("bot not found".to_string()))
+            return Err(BotError::NotFound("bot not found".to_string()));
         }
+
+        self.publish_bot_event(&BotMacroEvent::deleted(BotDeletedMetadata {
+            bot_id: bot.id,
+            owner: bot.owner.expect("owned bot must have an owner"),
+            actor_user_id: caller,
+        }));
+
+        Ok(())
     }
 
     async fn add_bot_to_channel(
@@ -327,13 +400,26 @@ where
         }
     }
 
+    async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        if self
+            .repo
+            .bot_active_in_channel(channel_id, bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            Ok(())
+        } else {
+            Err(BotError::Unauthorized)
+        }
+    }
+
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
         let candidate = self
             .repo
             .token_candidate(token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidate(candidate).await
+        Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 
     async fn authenticate_channel_token(
@@ -346,6 +432,6 @@ where
             .channel_token_candidate(channel_id, token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidate(candidate).await
+        Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 }

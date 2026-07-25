@@ -1,7 +1,7 @@
 use anyhow::Context;
+use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
@@ -12,7 +12,9 @@ env_vars! {
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
+    /// Shared CloudFront distribution URL for document content and call recording GET URLs.
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
+    /// Shared CloudFront signer public key ID for document content and call recordings.
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct RedisUri;
     pub struct BulkUploadRequestsTable;
@@ -36,8 +38,10 @@ env_vars! {
     /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
     pub struct CohereApiKey;
     pub struct DocumentLimit;
+    /// Shared signed URL lifetime for document content and call recordings.
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
+    /// Shared CloudFront signer private key for document content and call recordings.
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     #[derive(Clone)]
     pub struct DocumentPermissionJwt;
@@ -136,13 +140,14 @@ pub struct Config {
     #[macro_config_default(20)]
     pub document_limit: u64,
 
-    /// The number of seconds a presigned url is valid for
+    /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
     pub document_storage_service_presigned_url_expiry_seconds: u64,
     /// The number of seconds a browser cache for a presigned url is valid for
     #[macro_config_default(DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS)]
     pub document_storage_service_presigned_url_browser_cache_expiry_seconds: u64,
 
+    /// The CloudFront private key shared by document content and call recording URL signing.
     pub document_storage_service_cloudfront_signer_private_key:
         LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
 

@@ -13,6 +13,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { macroEntityToPropertyEntityType } from '@property/utils';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -23,8 +24,12 @@ import {
   makeDeleteAction,
   makeFavoriteAction,
   makeMarkDoneAction,
+  makeMarkNotDoneAction,
+  makeMarkReadAction,
+  makeMarkUnreadAction,
   makeMoveToProjectAction,
   makeRenameAction,
+  makeSetCompanyPropertyAction,
   makeShareAction,
 } from './index';
 
@@ -54,6 +59,13 @@ export const useEntityActionHotkeys = (
     hotkeyGroup: group,
   });
 
+  const markNotDone = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
+  });
+
+  const markRead = makeMarkReadAction();
+  const markUnread = makeMarkUnreadAction();
+
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
   });
@@ -75,6 +87,8 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+
+  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const getEntitiesForAction = (): EntityData[] => {
     if (
@@ -99,6 +113,9 @@ export const useEntityActionHotkeys = (
 
   const openNextEntity = (entity: EntityData) => {
     if (!splitHandle) return;
+    // Preview Controllers are synchronized centrally by executeWithSoup so
+    // every mark-done entry point, including menus and swipe, behaves alike.
+    if (splitHandle.isControllerSplit()) return;
     const handleContent = splitHandle.content().type;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, {
@@ -123,6 +140,14 @@ export const useEntityActionHotkeys = (
     const entities = getEntitiesForAction();
     if (entities.length > 0) {
       openPropertyEditor(entities, mode, property);
+    }
+  };
+  const canAssignTags = (entity: EntityData) => {
+    try {
+      macroEntityToPropertyEntityType(entity);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -157,6 +182,90 @@ export const useEntityActionHotkeys = (
       return entities.length > 0 && entities.every(markDone.canExecute);
     },
     displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mark as not done - 'shift+e', reverses mark done on archived emails
+  registerHotkey({
+    hotkey: ['shift+e'],
+    hotkeyToken: TOKENS.entity.action.markNotDone,
+    scopeId,
+    description: 'Mark as not done',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(markNotDone.canExecute)) return false;
+
+      markNotDone.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+
+      const contentId = splitHandle?.content().id;
+
+      const soupViewTab = options.activeSoupViewTab?.();
+
+      if (
+        !isListViewID(contentId) ||
+        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
+      )
+        return false;
+
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(markNotDone.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mark unread - 'u', read email threads only; rows stay in place
+  registerHotkey({
+    hotkey: ['u'],
+    hotkeyToken: TOKENS.entity.action.markUnread,
+    scopeId,
+    description: 'Mark unread',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(markUnread.canExecute)) return false;
+
+      markUnread.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(markUnread.canExecute);
+    },
+    displayPriority: 9,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mark read - 'shift+u', email selections with at least one unread thread
+  registerHotkey({
+    hotkey: ['shift+u'],
+    hotkeyToken: TOKENS.entity.action.markRead,
+    scopeId,
+    description: 'Mark read',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.some(markRead.canExecute)) return false;
+
+      markRead.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 &&
+        entities.every((e) => e.type === 'email') &&
+        entities.some(markRead.canExecute)
+      );
+    },
+    displayPriority: 9,
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
@@ -404,6 +513,30 @@ export const useEntityActionHotkeys = (
     scopeId,
   }).withGroup(group);
 
+  // Assign tags - t
+  registerHotkey({
+    hotkey: ['t'],
+    hotkeyToken: TOKENS.entity.action.tags,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: () => {
+      const count = getEntitiesForAction().length;
+      return count > 1 ? 'Tag items' : 'Tag item';
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      openPropertyEditor(entities, 'tag');
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(canAssignTags);
+    },
+    scopeId,
+  }).withGroup(group);
+
   // Set priority - shift+cmd+p
   registerHotkey({
     hotkey: ['shift+cmd+p'],
@@ -470,6 +603,42 @@ export const useEntityActionHotkeys = (
     },
     scopeId,
   }).withGroup(group);
+
+  // Set stage / owner / revenue for CRM companies (command menu only, no
+  // keybindings) — company counterpart of the task property commands above.
+  const companyPropertyCommands = [
+    { token: TOKENS.entity.action.stage, field: 'stage', label: 'Set stage' },
+    { token: TOKENS.entity.action.owner, field: 'owner', label: 'Set owner' },
+    {
+      token: TOKENS.entity.action.revenue,
+      field: 'revenue',
+      label: 'Set revenue',
+    },
+  ] as const;
+  for (const { token, field, label } of companyPropertyCommands) {
+    registerHotkey({
+      hotkeyToken: token,
+      tags: [HotkeyTags.SelectionModification],
+      displayPriority: 10,
+      description: label,
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        setCompanyPropertyAction.execute(entities, field);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return (
+          entities.length > 0 &&
+          entities.every(setCompanyPropertyAction.canExecute)
+        );
+      },
+      scopeId,
+    }).withGroup(group);
+  }
 
   onCleanup(() => group.dispose());
 

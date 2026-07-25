@@ -1,23 +1,25 @@
+import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
+import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
+import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { useDealStages } from '@companies/crm/deal-stages';
 import {
-  type CrmDisplayOptions,
-  useCrmDisplayOptions,
-} from '@companies/crm/display-options';
+  openEntityInSplitFromUnifiedList,
+  preventDuplicatePreviewEntityOpen,
+} from '@app/features/next-soup/utils';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import {
   useClosedStageIds,
   useCrmPermissions,
+  useCrmUnavailable,
 } from '@companies/crm/team-crm-config';
-import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { Resize } from '@core/component/Resize';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { UserIcon } from '@core/component/UserIcon';
-import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import {
+  type CrmCompanyEntity,
   Entity,
   type EntityData,
   formatTimestamp,
@@ -26,12 +28,21 @@ import {
 } from '@entity';
 import CircleDashed from '@phosphor/circle-dashed.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { getSoupEntityById } from '@queries/soup/normalized-cache';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { cn, EmptyStatePanel, Layer } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn, Layer } from '@ui';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Column key for companies without a Stage value. */
 const NO_STAGE_KEY = '';
+
+/** Minimum column width the snapping layout will shrink to. */
+const MIN_COLUMN_WIDTH = 224;
+/** gap-3 between columns. */
+const COLUMN_GAP = 12;
+/** p-3 on each side of the column row. */
+const BOARD_PADDING_X = 24;
 
 type StageColumn = {
   key: string;
@@ -46,38 +57,135 @@ type StageColumn = {
  * admins/owners only, matching CRM edit access; moving deals out of a
  * closed stage additionally requires the move-closed-deals permission).
  *
- * Like the list, the board supports the toggleable preview pane (Preview
- * button / space in the filters bar): while it's open, clicking a card
- * previews the company to the side instead of replacing the split.
  */
 export function CompanyKanban() {
-  const { source, soup } = useSoupView();
+  const { source, soup, stageFilter, searchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
-  const saveMutation = useBulkSaveEntityPropertiesMutation();
-  const orchestrator = useGlobalBlockOrchestrator();
 
-  const { stages, stageProperty, resolveStage } = useDealStages();
+  // Stage moves made while the board is fed by search results. Search rows
+  // bypass the normalized soup cache, so the mutation's optimistic update
+  // never reaches them — without this overlay a drop wouldn't move the card.
+  const [stageOverrides, setStageOverrides] = createSignal<
+    ReadonlyMap<string, string>
+  >(new Map());
+
+  const setStageOverride = (entityId: string, stageKey: string) => {
+    setStageOverrides((prev) => new Map(prev).set(entityId, stageKey));
+  };
+
+  // Drop an override, optionally only when it still points at `stageKey`
+  // (so a failed save doesn't undo a newer drag of the same card).
+  const clearStageOverride = (entityId: string, stageKey?: string) => {
+    setStageOverrides((prev) => {
+      if (stageKey !== undefined && prev.get(entityId) !== stageKey) {
+        return prev;
+      }
+      if (!prev.has(entityId)) return prev;
+      const next = new Map(prev);
+      next.delete(entityId);
+      return next;
+    });
+  };
+
+  const saveMutation = useBulkSaveEntityPropertiesMutation({
+    onError: (_error, variables) => {
+      for (const item of variables.properties) {
+        if (item.apiValues.valueType !== 'SELECT_STRING') continue;
+        const stageKey = item.apiValues.values?.[0] ?? NO_STAGE_KEY;
+        clearStageOverride(item.entityId, stageKey);
+      }
+    },
+  });
+
+  const { stages, filterStages, stageProperty, resolveStage } = useDealStages();
   const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
   const closedStageIds = useClosedStageIds(stages);
-  // Personal display options gate which fields render on cards; read once
-  // here and passed down rather than per-card.
-  const displayOptions = useCrmDisplayOptions();
 
-  const stageColumns = createMemo((): StageColumn[] => [
-    ...stages().map((stage) => ({ key: stage.id, label: stage.label })),
-    { key: NO_STAGE_KEY, label: 'No stage' },
-  ]);
+  // Mirror the list view's no-team / CRM-disabled empty states.
+  const crmUnavailable = useCrmUnavailable();
+  const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
+    useFilterRefinements();
 
-  const { paneVisible, selectedEntity } = usePreviewPaneVisiblity();
+  // Debug: force the board to render its empty state regardless of content.
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
-  const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
+  const stageColumns = createMemo((): StageColumn[] => {
+    // Candidates in canonical pipeline order: the filterable set (active
+    // stages plus retired legacy stages on the system default), then
+    // "No stage" — checked columns always render in this fixed order.
+    const candidates: StageColumn[] = [
+      ...filterStages().map((stage) => ({ key: stage.id, label: stage.label })),
+      { key: NO_STAGE_KEY, label: 'No stage' },
+    ];
+    // An active stage filter removes the filtered-out columns entirely,
+    // not just their (already predicate-filtered) cards. With no filter,
+    // only the active stage set shows (legacy stages are opt-in).
+    const filter = stageFilter();
+    if (filter.length === 0) {
+      const active = new Set(stages().map((stage) => stage.id));
+      return candidates.filter(
+        (column) => column.key === NO_STAGE_KEY || active.has(column.key)
+      );
+    }
+    return candidates.filter((column) =>
+      filter.includes(column.key === NO_STAGE_KEY ? NO_STAGE : column.key)
+    );
+  });
+
+  // Search results don't carry properties, which would strand every match
+  // in "No stage" (and skip closed-stage drag gating). Backfill from the
+  // normalized soup cache, which still holds the full rows the search is
+  // narrowing.
+  const companies = createMemo(() =>
+    source
+      .data()
+      .filter(isCrmCompanyEntity)
+      .map((entity) => {
+        if (entity.properties) return entity;
+        const cached = getSoupEntityById(entity.id);
+        return cached?.tag === 'crmCompany'
+          ? { ...entity, properties: cached.data.properties }
+          : entity;
+      })
+  );
+
+  /** The stage column a company renders in: pending drag moves win. */
+  const effectiveStage = (company: CrmCompanyEntity) =>
+    stageOverrides().get(company.id) ?? resolveStage(company) ?? NO_STAGE_KEY;
+
+  // Retire overrides the entity's own data has caught up with, so later
+  // remote stage changes aren't masked by a stale overlay.
+  createEffect(() => {
+    const overrides = stageOverrides();
+    if (overrides.size === 0) return;
+    for (const company of companies()) {
+      const override = overrides.get(company.id);
+      if (
+        override !== undefined &&
+        (resolveStage(company) ?? NO_STAGE_KEY) === override
+      ) {
+        clearStageOverride(company.id);
+      }
+    }
+  });
+
+  // Mirror the list view's empty states: beyond CRM-unavailable, an empty
+  // board ("No customers yet" / no search or filter matches) shows the
+  // panel instead of a row of empty columns. Fetches keep the board
+  // mounted so the empty state doesn't flash during refetches.
+  const showEmptyState = () =>
+    crmUnavailable() ||
+    (!source.isFetching() && companies().length === 0) ||
+    forceEmptyState();
 
   const columns = createMemo(() => {
     const buckets = new Map<string, EntityData[]>(
       stageColumns().map((column) => [column.key, []])
     );
     for (const company of companies()) {
-      const key = resolveStage(company) ?? NO_STAGE_KEY;
+      const key = effectiveStage(company);
       (buckets.get(buckets.has(key) ? key : NO_STAGE_KEY) ?? []).push(company);
     }
     return stageColumns().map((column) => ({
@@ -96,13 +204,35 @@ export function CompanyKanban() {
 
   const [draggedId, setDraggedId] = createSignal<string>();
   const [dropTarget, setDropTarget] = createSignal<string>();
+  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+
+  // Columns snap to a whole-column layout: as many columns as fit at the
+  // minimum width, each widened to exactly fill the viewport. Growing the
+  // board snaps in the next column once there's room; the rest scroll.
+  const boardSize = createElementSize(scrollRef);
+  const columnWidth = createMemo(() => {
+    const width = boardSize.width;
+    const count = stageColumns().length;
+    if (!width || count === 0) return undefined;
+    const usable = width - BOARD_PADDING_X;
+    const fit = Math.max(
+      1,
+      Math.min(
+        count,
+        Math.floor((usable + COLUMN_GAP) / (MIN_COLUMN_WIDTH + COLUMN_GAP))
+      )
+    );
+    // Floored so rounding can't overflow the viewport by a pixel and
+    // phantom-trigger the horizontal scrollbar.
+    return Math.floor((usable - (fit - 1) * COLUMN_GAP) / fit);
+  });
 
   const moveToStage = (entityId: string, stageKey: string) => {
     const entity = companies().find((company) => company.id === entityId);
     if (!entity) return;
-    const currentStage = resolveStage(entity) ?? NO_STAGE_KEY;
-    if (currentStage === stageKey) return;
+    if (effectiveStage(entity) === stageKey) return;
 
+    setStageOverride(entityId, stageKey);
     saveMutation.mutate({
       properties: [
         {
@@ -119,14 +249,17 @@ export function CompanyKanban() {
   };
 
   const openCompany = (entity: EntityData, event: MouseEvent) => {
-    soup.focus.set(entity.id);
-
-    // While the preview pane is open, card clicks retarget it instead of
-    // replacing the split (mirrors the list view's behavior).
-    if (paneVisible()) {
-      soup.setPreviewEntity(entity.id);
+    // Shift+click always opens a fresh split; a plain click while engaged as a
+    // Controller previews into the Viewer and shouldn't re-open an entity
+    // already shown elsewhere. Matches the list view's onEntityClick.
+    if (
+      !event.shiftKey &&
+      panel.handle.isControllerSplit() &&
+      preventDuplicatePreviewEntityOpen(entity, panel.handle)
+    ) {
       return;
     }
+    soup.focus.set(entity.id);
 
     void openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
@@ -136,24 +269,42 @@ export function CompanyKanban() {
   };
 
   return (
-    <Resize.Zone direction="horizontal" gutter={0}>
-      <Resize.Panel id="company-kanban" minSize={200}>
+    <Show
+      when={!showEmptyState()}
+      fallback={
+        <EmptyState
+          listView="companies"
+          search={!!searchText()}
+          hasRefinementsFromBase={hasActiveRefinements()}
+          hasHiddenItems={hasHiddenItems()}
+          onClearFilters={resetToTabDefaults}
+        />
+      }
+    >
+      {/* Relative wrapper anchors the horizontal scrollbar to the board's
+          bottom edge when the split is too narrow for all columns. */}
+      <div class="relative size-full min-w-0">
         <div
-          class={cn(
-            'size-full min-w-0 overflow-x-auto overflow-y-hidden',
-            paneVisible() && 'border-r border-edge-muted'
-          )}
+          ref={setScrollRef}
+          class="size-full overflow-x-auto overflow-y-hidden scrollbar-hidden"
         >
           <div class="flex h-full gap-3 p-3">
             <For each={columns()}>
               {(column, columnIndex) => (
                 <div
                   class={cn(
-                    'flex h-full w-64 shrink-0 flex-col rounded-lg border border-edge-muted bg-surface',
+                    // Fallback sizing until the board is measured; after
+                    // that the snapping columnWidth() takes over.
+                    'flex h-full min-w-56 flex-1 flex-col rounded-lg border border-edge-muted bg-surface',
                     dropTarget() === column.key &&
                       draggedId() &&
                       'border-accent/50 bg-accent/5'
                   )}
+                  style={
+                    columnWidth() !== undefined
+                      ? { width: `${columnWidth()}px`, flex: 'none' }
+                      : undefined
+                  }
                   onDragOver={(e) => {
                     if (!draggedId()) return;
                     e.preventDefault();
@@ -191,31 +342,37 @@ export function CompanyKanban() {
                       />
                     </Show>
                     <span class="truncate">{column.label}</span>
-                    <span class="ml-auto shrink-0 tabular-nums px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted font-medium">
-                      {column.entities.length}
-                    </span>
                   </div>
                   <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
                     <For each={column.entities}>
                       {(entity) => (
-                        <CompanyKanbanCard
-                          entity={entity}
-                          fields={displayOptions.options().kanbanFields}
-                          draggable={canDragFrom(column.key)}
-                          dragging={draggedId() === entity.id}
-                          onDragStart={(e) => {
-                            e.dataTransfer?.setData('text/plain', entity.id);
-                            if (e.dataTransfer) {
-                              e.dataTransfer.effectAllowed = 'move';
-                            }
-                            setDraggedId(entity.id);
-                          }}
-                          onDragEnd={() => {
-                            setDraggedId(undefined);
-                            setDropTarget(undefined);
-                          }}
-                          onClick={(e) => openCompany(entity, e)}
-                        />
+                        // The context-menu trigger is h-full (sized for list
+                        // rows); an auto-height wrapper resolves that to the
+                        // card's content height instead of the column's.
+                        <div class="shrink-0">
+                          <SoupEntityContextMenu entity={entity}>
+                            <CompanyKanbanCard
+                              entity={entity}
+                              draggable={canDragFrom(column.key)}
+                              dragging={draggedId() === entity.id}
+                              onDragStart={(e) => {
+                                e.dataTransfer?.setData(
+                                  'text/plain',
+                                  entity.id
+                                );
+                                if (e.dataTransfer) {
+                                  e.dataTransfer.effectAllowed = 'move';
+                                }
+                                setDraggedId(entity.id);
+                              }}
+                              onDragEnd={() => {
+                                setDraggedId(undefined);
+                                setDropTarget(undefined);
+                              }}
+                              onClick={(e) => openCompany(entity, e)}
+                            />
+                          </SoupEntityContextMenu>
+                        </div>
                       )}
                     </For>
                   </div>
@@ -224,42 +381,22 @@ export function CompanyKanban() {
             </For>
           </div>
         </div>
-      </Resize.Panel>
-      <Show when={paneVisible()}>
-        <Resize.Panel
-          id="soup-preview"
-          minSize={500}
-          target={{ kind: 'percent', percent: 70 }}
-        >
-          <Show
-            when={selectedEntity()}
-            fallback={
-              <EmptyStatePanel
-                graphic={EmptyStatePreviewIcon}
-                title="Nothing selected"
-                description="Select a card from the board to preview it here"
-                centered
-              />
-            }
-          >
-            {(entity) => (
-              <PreviewPanel
-                selectedEntity={entity()}
-                orchestrator={orchestrator}
-                splitPanelContext={panel}
-              />
-            )}
-          </Show>
-        </Resize.Panel>
-      </Show>
-    </Resize.Zone>
+        {/* watchContent: columns mount after the initial measurement, so
+              overflow must be re-detected as they load in. */}
+        <CustomScrollbar
+          scrollContainer={scrollRef}
+          horizontal
+          revealZone={48}
+          gutterSize={20}
+          watchContent
+        />
+      </div>
+    </Show>
   );
 }
 
 function CompanyKanbanCard(props: {
   entity: EntityData;
-  /** Which optional card fields render (personal display options). */
-  fields: CrmDisplayOptions['kanbanFields'];
   draggable: boolean;
   dragging: boolean;
   onDragStart: (e: DragEvent) => void;
@@ -284,7 +421,7 @@ function CompanyKanbanCard(props: {
         onClick={props.onClick}
         class={cn(
           'flex flex-col gap-1.5 rounded-lg border border-edge-muted bg-panel p-2.5 text-sm',
-          'hover:border-edge transition-colors',
+          'hover:border-edge hover:bg-active transition-colors',
           props.dragging && 'opacity-40'
         )}
       >
@@ -295,7 +432,7 @@ function CompanyKanbanCard(props: {
           <span class="ph-no-capture truncate font-semibold min-w-0">
             <Entity.Title entity={props.entity} />
           </span>
-          <Show when={props.fields.owner && ownerId()}>
+          <Show when={ownerId()}>
             {(id) => (
               <span class="ml-auto shrink-0">
                 <UserIcon id={id()} size="sm" suppressClick />
@@ -303,19 +440,17 @@ function CompanyKanbanCard(props: {
             )}
           </Show>
         </div>
-        <Show when={props.fields.domain || props.fields.lastInteraction}>
-          <div class="flex items-center gap-2 min-w-0 text-xs text-ink-extra-muted">
-            <Show when={props.fields.domain && primaryDomain()}>
-              {(domain) => <span class="truncate min-w-0">{domain()}</span>}
-            </Show>
-            {/* Last interaction — updatedAt carries crm_companies.last_interaction. */}
-            <Show when={props.fields.lastInteraction && props.entity.updatedAt}>
-              {(ts) => (
-                <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
-              )}
-            </Show>
-          </div>
-        </Show>
+        <div class="flex items-center gap-2 min-w-0 text-xs text-ink-extra-muted">
+          <Show when={primaryDomain()}>
+            {(domain) => <span class="truncate min-w-0">{domain()}</span>}
+          </Show>
+          {/* Last interaction — updatedAt carries crm_companies.last_interaction. */}
+          <Show when={props.entity.updatedAt}>
+            {(ts) => (
+              <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
+            )}
+          </Show>
+        </div>
       </div>
     </Layer>
   );

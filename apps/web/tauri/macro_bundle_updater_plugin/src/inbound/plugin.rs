@@ -8,6 +8,7 @@ use url::Url;
 
 use crate::{
     domain::{
+        bundle_routes::BundleRoutes,
         models::{UpdateError, UpdateStatus},
         ports::AutoUpdateService,
         service::{ApplyUpdateResult, Service},
@@ -15,6 +16,7 @@ use crate::{
     outbound::{
         api_client::BundleClient,
         fs::FileSystem,
+        runtime::TauriTaskSpawner,
         system_info::{SystemInfo, native_build},
     },
 };
@@ -137,15 +139,17 @@ impl BundleUpdateEvent {
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
     embedded_bundle_build: u64,
+    bundle_routes: BundleRoutes,
     auto_update: bool,
 }
 
 impl MacroBundleUpdaterPlugin {
     /// Create the plugin targeting the given update server URL.
-    pub fn new(base_url: Url, embedded_bundle_build: u64) -> Self {
+    pub fn new(base_url: Url, embedded_bundle_build: u64, bundle_routes: BundleRoutes) -> Self {
         Self {
             base_url,
             embedded_bundle_build,
+            bundle_routes,
             auto_update: true,
         }
     }
@@ -282,13 +286,20 @@ pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Resu
 
 /// Acknowledge that the webview mounted after an applied bundle update reload.
 #[tauri::command]
-pub async fn ack_bundle_update_reload(
+pub async fn ack_bundle_update_reload<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
+    app_handle: tauri::AppHandle<R>,
+    loaded_bundle_build: u64,
 ) -> Result<bool, String> {
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
     service
         .lock()
         .await
-        .acknowledge_update_reload()
+        .acknowledge_update_reload(&cache_dir, loaded_bundle_build)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -326,7 +337,7 @@ pub async fn get_bundle_debug_info(
         } else {
             BundleDebugSource::Embedded
         },
-        native_build: crate::outbound::system_info::native_build(),
+        native_build: service.native_build(),
     })
 }
 
@@ -341,15 +352,28 @@ pub async fn clear_bundle<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
-    service
-        .lock()
-        .await
-        .clear_bundle_root(&cache_dir)
-        .await
-        .map_err(|e| e.to_string())?;
+    let apply_result = {
+        let mut service = service.lock().await;
+        let result = service
+            .revert_to_embedded(&cache_dir)
+            .await
+            .map_err(|e| e.to_string())?;
+        if result == ApplyUpdateResult::ReloadNeeded {
+            service.mark_update_reload_dispatched();
+        }
+        result
+    };
 
-    if let Some(webview) = app_handle.webview_windows().values().next() {
-        let _ = webview.eval("window.location.reload();");
+    if apply_result == ApplyUpdateResult::ReloadNeeded {
+        if let Some(webview) = app_handle.webview_windows().values().next() {
+            if let Err(error) = webview.eval("window.location.reload();") {
+                tracing::warn!(error=?error, "[bundle-update] failed to reload after clearing bundle");
+                service.lock().await.unmark_update_reload_dispatched();
+            }
+        } else {
+            tracing::warn!("[bundle-update] bundle cleared but no webview was available to reload");
+            service.lock().await.unmark_update_reload_dispatched();
+        }
     }
     Ok(())
 }
@@ -366,18 +390,24 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = BundleClient::new(self.base_url.clone());
         let fs = FileSystem;
-        let system_info = SystemInfo::new(app.clone(), self.embedded_bundle_build);
+        let native_build = native_build();
+        let system_info = SystemInfo::new(app.clone(), native_build);
 
-        let mut service = Service::new(client, fs, system_info, self.embedded_bundle_build);
+        let mut service = Service::new::<_, _, TauriTaskSpawner>(
+            client,
+            fs,
+            system_info,
+            self.embedded_bundle_build,
+            native_build,
+            self.bundle_routes.clone(),
+        );
         let mut acknowledge_setup_apply = false;
         let mut start_update_check = false;
         if !self.auto_update {
-            tracing::info!(
-                "[bundle-update] automatic bundle updates are disabled in this build"
-            );
+            tracing::info!("[bundle-update] automatic bundle updates are disabled in this build");
         } else if let Ok(cache_dir) = app.path().app_cache_dir() {
             let restored_pending = tauri::async_runtime::block_on(async {
-                service.load_bundle_root(&cache_dir, native_build()).await
+                service.load_bundle_root(&cache_dir, native_build).await
             });
             if restored_pending {
                 match tauri::async_runtime::block_on(async {
@@ -427,10 +457,22 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                 return Ok(());
             };
             if acknowledge_setup_apply {
-                if let Err(e) = service.acknowledge_update_reload() {
-                    tracing::warn!(
-                        "[bundle-update] failed to acknowledge plugin-initialized bundle apply: {e}"
-                    );
+                match app.path().app_cache_dir() {
+                    Ok(cache_dir) => {
+                        let loaded_bundle_build =
+                            tauri::async_runtime::block_on(service.bundle_build())
+                                .unwrap_or(service.embedded_bundle_build());
+                        if let Err(e) = tauri::async_runtime::block_on(
+                            service.acknowledge_update_reload(&cache_dir, loaded_bundle_build),
+                        ) {
+                            tracing::warn!(
+                                "[bundle-update] failed to acknowledge plugin-initialized bundle apply: {e}"
+                            );
+                        }
+                    }
+                    Err(e) => tracing::warn!(
+                        "[bundle-update] failed to read cache dir for setup acknowledgement: {e}"
+                    ),
                 }
             } else if let Err(e) = service.start() {
                 tracing::warn!(

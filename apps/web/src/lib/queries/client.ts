@@ -1,3 +1,4 @@
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { QueryClient } from '@tanstack/solid-query';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
@@ -9,7 +10,18 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // 5 minutes
       gcTime: 1000 * 60 * 10, // 10 minutes
       refetchOnWindowFocus: false,
-      retry: 1,
+      // Auth failures are terminal within a session — fetchWithToken already
+      // refreshes and retries the token internally, so a query-level retry just
+      // repeats the doomed request.
+      retry: (failureCount, error) => {
+        if (
+          thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+          thrownResultErrorHasCode(error, 'FORBIDDEN')
+        ) {
+          return false;
+        }
+        return failureCount < 1;
+      },
     },
   },
 });

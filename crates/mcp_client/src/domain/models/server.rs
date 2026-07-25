@@ -1,16 +1,15 @@
 use super::consts::MCP_CLIENT_NAME;
-use crate::domain::ports::McpConnector;
+use crate::domain::ports::{McpConnector, McpServerStore};
+use crate::domain::service::PersistingCredentialStore;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
 use rmcp::model::{ClientInfo, Implementation};
 use rmcp::service::{RunningService, ServiceExt};
 use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::auth::{
-    AuthClient, AuthorizationManager, CredentialStore as _, InMemoryCredentialStore,
-    StoredCredentials,
-};
+use rmcp::transport::auth::{AuthClient, AuthorizationManager, StoredCredentials};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// A connected MCP server session.
 pub type McpServer = RunningService<RoleClient, ClientInfo>;
@@ -52,12 +51,12 @@ pub struct McpServerRecord {
 
 impl McpConnector for McpServerRecord {
     #[tracing::instrument(skip_all, err)]
-    async fn connect(&self) -> anyhow::Result<McpServer> {
+    async fn connect<S: McpServerStore>(&self, server_store: Arc<S>) -> anyhow::Result<McpServer> {
         match &self.credentials {
             Some(credentials) => {
                 let mut auth_manager = AuthorizationManager::new(&self.url).await?;
-                let store = InMemoryCredentialStore::new();
-                store.save(credentials.clone()).await?;
+                let store = PersistingCredentialStore::new(self.clone(), server_store);
+                store.seed(credentials.clone()).await?;
                 auth_manager.set_credential_store(store);
                 auth_manager.initialize_from_store().await?;
 

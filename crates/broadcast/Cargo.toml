@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "broadcast"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+dashmap = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["time"] }

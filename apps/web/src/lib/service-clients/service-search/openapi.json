@@ -318,6 +318,13 @@
                     "description": "`None` if the call has been deleted."
                   }
                 ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the call."
               }
             }
           }
@@ -382,6 +389,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "is_participant": {
+            "type": ["boolean", "null"],
+            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -418,6 +429,78 @@
           }
         }
       },
+      "ChannelMessageSearchResponseItem": {
+        "type": "object",
+        "description": "A single channel-message content hit in the unified search response.\nOne item per matching message, timestamped by the message itself, so the\nunified sort interleaves channel messages with other entity types by\ntheir own recency.",
+        "required": [
+          "id",
+          "channel_type",
+          "channel_id",
+          "message_id",
+          "sender_id",
+          "created_at",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the channel the message belongs to"
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The type of channel"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the channel message was created"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was deleted, if it has been"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the channel message"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized id field shared by all item types; the channel id."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel message id"
+          },
+          "owner_id": {
+            "type": ["string", "null"],
+            "description": "we don't store this for channels atm but keeping it here for consistency"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "The sender id"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel message thread id"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the channel message was last updated"
+          }
+        }
+      },
       "ChannelMetadata": {
         "type": "object",
         "description": "Metadata for a channel fetched from the database",
@@ -438,6 +521,51 @@
           "viewed_at": {
             "type": ["string", "null"],
             "format": "date-time"
+          }
+        }
+      },
+      "ChannelNameSearchResponseItem": {
+        "type": "object",
+        "description": "A channel-name search hit.",
+        "required": ["id", "channel_type", "channel_id", "highlight"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel id."
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The type of channel."
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The matched channel-name highlight."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized id field shared by all item types; the channel id."
+          },
+          "metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelMetadata",
+                "description": "Metadata for the channel."
+              }
+            ]
+          },
+          "owner_id": {
+            "type": ["string", "null"],
+            "description": "The channel owner."
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result."
           }
         }
       },
@@ -1692,6 +1820,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALL_RECORD",
           "CHANNEL",
           "CHAT",
           "COMPANY",
@@ -3850,7 +3979,24 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/ChannelSearchResponseItemWithMetadata"
+                "$ref": "#/components/schemas/ChannelMessageSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["channelMessage"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChannelNameSearchResponseItem"
               },
               {
                 "type": "object",

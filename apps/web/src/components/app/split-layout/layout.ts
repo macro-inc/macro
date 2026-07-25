@@ -26,6 +26,11 @@ export function useSplitLayout() {
     return splitManager.openWithSplit(content, {
       ...options,
       preferNewSplit,
+      // Navigation issued from inside a split panel (links, mentions,
+      // references) carries that panel as its source; callers outside any
+      // panel (sidebar, command menu) stay handle-less, which is what marks
+      // "external navigation" for Preview Pair routing.
+      handle: options?.handle ?? splitPanelContext?.handle,
     });
   }
 

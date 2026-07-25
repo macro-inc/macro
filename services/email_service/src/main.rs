@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
@@ -13,6 +13,7 @@ use email::{
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -124,6 +125,14 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args.clone()),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: Some("macro|INTERNAL@macro.com".to_string()),
+        },
+        macro_authorization::NoBotAuthorizer,
+    )));
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
@@ -157,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
+        authorization_state: authorization_state.clone(),
     };
     let auth_service_client = Arc::new(auth_service_client);
     let redis_conn = redis_client
@@ -181,6 +191,7 @@ async fn main() -> anyhow::Result<()> {
         s3_client: Arc::new(s3_client),
         dss_client: Arc::new(dss_client),
         system_properties_service,
+        authorization_state: authorization_state.clone(),
         jwt_args,
         email_service,
         entity_access_service,

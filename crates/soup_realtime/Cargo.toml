@@ -1,0 +1,56 @@
+[package]
+edition = "2024"
+name = "soup_realtime"
+publish = false
+version = "0.1.0"
+
+[features]
+consumer = [
+  "dep:documents",
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "dep:tokio",
+  "macro_event_broker/outbound",
+  "ports",
+]
+default = ["consumer", "outbound", "ports"]
+outbound = [
+  "dep:entity_access",
+  "dep:soup",
+  "ports",
+]
+ports = [
+  "dep:broadcast",
+  "dep:futures",
+  "dep:rootcause",
+  "dep:tokio",
+  "dep:tokio-retry",
+  "dep:tracing",
+]
+
+[dependencies]
+broadcast = { path = "../broadcast", optional = true }
+documents = { path = "../documents", default-features = false, optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"], optional = true }
+futures = { workspace = true, optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_soup = { path = "../models_soup" }
+rdkafka = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
+serde = { workspace = true }
+soup = { path = "../soup", default-features = false, features = ["ports"], optional = true }
+tokio = { workspace = true, features = ["sync", "time"], optional = true }
+tokio-retry = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+chrono = { workspace = true }
+models_properties = { path = "../models_properties" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
+uuid = { workspace = true }

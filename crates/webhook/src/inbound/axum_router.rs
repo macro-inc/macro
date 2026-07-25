@@ -15,41 +15,58 @@ use axum::{
     routing::{patch, post},
 };
 use axum_extra::extract::Cached;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
+use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
-use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService};
+use rootcause::Report;
 use std::sync::Arc;
 use std::time::Duration;
 
 /// State for the webhook router.
-pub struct WebhookRouterState<S, R> {
+pub struct WebhookRouterState<S, R, Auth> {
     service: Arc<S>,
     rate_limiter: R,
+    authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, R: Clone> Clone for WebhookRouterState<S, R> {
+impl<S, R: Clone, Auth> Clone for WebhookRouterState<S, R, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             rate_limiter: self.rate_limiter.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S: WebhookService, R: RateLimitService + Clone> WebhookRouterState<S, R> {
+impl<S: WebhookService, R: RateLimitService + Clone, Auth> WebhookRouterState<S, R, Auth> {
     /// Create webhook router state.
-    pub fn new(service: S, rate_limiter: R) -> Self {
+    pub fn new(
+        service: S,
+        rate_limiter: R,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             service: Arc::new(service),
             rate_limiter,
+            authorization_state,
         }
     }
 }
 
-impl<S, R: Clone> FromRef<WebhookRouterState<S, R>> for Arc<S> {
-    fn from_ref(state: &WebhookRouterState<S, R>) -> Self {
+impl<S, R, Auth> FromRef<WebhookRouterState<S, R, Auth>> for Arc<S> {
+    fn from_ref(state: &WebhookRouterState<S, R, Auth>) -> Self {
         state.service.clone()
+    }
+}
+
+impl<S, R, Auth> FromRef<WebhookRouterState<S, R, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &WebhookRouterState<S, R, Auth>) -> Self {
+        state.authorization_state.clone()
     }
 }
 
@@ -61,14 +78,16 @@ pub struct WebhookPath {
 }
 
 /// Per-user validation attempt rate limit.
-pub struct PerUserValidateWebhookRateLimit {
-    user: MacroUserExtractor,
+pub struct PerUserValidateWebhookRateLimit<Auth> {
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     webhook_id: WebhookId,
 }
 
-impl<S> RateLimitExtractable<S> for PerUserValidateWebhookRateLimit
+impl<S, Auth> RateLimitExtractable<S> for PerUserValidateWebhookRateLimit<Auth>
 where
-    S: Send + Sync,
+    S: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
 {
     fn config() -> RateLimitConfig {
         RateLimitConfig {
@@ -79,15 +98,17 @@ where
 
     fn key(&self) -> RateLimitKey {
         RateLimitKey::builder(&"per-user-validate-webhook")
-            .append(&self.user.macro_user_id.as_ref())
+            .append(&self.authorization.authorization.user.macro_user_id.as_ref())
             .append(&self.webhook_id)
             .finish()
     }
 }
 
-impl<S> FromRequestParts<S> for PerUserValidateWebhookRateLimit
+impl<S, Auth> FromRequestParts<S> for PerUserValidateWebhookRateLimit<Auth>
 where
-    S: Send + Sync,
+    S: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
 {
     type Rejection = Response;
 
@@ -95,44 +116,92 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(user): Cached<MacroUserExtractor> = parts
-            .extract_with_state(state)
-            .await
-            .map_err(IntoResponse::into_response)?;
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
+            parts
+                .extract_with_state(state)
+                .await
+                .map_err(IntoResponse::into_response)?;
         let Path(path): Path<WebhookPath> = parts
             .extract_with_state(state)
             .await
             .map_err(IntoResponse::into_response)?;
 
         Ok(Self {
-            user,
+            authorization,
             webhook_id: path.webhook_id,
         })
     }
 }
 
+struct ValidateWebhookRateLimitState<R, Auth> {
+    rate_limiter: R,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<R: Clone, Auth> Clone for ValidateWebhookRateLimitState<R, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            rate_limiter: self.rate_limiter.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<R, Auth> FromRef<ValidateWebhookRateLimitState<R, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &ValidateWebhookRateLimitState<R, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+impl<R, Auth> RateLimitService for ValidateWebhookRateLimitState<R, Auth>
+where
+    R: RateLimitService,
+    Auth: MacroAuthorizationService,
+{
+    async fn check_rate_limit(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+    ) -> Result<RateLimitResult, Report> {
+        self.rate_limiter.check_rate_limit(key, config).await
+    }
+
+    async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), Report> {
+        self.rate_limiter.rollback_ticket(ticket).await
+    }
+}
+
 /// Create a webhook API router.
-pub fn webhook_router<S, R, T>(state: WebhookRouterState<S, R>) -> Router<T>
+pub fn webhook_router<S, R, Auth, T>(state: WebhookRouterState<S, R, Auth>) -> Router<T>
 where
     S: WebhookService,
     R: RateLimitService + Clone,
-    T: Send + Sync,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
 {
+    let rate_limit_state = ValidateWebhookRateLimitState {
+        rate_limiter: state.rate_limiter.clone(),
+        authorization_state: state.authorization_state.clone(),
+    };
     let validate_route = Router::new()
         .route(
             "/webhooks/{webhook_id}/validate",
-            post(validate_webhook::<S>),
+            post(validate_webhook::<S, Auth>),
         )
         .layer(axum::middleware::from_fn_with_state(
-            state.rate_limiter.clone(),
-            rate_limit_middleware::<R, PerUserValidateWebhookRateLimit, R>,
+            rate_limit_state,
+            rate_limit_middleware::<
+                ValidateWebhookRateLimitState<R, Auth>,
+                PerUserValidateWebhookRateLimit<Auth>,
+                ValidateWebhookRateLimitState<R, Auth>,
+            >,
         ));
 
     Router::new()
-        .route("/webhooks", post(create_webhook::<S>))
+        .route("/webhooks", post(create_webhook::<S, Auth>))
         .route(
             "/webhooks/{webhook_id}",
-            patch(patch_webhook::<S>).delete(delete_webhook::<S>),
+            patch(patch_webhook::<S, Auth>).delete(delete_webhook::<S, Auth>),
         )
         .merge(validate_route)
         .with_state(state)
@@ -151,12 +220,14 @@ where
     ),
     tag = "webhook"
 )]
-pub async fn create_webhook<S: WebhookService>(
+pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
-    let webhook = service.create_webhook(user.macro_user_id, request).await?;
+    let webhook = service
+        .create_webhook(authorization.authorization.user.macro_user_id, request)
+        .await?;
     Ok((StatusCode::CREATED, Json(webhook.into())))
 }
 
@@ -175,15 +246,19 @@ pub async fn create_webhook<S: WebhookService>(
     ),
     tag = "webhook"
 )]
-pub async fn patch_webhook<S: WebhookService>(
+pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
     Ok(Json(
         service
-            .patch_webhook(user.macro_user_id, path.webhook_id, request)
+            .patch_webhook(
+                authorization.authorization.user.macro_user_id,
+                path.webhook_id,
+                request,
+            )
             .await?,
     ))
 }
@@ -201,13 +276,16 @@ pub async fn patch_webhook<S: WebhookService>(
     ),
     tag = "webhook"
 )]
-pub async fn delete_webhook<S: WebhookService>(
+pub async fn delete_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(path): Path<WebhookPath>,
 ) -> Result<StatusCode, WebhookHandlerError> {
     service
-        .delete_webhook(user.macro_user_id, path.webhook_id)
+        .delete_webhook(
+            authorization.authorization.user.macro_user_id,
+            path.webhook_id,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -226,14 +304,17 @@ pub async fn delete_webhook<S: WebhookService>(
     ),
     tag = "webhook"
 )]
-pub async fn validate_webhook<S: WebhookService>(
+pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Path(path): Path<WebhookPath>,
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
     Ok(Json(
         service
-            .validate_webhook(user.macro_user_id, path.webhook_id)
+            .validate_webhook(
+                authorization.authorization.user.macro_user_id,
+                path.webhook_id,
+            )
             .await?,
     ))
 }

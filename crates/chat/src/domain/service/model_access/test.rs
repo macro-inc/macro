@@ -1,6 +1,7 @@
 use super::*;
 
 const HAIKU: &str = "anthropic/claude-haiku-4-5";
+const SONNET_5: &str = "anthropic/claude-sonnet-5";
 const OPUS: &str = "anthropic/claude-opus-4-8";
 const OPUS_4_7: &str = "anthropic/claude-opus-4-7";
 const SONNET_4_6: &str = "anthropic/claude-sonnet-4-6";
@@ -10,6 +11,7 @@ const GPT_5_MINI: &str = "openai/gpt-5-mini";
 #[test]
 fn free_user_only_has_haiku() {
     let svc = ModelAccessServiceImpl;
+    assert_eq!(svc.best_model(false), HAIKU);
     assert!(svc.has_access(false, HAIKU));
     assert!(!svc.has_access(false, OPUS));
     assert!(!svc.has_access(false, SONNET_4_6));
@@ -19,6 +21,8 @@ fn free_user_only_has_haiku() {
 #[test]
 fn professional_user_has_everything() {
     let svc = ModelAccessServiceImpl;
+    assert_eq!(svc.best_model(true), SONNET_5);
+    assert!(svc.has_access(true, SONNET_5));
     assert!(svc.has_access(true, HAIKU));
     assert!(svc.has_access(true, OPUS));
     assert!(svc.has_access(true, OPUS_4_7));

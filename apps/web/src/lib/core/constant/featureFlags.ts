@@ -122,18 +122,53 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
-// Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. Dev/local only for now; override
-// with VITE_ENABLE_EMAIL_SIGNATURES.
-export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
-  'ENABLE_EMAIL_SIGNATURES',
+// Activity timeline: the Activity sidebar entry and the combined Firehose /
+// My Activity view. Keep it dev-only by default while the feature is under
+// development; override with VITE_ENABLE_ACTIVITY for controlled testing.
+export const ENABLE_ACTIVITY = resolveFeatureFlag(
+  'ENABLE_ACTIVITY',
   DEV_MODE_ENV
 );
 
+// Email signatures: the settings editor, the compose / reply / AI-chat signature
+// previews, and the per-message include toggle. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
+export const ENABLE_EMAIL_SIGNATURES_FLAG = 'enable-email-signatures';
+// Honor an explicit VITE_ENABLE_EMAIL_SIGNATURES=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+export const ENABLE_EMAIL_SIGNATURES_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_EMAIL_SIGNATURES') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, { enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE })`.
+ */
+export function ENABLE_EMAIL_SIGNATURES(): boolean {
+  if (ENABLE_EMAIL_SIGNATURES_OVERRIDE !== undefined) {
+    return ENABLE_EMAIL_SIGNATURES_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_SIGNATURES_FLAG) ?? false
+  );
+}
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
-// global search. override with VITE_ENABLE_CRM.
-export const ENABLE_CRM = resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV);
+// global search. PostHog-gated (currently targeted at the Macro team in prod)
+// with a dev-mode default; override with VITE_ENABLE_CRM.
+export const ENABLE_CRM_FLAG = 'enable-crm';
+export const ENABLE_CRM_OVERRIDE =
+  resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV) || undefined;
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_CRM_FLAG, { enabledOverride: ENABLE_CRM_OVERRIDE })`.
+ */
+export function ENABLE_CRM(): boolean {
+  if (ENABLE_CRM_OVERRIDE !== undefined) return ENABLE_CRM_OVERRIDE;
+  return analytics.posthog.isFeatureEnabled(ENABLE_CRM_FLAG) ?? false;
+}
 
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',
@@ -253,12 +288,6 @@ const _ENABLE_SOUP_FROM_FILTER = resolveFeatureFlag(
   false
 );
 
-export const ENABLE_PREVIEW = resolveFeatureFlag('ENABLE_PREVIEW', true);
-export const ENABLE_PROJECT_VIEW_PREVIEW = resolveFeatureFlag(
-  'ENABLE_PROJECT_VIEW_PREVIEW',
-  true
-);
-
 const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
   'ENABLE_DOCK_NOTITIFCATIONS',
   DEV_MODE_ENV
@@ -305,6 +334,13 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   'ENABLE_UNIFIED_LIST_AI_INPUT',
   true
 );
+
+// Inline AI editing: the floating document AI edit pill and the AI editing
+// tool in the selection formatting menu. Gated by PostHog; use the reactive
+// `useFeatureFlag(INLINE_AI_EDITING_FLAG, { enabledOverride: INLINE_AI_EDITING_OVERRIDE })`.
+export const INLINE_AI_EDITING_FLAG = 'inline-ai-editing';
+export const INLINE_AI_EDITING_OVERRIDE =
+  resolveFeatureFlag('INLINE_AI_EDITING', DEV_MODE_ENV) || undefined;
 
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
@@ -361,11 +397,6 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
   true
 );
 
-// skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
-// can also be overridden via VITE_ENABLE_TEAMS env var
-export const ENABLE_TEAMS_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TEAMS', DEV_MODE_ENV) || undefined;
-
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
@@ -390,6 +421,14 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   : undefined;
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+// Persist soup filters, predicates and tabs across reloads. PostHog controls
+// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+export const ENABLE_SOUP_FILTER_PERSISTENCE_FLAG =
+  'enable-soup-filter-persistence';
+export const ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_SOUP_FILTER_PERSISTENCE'
+);
 
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -493,18 +532,6 @@ export function ENABLE_NEW_INBOX() {
   return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
 }
 
-export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
-export const ENABLE_TAGS_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
-
-// Narrow rollout gate for the search-view tag surfaces (facet row + row
-// chips), layered on top of enable-tags-fe. PostHog-controlled per
-// environment with a dev-mode default. Override with
-// VITE_ENABLE_TAGS_SEARCH_FE.
-export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
-export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;
-
 // Channel mode where replying and editing do not happen inline, but in a single unified input instead.
 export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
   'UNIFIED_CHANNEL_INPUT',
@@ -516,3 +543,11 @@ export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
 export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
+
+// Onboarding v4: the full-screen stepper new users land in after signup
+// (unified with /login), driving the import machinery with auto-import.
+// Dev-mode default; override with VITE_ENABLE_ONBOARDING_V4.
+export const ENABLE_ONBOARDING_V4 = resolveFeatureFlag(
+  'ENABLE_ONBOARDING_V4',
+  DEV_MODE_ENV
+);

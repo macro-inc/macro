@@ -18,6 +18,9 @@ export interface BucketConfig<T extends MentionItem = MentionItem> {
   label: string;
   getData: () => T[];
   getFullCount: () => number;
+  hasMore?: () => boolean;
+  isLoadingMore?: () => boolean;
+  loadMore?: () => Promise<void> | void;
 }
 
 /**
@@ -329,10 +332,9 @@ class MentionsMenuController {
 
   canViewAllForCategory(categoryId: string): boolean {
     const currentBins = this.bins();
-    const rawBins = this.rawBins();
+    const config = this.buckets().find((bucket) => bucket.id === categoryId);
     const abbreviatedCount = currentBins[categoryId] || 0;
-    const fullCount = rawBins[categoryId] || 0;
-    return fullCount > abbreviatedCount;
+    return (config?.getFullCount() ?? 0) > abbreviatedCount;
   }
 
   private computeBins(rawBins: MentionBins, maxItems: number): MentionBins {

@@ -38,6 +38,8 @@ export type CrmViewConfig = {
   /** Owner ids selected in the Owner filter. */
   ownerFilter?: string[];
   activeTab?: string;
+  /** Personal views only: applied by default when opening the Customers view. */
+  isDefault?: boolean;
 };
 
 export function isCrmViewConfig(value: unknown): value is CrmViewConfig {
@@ -98,6 +100,8 @@ export function usePersonalCrmViews() {
     )
   );
 
+  const defaultView = () => views().find((view) => view.config.isDefault);
+
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: CRM_SAVED_VIEWS_QUERY_KEY });
 
@@ -146,12 +150,46 @@ export function usePersonalCrmViews() {
     },
   }));
 
+  // The backend PATCH shallow-merges into the stored config, so sending just
+  // `{isDefault}` flips the flag without touching the rest of the snapshot.
+  const setDefaultMutation = useMutation(() => ({
+    mutationFn: async (vars: { id: string | undefined }) => {
+      const { id } = vars;
+      const previous = defaultView();
+      if (previous && previous.id !== id) {
+        await throwOnErr(
+          async () =>
+            await storageServiceClient.views.patchView({
+              saved_view_id: previous.id,
+              config: { isDefault: false },
+            })
+        );
+      }
+      if (id !== undefined) {
+        await throwOnErr(
+          async () =>
+            await storageServiceClient.views.patchView({
+              saved_view_id: id,
+              config: { isDefault: true },
+            })
+        );
+      }
+    },
+    onSuccess: () => invalidate(),
+    onError: (error: Error) => {
+      console.error('Failed to set default view', error);
+      toast.failure('Failed to set default view');
+    },
+  }));
+
   return {
     views,
+    defaultView,
     isLoading: () => viewsQuery.isLoading,
     create: createMutation,
     rename: renameMutation,
     remove: deleteMutation,
+    setDefault: setDefaultMutation,
   };
 }
 
@@ -164,6 +202,22 @@ export function useTeamCrmViews() {
     (config().teamViews ?? []).filter((view) => isCrmViewConfig(view.config))
   );
 
+  const defaultViewId = () => config().defaultTeamViewId;
+
+  const defaultView = () => views().find((view) => view.id === defaultViewId());
+
+  const setDefault = (id: string | undefined) => {
+    update.mutate(
+      { defaultTeamViewId: id ?? null },
+      {
+        onError: (error: Error) => {
+          console.error('Failed to set default team view', error);
+          toast.failure('Failed to set default team view');
+        },
+      }
+    );
+  };
+
   const add = (name: string, viewConfig: CrmViewConfig) => {
     const view: TeamCrmSavedView = {
       id: crypto.randomUUID(),
@@ -173,10 +227,9 @@ export function useTeamCrmViews() {
       createdAt: new Date().toISOString(),
     };
     update.mutate(
-      (current) => ({
-        ...current,
-        teamViews: [...(current.teamViews ?? []), view],
-      }),
+      // Updater form: derives from the latest cache when the (serialized)
+      // mutation actually runs, so rapid saves don't drop each other.
+      { teamViews: (current) => [...current, view] },
       {
         onError: (error: Error) => {
           console.error('Failed to save team view', error);
@@ -188,10 +241,13 @@ export function useTeamCrmViews() {
 
   const remove = (id: string) => {
     update.mutate(
-      (current) => ({
-        ...current,
-        teamViews: (current.teamViews ?? []).filter((view) => view.id !== id),
-      }),
+      {
+        teamViews: (current) => current.filter((view) => view.id !== id),
+        // A deleted view can't stay the team default.
+        ...(config().defaultTeamViewId === id
+          ? { defaultTeamViewId: null }
+          : {}),
+      },
       {
         onError: (error: Error) => {
           console.error('Failed to delete team view', error);
@@ -201,5 +257,14 @@ export function useTeamCrmViews() {
     );
   };
 
-  return { views, add, remove, isLoading, isSaving: () => update.isPending };
+  return {
+    views,
+    defaultViewId,
+    defaultView,
+    add,
+    remove,
+    setDefault,
+    isLoading,
+    isSaving: () => update.isPending,
+  };
 }

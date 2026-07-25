@@ -180,6 +180,7 @@ pub(crate) async fn seed_from_file_ref(
             channel_type: row.channel_type,
             org_id: None,
             participants,
+            team_id: None,
         };
 
         match ctx.db.seed_channel(options).await {

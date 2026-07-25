@@ -32,15 +32,13 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun
-        path: /nix
+        cache: nix
+        path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Build
       run: just build-dev
       env:

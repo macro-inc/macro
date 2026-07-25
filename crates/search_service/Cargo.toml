@@ -31,6 +31,7 @@ http-body-util = { workspace = true }
 indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
 macro_auth = { path = "../macro_auth" }
+macro_authorization = { path = "../macro_authorization" }
 macro_db_client = { path = "../macro_db_client" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
@@ -41,9 +42,6 @@ system_properties = { path = "../system_properties" }
 readonly_pool = { path = "../readonly_pool" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
-macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-  "auth",
-] }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 models_email = { path = "../models_email" }

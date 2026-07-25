@@ -1,6 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
@@ -47,14 +46,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     });
   };
 
-  const previewPanel = useMaybePreviewPanel();
-
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const currentIndex = soup.focus.index();
     const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
-
-    const inPreview = previewPanel !== undefined;
 
     // Separate email entities from non-email entities
     const emailEntities = entities.filter((e) => e.type === 'email');
@@ -103,7 +98,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         toast.failure('Failed to move to Trash');
       });
 
-      restoreSoupFocus(nextRow?.id, inPreview);
+      restoreSoupFocus(nextRow?.id);
     };
 
     if (nonEmailEntities.length > 0) {
@@ -134,7 +129,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
             if (nextRow) {
               soup.focus.set(nextRow.id);
             }
-            restoreSoupFocus(nextRow?.id, inPreview);
+            restoreSoupFocus(nextRow?.id);
           }
         },
         onCancel: () => {
@@ -142,7 +137,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
           if (firstEntity) {
             soup.focus.set(firstEntity.id);
           }
-          restoreSoupFocus(firstEntity?.id, inPreview);
+          restoreSoupFocus(firstEntity?.id);
         },
       });
     } else if (emailEntities.length > 0) {

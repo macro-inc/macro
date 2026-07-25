@@ -3,7 +3,7 @@ import type { ThemeMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
-import { applyTheme } from '@theme/utils/themeUtils';
+import { pinTheme } from '@theme/utils/themeUtils';
 import { isThemeV2 } from '@theme/utils/themeValidation';
 import { cn } from '@ui';
 import { Show, useContext } from 'solid-js';
@@ -34,7 +34,7 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
       setUserThemes([...userThemes(), t]);
     }
 
-    applyTheme(t.id);
+    pinTheme(t);
     openSettings('Appearance');
   };
 

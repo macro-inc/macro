@@ -4,7 +4,7 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { contactsClient } from '@service-contacts/client';
 import { useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { contactsKeys } from './keys';
 
 function contactsQueryOptions() {
@@ -24,7 +24,7 @@ function useContactsQuery() {
  */
 export function useContacts(): Accessor<IUser[]> {
   const query = useContactsQuery();
-  return () => {
+  return createMemo(() => {
     if (!query.isSuccess) return [];
     const contacts = query.data.contacts;
     return contacts.map((c) => ({
@@ -32,7 +32,7 @@ export function useContacts(): Accessor<IUser[]> {
       email: idToEmail(c),
       name: idToDisplayName(c),
     }));
-  };
+  });
 }
 
 export function invalidateContacts() {

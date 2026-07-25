@@ -1,13 +1,11 @@
+use super::is_share_deep_link;
 use super::shared::{
     STAGED_SHARED_FILE_NOT_FOUND_ERROR, is_staged_shared_file_not_found_error,
     sanitize_shared_filename, share_filenames_from_url,
 };
 use super::{PendingShareFilesState, ShareTargetPlatform, StagedSharedFile};
-use crate::{
-    APP_SCHEME,
-    staged_upload::{
-        StagedUploadSource, next_stage_token, staged_file_path, staged_file_path_for_name,
-    },
+use crate::staged_upload::{
+    StagedUploadSource, next_stage_token, staged_file_path, staged_file_path_for_name,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -177,8 +175,7 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
         match app.deep_link().get_current() {
             Ok(Some(urls)) => {
                 if let Some(url) = urls.first()
-                    && url.scheme() == APP_SCHEME
-                    && url.host_str() == Some("share")
+                    && is_share_deep_link(url)
                 {
                     let filenames = share_filenames_from_url(url);
                     let filenames_clone = filenames.clone();
@@ -263,7 +260,7 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
     }
 
     fn maybe_handle_share_deep_link(handle: &AppHandle, url: &Url) -> bool {
-        if url.scheme() == APP_SCHEME && url.host_str() == Some("share") {
+        if is_share_deep_link(url) {
             let filenames = share_filenames_from_url(url);
 
             let state = handle.state::<PendingShareFilesState>();

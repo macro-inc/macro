@@ -1,4 +1,3 @@
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { createBulkRemoveFromProjectDssEntityMutation } from '@entity';
@@ -29,15 +28,11 @@ export const makeRemoveFromProjectAction = () => {
     return true;
   };
 
-  const previewPanel = useMaybePreviewPanel();
-
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     // Entities leave the viewed folder's list; move focus to a neighbor
     const currentIndex = soup.focus.index();
     const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
-    const inPreview = previewPanel !== undefined;
-
     const success = await execute(entities);
     // Rolled back on failure; keep selection and focus for a retry
     if (!success) return;
@@ -46,7 +41,7 @@ export const makeRemoveFromProjectAction = () => {
     if (nextRow) {
       soup.focus.set(nextRow.id);
     }
-    restoreSoupFocus(nextRow?.id, inPreview);
+    restoreSoupFocus(nextRow?.id);
   };
 
   return { canExecute, execute, executeWithSoup };

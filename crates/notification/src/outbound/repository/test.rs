@@ -21,6 +21,16 @@ impl Notification for TestNotification {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TestMessageNotification {
+    message_id: String,
+}
+
+impl Notification for TestMessageNotification {
+    const TYPE_NAME: &'static str = "test_message_notification";
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct TestGithubNotification {
     message: String,
 }
@@ -40,6 +50,29 @@ impl Notification for TestGithubCheckRunNotification {
 
 fn test_user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
+}
+
+async fn create_message_notification(
+    pool: &Pool<Postgres>,
+    recipient: &MacroUserIdStr<'static>,
+    notification_id: Uuid,
+    message_id: &str,
+    thread_id: Option<&str>,
+) {
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Channel.with_entity_str("channel-1"),
+        secondary_notification_entity: thread_id
+            .map(|thread_id| EntityType::ChannelMessage.with_entity_str(thread_id)),
+        notification: TaggedContent::new(TestMessageNotification {
+            message_id: message_id.to_owned(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient.clone()]),
+    };
+
+    pool.create_notification(request, notification_id, "test_service", None)
+        .await
+        .unwrap();
 }
 
 #[sqlx::test(
@@ -613,6 +646,67 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
         .await
         .unwrap();
     assert!(wrong_entity_results.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_entity_notifications_batch_matches_channel_thread_secondary_entity(
+    pool: Pool<Postgres>,
+) {
+    let user = test_user("thread-recipient@test.com");
+    let thread_id = Uuid::new_v4().to_string();
+    let other_thread_id = Uuid::new_v4().to_string();
+    let direct_notification_id = Uuid::new_v4();
+    let reply_notification_id = Uuid::new_v4();
+    let other_thread_notification_id = Uuid::new_v4();
+
+    create_message_notification(&pool, &user, direct_notification_id, &thread_id, None).await;
+    create_message_notification(
+        &pool,
+        &user,
+        reply_notification_id,
+        &Uuid::new_v4().to_string(),
+        Some(&thread_id),
+    )
+    .await;
+    create_message_notification(
+        &pool,
+        &user,
+        other_thread_notification_id,
+        &Uuid::new_v4().to_string(),
+        Some(&other_thread_id),
+    )
+    .await;
+
+    let thread_ref = NotificationEntityRef {
+        entity_type: NotificationItemType::Message,
+        id: thread_id,
+    };
+    let other_thread_ref = NotificationEntityRef {
+        entity_type: NotificationItemType::Message,
+        id: other_thread_id,
+    };
+    let result = pool
+        .get_entity_notifications_batch(user, vec![thread_ref.clone(), other_thread_ref.clone()])
+        .await
+        .unwrap();
+
+    let thread_notification_ids = result[&thread_ref]
+        .iter()
+        .map(|notification| notification.notification_id)
+        .collect::<HashSet<_>>();
+    assert_eq!(
+        thread_notification_ids,
+        HashSet::from([direct_notification_id, reply_notification_id])
+    );
+
+    let other_thread_notification_ids = result[&other_thread_ref]
+        .iter()
+        .map(|notification| notification.notification_id)
+        .collect::<HashSet<_>>();
+    assert_eq!(
+        other_thread_notification_ids,
+        HashSet::from([other_thread_notification_id])
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

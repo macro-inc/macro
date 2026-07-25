@@ -123,7 +123,6 @@ function SoupChatInputInner() {
     <div
       ref={containerRef}
       class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
-      classList={{ hidden: splitPanelContext.previewState[0]() }}
       style={{
         'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
       }}

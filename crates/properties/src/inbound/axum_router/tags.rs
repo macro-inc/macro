@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -103,14 +103,16 @@ impl IntoResponse for TagsError {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), err)]
-pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+pub async fn list_tags<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
+    let user = user.authorization.user.macro_user_id;
     let sets = state
         .properties_service
         .list_tag_sets(&user, team.entity_access_receipt.as_ref())
@@ -133,15 +135,17 @@ pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), fields(scope = ?request.scope), err)]
-pub async fn ensure_tag_set<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+pub async fn ensure_tag_set<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
+    let user = user.authorization.user.macro_user_id;
     let set = state
         .properties_service
         .ensure_tag_set(

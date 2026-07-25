@@ -230,9 +230,7 @@ pub enum ChannelTopicEvent {
 impl TopicEvent for ChannelTopicEvent {
     type Topic = MacroChannelsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroChannelsTopic`], keyed by channel id.

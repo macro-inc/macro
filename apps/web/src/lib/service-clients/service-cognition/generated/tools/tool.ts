@@ -12,6 +12,10 @@ type ToolParserMap = {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
+  BulkSetEntityPropertyOptions: {
+    call: types.BulkSetEntityPropertyOptions;
+    response: types.BulkSetEntityPropertyOptionsResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -20,6 +24,16 @@ type ToolParserMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateImportEntity: {
+    call: types.CreateImportEntity;
+    response: types.CreateImportEntityResponse;
+  };
+  CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteImportEntity: {
+    call: types.DeleteImportEntity;
+    response: types.DeleteImportEntityResponse;
+  };
+  DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -28,16 +42,13 @@ type ToolParserMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
-  ListCallRecords: {
-    call: types.ListCallRecords;
-    response: types.ListCallRecordsResponse;
-  };
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
@@ -45,6 +56,10 @@ type ToolParserMap = {
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
+  };
+  ListImportEntities: {
+    call: types.ListImportEntities;
+    response: types.ListImportEntitiesResponse;
   };
   ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
@@ -126,6 +141,10 @@ const toolParserMap = {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
   },
+  BulkSetEntityPropertyOptions: {
+    call: schemas.BulkSetEntityPropertyOptions,
+    response: schemas.BulkSetEntityPropertyOptionsResponse,
+  },
   ContentSearch: {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
@@ -134,6 +153,16 @@ const toolParserMap = {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
   },
+  CreateImportEntity: {
+    call: schemas.CreateImportEntity,
+    response: schemas.CreateImportEntityResponse,
+  },
+  CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  DeleteImportEntity: {
+    call: schemas.DeleteImportEntity,
+    response: schemas.DeleteImportEntityResponse,
+  },
+  DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
   DisplayResults: {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
@@ -142,6 +171,7 @@ const toolParserMap = {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
   },
+  EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
   GetCompany: {
     call: schemas.GetCompany,
     response: schemas.GetCompanyResponse,
@@ -151,10 +181,6 @@ const toolParserMap = {
     response: schemas.GetEntityPropertiesResponse,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
-  ListCallRecords: {
-    call: schemas.ListCallRecords,
-    response: schemas.ListCallRecordsResponse,
-  },
   ListCompanies: {
     call: schemas.ListCompanies,
     response: schemas.ListCompaniesResponse,
@@ -162,6 +188,10 @@ const toolParserMap = {
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListImportEntities: {
+    call: schemas.ListImportEntities,
+    response: schemas.ListImportEntitiesResponse,
   },
   ListInboxes: {
     call: schemas.ListInboxes,
@@ -266,6 +296,10 @@ type ToolDataMap = {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
+  BulkSetEntityPropertyOptions: {
+    call: types.BulkSetEntityPropertyOptions;
+    response: types.BulkSetEntityPropertyOptionsResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -274,6 +308,16 @@ type ToolDataMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateImportEntity: {
+    call: types.CreateImportEntity;
+    response: types.CreateImportEntityResponse;
+  };
+  CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteImportEntity: {
+    call: types.DeleteImportEntity;
+    response: types.DeleteImportEntityResponse;
+  };
+  DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -282,16 +326,13 @@ type ToolDataMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
-  ListCallRecords: {
-    call: types.ListCallRecords;
-    response: types.ListCallRecordsResponse;
-  };
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
@@ -299,6 +340,10 @@ type ToolDataMap = {
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
+  };
+  ListImportEntities: {
+    call: types.ListImportEntities;
+    response: types.ListImportEntitiesResponse;
   };
   ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };

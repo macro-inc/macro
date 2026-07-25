@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            status as \"status: CrmCleanupJobStatus\",\n            total_candidates,\n            dispatched_count,\n            max_candidate_id,\n            created_at,\n            updated_at\n        FROM crm_cleanup_jobs\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status: CrmCleanupJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "crm_cleanup_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "total_candidates",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "dispatched_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "max_candidate_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "689490b62b78314388ddf6ad540d48aca103b27a8c9e0a22f2f73ff791491fd0"
+}

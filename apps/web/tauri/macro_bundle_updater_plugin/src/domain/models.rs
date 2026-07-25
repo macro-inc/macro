@@ -76,11 +76,6 @@ impl BundleRoot {
         self.0.as_deref()
     }
 
-    /// Clear the bundle root, reverting to the built-in assets.
-    pub(crate) fn clear(&mut self) {
-        self.0 = None;
-    }
-
     /// Read the bundle manifest inside the bundle root.
     pub(crate) async fn manifest(&self, fs: &impl FsRepo) -> Option<BundleManifest> {
         let manifest_path = self.0.as_ref()?.join("bundle-manifest.json");
@@ -122,6 +117,17 @@ impl BundleManifest {
 
 /// the bounded size of mpsc channels
 const MPSC_CHAN_SIZE: usize = 10;
+
+/// Native application metadata reported by the host platform.
+#[derive(Debug, Clone)]
+pub struct NativeAppInfo {
+    /// The native app build number.
+    pub native_build: u64,
+    /// CPU architecture.
+    pub arch: Arch,
+    /// Operating system target.
+    pub target: Target,
+}
 
 /// Application metadata sent to the update server.
 #[derive(Debug, Clone)]
@@ -468,6 +474,8 @@ pub struct UnzipStatus {
 /// The update has been fully downloaded and extracted.
 #[derive(Debug, Clone)]
 pub struct CompletedStatus {
+    /// Build number from the validated bundle manifest.
+    pub bundle_build: u64,
     /// Path to the extracted `index.html` entrypoint.
     pub entrypoint: PathBuf,
 }

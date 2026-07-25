@@ -1,5 +1,6 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 use axum_extra::extract::Cached;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -12,14 +13,15 @@ use super::{
 };
 
 /// Create the send router with a `POST /` handler.
-pub fn send_router<S, T>(state: EmailRouterState<T>) -> Router<S>
+pub fn send_router<S, T, Auth>() -> Router<S>
 where
-    S: Send + Sync + 'static,
+    S: Send + Sync + Clone + 'static,
     T: EmailService,
+    Auth: MacroAuthorizationService,
+    EmailRouterState<T>: axum::extract::FromRef<S>,
+    MacroAuthorizationState<Auth>: axum::extract::FromRef<S>,
 {
-    Router::new()
-        .route("/", post(send_message_handler::<T>))
-        .with_state(state)
+    Router::new().route("/", post(send_message_handler::<T, Auth>))
 }
 
 /// Errors from the send message handler.
@@ -87,10 +89,12 @@ impl From<EmailErr> for SendMessageError {
     )
 )]
 #[tracing::instrument(err, skip(state, link, accessible_inboxes, body))]
-pub async fn send_message_handler<T: EmailService>(
+pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
-    Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<MultiEmailLinkExtractor<T>>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
+    Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<
+        MultiEmailLinkExtractor<T, Auth>,
+    >,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, SendMessageError> {
     let input = body.into_domain();

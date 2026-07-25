@@ -22,6 +22,11 @@ pub(super) struct ResolvedFilters {
     /// All TRASH label ids in scope. One id per link with a TRASH label.
     /// Empty when no scope-relevant link has a TRASH label (rare).
     trash_label_ids: Vec<Uuid>,
+    /// Every primary `email_links.id` owned by a member of the query's team.
+    /// `Some` only for team-scoped queries. Doubles as the candidate-stage
+    /// `t.link_id = ANY(…)` set and (for non-shared, non-project queries)
+    /// the `matching_threads` link scope.
+    team_link_ids: Option<Vec<Uuid>>,
 }
 
 impl ResolvedFilters {
@@ -45,6 +50,11 @@ impl ResolvedFilters {
         &self.trash_label_ids
     }
 
+    /// The team's primary link ids, when this resolution was team-scoped.
+    pub(super) fn team_link_ids(&self) -> Option<&[Uuid]> {
+        self.team_link_ids.as_deref()
+    }
+
     /// True iff at least one Complete email address in the AST has any
     /// matching contact in the resolved scope. Used by `fold_unresolved`.
     fn has_contact_for(&self, lowered_email: &str) -> bool {
@@ -59,7 +69,14 @@ impl ResolvedFilters {
         Self {
             contact_ids: HashMap::new(),
             trash_label_ids: Vec::new(),
+            team_link_ids: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_team_links(mut self, ids: Vec<Uuid>) -> Self {
+        self.team_link_ids = Some(ids);
+        self
     }
 
     #[cfg(test)]
@@ -181,84 +198,62 @@ pub(super) async fn resolve_filters(
     team_id: Option<Uuid>,
     ast: &Expr<EmailLiteral>,
 ) -> Result<ResolvedFilters, sqlx::Error> {
-    let trash_label_ids: Vec<Uuid> = match team_id {
-        None => {
+    // Team scope resolves to a concrete link-id set once, so every
+    // downstream lookup (and the main query's candidate WHERE / CTE link
+    // scope) is a direct `link_id = ANY($ids)` instead of re-joining
+    // email_links/team_user per query.
+    let team_link_ids: Option<Vec<Uuid>> = match team_id {
+        None => None,
+        Some(team_id) => Some(
             sqlx::query_scalar!(
                 r#"
+            SELECT el.id
+            FROM email_links el
+            JOIN team_user tu ON tu.user_id = el.macro_id
+            WHERE tu.team_id = $1 AND el.is_primary
+            "#,
+                team_id,
+            )
+            .fetch_all(pool)
+            .await?,
+        ),
+    };
+    let scope_link_ids: &[Uuid] = team_link_ids.as_deref().unwrap_or(link_ids);
+
+    let trash_label_ids: Vec<Uuid> = sqlx::query_scalar!(
+        r#"
             SELECT id
             FROM email_labels
             WHERE link_id = ANY($1) AND name = 'TRASH'
             "#,
-                link_ids,
-            )
-            .fetch_all(pool)
-            .await?
-        }
-        Some(team_id) => {
-            sqlx::query_scalar!(
-                r#"
-            SELECT l.id
-            FROM email_labels l
-            JOIN email_links el ON el.id = l.link_id
-            JOIN team_user tu ON tu.user_id = el.macro_id
-            WHERE l.name = 'TRASH' AND tu.team_id = $1
-              AND el.is_primary
-            "#,
-                team_id,
-            )
-            .fetch_all(pool)
-            .await?
-        }
-    };
+        scope_link_ids,
+    )
+    .fetch_all(pool)
+    .await?;
 
     let emails = collect_complete_emails(ast);
     let mut contact_ids: HashMap<String, Vec<Uuid>> = HashMap::new();
     if !emails.is_empty() {
-        // Project each arm's anonymous `Record` into a common `(Uuid, String)`
-        // shape — `sqlx::query!` generates a distinct struct per call site, so
-        // the `match` arms can't share a return type otherwise.
-        let rows: Vec<(Uuid, String)> = match team_id {
-            None => sqlx::query!(
-                r#"
+        let rows = sqlx::query!(
+            r#"
                 SELECT id, LOWER(email_address) AS "email_lower!"
                 FROM email_contacts
                 WHERE link_id = ANY($1) AND LOWER(email_address) = ANY($2)
                 "#,
-                link_ids,
-                &emails,
-            )
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .map(|r| (r.id, r.email_lower))
-            .collect(),
-            Some(team_id) => sqlx::query!(
-                r#"
-                SELECT c.id, LOWER(c.email_address) AS "email_lower!"
-                FROM email_contacts c
-                JOIN email_links el ON el.id = c.link_id
-                JOIN team_user tu ON tu.user_id = el.macro_id
-                WHERE tu.team_id = $1
-                  AND el.is_primary
-                  AND LOWER(c.email_address) = ANY($2)
-                "#,
-                team_id,
-                &emails,
-            )
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .map(|r| (r.id, r.email_lower))
-            .collect(),
-        };
+            scope_link_ids,
+            &emails,
+        )
+        .fetch_all(pool)
+        .await?;
 
-        for (id, email_lower) in rows {
-            contact_ids.entry(email_lower).or_default().push(id);
+        for row in rows {
+            contact_ids.entry(row.email_lower).or_default().push(row.id);
         }
     }
 
     Ok(ResolvedFilters {
         contact_ids,
         trash_label_ids,
+        team_link_ids,
     })
 }

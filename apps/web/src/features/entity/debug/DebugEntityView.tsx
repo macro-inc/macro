@@ -3,6 +3,7 @@ import { StaticSplitLabel } from '@components/app/split-layout/components/SplitL
 import { seedMockDisplayNames } from '@core/user';
 import { createSignal, For } from 'solid-js';
 import { ListEntity } from '../composed/ListEntity';
+import { ListEntityNoopMetadataProvider } from '../composed/list-entity/list-entity-metadata-provider';
 import {
   ALL_MOCK_ENTITIES,
   createEntityWithNotifications,
@@ -66,21 +67,23 @@ export default function DebugEntityView() {
         <StaticSplitLabel label="Enity Component Demo (mock data)" />
         jk
       </SplitHeaderLeft>
-      <div class="size-full overflow-auto">
-        <For each={entitiesWithNotifications}>
-          {(entity, index) => (
-            <ListEntity
-              entity={entity}
-              onClick={() => handleEntityClick(entity, index())}
-              checked={selectedIds().has(entity.id)}
-              onChecked={(checked, shiftKey) =>
-                handleEntityChecked(entity, index(), checked, shiftKey)
-              }
-              showUnrollNotifications={true}
-            />
-          )}
-        </For>
-      </div>
+      <ListEntityNoopMetadataProvider>
+        <div class="size-full overflow-auto">
+          <For each={entitiesWithNotifications}>
+            {(entity, index) => (
+              <ListEntity
+                entity={entity}
+                onClick={() => handleEntityClick(entity, index())}
+                checked={selectedIds().has(entity.id)}
+                onChecked={(checked, shiftKey) =>
+                  handleEntityChecked(entity, index(), checked, shiftKey)
+                }
+                showUnrollNotifications={true}
+              />
+            )}
+          </For>
+        </div>
+      </ListEntityNoopMetadataProvider>
     </>
   );
 }

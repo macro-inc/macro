@@ -73,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
     let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
     let search_event_queue = macro_queues::SearchEventQueue::new();
     let backfill_queue = macro_queues::EmailBackfillQueue::new();
+    let crm_cleanup_queue = macro_queues::EmailCrmCleanupQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
@@ -87,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
         .gmail_ops_retry_queue(&gmail_ops_retry_queue)
         .search_event_queue(&search_event_queue)
         .email_backfill_queue(&backfill_queue)
+        .email_crm_cleanup_queue(&crm_cleanup_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
@@ -142,6 +144,17 @@ async fn main() -> anyhow::Result<()> {
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
                 backfill_queue.to_string(),
                 config.backfill_queue_max_messages,
+                config.queue_wait_time_seconds,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let crm_cleanup_workers = (0..config.crm_cleanup_queue_workers)
+        .map(|_| {
+            sqs_worker::SQSWorker::new(
+                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+                crm_cleanup_queue.to_string(),
+                config.crm_cleanup_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
         })
@@ -468,6 +481,27 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         num_workers = config.backfill_queue_workers,
         "backfill workers started"
+    );
+
+    // nightly crm cleanup: pages crm_cleanup_candidates and depopulates
+    // contacts whose links no longer have messages with them
+    for worker in crm_cleanup_workers {
+        let db_crm_cleanup = db_backfill.clone();
+        let sqs_client_crm_cleanup = sqs_client.clone();
+        let crm_service_crm_cleanup = crm_service_backfill.clone();
+        tokio::spawn(async move {
+            email_service::pubsub::crm_cleanup::worker::run_worker(
+                db_crm_cleanup,
+                worker,
+                sqs_client_crm_cleanup,
+                crm_service_crm_cleanup,
+            )
+            .await;
+        });
+    }
+    tracing::info!(
+        num_workers = config.crm_cleanup_queue_workers,
+        "crm cleanup workers started"
     );
 
     let db_link_manager = db.clone();

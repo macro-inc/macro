@@ -135,6 +135,13 @@ impl EmailRepo for EmailPgRepo {
         thread::messages_by_thread_id_paginated(&self.pool, thread_id, offset, limit).await
     }
 
+    async fn latest_content_message_rows(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<MessageRow>, Self::Err> {
+        thread::latest_content_message_rows(&self.pool, thread_ids).await
+    }
+
     async fn cross_inbox_reply_drafts(
         &self,
         replying_to_ids: &[Uuid],
@@ -280,6 +287,15 @@ impl EmailRepo for EmailPgRepo {
         is_read: bool,
     ) -> Result<(), Self::Err> {
         label::update_message_read_status_batch(&self.pool, message_ids, link_id, is_read).await
+    }
+
+    async fn update_thread_read_status(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        is_read: bool,
+    ) -> Result<(), Self::Err> {
+        thread::update_thread_read_status(&self.pool, thread_id, link_id, is_read).await
     }
 
     async fn update_message_starred_status_batch(

@@ -7,11 +7,16 @@
 mod helpers;
 
 mod comments;
+mod create_company;
+mod create_contact;
 mod get_company_for_team;
 mod get_contact_for_team;
 mod list_companies_for_soup;
 mod list_contacts_for_company;
 mod populate_contact;
 mod set_company_hidden;
+mod set_company_name;
 mod set_contact_hidden;
+mod set_contact_name;
 mod set_email_sync;
+mod team_settings;

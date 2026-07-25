@@ -13,7 +13,10 @@ import {
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
-import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  type SoupViewMode,
+  useSoupView,
+} from '@app/features/next-soup/soup-view/soup-view-context';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { TabItem } from '@core/component/Tabs';
@@ -21,7 +24,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
+import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -33,7 +36,6 @@ export type TabbedListView = Extract<
   | 'tasks'
   | 'channels'
   | 'calls'
-  | 'companies'
   | 'folders'
 >;
 
@@ -53,8 +55,8 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   mail: [
     { value: 'important', label: 'Signal' },
     { value: 'noise', label: 'Noise' },
-    { value: 'calendar', label: 'Calendar' },
     { value: 'sent', label: 'Sent' },
+    { value: 'calendar', label: 'Calendar' },
     { value: 'drafts', label: 'Drafts' },
     { value: 'shared', label: 'Shared' },
     { value: 'all', label: 'All' },
@@ -81,13 +83,6 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'missed', label: 'Missed' },
     { value: 'unattended', label: 'Unattended' },
   ],
-  companies: [
-    { value: 'active', label: 'Active' },
-    // The 'hidden' tab is gated to admin/owner team members — see
-    // `filterTabsForUser` below and the preset resolver in
-    // soup-filter-presets.ts.
-    { value: 'hidden', label: 'Hidden' },
-  ],
   folders: [
     { value: 'owned', label: 'Owned' },
     { value: 'all', label: 'All' },
@@ -113,8 +108,15 @@ export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { queryFilters, setActiveTab, activeTab, assigneeFilter } =
-    useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const {
+    queryFilters,
+    restorePersistedQueryFilters,
+    restorePersistedPredicates,
+    setActiveTab,
+    activeTab,
+    assigneeFilter,
+  } = useSoupView();
   const user = useUserContext();
   const isTeamAdmin = useIsTeamAdmin();
 
@@ -200,10 +202,27 @@ export const useApplyPreset = () => {
 
     batch(() => {
       setActiveTab(tabId);
-      queryFilters.replace(nextFilters);
-      soup.predicates.set(nextClientFilters);
+      if (!restorePersistedQueryFilters(tabId)) {
+        queryFilters.replace(nextFilters);
+      }
+      if (!restorePersistedPredicates(tabId)) {
+        soup.predicates.set(nextClientFilters);
+      }
       soup.grouping.setActiveGroupId(preset.groupBy);
     });
+
+    // The new tab replaces the dataset wholesale, and row focus only follows
+    // a row that survives into it (see soup.setRows). When it doesn't,
+    // nothing is selected anymore, so the Preview Pair's Viewer returns to
+    // its placeholder instead of lingering on the previous tab's entity.
+    const focusedRow = soup.focus.row();
+    if (
+      !focusedRow ||
+      focusedRow.getIsGrouped() ||
+      focusedRow.getIsLoadMore()
+    ) {
+      panel.handle.resetPreview();
+    }
     return true;
   };
 
@@ -215,6 +234,9 @@ export const SoupViewTabs = () => {
 
   return (
     <Switch>
+      <Match when={listView() === 'companies'}>
+        <CompanyModeTabs />
+      </Match>
       <For each={Object.keys(VIEW_TAB_LISTS) as TabbedListView[]}>
         {(v) => (
           <Match when={listView() === v}>
@@ -226,28 +248,32 @@ export const SoupViewTabs = () => {
   );
 };
 
-/** Drops admin-only tabs for non-admin users (currently: companies → hidden). */
-function filterTabsForUser(
-  view: TabbedListView,
-  list: TabItem[],
-  isTeamAdmin: boolean
-): TabItem[] {
-  if (view === 'companies' && !isTeamAdmin) {
-    return list.filter((t) => t.value !== 'hidden');
-  }
-  return list;
-}
+/** The Customers view swaps filter tabs for a board/list mode switch. */
+const COMPANY_MODE_TABS: TabItem[] = [
+  { value: 'board', label: 'Board' },
+  { value: 'list', label: 'List' },
+];
+
+const CompanyModeTabs = () => {
+  const { viewMode, setViewMode } = useSoupView();
+
+  return (
+    <TabsInset
+      list={COMPANY_MODE_TABS}
+      value={viewMode()}
+      defaultValue="board"
+      onChange={(value) => setViewMode(value as SoupViewMode)}
+    />
+  );
+};
 
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
-  const isTeamAdmin = useIsTeamAdmin();
-  const list = () =>
-    filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
 
   return (
     <TabsInset
-      list={list()}
+      list={VIEW_TAB_LISTS[props.view]}
       value={activeTab()}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
@@ -259,8 +285,7 @@ const ViewTabs = (props: { view: TabbedListView }) => {
 export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-  const isTeamAdmin = useIsTeamAdmin();
+  const { activeTab, viewMode, setViewMode } = useSoupView();
 
   const view = createMemo(() => {
     const v = listView();
@@ -269,7 +294,7 @@ export const CollapsedSoupViewTabs = () => {
 
   const list = createMemo(() => {
     const v = view();
-    return v ? filterTabsForUser(v, VIEW_TAB_LISTS[v], isTeamAdmin()) : [];
+    return v ? VIEW_TAB_LISTS[v] : [];
   });
 
   const defaultValue = createMemo(() => {
@@ -278,17 +303,29 @@ export const CollapsedSoupViewTabs = () => {
   });
 
   return (
-    <TabsInsetDropdown
-      list={list()}
-      value={activeTab()}
-      defaultValue={defaultValue()}
-      onChange={(value) => {
-        const v = view();
-        if (v) {
-          applyTabPreset(v, value);
-        }
-      }}
-    />
+    <Show
+      when={listView() !== 'companies'}
+      fallback={
+        <TabsInsetDropdown
+          list={COMPANY_MODE_TABS}
+          value={viewMode()}
+          defaultValue="board"
+          onChange={(value) => setViewMode(value as SoupViewMode)}
+        />
+      }
+    >
+      <TabsInsetDropdown
+        list={list()}
+        value={activeTab()}
+        defaultValue={defaultValue()}
+        onChange={(value) => {
+          const v = view();
+          if (v) {
+            applyTabPreset(v, value);
+          }
+        }}
+      />
+    </Show>
   );
 };
 
@@ -299,6 +336,9 @@ export const MobileSoupViewTabs = () => {
     <div class="flex items-center px-(--mobile-chrome-gutter)">
       <MobileFilterDrawer />
       <Switch>
+        <Match when={listView() === 'companies'}>
+          <MobileCompanyModeTabs />
+        </Match>
         <For
           each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
         >
@@ -313,18 +353,28 @@ export const MobileSoupViewTabs = () => {
   );
 };
 
+const MobileCompanyModeTabs = () => {
+  const { viewMode, setViewMode } = useSoupView();
+
+  return (
+    <PillTabs
+      class="pl-2"
+      items={COMPANY_MODE_TABS}
+      value={viewMode()}
+      onChange={(value) => setViewMode(value as SoupViewMode)}
+    />
+  );
+};
+
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
-  const isTeamAdmin = useIsTeamAdmin();
-  const list = () =>
-    filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
   const activeValue = () => activeTab() ?? VIEW_TAB_PRESETS[props.view].default;
 
   return (
     <PillTabs
       class="pl-2"
-      items={list()}
+      items={VIEW_TAB_LISTS[props.view]}
       value={activeValue()}
       onChange={(value) => applyTabPreset(props.view, value)}
     />

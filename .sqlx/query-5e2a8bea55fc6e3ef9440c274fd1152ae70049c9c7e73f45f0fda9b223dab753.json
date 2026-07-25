@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO comms_channel_participants (channel_id, user_id, role)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (channel_id, user_id) DO UPDATE\n            SET role = EXCLUDED.role,\n                joined_at = now(),\n                left_at = NULL\n            WHERE comms_channel_participants.left_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "comms_participant_role",
+            "kind": {
+              "Enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e2a8bea55fc6e3ef9440c274fd1152ae70049c9c7e73f45f0fda9b223dab753"
+}

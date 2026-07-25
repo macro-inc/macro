@@ -1,17 +1,15 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
 use crate::model::stream::ToolSet;
 use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
 use axum::Json;
-use axum::extract::{Extension, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use mcp_client::domain::ports::McpServerStore;
-use model::user::UserContext;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
@@ -64,22 +62,17 @@ impl IntoResponse for StructuredCompletionError {
         (status = 500, description = "Internal error", body = StructuredCompletionError),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user_context, request), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.authorization.user.macro_user_id), err)]
 pub async fn structured_completion(
     State(state): State<ApiContext>,
-    model_access: ChatModelAccess,
-    Extension(user_context): Extension<UserContext>,
+    model_access: DcsChatModelAccess,
+    user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);
     let model = model_access.best_model();
 
-    let user_id = MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| {
-        StructuredCompletionError {
-            error: "Invalid user ID".to_string(),
-            status: StatusCode::BAD_REQUEST,
-        }
-    })?;
+    let user_id = user.authorization.user.macro_user_id.clone();
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,
@@ -95,8 +88,12 @@ pub async fn structured_completion(
     let mcp_store = ctx.mcp_state.store();
     let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
     let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
-        mcp_client::domain::service::CombinedToolSet::new(ctx.all_tools.clone(), &mcp_records)
-            .await,
+        mcp_client::domain::service::CombinedToolSet::new(
+            ctx.all_tools.clone(),
+            &mcp_records,
+            mcp_store.clone(),
+        )
+        .await,
     );
 
     let user_message = ChatMessage {

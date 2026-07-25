@@ -30,6 +30,18 @@ struct PullRequestStatusTransition {
     status: GithubPullRequestStatus,
 }
 
+/// The webhook actor resolved to Macro users via `github_links`.
+///
+/// `sender_id` is the single Macro user a notification is attributed to. A
+/// GitHub account may be linked to several Macro users, so `actor_user_ids`
+/// carries every linked user; `send_github_notification` excludes all of them
+/// from recipients so nobody is notified about their own GitHub activity.
+#[derive(Default)]
+pub(super) struct NotificationSender {
+    sender_id: Option<MacroUserIdStr<'static>>,
+    actor_user_ids: HashSet<MacroUserIdStr<'static>>,
+}
+
 impl<
     D: DocumentService,
     R: GithubSyncRepo,
@@ -65,7 +77,7 @@ impl<
             return;
         }
 
-        let sender_id = self.notification_sender_id(event).await;
+        let sender = self.notification_sender(event).await;
         for (upsert, transition) in transitions {
             let recipient_ids = self
                 .participant_scoped_recipient_ids(&upsert.source, &participant_user_ids)
@@ -90,7 +102,7 @@ impl<
             self.send_github_notification(
                 notification,
                 upsert.foreign_entity_id,
-                sender_id.clone(),
+                &sender,
                 recipient_ids,
             )
             .await;
@@ -99,20 +111,35 @@ impl<
 
     /// Send a GitHub pull request notification over the connection gateway,
     /// logging (rather than propagating) delivery failures.
+    ///
+    /// Every Macro user linked to the actor's GitHub account is dropped from
+    /// the recipients: users should not be notified about their own GitHub
+    /// activity, and the notification service's sender exclusion only knows
+    /// the single attributed `sender_id`.
     pub(super) async fn send_github_notification<T: Notification + Clone + 'static>(
         &self,
         notification: T,
         foreign_entity_id: uuid::Uuid,
-        sender_id: Option<MacroUserIdStr<'static>>,
-        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        sender: &NotificationSender,
+        mut recipient_ids: HashSet<MacroUserIdStr<'static>>,
     ) {
+        recipient_ids.retain(|recipient| !sender.actor_user_ids.contains(recipient));
+        if recipient_ids.is_empty() {
+            tracing::trace!(
+                notification_type=%T::TYPE_NAME,
+                foreign_entity_id=%foreign_entity_id,
+                "skipping GitHub PR notification with no recipients besides the actor"
+            );
+            return;
+        }
+
         let notification_entity =
             EntityType::ForeignEntity.with_entity_string(foreign_entity_id.to_string());
         let request = SendNotificationRequestBuilder {
             notification_entity,
             secondary_notification_entity: None,
             notification,
-            sender_id,
+            sender_id: sender.sender_id.clone(),
             recipient_ids,
         }
         .into_request()
@@ -300,11 +327,13 @@ impl<
         }
     }
 
-    pub(super) async fn notification_sender_id(
+    pub(super) async fn notification_sender(
         &self,
         event: &ValidatedGithubWebhookEvent,
-    ) -> Option<MacroUserIdStr<'static>> {
-        let github_user_id = event.sender_github_user_id()?;
+    ) -> NotificationSender {
+        let Some(github_user_id) = event.sender_github_user_id() else {
+            return NotificationSender::default();
+        };
         let links = match self
             .repo
             .get_macro_ids_by_github_user_ids(std::slice::from_ref(&github_user_id))
@@ -317,26 +346,34 @@ impl<
                     sender_github_user_id=%github_user_id,
                     "failed to map GitHub PR notification sender"
                 );
-                return None;
+                return NotificationSender::default();
             }
         };
 
-        // A notification has a single sender; many Macro users may share one
-        // GitHub account, so pick the first mapped user.
-        let macro_id = links.get(&github_user_id).and_then(|ids| ids.first())?;
-
-        match MacroUserIdStr::try_from(macro_id.clone()) {
-            Ok(sender_id) => Some(sender_id),
-            Err(error) => {
-                tracing::warn!(
-                    error=?error,
-                    macro_id=%macro_id,
-                    sender_github_user_id=%github_user_id,
-                    "GitHub PR notification sender mapping is not a valid Macro user ID"
-                );
-                None
+        let mut sender = NotificationSender::default();
+        for macro_id in links.get(&github_user_id).into_iter().flatten() {
+            match MacroUserIdStr::try_from(macro_id.clone()) {
+                Ok(user_id) => {
+                    // A notification has a single sender; many Macro users may
+                    // share one GitHub account, so attribute to the first
+                    // mapped user but track all of them as the actor.
+                    if sender.sender_id.is_none() {
+                        sender.sender_id = Some(user_id.clone());
+                    }
+                    sender.actor_user_ids.insert(user_id);
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        macro_id=%macro_id,
+                        sender_github_user_id=%github_user_id,
+                        "GitHub PR notification sender mapping is not a valid Macro user ID"
+                    );
+                }
             }
         }
+
+        sender
     }
 
     /// Build the metadata fields shared by every GitHub pull request notification type.

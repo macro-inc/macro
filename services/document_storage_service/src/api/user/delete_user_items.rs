@@ -1,9 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, GenericErrorResponse};
 
 #[derive(serde::Deserialize)]
@@ -25,9 +26,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, _auth))]
 pub async fn delete_user_items_handler(
     State(ctx): State<ApiContext>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(Params { user_id }): Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("deleting user dss items");

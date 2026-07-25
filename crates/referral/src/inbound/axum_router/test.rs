@@ -1,8 +1,16 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{Extension, extract::ConnectInfo, http::StatusCode};
+use axum::{
+    Extension,
+    extract::ConnectInfo,
+    http::{StatusCode, header},
+};
 use http_body_util::BodyExt;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+};
 use model_user::UserContext;
 use rate_limit::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult, RateLimitServiceImpl,
@@ -14,6 +22,35 @@ use tower::ServiceExt;
 use crate::domain::models::{ReferralCode, ReferralError};
 use crate::domain::ports::ReferralService;
 use crate::inbound::axum_router::{ReferralRouterState, referral_router};
+
+const TEST_USER_ID: &str = "macro|test@test.com";
+const INTERNAL_ACTING_USER_ID: &str = "macro|internal@test.com";
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
+
+#[derive(Clone)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        if jwt != "valid" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(test_user_context(TEST_USER_ID))
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.map(|user_id| test_user_context(&user_id)))
+    }
+}
 
 struct MockReferralService {
     result: Result<ReferralCode, ReferralError>,
@@ -109,9 +146,9 @@ fn exceeding_rate_limiter() -> RateLimitServiceImpl<MockRateLimitPort> {
     }
 }
 
-fn test_user_context() -> UserContext {
+fn test_user_context(user_id: &str) -> UserContext {
     UserContext {
-        user_id: "macro|test@test.com".to_string(),
+        user_id: user_id.to_string(),
         fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
         permissions: None,
         organization_id: None,
@@ -125,13 +162,12 @@ fn build_router(
     let state = ReferralRouterState {
         service: Arc::new(service),
         rate_limiter,
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
     };
-    referral_router(state)
-        .layer(Extension(ConnectInfo(SocketAddr::from((
-            [127, 0, 0, 1],
-            0,
-        )))))
-        .layer(Extension(test_user_context()))
+    referral_router(state).layer(Extension(ConnectInfo(SocketAddr::from((
+        [127, 0, 0, 1],
+        0,
+    )))))
 }
 
 fn ok_service() -> MockReferralService {
@@ -140,17 +176,28 @@ fn ok_service() -> MockReferralService {
     }
 }
 
+fn get_code_request() -> axum::http::Request<axum::body::Body> {
+    axum::http::Request::get("/code")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(axum::body::Body::empty())
+        .unwrap()
+}
+
+fn send_invite_request() -> axum::http::Request<axum::body::Body> {
+    axum::http::Request::post("/send")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({"recipient": "friend@example.com"}).to_string(),
+        ))
+        .unwrap()
+}
+
 #[tokio::test]
 async fn test_get_referral_code_success() {
     let app = build_router(ok_service(), allowing_rate_limiter());
 
-    let request = axum::http::Request::builder()
-        .uri("/code")
-        .method("GET")
-        .body(axum::body::Body::empty())
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.oneshot(get_code_request()).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -166,29 +213,15 @@ async fn test_get_referral_code_internal_error() {
     };
     let app = build_router(service, allowing_rate_limiter());
 
-    let request = axum::http::Request::builder()
-        .uri("/code")
-        .method("GET")
-        .body(axum::body::Body::empty())
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.oneshot(get_code_request()).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
 async fn test_get_referral_code_unauthenticated() {
-    let state = ReferralRouterState {
-        service: Arc::new(ok_service()),
-        rate_limiter: allowing_rate_limiter(),
-    };
-    // No user context extension — should fail auth
-    let app: axum::Router = referral_router(state);
-
-    let request = axum::http::Request::builder()
-        .uri("/code")
-        .method("GET")
+    let app = build_router(ok_service(), allowing_rate_limiter());
+    let request = axum::http::Request::get("/code")
         .body(axum::body::Body::empty())
         .unwrap();
 
@@ -198,19 +231,24 @@ async fn test_get_referral_code_unauthenticated() {
 }
 
 #[tokio::test]
-async fn test_send_invite_succeeds_under_rate_limit() {
+async fn test_get_referral_code_accepts_internal_acting_user() {
     let app = build_router(ok_service(), allowing_rate_limiter());
-
-    let request = axum::http::Request::builder()
-        .uri("/send")
-        .method("POST")
-        .header("content-type", "application/json")
-        .body(axum::body::Body::from(
-            serde_json::json!({"recipient": "friend@example.com"}).to_string(),
-        ))
+    let request = axum::http::Request::get("/code")
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, INTERNAL_ACTING_USER_ID)
+        .body(axum::body::Body::empty())
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_send_invite_succeeds_under_rate_limit() {
+    let app = build_router(ok_service(), allowing_rate_limiter());
+
+    let response = app.oneshot(send_invite_request()).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }
@@ -219,33 +257,16 @@ async fn test_send_invite_succeeds_under_rate_limit() {
 async fn test_send_invite_blocked_when_rate_limit_exceeded() {
     let app = build_router(ok_service(), exceeding_rate_limiter());
 
-    let request = axum::http::Request::builder()
-        .uri("/send")
-        .method("POST")
-        .header("content-type", "application/json")
-        .body(axum::body::Body::from(
-            serde_json::json!({"recipient": "friend@example.com"}).to_string(),
-        ))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.oneshot(send_invite_request()).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[tokio::test]
 async fn test_send_invite_unauthenticated() {
-    let state = ReferralRouterState {
-        service: Arc::new(ok_service()),
-        rate_limiter: allowing_rate_limiter(),
-    };
-    // No user context extension — should fail auth
-    let app: axum::Router = referral_router(state);
-
-    let request = axum::http::Request::builder()
-        .uri("/send")
-        .method("POST")
-        .header("content-type", "application/json")
+    let app = build_router(ok_service(), allowing_rate_limiter());
+    let request = axum::http::Request::post("/send")
+        .header(header::CONTENT_TYPE, "application/json")
         .body(axum::body::Body::from(
             serde_json::json!({"recipient": "friend@example.com"}).to_string(),
         ))
@@ -258,17 +279,9 @@ async fn test_send_invite_unauthenticated() {
 
 #[tokio::test]
 async fn test_get_code_not_affected_by_rate_limit() {
-    // GET /code should succeed even when rate limiter would exceed,
-    // because rate limiting middleware only applies to /send
     let app = build_router(ok_service(), exceeding_rate_limiter());
 
-    let request = axum::http::Request::builder()
-        .uri("/code")
-        .method("GET")
-        .body(axum::body::Body::empty())
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.oneshot(get_code_request()).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 }

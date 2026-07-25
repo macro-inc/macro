@@ -28,6 +28,10 @@ pub mod premium_user;
 pub mod reject_invitation;
 /// Remove a user from a team.
 pub mod remove_user_from_team;
+/// Toggle automatic domain joining for a team.
+pub mod toggle_auto_join_domain;
+/// Toggle whether non-admin members may invite users to a team.
+pub mod toggle_non_admin_invites;
 
 #[cfg(test)]
 mod test;
@@ -42,69 +46,97 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
     model::{
         CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        RemoveTeamInviteError, RemoveUserFromTeamError, TeamError,
+        RemoveTeamInviteError, RemoveUserFromTeamError, TeamError, ToggleAutoJoinDomainError,
     },
     team_repo::TeamService,
 };
 
 /// Router state containing the team service.
-pub struct TeamRouterState<T, Eas> {
+pub struct TeamRouterState<T, Eas, Auth> {
     /// The team service implementation.
     pub service: Arc<T>,
     /// The entity access service.
     pub entity_access_service: Arc<Eas>,
+    /// State for request authorization.
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<T, Eas> FromRef<TeamRouterState<T, Eas>> for Arc<Eas> {
-    fn from_ref(state: &TeamRouterState<T, Eas>) -> Self {
+impl<T, Eas, Auth> FromRef<TeamRouterState<T, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &TeamRouterState<T, Eas, Auth>) -> Self {
         state.entity_access_service.clone()
     }
 }
 
-// Manual Clone impl so T, Eas doesn't need to be Clone (it's behind Arc).
-impl<T, Eas> Clone for TeamRouterState<T, Eas> {
+impl<T, Eas, Auth> FromRef<TeamRouterState<T, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &TeamRouterState<T, Eas, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+// Manual Clone impl so T, Eas, and Auth don't need to be Clone.
+impl<T, Eas, Auth> Clone for TeamRouterState<T, Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
 /// Build the teams router with all endpoints.
-pub fn teams_router<T, Eas, S>(state: TeamRouterState<T, Eas>) -> Router<S>
+pub fn teams_router<T, Eas, Auth, S>(state: TeamRouterState<T, Eas, Auth>) -> Router<S>
 where
     T: TeamService,
     Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     Router::new()
-        .route("/", post(create_team::handler::<T, Eas>))
-        .route("/join/{team_invite_id}", get(join_team::handler::<T, Eas>))
-        .route("/user", get(get_user_teams::handler::<T, Eas>))
-        .route("/user/invites", get(get_user_invites::handler::<T, Eas>))
-        .route("/", get(get_team::handler::<T, Eas>))
-        .route("/", patch(patch_team::handler::<T, Eas>))
-        .route("/", delete(delete_team::handler::<T, Eas>))
-        .route("/crm", patch(patch_team_crm_settings::handler::<T, Eas>))
-        .route("/invites", get(get_team_invites::handler::<T, Eas>))
-        .route("/invite", post(invite_to_team::handler::<T, Eas>))
+        .route("/", post(create_team::handler::<T, Eas, Auth>))
         .route(
             "/join/{team_invite_id}",
-            delete(reject_invitation::handler::<T, Eas>),
+            get(join_team::handler::<T, Eas, Auth>),
+        )
+        .route("/user", get(get_user_teams::handler::<T, Eas, Auth>))
+        .route(
+            "/user/invites",
+            get(get_user_invites::handler::<T, Eas, Auth>),
+        )
+        .route("/", get(get_team::handler::<T, Eas, Auth>))
+        .route("/", patch(patch_team::handler::<T, Eas, Auth>))
+        .route("/", delete(delete_team::handler::<T, Eas, Auth>))
+        .route(
+            "/crm",
+            patch(patch_team_crm_settings::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/auto-join-domain/toggle",
+            post(toggle_auto_join_domain::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/non-admin-invites/toggle",
+            post(toggle_non_admin_invites::handler::<T, Eas, Auth>),
+        )
+        .route("/invites", get(get_team_invites::handler::<T, Eas, Auth>))
+        .route("/invite", post(invite_to_team::handler::<T, Eas, Auth>))
+        .route(
+            "/join/{team_invite_id}",
+            delete(reject_invitation::handler::<T, Eas, Auth>),
         )
         .route(
             "/remove/{remove_user_id}",
-            delete(remove_user_from_team::handler::<T, Eas>),
+            delete(remove_user_from_team::handler::<T, Eas, Auth>),
         )
         .route(
             "/invite/{team_invite_id}",
-            delete(delete_team_invite::handler::<T, Eas>),
+            delete(delete_team_invite::handler::<T, Eas, Auth>),
         )
         .with_state(state)
 }
@@ -147,6 +179,21 @@ impl IntoResponse for TeamError {
             ),
         }
         .into_response()
+    }
+}
+
+impl IntoResponse for ToggleAutoJoinDomainError {
+    fn into_response(self) -> Response {
+        match self {
+            ToggleAutoJoinDomainError::GenericDomainNotAllowed(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            )
+                .into_response(),
+            ToggleAutoJoinDomainError::TeamError(e) => e.into_response(),
+        }
     }
 }
 
@@ -205,6 +252,19 @@ impl IntoResponse for InviteUsersToTeamError {
                     message: "too many emails".into(),
                 }),
             ),
+            InviteUsersToTeamError::NonAdminInvitesDisabled => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "only team admins may invite users to this team".into(),
+                }),
+            ),
+            InviteUsersToTeamError::NotEnoughOpenSeats => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "free team member limit reached; upgrade to invite more members"
+                        .into(),
+                }),
+            ),
             InviteUsersToTeamError::CustomerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -229,6 +289,13 @@ impl IntoResponse for JoinTeamError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal server error".into(),
+                }),
+            ),
+            JoinTeamError::FreeTeamLimitReached => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "team is at the free member limit - upgrade to add more members"
+                        .into(),
                 }),
             ),
             _ => (

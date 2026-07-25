@@ -1,4 +1,4 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setThemeMode, setUserThemes, systemMode, themeDepth, themeMode, themes, userThemes} from '../signals/themeSignals';
 import { semanticTokens, type ThemeV2, type ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
@@ -49,15 +49,9 @@ function isThemeV2(value: unknown): value is ThemeV2 {
   });
 }
 
-export function applyTheme(id: string): void{
-  let theme = themes().find((t) => t.id === id);
-  if(!theme){
-    console.error(`theme not found: ${id}`);
-    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
-  }
-  setCurrentThemeId(theme.id);
-
-  // Set theme overrides
+/** Writes a theme's semantic-token overrides to the document root, clearing
+ *  tokens the theme doesn't override. */
+function setThemeOverrides(theme: ThemeV2): void{
   for (const token of semanticTokens) {
     const themeOverride = theme.overrides?.find((o) => o.token === token)
     if (themeOverride) {
@@ -66,40 +60,105 @@ export function applyTheme(id: string): void{
       document.documentElement.style.removeProperty(`--theme-${token}`)
     }
   }
+}
 
+/** Writes a token set + depth to the live theme signals (the CSS variables). */
+function setLiveTokens(tokens: ThemeV2Tokens, depth: number): void{
   batch(() => {
-    (Object.keys(theme!.tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {
-      (Object.keys(theme!.tokens[tokenKey]) as Array<'l' | 'c' | 'h'>).forEach((prop) => {
-          themeReactive[tokenKey][prop][1](theme!.tokens[tokenKey][prop]);
+    (Object.keys(tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {
+      (Object.keys(tokens[tokenKey]) as Array<'l' | 'c' | 'h'>).forEach((prop) => {
+          themeReactive[tokenKey][prop][1](tokens[tokenKey][prop]);
         });
       }
     );
-    setThemeDepth(theme!.depth ?? 0.15);
-    queueMicrotask(() => {/* scuffed af */
-      setIsThemeSaved(true);
-      syncHtmlColor();
-    });
+    setThemeDepth(depth);
   });
 }
 
-/** When auto-detect is on, keeps the active theme in sync with the OS color
- *  scheme by applying the preferred light or dark theme as the system flips.
- *  Call once from a reactive root (see Root.tsx). */
+/** The live tokens/overrides as they were when a preview started; restored
+ *  when the preview ends. Null while no preview is active. */
+let previewSnapshot: {
+  tokens: ThemeV2Tokens;
+  depth: number;
+  overrides: Record<string, string>;
+} | null = null;
+
+export function applyTheme(id: string): void{
+  let theme = themes().find((t) => t.id === id);
+  if(!theme){
+    console.error(`theme not found: ${id}`);
+    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
+  }
+  setCurrentThemeId(theme.id);
+  // Committing a theme supersedes any in-flight preview; drop the snapshot so
+  // clearThemePreview doesn't revert the commit.
+  previewSnapshot = null;
+
+  setThemeOverrides(theme);
+  setLiveTokens(theme.tokens, theme.depth ?? 0.15);
+  queueMicrotask(() => {/* scuffed af */
+    setIsThemeSaved(true);
+    syncHtmlColor();
+  });
+}
+
+/** Temporarily shows a theme (e.g. while it's hovered/highlighted in a picker)
+ *  without selecting it: only the live token signals and override CSS vars
+ *  change — currentThemeId, saved-state, and the persisted first-paint color
+ *  are untouched. Revert with clearThemePreview; committing via applyTheme
+ *  makes the preview permanent. */
+export function previewTheme(id: string): void{
+  const theme = themes().find((t) => t.id === id);
+  if(!theme){return}
+  if(!previewSnapshot){
+    const overrides: Record<string, string> = {};
+    for(const token of semanticTokens){
+      overrides[token] = document.documentElement.style.getPropertyValue(`--theme-${token}`);
+    }
+    // Snapshot the live tokens (not the selected theme id) so ending the
+    // preview restores unsaved in-editor edits too.
+    previewSnapshot = { tokens: getCurrentTokens(), depth: themeDepth(), overrides };
+  }
+  setThemeOverrides(theme);
+  setLiveTokens(theme.tokens, theme.depth ?? 0.15);
+}
+
+/** Ends an active theme preview, restoring the pre-preview tokens. No-op when
+ *  nothing is being previewed. */
+export function clearThemePreview(): void{
+  if(!previewSnapshot){return}
+  for(const token of semanticTokens){
+    const value = previewSnapshot.overrides[token];
+    if(value){
+      document.documentElement.style.setProperty(`--theme-${token}`, value);
+    } else {
+      document.documentElement.style.removeProperty(`--theme-${token}`);
+    }
+  }
+  setLiveTokens(previewSnapshot.tokens, previewSnapshot.depth);
+  previewSnapshot = null;
+}
+
+/** Resolves the theme id that should be live for the current "Active theme"
+ *  mode: the pinned light/dark theme, or — in system mode — whichever matches
+ *  the OS color scheme. Read inside a reactive scope, it subscribes to the mode,
+ *  the OS scheme (system mode only), and the relevant per-mode theme. */
+export function resolveActiveThemeId(): string{
+  const resolved = themeMode() === 'system' ? systemMode() : themeMode();
+  return resolved === 'dark' ? darkModeTheme() : lightModeTheme();
+}
+
+/** Keeps the active theme in sync with the "Active theme" mode: applies the
+ *  pinned light/dark theme, or follows the OS color scheme in system mode.
+ *  Re-applies whenever the mode, the OS scheme, or the *active* mode's theme
+ *  changes — but not when the inactive mode's theme changes (that id isn't read
+ *  by resolveActiveThemeId, so it isn't tracked). Call once from a reactive root
+ *  (see Root.tsx). */
 export function systemThemeEffect(): void{
   createEffect(
     on(
-      // Only react to the OS color scheme flipping or auto-detect turning on —
-      // deliberately NOT to darkModeTheme/lightModeTheme. `on` runs its callback
-      // untracked, so reading the defaults below does not subscribe to them. This
-      // keeps "Set default light/dark theme" from re-applying the current mode's
-      // default and clobbering the active theme; a new default takes effect on the
-      // next mode change (or when auto-detect is toggled on).
-      [themeShouldMatchSystem, systemMode],
-      () => {
-        if(themeShouldMatchSystem()){
-          applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
-        }
-      },
+      resolveActiveThemeId,
+      (id) => applyTheme(id),
       { defer: true }
     )
   );
@@ -236,6 +295,29 @@ export function getLiveTheme(): ThemeV2{
 /** Intrinsic darkness of a stored theme: dark when text is lighter than background. */
 export function isTokensDark(tokens: ThemeV2Tokens): boolean {
   return tokens.c0.l > tokens.b0.l;
+}
+
+/** Pins a theme as the "Active theme": makes it the stored theme for its
+ *  intrinsic light/dark mode and switches the mode to match, so
+ *  resolveActiveThemeId / systemThemeEffect apply it live. Shared by the settings
+ *  Active-theme picker and the command-palette "Change theme" action so choosing
+ *  a theme in either place is reflected in the other. */
+export function pinTheme(theme: ThemeV2): void {
+  if (isTokensDark(theme.tokens)) {
+    setDarkModeTheme(theme.id);
+    setThemeMode('dark');
+  } else {
+    setLightModeTheme(theme.id);
+    setThemeMode('light');
+  }
+}
+
+/** Follows the OS color scheme (the "System preference" option): switches the
+ *  mode to 'system' and applies whichever per-mode theme the OS currently
+ *  resolves to. Shared by the settings picker and the command palette. */
+export function applySystemTheme(): void {
+  setThemeMode('system');
+  applyTheme(resolveActiveThemeId());
 }
 
 /** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */

@@ -342,7 +342,7 @@ async fn publish_label_diff_events(
     }
 
     for event in &events {
-        publish_email_event(&ctx.macro_event_broker, event).await;
+        publish_email_event(&ctx.macro_event_broker, event);
     }
 }
 
@@ -380,7 +380,7 @@ pub async fn add_message_labels(
             email_db_client::messages::update::update_message_read_status(
                 &mut tx,
                 message_db_id,
-                &link.fusionauth_user_id,
+                link.id,
                 false,
             )
             .await
@@ -442,7 +442,7 @@ pub async fn remove_message_labels(
             email_db_client::messages::update::update_message_read_status(
                 &mut tx,
                 message_db_id,
-                &link.fusionauth_user_id,
+                link.id,
                 true,
             )
             .await

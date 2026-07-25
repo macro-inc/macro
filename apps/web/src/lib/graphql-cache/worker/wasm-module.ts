@@ -9,8 +9,14 @@
  */
 
 import type {
+  CachedQueryInstanceWire,
+  ClaimedMutation,
+  OptimisticLinkPatchWire,
   OptimisticWriteResult,
+  QueryRevalidationWire,
   ReadResult,
+  RecordCursor,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -21,6 +27,12 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined
   ): Promise<ReadResult>;
+  readRecords(
+    document: string,
+    fragmentName: string,
+    cursor: RecordCursor | undefined,
+    limit: number
+  ): Promise<SelectedRecordPageWire>;
   writeQuery(
     originOpId: string | undefined,
     query: string,
@@ -34,18 +46,43 @@ export interface CacheEngine {
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
-    data: unknown
+    data: unknown,
+    linkPatches: OptimisticLinkPatchWire[] | undefined,
+    revalidations: QueryRevalidationWire[] | undefined,
+    createdAtMs: number
   ): Promise<OptimisticWriteResult>;
+  inspectQuery(
+    query: string,
+    operationName: string | undefined,
+    path: Array<{ field: string }>
+  ): Promise<CachedQueryInstanceWire[]>;
+  claimNextMutation(
+    owner: string,
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): Promise<ClaimedMutation | undefined>;
+  deferOptimisticWrite(
+    transactionId: string,
+    leaseOwner: string,
+    leaseGeneration: string,
+    nextAttemptAtMs: number,
+    error: string
+  ): Promise<void>;
   commitOptimisticWrite(
     transactionId: string,
+    leaseOwner: string,
+    leaseGeneration: string,
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown
   ): Promise<WriteResult>;
-  rollbackOptimisticWrite(transactionId: string): Promise<WriteResult>;
+  rollbackOptimisticWrite(
+    transactionId: string,
+    leaseOwner: string,
+    leaseGeneration: string
+  ): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
-  externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
   /** Close the IndexedDB connection; call before destroyCache. */

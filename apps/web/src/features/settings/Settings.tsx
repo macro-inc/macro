@@ -44,6 +44,7 @@ import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
 import { MobileApp } from './MobileApp';
 import { Shortcuts } from './Shortcuts';
+import { Tags } from './Tags';
 import { Team } from './Team';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
@@ -395,6 +396,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Team')}>
                   <Suspense>
                     <Team />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Tags')}>
+                  <Suspense>
+                    <Tags />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('CRM')}>

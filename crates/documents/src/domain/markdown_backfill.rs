@@ -4,7 +4,8 @@ use std::{future::Future, time::Duration};
 
 use anyhow::Context;
 use futures::stream::{self, StreamExt};
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
+use tokio_retry::Retry;
 
 use crate::domain::models::DocumentError;
 use crate::domain::ports::markdown::MarkdownInitializationPort;
@@ -445,37 +446,37 @@ where
     S: SyncServiceProbe,
 {
     let attempts = retries + 1;
+    let retry_strategy = (1..attempts).map(|attempt| Duration::from_millis(250 * attempt as u64));
+    let mut attempt = 0usize;
 
-    for attempt_index in 0..attempts {
-        let attempt = attempt_index + 1;
-
-        match timeout(request_timeout, sync_service.exists(document_id)).await {
-            Ok(Ok(exists)) => return Ok(exists),
-            Ok(Err(error)) if attempt < attempts => {
-                tracing::debug!(%document_id, attempt, attempts, error = ?error, "sync-service exists request failed; retrying");
-            }
-            Ok(Err(error)) => {
-                return Err(error).with_context(|| {
-                    format!("sync-service exists request failed after {attempts} attempts")
-                });
-            }
-            Err(error) if attempt < attempts => {
-                tracing::debug!(%document_id, attempt, attempts, timeout_secs = request_timeout.as_secs(), error = ?error, "sync-service exists request timed out; retrying");
-            }
-            Err(error) => {
-                return Err(error).with_context(|| {
-                    format!(
-                        "sync-service exists request timed out after {attempts} attempts of {}s",
-                        request_timeout.as_secs()
-                    )
-                });
+    Retry::start(retry_strategy, || {
+        attempt += 1;
+        async move {
+            match timeout(request_timeout, sync_service.exists(document_id)).await {
+                Ok(Ok(exists)) => Ok(exists),
+                Ok(Err(error)) => {
+                    if attempt < attempts {
+                        tracing::debug!(%document_id, attempt, attempts, error = ?error, "sync-service exists request failed; retrying");
+                    }
+                    Err(error).with_context(|| {
+                        format!("sync-service exists request failed after {attempts} attempts")
+                    })
+                }
+                Err(error) => {
+                    if attempt < attempts {
+                        tracing::debug!(%document_id, attempt, attempts, timeout_secs = request_timeout.as_secs(), error = ?error, "sync-service exists request timed out; retrying");
+                    }
+                    Err(error).with_context(|| {
+                        format!(
+                            "sync-service exists request timed out after {attempts} attempts of {}s",
+                            request_timeout.as_secs()
+                        )
+                    })
+                }
             }
         }
-
-        sleep(Duration::from_millis(250 * attempt as u64)).await;
-    }
-
-    unreachable!("retry loop should return before exhausting attempts")
+    })
+    .await
 }
 
 fn sync_snapshot_already_exists(error: &DocumentError) -> bool {

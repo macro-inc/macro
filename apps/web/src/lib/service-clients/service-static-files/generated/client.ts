@@ -144,6 +144,11 @@ export type handleGetMetadataResponse200 = {
   status: 200;
 };
 
+export type handleGetMetadataResponse401 = {
+  data: string;
+  status: 401;
+};
+
 export type handleGetMetadataResponse404 = {
   data: string;
   status: 404;
@@ -158,6 +163,7 @@ export type handleGetMetadataResponseSuccess = handleGetMetadataResponse200 & {
   headers: Headers;
 };
 export type handleGetMetadataResponseError = (
+  | handleGetMetadataResponse401
   | handleGetMetadataResponse404
   | handleGetMetadataResponse500
 ) & {

@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
@@ -23,7 +24,8 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SCHEDULED_SEND,
-  ENABLE_EMAIL_SIGNATURES,
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -263,6 +265,7 @@ export function BaseInput(props: {
   onMarkDone?: (opts?: {
     silent?: boolean;
     onUndoHandle?: (handle: UndoHandle) => void;
+    nextEntityId?: string;
   }) => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -330,6 +333,9 @@ export function BaseInput(props: {
     emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
   );
   const signature = useEmailSignature(activeLinkId);
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   // Whether this reply includes the signature. Defaults on, reset per reply,
   // and dismissable via the preview ✕.
   const [includeSignature, setIncludeSignature] = createSignal(true);
@@ -338,7 +344,7 @@ export function BaseInput(props: {
   // and the user hasn't dismissed it. The backend does the actual injection on
   // send — this just mirrors when that will happen.
   const replySignatureHtml = (): string | undefined =>
-    ENABLE_EMAIL_SIGNATURES &&
+    emailSignaturesFlag().enabled &&
     props.replyingTo() &&
     includeSignature() &&
     sendingLink()?.settings.signature_on_replies_forwards
@@ -461,6 +467,7 @@ export function BaseInput(props: {
   // can reverse it. Cleared on each send: undo-send must only un-mark-done
   // when this send did the marking.
   let markDoneUndoHandle: UndoHandle | undefined;
+  let pendingMarkDoneNavigationTargetId: string | undefined;
 
   const undoSend = async (draftId: string) => {
     try {
@@ -557,7 +564,7 @@ export function BaseInput(props: {
               },
             ]
           : undefined,
-        duration: 10_000,
+        duration: 5_000,
       });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
@@ -573,7 +580,9 @@ export function BaseInput(props: {
           onUndoHandle: (handle) => {
             markDoneUndoHandle = handle;
           },
+          nextEntityId: pendingMarkDoneNavigationTargetId,
         });
+        pendingMarkDoneNavigationTargetId = undefined;
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -581,6 +590,7 @@ export function BaseInput(props: {
       // Restore autosave so the user can keep editing after a failed send.
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
+      pendingMarkDoneNavigationTargetId = undefined;
       toast.failure('Failed to send email');
     },
   });
@@ -710,7 +720,7 @@ export function BaseInput(props: {
     };
   }
 
-  async function executeSaveDraft() {
+  async function executeSaveDraft(skipSoupRefetch = false) {
     if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
     }
@@ -722,6 +732,7 @@ export function BaseInput(props: {
           draftId,
           threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
+          skipSoupRefetch,
         });
         refetchThreadMessages();
       }
@@ -753,6 +764,7 @@ export function BaseInput(props: {
         thread_db_id: currentThread?.db_id,
       },
       linkId: headerLinkId(),
+      skipSoupRefetch,
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -1012,9 +1024,17 @@ export function BaseInput(props: {
 
     const currentEditor = editor();
 
+    // Sending a reply marks the thread done. Gated on inbox_visible because
+    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
+    // replying from search or the sent view) would be unarchived.
+    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
+    pendingMarkDoneNavigationTargetId = willMarkDone
+      ? ctx.getMarkDoneNavigationTargetId()
+      : undefined;
+
     // Ensure draft is saved before sending so undo-send always has a draft to restore
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
-    await executeSaveDraft();
+    await executeSaveDraft(willMarkDone);
 
     // Snapshot editor state before watermark so undo-send can restore it.
     // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
@@ -1065,10 +1085,6 @@ export function BaseInput(props: {
     }
 
     pendingMentions = prepared.mentions;
-    // Sending a reply marks the thread done. Gated on inbox_visible because
-    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
-    // replying from search or the sent view) would be unarchived.
-    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
     setShouldMarkDoneOnSuccess(willMarkDone);
     markDoneUndoHandle = undefined;
 
@@ -1824,6 +1840,7 @@ export function BaseInput(props: {
                 form().setRecipients('to', v)
               )}
               triggerMode="input"
+              portalScope={composePortalScope()}
               hideBorder
               noPadding
               onChipDragStart={(option, e) =>
@@ -1867,6 +1884,7 @@ export function BaseInput(props: {
                   form().setRecipients('cc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>
@@ -1896,6 +1914,7 @@ export function BaseInput(props: {
                   form().setRecipients('bcc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>

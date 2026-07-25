@@ -1,21 +1,21 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::{
     authentication::webhooks::populate_jwt::{PopulateJwtWebhook, PopulateJwtWebhookResponse},
     user::UserInfoWithMacroUserId,
 };
 
 /// Populate user jwt webhook
-#[tracing::instrument(skip(ctx, req, _internal_access))]
+#[tracing::instrument(skip(ctx, req, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<PopulateJwtWebhook>,
 ) -> Result<Response, Response> {
     let email = req.email.to_lowercase();

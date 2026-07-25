@@ -1,3 +1,6 @@
+DELETE FROM notification
+WHERE id::text LIKE '00000000-0000-0000-0004-%';
+
 DELETE FROM entity_access
 WHERE source_id LIKE '00000000-0000-0000-0000-00000000000%'
    OR entity_id::text LIKE '00000000-0000-0000-0002-%';

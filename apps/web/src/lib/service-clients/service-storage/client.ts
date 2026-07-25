@@ -62,6 +62,7 @@ import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotToken } from './generated/schemas/botToken';
+import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
 import { ChannelType } from './generated/schemas/channelType';
 import {
@@ -74,6 +75,8 @@ import type { CreateChannelScopedBotRequest } from './generated/schemas/createCh
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
+import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
+import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
@@ -92,6 +95,7 @@ import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityT
 import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
@@ -135,10 +139,13 @@ import type { Project } from './generated/schemas/project';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
+import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
+import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
@@ -185,7 +192,9 @@ export function dssFetch<T extends Record<string, any> = never>(
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
-async function getDocumentPermissionToken(documentId: string): Promise<string> {
+export async function getDocumentPermissionToken(
+  documentId: string
+): Promise<string> {
   const token = await fetchWithToken<GetDocumentPermissionsTokenResponse>(
     `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${documentId}`,
     {
@@ -648,11 +657,11 @@ export const storageServiceClient = {
   },
 
   async patchChannel(args: WithChannelId & PatchChannelRequest) {
-    const { channel_id, channel_name } = args;
+    const { channel_id, ...request } = args;
     return (
       await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ channel_name }),
+        body: JSON.stringify(request),
       })
     ).map((result) => result);
   },
@@ -791,6 +800,19 @@ export const storageServiceClient = {
         method: 'POST',
       })
     ).map((result) => result);
+  },
+
+  async getChannelJoinLink(args: WithChannelId) {
+    return await dssFetch<ChannelJoinCodeResponse>(
+      `/channels/${args.channel_id}/join-link`,
+      { method: 'GET' }
+    );
+  },
+
+  async joinChannelByCode(args: { join_code: string }) {
+    return await dssFetch(`/channels/join/${args.join_code}`, {
+      method: 'POST',
+    });
   },
 
   async leaveChannel(args: WithChannelId) {
@@ -2261,6 +2283,12 @@ export const storageServiceClient = {
       })
     ).map((result) => result.data);
   },
+  async createCompany(body: CreateCrmCompanyRequest) {
+    return await dssFetch<CrmCompanyResponse>('/crm/companies', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
   async getCompany({ companyId }: { companyId: string }) {
     return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
       method: 'GET',
@@ -2270,6 +2298,18 @@ export const storageServiceClient = {
     return await dssFetch<CrmContactResponse[]>(
       `/crm/companies/${companyId}/contacts`,
       { method: 'GET' }
+    );
+  },
+  async createContact({
+    companyId,
+    ...body
+  }: { companyId: string } & CreateCrmContactRequest) {
+    return await dssFetch<CrmContactResponse>(
+      `/crm/companies/${companyId}/contacts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
     );
   },
   async getContact({ contactId }: { contactId: string }) {
@@ -2289,6 +2329,15 @@ export const storageServiceClient = {
       body: JSON.stringify({ hidden }),
     });
   },
+  async setContactName({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactNameRequest) {
+    return await dssFetch(`/crm/contacts/${contactId}/name`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
   async setCompanyHidden({
     companyId,
     hidden,
@@ -2301,6 +2350,15 @@ export const storageServiceClient = {
       body: JSON.stringify({ hidden }),
     });
   },
+  async setCompanyName({
+    companyId,
+    ...body
+  }: { companyId: string } & SetCompanyNameRequest) {
+    return await dssFetch(`/crm/companies/${companyId}/name`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
   async setEmailSync({
     companyId,
     emailSync,
@@ -2311,6 +2369,17 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
       method: 'PUT',
       body: JSON.stringify({ email_sync: emailSync }),
+    });
+  },
+  async getCrmTeamSettings() {
+    return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
+      method: 'GET',
+    });
+  },
+  async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {
+    return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
+      method: 'PUT',
+      body: JSON.stringify(body),
     });
   },
   crmComments: {

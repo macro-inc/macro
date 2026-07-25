@@ -84,8 +84,33 @@ export const sendEmailCode = action(async (formData: FormData) => {
     return false; // passwordless login flow is not reached
   }
 
+  // Local backends return the one-time code so dev tooling (seeded persona
+  // tabs) can finish the login without the email round-trip.
+  if (import.meta.env.DEV) {
+    const body = (await response.json().catch(() => undefined)) as
+      | { code?: string }
+      | undefined;
+    if (body?.code) return { autoCode: body.code };
+  }
+
   return true;
 }, 'passwordless-login');
+
+/// True when the email step succeeded and the verify step should show.
+export function sentEmailCode(
+  result: Awaited<ReturnType<typeof sendEmailCode>> | undefined
+): boolean {
+  return result === true || (typeof result === 'object' && !!result);
+}
+
+/// The local-backend auto-login code, when the email step returned one.
+export function autoLoginCode(
+  result: Awaited<ReturnType<typeof sendEmailCode>> | undefined
+): string | undefined {
+  if (typeof result === 'object' && result && 'autoCode' in result) {
+    return result.autoCode;
+  }
+}
 
 export function useResetEmailCode(setStage: (next: Stage) => void) {
   const submission = useSubmission(sendEmailCode);
@@ -105,7 +130,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
   });
 
   createEffect(() => {
-    if (submission.result === true) {
+    if (sentEmailCode(submission.result)) {
       props.setStage(Stage.Verify);
     } else if (submission.result === 'isPasswordLogin') {
       setIsPasswordLogin(true);

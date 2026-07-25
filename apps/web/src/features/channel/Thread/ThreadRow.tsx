@@ -9,6 +9,7 @@ import {
 import { ThreadRail } from './ThreadRail';
 
 type ThreadRowProps = ParentProps & {
+  ref?: (element: HTMLDivElement) => void;
   /** Present only in channel threads; other consumers (calls, PRs, comments) omit it. */
   channelId?: string;
   message: ApiChannelMessage;
@@ -23,7 +24,11 @@ export function ThreadRow(props: ThreadRowProps) {
       : undefined;
 
   return (
-    <div class="w-full flex justify-center">
+    <div
+      ref={(element) => props.ref?.(element)}
+      data-channel-thread-row
+      class="w-full flex justify-center"
+    >
       <div class="macro-message-width w-full relative">
         <Show when={channelCreatedId()}>
           {(id) => <ChannelCreatedIndicator channelId={id()} />}

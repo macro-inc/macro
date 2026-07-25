@@ -17,9 +17,9 @@ pub enum TopicError {
 
 /// A Topic is mapped to a Kafka topic that events can be published to.
 #[sealed]
-pub trait Topic: Default + Copy + Send + Sync + 'static {
-    /// The kafka topic name as a string.
-    fn as_str(&self) -> &'static str;
+pub trait Topic: Copy + Send + Sync + 'static {
+    /// the statically known string name of this topic
+    const TOPIC_STR: &'static str;
 }
 
 /// Defines each topic struct with its `Topic` impl, plus [`all_topic_names`]
@@ -33,15 +33,13 @@ macro_rules! topics {
 
             #[sealed]
             impl Topic for $name {
-                fn as_str(&self) -> &'static str {
-                    $topic
-                }
+                const TOPIC_STR: &'static str = $topic;
             }
         )*
 
         /// The names of all Kafka topics defined in this crate.
-        pub fn all_topic_names() -> Vec<&'static str> {
-            vec![$($name.as_str()),*]
+        pub fn all_topic_names() -> &'static [&'static str] {
+            &[$($name::TOPIC_STR),*]
         }
     };
 }
@@ -49,10 +47,22 @@ macro_rules! topics {
 topics! {
     /// Example kafka topic.
     MacroExampleTopic => "macro.example",
+    /// Bot lifecycle events (created / updated / deleted).
+    MacroBotsTopic => "macro.bots",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
+    /// User-scoped full Soup items produced from entity updates.
+    MacroSoupRealtimeTopic => "macro.soup",
+    /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
+    MacroProjectsTopic => "macro.projects",
+    /// Team lifecycle, invite, and membership events.
+    MacroTeamsTopic => "macro.teams",
     /// Channel lifecycle, message, participant, and attachment events.
     MacroChannelsTopic => "macro.channels",
     /// Email lifecycle events (links, messages, threads, labels).
     MacroEmailTopic => "macro.email",
+    /// Webhook configuration lifecycle events (created / updated / deleted / validated).
+    MacroWebhooksTopic => "macro.webhooks",
+    /// Entity mention events (created / deleted) across channels and docs.
+    MacroMentionsTopic => "macro.mentions",
 }

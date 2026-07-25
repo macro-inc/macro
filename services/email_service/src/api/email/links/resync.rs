@@ -1,11 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::email::links::access::{InboxActionError, authorize_inbox_access};
 use anyhow::Context;
-use axum::Extension;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Json, Response};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
@@ -42,13 +41,18 @@ pub struct ResyncResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id), err)]
 pub async fn resync_link_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(link_id): Path<Uuid>,
 ) -> Result<Response, InboxActionError> {
-    let (link, _access) = authorize_inbox_access(&ctx, &user_context.user_id, link_id).await?;
+    let (link, _access) = authorize_inbox_access(
+        &ctx,
+        &authorization.authorization.user.user_context.user_id,
+        link_id,
+    )
+    .await?;
 
     if let Some(active) =
         email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)

@@ -1,8 +1,9 @@
+use entity_access::domain::models::MemberTeamRole;
 use foreign_entity::domain::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
 };
 use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
-use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use model::document::DocumentMetadata;
 use std::sync::{Arc, Mutex};
@@ -81,6 +82,28 @@ fn authenticated_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLev
 
 fn internal_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::dangerously_assert_internal_user(document_id, EntityType::Document)
+}
+
+fn member_team_receipt(team_id: &str, user_id: &str) -> EntityAccessReceipt<MemberTeamRole> {
+    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)
+        .unwrap()
+        .into_owned();
+
+    EntityAccessReceipt::dangerously_assert_authenticated_user(user_id, team_id, EntityType::Team)
+}
+
+fn bot_id() -> entity_access::domain::models::BotId {
+    entity_access::domain::models::BotId::new_from_uuid(uuid::uuid!(
+        "00000000-0000-0000-0000-000000000123"
+    ))
+}
+
+fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_bot(
+        bot_id().into_storage_id(),
+        document_id,
+        EntityType::Document,
+    )
 }
 
 struct TestUploadUrlPort;
@@ -322,13 +345,34 @@ impl TestEventBroker {
 }
 
 impl MacroEventBroker for TestEventBroker {
-    async fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
         self.published.lock().unwrap().push(PublishedEvent {
-            topic: event.topic().as_str(),
+            topic: event.topic(),
             key: event.key().to_string(),
             payload: serde_json::to_value(event.event())?,
         });
-        Ok(())
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct TestDocumentSearchIndexer {
+    enqueued: Arc<Mutex<Vec<String>>>,
+}
+
+impl crate::domain::ports::DocumentSearchIndexer for TestDocumentSearchIndexer {
+    fn enqueue_name_update(
+        &self,
+        document_id: String,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>> {
+        let enqueued = Arc::clone(&self.enqueued);
+        Box::pin(async move {
+            enqueued.lock().unwrap().push(document_id);
+            Ok(())
+        })
     }
 }
 
@@ -396,6 +440,29 @@ fn make_test_service_with_entity_access(
         TestEventBroker::default(),
     );
     (service, entity_access)
+}
+
+/// Build a test service along with a handle to its recording search indexer.
+fn make_test_service_with_search_indexer(
+    repo: MockDocumentRepo,
+) -> (TestDocumentService, TestDocumentSearchIndexer) {
+    let search_indexer = TestDocumentSearchIndexer::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService,
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    )
+    .with_search_indexer(Arc::new(search_indexer.clone()));
+    (service, search_indexer)
 }
 
 /// Build a test service along with a handle to its recording event broker.
@@ -540,6 +607,295 @@ fn assert_shallow_pull_request_with_foreign_entity_id(
 }
 
 #[tokio::test]
+async fn get_document_by_team_slug_resolves_valid_slug() {
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000701");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_document_id_by_team_task_number()
+        .withf(move |actual_team_id, task_num| actual_team_id == &team_id && *task_num == 42)
+        .return_once(|_, _| Box::pin(std::future::ready(Ok(Some("doc-1".to_string())))));
+    repo.expect_get_basic_document()
+        .withf(|document_id| document_id == "doc-1")
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let document_id = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt(&team_id.to_string(), "macro|user@user.com"),
+            "engineering-platform-42",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(document_id, "doc-1");
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_rejects_malformed_slugs() {
+    for slug in [
+        "",
+        "engineering",
+        "-1",
+        "engineering-",
+        "engineering--task-1",
+        "engineering-task",
+        "engineering-1.5",
+        "engineering-+1",
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_document_id_by_team_task_number().times(0);
+        repo.expect_get_basic_document().times(0);
+
+        let result = make_test_service(repo)
+            .get_document_by_team_slug(
+                member_team_receipt(
+                    "00000000-0000-0000-0000-000000000701",
+                    "macro|user@user.com",
+                ),
+                slug,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(DocumentError::BadRequest(_))),
+            "expected {slug:?} to be rejected, got {result:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_rejects_non_positive_and_overflowing_numbers() {
+    for slug in ["engineering-0", "engineering--1", "engineering-2147483648"] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_document_id_by_team_task_number().times(0);
+        repo.expect_get_basic_document().times(0);
+
+        let result = make_test_service(repo)
+            .get_document_by_team_slug(
+                member_team_receipt(
+                    "00000000-0000-0000-0000-000000000701",
+                    "macro|user@user.com",
+                ),
+                slug,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(DocumentError::BadRequest(_))),
+            "expected {slug:?} to be rejected, got {result:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_rejects_wrong_receipt_entity_type() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number().times(0);
+    repo.expect_get_basic_document().times(0);
+    let receipt = EntityAccessReceipt::<MemberTeamRole>::dangerously_assert_authenticated_user(
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+            .unwrap()
+            .into_owned(),
+        "00000000-0000-0000-0000-000000000701",
+        EntityType::Document,
+    );
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(receipt, "engineering-1")
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_rejects_malformed_team_uuid() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number().times(0);
+    repo.expect_get_basic_document().times(0);
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt("not-a-team-uuid", "macro|user@user.com"),
+            "engineering-1",
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_maps_missing_lookup_to_not_found() {
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000701");
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number()
+        .withf(move |actual_team_id, task_num| actual_team_id == &team_id && *task_num == 404)
+        .return_once(|_, _| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_get_basic_document().times(0);
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt(&team_id.to_string(), "macro|user@user.com"),
+            "engineering-404",
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(DocumentError::NotFound(slug)) if slug == "engineering-404"
+    ));
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_maps_lookup_error_to_internal() {
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000701");
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number()
+        .return_once(|_, _| Box::pin(std::future::ready(Err(anyhow!("database unavailable")))));
+    repo.expect_get_basic_document().times(0);
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt(&team_id.to_string(), "macro|user@user.com"),
+            "engineering-1",
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Internal(_))));
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_maps_document_load_error_to_internal() {
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000701");
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number()
+        .return_once(|_, _| Box::pin(std::future::ready(Ok(Some("doc-1".to_string())))));
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Err(anyhow!("database unavailable")))));
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt(&team_id.to_string(), "macro|user@user.com"),
+            "engineering-1",
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Internal(_))));
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_allows_owner_of_deleted_document() {
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000701");
+    let mut document = task_document_context("doc-1");
+    document.deleted_at = Some(chrono::Utc::now());
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number()
+        .return_once(|_, _| Box::pin(std::future::ready(Ok(Some("doc-1".to_string())))));
+    repo.expect_get_basic_document()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(document))));
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt(&team_id.to_string(), "macro|owner@user.com"),
+            "engineering-1",
+        )
+        .await;
+
+    assert_eq!(result.unwrap(), "doc-1");
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_rejects_non_owner_of_deleted_document() {
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000701");
+    let mut document = task_document_context("doc-1");
+    document.deleted_at = Some(chrono::Utc::now());
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_id_by_team_task_number()
+        .return_once(|_, _| Box::pin(std::future::ready(Ok(Some("doc-1".to_string())))));
+    repo.expect_get_basic_document()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(document))));
+
+    let result = make_test_service(repo)
+        .get_document_by_team_slug(
+            member_team_receipt(&team_id.to_string(), "macro|user@user.com"),
+            "engineering-1",
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn bot_document_has_no_saved_user_view_location() {
+    let mut repo = make_mock_repo();
+    let metadata = make_test_metadata();
+
+    repo.expect_get_document_metadata()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(metadata))));
+    repo.expect_get_user_view_location().times(0);
+    repo.expect_get_persisted_document_content()
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+                DocumentContentLocation::ObjectStorage,
+            )))))
+        });
+    repo.expect_get_team_task_metadata()
+        .return_once(|_| Box::pin(std::future::ready(Ok(None))));
+
+    let response = make_test_service(repo)
+        .get_document(bot_receipt("doc-1"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.view_location, None);
+}
+
+#[tokio::test]
+async fn bot_lifecycle_event_has_no_actor_user_id() {
+    let mut repo = make_mock_repo();
+    repo.expect_soft_delete_document()
+        .withf(|id| id == "doc-1")
+        .return_once(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let receipt = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_bot(
+        bot_id().into_storage_id(),
+        "doc-1",
+        EntityType::Document,
+    );
+
+    service.delete_document(receipt, None).await.unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0].payload["metadata"]["actor_user_id"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn bot_task_branch_uses_macro_fallback() {
+    let document_id = "00000000-0000-0000-0000-000000000124";
+    let service = make_test_service(make_mock_repo());
+
+    let response = service
+        .get_task_branch_name(bot_receipt(document_id), "Fix bot auth".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.branch_name,
+        build_task_branch_name(
+            "macro",
+            None,
+            None,
+            &short_id_for_entity_id(document_id).unwrap(),
+            "Fix bot auth",
+        )
+    );
+}
+
+#[tokio::test]
 async fn test_get_document_happy_path() {
     let mut repo = make_mock_repo();
     let metadata = make_test_metadata();
@@ -593,6 +949,50 @@ async fn test_soft_delete_document() {
 
     let result = repo.soft_delete_document("doc-1").await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn bot_pull_request_does_not_hydrate_foreign_entity() {
+    let document_id = "00000000-0000-0000-0000-000000000125";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000126");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/17".to_string(),
+            ])))
+        });
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![make_foreign_entity(
+            foreign_entity_id,
+            "macro/repo/pull/17",
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            bot_id().into_storage_id().as_ref(),
+            "bot",
+        )],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            bot_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/17",
+        "macro",
+        "repo",
+        17,
+    );
 }
 
 #[tokio::test]
@@ -1265,6 +1665,65 @@ async fn test_edit_document_rename_only_keeps_project_access() {
             .is_empty()
     );
     assert!(entity_access.added_to_projects.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_edit_document_rename_enqueues_search_name_update() {
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .withf(|args| args.document_id == "doc-1")
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, search_indexer) = make_test_service_with_search_indexer(repo);
+
+    service
+        .edit_document(
+            edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            EditDocumentServiceArgs {
+                document_name: Some("New name".to_string()),
+                project_id: None,
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *search_indexer.enqueued.lock().unwrap(),
+        vec!["doc-1".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn test_edit_document_without_rename_does_not_enqueue_search_name_update() {
+    let document_id = uuid::Uuid::new_v4().to_string();
+    let new_project_id = uuid::Uuid::new_v4();
+
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_update_project_modified()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, search_indexer) = make_test_service_with_search_indexer(repo);
+
+    service
+        .edit_document(
+            edit_receipt(&document_id),
+            task_document_context(&document_id),
+            EditDocumentServiceArgs {
+                document_name: None,
+                project_id: Some(new_project_id.to_string()),
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(search_indexer.enqueued.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -1,3 +1,4 @@
+import { openExternalUrl } from '@core/util/url';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import GlobeIcon from '@phosphor/globe-simple.svg';
@@ -26,7 +27,7 @@ export function UnfurlLink(props: UnfurlLinkProps) {
   return (
     <div
       class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none"
-      onClick={() => window.open(props.unfurled.url)}
+      onClick={() => openExternalUrl(props.unfurled.url)}
     >
       <div class="flex flex-row items-center gap-1.5 size-full">
         <div class="shrink-0">

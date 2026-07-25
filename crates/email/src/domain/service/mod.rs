@@ -5,14 +5,17 @@ mod signature;
 mod thread;
 mod thread_labels;
 
+/// Unified entity-mutation capability impls.
+mod entity_mutation;
+
 use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
-        GetEmailsRequest, Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
-        UpsertEmailFilterInput,
+        GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread, Thread,
+        UpdateThreadLabelsResult, UpsertEmailFilterInput,
     },
-    ports::{EmailMessageEnqueuer, EmailRepo, EmailService},
+    ports::{EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService},
 };
 use crm::domain::service::CrmService;
 use entity_access::domain::models::{
@@ -23,6 +26,7 @@ use frecency::domain::ports::FrecencyQueryService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use model_entity::EntityType;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -84,14 +88,13 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
 
     /// Publish an email event to the `macro.email` topic, logging and
     /// dropping failures — event emission must never fail the operation.
-    pub(crate) async fn publish_email_event(&self, event: &EmailMacroEvent)
+    pub(crate) fn publish_email_event(&self, event: &EmailMacroEvent)
     where
         B: MacroEventBroker,
     {
         let _ = self
             .macro_event_broker
             .send_event(event)
-            .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
     }
 }
@@ -263,13 +266,12 @@ where
 
     async fn update_thread_labels(
         &self,
-        access_token: &str,
         link: &Link,
         thread_id: Uuid,
         label_id: Uuid,
         add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
-        self.update_thread_labels_impl(access_token, link, thread_id, label_id, add)
+        self.update_thread_labels_impl(link, thread_id, label_id, add)
             .await
     }
 
@@ -355,8 +357,7 @@ where
                                 previous_project_id: old_project_id.clone(),
                                 project_id: project_id.map(|p| p.to_string()),
                             },
-                        ))
-                        .await;
+                        ));
                     }
                     Ok(None) => tracing::warn!(
                         %thread_id,
@@ -406,5 +407,22 @@ where
             .list_email_filters(link.id)
             .await
             .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+}
+
+impl<T, U, E, CS, Eam> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam>
+where
+    T: EmailRepo,
+    U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
+    CS: CrmService,
+    Eam: EntityAccessManagementService,
+    anyhow::Error: From<T::Err>,
+{
+    async fn get_latest_messages_parsed(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        self.get_latest_messages_parsed_impl(receipts).await
     }
 }

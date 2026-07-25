@@ -3,7 +3,7 @@ import {
   type HoverCardRootProps,
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
-import { cn } from '@ui';
+import { cn } from '@ui/utils/classname';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -42,11 +42,15 @@ type HoverCardComponentProps = {
   gutter?: number;
   /** Additional class for content */
   contentClass?: string;
+  /** Semantic z-index class for the portaled content. Defaults to `z-tool-tip`. */
+  contentZIndexClass?: string;
   /**
    * Element type Kobalte should render the trigger as. Defaults to `span`.
-   * Use `div` when the trigger child is itself block-level (e.g. a chip).
+   * Use `div` for block-level children or `nav` for navigation triggers.
    */
-  triggerAs?: 'span' | 'div';
+  triggerAs?: 'span' | 'div' | 'nav';
+  /** Accessible label applied to the trigger element. */
+  triggerAriaLabel?: string;
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
   /** Tab index for the trigger element. Use -1 to remove from tab order. */
@@ -67,6 +71,8 @@ type HoverCardComponentProps = {
    * can dismiss the card via a close callback).
    */
   open?: boolean;
+  /** Element that should receive the portaled hover-card content. */
+  portalMount?: HTMLElement;
   /** Placement of the hover card */
   placement?: HoverCardRootProps['placement'];
 };
@@ -204,6 +210,7 @@ export function HoverCard(props: HoverCardComponentProps) {
     >
       <KobalteHoverCard.Trigger
         as={props.triggerAs ?? 'span'}
+        aria-label={props.triggerAriaLabel}
         class={props.triggerClass}
         disabled={isDisabled()}
         tabIndex={props.triggerTabIndex}
@@ -211,12 +218,15 @@ export function HoverCard(props: HoverCardComponentProps) {
         {props.trigger}
       </KobalteHoverCard.Trigger>
 
-      <KobalteHoverCard.Portal>
+      <KobalteHoverCard.Portal mount={props.portalMount}>
         <KobalteHoverCard.Content
           ref={(el) => {
             contentEl = el;
           }}
-          class={cn('z-tool-tip', props.contentClass)}
+          class={cn(
+            props.contentZIndexClass ?? 'z-tool-tip',
+            props.contentClass
+          )}
         >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}

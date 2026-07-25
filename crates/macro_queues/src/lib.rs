@@ -447,7 +447,7 @@ queue! {
     /// Common SQS queues used by Macro services.
     ///
     /// Default values mirror what infrastructure provisions: `local` uses the
-    /// bare queue names seen in `docker/docker-compose.local-e2e.yml`, while `dev` and
+    /// bare queue names emitted by the xtask local environment, while `dev` and
     /// `prod` use the `{base}-queue-{stack}` names provisioned by Pulumi.
     pub struct Queues {
         /// Queue for document text extraction jobs.
@@ -589,6 +589,12 @@ queue! {
             local: "email-service-backfill-queue",
             dev: "email-service-backfill-queue-dev",
             prod: "email-service-backfill-queue-prod",
+        },
+        /// Queue for the nightly CRM cleanup job (email_service).
+        pub EmailCrmCleanupQueue {
+            local: "email-service-crm-cleanup-queue",
+            dev: "email-service-crm-cleanup-queue-dev",
+            prod: "email-service-crm-cleanup-queue-prod",
         },
         /// Queue for the bulk upload extractor lambda
         /// (upload_extractor_lambda_trigger `UPLOAD_EXTRACTOR_QUEUE`).

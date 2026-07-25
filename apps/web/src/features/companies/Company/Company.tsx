@@ -1,5 +1,8 @@
+import { openCreateContactModal } from '@app/features/companies/CreateContactModal';
 import { SidePanel } from '@components/app/side-panel';
+import PlusIcon from '@phosphor/plus.svg';
 import { useCompanyQuery } from '@queries/crm/companies';
+import { Button } from '@ui';
 import { CompanyContactsSection } from './CompanyContactsSection';
 import { CompanyDiscussionSection } from './CompanyDiscussionSection';
 import { CompanyEmailsSection } from './CompanyEmailsSection';
@@ -48,6 +51,23 @@ export function Company(props: { companyId: string }) {
         title="Contacts"
         order={20}
         defaultOpen
+        actions={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label="Add contact"
+            tooltip="Add contact"
+            // Contact emails are pinned to the company's primary domain;
+            // disabled until the company (and its domains) has loaded.
+            disabled={!company()?.domains[0]}
+            onClick={() => {
+              const domain = company()?.domains[0]?.domain;
+              if (domain) openCreateContactModal(props.companyId, domain);
+            }}
+          >
+            <PlusIcon class="size-3.5" />
+          </Button>
+        }
       >
         <CompanyContactsSection company={company()} contacts={contacts()} />
       </SidePanel.Section>

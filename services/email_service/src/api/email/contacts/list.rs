@@ -1,10 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::email::service::address::ContactInfoWithInteraction;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
@@ -29,24 +29,26 @@ pub struct ListContactsResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn list_contacts_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
-    let links =
-        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to fetch links");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to fetch links".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
+    let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
+        &ctx.db,
+        &authorization.authorization.user.user_context.user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to fetch links");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "unable to fetch links".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let mut contacts: HashMap<Uuid, Vec<ContactInfoWithInteraction>> =
         HashMap::with_capacity(links.len());

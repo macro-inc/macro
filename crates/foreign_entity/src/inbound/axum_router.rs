@@ -16,6 +16,7 @@ use entity_access::{
     domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::ForeignEntityAccessLevelExtractor,
 };
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -24,37 +25,52 @@ use crate::domain::{
 };
 
 /// Router state for authenticated foreign entity operations.
-pub struct ForeignEntityRouterState<S, AccessSvc> {
+pub struct ForeignEntityRouterState<S, AccessSvc, Auth> {
     service: Arc<S>,
     access_service: Arc<AccessSvc>,
+    authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, AccessSvc> Clone for ForeignEntityRouterState<S, AccessSvc> {
+impl<S, AccessSvc, Auth> Clone for ForeignEntityRouterState<S, AccessSvc, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S, AccessSvc> ForeignEntityRouterState<S, AccessSvc>
+impl<S, AccessSvc, Auth> ForeignEntityRouterState<S, AccessSvc, Auth>
 where
     S: ForeignEntityService,
     AccessSvc: EntityAccessService,
 {
-    /// Create router state from shared service references.
-    pub fn new(service: Arc<S>, access_service: Arc<AccessSvc>) -> Self {
+    /// Create router state from shared service references and authorization state.
+    pub fn new(
+        service: Arc<S>,
+        access_service: Arc<AccessSvc>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             service,
             access_service,
+            authorization_state,
         }
     }
 }
 
-impl<S, AccessSvc> FromRef<ForeignEntityRouterState<S, AccessSvc>> for Arc<AccessSvc> {
-    fn from_ref(state: &ForeignEntityRouterState<S, AccessSvc>) -> Self {
+impl<S, AccessSvc, Auth> FromRef<ForeignEntityRouterState<S, AccessSvc, Auth>> for Arc<AccessSvc> {
+    fn from_ref(state: &ForeignEntityRouterState<S, AccessSvc, Auth>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<S, AccessSvc, Auth> FromRef<ForeignEntityRouterState<S, AccessSvc, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &ForeignEntityRouterState<S, AccessSvc, Auth>) -> Self {
+        state.authorization_state.clone()
     }
 }
 
@@ -62,16 +78,20 @@ impl<S, AccessSvc> FromRef<ForeignEntityRouterState<S, AccessSvc>> for Arc<Acces
 ///
 /// Routes:
 /// - `GET /{id}` — get a visible foreign entity by its internal ID.
-pub fn foreign_entity_router<S, AccessSvc, T>(
-    state: ForeignEntityRouterState<S, AccessSvc>,
+pub fn foreign_entity_router<S, AccessSvc, Auth, T>(
+    state: ForeignEntityRouterState<S, AccessSvc, Auth>,
 ) -> Router<T>
 where
     S: ForeignEntityService,
     AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
 {
     Router::new()
-        .route("/{id}", get(get_foreign_entity_handler::<S, AccessSvc>))
+        .route(
+            "/{id}",
+            get(get_foreign_entity_handler::<S, AccessSvc, Auth>),
+        )
         .with_state(state)
 }
 
@@ -93,13 +113,14 @@ where
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_foreign_entity_handler<S, AccessSvc>(
-    State(state): State<ForeignEntityRouterState<S, AccessSvc>>,
-    access: ForeignEntityAccessLevelExtractor<ViewAccessLevel, AccessSvc>,
+pub async fn get_foreign_entity_handler<S, AccessSvc, Auth>(
+    State(state): State<ForeignEntityRouterState<S, AccessSvc, Auth>>,
+    access: ForeignEntityAccessLevelExtractor<ViewAccessLevel, AccessSvc, Auth>,
 ) -> Result<Json<ForeignEntity>, ForeignEntityError>
 where
     S: ForeignEntityService,
     AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     let foreign_entity = state
         .service

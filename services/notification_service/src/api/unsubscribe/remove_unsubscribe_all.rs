@@ -4,10 +4,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use decode_jwt::DecodedJwt;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 /// Unmutes all notifications.
 /// Existing notifications that were muted manually will remain muted.
@@ -21,14 +21,14 @@ use crate::api::context::ApiContext;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, decoded_jwt))]
+#[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    decoded_jwt: DecodedJwt,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
     notification_db_client::user_mute_notification::remove_user_mute_notification(
         &ctx.db,
-        &decoded_jwt.user_context.user_id,
+        &user.authorization.user.user_context.user_id,
     )
     .await
     .map_err(|e| {

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                bt.id AS token_id,\n                b.id AS bot_id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id\n            FROM bot_tokens bt\n            JOIN bots b ON b.id = bt.bot_id\n            WHERE bt.token = $1\n              AND bt.revoked_at IS NULL\n              AND (bt.expires_at IS NULL OR bt.expires_at > now())\n              AND b.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "eb3db180aff5d16f1eed86bfbddf2ffbe4cec0122e364242dec6fec10a98c1c8"
+}

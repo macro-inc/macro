@@ -14,7 +14,11 @@ type ResizeSolver = {
   dropPanel: (id: PanelId) => void;
   updatePanel: (
     id: PanelId,
-    config: { minSize?: number; maxSize?: number }
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionPreferredSize?: number;
+    }
   ) => void;
   solve: () => LayoutResult;
   reset: () => void;
@@ -155,6 +159,71 @@ function initPanel(panel: PanelConfig): Panel {
 }
 
 /**
+ * Pin automatic-layout preferences when the remaining panels can absorb the
+ * leftover space. Preferences yield to every panel's minimum size, while
+ * manual resize solves ignore them entirely.
+ */
+function applyRedistributionPreferences(
+  panels: Panel[],
+  usable: number
+): Panel[] {
+  if (usable <= 0) return panels;
+
+  const preferredPanels = panels.flatMap((panel) => {
+    const preferred = panel.redistributionPreferredSize;
+    if (preferred === undefined || !Number.isFinite(preferred)) return [];
+    const size = Math.min(Math.max(preferred, panel.minSize), panel.maxSize);
+    return [{ panel, size }];
+  });
+  if (preferredPanels.length === 0) return panels;
+
+  const preferredIds = new Set(preferredPanels.map(({ panel }) => panel.id));
+  const remainingPanels = panels.filter((panel) => !preferredIds.has(panel.id));
+  const remainingMin = sumArray(remainingPanels.map((panel) => panel.minSize));
+  const availableForPreferred = usable - remainingMin;
+  const preferredMin = sumArray(
+    preferredPanels.map(({ panel }) => panel.minSize)
+  );
+  if (availableForPreferred + EPSILON < preferredMin) return panels;
+
+  const preferredTotal = sumArray(preferredPanels.map(({ size }) => size));
+  const overflow = Math.max(0, preferredTotal - availableForPreferred);
+  if (overflow > 0) {
+    const shrinkable = sumArray(
+      preferredPanels.map(({ panel, size }) => size - panel.minSize)
+    );
+    if (shrinkable > 0) {
+      for (const target of preferredPanels) {
+        const room = target.size - target.panel.minSize;
+        target.size -= overflow * (room / shrinkable);
+      }
+    }
+  }
+
+  const resolvedPreferredTotal = sumArray(
+    preferredPanels.map(({ size }) => size)
+  );
+  const remainingMax = sumArray(remainingPanels.map((panel) => panel.maxSize));
+  // Avoid leaving a gap when no other panel can absorb the remaining space.
+  if (resolvedPreferredTotal + remainingMax + EPSILON < usable) return panels;
+
+  const preferredSizeById = new Map(
+    preferredPanels.map(({ panel, size }) => [panel.id, size])
+  );
+  return panels.map((panel) => {
+    const preferred = preferredSizeById.get(panel.id);
+    return preferred === undefined
+      ? panel
+      : {
+          ...panel,
+          minSize: preferred,
+          maxSize: preferred,
+          share: preferred / usable,
+        };
+  });
+}
+
+/**
  * Create the internal-hiding business logic for a resize Zone.
  * @param params
  * @returns
@@ -178,7 +247,11 @@ export function createResizeSolver(params: {
   // counter manually manages reactivity, rather than a store on panel data -
   // whose side effects become a pain.
   const [counter, setCounter] = createSignal(0);
-  const setDirty = () => setCounter((p) => p + 1);
+  let nextSolveKind: 'automatic' | 'manual' = 'automatic';
+  const setDirty = (kind: 'automatic' | 'manual' = 'automatic') => {
+    nextSolveKind = kind;
+    setCounter((p) => p + 1);
+  };
 
   const panelsInOrder = () => {
     counter(); // deps
@@ -206,18 +279,29 @@ export function createResizeSolver(params: {
   // the solve on dependencies effect
   createEffect(() => {
     const ps = panelsInOrder();
+    const solveKind = nextSolveKind;
+    nextSolveKind = 'automatic';
+
+    const usable = getUsable(ps.length, params.size(), params.gutter());
+    const solvePanels =
+      solveKind === 'automatic'
+        ? applyRedistributionPreferences(ps, usable)
+        : ps;
 
     // run the solve to get pixel values
-    const solve = computeFractionalShares(ps, params.size(), params.gutter());
+    const solve = computeFractionalShares(
+      solvePanels,
+      params.size(),
+      params.gutter()
+    );
 
     // basically update the float share values to match the actual pixel sizes returned by the solve.
     const ids = order();
     const n = ids.length;
-    const usable = getUsable(n, params.size(), params.gutter());
     if (usable > 0 && n > 0) {
       const clampedPx = ids.map((id) => solve.sizes.get(id) ?? 0);
-      const mins = ps.map((p) => p.minSize ?? 0);
-      const maxs = ps.map((p) => p.maxSize ?? Infinity);
+      const mins = solvePanels.map((p) => p.minSize ?? 0);
+      const maxs = solvePanels.map((p) => p.maxSize ?? Infinity);
 
       const free: number[] = [];
       const clamped: number[] = [];
@@ -321,7 +405,11 @@ export function createResizeSolver(params: {
 
   function updatePanel(
     id: PanelId,
-    config: { minSize?: number; maxSize?: number }
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionPreferredSize?: number;
+    }
   ) {
     const panel = panelData[id];
     if (!panel) return;
@@ -337,6 +425,13 @@ export function createResizeSolver(params: {
       const next = config.maxSize ?? Infinity;
       if (panel.maxSize !== next) {
         panel.maxSize = next;
+        changed = true;
+      }
+    }
+    if ('redistributionPreferredSize' in config) {
+      const next = config.redistributionPreferredSize;
+      if (panel.redistributionPreferredSize !== next) {
+        panel.redistributionPreferredSize = next;
         changed = true;
       }
     }
@@ -485,7 +580,7 @@ export function createResizeSolver(params: {
       }
     }
 
-    setDirty();
+    setDirty('manual');
   }
 
   return {
@@ -510,7 +605,7 @@ export function createResizeSolver(params: {
     canFitPanel: (panel: PanelConfig) => {
       const currentPanels = panelsInOrder();
       const n = currentPanels.length;
-      const usable = getUsable(n, params.size(), params.gutter());
+      const usable = getUsable(n + 1, params.size(), params.gutter());
       if (usable <= 0) return false;
       const minSum = sumArray(currentPanels.map((p) => p.minSize ?? 0));
       const totalMinRequired = minSum + (panel.minSize ?? 0);

@@ -1,7 +1,7 @@
 use anyhow::Context;
 use models_properties::EntityType;
 use opensearch_client::{
-    OpensearchClient, date_format::EpochSeconds, upsert::chat_message::UpsertChatMessageArgs,
+    OpensearchClient, date_format::EpochMillis, upsert::chat_message::UpsertChatMessageArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use sqs_client::search::chat::{ChatMessage, RemoveChatMessage};
@@ -56,8 +56,8 @@ pub async fn insert_chat_message(
                 chat_id: chat_message.chat_id.clone(),
                 chat_message_id: chat_message.message_id.clone(),
                 user_id: chat_message.user_id.clone(),
-                created_at_seconds: EpochSeconds::new(chat_message.created_at.timestamp())?,
-                updated_at_seconds: EpochSeconds::new(chat_message.updated_at.timestamp())?,
+                created_at_millis: EpochMillis::new(chat_message.created_at.timestamp_millis())?,
+                updated_at_millis: EpochMillis::new(chat_message.updated_at.timestamp_millis())?,
                 title: info.name,
                 content: info.content,
                 role: info.role,

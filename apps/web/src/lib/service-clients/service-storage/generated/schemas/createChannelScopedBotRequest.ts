@@ -22,7 +22,7 @@ export interface CreateChannelScopedBotRequest {
   handle: string;
   /** Display name. */
   name: string;
-  /** Team owner. Omit for a user-owned bot. */
+  /** Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot. */
   team_id?: CreateChannelScopedBotRequestTeamId;
   /** Optional token expiration timestamp. */
   token_expires_at?: CreateChannelScopedBotRequestTokenExpiresAt;

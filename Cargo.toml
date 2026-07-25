@@ -7,6 +7,7 @@ members = [
   "crates/ai_usage",
   "crates/bot_id",
   "crates/bots",
+  "crates/broadcast",
   "crates/channel_bots",
   "crates/client/cache-core",
   "crates/client/cache-idb",
@@ -16,15 +17,17 @@ members = [
   "crates/cowlike",
   "crates/crm",
   "crates/embedding",
+  "crates/entity_mutation",
   "crates/favorites",
   "crates/foreign_entity",
+  "crates/generic_email_domains",
   "crates/graphql_common",
+  "crates/graphql_email",
   "crates/graphql_notification",
   "crates/graphql_properties",
   "crates/graphql_soup",
+  "crates/import",
   "crates/integration_tests/local_e2e",
-  "crates/integration_tests/test_build_full_pdf_modification_data",
-  "crates/integration_tests/test_pdf_modification_data_deserialize",
   "crates/loops_client",
   "crates/macro_authorization",
   "crates/macro_config",
@@ -32,52 +35,55 @@ members = [
   "crates/macro_event_topics",
   "crates/macro_queues",
   "crates/macro_sync_service_jwt",
+  "crates/maybe_send",
   "crates/memory",
+  "crates/onboarding",
   "crates/prompt",
   "crates/properties_service",
   "crates/search_service",
+  "crates/soup_realtime",
   "crates/task_dedup",
   "crates/unfurl",
   "crates/workspace-hack",
+  "services/ai_projections_refresh_handler",
   "services/authentication_service",
+  "services/call_recording_preview_handler",
   "services/connection_gateway",
   "services/contacts_service",
   "services/convert_service",
-  "services/document_cognition_service",
-  "services/document_cognition_service/load-test",
-  "services/document_storage_service",
-  "services/email_service",
-  "services/image_proxy_service",
-  "services/ai_projections_refresh_handler",
-  "services/call_recording_preview_handler",
   "services/dataloss_prevention_handler",
   "services/delete_chat_handler",
   "services/deleted_item_poller",
+  "services/document_cognition_service",
+  "services/document_cognition_service/load-test",
+  "services/document_storage_service",
   "services/document_text_extractor",
   "services/document_upload_finalizer_handler",
   "services/docx_unzip_handler",
   "services/email_refresh_handler",
   "services/email_scheduled_handler",
+  "services/email_service",
   "services/email_sfs_delete_handler",
   "services/email_suppression_handler",
   "services/image_optimizer",
-  "services/organization_retention_handler",
-  "services/organization_retention_trigger",
-  "services/search_upload_handler",
-  "services/sha_cleanup_worker",
-  "services/upload_extractor_lambda_handler",
-  "services/upload_extractor_lambda_trigger",
-  "services/user_link_cleanup_handler",
-  "services/worker_trigger",
+  "services/image_proxy_service",
   "services/mcp_auth_proxy",
   "services/mcp_service",
   "services/notification_service",
+  "services/organization_retention_handler",
+  "services/organization_retention_trigger",
   "services/scheduled_action",
   "services/search_processing_service",
+  "services/search_upload_handler",
+  "services/sha_cleanup_worker",
   "services/static_file_service",
   "services/sync-service",
   "services/sync-service/bebop-schema",
   "services/unfurl_service",
+  "services/upload_extractor_lambda_handler",
+  "services/upload_extractor_lambda_trigger",
+  "services/user_link_cleanup_handler",
+  "services/worker_trigger",
   "tooling/native_app_server",
   "tooling/notification_sandbox",
   "tooling/seed_cli",
@@ -121,6 +127,7 @@ cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
+constant_time_eq = "0.3.1"
 cookie = "0.18.1"
 csv = "1"
 dashmap = "6.1.0"
@@ -198,6 +205,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 rmcp = "1.6.0"
 rootcause = { version = "0.12" }
+rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1.0.214", features = ["derive"] }
@@ -219,6 +227,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio-retry = { version = "0.3.2", default-features = false }
 tokio-stream = { version = "0.1.17" }
 tokio-tungstenite = { version = "0.28", default-features = false, features = [
   "connect",

@@ -1,5 +1,6 @@
 use ai_tools::{
-    NoOpConnectionService, NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
+    NoOpConnectionService, NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue,
+    ToolServiceContext,
 };
 use channels::{
     domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
@@ -103,7 +104,9 @@ pub async fn build_tool_service_context(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        call::domain::service::CallRecordQueryServiceImpl::new(
+            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -155,7 +158,7 @@ pub async fn build_tool_service_context(
     let document_tool_context = DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
-        lexical_client,
+        lexical_client.clone(),
         sync_client.as_ref().clone(),
     );
 
@@ -189,12 +192,8 @@ pub async fn build_tool_service_context(
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-    );
     let call_tool_context = call::inbound::toolset::CallToolContext::new(
         call_service,
-        call_query_service,
         (*entity_access_service).clone(),
     );
 
@@ -235,8 +234,12 @@ pub async fn build_tool_service_context(
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        channel_tool_context: ai_tools::build_channel_tool_context(
+            pool.clone(),
+            Arc::new(lexical_client),
+        ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,

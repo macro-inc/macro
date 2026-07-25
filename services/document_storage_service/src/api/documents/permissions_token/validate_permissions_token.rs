@@ -1,16 +1,20 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use macro_authorization::{
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use macro_sync_service_jwt::ISSUER;
-use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
+use model::{document::DocumentPermissionsToken, response::ErrorResponse};
 use utoipa::ToSchema;
 
+use crate::api::context::AuthorizationService;
 use crate::config::Config;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -32,10 +36,13 @@ pub struct DocumentPermissionsTokenRequest {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(config_context, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(
+    skip(config_context, user),
+    fields(actor = tracing::field::Empty)
+)]
 pub async fn handler(
     State(config_context): State<Arc<Config>>,
-    user_context: Extension<UserContext>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     extract::Json(DocumentPermissionsTokenRequest { token }): extract::Json<
         DocumentPermissionsTokenRequest,
     >,
@@ -45,11 +52,14 @@ pub async fn handler(
 
     validation.set_issuer(&[ISSUER]);
 
-    let user_id = if user_context.user_id.is_empty() {
-        None
-    } else {
-        Some(user_context.user_id.clone())
-    };
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+    let user_id = user
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
+        .map(|user| user.macro_user_id.to_string());
 
     // Attempt to decode the token.
     let decoded_jwt: DocumentPermissionsToken = match jsonwebtoken::decode::<DocumentPermissionsToken>(

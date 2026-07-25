@@ -10,10 +10,27 @@ use model::response::{GenericErrorResponse, StringIDResponse};
 use model_entity::{Entity, EntityType};
 use models_bulk_upload::UploadFolderStatusUpdate;
 use stream::domain::{StreamEvent, StreamItem};
-use utoipa::OpenApi;
+use utoipa::{
+    Modify, OpenApi,
+    openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
+};
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "internal-api-key",
+                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("x-internal-auth-key"))),
+            );
+        }
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
+        modifiers(&SecurityAddon),
         info(
             terms_of_service = "https://macro.com/terms",
         ),

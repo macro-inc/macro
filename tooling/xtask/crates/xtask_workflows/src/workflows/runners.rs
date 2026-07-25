@@ -3,7 +3,8 @@
 //! We run on Namespace (namespace.so) hosted runners, selected by the dashboard
 //! *profile* name — the same convention the deploy workflows already use. Each
 //! profile's persisted cache volume is configured in the Namespace dashboard;
-//! that volume backs the sccache + cargo caches (see
+//! that volume backs Cargo/Nix state while compiled objects use Namespace's
+//! official remote sccache (see
 //! [`crate::workflows::steps::mount_cache_volume`]).
 
 use std::fmt;
@@ -22,7 +23,7 @@ pub enum Runner {
     Mid,
     /// Dedicated CI profile for the heavy compile + test jobs. Has its own
     /// cache volume, isolated from the deploy profiles so deploy's churn can't
-    /// evict the CI sccache/cargo caches.
+    /// evict the CI Cargo/Nix caches.
     RustCi,
 }
 
@@ -45,9 +46,8 @@ impl Runner {
     /// branch can only inherit the *default* branch's cache, so any branch whose
     /// workflow never runs on `main` starts cold every time. Pinning a fixed tag
     /// makes every branch read/write the *same* volume — one global cache, like
-    /// the old shared S3 sccache bucket. sccache entries are content-addressed,
-    /// so concurrent writers never corrupt each other; the worst case is an
-    /// occasional miss that simply recompiles.
+    /// the old globally shared cache behavior. Cache-volume writes are managed
+    /// by Namespace; compiled objects use the separately named remote sccache.
     pub fn with_cache_tag(self, tag: &str) -> String {
         format!("{self};overrides.cache-tag={tag}")
     }

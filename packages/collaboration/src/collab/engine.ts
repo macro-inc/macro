@@ -15,6 +15,7 @@ import type { Awareness } from './awareness';
 import { BroadcastChannelChatter, type Chatter, noopChatter } from './chatter';
 import { logSyncService } from './logger';
 import {
+  LoroManagerError,
   LoroStateTag,
   type StateUpdate,
   type SyncEngineManager,
@@ -79,6 +80,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly readonly: () => boolean;
   private readonly syncLock = new Mutex();
   private unsubscribe?: () => void;
+  private liveUnsubscribe?: () => void;
   private snapshotInterval?: ReturnType<typeof setInterval>;
   private readonly snapshotStore?: LoroSnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
@@ -86,6 +88,12 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly makeChatter: (documentId: string) => Chatter;
   private chatter?: Chatter;
   private chatterUnsub?: () => void;
+  private lifecycleGeneration = 0;
+  private convergence?: {
+    generation: number;
+    promise: Promise<void>;
+    rerunRequested: boolean;
+  };
 
   constructor({
     loroManager,
@@ -144,7 +152,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         .exhaustive()
     );
 
-    this.syncs.live.listen((event) => this.handleSourceEvent(event));
+    this._isRunning = true;
+    this.lifecycleGeneration++;
+
+    this.liveUnsubscribe?.();
+    this.liveUnsubscribe = this.syncs.live.listen((event) =>
+      this.handleSourceEvent(event)
+    );
     this.syncs.live.registerPeerId(this.loroManager.peerId);
 
     if (this.snapshotStore && this.snapshotInterval === undefined) {
@@ -154,15 +168,21 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       );
     }
 
-    this._isRunning = true;
     this.onRunningChange(true);
     this.log('info', 'engine.start: ok');
+    void this.convergeFromServer();
     return true;
   }
 
   public stop() {
+    this._isRunning = false;
+    this.lifecycleGeneration++;
+
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+
+    this.liveUnsubscribe?.();
+    this.liveUnsubscribe = undefined;
 
     this.chatterUnsub?.();
     this.chatter?.close();
@@ -176,7 +196,6 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     this.awareness.updateLocalAwareness(undefined);
     this.syncs.live.pushAwareness(this.awareness.getEncodedLocalAwareness());
-    this._isRunning = false;
     this.onRunningChange(false);
     this.log('info', 'engine.stop: ok');
   }
@@ -285,8 +304,10 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
   }
 
-  private async handleRemoteUpdate(update: RawUpdate) {
-    await this.syncLock.runExclusive(() =>
+  private async handleRemoteUpdate(
+    update: RawUpdate
+  ): Promise<'applied' | 'pending' | 'reset'> {
+    return this.syncLock.runExclusive(() =>
       telemetrySpan(this.syncs.live.documentId, 'edit.apply', async (span) => {
         // The receive side of the Teo→Hutch chain: did the op apply, and did it
         // actually change the doc (didChange=false ⇒ converged but nothing new)?
@@ -295,6 +316,18 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         const importResult = this.loroManager.importUpdate(update);
         await Promise.resolve();
         if (importResult.isErr()) {
+          const pendingOnly = importResult.error.every(
+            (e) => e.code === LoroManagerError.ImportPending
+          );
+          if (pendingOnly) {
+            // Loro retains causally-ahead updates. Pull the missing operations
+            // rather than resetting the document.
+            this.log('info', 'engine: remote update pending on missing ops');
+            span.setAttr('outcome', 'pending');
+            void this.convergeFromServer();
+            return 'pending';
+          }
+
           this.log(
             'error',
             'engine: failed to import remote update, resetting',
@@ -305,11 +338,12 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           span.error(importResult.error);
           span.setAttr('outcome', 'reset');
           this.reset();
-          return;
+          return 'reset';
         }
         span.setAttr('outcome', 'applied');
         span.setAttr('did_change', importResult.value);
         this.log('debug', 'engine: remote update imported ok');
+        return 'applied';
       })
     );
   }
@@ -332,15 +366,59 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           'info',
           'engine: reconnect, requesting updates since current version'
         );
-        this.requestAndHandleUpdatesSince(this.loroManager.doc.version());
+        void this.convergeFromServer({ rerunIfInFlight: true });
         break;
     }
   }
 
+  /**
+   * Pull every server operation missing from the current local seed.
+   *
+   * Snapshot sources are intentionally transport-agnostic and first-wins, so
+   * this anti-entropy step is what makes optimistic, IDB, and S3 seeds converge
+   * to server truth. Calls within one engine lifecycle are coalesced;
+   * `rerunIfInFlight` additionally queues one fresh pass after the in-flight
+   * one settles, so a reconnect is never absorbed into an attempt that goes
+   * on to exhaust its retries.
+   */
+  private convergeFromServer({
+    rerunIfInFlight = false,
+  }: {
+    rerunIfInFlight?: boolean;
+  } = {}): Promise<void> {
+    const generation = this.lifecycleGeneration;
+    if (!this.isActiveGeneration(generation)) return Promise.resolve();
+
+    const inFlight = this.convergence;
+    if (inFlight?.generation === generation) {
+      if (rerunIfInFlight) inFlight.rerunRequested = true;
+      return inFlight.promise;
+    }
+
+    const since = this.loroManager.doc.version();
+    const promise = this.requestAndHandleUpdatesSince(since, 1, generation);
+    const record = { generation, promise, rerunRequested: false };
+    this.convergence = record;
+    const settle = () => {
+      if (this.convergence !== record) return;
+      this.convergence = undefined;
+      if (record.rerunRequested) void this.convergeFromServer();
+    };
+    void promise.then(settle, settle);
+    return promise;
+  }
+
+  private isActiveGeneration(generation: number): boolean {
+    return this._isRunning && this.lifecycleGeneration === generation;
+  }
+
   private async requestAndHandleUpdatesSince(
     since: VersionVector,
-    attempt = 1
+    attempt: number,
+    generation: number
   ) {
+    if (!this.isActiveGeneration(generation)) return;
+
     // The catch-up flow: "give me everything after the version I hold".
     // The span shows the anchor version, what came back, and whether it
     // applied — the trail for "client was stale and (never) reconciled".
@@ -349,6 +427,12 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     span.setAttr('attempt', attempt);
     this.log('debug', `engine: requestUpdatesSince (attempt ${attempt})`);
     const updates = await this.syncs.live.requestUpdatesSince(since);
+    if (!this.isActiveGeneration(generation)) {
+      span.setAttr('outcome', 'cancelled');
+      span.end();
+      return;
+    }
+
     if (updates.isErr() || !updates.value) {
       this.log('error', 'engine: requestUpdatesSince failed', {
         err: updates.isErr() ? String(updates.error) : 'update is undefined',
@@ -362,14 +446,26 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         await new Promise((resolve) =>
           setTimeout(resolve, REQUEST_UPDATES_RETRY_DELAY_MS)
         );
-        void this.requestAndHandleUpdatesSince(since, attempt + 1);
+        await this.requestAndHandleUpdatesSince(since, attempt + 1, generation);
       }
       return;
     }
 
+    if (updates.value.length === 0) {
+      // Nothing to converge. Zero bytes are not a valid Loro payload (real
+      // sources encode "no new ops" as a non-empty update), so importing them
+      // would throw and trigger a reset — the noop live source used by
+      // non-propagating AI edit sessions answers with exactly this.
+      this.log('debug', 'engine: requestUpdatesSince ok, empty update');
+      span.setAttr('outcome', 'noop');
+      span.setAttr('update.bytes', 0);
+      span.end();
+      return;
+    }
+
     this.log('debug', 'engine: requestUpdatesSince ok, applying update');
-    await this.handleRemoteUpdate(updates.value);
-    span.setAttr('outcome', 'applied');
+    const outcome = await this.handleRemoteUpdate(updates.value);
+    span.setAttr('outcome', outcome);
     span.setAttr('update.bytes', updates.value.length);
     span.end();
   }

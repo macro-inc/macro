@@ -1,7 +1,7 @@
 //! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
-    models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
+    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -193,6 +193,9 @@ pub enum EntityItem {
         id: Uuid,
         /// User or actor that created the call.
         created_by: String,
+        /// Tags on the call visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
     },
     /// Foreign entity item.
     #[serde(rename_all = "camelCase")]
@@ -209,7 +212,10 @@ pub enum EntityItem {
 }
 
 impl EntityItem {
-    pub(super) fn from_soup_item(item: SoupItem, tag_map: &HashMap<Uuid, AppliedTag>) -> Self {
+    pub(super) fn from_soup_item(
+        item: SoupItem<SoupPropertiesField>,
+        tag_map: &HashMap<Uuid, AppliedTag>,
+    ) -> Self {
         match item {
             SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
@@ -222,17 +228,17 @@ impl EntityItem {
                 }),
                 file_type: doc.file_type,
                 name: doc.name,
-                tags: resolve_applied_tags(&doc.properties, tag_map),
+                tags: resolve_applied_tags(&doc.extra.properties, tag_map),
             },
             SoupItem::Chat(chat) => EntityItem::AiChat {
                 id: chat.id,
                 name: chat.name,
-                tags: resolve_applied_tags(&chat.properties, tag_map),
+                tags: resolve_applied_tags(&chat.extra.properties, tag_map),
             },
             SoupItem::Project(project) => EntityItem::Project {
                 id: project.id,
                 name: project.name,
-                tags: resolve_applied_tags(&project.properties, tag_map),
+                tags: resolve_applied_tags(&project.extra.properties, tag_map),
             },
             SoupItem::EmailThread(thread) => EntityItem::Email {
                 id: thread.thread.id,
@@ -243,7 +249,7 @@ impl EntityItem {
                 inbox_visible: thread.thread.inbox_visible,
                 is_read: thread.thread.is_read,
                 is_draft: thread.thread.is_draft,
-                tags: resolve_applied_tags(&thread.properties, tag_map),
+                tags: resolve_applied_tags(&thread.extra.properties, tag_map),
             },
             SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
@@ -256,6 +262,7 @@ impl EntityItem {
             SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,
                 created_by: record.created_by,
+                tags: resolve_applied_tags(&record.extra.properties, tag_map),
             },
             // `entity_filter_ast` force-filters CrmCompany out — kept
             // loud here so a contract break is obvious, not silent.
@@ -298,14 +305,14 @@ fn resolve_applied_tags(
 }
 
 /// True when any item carries a tag property that would need label resolution.
-fn any_item_has_tags(items: &[FrecencySoupItem]) -> bool {
-    items.iter().any(|FrecencySoupItem { item, .. }| {
+fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
+    items.iter().any(|EnrichedSoupItem { item, .. }| {
         let properties = match item {
-            SoupItem::Document(doc) => &doc.properties,
-            SoupItem::Chat(chat) => &chat.properties,
-            SoupItem::Project(project) => &project.properties,
-            SoupItem::EmailThread(thread) => &thread.properties,
-            SoupItem::CrmCompany(company) => &company.properties,
+            SoupItem::Document(doc) => &doc.extra.properties,
+            SoupItem::Chat(chat) => &chat.extra.properties,
+            SoupItem::Project(project) => &project.extra.properties,
+            SoupItem::EmailThread(thread) => &thread.extra.properties,
+            SoupItem::CrmCompany(company) => &company.extra.properties,
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
@@ -332,7 +339,7 @@ pub struct ListEntitiesResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListEntities",
-    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, and emails include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
+    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
     /// Filter returned items to specific item types.
@@ -382,7 +389,7 @@ pub struct ListEntities {
 
     /// Email entity AST filter.
     #[schemars(
-        description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}. Supports filtering by thread timestamp: {\"l\":{\"ca\":{\"gte\":\"<start>\"}}} matches created_at, {\"l\":{\"ua\":{\"gte\":\"<start>\",\"lt\":\"<end>\"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For \"emails from the last 7 days\", AND a ua (or ca) gte bound set to 7 days before now, e.g. {\"l\":{\"ua\":{\"gte\":\"<7-days-ago-ISO>\"}}}.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "ef")]
@@ -456,8 +463,8 @@ with tagsMatch=\"all\". Each entry names a tag by its label, matched case-insens
 against the user's own tags; only set scope (\"personal\" or \"team\") when the user \
 distinguishes between their personal and team tags. An unknown label fails with the list of \
 available tags — call ListTags first when unsure what tags exist. Only taggable items \
-(documents, tasks, projects, emails, AI chats) can match a tag filter. Prefer this over \
-hand-building a propf filter for tags.")]
+(documents, tasks, projects, emails, AI chats, call records) can match a tag filter. Prefer \
+this over hand-building a propf filter for tags.")]
     #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,
 
@@ -700,7 +707,7 @@ where
 
         let result = service_context
             .service
-            .get_user_soup(
+            .get_user_soup_with_properties(
                 SoupRequest {
                     soup_type: SoupType::Expanded,
                     limit,
@@ -729,17 +736,28 @@ where
             .map(|sets| sets.applied_tag_by_option_id())
             .unwrap_or_default();
 
-        let items: Vec<EntityItem> = paginated
+        let mut items: Vec<EntityItem> = paginated
             .items
             .into_iter()
-            .map(|FrecencySoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
+            .map(|EnrichedSoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
             .collect();
+
+        retain_excluding_self_chat(&mut items, service_context.self_chat_id);
 
         // Build summary
         let summary = build_summary(&items, has_more, &self.effective_include_types());
 
         Ok(ListEntitiesResponse { items, summary })
     }
+}
+
+/// Drop the chat the agent is currently running inside from `items` so it
+/// never surfaces itself in its own results.
+pub(super) fn retain_excluding_self_chat(items: &mut Vec<EntityItem>, self_chat_id: Option<Uuid>) {
+    let Some(self_chat_id) = self_chat_id else {
+        return;
+    };
+    items.retain(|item| !matches!(item, EntityItem::AiChat { id, .. } if *id == self_chat_id));
 }
 
 async fn fetch_caller_tag_sets<T, E>(

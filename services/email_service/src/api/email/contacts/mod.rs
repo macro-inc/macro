@@ -14,14 +14,14 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/block",
             post(block_sender::handler).layer(axum::middleware::from_fn_with_state(
-                state.email_service.clone(),
+                state.clone(),
                 crate::api::middleware::link::attach_link_context,
             )),
         )
         .route(
             "/unblock",
             post(unblock_sender::handler).layer(axum::middleware::from_fn_with_state(
-                state.email_service.clone(),
+                state.clone(),
                 crate::api::middleware::link::attach_link_context,
             )),
         )

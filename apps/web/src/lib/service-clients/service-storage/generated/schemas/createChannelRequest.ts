@@ -12,6 +12,8 @@ import type { CreateChannelRequestTeamId } from './createChannelRequestTeamId';
  * Request to create a channel.
  */
 export interface CreateChannelRequest {
+  /** Whether team members automatically join this channel. Defaults to false. */
+  auto_join_team?: boolean;
   /** Channel type. */
   channel_type: ChannelType;
   /** Optional channel name. */

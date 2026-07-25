@@ -1,7 +1,9 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
-import type { Property } from '@property/types';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { ItemType } from '@service-storage/client';
 import { Show, Suspense } from 'solid-js';
@@ -18,26 +20,17 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
 
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
-        <Suspense fallback={<SidePanel.Loading />}>
-          <EntityPropertiesSection
-            entityId={props.threadId}
-            entityType="THREAD"
-            canEdit={canEdit()}
-            documentName={props.title}
-            includeMetadata
-            propertyFilter={(property) => property.isMetadata === true}
-            getEmptyLabel={getEmailMetadataEmptyLabel}
-            showAddProperty={false}
-            showTags={false}
-          />
-        </Suspense>
-      </SidePanel.Section>
+      <EntityTagsSection
+        entityId={props.threadId}
+        entityType="THREAD"
+        canEdit={canEdit()}
+        order={20}
+      />
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
-        order={20}
+        order={30}
       >
         <Suspense fallback={<SidePanel.Loading />}>
           <EntityPropertiesSection
@@ -46,6 +39,7 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
             canEdit={canEdit()}
             documentName={props.title}
             propertyFilter={(property) => property.isMetadata !== true}
+            showTags={false}
           />
         </Suspense>
       </SidePanel.Section>
@@ -85,21 +79,4 @@ function ReferencesSectionConditional(props: { threadId: string }) {
       </SidePanel.Section>
     </Show>
   );
-}
-
-function getEmailMetadataEmptyLabel(property: Property) {
-  if (!property.isMetadata) return undefined;
-
-  switch (property.displayName) {
-    case 'Last Sent':
-      return 'No sent messages';
-    case 'Last Received':
-      return 'No received messages';
-    case 'Thread Started':
-      return 'No messages';
-    case 'Subject':
-      return 'No subject';
-    default:
-      return undefined;
-  }
 }

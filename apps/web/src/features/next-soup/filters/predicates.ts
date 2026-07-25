@@ -21,7 +21,12 @@ function getPredicateNotifications(
 ) {
   const attachedNotifications = (entity as WithNotification<EntityData>)
     .notifications;
-  if (attachedNotifications) return attachedNotifications();
+
+  if (typeof attachedNotifications === 'function') {
+    return attachedNotifications();
+  }
+
+  if (Array.isArray(attachedNotifications)) return attachedNotifications;
 
   return notificationSource.notificationsByEntity()[
     compositeEntity(toNotificationEntity(entity))
@@ -121,11 +126,11 @@ export function githubPrFilter(entity: EntityData): boolean {
 }
 
 export function channelsFilter(entity: EntityData): boolean {
-  return (
-    entity.type === 'channel' ||
-    entity.type === 'channel_message' ||
-    entity.type === 'channel_thread'
-  );
+  // Non-member team channels (surfaced by the Teams tab) must not leak into
+  // Recent through the shared soup cache; message/thread rows only exist for
+  // channels the user is in.
+  if (entity.type === 'channel') return entity.isParticipant !== false;
+  return entity.type === 'channel_message' || entity.type === 'channel_thread';
 }
 
 export function callsFilter(entity: EntityData): boolean {

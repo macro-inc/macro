@@ -6,14 +6,16 @@
 use crate::domain::{AiFeature, UsageApiParams, UsageService, UsageSummary};
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{FromRef, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };
 use chrono::{DateTime, Utc};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -54,21 +56,61 @@ pub struct ErrorBody {
     pub error: String,
 }
 
+/// Router state containing the usage service and the authorization state used
+/// to authenticate callers.
+pub struct AiUsageRouterState<T, Auth> {
+    /// The usage service implementation.
+    pub service: Arc<T>,
+    /// The authorization state used by the request extractors.
+    pub authorization_state: MacroAuthorizationState<Auth>,
+}
+
+// Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
+impl<T, Auth> Clone for AiUsageRouterState<T, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<T, Auth> FromRef<AiUsageRouterState<T, Auth>> for Arc<T> {
+    fn from_ref(state: &AiUsageRouterState<T, Auth>) -> Self {
+        state.service.clone()
+    }
+}
+
+impl<T, Auth> FromRef<AiUsageRouterState<T, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &AiUsageRouterState<T, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
 /// Build the admin AI-cost router.
-pub fn ai_usage_router<T, S>(service: Arc<T>) -> Router<S>
+pub fn ai_usage_router<T, Auth, S>(state: AiUsageRouterState<T, Auth>) -> Router<S>
 where
     T: UsageService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
-        .route("/ai-cost/usage", post(get_usage_handler::<T>))
-        .route("/ai-cost/pricing", post(set_pricing_handler::<T>))
-        .with_state(service)
+        .route("/ai-cost/usage", post(get_usage_handler::<T, Auth>))
+        .route("/ai-cost/pricing", post(set_pricing_handler::<T, Auth>))
+        .with_state(state)
 }
 
 /// Returns `Some(403)` unless the caller is a Macro admin.
-fn admin_rejection(user: &MacroUserExtractor) -> Option<Response> {
-    if user.macro_user_id.email_str().ends_with(ADMIN_EMAIL_SUFFIX) {
+fn admin_rejection<Auth>(
+    user: &MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Option<Response> {
+    if user
+        .authorization
+        .user
+        .macro_user_id
+        .email_str()
+        .ends_with(ADMIN_EMAIL_SUFFIX)
+    {
         None
     } else {
         Some(
@@ -106,10 +148,13 @@ fn internal_error(context: &str) -> Response {
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
-pub async fn get_usage_handler<T: UsageService>(
+#[tracing::instrument(
+    skip(service, user),
+    fields(actor = %user.acting_entity())
+)]
+pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroUserExtractor,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<UsageRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {
@@ -162,10 +207,13 @@ pub async fn get_usage_handler<T: UsageService>(
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
-pub async fn set_pricing_handler<T: UsageService>(
+#[tracing::instrument(
+    skip(service, user),
+    fields(actor = %user.acting_entity())
+)]
+pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroUserExtractor,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {

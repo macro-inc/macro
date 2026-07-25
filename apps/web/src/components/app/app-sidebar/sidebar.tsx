@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -42,6 +43,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  ENABLE_ACTIVITY,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
@@ -60,7 +62,9 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
+import { tryMacroId, useDisplayName } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedActivityIcon } from '@icon/wide-activity';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
@@ -80,8 +84,14 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useJoinTeamMutation,
+  useRejectInvitationMutation,
+  useUserInvitesQuery,
+} from '@queries/team/invitations';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { authServiceClient } from '@service-auth/client';
+import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
@@ -232,18 +242,6 @@ const SIDEBAR_LINKS = [
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
-  ...(ENABLE_CRM
-    ? ([
-        {
-          id: 'companies',
-          label: 'Companies',
-          href: LIST_VIEW_PATHS.companies,
-          icon: AnimatedCompanyIcon,
-          hotkey: 'o',
-          hotkeyToken: TOKENS.sidebar.goTo.companies,
-        },
-      ] satisfies SidebarItem[])
-    : []),
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
@@ -684,11 +682,20 @@ const SidebarDropdownLink = (
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
   const openInNewSplit = () => {
     if (canOpenInNewSplit()) open(true);
   };
   const openInCurrentSplit = () => open(false);
-  const openFullscreen = () => open(false)?.toggleSpotlight(true);
+  const openFullscreen = () => {
+    analytics.track('sidebar_click', { view: props.id });
+    const handle = layout.replaceAllSplits(
+      { type: 'component', id: props.id, params: props.params },
+      { referredFrom: 'sidebar' }
+    );
+    if (props.id === 'search' && handle) requestSearchFocus(handle.id);
+    globalSplitManager()?.returnFocus();
+  };
 
   const ContextMenuTriggerItem = (
     triggerProps: ComponentProps<typeof ContextMenu.Trigger>
@@ -702,7 +709,9 @@ const SidebarDropdownLink = (
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>
@@ -925,6 +934,15 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const COMPANIES_LINK: SidebarItem = {
+  id: 'companies',
+  label: 'Customers',
+  href: LIST_VIEW_PATHS.companies,
+  icon: AnimatedCompanyIcon,
+  hotkey: 'o',
+  hotkeyToken: TOKENS.sidebar.goTo.companies,
+};
+
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
   label: 'Home',
@@ -934,30 +952,88 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+const ACTIVITY_LINK: SidebarItem = {
+  id: 'activity',
+  label: 'Activity',
+  href: '/activity',
+  icon: AnimatedActivityIcon,
+  hotkey: 'y',
+  hotkeyToken: TOKENS.sidebar.goTo.activity,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Calls entry in their correct positions. Shared by the rendered
- * sidebar (`AppSidebar.visibleLinks`) and the always-mounted `GoToHotkeys`
- * registrar so their link sets can't drift. Call from a reactive context — it
- * reads `ENABLE_CALLS()`. Rendered sections additionally drop
- * `hiddenFromSidebar`
- * entries, which have hotkeys but no sidebar row.
+ * flag-gated Activity, Calls, and CRM entries in their correct positions.
+ * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
+ * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
+ * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
+ * Rendered sections additionally drop `hiddenFromSidebar` entries, which have
+ * hotkeys but no sidebar row.
  */
 const buildSidebarLinks = (): SidebarItem[] => {
   let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
+
+  if (ENABLE_ACTIVITY) {
+    const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [
+      ...links.slice(0, idx + 1),
+      ACTIVITY_LINK,
+      ...links.slice(idx + 1),
+    ];
+  }
 
   if (ENABLE_CALLS()) {
     const idx = links.findIndex((l) => l.id === 'channels');
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
+  if (ENABLE_CRM()) {
+    // Customers sits just after Channels (and Calls when present).
+    const anchorId = ENABLE_CALLS() ? 'calls' : 'channels';
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [
+      ...links.slice(0, idx + 1),
+      COMPANIES_LINK,
+      ...links.slice(idx + 1),
+    ];
+  }
+
   return links;
+};
+
+const TeamInviteSidebarPromo = (props: { invite: TeamInviteDetails }) => {
+  const [inviterName] = useDisplayName(tryMacroId(props.invite.invited_by));
+  const joinTeamMutation = useJoinTeamMutation();
+  const rejectInvitationMutation = useRejectInvitationMutation();
+  const mutationPending = () =>
+    joinTeamMutation.isPending || rejectInvitationMutation.isPending;
+
+  return (
+    <SidebarPromoCard
+      label="Team invitation"
+      description={`${inviterName() || 'A teammate'} invited you to join a team as ${props.invite.team_role}.`}
+      primaryAction={{
+        label: 'Accept',
+        disabled: mutationPending(),
+        onClick: () =>
+          joinTeamMutation.mutate({ teamInviteId: props.invite.id }),
+      }}
+      secondaryAction={{
+        label: 'Decline',
+        disabled: mutationPending(),
+        onClick: () =>
+          rejectInvitationMutation.mutate({ teamInviteId: props.invite.id }),
+      }}
+    />
+  );
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const currentTeamQuery = useCurrentTeamQuery();
+  const userInvitesQuery = useUserInvitesQuery();
+  const firstTeamInvite = () => userInvitesQuery.data?.invites.at(0);
   const [sectionVisibility, setSectionVisibility] = makePersisted(
     createSignal<SidebarSectionVisibility>(DEFAULT_SECTION_VISIBILITY),
     { name: 'sidebar-section-visibility' }
@@ -1123,7 +1199,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox']
+    ['home', 'inbox', 'activity']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
   );
@@ -1252,7 +1328,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     <div
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
-        isExpanded() && 'relative h-full shrink-0 max-w-60 w-60 opacity-100',
+        isExpanded() && 'relative h-full shrink-0 max-w-55 w-55 opacity-100',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1260,7 +1336,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           !overlayOpen() &&
           'left-0 inset-y-0 h-full max-w-0 w-0 opacity-0 pointer-events-none -translate-x-2',
         isOverlayExpanded() &&
-          'left-0 inset-y-0 h-full max-w-60 w-60 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
+          'left-0 inset-y-0 h-full max-w-55 w-55 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
       )}
       data-expanded={isExpandedView()}
       data-slim={isSlim()}
@@ -1390,15 +1466,26 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView()}>
+          <SidebarActiveCallWidget
+            sidebarState="expanded"
+            class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
+          />
+        </Show>
         <Show when={isExpandedView() && callCtx?.isInCall()}>
           <div data-ui="sidebar-in-call-panel">
             <InCallPanel isSlim={() => false} />
           </div>
         </Show>
+        <Show keyed when={isExpandedView() ? firstTeamInvite() : undefined}>
+          {(invite) => <TeamInviteSidebarPromo invite={invite} />}
+        </Show>
         <Show
           when={
             !hasPaidAccess() &&
             isExpandedView() &&
+            !userInvitesQuery.isLoading &&
+            !firstTeamInvite() &&
             !premiumCardDismissed() &&
             newPricingFF().enabled
           }
@@ -1427,6 +1514,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
           when={
             !hasPaidAccess() &&
             isExpandedView() &&
+            !userInvitesQuery.isLoading &&
+            !firstTeamInvite() &&
             premiumHintVisible() &&
             premiumCardDismissed() &&
             newPricingFF().enabled
@@ -1503,6 +1592,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
     }) as const;
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
 
   const openInCurrentSplit = () =>
     layout.openWithSplit(content(), {
@@ -1526,8 +1616,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
   };
 
   const openFullscreen = () => {
-    const split = openInCurrentSplit();
-    split?.toggleSpotlight(true);
+    const split = layout.replaceAllSplits(content(), {
+      referredFrom: 'sidebar',
+    });
+    if (props.id === 'search' && split) requestSearchFocus(split.id);
+    globalSplitManager()?.returnFocus();
   };
 
   return (
@@ -1652,7 +1745,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>

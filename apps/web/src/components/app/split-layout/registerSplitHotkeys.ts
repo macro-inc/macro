@@ -18,6 +18,7 @@ export function registerSplitHotkeys(args: {
   splitName: () => string;
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
+  isViewerSplit: () => boolean;
 }) {
   const {
     splitHotkeyScope,
@@ -30,12 +31,14 @@ export function registerSplitHotkeys(args: {
     splitName,
     getSplitCount,
     isNotUnifiedList,
+    isViewerSplit: isPreviewSplit,
     goHome,
   } = args;
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: ['cmd+escape', 'opt+escape'],
-    condition: () => isNotUnifiedList() || getSplitCount() > 1,
+    condition: () =>
+      !isPreviewSplit() && (isNotUnifiedList() || getSplitCount() > 1),
     description: () => (isNotUnifiedList() ? 'Go home' : 'Close split'),
     keyDownHandler: () => {
       if (isNotUnifiedList()) {

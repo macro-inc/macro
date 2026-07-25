@@ -1,4 +1,3 @@
-use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
 use channels::domain::{
     models::{
@@ -24,9 +23,10 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use item_filters::{
     ChannelThreadFilters, EntityFilters, ForeignEntityFilters,
-    ast::foreign_entity::ForeignEntityLiteral,
+    ast::{EntityFilterAst, foreign_entity::ForeignEntityLiteral},
 };
 use model_entity::EntityType;
+use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
     TypeEraseCursor,
@@ -44,11 +44,12 @@ struct NoopEmailPreviewService;
 impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
     async fn get_email_thread_previews(
         &self,
-        _req: email::domain::models::GetEmailsRequest,
+        req: email::domain::models::GetEmailsRequest,
     ) -> Result<
         PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
         email::domain::models::EmailErr,
     > {
+        assert!(!req.include_frecency);
         Ok(Option::<EnrichedEmailThreadPreview>::None
             .into_iter()
             .paginate_on(0, SimpleSortMethod::CreatedAt)
@@ -61,8 +62,9 @@ struct NoopCommsService;
 impl ChannelListService for NoopCommsService {
     async fn get_channels(
         &self,
-        _req: GetChannelsRequest,
+        req: GetChannelsRequest,
     ) -> Result<Vec<channels::domain::models::ChannelWithLatest>, Report> {
+        assert!(!req.include_frecency);
         Ok(Vec::new())
     }
 
@@ -124,6 +126,7 @@ impl ChannelListService for RecordingCommsService {
         &self,
         req: GetChannelsRequest,
     ) -> Result<Vec<channels::domain::models::ChannelWithLatest>, Report> {
+        assert!(!req.include_frecency);
         *self.channel_calls.lock().unwrap() += 1;
         self.channel_filters
             .lock()
@@ -166,6 +169,67 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
         _req: call::domain::models::GetCallRecordsRequest,
     ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
         Ok(Vec::new())
+    }
+}
+
+#[derive(Clone)]
+struct RecordingCallRecordQueryService {
+    records: Vec<call::domain::models::CallRecord>,
+    calls: Arc<Mutex<u32>>,
+}
+
+impl RecordingCallRecordQueryService {
+    fn new(records: Vec<call::domain::models::CallRecord>) -> Self {
+        Self {
+            records,
+            calls: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    fn calls(&self) -> u32 {
+        *self.calls.lock().unwrap()
+    }
+}
+
+impl CallRecordQueryService for RecordingCallRecordQueryService {
+    async fn get_user_call_records(
+        &self,
+        _req: call::domain::models::GetCallRecordsRequest,
+    ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
+        *self.calls.lock().unwrap() += 1;
+        Ok(self.records.clone())
+    }
+}
+
+fn call_record(
+    call_id: Uuid,
+    channel_id: Uuid,
+    created_by: &str,
+    started_at: DateTime<Utc>,
+) -> call::domain::models::CallRecord {
+    call::domain::models::CallRecord {
+        call_id,
+        channel_id,
+        room_name: String::new(),
+        created_by: created_by.to_string(),
+        started_at,
+        ended_at: None,
+        duration_ms: None,
+        egress_id: None,
+        recording_started_at: None,
+        recording_key: None,
+        preview_key: None,
+        recording_url: None,
+        recording_preview_url: None,
+        channel_name: None,
+        custom_name: None,
+        summary: None,
+        share_with_team: false,
+        is_active: true,
+        status: None,
+        user_access_level: None,
+        participants: Vec::new(),
+        transcript: Vec::new(),
     }
 }
 
@@ -467,8 +531,8 @@ fn soup_document_with_is_completed(
         updated_at,
         viewed_at: Default::default(),
         sub_type: is_completed.map(|is_completed| SoupDocumentSubType::Task { is_completed }),
-        properties: Default::default(),
         deleted_at: None,
+        extra: (),
     }
 }
 
@@ -578,13 +642,71 @@ async fn simple_soup_includes_channel_threads() {
 
     assert_eq!(page.items.len(), 1);
     assert_matches!(
-        &page.items[0].item,
+        &page.items[0],
         SoupItem::ChannelThread(thread) => {
             assert_eq!(thread.channel_id, channel_id);
             assert_eq!(thread.id, thread_id);
             assert_eq!(thread.thread.reply_count, 1);
             assert_eq!(thread.thread.preview.len(), 1);
             assert_eq!(thread.thread.preview[0].id, reply_id);
+        }
+    );
+}
+
+#[tokio::test]
+async fn simple_soup_includes_call_records() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let call_id = Uuid::from_u128(0xca11);
+    let channel_id = Uuid::from_u128(0xc4a2);
+    let call_query_service = RecordingCallRecordQueryService::new(vec![call_record(
+        call_id,
+        channel_id,
+        user.as_ref(),
+        DateTime::default() + Days::new(2),
+    )]);
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        call_query_service.clone(),
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user: user.clone(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(call_query_service.calls(), 1);
+    assert_eq!(page.items.len(), 1);
+    assert_matches!(
+        &page.items[0],
+        SoupItem::Call(call) => {
+            assert_eq!(call.call_id, call_id);
+            assert_eq!(call.channel_id, channel_id);
         }
     );
 }
@@ -700,10 +822,10 @@ async fn simple_soup_includes_foreign_entities() {
 
     assert_eq!(page.items.len(), 2);
     assert_matches!(
-        &page.items[0].item,
+        &page.items[0],
         SoupItem::ForeignEntity(entity) => assert_eq!(entity.id, foreign_entity_id)
     );
-    assert_matches!(&page.items[1].item, SoupItem::Document(_));
+    assert_matches!(&page.items[1], SoupItem::Document(_));
 
     let calls = foreign_entity_service.calls();
     assert_eq!(calls.len(), 1);
@@ -971,9 +1093,7 @@ async fn it_should_not_query_frecency() {
                     .collect())
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    soup_mock.expect_populate_properties().times(0);
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1007,6 +1127,284 @@ async fn it_should_not_query_frecency() {
     dbg!(&res);
 
     assert_eq!(res.items.len(), 10)
+}
+
+#[tokio::test]
+async fn properties_are_populated_once_after_pagination() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move {
+                Ok((0..100)
+                    .map(|i| soup_document(&format!("document-{i}")))
+                    .map(SoupItem::Document)
+                    .collect())
+            })
+        });
+    soup_mock
+        .expect_populate_properties()
+        .withf(|user_id, items| user_id.as_ref() == "macro|test@example.com" && items.len() == 20)
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup_with_properties(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![Uuid::new_v4()],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 20);
+    assert!(res.items.into_iter().all(|item| {
+        item.frecency_score.is_none()
+            && match item.item {
+                SoupItem::Document(document) => document.extra.properties.is_empty(),
+                _ => false,
+            }
+    }));
+}
+
+#[tokio::test]
+async fn frecency_is_populated_once_after_pagination() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move {
+                Ok((0..100)
+                    .map(|i| soup_document(&format!("document-{i}")))
+                    .map(SoupItem::Document)
+                    .collect())
+            })
+        });
+    soup_mock.expect_populate_properties().times(0);
+
+    let mut frecency = MockFrecencyQueryService::new();
+    frecency
+        .expect_get_frecencies_by_ids()
+        .withf(|request| {
+            request.user_id.as_ref() == "macro|test@example.com" && request.ids.len() == 20
+        })
+        .times(1)
+        .returning(|request| {
+            let scores = request.ids.iter().enumerate().map(|(index, entity)| {
+                AggregateFrecency::new_mock(
+                    EntityType::Document.with_entity_string(entity.entity_id.to_string()),
+                    index as f64 + 1.0,
+                )
+            });
+            let response = FrecencyPageResponse::new_mock(scores);
+            Box::pin(async move { Ok(response) })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        frecency,
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup_with_frecency(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![Uuid::new_v4()],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 20);
+    assert!(res.items.iter().all(|item| item.frecency_score.is_some()));
+}
+
+#[tokio::test]
+async fn properties_and_frecency_are_composed_after_pagination() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move { Ok(vec![SoupItem::Document(soup_document("document-1"))]) })
+        });
+    soup_mock
+        .expect_populate_properties()
+        .withf(|_, items| items.len() == 1)
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+
+    let mut frecency = MockFrecencyQueryService::new();
+    frecency
+        .expect_get_frecencies_by_ids()
+        .withf(|request| request.ids.len() == 1)
+        .times(1)
+        .returning(|request| {
+            let score = AggregateFrecency::new_mock(
+                EntityType::Document.with_entity_string(request.ids[0].entity_id.to_string()),
+                42.0,
+            );
+            Box::pin(async move { Ok(FrecencyPageResponse::new_mock([score])) })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        frecency,
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup_with_properties_and_frecency(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![Uuid::new_v4()],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 1);
+    assert_eq!(
+        res.items[0]
+            .frecency_score
+            .as_ref()
+            .map(|score| score.data.frecency_score),
+        Some(42.0)
+    );
+    assert!(match &res.items[0].item {
+        SoupItem::Document(document) => document.extra.properties.is_empty(),
+        _ => false,
+    });
+}
+
+#[tokio::test]
+async fn grouped_properties_are_populated_by_the_service() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move {
+                Ok(vec![ItemGroupingInfo {
+                    item: SoupItem::Document(soup_document("grouped-document")),
+                    key: "document".to_string(),
+                    total_group_count: 1,
+                    index_in_group: 1,
+                }]
+                .into_iter())
+            })
+        });
+    soup_mock
+        .expect_populate_properties()
+        .withf(|_, items| items.len() == 1)
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+
+    let service = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    );
+    let items = service
+        .get_user_soup_grouped(GroupedSortRequest {
+            limit: 20,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        })
+        .await
+        .unwrap()
+        .collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].key, "document");
+    assert_eq!(items[0].total_group_count, 1);
+    assert_eq!(items[0].index_in_group, 1);
+    assert!(match &items[0].item {
+        SoupItem::Document(document) => document.extra.properties.is_empty(),
+        _ => false,
+    });
 }
 
 #[tokio::test]
@@ -1155,7 +1553,7 @@ async fn it_should_sort_frecency_descending() {
         NoOpCrmService,
         NoopForeignEntityService,
     )
-    .get_user_soup(
+    .get_user_soup_with_frecency(
         SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -1253,7 +1651,7 @@ async fn frecency_should_fallback() {
         NoOpCrmService,
         NoopForeignEntityService,
     )
-    .get_user_soup(
+    .get_user_soup_with_frecency(
         SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -1335,7 +1733,7 @@ async fn frecency_should_paginate() {
         NoOpCrmService,
         NoopForeignEntityService,
     )
-    .get_user_soup(
+    .get_user_soup_with_frecency(
         SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -1419,7 +1817,7 @@ async fn frecency_should_resume_cursor() {
         NoOpCrmService,
         NoopForeignEntityService,
     )
-    .get_user_soup(
+    .get_user_soup_with_frecency(
         SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -1519,7 +1917,7 @@ async fn frecency_fallback_cursor_should_resume() {
         NoOpCrmService,
         NoopForeignEntityService,
     )
-    .get_user_soup(
+    .get_user_soup_with_frecency(
         SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -1582,9 +1980,6 @@ async fn cursor_should_return_simple_sort() {
                 .collect();
             Box::pin(async move { Ok(res) })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1693,9 +2088,9 @@ async fn cursor_should_return_frecency() {
     })
 }
 
-/// Helper to extract is_completed from a FrecencySoupItem
-fn get_is_completed(item: &FrecencySoupItem) -> Option<bool> {
-    match &item.item {
+/// Helper to extract is_completed from a raw Soup item.
+fn get_is_completed(item: &SoupItem<()>) -> Option<bool> {
+    match item {
         SoupItem::Document(doc) => doc.sub_type.as_ref().and_then(|st| st.is_task_completed()),
         _ => None,
     }
@@ -1716,9 +2111,6 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
                 ))])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1768,9 +2160,6 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
                 ))])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1820,9 +2209,6 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
                 ))])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1884,9 +2270,6 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
                 ])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,

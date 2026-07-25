@@ -53,7 +53,7 @@ impl<
             return;
         }
 
-        let sender_id = self.notification_sender_id(event).await;
+        let sender = self.notification_sender(event).await;
         for upsert in upserts {
             let recipient_ids = self
                 .participant_scoped_recipient_ids(&upsert.source, &participant_user_ids)
@@ -77,7 +77,7 @@ impl<
             self.send_github_notification(
                 notification,
                 upsert.foreign_entity_id,
-                sender_id.clone(),
+                &sender,
                 recipient_ids,
             )
             .await;

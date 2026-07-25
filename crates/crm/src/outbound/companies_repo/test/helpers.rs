@@ -140,6 +140,30 @@ pub(super) async fn fetch_email_sync(
     Ok(row.map(|(s,)| s))
 }
 
+pub(super) async fn fetch_company_custom_name(
+    pool: &PgPool,
+    company_id: Uuid,
+) -> sqlx::Result<Option<Option<String>>> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as(r#"SELECT custom_name FROM crm_companies WHERE id = $1"#)
+            .bind(company_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(n,)| n))
+}
+
+pub(super) async fn fetch_contact_name(
+    pool: &PgPool,
+    contact_id: Uuid,
+) -> sqlx::Result<Option<Option<String>>> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as(r#"SELECT name FROM crm_contacts WHERE id = $1"#)
+            .bind(contact_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(n,)| n))
+}
+
 pub(super) async fn fetch_company_hidden(
     pool: &PgPool,
     company_id: Uuid,

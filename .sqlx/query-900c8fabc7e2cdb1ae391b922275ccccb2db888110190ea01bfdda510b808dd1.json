@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT hidden\n            FROM crm_companies\n            WHERE id = $1\n              AND team_id = $2\n              AND ($3 OR hidden = FALSE)\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hidden",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "900c8fabc7e2cdb1ae391b922275ccccb2db888110190ea01bfdda510b808dd1"
+}

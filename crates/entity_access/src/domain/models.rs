@@ -1,11 +1,15 @@
 //! Domain models for entity access.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use bot_id::{BotId, BotIdStr};
 pub use model_entity::EntityType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
@@ -22,6 +26,9 @@ pub struct CrmEntityAccess {
     pub access_level: AccessLevel,
     /// The team that owns the entity.
     pub team_id: Uuid,
+    /// The role the user holds on the owning team. Hidden-row visibility
+    /// keys on this (admin/owner) rather than on the access level.
+    pub team_role: TeamRole,
 }
 
 /// The role a user has within a channel.
@@ -83,6 +90,10 @@ pub struct AdminParticipantRole;
 #[derive(Debug, Clone, Copy)]
 pub struct MemberParticipantRole;
 
+/// Permission to view a channel without requiring an active participant role.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewOnly;
+
 /// Trait implemented by marker types that encode a permission requirement.
 pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
     /// Returns whether the provided permission satisfies this requirement.
@@ -92,7 +103,7 @@ pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
 /// A user's permission for an entity, discriminated by entity kind.
 ///
 /// Items (documents, chats, projects, threads) use access levels.
-/// Channels use participant roles.
+/// Channels use view-only permission or participant roles.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -102,7 +113,9 @@ pub enum EntityPermission {
         /// The access level the user has.
         access_level: AccessLevel,
     },
-    /// Permission for channel-based entities.
+    /// View-only permission for a channel without an active participant role.
+    ChannelViewOnly,
+    /// Permission for channel-based entities with an active participant role.
     ChannelRole {
         /// The role the user has in the channel.
         role: ParticipantRole,
@@ -184,6 +197,15 @@ impl RequiredPermission for OwnerAccessLevel {
     }
 }
 
+impl RequiredPermission for ViewOnly {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        matches!(
+            permission,
+            EntityPermission::ChannelViewOnly | EntityPermission::ChannelRole { .. }
+        )
+    }
+}
+
 impl RequiredPermission for OwnerParticipantRole {
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_participant_role(ParticipantRole::Owner)
@@ -231,12 +253,14 @@ pub struct UserTeamInfo {
 
 /// Result of resolving a user's role in a channel.
 ///
-/// Distinguishes between "user has a role", "channel exists but user
-/// has no access", and "channel does not exist" — all from a single query.
+/// Distinguishes between an active participant role, view-only access,
+/// no access to an existing channel, and a channel that does not exist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelRoleResult {
     /// User has a role in the channel.
     Role(ParticipantRole),
+    /// User can view the channel without an active participant role.
+    ViewOnly,
     /// Channel exists but user has no access.
     NoAccess,
     /// Channel does not exist.
@@ -258,6 +282,8 @@ pub struct Entity {
 pub enum EntityAccessAuth {
     /// The user is authenticated
     Authenticated(MacroUserIdStr<'static>),
+    /// A bot is authenticated.
+    Bot(BotIdStr<'static>),
     /// The user is unauthenticated
     Unauthenticated,
     /// Internally authenticated
@@ -281,6 +307,17 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
+    /// Re-tag this receipt for another permission requirement after
+    /// revalidating the already-resolved permission.
+    ///
+    /// This safely supports passing a stronger receipt to a read-only domain
+    /// method without repeating the underlying access lookup.
+    pub fn try_into_requirement<U: RequiredPermission>(
+        self,
+    ) -> Result<EntityAccessReceipt<U>, AccessError> {
+        EntityAccessReceipt::<U>::try_new(self.auth, self.entity, self.entity_permission)
+    }
+
     /// Creates an access receipt for the given auth after validating the
     /// provided permission against the required level `T`.
     pub fn try_new(
@@ -313,11 +350,32 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
         )
     }
 
-    /// get the authenticated user or error
+    /// Creates an access receipt for an authenticated bot after validating the provided permission.
+    pub fn try_new_bot(
+        bot_id: BotIdStr<'static>,
+        entity: Entity,
+        entity_permission: EntityPermission,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Self::try_new(EntityAccessAuth::Bot(bot_id), entity, entity_permission)
+    }
+
+    /// Get the authenticated user or return an authorization error.
     pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
         match &self.auth {
             EntityAccessAuth::Authenticated(user) => Ok(user),
-            _ => Err(AccessError::Unauthorized),
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
+        }
+    }
+
+    /// Get the authenticated bot or return an authorization error.
+    pub fn get_authenticated_bot(&self) -> Result<&BotIdStr<'static>, AccessError> {
+        match &self.auth {
+            EntityAccessAuth::Bot(bot_id) => Ok(bot_id),
+            EntityAccessAuth::Authenticated(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
         }
     }
 
@@ -370,6 +428,30 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     ) -> EntityAccessReceipt<T> {
         EntityAccessReceipt {
             auth: EntityAccessAuth::Authenticated(user_id),
+            entity: Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission: EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    /// Dangerously generates an `EntityAccessReceipt` for an authenticated bot
+    /// without performing the underlying access check.
+    ///
+    /// **NOTE** This is intended for tests. It **DOES NOT** assert the
+    /// existence of the item or that the bot actually has the required
+    /// permission.
+    pub fn dangerously_assert_bot(
+        bot_id: BotIdStr<'static>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> EntityAccessReceipt<T> {
+        EntityAccessReceipt {
+            auth: EntityAccessAuth::Bot(bot_id),
             entity: Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,

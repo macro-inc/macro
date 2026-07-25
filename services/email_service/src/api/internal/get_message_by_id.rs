@@ -1,9 +1,10 @@
-use crate::api::ApiContext;
+use crate::api::{ApiContext, context::AuthorizationService};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
 
@@ -16,6 +17,7 @@ pub struct PathParams {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(PathParams { id }): Path<PathParams>,
 ) -> Result<Response, Response> {
     let message = email_db_client::messages::get_parsed::get_parsed_message_by_id(&ctx.db, &id)
@@ -47,6 +49,7 @@ pub async fn handler(
 #[tracing::instrument(skip(ctx))]
 pub async fn get_message_by_id_batch_handler(
     State(ctx): State<ApiContext>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Response, Response> {
     let messages =

@@ -106,7 +106,11 @@ export function createTargetMessageController(
         // true the effect re-fires and executes the scroll.
         if (!didInitialScroll) return;
 
-        if (!navigation.scrollToId(pendingTargetId)) return;
+        // Channel keeps a pending target's row mounted. Scrolling the whole
+        // row first can land on the wrong part of a tall thread and creates a
+        // visible intermediate position, so the measured root/reply element
+        // performs the only viewport movement.
+        const nestedTarget = !!targetMessageData['pendingTargetReplyId'];
 
         const restoredDefaultPagination =
           restoreDefaultChannelPaginationAfterTargetLoad(
@@ -116,7 +120,10 @@ export function createTargetMessageController(
         if (restoredDefaultPagination) {
           setTargetMessageData('loadAroundMessageId', undefined);
         }
-        completePendingScroll(pendingTargetId);
+        // Nested replies acknowledge the outer row immediately so their own
+        // measured-element scroll can begin. Root messages stay pending until
+        // ChannelThread positions the message inside its potentially tall row.
+        if (nestedTarget) completePendingScroll(pendingTargetId);
       }
     )
   );

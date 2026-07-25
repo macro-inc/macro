@@ -19,7 +19,7 @@ path = "src/doppler_config.rs"
 
 [features]
 local = []
-local_auth = ["macro_middleware/local_auth"]
+local_auth = ["macro_authorization/local_auth"]
 local_queue = []
 
 
@@ -76,16 +76,17 @@ macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_queues = { path = "../../crates/macro_queues" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
   "cloud_storage",
-  "user_permissions",
 ] }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
+import = { path = "../../crates/import" }
 mcp_client = { path = "../../crates/mcp_client" }
 model-error-response = { path = "../../crates/model-error-response" }
 memory = { path = "../../crates/memory" }
+onboarding = { path = "../../crates/onboarding" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
@@ -103,7 +104,9 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest.workspace = true
-roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = [
+  "outbound",
+] }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

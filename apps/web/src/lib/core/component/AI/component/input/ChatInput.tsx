@@ -9,6 +9,7 @@ import {
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
+import { isImageAttachment } from '@core/component/AI/util/attachment';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -27,6 +28,12 @@ import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
+
+/**
+ * Id of the chat input's text-area wrapper. Exposed so callers (e.g. the
+ * mobile Create menu) can arm focus on the contenteditable before it mounts.
+ */
+export const CHAT_INPUT_TEXT_AREA_ID = 'chat-input-text-area';
 
 type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
@@ -194,7 +201,8 @@ export function ChatInput(props: ChatInputComponentProps) {
     });
 
   const hasAttachments = () =>
-    attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
+    attachments.attached().some(isImageAttachment) ||
+    uploadQueue.uploading().length > 0;
 
   const LeftButton = () => (
     <Button
@@ -246,7 +254,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         selectedModel={model()}
         models={modelOptions()}
         onSelect={(m) => input.setModel(m)}
-        onLocked={() => showPaywall(PaywallKey.MODEL_LIMIT)}
+        onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />
       <Show when={generating() && props.onStop} fallback={<SendButton />}>
@@ -335,7 +343,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               </div>
             </Show>
             <div
-              id="chat-input-text-area"
+              id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn('text-sm sm:text-sm text-ink')}
               classList={{
                 'pl-8': !isMultiline() && !isTallVariant(),

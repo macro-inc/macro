@@ -46,6 +46,46 @@ export type AppEvents = {
   tutorial_completed: { isFirstTime: boolean };
   tutorial_skipped: Record<string, unknown>;
 
+  // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
+  /**
+   * Flow entered. `signup_method` is inferred from the inbox state at
+   * entry: a Google SSO signup arrives with its Gmail inbox already
+   * linked, an email-code signup with none. `entry_step` is where the
+   * user landed ('email' unless a persisted step was restored).
+   */
+  onboarding_v4_started: {
+    signup_method: 'google' | 'email_code';
+    entry_step: string;
+  };
+  /** One per step transition: viewed on entry, completed/skipped on exit. */
+  onboarding_v4_step: {
+    step: string;
+    index: number;
+    state: 'viewed' | 'completed' | 'skipped';
+  };
+  /** A connect-inbox row was clicked (OAuth may still be abandoned). */
+  onboarding_v4_email_connect_clicked: { slot: string };
+  /** An inbox finished linking while onboarding. */
+  onboarding_v4_email_connected: { connected_count: number };
+  /** A connector completed OAuth from its step. */
+  onboarding_v4_connector_connected: { connector: string };
+  /** What happened on the team step. */
+  onboarding_v4_team: {
+    action: 'created' | 'joined_invite' | 'already_on_team';
+    invites_sent?: number;
+    used_domain_suggestion?: boolean;
+  };
+  /**
+   * The flow finished (free, premium, or plan skipped) with a rollup of
+   * everything connected along the way.
+   */
+  onboarding_v4_completed: {
+    plan: 'free' | 'premium';
+    plan_skipped: boolean;
+    emails_connected: number;
+    connectors_connected: string[];
+  };
+
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
   subscription_success: Record<string, unknown>;

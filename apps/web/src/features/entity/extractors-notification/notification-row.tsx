@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import type { NotificationType } from '@core/types';
@@ -301,6 +302,9 @@ function ExpandedBody(props: BodyProps) {
  */
 export function NotificationRow(props: NotificationRowProps) {
   const notificationSource = useGlobalNotificationSource();
+  // The containing split (when any) is the navigation source, so opens from
+  // an engaged preview controller route into its viewer split.
+  const panel = useSplitPanel();
   const unread = () => isNotificationUnread(props.notification);
   const canMarkDone = () =>
     props.showMarkDone !== false &&
@@ -325,7 +329,8 @@ export function NotificationRow(props: NotificationRowProps) {
       props.notification,
       splitManager,
       e.shiftKey,
-      entityOverride
+      entityOverride,
+      panel?.handle
     );
     await notificationSource.markAsRead(props.notification);
     props.onClick?.(e);

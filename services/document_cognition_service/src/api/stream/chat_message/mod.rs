@@ -3,7 +3,7 @@ use super::util::chat_message::ai_request::build_chat_messages;
 use super::util::chat_message::toolset::choose_tools_prompt;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
 use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::model::stream::{
@@ -23,14 +23,13 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use chat::domain::ports::MessageService;
-use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
 use memory::domain::MemoryService;
-use model::user::UserContext;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -136,18 +135,18 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user, bearer, request), fields(chat_id=?request.chat_id, user_id = %user.authorization.user.macro_user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
-    model_access: ChatModelAccess,
-    Extension(user_context): Extension<UserContext>,
+    model_access: DcsChatModelAccess,
+    user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Extension(bearer): Extension<BearerToken>,
     Json(request): Json<HttpSendChatMessageRequest>,
 ) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
     Box::pin(send_chat_message_inner(
         state,
         model_access,
-        user_context,
+        user.authorization.user.macro_user_id.clone(),
         bearer,
         request,
     ))
@@ -156,8 +155,8 @@ pub async fn send_chat_message(
 
 async fn send_chat_message_inner(
     state: ApiContext,
-    model_access: ChatModelAccess,
-    user_context: UserContext,
+    model_access: DcsChatModelAccess,
+    user_id: MacroUserIdStr<'static>,
     bearer: BearerToken,
     request: HttpSendChatMessageRequest,
 ) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
@@ -169,13 +168,6 @@ async fn send_chat_message_inner(
     let message_id = uuid::Uuid::new_v4().to_string();
     let stream_id = message_id.clone();
 
-    // Validate user ID
-    let user_id =
-        MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| ChatMessageError {
-            error: "Invalid user ID".to_string(),
-            stream_id: Some(stream_id.clone()),
-            status: None,
-        })?;
     let user_id = Arc::new(user_id);
 
     // Determine chat_id - use provided or we'll create a new chat
@@ -203,7 +195,7 @@ async fn send_chat_message_inner(
                 // Chat exists - check permissions
                 match chat_permissions::chat_access(
                     &ctx,
-                    &user_context,
+                    &user_id,
                     &requested_chat_id,
                     stream_id.clone(),
                 )
@@ -512,7 +504,12 @@ fn stream_and_save_message(
 
         let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
         let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
-            mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
+            mcp_client::domain::service::CombinedToolSet::new(
+                static_tools,
+                &mcp_records,
+                mcp_store.clone(),
+            )
+            .await,
         );
         let agent_loop =
             AgentLoop::new(tool_context.recorder.clone()).with_model(&model);

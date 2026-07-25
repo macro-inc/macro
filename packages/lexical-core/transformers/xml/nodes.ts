@@ -202,6 +202,16 @@ export type ThemeMentionNode = Id & {
   name: string;
 };
 
+export type TagMentionNode = Id & {
+  type: 'tag-mention';
+  version: number;
+  optionId: string;
+  propertyDefinitionId: string;
+  scope: 'user' | 'team';
+  name: string;
+  color?: string;
+};
+
 export type UnknownMentionNode = Id & {
   type: 'unknown-mention';
   version: number;
@@ -236,6 +246,7 @@ export type KnownNode =
   | ContactMentionNode
   | GroupMentionNode
   | PullRequestMentionNode
+  | TagMentionNode
   | ThemeMentionNode
   | UnknownMentionNode;
 

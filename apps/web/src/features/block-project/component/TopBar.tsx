@@ -10,6 +10,7 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
+import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import {
   type FileOperation,
@@ -27,7 +28,6 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { toast } from '@core/component/Toast/Toast';
@@ -36,10 +36,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import {
-  ENABLE_PROJECT_SHARING,
-  ENABLE_PROJECT_VIEW_PREVIEW,
-} from '@core/constant/featureFlags';
+import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -52,8 +49,6 @@ import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 //     with folder block.
 
 export function TopBar() {
-  const splitPanelContext = useSplitPanelOrThrow();
-  const [preview] = splitPanelContext.previewState;
   const id = useBlockId();
   const isSpecialProject = getIsSpecialProject(id);
   const isOwner = useIsDocumentOwner();
@@ -93,11 +88,6 @@ export function TopBar() {
         ]
       : []),
   ]);
-
-  const showToolbarRight = () => {
-    if (!ENABLE_PROJECT_VIEW_PREVIEW) return true;
-    return !preview();
-  };
 
   const { tools: createTools, CreateDialog } = useProjectCreateTools(
     id,
@@ -161,21 +151,20 @@ export function TopBar() {
             </Show>
           </div>
         </SplitToolbarLeft>
-        <Show when={showToolbarRight()}>
-          <SplitToolbarRight>
-            <For each={toolbarTools()}>
-              {(tool) => (
-                <Show when={!tool.condition || tool.condition()}>
-                  {tool.buttonComponent ? (
-                    <tool.buttonComponent />
-                  ) : (
-                    <ToolButton tool={tool} />
-                  )}
-                </Show>
-              )}
-            </For>
-          </SplitToolbarRight>
-        </Show>
+        <SplitToolbarRight>
+          <For each={toolbarTools()}>
+            {(tool) => (
+              <Show when={!tool.condition || tool.condition()}>
+                {tool.buttonComponent ? (
+                  <tool.buttonComponent />
+                ) : (
+                  <ToolButton tool={tool} />
+                )}
+              </Show>
+            )}
+          </For>
+          <PreviewButton />
+        </SplitToolbarRight>
       </Show>
       <CreateDialog />
     </>

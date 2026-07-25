@@ -13,15 +13,18 @@ aes-gcm = "0.10"
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
+async-trait.workspace = true
 oauth2 = { version = "5.0", default-features = false }
 base64.workspace = true
 async-openai.workspace = true
 axum.workspace = true
 futures.workspace = true
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
 macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response" }
-model_user = { path = "../model_user", features = ["axum"] }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }
@@ -33,3 +36,6 @@ thiserror.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio.workspace = true

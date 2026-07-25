@@ -984,6 +984,12 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['f'], codes: ['KeyF'], description: 'Open filter menu' },
       { keys: ['x'], codes: ['KeyX'], description: 'Select items' },
       { keys: ['e'], codes: ['KeyE'], description: 'Mark done' },
+      { keys: ['u'], codes: ['KeyU'], description: 'Mark unread' },
+      {
+        keys: ['shift+u'],
+        codes: ['ShiftLeft', 'KeyU'],
+        description: 'Mark read',
+      },
     ],
   },
 ];

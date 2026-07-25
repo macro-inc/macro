@@ -18,10 +18,6 @@ use crate::{
             },
         },
         entity, health, history, instructions, pins,
-        projects::{
-            self,
-            delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
-        },
         recents::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
@@ -124,8 +120,11 @@ use models_soup::email_thread::{
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::foreign_entity::SoupForeignEntity;
-use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
+use projects_hex::inbound::axum_router::delete_project::{
+    ProjectDeleteResponse, ProjectDeleteResponseData,
+};
+use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
@@ -158,6 +157,7 @@ use utoipa::OpenApi;
         // documents
         documents::get_user_documents::get_user_documents_handler,
         documents_hex::inbound::axum_router::get_document::get_document_handler,
+        documents_hex::inbound::axum_router::get_document_by_team_slug::get_document_by_team_slug_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document::create_document_handler,
         documents_hex::inbound::axum_router::create_markdown::create_markdown_handler,
@@ -224,6 +224,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_typing_handler,
         channels::inbound::axum_router::add_participants_handler,
         channels::inbound::axum_router::remove_participants_handler,
+        channels::inbound::axum_router::get_channel_join_link_handler,
+        channels::inbound::axum_router::join_channel_by_code_handler,
         channels::inbound::axum_router::join_channel_handler,
         channels::inbound::axum_router::leave_channel_handler,
         channels::inbound::axum_router::get_channel_messages_handler,
@@ -272,20 +274,20 @@ use utoipa::OpenApi;
         pins::get_pins::get_pins_handler,
 
         // projects
-        projects::get_projects::get_projects_handler,
-        projects::get_projects::get_pending_projects_handler,
-        projects::get_project::get_project_content_handler,
-        projects::create_project::create_project_handler,
-        projects::edit_project::edit_project_handler_v2,
-        projects::delete_project::delete_project_handler,
-        projects::delete_project::permanently_delete_project_handler,
-        projects::upload_folder::upload_folder_handler,
-        projects::upload_folder::upload_extract_folder_handler,
-        projects::project_permission::get_project_permissions_handler,
-        projects::project_permission::get_project_access_level_handler,
-        projects::get_batch_preview::get_batch_preview_handler,
-        projects::get_project::get_project_handler,
-        projects::revert_delete_project::handler,
+        projects_hex::inbound::axum_router::get_projects::get_projects_handler,
+        projects_hex::inbound::axum_router::get_projects::get_pending_projects_handler,
+        projects_hex::inbound::axum_router::get_project::get_project_content_handler,
+        projects_hex::inbound::axum_router::create_project::create_project_handler,
+        projects_hex::inbound::axum_router::edit_project::edit_project_handler,
+        projects_hex::inbound::axum_router::delete_project::delete_project_handler,
+        projects_hex::inbound::axum_router::delete_project::permanently_delete_project_handler,
+        projects_hex::inbound::axum_router::upload_folder::upload_folder_handler,
+        projects_hex::inbound::axum_router::upload_folder::upload_extract_folder_handler,
+        projects_hex::inbound::axum_router::project_permission::get_project_permissions_handler,
+        projects_hex::inbound::axum_router::project_permission::get_project_access_level_handler,
+        projects_hex::inbound::axum_router::get_batch_preview::get_batch_preview_handler,
+        projects_hex::inbound::axum_router::get_project::get_project_handler,
+        projects_hex::inbound::axum_router::revert_delete_project::revert_delete_project_handler,
 
         entity::get_entity_permission::handler,
 
@@ -318,14 +320,20 @@ use utoipa::OpenApi;
         // /crm
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
+        crm::inbound::axum_router::set_company_name::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
+        crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
         crm::inbound::axum_router::get_company::handler,
+        crm::inbound::axum_router::create_company::handler,
+        crm::inbound::axum_router::create_contact::handler,
         crm::inbound::axum_router::comments::list_handler,
         crm::inbound::axum_router::comments::create_handler,
         crm::inbound::axum_router::comments::edit_handler,
         crm::inbound::axum_router::comments::delete_handler,
+        crm::inbound::axum_router::team_settings::get_handler,
+        crm::inbound::axum_router::team_settings::update_handler,
     ),
     components(
         schemas(
@@ -403,11 +411,12 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
-            SoupItem,
+            SoupItemWithProperties,
             SoupApiItem,
-            SoupDocument,
-            SoupChat,
-            SoupProject,
+            SoupDocument<SoupPropertiesField>,
+            SoupChat<SoupPropertiesField>,
+            SoupProject<SoupPropertiesField>,
+            SoupPropertiesField,
             SoupForeignEntity,
             ForeignEntity,
             Favorite,
@@ -417,7 +426,7 @@ use utoipa::OpenApi;
             ReorderFavoritesRequest,
             SoupApiSort,
             SoupPage,
-            SoupEnrichedEmailThreadPreview,
+            SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
             SoupEmailThreadPreview,
             SoupAttachment,
             SoupContact,
@@ -519,7 +528,7 @@ use utoipa::OpenApi;
             call::domain::models::GetBatchCallRecordPreviewResponse,
             call::domain::models::RingStatus,
             call::domain::models::RingStatusResponse,
-            SoupCallRecord,
+            SoupCallRecord<SoupPropertiesField>,
             SoupCallRecordParticipant,
 
             // Webhooks
@@ -596,10 +605,14 @@ use utoipa::OpenApi;
             // CRM
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
+            crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
+            crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
             crm::inbound::axum_router::get_company::CrmCompanyResponse,
             crm::inbound::axum_router::get_company::CrmDomainResponse,
+            crm::inbound::axum_router::create_company::CreateCrmCompanyRequest,
+            crm::inbound::axum_router::create_contact::CreateCrmContactRequest,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
             crm::domain::comment::CrmCommentEntityType,
@@ -607,6 +620,9 @@ use utoipa::OpenApi;
             crm::domain::comment::CrmComment,
             crm::domain::comment::CrmCommentThread,
             crm::domain::comment::DeleteCrmCommentResult,
+            crm::inbound::axum_router::team_settings::CrmTeamSettingsResponse,
+            crm::inbound::axum_router::team_settings::UpdateCrmTeamSettingsRequest,
+            crm::domain::model::CrmPermissionRole,
         ),
     ),
     tags(

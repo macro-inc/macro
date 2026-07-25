@@ -8,6 +8,7 @@ import {
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
+import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { useTaskSimilaritySearchQuery } from '@queries/storage/task-duplicates';
 import type { TaskSimilarityResult } from '@service-storage/client';
@@ -23,6 +24,7 @@ import {
 } from 'solid-js';
 
 const DEBOUNCE_MS = 300;
+const MAX_SIMILAR_TASKS = 2;
 
 type DebouncedInput = { title: string; markdown: string };
 
@@ -50,7 +52,7 @@ function SimilarTasksInner(props: {
     return input.title.trim().length > 0 || input.markdown.trim().length > 0;
   };
   const results = (): TaskSimilarityResult[] =>
-    hasInput() ? (similarity.data ?? []) : [];
+    hasInput() ? (similarity.data ?? []).slice(0, MAX_SIMILAR_TASKS) : [];
   const ids = () => results().map((result) => result.taskId);
 
   // Hydrate full soup entities (status, owner, assignees, …) for the matches so
@@ -92,25 +94,27 @@ function SimilarTasksInner(props: {
           <span>Similar Tasks</span>
         </button>
         <Show when={expanded()}>
-          <ListLayoutProvider ref={listRef}>
-            {/* Named `u-list` container so the task rows pick up the narrow
-                (<=840px) container queries and collapse status/priority/
-                assignee pills to icons, leaving the width for task names. */}
-            <div
-              ref={setListRef}
-              class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
-            >
-              <For each={entities()}>
-                {(entity) => (
-                  <TaskListEntity
-                    entity={entity}
-                    hideCheckbox
-                    onClick={() => props.onOpenTask(entity.id)}
-                  />
-                )}
-              </For>
-            </div>
-          </ListLayoutProvider>
+          <TagSetsQueryProvider>
+            <ListLayoutProvider ref={listRef}>
+              {/* Named `u-list` container so the task rows pick up the narrow
+                  (<=840px) container queries and collapse status/priority/
+                  assignee pills to icons, leaving the width for task names. */}
+              <div
+                ref={setListRef}
+                class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
+              >
+                <For each={entities()}>
+                  {(entity) => (
+                    <TaskListEntity
+                      entity={entity}
+                      hideCheckbox
+                      onClick={() => props.onOpenTask(entity.id)}
+                    />
+                  )}
+                </For>
+              </div>
+            </ListLayoutProvider>
+          </TagSetsQueryProvider>
         </Show>
       </div>
     </Show>

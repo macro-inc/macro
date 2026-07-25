@@ -5,13 +5,14 @@
 //! instead of duplicating the wiring logic.
 
 use crate::tool_context::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpSnsEndpointManager,
-    ToolNotificationQueue, ToolServiceContext,
+    ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
+    NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use connection_gateway_client::ConnectionGatewayClient;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
@@ -33,8 +34,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -57,6 +58,7 @@ env_var! {
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
         DocumentPermissionJwt,
+        InternalApiKey,
         KafkaBrokers,
     }
 }
@@ -83,7 +85,8 @@ maybe_env_var! {
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
-/// `KAFKA_BROKERS`.
+/// `INTERNAL_API_KEY` (presented to the connection gateway for realtime
+/// channel side effects), `KAFKA_BROKERS`.
 ///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
@@ -106,6 +109,7 @@ pub async fn build_tool_service_context_from_env(
     let email_service_url = EmailServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
+    let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
@@ -140,7 +144,7 @@ pub async fn build_tool_service_context_from_env(
     let notification_queue = if enable_notification_queue {
         let notification_queue = macro_queues::NotificationIngressQueue::new();
         ToolNotificationQueue::Sqs(SqsQueue::new(
-            aws_sqs_client,
+            aws_sqs_client.clone(),
             notification_queue.to_string(),
         ))
     } else {
@@ -203,7 +207,6 @@ pub async fn build_tool_service_context_from_env(
         PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
-    let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
     let foreign_entity_service =
@@ -213,7 +216,9 @@ pub async fn build_tool_service_context_from_env(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        call::domain::service::CallRecordQueryServiceImpl::new(
+            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -250,6 +255,22 @@ pub async fn build_tool_service_context_from_env(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
     );
+    // Channel messages sent by AI tools dispatch the same side effects as the
+    // document-storage channel API (realtime, notifications, search indexing,
+    // contact sync, broker events), so agent-sent messages notify mentioned
+    // users and stream to connected clients instead of landing silently.
+    let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
+        pool.clone(),
+        Arc::new(lexical_client.clone()),
+        ChannelSideEffectClients {
+            connection_gateway: Arc::new(ConnectionGatewayClient::new(
+                env.internal_api_key.to_string(),
+                connection_gateway_url,
+            )),
+            sqs: aws_sqs_client,
+            macro_event_broker: macro_event_broker.clone(),
+        },
+    );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -265,6 +286,10 @@ pub async fn build_tool_service_context_from_env(
             pool.clone(),
         )),
         macro_event_broker: macro_event_broker.clone(),
+        // AI-agent contexts don't own a search event queue (their sqs_client is
+        // configured without one), so no search-index refresh is published from
+        // here — matching the properties service built in the same context.
+        search_indexer: None,
     };
 
     let document_tool_context = DocumentToolContext::new(
@@ -310,12 +335,8 @@ pub async fn build_tool_service_context_from_env(
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-    );
     let call_tool_context = call::inbound::toolset::CallToolContext::new(
         call_service,
-        call_query_service,
         (*entity_access_service).clone(),
     );
 
@@ -359,6 +380,7 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),

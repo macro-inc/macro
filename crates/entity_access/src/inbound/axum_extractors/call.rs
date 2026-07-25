@@ -3,17 +3,24 @@
 //! Resolves a call (from both `calls` and `call_records` tables), checks channel
 //! membership, and exposes the call's `share_permission_id` for downstream handlers.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt,
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use uuid::Uuid;
 
-use super::{ExtractorError, InternalUser};
+use super::ExtractorError;
 use crate::domain::{
     models::{
         Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -21,7 +28,6 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 #[derive(Debug, serde::Deserialize)]
 struct CallAccessParams {
@@ -41,22 +47,25 @@ struct CallWithChannelIdAccessParams {
 ///
 /// Type parameter `T` specifies the required permission marker.
 /// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is the authorization service implementation.
 #[derive(Debug)]
-pub struct CallAccessLevelExtractor<T: RequiredPermission, Svc> {
-    /// The entity access receipt (entity is the channel the call belongs to).
+pub struct CallAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
+    /// The entity access receipt for the call.
     pub entity_access_receipt: EntityAccessReceipt<T>,
     /// The call's share permission ID.
     pub share_permission_id: String,
     /// The channel ID the call belongs to.
     pub channel_id: Uuid,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for CallAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for CallAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -65,10 +74,21 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+                parts, state,
+            )
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
+        let macro_user_id = authorization
+            .authorization
+            .as_ref()
+            .and_then(UserOrInternalServiceAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
 
         let Path(CallAccessParams { call_id }) = parts
             .extract::<Path<CallAccessParams>>()
@@ -84,16 +104,7 @@ where
             .map_err(ExtractorError::from)?
             .ok_or(ExtractorError::NotFound("call not found"))?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
-
-        if internal_user.is_some() {
+        if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
@@ -150,22 +161,25 @@ where
 ///
 /// Type parameter `T` specifies the required permission marker.
 /// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is the authorization service implementation.
 #[derive(Debug)]
-pub struct CallWithChannelIdAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct CallWithChannelIdAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt (entity is the channel the call belongs to).
     pub entity_access_receipt: EntityAccessReceipt<T>,
     /// The call's share permission ID.
     pub share_permission_id: String,
     /// The channel ID.
     pub channel_id: Uuid,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for CallWithChannelIdAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for CallWithChannelIdAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -174,14 +188,22 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        } = parts
-            .extract()
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+                parts, state,
+            )
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
+        let (macro_user_id, user_context) = authorization
+            .authorization
+            .as_ref()
+            .and_then(UserOrInternalServiceAuthorization::acting_user)
+            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
+            .unwrap_or_default();
 
         let Path(CallWithChannelIdAccessParams { channel_id }) = parts
             .extract::<Path<CallWithChannelIdAccessParams>>()
@@ -197,16 +219,7 @@ where
             .map_err(ExtractorError::from)?
             .ok_or(ExtractorError::NotFound("call not found for channel"))?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
-
-        if internal_user.is_some() {
+        if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {

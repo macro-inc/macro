@@ -1,6 +1,5 @@
 //! SetEntityProperty tool for updating property values on entities.
 
-use crate::domain::model::{PropertiesAccessReceipt, access_entity_type};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -15,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::PropertiesToolContext;
-use super::get_entity_properties::ToolEntityType;
+use super::get_entity_properties::{ToolEntityType, ToolPropertyTargetEntityType};
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +38,7 @@ pub struct ToolEntityRef {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SetEntityProperty",
-    description = "Set or update a property value on an entity (document, task, project, etc.). Provide the property_definition_id and exactly one value field matching the property's data type.
+    description = "Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
 
 For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
 
@@ -56,7 +55,7 @@ CRM companies (entity_type='company', entity_id=the company UUID) always have th
 - Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
 - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
-Editing company properties requires the caller to be a team admin or owner.
+Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
 
 For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options."
 )]
@@ -66,7 +65,7 @@ pub struct SetEntityProperty {
     pub entity_id: String,
 
     #[schemars(description = "The type of entity.")]
-    pub entity_type: ToolEntityType,
+    pub entity_type: ToolPropertyTargetEntityType,
 
     #[schemars(
         description = "The property definition ID. Get this from GetEntityProperties results."
@@ -215,7 +214,7 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!("Set entity property");
 
-        let entity_type = EntityType::from(self.entity_type);
+        let entity_type = model_entity::EntityType::from(self.entity_type);
         let set_value = self.to_set_property_value();
 
         // Prove the requesting user can edit the entity before writing anything.
@@ -225,22 +224,13 @@ where
                 &request_context.user_id,
                 None,
                 &self.entity_id,
-                access_entity_type(entity_type),
+                entity_type,
             )
             .await
             .map_err(|e| ToolCallError {
                 description: "You do not have edit access to this entity".to_string(),
                 internal_error: e.into(),
             })?;
-        let access = PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            entity_type,
-        )
-        .map_err(|e| ToolCallError {
-            description: "Unable to validate entity access".to_string(),
-            internal_error: e.into(),
-        })?;
-
         // Delta mode: add/remove specific options atomically so concurrent
         // edits to the same multi-select value are never overwritten.
         let add_option_ids = self.add_option_ids.as_deref().unwrap_or_default();
@@ -258,7 +248,11 @@ where
             for option_id in add_option_ids {
                 service_context
                     .service
-                    .add_entity_property_option(&access, self.property_definition_id, *option_id)
+                    .add_entity_property_option(
+                        &entity_access_receipt,
+                        self.property_definition_id,
+                        *option_id,
+                    )
                     .await
                     .map_err(|e| ToolCallError {
                         description: format!("Failed to add option {option_id}: {e}"),
@@ -268,7 +262,11 @@ where
             for option_id in remove_option_ids {
                 service_context
                     .service
-                    .remove_entity_property_option(&access, self.property_definition_id, *option_id)
+                    .remove_entity_property_option(
+                        &entity_access_receipt,
+                        self.property_definition_id,
+                        *option_id,
+                    )
                     .await
                     .map_err(|e| ToolCallError {
                         description: format!("Failed to remove option {option_id}: {e}"),
@@ -284,7 +282,11 @@ where
 
         service_context
             .service
-            .set_entity_property(&access, self.property_definition_id, set_value)
+            .set_entity_property(
+                &entity_access_receipt,
+                self.property_definition_id,
+                set_value,
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to set property: {e}"),

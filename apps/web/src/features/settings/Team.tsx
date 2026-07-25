@@ -1,7 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
-import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
@@ -39,12 +36,14 @@ import {
   useDeleteTeamMutation,
   usePatchTeamMutation,
   useTeamQuery,
+  useToggleAutoJoinDomainMutation,
+  useToggleNonAdminInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -65,13 +64,11 @@ import {
   SettingsRow,
   SettingsSection,
 } from './primitives';
+import {
+  canRemoveTeamMember,
+  isTeamAdminOrOwner,
+} from './teamMemberPermissions';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
-
-function useRequiresPaidUpgrade() {
-  const hasPaidAccess = useHasPaidAccess();
-  const newPricingFlag = useFeatureFlag('enable-new-pricing');
-  return createMemo(() => newPricingFlag().enabled && !hasPaidAccess());
-}
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -303,6 +300,8 @@ function MemberRow(props: {
   member: TeamMember;
   isOwner: boolean;
   isCurrentUser: boolean;
+  canManageRemovals: boolean;
+  canRemove: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
@@ -346,9 +345,9 @@ function MemberRow(props: {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
-        <Show when={props.isOwner}>
+        <Show when={props.canManageRemovals}>
           <Show
-            when={!props.isCurrentUser && !isMemberOwner()}
+            when={props.canRemove}
             fallback={
               <Tooltip
                 label={
@@ -387,7 +386,7 @@ function MemberName(props: { memberId: string }) {
 
 function InviteRow(props: {
   invite: TeamInviteDetails;
-  isOwner: boolean;
+  canChange: boolean;
   onCancel: () => void;
 }) {
   const [copied, setCopied] = createSignal(false);
@@ -423,7 +422,7 @@ function InviteRow(props: {
           </div>
         </div>
       </div>
-      <Show when={props.isOwner}>
+      <Show when={props.canChange}>
         <Tooltip label={copied() ? 'Copied' : 'Copy invite link'}>
           <Button
             variant="ghost"
@@ -462,8 +461,6 @@ function UserInviteRow(props: {
   onDecline: () => void;
   isAccepting: boolean;
   isDeclining: boolean;
-  requiresUpgrade: boolean;
-  onUpgrade: () => void;
 }) {
   return (
     <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
@@ -509,8 +506,6 @@ function TeamInvites() {
   const userInvitesQuery = useUserInvitesQuery();
   const joinTeamMutation = useJoinTeamMutation();
   const rejectMutation = useRejectInvitationMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
-  const { showPaywall } = usePaywallState();
 
   const invites = () => userInvitesQuery.data?.invites ?? [];
 
@@ -541,8 +536,6 @@ function TeamInvites() {
                   }
                   isAccepting={isAccepting(invite.id)}
                   isDeclining={isDeclining(invite.id)}
-                  requiresUpgrade={requiresUpgrade()}
-                  onUpgrade={() => showPaywall()}
                 />
               )}
             </For>
@@ -577,7 +570,6 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   );
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
 
   const charCountColor = () => {
     const len = teamName().trim().length;
@@ -674,19 +666,17 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
             </Show>
           </div>
-          <Show when={!requiresUpgrade()}>
-            <div class="flex flex-col gap-1">
-              <label class="text-sm text-ink-muted">
-                Invite members (optional)
-              </label>
-              <InviteEmailsInput
-                invites={invites()}
-                onChange={setInvites}
-                errors={inviteErrors()}
-                onErrorsChange={setInviteErrors}
-              />
-            </div>
-          </Show>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm text-ink-muted">
+              Invite members (optional)
+            </label>
+            <InviteEmailsInput
+              invites={invites()}
+              onChange={setInvites}
+              errors={inviteErrors()}
+              onErrorsChange={setInviteErrors}
+            />
+          </div>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -719,8 +709,6 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
 
 function EmptyTeamState() {
   const [showCreateModal, setShowCreateModal] = createSignal(false);
-  const hasPaidAccess = useHasPaidAccess();
-  const { showPaywall } = usePaywallState();
 
   return (
     <SettingsPage title="Team">
@@ -731,37 +719,18 @@ function EmptyTeamState() {
               <UsersIcon class="size-6 text-accent" />
             </div>
             <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
-            <Show
-              when={hasPaidAccess()}
-              fallback={
-                <>
-                  <p class="text-xs text-ink-muted max-w-xs mb-4">
-                    Teams are available on paid plans. Upgrade to create and
-                    manage teams.
-                  </p>
-                  <Button
-                    variant="active"
-                    class="rounded-xs"
-                    onClick={() => showPaywall(PaywallKey.TEAMS)}
-                  >
-                    Upgrade
-                  </Button>
-                </>
-              }
+            <p class="text-xs text-ink-muted max-w-xs mb-4">
+              Create a team to collaborate with others and manage access
+              together.
+            </p>
+            <Button
+              variant="active"
+              class="rounded-xs"
+              onClick={() => setShowCreateModal(true)}
             >
-              <p class="text-xs text-ink-muted max-w-xs mb-4">
-                Create a team to collaborate with others and manage access
-                together.
-              </p>
-              <Button
-                variant="active"
-                class="rounded-xs"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <PlusIcon class="size-4" />
-                Create Team
-              </Button>
-            </Show>
+              <PlusIcon class="size-4" />
+              Create Team
+            </Button>
           </div>
         </SettingsCard>
       </SettingsSection>
@@ -850,8 +819,8 @@ function TeamManagement(props: {
   const patchTeamMutation = usePatchTeamMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
-  const { showPaywall } = usePaywallState();
+  const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
+  const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
@@ -969,11 +938,46 @@ function TeamManagement(props: {
     );
   });
 
+  const currentUserRole = createMemo(() => {
+    const currentUserId = userId();
+    if (!currentUserId) return undefined;
+
+    return teamQuery.data?.members.find(
+      (member) => member.user_id === currentUserId
+    )?.role;
+  });
+  const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
+  const canManageMemberRemovals = () => isAdminOrOwner();
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
     return props.ownerId === currentUserId;
   });
+
+  // The team's auto-join domain doubles as the toggle state: a string means
+  // auto-join is on for that domain, null/undefined means it's off.
+  const autoJoinDomain = () => teamQuery.data?.team.auto_join_domain ?? null;
+  const autoJoinDescription = () => {
+    const domain = autoJoinDomain();
+    return domain
+      ? `New sign-ups with an @${domain} email automatically join this team.`
+      : "Automatically add new sign-ups whose email matches the team owner's domain.";
+  };
+
+  const handleToggleAutoJoin = () => {
+    if (!props.teamId || toggleAutoJoinMutation.isPending) return;
+    toggleAutoJoinMutation.mutate({ teamId: props.teamId });
+  };
+
+  // Whether non-admin members may invite. Teams default to true; only the
+  // backend response flips it, so missing data reads as the default.
+  const allowNonAdminInvites = () =>
+    teamQuery.data?.team.allow_non_admin_invites ?? true;
+
+  const handleToggleNonAdminInvites = () => {
+    if (!props.teamId || toggleNonAdminInvitesMutation.isPending) return;
+    toggleNonAdminInvitesMutation.mutate({ teamId: props.teamId });
+  };
 
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
@@ -1227,6 +1231,39 @@ function TeamManagement(props: {
                 </div>
               </Show>
             </SettingsRow>
+
+            <Show when={isAdminOrOwner()}>
+              <SettingsRow
+                label="Auto-join on domain"
+                description={autoJoinDescription()}
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={!!autoJoinDomain()}
+                  disabled={
+                    toggleAutoJoinMutation.isPending || teamQuery.isLoading
+                  }
+                  onChange={handleToggleAutoJoin}
+                />
+              </SettingsRow>
+
+              <SettingsRow
+                label="Members can invite"
+                description="Let every team member invite people. When off, only admins and the owner can send invites."
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={allowNonAdminInvites()}
+                  disabled={
+                    toggleNonAdminInvitesMutation.isPending ||
+                    teamQuery.isLoading
+                  }
+                  onChange={handleToggleNonAdminInvites}
+                />
+              </SettingsRow>
+            </Show>
           </SettingsCard>
         </SettingsSection>
 
@@ -1253,19 +1290,14 @@ function TeamManagement(props: {
         <SettingsSection
           title="Members"
           actions={
-            <Show when={isOwner()}>
+            // Members can invite unless the team has restricted inviting
+            // to admins; removals stay admin-only.
+            <Show when={isAdminOrOwner() || allowNonAdminInvites()}>
               <Button
                 variant="base"
                 size="sm"
                 class="rounded-xs"
-                tooltip={
-                  requiresUpgrade()
-                    ? 'Inviting members requires a paid plan'
-                    : undefined
-                }
-                onClick={() =>
-                  requiresUpgrade() ? showPaywall() : setShowInviteModal(true)
-                }
+                onClick={() => setShowInviteModal(true)}
               >
                 <PlusIcon class="size-4" />
                 Invite
@@ -1321,6 +1353,12 @@ function TeamManagement(props: {
                       member={member}
                       isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
+                      canManageRemovals={canManageMemberRemovals()}
+                      canRemove={canRemoveTeamMember(
+                        userId(),
+                        currentUserRole(),
+                        member
+                      )}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;
@@ -1344,14 +1382,19 @@ function TeamManagement(props: {
           </Show>
         </SettingsSection>
 
-        <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
+        <Show
+          when={
+            (isOwner() || allowNonAdminInvites()) &&
+            (invitesQuery.data?.invites?.length ?? 0) > 0
+          }
+        >
           <SettingsSection title="Pending invites">
             <SettingsCard>
               <For each={invitesQuery.data?.invites ?? []}>
                 {(invite) => (
                   <InviteRow
                     invite={invite}
-                    isOwner={isOwner()}
+                    canChange={isOwner() || allowNonAdminInvites()}
                     onCancel={() => setShowCancelInviteModal(invite)}
                   />
                 )}

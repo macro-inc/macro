@@ -27,11 +27,11 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::GroupedSoupItem;
+use crate::domain::models::grouping::ItemGroupingInfo;
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
-use crate::outbound::pg_soup_repo::{populate_properties, type_err};
+use crate::outbound::pg_soup_repo::type_err;
 use models_grouping::{GroupByField, GroupingConfig, date_bucket_sql_order};
 
 static PREFIX: &str = r#"
@@ -78,7 +78,11 @@ static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN d."createdAt"
                         ELSE d."updatedAt"
                     END::timestamptz as sort_ts,
-                    d."projectId"::text as project_id
+                    d."projectId"::text as project_id,
+                    CASE
+                        WHEN dt.sub_type = 'task' THEN 'TASK'::property_entity_type
+                        ELSE 'DOCUMENT'::property_entity_type
+                    END as property_entity_type
                 FROM AccessibleItems ai
                 INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -94,7 +98,8 @@ static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN c."createdAt"
                         ELSE c."updatedAt"
                     END::timestamptz as sort_ts,
-                    c."projectId"::text as project_id
+                    c."projectId"::text as project_id,
+                    'CHAT'::property_entity_type as property_entity_type
                 FROM AccessibleItems ai
                 INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -111,7 +116,8 @@ static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN p."createdAt"
                         ELSE p."updatedAt"
                     END::timestamptz as sort_ts,
-                    p."parentId"::text as project_id
+                    p."parentId"::text as project_id,
+                    'PROJECT'::property_entity_type as property_entity_type
                 FROM AccessibleItems ai
                 INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
                 LEFT JOIN "UserHistory" uh
@@ -1435,7 +1441,8 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
-    fn into_soup_item(self) -> Result<SoupItem, sqlx::Error> {
+    #[tracing::instrument(err)]
+    fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
                 id,
@@ -1482,7 +1489,7 @@ impl SoupRow {
                 viewed_at,
                 sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
                 deleted_at,
-                properties: Default::default(),
+                extra: (),
             }),
             SoupRow::Chat(ChatRow {
                 id,
@@ -1510,7 +1517,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 deleted_at,
-                properties: Default::default(),
+                extra: (),
             }),
             SoupRow::Project(ProjectRow {
                 id,
@@ -1536,7 +1543,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 deleted_at,
-                properties: Default::default(),
+                extra: (),
             }),
         })
     }
@@ -1559,7 +1566,7 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
-) -> Result<Vec<SoupItem>, sqlx::Error> {
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
         limit,
@@ -1574,7 +1581,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut items = build_query(cursor.filter(), exclude_frecency, *cursor.sort_method())
+    let items = build_query(cursor.filter(), exclude_frecency, *cursor.sort_method())
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
@@ -1594,8 +1601,6 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
         .await?;
-
-    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }
@@ -1620,35 +1625,20 @@ pub struct GroupedDynamicCursorArgs<'a> {
 }
 
 /// Group metadata fields extracted from grouped query rows.
+#[derive(FromRow)]
 struct GroupFields {
     group_key: String,
     group_total_count: i64,
     row_in_group: i64,
 }
 
-impl GroupFields {
-    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-        Ok(GroupFields {
-            group_key: row.try_get("group_key")?,
-            group_total_count: row.try_get("group_total_count")?,
-            row_in_group: row.try_get("row_in_group")?,
-        })
-    }
-}
-
 /// Grouped row: reuses SoupRow for item data, adds group metadata.
+#[derive(FromRow)]
 struct GroupedSoupRow {
+    #[sqlx(flatten)]
     item: SoupRow,
+    #[sqlx(flatten)]
     group: GroupFields,
-}
-
-impl<'a> FromRow<'a, PgRow> for GroupedSoupRow {
-    fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
-        Ok(GroupedSoupRow {
-            item: SoupRow::from_row(row)?,
-            group: GroupFields::from_row(row)?,
-        })
-    }
 }
 
 /// Per-group limit for initial grouped queries.
@@ -1740,7 +1730,7 @@ fn build_grouped_query<'a>(
     // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push(
-        "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id FROM (",
+        "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id, all_items.property_entity_type FROM (",
     );
 
     let mut needs_separator = false;
@@ -1782,7 +1772,7 @@ fn build_grouped_query<'a>(
     // Fallback when all entity types are filtered out
     if !needs_separator {
         builder.push(
-            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id WHERE false",
+            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id, NULL::property_entity_type as property_entity_type WHERE false",
         );
     }
 
@@ -1884,7 +1874,7 @@ fn build_grouped_query<'a>(
 pub async fn expanded_dynamic_cursor_soup_grouped(
     db: &PgPool,
     args: GroupedDynamicCursorArgs<'_>,
-) -> Result<Vec<GroupedSoupItem>, sqlx::Error> {
+) -> Result<std::vec::IntoIter<ItemGroupingInfo>, sqlx::Error> {
     let GroupedDynamicCursorArgs {
         user_id,
         limit,
@@ -1906,7 +1896,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     // $9 is bound unconditionally (NULL when not in single-group mode) so $10 stays aligned.
     let mut query = query_builder
-        .build()
+        .build_query_as::<'_, GroupedSoupRow>()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
         .bind(query_limit)
@@ -1927,36 +1917,22 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .try_map(|row| GroupedSoupRow::from_row(&row))
         .fetch_all(db)
         .await?;
 
-    // Convert rows to (SoupItem, GroupFields) pairs and unzip
-    let (mut soup_items, groups): (Vec<SoupItem>, Vec<GroupFields>) = rows
+    let items = rows
         .into_iter()
         .map(|row| {
-            let item = row.item.into_soup_item()?;
-            Ok((item, row.group))
+            Ok(ItemGroupingInfo {
+                item: row.item.into_soup_item()?,
+                key: row.group.group_key,
+                total_group_count: usize::try_from(row.group.group_total_count)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                index_in_group: usize::try_from(row.group.row_in_group)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            })
         })
-        .collect::<Result<Vec<_>, sqlx::Error>>()?
-        .into_iter()
-        .unzip();
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
-    populate_properties(db, user_id.copied(), &mut soup_items).await?;
-
-    let items = soup_items
-        .into_iter()
-        .zip(groups)
-        .map(|(item, group)| GroupedSoupItem {
-            item,
-            frecency_score: None,
-            group_key: group.group_key,
-            group_total_count: group.group_total_count as u32,
-            row_in_group: group.row_in_group as u32,
-            group_label: None,
-            group_display_order: None,
-        })
-        .collect();
-
-    Ok(items)
+    Ok(items.into_iter())
 }

@@ -1,0 +1,36 @@
+[package]
+edition = "2024"
+name = "import"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent = { path = "../agent" }
+ai_toolset = { path = "../ai_toolset" }
+ai_usage = { path = "../ai_usage" }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client" }
+futures = { workspace = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
+macro_user_id = { path = "../macro_user_id" }
+mcp_client = { path = "../mcp_client" }
+model-entity = { path = "../model-entity" }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

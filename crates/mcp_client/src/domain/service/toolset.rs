@@ -1,5 +1,5 @@
 use crate::domain::models::{Error, McpServer, McpServerRecord};
-use crate::domain::ports::McpConnector;
+use crate::domain::ports::{McpConnector, McpServerStore};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
     ToolResult, ToolSet, ToolSetError,
@@ -59,16 +59,19 @@ pub struct McpToolSet {
 
 impl McpToolSet {
     /// Connect to every server in `records` concurrently, discover tools, and
-    /// register them.
+    /// register them. Credential updates (e.g. refreshed OAuth tokens) are
+    /// persisted through `server_store`.
     ///
     /// Servers that fail to connect or list tools are silently skipped.
     #[tracing::instrument(skip_all)]
-    pub async fn new(records: &[McpServerRecord]) -> Self {
+    pub async fn new<S: McpServerStore>(records: &[McpServerRecord], server_store: Arc<S>) -> Self {
         let futs = records
             .iter()
             .filter(|r| r.enabled)
-            .map(|record| async move {
-                let client = record.connect().await.inspect_err(|e| {
+            .map(|record| {
+                let server_store = server_store.clone();
+                async move {
+                let client = record.connect(server_store).await.inspect_err(|e| {
                     tracing::warn!(server = %record.server_name, error = ?e, "failed to connect");
                 }).ok()?;
 
@@ -82,6 +85,7 @@ impl McpToolSet {
                 };
 
                 Some((record.server_name.clone(), client, server_tools))
+                }
             });
 
         let results = futures::future::join_all(futs).await;
@@ -267,11 +271,15 @@ pub struct CombinedToolSet<T> {
 
 impl<T> CombinedToolSet<T> {
     /// Build a combined toolset from the static tools and the user's MCP servers.
-    pub async fn new(
+    ///
+    /// Credential updates from the MCP connections (e.g. refreshed OAuth
+    /// tokens) are persisted through `server_store`.
+    pub async fn new<S: McpServerStore>(
         static_tools: Arc<AsyncToolCollection<T>>,
         records: &[McpServerRecord],
+        server_store: Arc<S>,
     ) -> Self {
-        let mcp_tools = McpToolSet::new(records).await;
+        let mcp_tools = McpToolSet::new(records, server_store).await;
         Self {
             static_tools,
             mcp_tools,

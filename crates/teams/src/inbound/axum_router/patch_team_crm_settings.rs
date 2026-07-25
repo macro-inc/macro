@@ -1,8 +1,9 @@
 use axum::{Json, extract::State};
 use entity_access::{
     domain::{models::AdminTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::MacroUserTeamExtractor,
+    inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -12,9 +13,11 @@ use crate::domain::{
 
 use super::TeamRouterState;
 
-/// Enables or disables CRM for the team. On enable, kicks off a
-/// best-effort backfill that enqueues a `PopulateCrmForUser` message
-/// per team member (no-op if CRM is already enabled). On disable,
+/// Enables or disables CRM for the team. On enable with `backfill`
+/// (the default), kicks off a best-effort backfill that enqueues a
+/// `PopulateCrmForUser` message per team member (no-op if CRM is
+/// already enabled); without `backfill` the CRM starts empty and fills
+/// from new activity only. On disable,
 /// flips the flag and purges the team's CRM data (cascading through
 /// `crm_companies` → `crm_domains` / `crm_contacts` /
 /// `crm_contact_sources`). Requires the caller to be an Admin or
@@ -34,14 +37,14 @@ use super::TeamRouterState;
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<AdminTeamRole, Eas>,
-    State(state): State<TeamRouterState<T, Eas>>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamRouterState<T, Eas, Auth>>,
     Json(req): Json<PatchTeamCrmSettingsRequest>,
 ) -> Result<Json<PatchTeamCrmSettingsResponse>, TeamError> {
     let response = state
         .service
-        .set_team_crm_enabled(access.entity_access_receipt, req.enabled)
+        .set_team_crm_enabled(access.entity_access_receipt, req.enabled, req.backfill)
         .await?;
     Ok(Json(response))
 }

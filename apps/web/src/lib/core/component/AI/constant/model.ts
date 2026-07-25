@@ -9,6 +9,7 @@ import OpenAiIcon from '@core/component/AI/assets/openai.svg';
  * strings.
  */
 export const Model = {
+  sonnet5: 'anthropic/claude-sonnet-5',
   opus48: 'anthropic/claude-opus-4-8',
   haiku45: 'anthropic/claude-haiku-4-5',
   sonnet46: 'anthropic/claude-sonnet-4-6',
@@ -26,6 +27,7 @@ type ExhaustiveMap = {
 };
 
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
+  'anthropic/claude-sonnet-5': 'Sonnet 5',
   'anthropic/claude-opus-4-8': 'Opus 4.8',
   'anthropic/claude-haiku-4-5': 'Haiku 4.5',
   'anthropic/claude-sonnet-4-6': 'Sonnet 4.6',
@@ -34,6 +36,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
+  'anthropic/claude-sonnet-5': AnthropicIcon,
   'anthropic/claude-opus-4-8': AnthropicIcon,
   'anthropic/claude-haiku-4-5': AnthropicIcon,
   'anthropic/claude-sonnet-4-6': AnthropicIcon,
@@ -42,7 +45,7 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
 };
 
 /** Default model for paid users. */
-export const DEFAULT_MODEL: TModel = Model.opus48;
+export const DEFAULT_MODEL: TModel = Model.sonnet5;
 
 /**
  * Default model for free users. Free users aren't entitled to the premium
@@ -74,6 +77,7 @@ export function modelsForPlan(hasPaidAccess: boolean): readonly TModel[] {
 
 /** Provider serving each model — mirrors the backend `provider` field. */
 export const MODEL_PROVIDER: ExhaustiveMap = {
+  'anthropic/claude-sonnet-5': 'anthropic',
   'anthropic/claude-opus-4-8': 'anthropic',
   'anthropic/claude-haiku-4-5': 'anthropic',
   'anthropic/claude-sonnet-4-6': 'anthropic',

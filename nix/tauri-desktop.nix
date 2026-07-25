@@ -160,11 +160,24 @@
         version = appVersion;
         binaryName = "app";
         src = ../apps/web/tauri;
-        cargoRoot = ../apps/web/tauri;
+        # The native GraphQL cache plugin depends on cache-core/cache-sqlite
+        # at the repository root, so preserve those relative paths in the
+        # filtered Cargo source used by crane.
+        cargoRoot = ../.;
         cargoLock = ../apps/web/tauri/Cargo.lock;
+        # cache-core's build script generates metadata from the GraphQL schema.
+        # Non-Cargo inputs must be added explicitly to crane's app fileset.
+        extraFileset = ../static_assets/schema.graphql;
         inherit frontend;
 
         craneArgs.cargoVendorDir = tauriCargoVendorDir;
+        craneArgs.CARGO_TARGET_DIR = "apps/web/tauri/target";
+        # crane's common Cargo fileset only keeps the lockfile at cargoRoot.
+        # Restore the nested Tauri workspace lockfile where Cargo discovers it.
+        craneArgs.preConfigure = ''
+          export CARGO_TARGET_DIR="$PWD/apps/web/tauri/target"
+          install -Dm0644 ${../apps/web/tauri/Cargo.lock} apps/web/tauri/Cargo.lock
+        '';
         craneArgs.postConfigure = ''
           writable_vendor="$TMPDIR/cargo-vendor"
           mkdir -p "$writable_vendor"
@@ -174,9 +187,16 @@
             --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
         '';
         craneArgs.preBuild = ''
-          cp ${../apps/web/package.json} ../package.json
-          rm -rf ../dist
-          cp -r ${frontend} ../dist
+          cp ${../apps/web/package.json} apps/web/package.json
+          rm -rf apps/web/dist
+          cp -r ${frontend} apps/web/dist
+
+          # The dependency derivation runs from cargoRoot with an injected
+          # manifest path. Actual Tauri commands must run beside tauri.conf.json.
+          case "''${name:-}" in
+            *-deps-*) ;;
+            *) cd apps/web/tauri ;;
+          esac
         '';
       };
 
@@ -418,7 +438,7 @@
       tauriLinuxdeployAppimagePluginSource = pkgs.fetchurl {
         # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
         url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage";
-        hash = "sha256-psPPOB4jSR61J5Tsuiqb1F5k2okJetKF4l72l0nuKa4=";
+        hash = "sha256-mS1QKiSOFKsYVEjd9vbn0lVYy4TUYjw1TDrzUMJfzLM=";
       };
       tauriLinuxdeployAppimagePluginExtracted = pkgs.appimageTools.extractType2 {
         pname = "linuxdeploy-plugin-appimage";

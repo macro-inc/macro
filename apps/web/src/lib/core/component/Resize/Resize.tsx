@@ -103,7 +103,14 @@ function Zone(props: ParentProps<ZoneProps>) {
     solver.dropPanel(id);
   }
 
-  function update(id: PanelId, config: { minSize?: number; maxSize?: number }) {
+  function update(
+    id: PanelId,
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionPreferredSize?: number;
+    }
+  ) {
     solver.updatePanel(id, config);
   }
 
@@ -189,6 +196,9 @@ function Zone(props: ParentProps<ZoneProps>) {
  * @property id - Unique identifier for the panel
  * @property minSize - Minimum size constraint for the panel in pixels
  * @property maxSize - Maximum size constraint for the panel in pixels (defaults to Infinity)
+ * @property redistributionPreferredSize - Preferred size used only during
+ *     automatic layout redistribution. It is reduced when neighboring panel
+ *     minimums leave insufficient room.
  * @property collapsed - Accessor that returns whether the panel should be collapsed. This
  *     is currently kind of COPE and should be avoided. Is used for the side-bar which should
  *     be toggled without being unmounted. It is WAY preferred to let the system derive its
@@ -202,6 +212,7 @@ type PanelProps = {
   id: PanelId;
   minSize: number;
   maxSize?: number;
+  redistributionPreferredSize?: number;
   /**
    * Initial target size for the panel at registration time.
    * - number: interpreted as a percentage (e.g., 25 = 25%)
@@ -268,6 +279,7 @@ function Panel(props: ParentProps<PanelProps>) {
           id: props.id,
           minSize: props.minSize,
           maxSize: props.maxSize ?? Infinity,
+          redistributionPreferredSize: props.redistributionPreferredSize,
           target: getTarget(),
         },
         props.index
@@ -279,6 +291,7 @@ function Panel(props: ParentProps<PanelProps>) {
     ctx.update(props.id, {
       minSize: props.minSize,
       maxSize: props.maxSize ?? Infinity,
+      redistributionPreferredSize: props.redistributionPreferredSize,
     });
   });
 
@@ -293,6 +306,7 @@ function Panel(props: ParentProps<PanelProps>) {
           id: props.id,
           minSize: props.minSize,
           maxSize: props.maxSize ?? Infinity,
+          redistributionPreferredSize: props.redistributionPreferredSize,
           target: getTarget(),
         },
         props.index
@@ -319,6 +333,7 @@ function Panel(props: ParentProps<PanelProps>) {
             id: props.id,
             minSize: props.minSize,
             maxSize: props.maxSize ?? Infinity,
+            redistributionPreferredSize: props.redistributionPreferredSize,
             target: getTarget(),
           },
           props.index

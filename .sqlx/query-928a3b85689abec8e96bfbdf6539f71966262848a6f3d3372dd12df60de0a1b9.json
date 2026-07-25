@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity\n            SET status = 'discarded', updated_at = NOW()\n            WHERE user_id = $1 AND initiator = $2 AND status = 'staged'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "928a3b85689abec8e96bfbdf6539f71966262848a6f3d3372dd12df60de0a1b9"
+}

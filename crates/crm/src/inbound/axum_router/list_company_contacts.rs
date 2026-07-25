@@ -4,6 +4,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -82,9 +83,9 @@ impl From<CrmContact> for CrmContactResponse {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmCompanyAccessLevelExtractor<ViewAccessLevel, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: CrmCompanyAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
 ) -> Result<Json<Vec<CrmContactResponse>>, CrmError> {
     let contacts = state

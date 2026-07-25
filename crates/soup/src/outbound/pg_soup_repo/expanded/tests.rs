@@ -1,7 +1,10 @@
-use crate::outbound::pg_soup_repo::expanded::{
-    by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
-    by_ids::expanded_soup_by_ids,
-    dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
+use crate::outbound::pg_soup_repo::{
+    expanded::{
+        by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
+        by_ids::expanded_soup_by_ids,
+        dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
+    },
+    populate_properties,
 };
 use filter_ast::Expr;
 use item_filters::{
@@ -328,7 +331,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
     Ok(())
 }
 
-// Test that expanded_soup_by_ids returns items in the correct order and includes items with implicit access
+// Test that expanded_soup_by_ids includes items with implicit access
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -357,37 +360,30 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
 
     // Verify we can access items through project inheritance
     // doc-in-A is in project-A which user-1 has access to
+    let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
+    let expected_project_id = Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-A
     let doc = items
         .iter()
         .find_map(|x| match x {
-            SoupItem::Document(soup_document) => Some(soup_document),
-            SoupItem::Chat(_)
-            | SoupItem::Project(_)
-            | SoupItem::EmailThread(_)
-            | SoupItem::Channel(_)
-            | SoupItem::ChannelThread(_)
-            | SoupItem::Call(_)
-            | SoupItem::CrmCompany(_)
-            | SoupItem::ForeignEntity(_) => None,
+            SoupItem::Document(soup_document) if soup_document.id == expected_doc_id => {
+                Some(soup_document)
+            }
+            _ => None,
         })
         .expect("The document should exist");
-    let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
-    let expected_project_id = Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-A
-    assert_eq!(doc.id, expected_doc_id);
     assert_eq!(doc.name, "Document in A");
     assert_eq!(doc.project_id, Some(expected_project_id));
 
     // chat-in-B is in project-B which is a child of project-A
+    let expected_chat_id = Uuid::parse_str("22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(); // chat-in-B
+    let expected_project_id = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-B
     let chat = items
         .iter()
         .find_map(|x| match x {
-            SoupItem::Chat(soup_chat) => Some(soup_chat),
+            SoupItem::Chat(soup_chat) if soup_chat.id == expected_chat_id => Some(soup_chat),
             _ => None,
         })
         .expect("The chat should exist");
-    let expected_chat_id = Uuid::parse_str("22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(); // chat-in-B
-    let expected_project_id = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-B
-    assert_eq!(chat.id, expected_chat_id);
     assert_eq!(chat.name, "Chat in B");
     assert_eq!(chat.project_id.as_ref(), Some(&expected_project_id));
 }
@@ -2585,7 +2581,7 @@ async fn test_filter_projects_by_importance(db: PgPool) -> anyhow::Result<()> {
         scripts("soup_items_with_properties")
     )
 )]
-async fn test_expanded_dynamic_cursor_populates_properties(
+async fn test_bulk_populate_properties_enriches_raw_soup_items(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
@@ -2600,6 +2596,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
         },
     )
     .await?;
+    let items = populate_properties(&pool, user_id, items).await?;
 
     // Should get 2 documents and 2 projects (A and B)
     assert!(!items.is_empty(), "Should return some items");
@@ -2613,7 +2610,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
 
     let doc = unwrap_enum!(doc_a, SoupItem::Document);
     assert_eq!(
-        doc.properties.len(),
+        doc.extra.properties.len(),
         2,
         "Document in A should have 2 properties"
     );
@@ -2626,7 +2623,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
     let doc = unwrap_enum!(doc_b, Some => SoupItem::Document);
     // Document in B has Priority and Due Date properties
     assert_eq!(
-        doc.properties.len(),
+        doc.extra.properties.len(),
         2,
         "Document in B should have 2 properties"
     );
@@ -2638,11 +2635,15 @@ async fn test_expanded_dynamic_cursor_populates_properties(
 
     let proj = unwrap_enum!(proj_a, Some => SoupItem::Project);
     assert!(
-        !proj.properties.is_empty(),
+        !proj.extra.properties.is_empty(),
         "Project A should have properties populated"
     );
     // Project A has Priority property
-    assert_eq!(proj.properties.len(), 1, "Project A should have 1 property");
+    assert_eq!(
+        proj.extra.properties.len(),
+        1,
+        "Project A should have 1 property"
+    );
 
     // Check that Project B has no properties (none were added in fixture)
     let proj_b_uuid = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap();
@@ -2651,7 +2652,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
 
     let proj = unwrap_enum!(proj_b, Some => SoupItem::Project);
     // Project B has no properties in the fixture, so it should be empty or None
-    let props_count = proj.properties.len();
+    let props_count = proj.extra.properties.len();
     assert_eq!(props_count, 0, "Project B should have 0 properties");
 
     Ok(())

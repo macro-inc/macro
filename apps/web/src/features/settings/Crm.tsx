@@ -90,13 +90,11 @@ function ConfirmDialog(props: {
  */
 function usePatchTeamCrmSettingsMutation() {
   return useMutation(() => ({
-    mutationFn: async (enabled: boolean) =>
+    mutationFn: async (req: PatchTeamCrmSettingsRequest) =>
       await throwOnErr(() =>
         fetchWithAuth<PatchTeamCrmSettingsResponse>(`${authHost}/team/crm`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            enabled,
-          } satisfies PatchTeamCrmSettingsRequest),
+          body: JSON.stringify(req),
         })
       ),
     onSuccess: (data: PatchTeamCrmSettingsResponse) => {
@@ -114,20 +112,22 @@ const DISABLE_CRM_PHRASE = 'Disable CRM';
 
 function CrmEnablementSection() {
   const isTeamAdmin = useIsTeamAdmin();
+  const teamQuery = useCurrentTeamQuery();
   const patchCrmMutation = usePatchTeamCrmSettingsMutation();
 
-  // The team API doesn't report `crm_enabled`, so the toggle is optimistic:
-  // it starts from "enabled" and tracks the results of changes made here.
-  const [crmEnabled, setCrmEnabled] = createSignal(true);
+  // The mutation invalidates the team query on success, which refetches
+  // the authoritative flag.
+  const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
+  const [showEnableModal, setShowEnableModal] = createSignal(false);
+  const [enableChoice, setEnableChoice] = createSignal<'backfill' | 'fresh'>();
   const [showDisableModal, setShowDisableModal] = createSignal(false);
   const [disableConfirmation, setDisableConfirmation] = createSignal('');
 
   const handleToggle = (next: boolean) => {
     if (!isTeamAdmin() || patchCrmMutation.isPending) return;
     if (next) {
-      patchCrmMutation.mutate(true, {
-        onSuccess: (data) => setCrmEnabled(data.enabled),
-      });
+      // Enabling asks whether to backfill from existing email history.
+      setShowEnableModal(true);
     } else {
       // Disabling purges the team's CRM data — force a typed confirmation.
       setDisableConfirmation('');
@@ -135,21 +135,32 @@ function CrmEnablementSection() {
     }
   };
 
+  const handleEnable = (backfill: boolean) => {
+    setEnableChoice(backfill ? 'backfill' : 'fresh');
+    patchCrmMutation.mutate(
+      { enabled: true, backfill },
+      {
+        onSuccess: () => setShowEnableModal(false),
+        onSettled: () => setEnableChoice(undefined),
+      }
+    );
+  };
+
   const handleDisable = () => {
-    patchCrmMutation.mutate(false, {
-      onSuccess: (data) => {
-        setCrmEnabled(data.enabled);
-        setShowDisableModal(false);
-      },
-    });
+    patchCrmMutation.mutate(
+      { enabled: false, backfill: false },
+      {
+        onSuccess: () => setShowDisableModal(false),
+      }
+    );
   };
 
   return (
     <SettingsSection title="General">
       <SettingsCard>
         <SettingsRow
-          label="Enable CRM"
-          description="Turns the CRM on for everyone on your team. This setting isn't reported by the server, so the toggle reflects your latest change here."
+          label={crmEnabled() ? 'Disable CRM' : 'Enable CRM'}
+          description={`Turn the CRM ${crmEnabled() ? 'off' : 'on'} for everyone on your team.`}
           hideDescriptionOnMobile
         >
           <Show
@@ -182,6 +193,68 @@ function CrmEnablementSection() {
         </SettingsRow>
       </SettingsCard>
 
+      <Dialog
+        open={showEnableModal()}
+        onOpenChange={(open) => !open && setShowEnableModal(false)}
+      >
+        <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
+          <Panel.Header class="px-2 gap-1">
+            <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+              <XIcon />
+            </Dialog.CloseButton>
+            <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+              Enable CRM
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-3 flex flex-col gap-3">
+            <p>
+              Start the CRM from your team's existing email, or from a clean
+              slate.
+            </p>
+            <div class="flex justify-end gap-1 pt-2">
+              <Button
+                variant="ghost"
+                class="rounded-xs"
+                disabled={patchCrmMutation.isPending}
+                onClick={() => setShowEnableModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="base"
+                class="rounded-xs"
+                disabled={patchCrmMutation.isPending}
+                onClick={() => handleEnable(false)}
+              >
+                <Show
+                  when={
+                    enableChoice() === 'fresh' && patchCrmMutation.isPending
+                  }
+                  fallback="Start from now"
+                >
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+              <Button
+                variant="active"
+                class="rounded-xs"
+                disabled={patchCrmMutation.isPending}
+                onClick={() => handleEnable(true)}
+              >
+                <Show
+                  when={
+                    enableChoice() === 'backfill' && patchCrmMutation.isPending
+                  }
+                  fallback="Backfill existing emails"
+                >
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
+
       <ConfirmDialog
         open={showDisableModal()}
         title="Disable CRM"
@@ -194,7 +267,7 @@ function CrmEnablementSection() {
         <p>
           Disabling the CRM <span class="font-medium">permanently purges</span>{' '}
           your team's CRM data — companies, contacts, and their history.
-          Re-enabling later starts from a fresh backfill.
+          Re-enabling later lets you backfill again or start fresh.
         </p>
         <p class="text-sm text-ink-muted">
           Type <span class="font-medium text-ink">{DISABLE_CRM_PHRASE}</span> to

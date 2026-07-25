@@ -1,15 +1,15 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use macro_db_client::user::get_user_name::get_user_name;
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use model::user::UserName;
 
 /// Retrieves the name of a particular user.
@@ -23,15 +23,18 @@ use model::user::UserName;
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context))]
+#[tracing::instrument(skip(ctx, authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
-    let user_name = get_user_name(&ctx.db, &user_context.fusion_user_id)
+    let user_name = get_user_name(
+        &ctx.db,
+        &authorization.authorization.user.user_context.fusion_user_id,
+    )
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, user_context.user_id, "failed to update user name");
+            tracing::error!(error=?e, user_id = %authorization.authorization.user.user_context.user_id, "failed to update user name");
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         })?;
     Ok((StatusCode::OK, Json(user_name)).into_response())

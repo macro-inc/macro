@@ -3,6 +3,7 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::{EditAccessLevel, ViewAccessLevel};
 
 use super::DocumentRouterState;
@@ -30,9 +31,13 @@ use crate::domain::ports::DocumentService;
     )
 )]
 #[tracing::instrument(skip(state, access), err)]
-pub async fn get_team_share_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
+pub async fn get_team_share_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
 ) -> Result<Json<DocumentTeamShareResponse>, DocumentError> {
     let response = state
         .service
@@ -63,9 +68,13 @@ pub async fn get_team_share_handler<T: DocumentService, Svc: EntityAccessService
     )
 )]
 #[tracing::instrument(skip(state, access, request), err)]
-pub async fn set_team_share_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    access: DocumentAccessExtractor<EditAccessLevel, Svc>,
+pub async fn set_team_share_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    access: DocumentAccessExtractor<EditAccessLevel, Svc, Auth>,
     Json(request): Json<SetDocumentTeamShareRequest>,
 ) -> Result<Json<DocumentTeamShareResponse>, DocumentError> {
     let response = state

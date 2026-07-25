@@ -12,6 +12,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform } from '@core/util/platform';
 import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { getPlanAnalyticsProperties } from './planProperties';
 
 /**
  * Resolves the user's device context for analytics enrichment.
@@ -26,6 +27,8 @@ import { match } from 'ts-pattern';
  */
 const DEVICE_PROPERTY = 'macro_device' as const;
 const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
+const PLAN_TIER_AT_EVENT_PROPERTY = 'plan_tier_at_event' as const;
+const HAS_PAID_ACCESS_AT_EVENT_PROPERTY = 'has_paid_access_at_event' as const;
 
 function getEnvironment(): 'dev' | 'prod' | 'unknown' {
   if (PROD_MODE_ENV) return 'prod';
@@ -104,6 +107,10 @@ const IGNORABLE_ERRORS = [
   'ResizeObserver loop completed with undelivered notifications',
 ];
 
+// Privacy filter lists block the upstream filename; the proxy maps this opaque alias back.
+const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
+const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -112,6 +119,16 @@ const initializePosthog = (instance: PostHog) => {
     api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    prepare_external_dependency_script: (script) => {
+      const url = new URL(script.src);
+
+      if (url.pathname.endsWith(`/static/${POSTHOG_RECORDER_SCRIPT_NAME}`)) {
+        url.pathname = `/i/ph/static/${POSTHOG_RECORDER_PROXY_SCRIPT_NAME}`;
+        script.src = url.toString();
+      }
+
+      return script;
+    },
     before_send: (cr) => {
       if (cr) {
         cr.properties.env = DEV_MODE_ENV
@@ -162,7 +179,8 @@ const createAnalytics = () => {
   const sendEvent = (
     provider: AnalyticsProvider,
     event: EventName,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    options?: { eventID?: string }
   ) => {
     if (disabled) return;
 
@@ -181,7 +199,12 @@ const createAnalytics = () => {
           const fbqMethod = META_STANDARD_EVENTS.has(event)
             ? 'track'
             : 'trackCustom';
-          fbq(fbqMethod, event, enriched);
+          fbq(
+            fbqMethod,
+            event,
+            enriched,
+            options?.eventID ? { eventID: options.eventID } : undefined
+          );
         })
         .with('posthog', () => {
           posthog.capture(event, enriched);
@@ -219,12 +242,18 @@ const createAnalytics = () => {
    *
    * For the rare event with no standard equivalent, fall back to
    * `track(event, data, ['meta-pixel'])` — that path uses `trackCustom`.
+   *
+   * Pass `options.eventID` when the backend fires the same event through the
+   * Conversions API — Meta dedupes browser and server fires that share an
+   * event name + event id, so the pair counts once while keeping the
+   * browser's click-id cookies for attribution.
    */
   const trackMeta = (
     event: MetaStandardEvent,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    options?: { eventID?: string }
   ) => {
-    sendEvent('meta-pixel', event, data);
+    sendEvent('meta-pixel', event, data, options);
   };
 
   /**
@@ -277,12 +306,27 @@ const createAnalytics = () => {
     }
   };
 
+  const setPlanProperties = (licenseStatus: string | undefined) => {
+    if (disabled) return;
+
+    try {
+      const properties = getPlanAnalyticsProperties(licenseStatus);
+
+      posthog.setPersonProperties(properties.person);
+      posthog.register(properties.event);
+    } catch (e) {
+      console.error('[Analytics] Failed to set plan properties:', e);
+    }
+  };
+
   const reset = () => {
     if (disabled) return;
 
     try {
       gtag('config', GA_ID, { user_id: undefined });
 
+      posthog.unregister(PLAN_TIER_AT_EVENT_PROPERTY);
+      posthog.unregister(HAS_PAID_ACCESS_AT_EVENT_PROPERTY);
       posthog.reset();
     } catch (e) {
       console.error('[Analytics] Failed to reset:', e);
@@ -331,6 +375,7 @@ const createAnalytics = () => {
     trackMeta,
     trackGoogleConversion,
     identify,
+    setPlanProperties,
     reset,
     pageView,
   };
@@ -339,12 +384,17 @@ const createAnalytics = () => {
 export type AnalyticsInterface = {
   posthog: PostHog;
   track: TrackFn;
-  trackMeta: (event: MetaStandardEvent, data?: Record<string, unknown>) => void;
+  trackMeta: (
+    event: MetaStandardEvent,
+    data?: Record<string, unknown>,
+    options?: { eventID?: string }
+  ) => void;
   trackGoogleConversion: (
     action: GoogleConversionAction,
     data?: { value?: number; currency?: string; transaction_id?: string }
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
+  setPlanProperties: (licenseStatus: string | undefined) => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;
 };

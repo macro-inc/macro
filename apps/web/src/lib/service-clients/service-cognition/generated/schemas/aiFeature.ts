@@ -22,4 +22,5 @@ export const AiFeature = {
   channel_bot: 'channel_bot',
   ai_projection: 'ai_projection',
   ai_editing: 'ai_editing',
+  import: 'import',
 } as const;

@@ -3,10 +3,16 @@
 //! These extractors validate that the requesting user has sufficient
 //! access to the entity being accessed.
 
+#[cfg(test)]
+mod test;
+#[cfg(test)]
+mod test_support;
+
 mod call;
 mod channel;
 mod chat;
 mod document;
+mod entity_body;
 mod entity_permission;
 mod foreign_entity;
 mod history;
@@ -19,29 +25,27 @@ pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
+pub use entity_body::EntityBodyAccessLevelExtractor;
 pub use entity_permission::EntityPermissionExtractor;
 pub use foreign_entity::ForeignEntityAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
-pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor};
-pub use team::{MacroUserTeamExtractor, OptionalMacroUserTeamExtractor};
+pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
+pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
 pub use thread::ThreadAccessLevelExtractor;
 
-use crate::domain::models::{AccessError, AccessLevel};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use std::borrow::Cow;
+
+use crate::domain::models::AccessError;
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use macro_authorization::MacroAuthorizationRejection;
 use model_error_response::ErrorResponse;
 
 pub use crate::domain::models::RequiredPermission;
-
-/// Marker struct for internal service-to-service requests.
-///
-/// Middleware inserts this into request extensions for authenticated internal callers.
-#[derive(Debug, Clone)]
-pub struct InternalUser {
-    /// The access level granted to the internal user.
-    pub access_level: AccessLevel,
-}
 
 /// Error type for access extractors that can be returned as HTTP responses.
 #[derive(Debug, thiserror::Error)]
@@ -49,6 +53,15 @@ pub enum ExtractorError {
     /// User does not have access to the requested resource.
     #[error("User does not have access to the requested resource")]
     Unauthorized,
+
+    /// User credentials were rejected by the authorization service.
+    #[error("{message}")]
+    Authorization {
+        /// HTTP status returned by the authorization extractor.
+        status: StatusCode,
+        /// Error message returned by the authorization extractor.
+        message: Cow<'static, str>,
+    },
 
     /// User does not have access with a specific message.
     #[error("{0}")]
@@ -86,23 +99,30 @@ impl From<AccessError> for ExtractorError {
     }
 }
 
+impl From<MacroAuthorizationRejection> for ExtractorError {
+    fn from(MacroAuthorizationRejection { status, message }: MacroAuthorizationRejection) -> Self {
+        Self::Authorization { status, message }
+    }
+}
+
 impl IntoResponse for ExtractorError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            ExtractorError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            ExtractorError::UnauthorizedWithMessage(_) => {
-                (StatusCode::UNAUTHORIZED, self.to_string())
+        let (status, message) = match self {
+            ExtractorError::Authorization { status, message } => (status, message),
+            error @ (ExtractorError::Unauthorized | ExtractorError::UnauthorizedWithMessage(_)) => {
+                (StatusCode::UNAUTHORIZED, error.to_string().into())
             }
-            ExtractorError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ExtractorError::NotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
-            ExtractorError::Internal | ExtractorError::Database => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            error @ ExtractorError::BadRequest(_) => {
+                (StatusCode::BAD_REQUEST, error.to_string().into())
+            }
+            error @ ExtractorError::NotFound(_) => {
+                (StatusCode::NOT_FOUND, error.to_string().into())
+            }
+            error @ (ExtractorError::Internal | ExtractorError::Database) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, error.to_string().into())
             }
         };
 
-        let error_response = ErrorResponse {
-            message: message.into(),
-        };
-        (status, axum::Json(error_response)).into_response()
+        (status, Json(ErrorResponse { message })).into_response()
     }
 }

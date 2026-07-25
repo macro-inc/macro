@@ -24,6 +24,7 @@ import {
   type PullRequestMentionInfo,
   type PullRequestMentionNode,
 } from '../nodes/PullRequestMentionNode';
+import type { TagMentionInfo } from '../nodes/TagMentionNode';
 import {
   $isUserMentionNode,
   type UserMentionInfo,
@@ -69,12 +70,83 @@ export function $extractAllMentions(): MentionNode[] {
   return out;
 }
 
+/** An entity mention in the shape channel messages send to the backend. */
+export type ChannelMention = {
+  entityType: string;
+  entityId: string;
+};
+
+/**
+ * Entity type for a document-mention block name, mirroring
+ * `$mentionItemFromNode` in the web editor's mentions plugin. Plain file
+ * block names (md, pdf, csv, ...) and unknown block names are all
+ * `document`.
+ */
+function documentMentionEntityType(blockName: string): string {
+  switch (blockName) {
+    case 'channel':
+      return 'channel';
+    case 'project':
+      return 'project';
+    case 'chat':
+      return 'chat';
+    case 'email':
+      return 'thread';
+    case 'call':
+      return 'call';
+    case 'automation':
+      return 'automation';
+    case 'company':
+      return 'crm_company';
+    case 'contact':
+      return 'crm_contact';
+    default:
+      return 'document';
+  }
+}
+
+/**
+ * Extracts the mentions in the current editor state as `ChannelMention`s,
+ * the way the web editor tracks them while composing a channel message.
+ * Document mentions map by block name; user mentions are re-tagged `bot`
+ * when they target a bot principal. Contact, date, group, and PR mentions
+ * carry no referencable entity and are skipped. Duplicates are dropped.
+ */
+export function $extractChannelMentions(): ChannelMention[] {
+  const out: ChannelMention[] = [];
+  const seen = new Set<string>();
+  const push = (mention: ChannelMention) => {
+    if (!mention.entityId) return;
+    const key = `${mention.entityType}:${mention.entityId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(mention);
+  };
+
+  for (const node of $extractAllMentions()) {
+    if ($isDocumentMentionNode(node)) {
+      push({
+        entityType: documentMentionEntityType(node.getBlockName()),
+        entityId: node.getDocumentId(),
+      });
+    } else if ($isUserMentionNode(node)) {
+      const userId = node.getUserId();
+      push({
+        entityType: userId.startsWith('bot|') ? 'bot' : 'user',
+        entityId: userId,
+      });
+    }
+  }
+  return out;
+}
+
 export type MentionInfo =
   | (UserMentionInfo & { type: 'user' })
   | (DocumentMentionInfo & { type: 'document' })
   | (PullRequestMentionInfo & { type: 'pr' })
   | (ContactMentionInfo & { type: 'contact' })
-  | (DateMentionInfo & { type: 'date' });
+  | (DateMentionInfo & { type: 'date' })
+  | (TagMentionInfo & { type: 'tag' });
 
 export function buildMentionMarkdownString(info: MentionInfo): string {
   switch (info.type) {
@@ -88,6 +160,8 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
       return wrapXml('m-contact-mention', dropKey(info, 'type'));
     case 'date':
       return wrapXml('m-date-mention', dropKey(info, 'type'));
+    case 'tag':
+      return wrapXml('m-tag', dropKey(info, 'type'));
   }
 }
 
@@ -100,5 +174,6 @@ export {
   parseGroupMentions,
   parseLinks,
   parsePullRequestMentions,
+  parseTagMentions,
   parseUserMentions,
 } from './parsers';

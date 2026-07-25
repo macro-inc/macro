@@ -70,13 +70,13 @@ default = [
   "sfs_delete",
 ]
 gmail_webhook_auth = []
-local_auth = ["macro_middleware/local_auth"]
+local_auth = ["macro_authorization/local_auth"]
 local_queue = []
 sfs_map = []
 sfs_delete = []
 
 [dependencies]
-ammonia = "4.1.3"
+ammonia = "4.1.4"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
@@ -111,6 +111,7 @@ infer = "0.19.0"
 item_filters = { path = "../../crates/item_filters" }
 lol_html = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
 macro_db_client = { path = "../../crates/macro_db_client" }
@@ -120,9 +121,7 @@ macro_event_broker = { path = "../../crates/macro_event_broker" }
 mailparse = "0.16.1"
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth", "cloud_storage"
-] }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 notification = { path = "../../crates/notification" }
 macro_user_id = { path = "../../crates/macro_user_id" }
@@ -167,6 +166,7 @@ strum_macros = { workspace = true }
 system_properties = { path = "../../crates/system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
+tokio-retry.workspace = true
 tower = { workspace = true }
 tower-http = { workspace = true, features = [
   "compression-gzip",

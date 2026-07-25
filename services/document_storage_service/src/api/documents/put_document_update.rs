@@ -1,9 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, GenericErrorResponse};
 
 #[derive(serde::Deserialize)]
@@ -11,11 +12,11 @@ pub struct Params {
     pub document_id: String,
 }
 
-/// Gets a particular document by its id
+/// Updates a particular document by its id.
 #[utoipa::path(
         tag = "document",
-        get,
-        path = "/documents/{document_id}/update",
+        put,
+        path = "/internal/documents/{document_id}/update",
         operation_id = "put_document_update",
         params(
             ("document_id" = String, Path, description = "Document ID")
@@ -27,9 +28,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, _auth))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     let res = macro_db_client::document::update::update_document(&ctx.db, &document_id).await;

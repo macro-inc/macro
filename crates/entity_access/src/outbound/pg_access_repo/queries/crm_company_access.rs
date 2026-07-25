@@ -42,18 +42,22 @@ pub async fn get_crm_company_access(
         team_role_to_access_level(r.role, r.hidden).map(|access_level| CrmEntityAccess {
             access_level,
             team_id: r.team_id,
+            team_role: r.role,
         })
     }))
 }
 
 /// Map a team role + hidden flag to an [`AccessLevel`].
 ///
-/// Hidden CRM rows are invisible to plain members; admins and owners keep
-/// their normal access.
+/// Every team role can edit visible CRM rows (members included, so they can
+/// change company properties like Stage / Owner / Revenue). Hidden CRM rows
+/// are invisible to plain members; admins and owners keep their normal
+/// access. Governance actions (hiding rows, email sync) are gated on the
+/// team role by the CRM domain service, not on the access level.
 pub(super) fn team_role_to_access_level(role: TeamRole, hidden: bool) -> Option<AccessLevel> {
     match (role, hidden) {
         (TeamRole::Member, true) => None,
-        (TeamRole::Member, false) => Some(AccessLevel::View),
+        (TeamRole::Member, false) => Some(AccessLevel::Edit),
         (TeamRole::Admin, _) => Some(AccessLevel::Edit),
         (TeamRole::Owner, _) => Some(AccessLevel::Owner),
     }

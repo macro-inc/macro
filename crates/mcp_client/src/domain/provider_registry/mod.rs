@@ -5,6 +5,7 @@ use super::models;
 /// Slack MCP server URL.
 const SLACK_SERVER_URL: &str = "https://mcp.slack.com/mcp";
 const GITHUB_SERVER_URL: &str = "https://api.githubcopilot.com/mcp";
+const LINEAR_SERVER_URL: &str = "https://mcp.linear.app/mcp";
 
 macro_env_var::env_var! {
     /// Environment variables for pre-registered MCP providers.
@@ -82,3 +83,23 @@ impl PreRegisteredProviders {
         }
     }
 }
+
+/// Default OAuth scopes to request for MCP servers that support Dynamic
+/// Client Registration but have no pre-registered credentials.
+///
+/// Requesting no scope isn't the same as requesting "default" access on
+/// every provider: Linear's MCP authorization server records the local
+/// approval with whatever scope was requested (empty, if none was) but then
+/// defaults the actual grant it asks the user for to full write access,
+/// leaving the recorded approval and the granted access out of sync and the
+/// flow failing after the user approves. Requesting explicit scopes keeps
+/// both sides consistent.
+pub fn dcr_default_scopes(server_url: &str) -> Vec<String> {
+    match server_url {
+        LINEAR_SERVER_URL => vec!["read".to_string(), "write".to_string()],
+        _ => vec![],
+    }
+}
+
+#[cfg(test)]
+mod test;

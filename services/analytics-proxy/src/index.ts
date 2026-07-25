@@ -20,6 +20,10 @@ declare global {
 
 const POSTHOG_PREFIX = '/i/ph';
 const POSTHOG_ORIGIN = 'https://us.i.posthog.com';
+// Privacy filter lists block the upstream filename; keep the browser-facing
+// alias opaque and restore the real filename only for the upstream request.
+const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
+const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
 // OTLP telemetry is proxied to a per-signal intake origin (full origin,
 // scheme included, so it can be Datadog's https intakes in deployed envs or
@@ -115,7 +119,11 @@ app.all(`${OTLP_PREFIX}/*`, async (c) => {
 
 app.all(`${POSTHOG_PREFIX}/*`, (c) => {
   const url = new URL(c.req.url);
-  const path = url.pathname.slice(POSTHOG_PREFIX.length) || '/';
+  const proxyPath = url.pathname.slice(POSTHOG_PREFIX.length) || '/';
+  const path =
+    proxyPath === `/static/${POSTHOG_RECORDER_PROXY_SCRIPT_NAME}`
+      ? `/static/${POSTHOG_RECORDER_SCRIPT_NAME}`
+      : proxyPath;
   return handleProxy(c.req.raw, POSTHOG_ORIGIN, path + url.search);
 });
 

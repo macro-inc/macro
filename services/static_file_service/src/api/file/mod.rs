@@ -4,10 +4,9 @@ pub mod get_file;
 pub mod metadata;
 pub mod put_presigned_url;
 
+use crate::api::context::AppState;
 use axum::Router;
 use axum::routing::{delete, get, post, put};
-
-use crate::api::context::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
