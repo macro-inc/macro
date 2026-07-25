@@ -2,7 +2,8 @@
 //!
 //! One tool surface serves three callers, differing only in the
 //! [`ToolPolicy`] baked into the context:
-//! - chat sessions get all three tools, staging as `initiator = chat`;
+//! - chat sessions get the ledger tools plus the single-page Notion import
+//!   workflow, staging as `initiator = chat`;
 //! - gather jobs get only `CreateImportEntity`, locked to one source and
 //!   `initiator = onboarding`, staging only;
 //! - Notion import jobs get only `FinalizeImport`.
@@ -12,7 +13,10 @@
 
 use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
 use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
-use crate::domain::service::{DiscardOutcome, ImportFinalizer, ImportStager, StageOutcome};
+use crate::domain::service::{
+    DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
+    StageOutcome,
+};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
 };
@@ -117,9 +121,11 @@ impl<T> ImportToolContext<T> {
 }
 
 /// The import toolset for interactive chat.
-pub fn import_toolset<T: ImportStager>() -> AsyncToolCollection<ImportToolContext<T>> {
+pub fn import_toolset<T: ImportStager + NotionPageImporter>()
+-> AsyncToolCollection<ImportToolContext<T>> {
     AsyncToolCollection::new()
         .add_tool::<CreateImportEntity, ImportToolContext<T>>()
+        .add_tool::<ImportNotionPage, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }
@@ -381,6 +387,107 @@ fn stage_response(outcome: StageOutcome, user: &str) -> CreateImportEntityRespon
             message: "An import is already running for this item; leave it alone.".into(),
             entity: ImportEntityView::of(&row, user),
         },
+    }
+}
+
+/// Import one specific Notion page as a Macro markdown document.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(
+    title = "ImportNotionPage",
+    description = "Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, fetches through the user's connected Notion MCP, normalizes the page, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases and database-first pages are intentionally not imported."
+)]
+pub struct ImportNotionPage {
+    /// The exact Notion page URL or stable 32-character page id.
+    #[schemars(
+        description = "The exact Notion page URL or stable 32-character Notion page id to import."
+    )]
+    pub page_url: String,
+}
+
+/// Response from importing one Notion page.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportNotionPageResponse {
+    /// What happened: `imported`, `already_imported`,
+    /// `already_imported_by_teammate`, `previously_declined`, or
+    /// `import_in_progress`.
+    pub outcome: String,
+    /// The ledger row and Macro entity id, when one exists.
+    pub entity: ImportEntityView,
+    /// Human-readable result and next action.
+    pub message: String,
+}
+
+#[async_trait]
+impl<T: NotionPageImporter> AsyncTool<ImportToolContext<T>> for ImportNotionPage {
+    type Output = ImportNotionPageResponse;
+
+    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, page_url = %self.page_url), err)]
+    async fn call(
+        &self,
+        service_context: ServiceContext<ImportToolContext<T>>,
+        request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        let page_url = self.page_url.trim();
+        if page_url.is_empty() {
+            return Err(tool_error(
+                "A Notion page URL or id is required.".to_string(),
+                anyhow::anyhow!("empty Notion page URL"),
+            ));
+        }
+
+        let user = request_context.user_id.clone();
+        let outcome = service_context
+            .require_service()?
+            .import_notion_page(&user, page_url)
+            .await
+            .map_err(|e| import_error("Failed to import Notion page", e))?;
+
+        Ok(match outcome {
+            ImportNotionPageOutcome::Imported {
+                entity,
+                already_existed,
+                by_teammate,
+            } => {
+                let outcome = if by_teammate {
+                    "already_imported_by_teammate"
+                } else if already_existed {
+                    "already_imported"
+                } else {
+                    "imported"
+                };
+                let message = if already_existed {
+                    format!(
+                        "This Notion page was already imported{} as Macro document `{}`. Do not create a duplicate.",
+                        if by_teammate { " by a teammate" } else { "" },
+                        entity.entity_id.as_deref().unwrap_or("?"),
+                    )
+                } else {
+                    format!(
+                        "Imported the Notion page as Macro document `{}`.",
+                        entity.entity_id.as_deref().unwrap_or("?"),
+                    )
+                };
+                ImportNotionPageResponse {
+                    outcome: outcome.to_string(),
+                    entity: ImportEntityView::of(&entity, user.as_ref()),
+                    message,
+                }
+            }
+            ImportNotionPageOutcome::PreviouslyDiscarded(entity) => ImportNotionPageResponse {
+                outcome: "previously_declined".to_string(),
+                message: "The user previously declined this page, so it was not imported."
+                    .to_string(),
+                entity: ImportEntityView::of(&entity, user.as_ref()),
+            },
+            ImportNotionPageOutcome::ImportInProgress(entity) => ImportNotionPageResponse {
+                outcome: "import_in_progress".to_string(),
+                message: "This Notion page is already being imported. Do not start a duplicate."
+                    .to_string(),
+                entity: ImportEntityView::of(&entity, user.as_ref()),
+            },
+        })
     }
 }
 
