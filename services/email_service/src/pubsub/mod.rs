@@ -3,6 +3,7 @@ pub(crate) mod context;
 /// The flag-selected CRM metadata resolver, re-exported for the
 /// pubsub_workers binary to construct.
 pub use context::CrmMetadataResolver;
+pub mod crm_cleanup;
 pub mod gmail_ops;
 pub mod inbox_sync;
 pub mod link_manager;

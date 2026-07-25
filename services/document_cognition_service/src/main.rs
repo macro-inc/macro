@@ -416,8 +416,23 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized chat tool context");
 
-    let channel_tool_context =
-        ai_tools::build_channel_tool_context(db.clone(), lexical_client.clone());
+    // Channel messages sent by AI tools (chat, agents) dispatch the same side
+    // effects as the document-storage channel API, so mentions and replies
+    // notify recipients and stream to connected clients.
+    let channels_connection_gateway =
+        Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+            internal_api_key.clone(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        ));
+    let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
+        db.clone(),
+        lexical_client.clone(),
+        ai_tools::ChannelSideEffectClients {
+            connection_gateway: channels_connection_gateway.clone(),
+            sqs: aws_sdk_sqs::Client::new(&aws_config),
+            macro_event_broker: macro_event_broker.clone(),
+        },
+    );
     let recorder = ai_usage::pg_recorder(db.clone());
 
     // The import pipeline: staged/imported external items, gather jobs over
@@ -433,12 +448,8 @@ async fn main() -> anyhow::Result<()> {
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
     // poll (see import::outbound::gateway_notifier).
-    let import_notify = import::outbound::gateway_notifier::gateway_import_notify(Arc::new(
-        connection_gateway_client::ConnectionGatewayClient::new(
-            internal_api_key.clone(),
-            ConnectionGatewayUrl::new()?.to_string(),
-        ),
-    ));
+    let import_notify =
+        import::outbound::gateway_notifier::gateway_import_notify(channels_connection_gateway);
 
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),

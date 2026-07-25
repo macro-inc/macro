@@ -10,25 +10,39 @@ use crate::domain::models::{ImportEntity, ImportSource, metadata_label};
 
 /// System prompt for a gather session over one connector.
 pub fn gather_system(source: ImportSource) -> String {
-    let (what, foreign_id_rule, metadata_hint) = match source {
+    let (what, foreign_id_rule, metadata_hint, search_strategy) = match source {
         ImportSource::Linear => (
             "the user's most relevant recent Linear issues",
             "the Linear issue identifier (e.g. `ENG-142`); fall back to the issue URL only when \
              no identifier exists",
             "identifier, title, description (short markdown), status, priority, assignee, \
              assignee_email, due_date (ISO date, when set), url",
+            "Always pass a non-empty query to search tools.",
         ),
         ImportSource::Notion => (
             "the user's most recently updated, substantive Notion pages",
             "the page URL (it is normalized to the stable page id server-side)",
             "title, url, summary (one line). Do NOT fetch or include page content — content is \
              fetched later, only for pages the user accepts",
+            "Always pass a non-empty query to search tools.",
         ),
         ImportSource::Slack => (
             "the Slack channels the user is most active in",
             "the Slack channel id (e.g. `C0123456789`); fall back to the channel name",
             "name (without the leading #), channel_id, purpose, participants (name + email when \
              available)",
+            "Slack-specific discovery strategy:\n\
+             - FIRST call `Search channels` with an explicitly empty search string: \
+             `{\"query\": \"\"}`. For this Slack MCP tool, an empty query lists all channels the \
+             connected user can see. Do not substitute `active`, `recent`, `all`, or `*`.\n\
+             - Follow the result's pagination cursor when one is present until you have enough \
+             candidates or there are no more pages.\n\
+             - Prefer channels whose names, topics, or purposes indicate substantive work. You \
+             may use one broad `Search messages & files` call afterward to rank the enumerated \
+             channels by recent activity, but do not use message search as a prerequisite for \
+             discovering that a channel exists.\n\
+             - Participant details are optional. Do not drop a channel merely because member \
+             names or emails are unavailable.",
         ),
     };
     format!(
@@ -37,8 +51,9 @@ pub fn gather_system(source: ImportSource) -> String {
          \n\
          Use the connected tools to find 8-15 strong candidates: recently active, substantive, \
          and clearly relevant to the user's own work. Prefer one or two broad searches/list \
-         calls over many narrow ones. Always pass a non-empty query and only the parameters a \
-         tool's schema requires; if a call fails validation, fix the arguments and retry once.\n\
+         calls over many narrow ones. Pass only parameters the tool's schema supports; if a call \
+         fails validation, fix the arguments and retry once.\n\
+         {search_strategy}\n\
          \n\
          For EACH candidate, call `CreateImportEntity` once with:\n\
          - `foreign_id`: {foreign_id_rule}\n\

@@ -86,6 +86,8 @@ pub struct SQS {
     email_scheduled_queue: Option<String>,
     #[cfg(feature = "email")]
     email_backfill_queue: Option<String>,
+    #[cfg(feature = "email")]
+    email_crm_cleanup_queue: Option<String>,
     #[cfg(feature = "search")]
     search_event_queue: Option<String>,
     #[cfg(feature = "sfs_uploader")]
@@ -126,6 +128,8 @@ impl SQS {
             email_scheduled_queue: None,
             #[cfg(feature = "email")]
             email_backfill_queue: None,
+            #[cfg(feature = "email")]
+            email_crm_cleanup_queue: None,
             #[cfg(feature = "search")]
             search_event_queue: None,
             #[cfg(feature = "sfs_uploader")]

@@ -18,7 +18,7 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
     type Topic: Topic;
 
     /// Version of this concrete event variant's payload schema.
-    fn schema_version(&self) -> u8;
+    const SCHEMA_VERSION: u8;
 }
 
 /// Serializable event envelope published through the broker.
@@ -50,7 +50,7 @@ impl<E: TopicEvent> Event<E> {
 
     /// Create a new event with an explicit event id.
     pub fn with_event_id(event_id: Uuid, event: E) -> Self {
-        let schema_version = event.schema_version();
+        let schema_version = E::SCHEMA_VERSION;
         Self::with_event_id_and_schema_version(event_id, schema_version, event)
     }
 
@@ -226,7 +226,7 @@ macro_rules! declare_topics {
                             .ok_or($crate::EventBrokerError::MissingMessagePayload)?;
                         let event = <$event as $crate::MacroEvent>::decode(key, payload)?;
                         let envelope = <$event as $crate::MacroEvent>::event(&event);
-                        let expected = $crate::TopicEvent::schema_version(&envelope.event);
+                        let expected = <<$event as $crate::MacroEvent>::EventPayload as $crate::TopicEvent>::SCHEMA_VERSION;
                         let actual = envelope.schema_version;
                         if actual != expected {
                             return Err($crate::EventBrokerError::UnsupportedSchemaVersion {

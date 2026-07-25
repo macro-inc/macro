@@ -72,6 +72,14 @@ pub struct Config {
     #[macro_config_default(1)]
     pub backfill_queue_max_messages: i32,
 
+    /// The number of workers we spawn for the nightly crm cleanup queue
+    #[macro_config_default(2)]
+    pub crm_cleanup_queue_workers: i32,
+
+    /// The queue max messages per poll for crm cleanup
+    #[macro_config_default(10)]
+    pub crm_cleanup_queue_max_messages: i32,
+
     /// The number of workers we spawn for gmail inbox sync
     #[macro_config_default(10)]
     pub inbox_sync_queue_workers: i32,

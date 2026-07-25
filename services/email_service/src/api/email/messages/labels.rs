@@ -186,7 +186,7 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_read_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &authorization.authorization.user.user_context.fusion_user_id,
+                    link.id,
                     !is_adding,
                 )
                 .await
@@ -195,7 +195,7 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_starred_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &authorization.authorization.user.user_context.fusion_user_id,
+                    link.id,
                     is_adding,
                 )
                 .await

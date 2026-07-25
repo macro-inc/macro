@@ -103,6 +103,7 @@ function PopoverSplitModal(props: {
     canEngagePreview: () => false,
     engagePreview: () => {},
     disengagePreview: () => {},
+    resetPreview: () => {},
     viewerId: () => undefined,
   };
 

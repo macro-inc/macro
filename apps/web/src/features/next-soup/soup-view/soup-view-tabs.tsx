@@ -108,6 +108,7 @@ export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
 
 export const useApplyPreset = () => {
   const soup = useSoup();
+  const panel = useSplitPanelOrThrow();
   const {
     queryFilters,
     restorePersistedQueryFilters,
@@ -209,6 +210,19 @@ export const useApplyPreset = () => {
       }
       soup.grouping.setActiveGroupId(preset.groupBy);
     });
+
+    // The new tab replaces the dataset wholesale, and row focus only follows
+    // a row that survives into it (see soup.setRows). When it doesn't,
+    // nothing is selected anymore, so the Preview Pair's Viewer returns to
+    // its placeholder instead of lingering on the previous tab's entity.
+    const focusedRow = soup.focus.row();
+    if (
+      !focusedRow ||
+      focusedRow.getIsGrouped() ||
+      focusedRow.getIsLoadMore()
+    ) {
+      panel.handle.resetPreview();
+    }
     return true;
   };
 

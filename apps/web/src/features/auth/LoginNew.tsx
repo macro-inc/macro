@@ -1,8 +1,12 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
+import { NoiseBackground } from '@app/features/setup/flow/shared';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
@@ -10,13 +14,13 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@icon/macro-apple.svg';
 import IconGoogle from '@icon/macro-google.svg';
 import LogoIcon from '@icon/macro-logo.svg';
-import IconMail from '@icon/macro-mail.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
   invalidateUserInfo,
+  useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import {
@@ -31,7 +35,6 @@ import { Stepper } from '@ui/components/Stepper';
 import { detect } from 'detect-browser';
 import {
   createEffect,
-  createMemo,
   createSignal,
   type JSX,
   onCleanup,
@@ -45,6 +48,7 @@ import {
   sentEmailCode,
   useResetEmailCode,
 } from './EmailForm';
+import { OtpInput } from './OtpInput';
 import { Stage } from './Shared';
 import { useSsoLogin } from './useSsoLogin';
 
@@ -60,10 +64,34 @@ function PostLoginRedirect() {
   return <LoadingBlock />;
 }
 
+/**
+ * Where login and onboarding meet: once authenticated, first-time desktop
+ * users continue straight into the onboarding steps IN PLACE — same page,
+ * no redirect — while everyone else proceeds into the app. This keeps
+ * /login a single surface that decides what the user needs next.
+ */
+function PostAuthGate() {
+  const userInfoQuery = useUserInfoQuery();
+
+  const needsOnboarding = () =>
+    ENABLE_ONBOARDING_V4 &&
+    !isMobile() &&
+    !isNativeMobilePlatform() &&
+    userInfoQuery.data?.authenticated === true &&
+    userInfoQuery.data.tutorialComplete === false;
+
+  return (
+    <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+      <OnboardingFlow />
+    </Show>
+  );
+}
+
 function LoginPicker(props: { setStage: (next: Stage) => void }) {
   const startSsoLogin = useSsoLogin();
-  const showApple =
-    !isNativeMobilePlatform() || getNativeMobilePlatform() === 'ios';
+  // Apple sign-in is iOS-only: it's required there for App Store review,
+  // and intentionally absent on desktop.
+  const showApple = getNativeMobilePlatform() === 'ios';
 
   return (
     <div class="flex flex-col gap-3">
@@ -78,7 +106,8 @@ function LoginPicker(props: { setStage: (next: Stage) => void }) {
 
       <Show when={showApple}>
         <Button
-          class="ring ring-edge-muted"
+          variant="base"
+          class="bg-surface"
           onClick={() => startSsoLogin('Apple')}
         >
           <IconApple />
@@ -87,10 +116,10 @@ function LoginPicker(props: { setStage: (next: Stage) => void }) {
       </Show>
 
       <Button
-        class="ring ring-edge-muted"
+        variant="base"
+        class="bg-surface"
         onClick={() => props.setStage(Stage.Email)}
       >
-        <IconMail />
         Continue with email
       </Button>
     </div>
@@ -229,7 +258,7 @@ function EmailFormNew(props: {
         Continue
         <ArrowRight class="size-4" />
       </Button>
-      <Button class="ring ring-edge-muted" onClick={props.onBack}>
+      <Button variant="base" class="bg-surface" onClick={props.onBack}>
         <ArrowLeft class="size-4" />
         Back to sign in
       </Button>
@@ -260,6 +289,7 @@ function VerifyFormNew(props: {
   setStage: (next: Stage) => void;
   onBack: () => void;
 }) {
+  const [code, setCode] = createSignal('');
   const [resendError, setResendError] = createSignal<string>();
   const [showResendCode, setShowResendCode] = createSignal(false);
   const [resendTimer, setResendTimer] = createSignal(RESEND_TIMER);
@@ -345,52 +375,50 @@ function VerifyFormNew(props: {
       class="flex flex-col gap-3"
     >
       <input type="hidden" name="email" value={email() ?? ''} />
+      <input type="hidden" name="one-time-code" value={code()} />
       <p class="text-xs text-ink-muted leading-snug">
         Enter the 6-digit code we sent to{' '}
         <span class="text-ink font-medium break-all">{email()}</span>.
       </p>
-      <div class="relative">
-        <FormInput
-          id="one-time-code"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]{6}"
-          placeholder="••••••"
-          maxLength={6}
-          monospace
-          centered
-          class="pr-20"
-          onInput={(e) => {
-            const value = e.currentTarget.value;
-            if (value.length === 6) {
-              const formData = new FormData(formEl);
-              formData.set('email', email());
-              submit(formData);
-            }
-          }}
-        />
-        <Button
+      <OtpInput
+        value={code()}
+        disabled={submission.pending}
+        onInput={setCode}
+        onComplete={(value) => {
+          const formData = new FormData(formEl);
+          formData.set('email', email());
+          formData.set('one-time-code', value);
+          submit(formData);
+        }}
+      />
+      <p class="text-center text-xs text-ink-muted" aria-live="polite">
+        Didn't receive a code?{' '}
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
           onClick={handleResendCode}
           disabled={
             emailSubmission.pending || submission.pending || !showResendCode()
           }
-          aria-live="polite"
-          class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs rounded-lg"
+          class="font-medium text-ink transition-colors hover:text-ink-muted disabled:text-ink-extra-muted"
         >
           <Show when={resendTimer() > 0} fallback="Resend">
-            {resendTimer()}s
+            Resend ({resendTimer()})
           </Show>
-        </Button>
-      </div>
+        </button>
+      </p>
       <FormError msg={submission.error?.message ?? resendError()} />
-      <Button variant="cta" type="submit" disabled={submission.pending}>
+      {/* The visible pattern-validated input is gone (the code lives in a
+          hidden field, which browsers exempt from constraint validation), so
+          gate submission here instead of round-tripping partial codes. */}
+      <Button
+        variant="cta"
+        type="submit"
+        disabled={submission.pending || code().length !== 6}
+      >
         Verify
         <ArrowRight class="size-4" />
       </Button>
-      <Button class="ring ring-edge-muted" onClick={props.onBack}>
+      <Button variant="base" class="bg-surface" onClick={props.onBack}>
         <ArrowLeft class="size-4" />
         Change email
       </Button>
@@ -504,19 +532,8 @@ export function LoginNew() {
     }
   };
 
-  const headerTitle = createMemo(() => {
-    switch (stage()) {
-      case Stage.Email:
-        return 'Enter your email';
-      case Stage.Verify:
-        return 'Check your inbox';
-      default:
-        return 'Log in to Macro';
-    }
-  });
-
   return (
-    <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
+    <Show when={!userInfo()?.authenticated} fallback={<PostAuthGate />}>
       <div class="flex items-center justify-center size-full overflow-hidden relative">
         <style>{
           /*css*/ `
@@ -539,17 +556,20 @@ export function LoginNew() {
         `
         }</style>
 
-        <div class="w-full max-w-sm sm:max-w-md ln-card">
-          <div class="px-4 sm:px-8 flex flex-col gap-16">
+        <NoiseBackground />
+
+        <div class="relative z-10 w-full max-w-sm sm:max-w-lg ln-card">
+          <div class="px-4 sm:px-8 flex flex-col gap-12">
             <div class="flex flex-col gap-8">
               <Show when={!virtualKeyboardVisible()}>
-                <div class="flex flex-col items-center text-center gap-2">
-                  <LogoIcon class="shrink-0 text-accent size-10" />
-                  <h1
-                    class={cn('font-semibold tracking-tight text-ink text-2xl')}
-                  >
-                    {headerTitle()}
+                <div class="flex flex-col gap-1.5">
+                  <LogoIcon class="mb-2 size-9 text-accent" />
+                  <h1 class="font-semibold tracking-tight text-ink text-2xl">
+                    Welcome to Macro
                   </h1>
+                  <p class="text-sm text-ink-muted">
+                    The open source workspace
+                  </p>
                 </div>
               </Show>
 

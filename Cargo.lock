@@ -186,6 +186,8 @@ dependencies = [
  "chat",
  "chrono",
  "connection",
+ "connection_gateway_client",
+ "contacts",
  "cool_asserts",
  "crm",
  "dateparser",
@@ -2396,6 +2398,7 @@ dependencies = [
  "connection",
  "entity_access",
  "entity_access_db_utils",
+ "entity_mutation",
  "filter_ast",
  "futures",
  "item_filters",
@@ -2413,6 +2416,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "pgvector",
+ "rootcause",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -2608,6 +2612,7 @@ dependencies = [
  "contacts",
  "entity_access",
  "entity_access_db_utils",
+ "entity_mutation",
  "filter_ast",
  "frecency",
  "futures",
@@ -2673,6 +2678,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "entity_mutation",
  "futures",
  "http-body-util",
  "macro_authorization",
@@ -4448,6 +4454,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "entity_mutation",
  "foreign_entity",
  "futures",
  "hex",
@@ -4488,6 +4495,7 @@ dependencies = [
  "task_dedup",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
@@ -4742,6 +4750,7 @@ dependencies = [
  "email_utils",
  "entity_access",
  "entity_access_management",
+ "entity_mutation",
  "filter_ast",
  "frecency",
  "futures",
@@ -4760,6 +4769,7 @@ dependencies = [
  "recursion",
  "redis",
  "reqwest 0.13.4",
+ "rootcause",
  "schemars 1.2.1",
  "scraper",
  "serde",
@@ -4967,6 +4977,7 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -5181,6 +5192,19 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "entity_mutation"
+version = "0.1.0"
+dependencies = [
+ "entity_access",
+ "macro_user_id",
+ "model-entity",
+ "models_permissions",
+ "rootcause",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -5793,6 +5817,13 @@ dependencies = [
  "loro-thunderdome",
  "proc-macro2",
  "rustc-hash 2.1.2",
+]
+
+[[package]]
+name = "generic_email_domains"
+version = "0.1.0"
+dependencies = [
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8763,6 +8794,7 @@ dependencies = [
  "call",
  "channels",
  "chat",
+ "connection_gateway_client",
  "crm",
  "database_env_vars",
  "documents",
@@ -10086,6 +10118,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "generic_email_domains",
  "import",
  "macro_authorization",
  "macro_user_id",
@@ -11119,6 +11152,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "entity_mutation",
  "futures",
  "hex",
  "http-body-util",
@@ -14222,6 +14256,7 @@ dependencies = [
  "chrono",
  "contacts",
  "entity_access",
+ "generic_email_domains",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -15675,6 +15710,7 @@ dependencies = [
  "sqs_client",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
  "tower 0.5.3",
  "tracing",
  "url",

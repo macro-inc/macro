@@ -892,6 +892,8 @@ pub enum PostMessageNotificationPolicy {
     /// Apply the normal channel notification rules.
     #[default]
     Default,
+    /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
+    MentionsOnly,
     /// Do not send notifications for this post. Realtime/search side effects still run.
     Silent,
 }

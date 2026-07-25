@@ -544,6 +544,58 @@ describe('layoutManager', () => {
       });
     });
 
+    it('resets the viewer to its placeholder without stacking history', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+        manager.engagePreviewMode(controllerId);
+        const viewerId = manager.viewerOf(controllerId)!;
+
+        manager.openWithSplit(
+          { type: 'md', id: 'doc-1' },
+          { referredFrom: null, handle: manager.getSplit(controllerId) }
+        );
+        expect(manager.splits()[1].content).toMatchObject({
+          type: 'md',
+          id: 'doc-1',
+        });
+
+        manager.getSplit(controllerId)?.resetPreview();
+
+        expect(manager.viewerOf(controllerId)).toBe(viewerId);
+        expect(manager.splits()).toHaveLength(2);
+        expect(manager.splits()[1].content).toMatchObject({
+          type: 'component',
+          id: 'preview-empty',
+        });
+        // Selection state was merge-replaced both ways, so the stale entity
+        // does not linger as a back entry.
+        expect(manager.getSplit(viewerId)?.canGoBack()).toBe(false);
+
+        dispose();
+      });
+    });
+
+    it('reset is a no-op without a viewer or when already on the placeholder', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+
+        manager.resetPreviewMode(controllerId);
+        expect(manager.splits()).toHaveLength(1);
+
+        manager.engagePreviewMode(controllerId);
+        const viewerId = manager.viewerOf(controllerId)!;
+        manager.resetPreviewMode(controllerId);
+
+        expect(manager.viewerOf(controllerId)).toBe(viewerId);
+        expect(manager.splits()[1].content).toMatchObject({
+          type: 'component',
+          id: 'preview-empty',
+        });
+
+        dispose();
+      });
+    });
+
     it('uses the configured controller width for Email Soup', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [

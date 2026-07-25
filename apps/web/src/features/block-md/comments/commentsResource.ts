@@ -43,7 +43,10 @@ async function fetchComments() {
   const commentThreads = await storageServiceClient.annotations.getComments({
     documentId,
   });
-  return commentThreads.isOk() ? commentThreads.value.data : [];
+  if (commentThreads.isErr()) {
+    throw new Error('Unable to fetch comments');
+  }
+  return commentThreads.value.data;
 }
 
 function useHandleCreateComment() {

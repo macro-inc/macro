@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT MAX(id) as \"max_id\", COUNT(*) as \"count!\"\n        FROM crm_cleanup_candidates\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "ea00eb1f5f38a4397875efe17d1184107ca291aacf93d4d8fbfa3d5d49101ab7"
+}

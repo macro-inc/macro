@@ -544,10 +544,10 @@ export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
 
-// New split-screen onboarding (/setup): connect tools on the left, pick
-// what to import on the right. Dev-mode default; override with
-// VITE_ENABLE_NEW_ONBOARDING_V3.
-export const ENABLE_NEW_ONBOARDING_V3 = resolveFeatureFlag(
-  'ENABLE_NEW_ONBOARDING_V3',
+// Onboarding v4: the full-screen stepper new users land in after signup
+// (unified with /login), driving the import machinery with auto-import.
+// Dev-mode default; override with VITE_ENABLE_ONBOARDING_V4.
+export const ENABLE_ONBOARDING_V4 = resolveFeatureFlag(
+  'ENABLE_ONBOARDING_V4',
   DEV_MODE_ENV
 );

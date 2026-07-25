@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO crm_cleanup_jobs (id, total_candidates, max_candidate_id, status)\n        VALUES ($1, $2, $3, 'Init')\n        ON CONFLICT ((TRUE)) WHERE status IN ('Init', 'InProgress') DO NOTHING\n        RETURNING\n            id,\n            status as \"status: CrmCleanupJobStatus\",\n            total_candidates,\n            dispatched_count,\n            max_candidate_id,\n            created_at,\n            updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status: CrmCleanupJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "crm_cleanup_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "total_candidates",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "dispatched_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "max_candidate_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6fc1d293fb45bfd5788378f7dd61517f26adfbd430a833f07e0f63807fb40ae1"
+}

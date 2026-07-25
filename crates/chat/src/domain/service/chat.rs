@@ -50,6 +50,19 @@ where
     }
 }
 
+impl<R: ChatRepo, Eam: EntityAccessManagementService> ChatServiceImpl<R, (), Eam> {
+    /// Create a chat service for hosts that only use metadata/lifecycle
+    /// operations and never execute stored tool calls.
+    pub fn new_without_tools(repo: R, entity_access_management_service: Eam) -> Self {
+        Self::new(
+            repo,
+            Arc::new(AsyncToolCollection::new()),
+            (),
+            entity_access_management_service,
+        )
+    }
+}
+
 impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService> ChatService
     for ChatServiceImpl<R, ToolSetContext, Eam>
 where
@@ -120,6 +133,16 @@ where
             chat,
             user_access_level,
         })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_metadata(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<model::chat::Chat> {
+        self.repo
+            .get_metadata(&entity_access_receipt.entity().entity_id)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]

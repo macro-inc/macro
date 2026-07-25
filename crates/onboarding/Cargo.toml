@@ -8,6 +8,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+generic_email_domains = { path = "../generic_email_domains" }
 import = { path = "../import" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",

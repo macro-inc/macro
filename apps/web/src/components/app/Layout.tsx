@@ -45,7 +45,7 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
+import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -284,9 +284,9 @@ function CollapsedSidebarIncomingCallWidget(props: {
 }
 
 /**
- * Sends first-time desktop users into the split-screen onboarding at
- * /setup. Fires from anywhere in the app (marketing SSO lands on /app, not
- * /login), but never off auth/full-screen routes — /setup itself included.
+ * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Fires from anywhere in the app (marketing SSO lands on /app, not /login),
+ * but never off auth/full-screen routes — /onboarding itself included.
  */
 function NewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
@@ -294,7 +294,7 @@ function NewOnboardingRedirect() {
   const location = useLocation();
 
   createEffect(() => {
-    if (!ENABLE_NEW_ONBOARDING_V3 || isMobile() || isNativeMobilePlatform()) {
+    if (!ENABLE_ONBOARDING_V4 || isMobile() || isNativeMobilePlatform()) {
       return;
     }
     const data = userInfoQuery.data;
@@ -303,12 +303,14 @@ function NewOnboardingRedirect() {
     }
     if (AUTH_URLS.includes(location.pathname)) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // /setup carries it as ?next and its finish() returns there instead of
+    // the flow carries it as ?next and its finish() returns there instead of
     // home. Base-relative so navigate() can resolve it against the router.
     const target =
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
     navigate(
-      target === '/' ? '/setup' : `/setup?next=${encodeURIComponent(target)}`,
+      target === '/'
+        ? '/onboarding'
+        : `/onboarding?next=${encodeURIComponent(target)}`,
       { replace: true }
     );
   });

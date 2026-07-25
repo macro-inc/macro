@@ -26,6 +26,7 @@ call = { path = "../../crates/call", default-features = false, features = [
 ] }
 channels = { path = "../../crates/channels", features = ["outbound"] }
 chat = { path = "../../crates/chat", features = ["ai_tools", "outbound"] }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 documents = { path = "../../crates/documents", features = ["ai_tools"] }

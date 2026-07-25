@@ -52,6 +52,10 @@ export type ConnectedServer = {
 export type OnboardingState = {
   row: OnboardingRow;
   connected_servers: ConnectedServer[];
+  /** The account email's domain when it can back a domain team (not a
+   * generic consumer provider), null otherwise. Server-judged with the same
+   * list the teams service uses for auto-join/claiming. */
+  suggested_team_domain?: string | null;
 };
 
 export const onboardingClient = {

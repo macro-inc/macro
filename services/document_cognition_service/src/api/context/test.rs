@@ -352,7 +352,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_tool_context: notification_tool_context.clone(),
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(
+        channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
         ),

@@ -12,8 +12,7 @@ use models_email::api::refresh::RefreshEmailEvent;
 #[cfg(test)]
 mod test;
 use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, DepopulateCrmContactPayload, LinkScopedPayload,
-    PopulateCrmContactPayload,
+    BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
 };
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
@@ -250,38 +249,28 @@ pub async fn enqueue_populate_crm_contacts(
     Ok(())
 }
 
-/// Producer-side fan-out helper for tearing CRM contacts down when a sent
-/// message is deleted. Mirrors [`enqueue_populate_crm_contacts`] and uses
-/// the same [`normalized_non_self_contact_emails`] filter.
-///
-/// Used by `delete_message` in the inbox-sync worker. The consumer
-/// (`depopulate_crm_contact`) re-checks whether the link still has any
-/// sent message to the contact before deleting, so duplicate enqueues
-/// from retries are harmless.
-pub async fn enqueue_depopulate_crm_contacts(
+/// Producer-side dedupe for deferred CRM teardown when a message is deleted.
+/// Uses the same [`normalized_non_self_contact_emails`] filter as the populate
+/// helper, then upserts one `crm_cleanup_candidates` row per distinct contact.
+/// The unique `(link_id, contact_email)` index collapses bulk deletes into a
+/// single pending row; the nightly cleanup job sweeps the table and
+/// depopulates contacts whose links no longer have messages with them.
+pub async fn insert_crm_cleanup_candidates(
     ctx: &PubSubContext,
     link_id: Uuid,
     self_email: &str,
     contact_emails: impl IntoIterator<Item = String>,
 ) -> Result<(), ProcessingError> {
-    for contact_email in normalized_non_self_contact_emails(self_email, contact_emails) {
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::DepopulateCrmContact(LinkScopedPayload {
-                link_id,
-                payload: DepopulateCrmContactPayload { contact_email },
-            }),
-        };
+    let emails = normalized_non_self_contact_emails(self_email, contact_emails);
 
-        ctx.sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue DepopulateCrmContact message"),
-                })
-            })?;
-    }
+    email_db_client::crm_cleanup::candidates::insert_candidates(&ctx.db, link_id, &emails)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to insert crm cleanup candidates"),
+            })
+        })?;
 
     Ok(())
 }

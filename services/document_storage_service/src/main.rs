@@ -822,9 +822,10 @@ async fn main() -> anyhow::Result<()> {
     let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build Macro agent tool context")?;
-    // Wire the agent's SendChannelMessage tool to the same side-effect pipeline
-    // as the HTTP API, so messages it posts fire notifications and realtime
-    // updates (the generic env builder uses a no-op dispatcher otherwise).
+    // Wire the agent's SendChannelMessage tool to this service's own
+    // side-effect pipeline so agent-posted messages share the exact instance
+    // used by the HTTP API, including the in-process bot trigger sender (the
+    // env builder wires an equivalent pipeline, but without bot triggers).
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),

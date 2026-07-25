@@ -307,6 +307,17 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
+    /// Re-tag this receipt for another permission requirement after
+    /// revalidating the already-resolved permission.
+    ///
+    /// This safely supports passing a stronger receipt to a read-only domain
+    /// method without repeating the underlying access lookup.
+    pub fn try_into_requirement<U: RequiredPermission>(
+        self,
+    ) -> Result<EntityAccessReceipt<U>, AccessError> {
+        EntityAccessReceipt::<U>::try_new(self.auth, self.entity, self.entity_permission)
+    }
+
     /// Creates an access receipt for the given auth after validating the
     /// provided permission against the required level `T`.
     pub fn try_new(

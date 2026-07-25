@@ -137,6 +137,12 @@ pub trait ChatService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl std::future::Future<Output = Result<GetChatResponse>> + Send;
 
+    /// Get chat metadata without loading messages.
+    fn get_metadata(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl std::future::Future<Output = Result<model::chat::Chat>> + Send;
+
     /// Copy a chat and its messages, returning the new chat ID.
     fn copy_chat(
         &self,

@@ -3540,6 +3540,10 @@
           "row": {
             "$ref": "#/components/schemas/OnboardingRow",
             "description": "The user's onboarding row."
+          },
+          "suggested_team_domain": {
+            "type": ["string", "null"],
+            "description": "The account email's domain when it can back a domain team — i.e. it\nis not a generic consumer provider — `None` otherwise. Judged with\nthe same list the teams service uses for domain auto-join and\nclaiming, so the client never suggests a domain team the server\nwould refuse."
           }
         }
       },

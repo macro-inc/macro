@@ -57,6 +57,15 @@ mod self_read_guard {
             unreachable!("guard should short-circuit before calling the chat service")
         }
 
+        async fn get_metadata(
+            &self,
+            _entity_access_receipt: EntityAccessReceipt<
+                entity_access::domain::models::ViewAccessLevel,
+            >,
+        ) -> Result<model::chat::Chat> {
+            unreachable!("guard should short-circuit before calling the chat service")
+        }
+
         async fn copy_chat(
             &self,
             _entity_access_receipt: EntityAccessReceipt<
@@ -273,6 +282,28 @@ mod self_read_guard {
             _args: CreateChatArgs,
         ) -> Result<String> {
             Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
+        }
+
+        async fn get_metadata(
+            &self,
+            entity_access_receipt: EntityAccessReceipt<
+                entity_access::domain::models::ViewAccessLevel,
+            >,
+        ) -> Result<model::chat::Chat> {
+            #[allow(deprecated)]
+            let chat_id = entity_access_receipt.entity().entity_id.clone();
+            Ok(model::chat::Chat {
+                id: chat_id.to_string(),
+                name: "Other Chat".to_string(),
+                user_id: "macro|test@example.com".to_string(),
+                model: None,
+                project_id: None,
+                created_at: None,
+                updated_at: None,
+                token_count: None,
+                is_persistent: true,
+                deleted_at: None,
+            })
         }
 
         async fn get_chat(

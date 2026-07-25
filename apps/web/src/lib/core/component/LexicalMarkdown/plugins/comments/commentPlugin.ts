@@ -61,6 +61,10 @@ export const MARK_SELECTED_COMMENT_COMMAND = createCommand<string[]>(
   'MARK_SELECTED_COMMENT_COMMAND'
 );
 
+export const REMOVE_ORPHANED_COMMENT_MARKS_COMMAND = createCommand<
+  ReadonlySet<string>
+>('REMOVE_ORPHANED_COMMENT_MARKS_COMMAND');
+
 export const SET_COMMENT_THREAD_ID_COMMAND = createCommand<{
   markId: string;
   threadId: number;
@@ -408,6 +412,14 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       COMMAND_PRIORITY_EDITOR
     ),
     editor.registerCommand(
+      REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
+      (validMarkIds) => {
+        $removeOrphanedCommentMarks(validMarkIds);
+        return true;
+      },
+      COMMAND_PRIORITY_EDITOR
+    ),
+    editor.registerCommand(
       CLEANUP_COMMENTS_COMMAND,
       (payload) => {
         $disposeExternalDraftComments(payload);
@@ -445,6 +457,24 @@ function $disposeExternalDraftComments(validPeerIds: string[]) {
       if (!validPeerIds.includes(nodePeerId)) {
         $unwrapMarkNode(node);
       }
+    }
+  });
+}
+
+function $removeOrphanedCommentMarks(validMarkIds: ReadonlySet<string>) {
+  $traverseNodes($getRoot(), (node) => {
+    if (!$isCommentNode(node) || node.getIsDraft()) return;
+
+    const invalidIds = node.getIDs().filter((id) => !validMarkIds.has(id));
+    if (invalidIds.length === 0) return;
+
+    if (invalidIds.length === node.getIDs().length) {
+      $unwrapMarkNode(node);
+      return;
+    }
+
+    for (const id of invalidIds) {
+      node.deleteID(id);
     }
   });
 }

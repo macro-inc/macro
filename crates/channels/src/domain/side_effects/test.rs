@@ -16,6 +16,7 @@ type RemovedMessages = Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>;
 #[derive(Clone)]
 struct FakeContext {
     message_count: i64,
+    fail_existing_user_lookup: bool,
     document_mentions: Vec<ChannelDocumentMention>,
     bot_profile: Option<BotSenderProfile>,
     bot_profile_lookup_count: Arc<Mutex<usize>>,
@@ -26,6 +27,7 @@ impl Default for FakeContext {
     fn default() -> Self {
         Self {
             message_count: 2,
+            fail_existing_user_lookup: false,
             document_mentions: Vec::new(),
             bot_profile: Some(BotSenderProfile {
                 name: "Test Bot".to_string(),
@@ -48,6 +50,9 @@ impl ChannelSideEffectContext for FakeContext {
         &self,
         user_ids: Vec<MacroUserIdStr<'static>>,
     ) -> Result<HashSet<String>, Self::Err> {
+        if self.fail_existing_user_lookup {
+            anyhow::bail!("existing-user lookup failed");
+        }
         Ok(user_ids
             .into_iter()
             .map(|user_id| user_id.as_ref().to_string())
@@ -437,6 +442,75 @@ async fn silent_message_posted_skips_notifications_only() {
         vec![(channel_id, message_id)]
     );
     assert!(notifications.effects.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let sender = user("julia@example.com");
+    let mentioned = user("new-user@example.com");
+    let jacob = user("jacob@example.com");
+    let teo = user("teo@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            fail_existing_user_lookup: true,
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeSearch::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let participants = [&sender, &mentioned, &jacob, &teo]
+        .into_iter()
+        .map(|user_id| ChannelParticipant {
+            channel_id,
+            user_id: user_id.as_ref().to_string(),
+            role: ParticipantRole::Member,
+            joined_at: now,
+            left_at: None,
+        })
+        .collect();
+
+    service
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Macro Support".to_string(),
+            },
+            participants,
+            message: MutatedMessage {
+                id: message_id,
+                channel_id,
+                thread_id: None,
+                sender_id: Sender::new_from_user(sender),
+                triggered_by: None,
+                content: "welcome".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: vec![SimpleMention::user(&mentioned)],
+            has_attachments: false,
+            attachments: Vec::new(),
+            nonce: None,
+            notification_policy: PostMessageNotificationPolicy::MentionsOnly,
+        })
+        .await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    assert_eq!(notification_effects.len(), 1);
+    let ChannelNotificationEffect::UserMention { recipient_ids, .. } = &notification_effects[0]
+    else {
+        panic!("expected only a user mention notification");
+    };
+    assert_eq!(recipient_ids, &HashSet::from([mentioned]));
 }
 
 #[tokio::test]

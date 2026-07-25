@@ -590,6 +590,12 @@ queue! {
             dev: "email-service-backfill-queue-dev",
             prod: "email-service-backfill-queue-prod",
         },
+        /// Queue for the nightly CRM cleanup job (email_service).
+        pub EmailCrmCleanupQueue {
+            local: "email-service-crm-cleanup-queue",
+            dev: "email-service-crm-cleanup-queue-dev",
+            prod: "email-service-crm-cleanup-queue-prod",
+        },
         /// Queue for the bulk upload extractor lambda
         /// (upload_extractor_lambda_trigger `UPLOAD_EXTRACTOR_QUEUE`).
         pub UploadExtractorQueue {

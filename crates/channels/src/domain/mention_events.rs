@@ -68,9 +68,7 @@ pub enum MentionTopicEvent {
 impl TopicEvent for MentionTopicEvent {
     type Topic = MacroMentionsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroMentionsTopic`], keyed by the mentioned

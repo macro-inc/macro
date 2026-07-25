@@ -134,9 +134,7 @@ pub enum DocumentTopicEvent {
 impl TopicEvent for DocumentTopicEvent {
     type Topic = MacroDocumentsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroDocumentsTopic`], keyed by document id.

@@ -34,9 +34,7 @@ pub enum SoupTopicEvent {
 impl TopicEvent for SoupTopicEvent {
     type Topic = MacroSoupRealtimeTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable realtime Soup event keyed by recipient user ID.
