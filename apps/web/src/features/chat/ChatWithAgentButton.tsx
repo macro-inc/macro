@@ -1,26 +1,22 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { BlockAlias, BlockName } from '@core/block';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
+import {
+  type ChatAttachmentMention,
+  chatAttachmentMentionToMarkdown,
+} from '@core/component/AI/util/chatAttachmentMention';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 
 export { AnimatedStarIcon as ChatWithAgentIcon };
-
-const CHANNEL_TYPE_VALUES = new Set<string>(Object.values(ChannelType));
-
-function _toChatChannelType(
-  t: string | undefined | null
-): ChannelType | undefined {
-  if (t && CHANNEL_TYPE_VALUES.has(t)) return t as ChannelType;
-  return undefined;
-}
 
 type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
@@ -28,7 +24,7 @@ type ChatWithAgentEntity =
       type: 'document';
       id: string;
       name: string;
-      fileType: string | null | undefined;
+      blockName: BlockName | BlockAlias;
     }
   | { type: 'project'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
@@ -50,6 +46,32 @@ function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
     .with({ type: 'channel' }, (e) => ({
       entity_id: e.id,
       entity_type: 'channel' as const,
+    }))
+    .exhaustive();
+}
+
+function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
+  return match(entity)
+    .with({ type: 'email' }, (e) => ({
+      documentId: e.id,
+      documentName: e.name,
+      blockName: 'email',
+    }))
+    .with({ type: 'document' }, (e) => ({
+      documentId: e.id,
+      documentName: e.name,
+      blockName: e.blockName,
+    }))
+    .with({ type: 'project' }, (e) => ({
+      documentId: e.id,
+      documentName: e.name,
+      blockName: 'project',
+    }))
+    .with({ type: 'channel' }, (e) => ({
+      documentId: e.id,
+      documentName: e.name,
+      blockName: 'channel',
+      channelType: e.channelType,
     }))
     .exhaustive();
 }
@@ -90,7 +112,8 @@ export async function openChatWithAgent(entity: ChatWithAgentEntity) {
     toast.failure("Can't attach this item to a chat");
     return;
   }
-  await createAndOpenChat({ attachments: [attachment] });
+  const input = chatAttachmentMentionToMarkdown(buildMention(entity));
+  await createAndOpenChat({ input, attachments: [attachment] });
 }
 
 export async function openChatWithInput(initialInput: string) {

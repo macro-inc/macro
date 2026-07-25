@@ -151,7 +151,7 @@ export function CallRecordingBody(props: {
                 type: 'document',
                 id: blockId,
                 name: callTitle(),
-                fileType: 'call',
+                blockName: 'call',
               }}
             />
           </div>

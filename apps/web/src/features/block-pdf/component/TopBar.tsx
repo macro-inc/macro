@@ -200,7 +200,7 @@ export function TopBar() {
           type: 'document',
           id: documentId,
           name: fileName(),
-          fileType,
+          blockName,
         }),
       buttonComponent: () => (
         <ChatWithAgentButton
@@ -208,7 +208,7 @@ export function TopBar() {
             type: 'document',
             id: documentId,
             name: fileName(),
-            fileType,
+            blockName,
           }}
         />
       ),
@@ -231,7 +231,7 @@ export function TopBar() {
           type: 'document',
           id: documentId,
           name: fileName(),
-          fileType,
+          blockName,
         }),
     },
   ];

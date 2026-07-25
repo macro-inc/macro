@@ -371,7 +371,7 @@ export function Notebook(props: {
                 type: 'document',
                 id: blockId,
                 name: documentName(),
-                fileType: 'md',
+                blockName: blockAliasedName,
               }}
             />
             <Show when={blockAliasedName === 'task' && !isMobile()}>

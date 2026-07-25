@@ -56,6 +56,7 @@ async function uploadFileForChat(
 
     return {
       type: 'ok',
+      preview,
       attachment: {
         entity_id: entityId,
         entity_type: entityType,

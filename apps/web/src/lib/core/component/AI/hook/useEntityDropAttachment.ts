@@ -1,9 +1,8 @@
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant';
-import type { Attachment, Attachments } from '@core/component/AI/types';
+import type { ChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityDragData, EntityDragEvent } from '@entity';
-import type { EntityType } from '@service-cognition/generated/schemas/entityType';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { type Accessor, createMemo } from 'solid-js';
 import { match, P } from 'ts-pattern';
@@ -13,12 +12,12 @@ import { match, P } from 'ts-pattern';
  * Creates a droppable zone and handles converting dropped entities to attachments.
  *
  * @param droppableId - Unique ID for the droppable zone
- * @param attachments - The attachments object from ChatContext
+ * @param onAttach - Inserts the dropped entity into the chat composer
  * @returns Object with droppable directive and isDraggingOver signal
  */
 export function useEntityDropAttachment(
   droppableId: string,
-  attachments: Attachments
+  onAttach: (mention: ChatAttachmentMention) => void
 ): {
   droppable: ReturnType<typeof createDroppable>;
   isDraggingOver: Accessor<boolean>;
@@ -69,26 +68,35 @@ export function useEntityDropAttachment(
       return;
     }
 
-    const attachment: Attachment | undefined = match(entityType)
+    const attachmentId = match(entityType)
+      .with(P.union('channel', 'channel_message', 'channel_thread'), () =>
+        'channelId' in data ? (data.channelId as string) : entityId
+      )
+      .otherwise(() => entityId);
+
+    const mention: ChatAttachmentMention | undefined = match(entityType)
       .with('document', () => ({
-        entity_id: entityId,
-        entity_type: 'document' as EntityType,
+        documentId: attachmentId,
+        documentName: data.name,
+        blockName,
       }))
       .with('project', () => ({
-        entity_id: entityId,
-        entity_type: 'project' as EntityType,
+        documentId: attachmentId,
+        documentName: data.name,
+        blockName: 'project',
       }))
       .with(P.union('channel', 'channel_message', 'channel_thread'), () => {
-        const channelId =
-          'channelId' in data ? (data.channelId as string) : entityId;
         return {
-          entity_id: channelId,
-          entity_type: 'channel' as EntityType,
+          documentId: attachmentId,
+          documentName: data.name,
+          blockName: 'channel',
+          channelType: 'channelType' in data ? data.channelType : undefined,
         };
       })
       .with('email', () => ({
-        entity_id: entityId,
-        entity_type: 'email_thread' as EntityType,
+        documentId: attachmentId,
+        documentName: data.name,
+        blockName: 'email',
       }))
       .with('chat', () => undefined)
       .with('call', () => undefined)
@@ -98,8 +106,8 @@ export function useEntityDropAttachment(
       .with('crm_contact', () => undefined)
       .exhaustive();
 
-    if (attachment) {
-      attachments.addAttachment(attachment);
+    if (mention) {
+      onAttach(mention);
     }
   });
 

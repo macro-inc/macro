@@ -32,6 +32,7 @@ import {
   peekPendingSend,
 } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
+import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
 import {
@@ -179,7 +180,8 @@ function ChatInner(props: {
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
-    input.attachments
+    (mention) =>
+      insertChatAttachmentMention(editor.controls.getLexical(), mention)
   );
   false && droppable;
 
