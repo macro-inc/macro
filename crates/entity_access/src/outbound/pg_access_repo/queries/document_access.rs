@@ -1,5 +1,8 @@
 //! Query for document access level.
 
+#[cfg(test)]
+mod test;
+
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -53,6 +56,19 @@ pub async fn get_document_access(
             AND id IN (
                 SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $3
             )
+
+            UNION ALL
+            -- Source 3: the document is an email attachment — access to the source
+            -- thread grants the same access level on the attachment document.
+            SELECT
+                tea.access_level::text
+            FROM document_email de
+            JOIN email_attachments ea ON ea.id = de.email_attachment_id
+            JOIN email_messages m ON m.id = ea.message_id
+            JOIN entity_access tea ON tea.entity_id = m.thread_id
+                AND tea.entity_type = 'email_thread'
+                AND tea.source_id = ANY($2)
+            WHERE de.document_id = $3
         ) AS combined_access
         "#,
         document_id,
