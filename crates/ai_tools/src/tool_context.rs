@@ -845,6 +845,339 @@ impl ToolEntityCreator {
             }
         }
     }
+
+    /// Attach properties recovered from a Notion database page. These writes
+    /// are enrichment: the imported document remains valid if an individual
+    /// definition, option, or value cannot be created.
+    async fn apply_document_properties(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document_id: &str,
+        imported: &import::domain::ports::ImportedDocumentProperties,
+    ) {
+        use models_properties::api::{
+            AddPropertyOptionRequest, AddStringOptionRequest, CreatePropertyDefinitionRequest,
+            CreatePropertyScope, SetPropertyValue,
+        };
+        use models_properties::service::property_option::PropertyOptionValue;
+        use properties::PropertiesService as _;
+
+        let access = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                document_id,
+                model_entity::EntityType::Document,
+            )
+            .await
+        {
+            Ok(access) => access,
+            Err(e) => {
+                tracing::warn!(document_id, error = ?e, "failed to authorize imported document properties");
+                return;
+            }
+        };
+        let service = &self.task_properties.properties;
+
+        if !imported.tags.is_empty() {
+            let tag_set = match service
+                .ensure_tag_set(user, None, properties::domain::model::TagScope::User)
+                .await
+            {
+                Ok(tag_set) => tag_set,
+                Err(e) => {
+                    tracing::warn!(document_id, error = ?e, "failed to prepare imported document tags");
+                    properties::domain::model::TagSet {
+                        scope: properties::domain::model::TagScope::User,
+                        definition: None,
+                        options: Vec::new(),
+                    }
+                }
+            };
+            if let Some(definition) = tag_set.definition {
+                let mut options = tag_set.options;
+                let mut option_ids = Vec::new();
+                for (index, label) in imported.tags.iter().enumerate() {
+                    if let Some(option) = options.iter().find(|option| {
+                        option
+                            .value
+                            .as_string()
+                            .is_some_and(|value| value.eq_ignore_ascii_case(label))
+                    }) {
+                        option_ids.push(option.id);
+                        continue;
+                    }
+                    let request = AddPropertyOptionRequest::SelectString {
+                        option: AddStringOptionRequest {
+                            display_order: options.len() as i32,
+                            value: label.clone(),
+                            color: Some(imported_tag_color(index).to_string()),
+                        },
+                    };
+                    match service
+                        .add_property_option(user, None, definition.id, &request)
+                        .await
+                    {
+                        Ok(option) => {
+                            option_ids.push(option.id);
+                            options.push(option);
+                        }
+                        Err(e) => {
+                            // Concurrent page imports commonly race while
+                            // creating the same label. Re-read after a failed
+                            // create and use the winning option when present.
+                            let recovered = service
+                                .get_property_options(definition.id, user, None)
+                                .await
+                                .ok()
+                                .and_then(|options| {
+                                    options.into_iter().find(|option| {
+                                        option
+                                            .value
+                                            .as_string()
+                                            .is_some_and(|value| value.eq_ignore_ascii_case(label))
+                                    })
+                                });
+                            if let Some(option) = recovered {
+                                option_ids.push(option.id);
+                            } else {
+                                tracing::warn!(document_id, label, error = ?e, "failed to create imported tag");
+                            }
+                        }
+                    }
+                }
+                option_ids.sort_unstable();
+                option_ids.dedup();
+                if !option_ids.is_empty()
+                    && let Err(e) = service
+                        .set_entity_property(
+                            &access,
+                            definition.id,
+                            Some(SetPropertyValue::MultiSelectOption { option_ids }),
+                        )
+                        .await
+                {
+                    tracing::warn!(document_id, error = ?e, "failed to attach imported tags");
+                }
+            }
+        }
+
+        for property in &imported.values {
+            let (data_type, stored_type, multi) = imported_property_type(&property.value);
+            let definitions = match service
+                .list_property_definitions(
+                    None,
+                    Some(user),
+                    false,
+                    Some(models_properties::EntityType::Document),
+                )
+                .await
+            {
+                Ok(definitions) => definitions,
+                Err(e) => {
+                    tracing::warn!(document_id, property = %property.name, error = ?e, "failed to list imported document properties");
+                    continue;
+                }
+            };
+            let same_name = definitions
+                .iter()
+                .find(|definition| definition.display_name.eq_ignore_ascii_case(&property.name));
+            let definition = if let Some(definition) = same_name {
+                if definition.data_type != stored_type || definition.is_multi_select != multi {
+                    tracing::warn!(
+                        document_id,
+                        property = %property.name,
+                        "skipping imported property whose existing Macro definition has a different type"
+                    );
+                    continue;
+                }
+                definition.clone()
+            } else {
+                let request = CreatePropertyDefinitionRequest {
+                    scope: CreatePropertyScope::User,
+                    display_name: property.name.clone(),
+                    data_type,
+                };
+                match service
+                    .create_property_definition(user, None, &request)
+                    .await
+                {
+                    Ok(definition) => definition,
+                    Err(e) => {
+                        // A concurrent import may have won the unique-name
+                        // race. Re-read once before giving up.
+                        let recovered = service
+                            .list_property_definitions(
+                                None,
+                                Some(user),
+                                false,
+                                Some(models_properties::EntityType::Document),
+                            )
+                            .await
+                            .ok()
+                            .and_then(|definitions| {
+                                definitions.into_iter().find(|definition| {
+                                    definition.display_name.eq_ignore_ascii_case(&property.name)
+                                        && definition.data_type == stored_type
+                                        && definition.is_multi_select == multi
+                                })
+                            });
+                        let Some(definition) = recovered else {
+                            tracing::warn!(document_id, property = %property.name, error = ?e, "failed to create imported document property");
+                            continue;
+                        };
+                        definition
+                    }
+                }
+            };
+
+            let set_value = match &property.value {
+                import::domain::ports::ImportedDocumentPropertyValue::Boolean { value } => {
+                    Some(SetPropertyValue::Boolean { value: *value })
+                }
+                import::domain::ports::ImportedDocumentPropertyValue::Date { value } => {
+                    match dateparser::parse(value) {
+                        Ok(value) => Some(SetPropertyValue::Date { value }),
+                        Err(e) => {
+                            tracing::warn!(document_id, property = %property.name, error = ?e, "failed to parse imported date property");
+                            None
+                        }
+                    }
+                }
+                import::domain::ports::ImportedDocumentPropertyValue::Number { value } => {
+                    Some(SetPropertyValue::Number { value: *value })
+                }
+                import::domain::ports::ImportedDocumentPropertyValue::String { value } => {
+                    Some(SetPropertyValue::String {
+                        value: value.clone(),
+                    })
+                }
+                import::domain::ports::ImportedDocumentPropertyValue::Link { urls } => {
+                    if multi {
+                        Some(SetPropertyValue::MultiLink { urls: urls.clone() })
+                    } else {
+                        urls.first()
+                            .cloned()
+                            .map(|url| SetPropertyValue::Link { url })
+                    }
+                }
+                import::domain::ports::ImportedDocumentPropertyValue::Select { values } => {
+                    let mut options = service
+                        .get_property_options(definition.id, user, None)
+                        .await
+                        .unwrap_or_default();
+                    let mut option_ids = Vec::new();
+                    for value in values {
+                        if let Some(option) = options.iter().find(|option| {
+                            option
+                                .value
+                                .as_string()
+                                .is_some_and(|label| label.eq_ignore_ascii_case(value))
+                        }) {
+                            option_ids.push(option.id);
+                            continue;
+                        }
+                        let request = AddPropertyOptionRequest::SelectString {
+                            option: AddStringOptionRequest {
+                                display_order: options.len() as i32,
+                                value: value.clone(),
+                                color: None,
+                            },
+                        };
+                        match service
+                            .add_property_option(user, None, definition.id, &request)
+                            .await
+                        {
+                            Ok(option) => {
+                                option_ids.push(option.id);
+                                options.push(option);
+                            }
+                            Err(e) => {
+                                let recovered = service
+                                    .get_property_options(definition.id, user, None)
+                                    .await
+                                    .ok()
+                                    .and_then(|options| {
+                                        options.into_iter().find(|option| {
+                                            matches!(
+                                                &option.value,
+                                                PropertyOptionValue::String(label)
+                                                    if label.eq_ignore_ascii_case(value)
+                                            )
+                                        })
+                                    });
+                                if let Some(option) = recovered {
+                                    option_ids.push(option.id);
+                                } else {
+                                    tracing::warn!(document_id, property = %property.name, option = value, error = ?e, "failed to create imported property option");
+                                }
+                            }
+                        }
+                    }
+                    option_ids.sort_unstable();
+                    option_ids.dedup();
+                    if multi {
+                        Some(SetPropertyValue::MultiSelectOption { option_ids })
+                    } else {
+                        option_ids
+                            .first()
+                            .copied()
+                            .map(|option_id| SetPropertyValue::SelectOption { option_id })
+                    }
+                }
+            };
+            if let Some(set_value) = set_value
+                && let Err(e) = service
+                    .set_entity_property(&access, definition.id, Some(set_value))
+                    .await
+            {
+                tracing::warn!(document_id, property = %property.name, error = ?e, "failed to set imported document property");
+            }
+        }
+    }
+}
+
+fn imported_property_type(
+    value: &import::domain::ports::ImportedDocumentPropertyValue,
+) -> (
+    models_properties::api::PropertyDataType,
+    models_properties::DataType,
+    bool,
+) {
+    use import::domain::ports::ImportedDocumentPropertyValue as Imported;
+    use models_properties::DataType;
+    use models_properties::api::PropertyDataType;
+
+    match value {
+        Imported::Boolean { .. } => (PropertyDataType::Boolean, DataType::Boolean, false),
+        Imported::Date { .. } => (PropertyDataType::Date, DataType::Date, false),
+        Imported::Number { .. } => (PropertyDataType::Number, DataType::Number, false),
+        Imported::String { .. } => (PropertyDataType::String, DataType::String, false),
+        Imported::Select { values } => (
+            PropertyDataType::SelectString {
+                options: Vec::new(),
+                multi: values.len() > 1,
+            },
+            DataType::SelectString,
+            values.len() > 1,
+        ),
+        Imported::Link { urls } => (
+            PropertyDataType::Link {
+                multi: urls.len() > 1,
+            },
+            DataType::Link,
+            urls.len() > 1,
+        ),
+    }
+}
+
+fn imported_tag_color(index: usize) -> &'static str {
+    const COLORS: [&str; 12] = [
+        "#0091FF", "#46A758", "#8E4EC6", "#F76B15", "#E93D82", "#12A594", "#FFB224", "#3E63DD",
+        "#E5484D", "#F5D90A", "#889096", "#E54D2E",
+    ];
+    COLORS[index % COLORS.len()]
 }
 
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
@@ -870,8 +1203,12 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
+        properties: &import::domain::ports::ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
-        self.create_doc(user, name, markdown, false, None).await
+        let document_id = self.create_doc(user, name, markdown, false, None).await?;
+        self.apply_document_properties(user, &document_id, properties)
+            .await;
+        Ok(document_id)
     }
 
     async fn create_channel(

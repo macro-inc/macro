@@ -102,20 +102,91 @@ fn notion_import_turns_scale_with_pages_and_cap() {
 
 #[test]
 fn notion_fetch_text_parses_the_fetch_document_shape() {
-    let (title, body) = parse_notion_fetch_text(
-        r##"{"id":"abc","title":"Roadmap H2","text":"# Roadmap\ncontent","url":"https://notion.so/x"}"##,
+    let parsed = parse_notion_fetch_text(
+        r##"{"id":"abc","title":"Roadmap H2","text":"# Roadmap\ncontent","url":"https://notion.so/x","properties":{"title":"Roadmap H2","Tags":["Planning","H2"],"Done":"__YES__","Score":4.5,"date:Due:start":"2026-08-01","date:Due:is_datetime":0}}"##,
     );
-    assert_eq!(title.as_deref(), Some("Roadmap H2"));
-    assert_eq!(body, "# Roadmap\ncontent");
+    assert_eq!(parsed.title.as_deref(), Some("Roadmap H2"));
+    assert_eq!(parsed.body, "# Roadmap\ncontent");
+    assert_eq!(parsed.properties.tags, vec!["Planning", "H2"]);
+    assert_eq!(
+        parsed.properties.values,
+        vec![
+            ImportedDocumentProperty {
+                name: "Done".into(),
+                value: ImportedDocumentPropertyValue::Boolean { value: true },
+            },
+            ImportedDocumentProperty {
+                name: "Score".into(),
+                value: ImportedDocumentPropertyValue::Number { value: 4.5 },
+            },
+            ImportedDocumentProperty {
+                name: "Due".into(),
+                value: ImportedDocumentPropertyValue::Date {
+                    value: "2026-08-01".into(),
+                },
+            },
+        ]
+    );
 
     // Anything else is the body itself.
-    let (title, body) = parse_notion_fetch_text("# Plain markdown\nno wrapper");
-    assert_eq!(title, None);
-    assert_eq!(body, "# Plain markdown\nno wrapper");
+    let parsed = parse_notion_fetch_text("# Plain markdown\nno wrapper");
+    assert_eq!(parsed.title, None);
+    assert_eq!(parsed.body, "# Plain markdown\nno wrapper");
 
     // JSON without a text field falls through to raw.
     let raw = r#"{"unexpected":"shape"}"#;
-    let (title, body) = parse_notion_fetch_text(raw);
-    assert_eq!(title, None);
-    assert_eq!(body, raw);
+    let parsed = parse_notion_fetch_text(raw);
+    assert_eq!(parsed.title, None);
+    assert_eq!(parsed.body, raw);
+}
+
+#[test]
+fn notion_page_references_become_external_markdown_links() {
+    let input = r#"<ancestor-path>
+<ancestor-3-page url="https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1" title=""/>
+<ancestor-4-page url="https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410" title="Parent"/>
+</ancestor-path>
+See <mention-page url="https://notion.so/roadmap">Roadmap</mention-page>.
+<page url="https://notion.so/spec">Product spec</page>"#;
+
+    assert_eq!(
+        normalize_notion_markdown(input),
+        "[Notion page](https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1)\n\
+[Parent](https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410)\n\
+See [Roadmap](https://notion.so/roadmap).\n\
+[Product spec](https://notion.so/spec)"
+    );
+}
+
+#[test]
+fn notion_tables_become_rectangular_macro_pipe_tables() {
+    let input = r#"<table fit-page-width="true" header-row="true">
+<colgroup>
+<col width="379">
+<col width="230">
+</colgroup>
+<tr>
+<td>AI PDF Editors</td>
+<td>Features</td>
+<td>Pricing</td>
+</tr>
+<tr>
+lc
+</tr>
+<tr>
+<td>PDFelement</td>
+<td>• Automatically bookmarks important pages
+• Use Lumi AI to chat with PDFs</td>
+<td>Paid plans start at $79.99 per year.</td>
+</tr>
+<tr><td>Forma | Pro</td><td>Draft with AI</td></tr>
+</table>"#;
+
+    assert_eq!(
+        normalize_notion_markdown(input),
+        "| AI PDF Editors | Features | Pricing |\n\
+| --- | --- | --- |\n\
+| PDFelement | • Automatically bookmarks important pages\\n• Use Lumi AI to chat with PDFs | Paid plans start at $79.99 per year. |\n\
+| Forma &#124; Pro | Draft with AI |  |"
+    );
 }

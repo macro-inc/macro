@@ -11,7 +11,7 @@
 //! spoof another user, source, or initiator.
 
 use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
-use crate::domain::ports::ImportError;
+use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
 use crate::domain::service::{DiscardOutcome, ImportFinalizer, ImportStager, StageOutcome};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
@@ -518,6 +518,18 @@ pub struct FinalizeImport {
     /// The document body.
     #[schemars(description = "The full markdown body for the created document.")]
     pub content_markdown: String,
+
+    /// Notion database properties to attach to the document.
+    #[serde(default)]
+    #[schemars(
+        description = "Useful non-title Notion page properties, typed for Macro. Omit unsupported or empty values."
+    )]
+    pub properties: Vec<ImportedDocumentProperty>,
+
+    /// Notion labels/tags to attach as Macro tags.
+    #[serde(default)]
+    #[schemars(description = "Labels from Notion properties named Tags, Tag, Labels, or Label.")]
+    pub tags: Vec<String>,
 }
 
 /// Response from finalizing an item.
@@ -547,6 +559,10 @@ impl<T: ImportFinalizer> AsyncTool<ImportToolContext<T>> for FinalizeImport {
                 self.import_id,
                 self.name.trim(),
                 &self.content_markdown,
+                &ImportedDocumentProperties {
+                    values: self.properties.clone(),
+                    tags: self.tags.clone(),
+                },
             )
             .await
             .map_err(|e| import_error("Failed to finalize import", e))?;

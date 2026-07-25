@@ -74,15 +74,30 @@ pub const NOTION_IMPORT_SYSTEM: &str = "You are importing Notion pages the user 
     \n\
     Work through the listed pages ONE AT A TIME, in order. For each page:\n\
     1. Fetch its content with the connected Notion tools (by URL or page id).\n\
-    2. Convert it to clean markdown. Preserve headings, lists, tables, and links; drop Notion \
-    artifacts that don't translate.\n\
-    3. Append a final line: `[Original in Notion](<page url>)` when a URL is known.\n\
-    4. Immediately call `FinalizeImport` with the page's `import_id`, a `name` (the page \
-    title), and the markdown as `content_markdown` — BEFORE fetching the next page. The user \
-    is watching items land live; never batch the finalize calls up for the end.\n\
+    2. Convert Notion's enhanced markdown to clean Macro markdown. Preserve headings, lists, \
+    checkboxes, formatting, and image URLs. Never copy raw Notion XML-like tags into the result.\n\
+    3. Convert every `<page>`, `<mention-page>`, `<database>`, and `<ancestor-N-page>` reference \
+    into a normal markdown link: `[visible title](notion URL)`. The destination may not be \
+    imported into Macro, so keep it as an external Notion URL; never invent a Macro entity id. \
+    If a reference has no title, use `Notion page` as its visible text.\n\
+    4. Convert every Notion `<table>` to a rectangular pipe table. Use one `| ... |` line per \
+    row and put `| --- | ... |` immediately after the first row. Every row must have the same \
+    cell count. Represent line breaks or lists inside a cell with the two literal characters \
+    `\\n` so the Macro Lexical transformer can reconstruct rich cell content; encode a literal \
+    pipe inside a cell as `&#124;`. Do not emit `<table>`, `<tr>`, `<td>`, `<colgroup>`, or \
+    `<col>` tags.\n\
+    5. Read the fetched page's `properties` map. Put properties named Tags, Tag, Labels, or \
+    Label into `tags`. Put other useful, non-title values into `properties` with the closest \
+    supported type: boolean, date (ISO-8601), number, string, select, or link. Omit empty, \
+    computed, rollup, relation, and unsupported values rather than flattening them into the \
+    document body.\n\
+    6. Append a final line: `[Original in Notion](<page url>)` when a URL is known.\n\
+    7. Immediately call `FinalizeImport` with the page's `import_id`, `name`, \
+    `content_markdown`, `properties`, and `tags` — BEFORE fetching the next page. The user is \
+    watching items land live; never batch the finalize calls up for the end.\n\
     \n\
     If a page's content cannot be fetched, still call `FinalizeImport` using the staged summary \
-    plus the backlink as the body — a thin import beats a failed one.\n\
+    plus the backlink as the body and empty properties/tags — a thin import beats a failed one.\n\
     \n\
     You MUST call `FinalizeImport` exactly once for every listed page. When all pages are \
     finalized, reply with one short sentence.";

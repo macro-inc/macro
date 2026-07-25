@@ -7137,6 +7137,7 @@ dependencies = [
  "macro_user_id",
  "mcp_client",
  "model-entity",
+ "regex",
  "schemars 1.2.1",
  "serde",
  "serde_json",

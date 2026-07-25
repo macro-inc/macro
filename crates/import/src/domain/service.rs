@@ -12,7 +12,10 @@
 //! content through `FinalizeImport` when the direct path can't cope.
 
 use super::models::*;
-use super::ports::{EntityCreator, ImportError, ImportRepo, ImportedTaskProperties, Result};
+use super::ports::{
+    EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties, ImportedDocumentProperty,
+    ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
+};
 use crate::inbound::toolset::{
     ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
 };
@@ -27,6 +30,7 @@ use mcp_client::domain::service::McpToolSet;
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -239,6 +243,7 @@ pub trait ImportFinalizer: Send + Sync + 'static {
         import_id: Uuid,
         name: &str,
         content_markdown: &str,
+        properties: &ImportedDocumentProperties,
     ) -> impl Future<Output = Result<ImportEntity>> + Send;
 }
 
@@ -452,23 +457,27 @@ where
             serde_json::Value::String(text) => text,
             other => other.to_string(),
         };
-        let (fetched_title, body) = parse_notion_fetch_text(&text);
-        anyhow::ensure!(!body.trim().is_empty(), "fetched page has no content");
+        let fetched = parse_notion_fetch_text(&text);
+        anyhow::ensure!(
+            !fetched.body.trim().is_empty(),
+            "fetched page has no content"
+        );
 
         let name = row
             .metadata
             .get("title")
             .and_then(|v| v.as_str())
             .map(str::to_string)
-            .or(fetched_title)
+            .or(fetched.title)
             .unwrap_or_else(|| "Untitled".to_string());
         let url = row.metadata.get("url").and_then(|v| v.as_str());
+        let body = normalize_notion_markdown(&fetched.body);
         let markdown = match url {
             Some(url) => format!("{}\n\n[Original in Notion]({url})", body.trim_end()),
             None => body,
         };
 
-        self.finalize_document(user, row.id, &name, &markdown)
+        self.finalize_document(user, row.id, &name, &markdown, &fetched.properties)
             .await
             .map_err(|e| anyhow::anyhow!("finalize failed: {e}"))?;
         Ok(())
@@ -1110,6 +1119,7 @@ where
         import_id: Uuid,
         name: &str,
         content_markdown: &str,
+        properties: &ImportedDocumentProperties,
     ) -> Result<ImportEntity> {
         let row = self
             .repo
@@ -1136,7 +1146,7 @@ where
             }
             ImportSource::Notion => {
                 self.creator
-                    .create_markdown_doc(user, name, content_markdown)
+                    .create_markdown_doc(user, name, content_markdown, properties)
                     .await
             }
             ImportSource::Slack => {
@@ -1173,7 +1183,14 @@ fn notion_fetch_tool_name(mcp_tools: &McpToolSet) -> Option<String> {
 /// Split a `notion-fetch` result into `(title, body)`. The tool returns a
 /// JSON document (`{id, title, text, url, …}`) as text; a result that isn't
 /// that shape is treated as the body itself.
-fn parse_notion_fetch_text(text: &str) -> (Option<String>, String) {
+#[derive(Debug, Default, PartialEq)]
+struct ParsedNotionPage {
+    title: Option<String>,
+    body: String,
+    properties: ImportedDocumentProperties,
+}
+
+fn parse_notion_fetch_text(text: &str) -> ParsedNotionPage {
     if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(text)
         && let Some(body) = map.get("text").and_then(|v| v.as_str())
     {
@@ -1181,9 +1198,306 @@ fn parse_notion_fetch_text(text: &str) -> (Option<String>, String) {
             .get("title")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        return (title, body.to_string());
+        let properties = map
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .map(imported_notion_properties)
+            .unwrap_or_default();
+        return ParsedNotionPage {
+            title,
+            body: body.to_string(),
+            properties,
+        };
     }
-    (None, text.to_string())
+    ParsedNotionPage {
+        body: text.to_string(),
+        ..Default::default()
+    }
+}
+
+fn imported_notion_properties(
+    raw: &serde_json::Map<String, serde_json::Value>,
+) -> ImportedDocumentProperties {
+    let mut imported = ImportedDocumentProperties::default();
+
+    for (raw_name, value) in raw {
+        let name = raw_name
+            .strip_prefix("userDefined:")
+            .unwrap_or(raw_name)
+            .trim();
+        if name.is_empty() || name.len() > 100 || name.eq_ignore_ascii_case("title") {
+            continue;
+        }
+
+        if let Some(date_name) = name
+            .strip_prefix("date:")
+            .and_then(|rest| rest.strip_suffix(":start"))
+        {
+            if let Some(value) = value.as_str().filter(|value| !value.trim().is_empty()) {
+                imported.values.push(ImportedDocumentProperty {
+                    name: date_name.to_string(),
+                    value: ImportedDocumentPropertyValue::Date {
+                        value: value.to_string(),
+                    },
+                });
+            }
+            continue;
+        }
+        if name.starts_with("date:") {
+            continue;
+        }
+
+        if is_tag_property_name(name) {
+            append_string_values(value, &mut imported.tags);
+            continue;
+        }
+
+        let value = match value {
+            serde_json::Value::Bool(value) => {
+                Some(ImportedDocumentPropertyValue::Boolean { value: *value })
+            }
+            serde_json::Value::Number(value) => value
+                .as_f64()
+                .map(|value| ImportedDocumentPropertyValue::Number { value }),
+            serde_json::Value::String(value) => {
+                let value = value.trim();
+                match value {
+                    "" => None,
+                    "__YES__" => Some(ImportedDocumentPropertyValue::Boolean { value: true }),
+                    "__NO__" => Some(ImportedDocumentPropertyValue::Boolean { value: false }),
+                    _ if is_web_url(value) => Some(ImportedDocumentPropertyValue::Link {
+                        urls: vec![value.to_string()],
+                    }),
+                    _ => Some(ImportedDocumentPropertyValue::String {
+                        value: value.to_string(),
+                    }),
+                }
+            }
+            serde_json::Value::Array(values) => {
+                let strings: Vec<String> = values
+                    .iter()
+                    .filter_map(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                if strings.is_empty() {
+                    None
+                } else if strings.iter().all(|value| is_web_url(value)) {
+                    Some(ImportedDocumentPropertyValue::Link { urls: strings })
+                } else {
+                    Some(ImportedDocumentPropertyValue::Select { values: strings })
+                }
+            }
+            serde_json::Value::Null | serde_json::Value::Object(_) => None,
+        };
+        if let Some(value) = value {
+            imported.values.push(ImportedDocumentProperty {
+                name: name.to_string(),
+                value,
+            });
+        }
+    }
+
+    dedupe_strings(&mut imported.tags);
+    imported
+}
+
+fn is_tag_property_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "tag" | "tags" | "label" | "labels"
+    )
+}
+
+fn is_web_url(value: &str) -> bool {
+    value.starts_with("https://") || value.starts_with("http://")
+}
+
+fn append_string_values(value: &serde_json::Value, output: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(value) => {
+            let value = value.trim();
+            if !value.is_empty() {
+                output.push(value.to_string());
+            }
+        }
+        serde_json::Value::Array(values) => {
+            output.extend(
+                values
+                    .iter()
+                    .filter_map(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string),
+            );
+        }
+        _ => {}
+    }
+}
+
+fn dedupe_strings(values: &mut Vec<String>) {
+    let mut seen = HashSet::new();
+    values.retain(|value| seen.insert(value.to_ascii_lowercase()));
+}
+
+static PAIRED_NOTION_PAGE_REFS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    ["page", "database", "mention-page", "mention-database"]
+        .into_iter()
+        .map(|tag| {
+            regex::Regex::new(&format!(
+                r#"(?s)<{tag}\b(?P<attrs>[^>]*)>(?P<label>.*?)</{tag}>"#
+            ))
+            .expect("valid notion page reference regex")
+        })
+        .collect()
+});
+static SELF_CLOSING_NOTION_PAGE_REF: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?m)^[\t ]*<(?:ancestor-\d+-)?(?:page|database)\b(?P<attrs>[^>]*)/?>[\t ]*$"#,
+    )
+    .expect("valid self-closing notion page reference regex")
+});
+static NOTION_ATTR_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?P<name>[\w-]+)="(?P<value>[^"]*)""#)
+        .expect("valid notion attribute regex")
+});
+static INLINE_TAG_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?s)<[^>]+>").expect("valid inline tag regex"));
+static BREAK_TAG_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?i)<br\s*/?>").expect("valid HTML break regex"));
+static TABLE_ROW_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?s)<tr\b[^>]*>(?P<body>.*?)</tr>").expect("valid notion table row regex")
+});
+static TABLE_CELL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?s)<t[dh]\b[^>]*>(?P<body>.*?)</t[dh]>")
+        .expect("valid notion table cell regex")
+});
+
+/// Convert Notion's enhanced-markdown extensions into the markdown dialect
+/// consumed by Macro's Lexical service. In particular, pipe tables become
+/// native Lexical tables and Notion page references remain clickable external
+/// links even when the referenced page was not part of the import.
+fn normalize_notion_markdown(input: &str) -> String {
+    let mut markdown = input.to_string();
+    for regex in PAIRED_NOTION_PAGE_REFS.iter() {
+        markdown = regex
+            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+                notion_page_link(
+                    &captures["attrs"],
+                    Some(INLINE_TAG_RE.replace_all(&captures["label"], "")),
+                )
+            })
+            .into_owned();
+    }
+    markdown = SELF_CLOSING_NOTION_PAGE_REF
+        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+            notion_page_link(&captures["attrs"], None)
+        })
+        .into_owned();
+    markdown = markdown
+        .replace("<ancestor-path>\n", "")
+        .replace("\n</ancestor-path>", "")
+        .replace("<ancestor-path>", "")
+        .replace("</ancestor-path>", "");
+    convert_notion_tables(&markdown)
+}
+
+fn notion_page_link(attrs: &str, body_label: Option<std::borrow::Cow<'_, str>>) -> String {
+    let mut url = None;
+    let mut title = None;
+    for captures in NOTION_ATTR_RE.captures_iter(attrs) {
+        match &captures["name"] {
+            "url" => url = Some(captures["value"].to_string()),
+            "title" => title = Some(captures["value"].to_string()),
+            _ => {}
+        }
+    }
+    let Some(url) = url else {
+        return body_label.unwrap_or_default().into_owned();
+    };
+    let label = body_label
+        .as_deref()
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .or_else(|| {
+            title
+                .as_deref()
+                .map(str::trim)
+                .filter(|label| !label.is_empty())
+        })
+        .unwrap_or("Notion page")
+        .replace('[', "\\[")
+        .replace(']', "\\]");
+    format!("[{label}]({url})")
+}
+
+fn convert_notion_tables(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut remaining = input;
+    while let Some(start) = remaining.find("<table") {
+        output.push_str(&remaining[..start]);
+        let table = &remaining[start..];
+        let Some(close_start) = table.find("</table>") else {
+            output.push_str(table);
+            return output;
+        };
+        let close_end = close_start + "</table>".len();
+        let fragment = &table[..close_end];
+        match notion_table_to_markdown(fragment) {
+            Some(converted) => output.push_str(&converted),
+            None => output.push_str(fragment),
+        }
+        remaining = &table[close_end..];
+    }
+    output.push_str(remaining);
+    output
+}
+
+fn notion_table_to_markdown(table: &str) -> Option<String> {
+    let mut rows: Vec<Vec<String>> = TABLE_ROW_RE
+        .captures_iter(table)
+        .filter_map(|row| {
+            let cells: Vec<String> = TABLE_CELL_RE
+                .captures_iter(&row["body"])
+                .map(|cell| normalize_notion_table_cell(&cell["body"]))
+                .collect();
+            (!cells.is_empty()).then_some(cells)
+        })
+        .collect();
+    let column_count = rows.iter().map(Vec::len).max()?;
+    if column_count == 0 {
+        return None;
+    }
+    for row in &mut rows {
+        row.resize(column_count, String::new());
+    }
+
+    let mut lines = Vec::with_capacity(rows.len() + 1);
+    for (index, row) in rows.into_iter().enumerate() {
+        lines.push(format!("| {} |", row.join(" | ")));
+        if index == 0 {
+            lines.push(format!(
+                "| {} |",
+                std::iter::repeat_n("---", column_count)
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ));
+        }
+    }
+    Some(lines.join("\n"))
+}
+
+fn normalize_notion_table_cell(cell: &str) -> String {
+    let with_breaks = BREAK_TAG_RE.replace_all(cell, "\n");
+    let without_tags = INLINE_TAG_RE.replace_all(&with_breaks, "");
+    without_tags
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\\n")
+        .replace('|', "&#124;")
 }
 
 /// Map a Linear workflow status name onto Macro's task status label.
