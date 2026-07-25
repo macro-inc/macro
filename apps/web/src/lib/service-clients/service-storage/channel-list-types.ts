@@ -24,3 +24,9 @@ export type ApiChannelWithLatest = ChannelWithParticipants &
     interacted_at?: string | null;
     viewed_at?: string | null;
   };
+
+/** A cursor-paginated page from the channel-list endpoint. */
+export type ApiChannelListPage = {
+  items: ApiChannelWithLatest[];
+  next_cursor: string | null;
+};
