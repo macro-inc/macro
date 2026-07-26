@@ -177,6 +177,7 @@ pub mod entity_type_labels {
         match key {
             "document" => "Documents",
             "email" => "Emails",
+            "calendar_event" => "Calendar",
             "channel" => "Messages",
             "chat" => "Chats",
             "project" => "Projects",
@@ -190,11 +191,12 @@ pub mod entity_type_labels {
         match key {
             "document" => 0,
             "email" => 1,
-            "channel" => 2,
-            "chat" => 3,
-            "project" => 4,
-            "call" => 5,
-            _ => 6,
+            "calendar_event" => 2,
+            "channel" => 3,
+            "chat" => 4,
+            "project" => 5,
+            "call" => 6,
+            _ => 7,
         }
     }
 }

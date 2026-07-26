@@ -47,7 +47,7 @@ pub enum SoupType {
 }
 
 /// the parameters required for a [SimpleSortMethod]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
     pub(crate) limit: u16,
@@ -70,7 +70,7 @@ pub struct GroupedSortRequest<'a> {
     pub grouping: GroupingConfig,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum SimpleSortQuery {
     /// we dont have anything to filter out
     NoFilter(Query<Uuid, SimpleSortMethod, ()>),
@@ -116,7 +116,6 @@ impl SimpleSortQuery {
 }
 
 impl SimpleSortQuery {
-    #[cfg(test)]
     pub(crate) fn sort_method(&self) -> &SimpleSortMethod {
         match self {
             SimpleSortQuery::NoFilter(query) => query.sort_method(),
@@ -128,7 +127,7 @@ impl SimpleSortQuery {
 }
 
 /// Parameters for fetching soup items by an explicit ordered entity list.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AdvancedSortParams<'a> {
     /// Entities to fetch and preserve in the requested order.
     pub entities: &'a [Entity<'a>],

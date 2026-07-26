@@ -41,6 +41,8 @@ pub enum GraphqlEntityType {
     ChannelMessage,
     /// Call entity.
     Call,
+    /// Calendar event entity.
+    CalendarEvent,
     /// CRM company entity.
     CrmCompany,
     /// Foreign entity.
@@ -107,6 +109,7 @@ impl GraphqlEntityType {
             EntityType::Channel => Self::Channel,
             EntityType::ChannelMessage => Self::ChannelMessage,
             EntityType::Call => Self::Call,
+            EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::User => Self::User,
