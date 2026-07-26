@@ -1,4 +1,9 @@
 import type { Attachment } from '@core/component/AI/types';
+import {
+  DOCUMENT_MENTION_CLOSE,
+  DOCUMENT_MENTION_OPEN,
+} from '@core/component/LexicalMarkdown/utils/macroXml';
+import { parseMacroEntityLink } from '@core/util/macroAppUrl';
 
 const ITEM_ATTACHMENT_TYPES = new Set<Attachment['entity_type']>([
   'channel',
@@ -7,20 +12,34 @@ const ITEM_ATTACHMENT_TYPES = new Set<Attachment['entity_type']>([
   'project',
 ]);
 
-function mentionedEntityIds(content: string): Set<string> {
-  const ids = new Set<string>();
-  const mentions = content.matchAll(
-    /<m-document-mention>([\s\S]*?)<\/m-document-mention>/g
-  );
+const DOCUMENT_MENTION_PATTERN = new RegExp(
+  `${DOCUMENT_MENTION_OPEN}([\\s\\S]*?)${DOCUMENT_MENTION_CLOSE}`,
+  'g'
+);
+const MARKDOWN_LINK_PATTERN = /\]\((https?:\/\/[^\s)]+)\)/g;
 
-  for (const match of mentions) {
+function getMentionedItemIds(content: string): Set<string> {
+  const ids = new Set<string>();
+
+  for (const match of content.matchAll(DOCUMENT_MENTION_PATTERN)) {
     try {
-      const data = JSON.parse(match[1]);
-      if (typeof data.documentId === 'string') ids.add(data.documentId);
+      const mention = JSON.parse(match[1]);
+      if (
+        mention &&
+        typeof mention === 'object' &&
+        typeof mention.documentId === 'string' &&
+        'documentName' in mention
+      ) {
+        ids.add(mention.documentId);
+      }
     } catch {
-      // Malformed mention markup is rendered as an unknown mention. It should
-      // not hide an otherwise usable attachment preview.
+      // Malformed mention markup renders as an unknown item, not a reference.
     }
+  }
+
+  for (const match of content.matchAll(MARKDOWN_LINK_PATTERN)) {
+    const link = parseMacroEntityLink(match[1]);
+    if (link) ids.add(link.id);
   }
 
   return ids;
@@ -33,7 +52,7 @@ export function getVisibleUserMessageAttachments(
   images: Attachment[];
   items: Attachment[];
 } {
-  const mentionedIds = mentionedEntityIds(content);
+  const mentionedItemIds = getMentionedItemIds(content);
 
   return {
     images: attachments.filter(
@@ -42,7 +61,7 @@ export function getVisibleUserMessageAttachments(
     items: attachments.filter(
       (attachment) =>
         ITEM_ATTACHMENT_TYPES.has(attachment.entity_type) &&
-        !mentionedIds.has(attachment.entity_id)
+        !mentionedItemIds.has(attachment.entity_id)
     ),
   };
 }

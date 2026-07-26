@@ -22,14 +22,72 @@ describe('getVisibleUserMessageAttachments', () => {
     });
   });
 
-  it('keeps the card when mention markup is malformed', () => {
+  it('keeps the card when malformed mention markup contains its id', () => {
     const attachments: Attachment[] = [
       { entity_id: 'document-id', entity_type: 'document' },
     ];
 
     expect(
       getVisibleUserMessageAttachments(
-        '<m-document-mention>not-json</m-document-mention>',
+        '<m-document-mention>{"documentId":"document-id"</m-document-mention>',
+        attachments
+      ).items
+    ).toEqual(attachments);
+  });
+
+  it('keeps the card when ordinary text contains its id', () => {
+    const attachments: Attachment[] = [
+      { entity_id: 'document-id', entity_type: 'document' },
+    ];
+
+    expect(
+      getVisibleUserMessageAttachments(
+        'Please summarize document-id',
+        attachments
+      ).items
+    ).toEqual(attachments);
+  });
+
+  it('hides cards represented by serialized Macro links', () => {
+    const attachments: Attachment[] = [
+      { entity_id: 'document-id', entity_type: 'document' },
+    ];
+
+    expect(
+      getVisibleUserMessageAttachments(
+        '[Plan](https://macro.com/app/md/document-id)',
+        attachments
+      ).items
+    ).toEqual([]);
+  });
+
+  it('keeps cards linked from non-Macro hosts', () => {
+    const attachments: Attachment[] = [
+      { entity_id: 'document-id', entity_type: 'document' },
+    ];
+
+    expect(
+      getVisibleUserMessageAttachments(
+        '[Plan](https://example.com/app/md/document-id)',
+        attachments
+      ).items
+    ).toEqual(attachments);
+  });
+
+  it('keeps cards referenced only by deeper Macro links', () => {
+    const attachments: Attachment[] = [
+      { entity_id: 'channel-id', entity_type: 'channel' },
+    ];
+
+    expect(
+      getVisibleUserMessageAttachments(
+        '[Message](https://macro.com/app/channel/channel-id/message/message-id)',
+        attachments
+      ).items
+    ).toEqual(attachments);
+    expect(
+      getVisibleUserMessageAttachments(
+        '[Message](https://macro.com/app/channel/channel-id?message=message-id)',
         attachments
       ).items
     ).toEqual(attachments);

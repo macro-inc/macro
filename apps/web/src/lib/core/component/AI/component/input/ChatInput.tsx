@@ -10,7 +10,7 @@ import {
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
-import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
+import { attachChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -140,11 +140,15 @@ export function ChatInput(props: ChatInputComponentProps) {
           upload.attachment.entity_type === 'document' &&
           metadata?.type === 'document'
         ) {
-          insertChatAttachmentMention(props.editor.controls.getLexical(), {
-            documentId: upload.attachment.entity_id,
-            documentName: metadata.document_name,
-            blockName: fileTypeToBlockName(metadata.document_type, true),
-          });
+          attachChatAttachmentMention(
+            props.editor.controls.getLexical(),
+            attachments,
+            {
+              documentId: upload.attachment.entity_id,
+              documentName: metadata.document_name,
+              blockName: fileTypeToBlockName(metadata.document_type, true),
+            }
+          );
         } else {
           attachments.addAttachment(upload.attachment);
         }
@@ -322,8 +326,9 @@ export function ChatInput(props: ChatInputComponentProps) {
               open={showAttachMenu()}
               onAttach={(item) => {
                 analytics.track('ai_attachment_add');
-                insertChatAttachmentMention(
+                attachChatAttachmentMention(
                   props.editor.controls.getLexical(),
+                  attachments,
                   {
                     documentId: item.id,
                     documentName: item.name,

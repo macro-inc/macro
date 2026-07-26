@@ -1,6 +1,8 @@
+import type { Attachments } from '@core/component/AI/types';
 import type { LexicalEditor } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  attachChatAttachmentMention,
   chatAttachmentMentionToMarkdown,
   insertChatAttachmentMention,
 } from './chatAttachmentMention';
@@ -40,5 +42,25 @@ describe('chat attachment mentions', () => {
       insertDocumentMentionCommand,
       mention
     );
+  });
+
+  it('keeps the explicit attachment when mention insertion is unavailable', () => {
+    const dispatchCommand = vi.fn(() => false);
+    const editor = { dispatchCommand } as unknown as LexicalEditor;
+    const addAttachment = vi.fn();
+    const attachments = { addAttachment } as unknown as Attachments;
+    const mention = {
+      documentId: 'document-id',
+      documentName: 'Project plan',
+      blockName: 'md',
+    };
+
+    expect(attachChatAttachmentMention(editor, attachments, mention)).toBe(
+      false
+    );
+    expect(addAttachment).toHaveBeenCalledWith({
+      entity_id: 'document-id',
+      entity_type: 'document',
+    });
   });
 });

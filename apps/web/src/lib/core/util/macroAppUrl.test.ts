@@ -1,6 +1,6 @@
 import { isTauri } from '@core/util/platform';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseInternalAppLink } from './macroAppUrl';
+import { parseInternalAppLink, parseMacroEntityLink } from './macroAppUrl';
 
 vi.mock('@core/util/platform', () => ({
   isTauri: vi.fn(() => false),
@@ -110,5 +110,32 @@ describe('parseInternalAppLink', () => {
   it('rejects invalid urls', () => {
     expect(parseInternalAppLink('not a url')).toBeNull();
     expect(parseInternalAppLink('/app/component/abc')).toBeNull();
+  });
+});
+
+describe('parseMacroEntityLink', () => {
+  it('parses the exact link shape emitted by document mentions', () => {
+    expect(
+      parseMacroEntityLink('https://macro.com/app/md/document-id')
+    ).toEqual({
+      block: 'md',
+      id: 'document-id',
+    });
+  });
+
+  it('rejects deep links, query links, and foreign hosts', () => {
+    expect(
+      parseMacroEntityLink(
+        'https://macro.com/app/channel/channel-id/message/message-id'
+      )
+    ).toBeNull();
+    expect(
+      parseMacroEntityLink(
+        'https://macro.com/app/channel/channel-id?message=message-id'
+      )
+    ).toBeNull();
+    expect(
+      parseMacroEntityLink('https://example.com/app/md/document-id')
+    ).toBeNull();
   });
 });

@@ -68,33 +68,31 @@ export function useEntityDropAttachment(
       return;
     }
 
-    const attachmentId = match(entityType)
-      .with(P.union('channel', 'channel_message', 'channel_thread'), () =>
-        'channelId' in data ? (data.channelId as string) : entityId
-      )
-      .otherwise(() => entityId);
-
     const mention: ChatAttachmentMention | undefined = match(entityType)
       .with('document', () => ({
-        documentId: attachmentId,
+        documentId: entityId,
         documentName: data.name,
         blockName,
       }))
       .with('project', () => ({
-        documentId: attachmentId,
+        documentId: entityId,
         documentName: data.name,
         blockName: 'project',
       }))
       .with(P.union('channel', 'channel_message', 'channel_thread'), () => {
+        const channelId =
+          'channelId' in data && typeof data.channelId === 'string'
+            ? data.channelId
+            : entityId;
         return {
-          documentId: attachmentId,
+          documentId: channelId,
           documentName: data.name,
           blockName: 'channel',
           channelType: 'channelType' in data ? data.channelType : undefined,
         };
       })
       .with('email', () => ({
-        documentId: attachmentId,
+        documentId: entityId,
         documentName: data.name,
         blockName: 'email',
       }))

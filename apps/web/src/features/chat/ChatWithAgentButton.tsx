@@ -5,6 +5,7 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
 import {
   type ChatAttachmentMention,
+  chatAttachmentMentionToAttachment,
   chatAttachmentMentionToMarkdown,
 } from '@core/component/AI/util/chatAttachmentMention';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
@@ -28,27 +29,6 @@ type ChatWithAgentEntity =
     }
   | { type: 'project'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
-
-function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
-  return match(entity)
-    .with({ type: 'email' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'email_thread' as const,
-    }))
-    .with({ type: 'document' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'document' as const,
-    }))
-    .with({ type: 'project' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'project' as const,
-    }))
-    .with({ type: 'channel' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'channel' as const,
-    }))
-    .exhaustive();
-}
 
 function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
   return match(entity)
@@ -106,13 +86,9 @@ async function createAndOpenChat(seed: {
 }
 
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const attachment = buildAttachment(entity);
-  if (!attachment) {
-    console.warn('openChatWithAgent: unable to build attachment', entity);
-    toast.failure("Can't attach this item to a chat");
-    return;
-  }
-  const input = chatAttachmentMentionToMarkdown(buildMention(entity));
+  const mention = buildMention(entity);
+  const attachment = chatAttachmentMentionToAttachment(mention);
+  const input = chatAttachmentMentionToMarkdown(mention);
   await createAndOpenChat({ input, attachments: [attachment] });
 }
 

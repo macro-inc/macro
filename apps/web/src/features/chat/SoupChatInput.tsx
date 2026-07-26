@@ -1,13 +1,11 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { buildChatEditorWithAttachments } from '@core/component/AI/component/input/buildChatEditorWithAttachments';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
-import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
@@ -24,21 +22,10 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createEffect, onMount } from 'solid-js';
 
 function SoupChatInputInner() {
-  const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
-  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-
-  const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      analytics.track('mentions_menu_use', { itemType: 'chat' });
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditorWithAttachments(input.attachments);
 
   // Persist the model the user picks in the new-chat composer so it survives
   // reload/navigation, matching how the existing-chat draft model is restored.

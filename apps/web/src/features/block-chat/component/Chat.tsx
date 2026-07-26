@@ -1,4 +1,3 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
@@ -9,7 +8,7 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { buildChatEditorWithAttachments } from '@core/component/AI/component/input/buildChatEditorWithAttachments';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
@@ -26,13 +25,12 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
-import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import {
   getPendingSend,
   peekPendingSend,
 } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
+import { attachChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
 import {
@@ -141,7 +139,6 @@ function ChatInner(props: {
   loadedInputText: string | undefined;
 }) {
   const owner = getOwner();
-  const analytics = useAnalytics();
   const input = useChatInputContext();
   const chat = useChatContext();
   const canEdit = useCanEdit();
@@ -156,17 +153,7 @@ function ChatInner(props: {
     props.loadedInputText ?? ''
   );
 
-  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-
-  const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      analytics.track('mentions_menu_use', { itemType: 'chat' });
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditorWithAttachments(input.attachments);
 
   // Sync isGenerating from controller phase
   createEffect(() => {
@@ -181,7 +168,11 @@ function ChatInner(props: {
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
     (mention) =>
-      insertChatAttachmentMention(editor.controls.getLexical(), mention)
+      attachChatAttachmentMention(
+        editor.controls.getLexical(),
+        input.attachments,
+        mention
+      )
   );
   false && droppable;
 

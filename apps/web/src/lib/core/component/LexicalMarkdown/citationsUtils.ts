@@ -11,10 +11,9 @@ import {
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ItemType } from '@service-storage/client';
 import { validate as uuidValidate } from 'uuid';
+import { jsonToXML } from './utils/macroXml';
 
-export const jsonToXML = (tag: string, data: object) => {
-  return `<${tag}>${JSON.stringify(data)}</${tag}>`;
-};
+export { jsonToXML } from './utils/macroXml';
 
 const fetchMentionPreview = async (
   id: string,

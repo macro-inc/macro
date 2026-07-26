@@ -1,11 +1,15 @@
+import {
+  DOCUMENT_MENTION_CLOSE,
+  DOCUMENT_MENTION_OPEN,
+} from '@core/component/LexicalMarkdown/utils/macroXml';
 import type {
   AssistantMessagePart,
   ChatStream,
 } from '@service-cognition/generated/schemas';
 import type { StreamPlugin } from './types';
 
-export const MENTION_OPEN = '<m-document-mention>';
-export const MENTION_CLOSE = '</m-document-mention>';
+export const MENTION_OPEN = DOCUMENT_MENTION_OPEN;
+export const MENTION_CLOSE = DOCUMENT_MENTION_CLOSE;
 export const MACRO_XML_PREFIX = '<m-';
 const MACRO_XML_OPEN_TAG = /^<(m-[a-zA-Z0-9_-]+)>/;
 /*
