@@ -10,7 +10,7 @@ import {
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
-import { attachChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
+import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -135,22 +135,17 @@ export function ChatInput(props: ChatInputComponentProps) {
       .filter((upload) => upload.type === 'ok')
       .forEach((upload) => {
         analytics.track('ai_attachment_add');
+        attachments.addAttachment(upload.attachment);
         const metadata = upload.preview.metadata;
         if (
           upload.attachment.entity_type === 'document' &&
           metadata?.type === 'document'
         ) {
-          attachChatAttachmentMention(
-            props.editor.controls.getLexical(),
-            attachments,
-            {
-              documentId: upload.attachment.entity_id,
-              documentName: metadata.document_name,
-              blockName: fileTypeToBlockName(metadata.document_type, true),
-            }
-          );
-        } else {
-          attachments.addAttachment(upload.attachment);
+          insertChatAttachmentMention(props.editor.controls.getLexical(), {
+            documentId: upload.attachment.entity_id,
+            documentName: metadata.document_name,
+            blockName: fileTypeToBlockName(metadata.document_type, true),
+          });
         }
       });
   });
@@ -324,11 +319,11 @@ export function ChatInput(props: ChatInputComponentProps) {
               close={() => setShowAttachMenu(false)}
               containerRef={containerRef}
               open={showAttachMenu()}
-              onAttach={(item) => {
+              onAttach={(attachment, item) => {
                 analytics.track('ai_attachment_add');
-                attachChatAttachmentMention(
+                attachments.addAttachment(attachment);
+                insertChatAttachmentMention(
                   props.editor.controls.getLexical(),
-                  attachments,
                   {
                     documentId: item.id,
                     documentName: item.name,

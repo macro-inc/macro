@@ -163,7 +163,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
           type: 'document',
           id: blockId,
           name: name(),
-          blockName: blockAliasedName,
+          fileType: 'md',
         }),
       buttonComponent: () => (
         <ChatWithAgentButton
@@ -171,7 +171,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
             type: 'document',
             id: blockId,
             name: name(),
-            blockName: blockAliasedName,
+            fileType: 'md',
           }}
         />
       ),
@@ -200,7 +200,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
           type: 'document',
           id: blockId,
           name: name(),
-          blockName: blockAliasedName,
+          fileType: 'md',
         }),
     },
     ...(isTask

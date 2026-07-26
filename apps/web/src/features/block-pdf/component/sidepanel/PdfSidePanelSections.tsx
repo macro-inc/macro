@@ -5,6 +5,7 @@ import {
   SidePanel,
 } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
+import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
 export function PdfSidePanelSections() {
@@ -22,6 +23,7 @@ export function PdfSidePanelSections() {
 function ActionsSectionContent() {
   const documentId = useBlockId();
   const name = useBlockDocumentName('Unknown Filename');
+  const fileType = () => blockMetadataSignal()?.fileType;
 
   return (
     <div class="m-px flex items-center justify-start gap-2">
@@ -30,7 +32,7 @@ function ActionsSectionContent() {
           type: 'document',
           id: documentId,
           name: name(),
-          blockName: 'pdf',
+          fileType: fileType(),
         }}
       />
     </div>

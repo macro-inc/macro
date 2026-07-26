@@ -72,7 +72,7 @@ export function CallRecordingSplitHeader(props: {
           type: 'document',
           id: blockId,
           name: callName(),
-          blockName: 'call',
+          fileType: 'call',
         }),
       condition: isMobile,
     },
@@ -84,7 +84,7 @@ export function CallRecordingSplitHeader(props: {
           type: 'document',
           id: blockId,
           name: callName(),
-          blockName: 'call',
+          fileType: 'call',
         }),
       buttonComponent: () => (
         <ChatWithAgentButton
@@ -92,7 +92,7 @@ export function CallRecordingSplitHeader(props: {
             type: 'document',
             id: blockId,
             name: callName(),
-            blockName: 'call',
+            fileType: 'call',
           }}
         />
       ),
@@ -109,7 +109,7 @@ export function CallRecordingSplitHeader(props: {
           type: 'document',
           id: blockId,
           name: callName(),
-          blockName: 'call',
+          fileType: 'call',
         }),
     },
     shareTool,

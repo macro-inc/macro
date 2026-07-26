@@ -129,7 +129,7 @@ export function TopBar() {
           type: 'document',
           id: documentId,
           name: fileName(),
-          blockName: 'canvas',
+          fileType: 'canvas',
         }),
     },
     {

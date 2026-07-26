@@ -2,13 +2,14 @@ import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { buildChatEditorWithAttachments } from '@core/component/AI/component/input/buildChatEditorWithAttachments';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
@@ -169,7 +170,16 @@ const HomeChatInput = () => {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
-  const editor = buildChatEditorWithAttachments(input.attachments);
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    block: 'chat',
+    showOpenTabs: true,
+  });
 
   const applyDraft = (text: string) => {
     replaceHomeComposerDraft(editor.controls, text);

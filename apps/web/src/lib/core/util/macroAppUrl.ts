@@ -10,8 +10,6 @@ const Hosts = {
   TauriLocalhost: 'tauri.localhost',
 } as const;
 
-const KnownMacroHosts = new Set<string>(Object.values(Hosts));
-
 function cleanHostname(hostname: string): string {
   // Strip only a leading `www.` (parity with the Rust `strip_prefix("www.")`);
   // a bare `replace('www.', '')` would also collapse a mid-string occurrence,
@@ -46,35 +44,6 @@ export function isValidMacroAppHostname(hostname: string): boolean {
     );
   }
   return false;
-}
-
-/**
- * Parses the exact external link shape emitted for an entity mention.
- * Stored messages may cross web, development, and native environments, so all
- * known Macro hosts are accepted rather than only the current navigation host.
- */
-export function parseMacroEntityLink(
-  value: string
-): { block: string; id: string } | null {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return null;
-  }
-
-  const target = cleanHostname(url.hostname);
-  const current =
-    typeof window === 'undefined'
-      ? undefined
-      : cleanHostname(window.location.hostname);
-  if (!KnownMacroHosts.has(target) && target !== current) return null;
-  if (url.search || url.hash) return null;
-
-  const path = url.pathname.split('/').filter(Boolean);
-  if (path.length !== 3 || path[0] !== 'app') return null;
-
-  return { block: path[1], id: path[2] };
 }
 
 type InternalAppLink = {

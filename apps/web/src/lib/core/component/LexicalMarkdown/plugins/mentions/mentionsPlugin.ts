@@ -163,7 +163,7 @@ function $isMentionNode(
 function $mentionItemFromNode(node: MentionNode): ItemMention {
   if ($isDocumentMentionNode(node)) {
     let fileType = '';
-    const itemType = getDocumentMentionItemType(node);
+    let itemType: ItemMention['itemType'] = 'document';
     const documentName = node.getDocumentName();
     const blockName = node.getBlockName();
     if (blockName === 'pdf') fileType = 'pdf';
@@ -181,20 +181,27 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
       fileType = 'png'; // Default to png
     } else if (blockName === 'channel') {
       fileType = 'channel';
+      itemType = 'channel';
     } else if (blockName === 'project') {
       fileType = 'project';
+      itemType = 'project';
     } else if (blockName === 'chat') {
       fileType = 'chat';
+      itemType = 'chat';
     } else if (blockName === 'rss') {
       fileType = 'rss';
     } else if (blockName === 'email') {
       fileType = 'email';
+      itemType = 'thread';
     } else if (blockName === 'call') {
       fileType = 'call';
+      itemType = 'call';
     } else if (blockName === 'company') {
       fileType = 'company';
+      itemType = 'crm_company';
     } else if (blockName === 'contact') {
       fileType = 'contact';
+      itemType = 'crm_contact';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }

@@ -1,9 +1,4 @@
 import type { Attachment } from '@core/component/AI/types';
-import {
-  DOCUMENT_MENTION_CLOSE,
-  DOCUMENT_MENTION_OPEN,
-} from '@core/component/LexicalMarkdown/utils/macroXml';
-import { parseMacroEntityLink } from '@core/util/macroAppUrl';
 
 const ITEM_ATTACHMENT_TYPES = new Set<Attachment['entity_type']>([
   'channel',
@@ -12,11 +7,8 @@ const ITEM_ATTACHMENT_TYPES = new Set<Attachment['entity_type']>([
   'project',
 ]);
 
-const DOCUMENT_MENTION_PATTERN = new RegExp(
-  `${DOCUMENT_MENTION_OPEN}([\\s\\S]*?)${DOCUMENT_MENTION_CLOSE}`,
-  'g'
-);
-const MARKDOWN_LINK_PATTERN = /\]\((https?:\/\/[^\s)]+)\)/g;
+const DOCUMENT_MENTION_PATTERN =
+  /<m-document-mention>([\s\S]*?)<\/m-document-mention>/g;
 
 function getMentionedItemIds(content: string): Set<string> {
   const ids = new Set<string>();
@@ -35,11 +27,6 @@ function getMentionedItemIds(content: string): Set<string> {
     } catch {
       // Malformed mention markup renders as an unknown item, not a reference.
     }
-  }
-
-  for (const match of content.matchAll(MARKDOWN_LINK_PATTERN)) {
-    const link = parseMacroEntityLink(match[1]);
-    if (link) ids.add(link.id);
   }
 
   return ids;

@@ -21,6 +21,10 @@ vi.mock('@core/component/AI/util/storage', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn() },
 }));
+vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: (fileType: string | null | undefined) =>
+    fileType ?? 'unknown',
+}));
 vi.mock('@core/util/create', () => ({
   createChat: mocks.createChat,
 }));
@@ -44,7 +48,7 @@ describe('openChatWithAgent', () => {
       type: 'document',
       id: 'document-id',
       name: 'Project plan',
-      blockName: 'md',
+      fileType: 'md',
     });
 
     expect(mocks.storeChatStateImmediate).toHaveBeenCalledWith('chat-id', {
@@ -56,19 +60,5 @@ describe('openChatWithAgent', () => {
       { type: 'chat', id: 'chat-id' },
       { activate: true, preferNewSplit: true }
     );
-  });
-
-  it('uses the email mention type while preserving the email attachment payload', async () => {
-    await openChatWithAgent({
-      type: 'email',
-      id: 'thread-id',
-      name: 'Quarterly planning',
-    });
-
-    expect(mocks.storeChatStateImmediate).toHaveBeenCalledWith('chat-id', {
-      input:
-        '<m-document-mention>{"documentId":"thread-id","documentName":"Quarterly planning","blockName":"email","blockParams":{}}</m-document-mention>',
-      attachments: [{ entity_id: 'thread-id', entity_type: 'email_thread' }],
-    });
   });
 });

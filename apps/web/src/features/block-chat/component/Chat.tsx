@@ -8,7 +8,7 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { buildChatEditorWithAttachments } from '@core/component/AI/component/input/buildChatEditorWithAttachments';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
@@ -25,12 +25,13 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import {
   getPendingSend,
   peekPendingSend,
 } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import { attachChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
+import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
 import {
@@ -153,7 +154,16 @@ function ChatInner(props: {
     props.loadedInputText ?? ''
   );
 
-  const editor = buildChatEditorWithAttachments(input.attachments);
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    block: 'chat',
+    showOpenTabs: true,
+  });
 
   // Sync isGenerating from controller phase
   createEffect(() => {
@@ -167,12 +177,9 @@ function ChatInner(props: {
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
+    input.attachments,
     (mention) =>
-      attachChatAttachmentMention(
-        editor.controls.getLexical(),
-        input.attachments,
-        mention
-      )
+      insertChatAttachmentMention(editor.controls.getLexical(), mention)
   );
   false && droppable;
 

@@ -577,7 +577,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         (isAccessiblePreviewItem(preview) ? preview.name : undefined) ??
         props.documentInfo.name ??
         '',
-      blockName: targetBlockType(),
+      fileType: targetBlockType(),
     });
   };
 

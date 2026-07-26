@@ -1,10 +1,11 @@
-import { buildChatEditorWithAttachments } from '@core/component/AI/component/input/buildChatEditorWithAttachments';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment, Model } from '@core/component/AI/types';
 import { onMount } from 'solid-js';
 
@@ -17,7 +18,16 @@ function EditableChatMessageInner(props: {
   model: Model;
 }) {
   const input = useChatInputContext();
-  const editor = buildChatEditorWithAttachments(input.attachments);
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    block: 'chat',
+    showOpenTabs: true,
+  });
 
   onMount(() => {
     editor.controls.focus();

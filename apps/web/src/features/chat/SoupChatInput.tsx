@@ -1,11 +1,12 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { buildChatEditorWithAttachments } from '@core/component/AI/component/input/buildChatEditorWithAttachments';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
@@ -25,7 +26,16 @@ function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
-  const editor = buildChatEditorWithAttachments(input.attachments);
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    block: 'chat',
+    showOpenTabs: true,
+  });
 
   // Persist the model the user picks in the new-chat composer so it survives
   // reload/navigation, matching how the existing-chat draft model is restored.

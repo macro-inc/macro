@@ -2,8 +2,8 @@ import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { globalAttachableHistory } from '@core/component/AI/signal/globalAttachments';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
-import { getDirectMentionAttachment } from '@core/component/AI/util/directMentionAttachment';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
+import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import {
   getCachedItemPreview,
   isAccessiblePreviewItem,
@@ -44,7 +44,7 @@ export const useChatAttachableHistory = () => {
   return globalAttachableHistory;
 };
 
-export const getChatAttachmentInfo = () => {
+export const useGetChatAttachmentInfo = () => {
   // fallback for callers that only have an id: the mentions menu and
   // attachment pickers render previews, so the item is usually cached
   const cachedDocumentFileType = (id: string): string | undefined => {
@@ -77,19 +77,36 @@ export const getChatAttachmentInfo = () => {
     };
   };
 
+  const getChannelAttachment = ({
+    itemId: id,
+  }: ItemMention): Attachment | undefined => {
+    if (!ENABLE_CHAT_CHANNEL_ATTACHMENT) return;
+
+    return {
+      entity_id: id,
+      entity_type: 'channel',
+    };
+  };
+
   const mentionToAttachment = (
     mention: ItemMention
   ): Attachment | undefined => {
-    const directAttachment = getDirectMentionAttachment(mention);
-    if (directAttachment) return directAttachment;
-
     if (mention.itemType === 'document') {
       return getDocumentAttachment(mention.itemId, mention.fileType);
+    } else if (mention.itemType === 'call') {
+      return { entity_id: mention.itemId, entity_type: 'document' };
+    } else if (mention.itemType === 'channel') {
+      return getChannelAttachment(mention);
+    } else if (mention.itemType === 'thread') {
+      return { entity_id: mention.itemId, entity_type: 'email_thread' };
+    } else if (mention.itemType === 'project') {
+      return { entity_id: mention.itemId, entity_type: 'project' };
     }
   };
 
   return {
     getDocumentAttachment,
+    getChannelAttachment,
     getAttachmentFromMention: mentionToAttachment,
   };
 };

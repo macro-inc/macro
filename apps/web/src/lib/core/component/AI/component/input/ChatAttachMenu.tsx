@@ -1,6 +1,10 @@
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
+import {
+  useChatAttachableHistory,
+  useGetChatAttachmentInfo,
+} from '@core/component/AI/signal/attachment';
+import type { Attachment } from '@core/component/AI/types';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import clickOutside from '@core/directive/clickOutside';
@@ -38,7 +42,7 @@ type ChatAttachMenuProps = {
   close: () => void;
   anchorRef: HTMLDivElement;
   containerRef: HTMLElement;
-  onAttach: (item: HistoryItem) => void;
+  onAttach: (attachment: Attachment, item: HistoryItem) => void;
 };
 
 function truncate(str: string, maxLength: number = 30) {
@@ -55,6 +59,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();
   const history = useChatAttachableHistory();
+  const { getDocumentAttachment } = useGetChatAttachmentInfo();
 
   const [input, setInput] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
@@ -185,7 +190,8 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
       return;
     }
 
-    props.onAttach(item);
+    const attachment = getDocumentAttachment(item.id, item.fileType);
+    if (attachment) props.onAttach(attachment, item);
     props.close();
   };
 

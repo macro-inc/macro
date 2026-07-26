@@ -1,21 +1,19 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { BlockAlias, BlockName } from '@core/block';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
 import {
   type ChatAttachmentMention,
-  chatAttachmentMentionToAttachment,
   chatAttachmentMentionToMarkdown,
 } from '@core/component/AI/util/chatAttachmentMention';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
-import { match } from 'ts-pattern';
 
 export { AnimatedStarIcon as ChatWithAgentIcon };
 
@@ -25,35 +23,36 @@ type ChatWithAgentEntity =
       type: 'document';
       id: string;
       name: string;
-      blockName: BlockName | BlockAlias;
+      fileType: string | null | undefined;
     }
   | { type: 'project'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
 
-function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
-  return match(entity)
-    .with({ type: 'email' }, (e) => ({
-      documentId: e.id,
-      documentName: e.name,
-      blockName: 'email',
-    }))
-    .with({ type: 'document' }, (e) => ({
-      documentId: e.id,
-      documentName: e.name,
-      blockName: e.blockName,
-    }))
-    .with({ type: 'project' }, (e) => ({
-      documentId: e.id,
-      documentName: e.name,
-      blockName: 'project',
-    }))
-    .with({ type: 'channel' }, (e) => ({
-      documentId: e.id,
-      documentName: e.name,
-      blockName: 'channel',
-      channelType: e.channelType,
-    }))
-    .exhaustive();
+function buildSeed(entity: ChatWithAgentEntity): {
+  mention: ChatAttachmentMention;
+  attachment: Attachment;
+} {
+  const attachmentType: Attachment['entity_type'] =
+    entity.type === 'email' ? 'email_thread' : entity.type;
+  const blockName =
+    entity.type === 'document'
+      ? fileTypeToBlockName(entity.fileType, true)
+      : entity.type === 'email'
+        ? 'email'
+        : entity.type;
+
+  return {
+    mention: {
+      documentId: entity.id,
+      documentName: entity.name,
+      blockName,
+      ...(entity.type === 'channel' ? { channelType: entity.channelType } : {}),
+    },
+    attachment: {
+      entity_id: entity.id,
+      entity_type: attachmentType,
+    },
+  };
 }
 
 async function createAndOpenChat(seed: {
@@ -86,8 +85,7 @@ async function createAndOpenChat(seed: {
 }
 
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const mention = buildMention(entity);
-  const attachment = chatAttachmentMentionToAttachment(mention);
+  const { mention, attachment } = buildSeed(entity);
   const input = chatAttachmentMentionToMarkdown(mention);
   await createAndOpenChat({ input, attachments: [attachment] });
 }
