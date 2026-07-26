@@ -1,5 +1,15 @@
+use crate::pubsub::calendar_backfill_adapters::{
+    PgEmailCalendarBackfillRepository, SqsEmailCalendarBackfillPublisher,
+};
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
+use calendar_events::{
+    domain::service::{
+        EmailCalendarBackfillCoordinator, GoogleCalendarBackfillCoordinator,
+        GoogleCalendarBackfillFailureService,
+    },
+    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -25,6 +35,53 @@ pub type PubSubEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTr
 
 /// The concrete notification ingress service type.
 pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
+
+/// Concrete Google Calendar backfill application service.
+pub type GoogleCalendarBackfillService = GoogleCalendarBackfillCoordinator<
+    PgCalendarRepository,
+    GoogleCalendarClient,
+    PgCalendarRepository,
+>;
+
+/// Concrete email-ICS backfill application service.
+pub type EmailIcsBackfillService = EmailCalendarBackfillCoordinator<
+    PgEmailCalendarBackfillRepository,
+    SqsEmailCalendarBackfillPublisher,
+>;
+
+/// Concrete pre-lease Google Calendar failure application service.
+pub type GoogleCalendarBackfillFailureHandler =
+    GoogleCalendarBackfillFailureService<PgCalendarRepository>;
+
+/// Calendar application services composed once when a worker starts.
+#[derive(Clone)]
+pub struct CalendarBackfillServices {
+    /// Google provider backfill coordinator.
+    pub google: Arc<GoogleCalendarBackfillService>,
+    /// Email-ICS backfill coordinator.
+    pub email_ics: Arc<EmailIcsBackfillService>,
+    /// Applies terminal provider failures that happen before a lease is claimed.
+    pub google_failure: Arc<GoogleCalendarBackfillFailureHandler>,
+}
+
+impl CalendarBackfillServices {
+    /// Compose calendar application services from process-level adapters.
+    pub fn new(db: PgPool, sqs_client: sqs_client::SQS) -> Self {
+        let repository = PgCalendarRepository::new(db.clone());
+        Self {
+            google: Arc::new(GoogleCalendarBackfillCoordinator::new(
+                repository.clone(),
+                GoogleCalendarClient::new(reqwest::Client::new()),
+                repository.clone(),
+            )),
+            email_ics: Arc::new(EmailCalendarBackfillCoordinator::new(
+                PgEmailCalendarBackfillRepository::new(db),
+                SqsEmailCalendarBackfillPublisher::new(sqs_client),
+            )),
+            google_failure: Arc::new(GoogleCalendarBackfillFailureService::new(repository)),
+        }
+    }
+}
 
 /// The unfurl-backed resolver used when Apollo enrichment is disabled.
 type UnfurlResolver = UnfurlCompanyMetadataResolver<
@@ -77,4 +134,5 @@ pub struct PubSubContext {
     pub macro_event_broker: PubSubEventBroker,
     pub notifications_enabled: bool,
     pub retry_worker: bool,
+    pub calendar_backfills: CalendarBackfillServices,
 }

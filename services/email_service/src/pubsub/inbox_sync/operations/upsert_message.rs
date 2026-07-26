@@ -82,6 +82,8 @@ pub async fn upsert_message(
         }
     };
 
+    let calendar_payload = message_resource.payload.clone();
+
     // Map Gmail resource to service model (IDs are generated in the parse function)
     let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
         ProcessingError::NonRetryable(DetailedError {
@@ -275,6 +277,27 @@ pub async fn upsert_message(
         };
         publish_email_event(&ctx.macro_event_broker, &event);
     }
+
+    crate::calendar_ingest::ingest_calendar_parts(
+        &ctx.db,
+        &ctx.gmail_client,
+        crate::calendar_ingest::CalendarIngestInput {
+            access_token: &gmail_access_token,
+            owner_id: link.macro_id.as_ref(),
+            email_link_id: link.id,
+            email_thread_id: thread_db_id,
+            email_message_id: message_db_id,
+            provider_message_id: &payload.provider_message_id,
+            payload: &calendar_payload,
+        },
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to extract calendar invitation"),
+        })
+    })?;
 
     handle_attachment_upload(
         ctx,

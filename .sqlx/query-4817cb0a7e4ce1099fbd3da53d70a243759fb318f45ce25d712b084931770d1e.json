@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                outbox.id,\n                outbox.backfill_job_id,\n                job.email_link_id,\n                job.kind\n            FROM calendar_sync_outbox outbox\n            JOIN calendar_backfill_jobs job ON job.id = outbox.backfill_job_id\n            WHERE outbox.published_at IS NULL\n            ORDER BY outbox.created_at, outbox.id\n            FOR UPDATE OF outbox SKIP LOCKED\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "backfill_job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4817cb0a7e4ce1099fbd3da53d70a243759fb318f45ce25d712b084931770d1e"
+}

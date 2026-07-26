@@ -98,6 +98,14 @@ async fn main() -> anyhow::Result<()> {
         .sfs_delete_queue(&sfs_delete_queue)
         .email_link_manager_queue(&link_manager_queue);
 
+    tokio::spawn(email_service::calendar_outbox::run(
+        db.clone(),
+        sqs_client.clone(),
+        calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+        ),
+    ));
+
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();

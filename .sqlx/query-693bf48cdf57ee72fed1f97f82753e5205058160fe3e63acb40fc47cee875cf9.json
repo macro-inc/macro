@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_backfill_jobs\n        SET status = 'failed',\n            last_error = 'email backfill failed before calendar extraction completed',\n            completed_at = now(),\n            updated_at = now()\n        WHERE kind = 'email_ics'\n          AND status = 'running'\n          AND cursor->>'emailBackfillJobId' = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "693bf48cdf57ee72fed1f97f82753e5205058160fe3e63acb40fc47cee875cf9"
+}

@@ -53,6 +53,8 @@ pub async fn backfill_message(
         }
     };
 
+    let calendar_payload = message_resource.payload.clone();
+
     // Map Gmail resource to service model (IDs are generated in the parse function)
     let mut message = map_message_resource_to_service(message_resource, link.id)
         .context("Failed to map message resource to service")
@@ -79,6 +81,40 @@ pub async fn backfill_message(
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
             source: e.context("Failed to insert final message into database"),
+        })
+    })?;
+    let (message_db_id, persisted_thread_id) =
+        email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
+            &ctx.db,
+            link.id,
+            &p.message_provider_id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to resolve persisted calendar invitation message"),
+            })
+        })?;
+
+    crate::calendar_ingest::ingest_calendar_parts(
+        &ctx.db,
+        &ctx.gmail_client,
+        crate::calendar_ingest::CalendarIngestInput {
+            access_token,
+            owner_id: link.macro_id.as_ref(),
+            email_link_id: link.id,
+            email_thread_id: persisted_thread_id,
+            email_message_id: message_db_id,
+            provider_message_id: &p.message_provider_id,
+            payload: &calendar_payload,
+        },
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to extract calendar invitation"),
         })
     })?;
 

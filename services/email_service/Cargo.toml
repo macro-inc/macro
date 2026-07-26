@@ -76,6 +76,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
+calendar_events = { path = "../../crates/calendar_events", features = ["google", "ics", "postgres"] }
 ammonia = "4.1.4"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
@@ -144,6 +145,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+rootcause = { workspace = true }
 s3_client = { path = "../../crates/s3_client" }
 schemars = { workspace = true }
 scraper = { workspace = true }

@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Calendar event domain and persistence adapter.
+//! Calendar event domain, parsing, and provider persistence adapters.
 //!
 //! A [`domain::models::CalendarEvent`] is the stable Macro entity. External
 //! calendars and email invitations are sources of that entity, while
@@ -7,9 +7,9 @@
 
 /// Calendar business models, ports, and services.
 pub mod domain;
-/// Inbound adapters that expose calendar use cases.
-#[cfg(feature = "inbound")]
+/// Inbound adapters that expose calendar use cases and accepted formats.
+#[cfg(any(feature = "ics", feature = "inbound"))]
 pub mod inbound;
-/// Database adapters used by service composition roots.
-#[cfg(feature = "postgres")]
+/// Database and provider adapters used by service composition roots.
+#[cfg(any(feature = "google", feature = "postgres"))]
 pub mod outbound;
