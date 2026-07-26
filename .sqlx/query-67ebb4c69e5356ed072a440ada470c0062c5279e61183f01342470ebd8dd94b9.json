@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH seen(calendar_id, provider_event_id) AS (\n                SELECT *\n                FROM unnest($3::uuid[], $4::text[])\n            ),\n            deleted_sources AS (\n                DELETE FROM calendar_event_sources source\n                WHERE source.source_kind = 'google'\n                  AND source.account_id = $1\n                  AND (\n                        source.calendar_id IS NULL\n                        OR NOT (source.calendar_id = ANY($2::uuid[]))\n                        OR (\n                            source.calendar_id = ANY($5::uuid[])\n                            AND NOT EXISTS (\n                                SELECT 1\n                                FROM seen\n                                WHERE seen.calendar_id = source.calendar_id\n                                  AND seen.provider_event_id = source.provider_event_id\n                            )\n                        )\n                  )\n                RETURNING source.event_id\n            )\n            SELECT DISTINCT event_id AS \"event_id!\"\n            FROM deleted_sources\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "67ebb4c69e5356ed072a440ada470c0062c5279e61183f01342470ebd8dd94b9"
+}

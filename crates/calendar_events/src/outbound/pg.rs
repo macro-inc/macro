@@ -1,0 +1,2327 @@
+//! PostgreSQL implementation of the calendar repository port.
+
+use std::collections::HashMap;
+
+use chrono::{DateTime, NaiveDate, Utc};
+use rootcause::Report;
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
+
+use crate::domain::{
+    models::{
+        AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
+        CalendarBackfillJobKey, CalendarBackfillKind, CalendarEvent, CalendarEventOverride,
+        CalendarEventSource, CalendarEventUpsert, CalendarOccurrence,
+        CalendarOccurrenceCoverageError, CalendarOccurrenceCursor, EventStart, EventStatus,
+        EventTime, EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES,
+        GoogleCalendarSnapshot, GoogleScopeSet, OccurrenceRange, ProviderCalendar,
+        StoredGoogleCalendar,
+    },
+    ports::{
+        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
+        GoogleCalendarSyncRepository,
+    },
+};
+
+/// PostgreSQL calendar repository.
+#[derive(Clone)]
+pub struct PgCalendarRepository {
+    pool: PgPool,
+}
+
+impl PgCalendarRepository {
+    /// Construct a repository from the shared MacroDB pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    async fn persist_google_backfill_failure(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Option<Uuid>,
+        disposition: CalendarBackfillFailureDisposition,
+        message: &str,
+    ) -> Result<CalendarBackfillFailureOutcome, Report> {
+        let (job_status, account_status, completed_at, link_needs_reauth) = match disposition {
+            CalendarBackfillFailureDisposition::Retry => ("pending", "pending", None, false),
+            CalendarBackfillFailureDisposition::Permanent => {
+                ("failed", "error", Some(Utc::now()), false)
+            }
+            CalendarBackfillFailureDisposition::ReauthRequired => {
+                ("failed", "reauth_required", Some(Utc::now()), true)
+            }
+            CalendarBackfillFailureDisposition::CalendarPermissionRequired => {
+                ("failed", "reauth_required", Some(Utc::now()), false)
+            }
+        };
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let mut tx = self.pool.begin().await.map_err(report)?;
+
+        // Incremental grant application locks the inbox before its jobs. Keep
+        // the same order for reauth failure so concurrent consent and worker
+        // deliveries cannot deadlock.
+        let previous_link_reauth = if link_needs_reauth {
+            Some(
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT needs_reauth
+                    FROM email_links
+                    WHERE id = $1
+                    FOR UPDATE
+                    "#,
+                    key.email_link_id,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(report)?,
+            )
+        } else {
+            None
+        };
+
+        let updated = if let Some(lease_token) = lease_token {
+            sqlx::query!(
+                r#"
+                UPDATE calendar_backfill_jobs
+                SET status = $4,
+                    lease_expires_at = NULL,
+                    lease_token = NULL,
+                    last_error = $2,
+                    completed_at = $5,
+                    updated_at = now()
+                WHERE id = $1
+                  AND email_link_id = $3
+                  AND kind = 'google_calendar'
+                  AND status = 'running'
+                  AND lease_token = $6
+                  AND lease_expires_at > now()
+                  AND EXISTS (
+                        SELECT 1
+                        FROM email_links link
+                        WHERE link.id = calendar_backfill_jobs.email_link_id
+                          AND link.google_grant_version = calendar_backfill_jobs.grant_version
+                          AND link.google_granted_scopes @> $7::text[]
+                  )
+                "#,
+                key.job_id,
+                message,
+                key.email_link_id,
+                job_status,
+                completed_at,
+                lease_token,
+                &required_scopes,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?
+        } else {
+            sqlx::query!(
+                r#"
+                UPDATE calendar_backfill_jobs
+                SET status = $4,
+                    lease_expires_at = NULL,
+                    lease_token = NULL,
+                    last_error = $2,
+                    completed_at = $5,
+                    updated_at = now()
+                WHERE id = $1
+                  AND email_link_id = $3
+                  AND kind = 'google_calendar'
+                  AND status NOT IN ('complete', 'failed')
+                  AND lease_token IS NULL
+                  AND EXISTS (
+                        SELECT 1
+                        FROM email_links link
+                        WHERE link.id = calendar_backfill_jobs.email_link_id
+                          AND link.google_grant_version = calendar_backfill_jobs.grant_version
+                          AND link.google_granted_scopes @> $6::text[]
+                  )
+                "#,
+                key.job_id,
+                message,
+                key.email_link_id,
+                job_status,
+                completed_at,
+                &required_scopes,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?
+        };
+        if updated.rows_affected() != 1 {
+            if lease_token.is_some() {
+                return Err(rootcause::report!(
+                    "Google Calendar backfill lease was lost"
+                ));
+            }
+            tx.commit().await.map_err(report)?;
+            return Ok(CalendarBackfillFailureOutcome {
+                job_transitioned: false,
+                link_reauth_transitioned: false,
+            });
+        }
+
+        sqlx::query!(
+            r#"
+            UPDATE calendar_accounts
+            SET sync_status = $2,
+                last_sync_error = $3,
+                updated_at = now()
+            WHERE email_link_id = $1
+            "#,
+            key.email_link_id,
+            account_status,
+            message,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        if link_needs_reauth {
+            sqlx::query!(
+                r#"
+                UPDATE email_links
+                SET needs_reauth = true,
+                    last_sync_error_at = now(),
+                    updated_at = now()
+                WHERE id = $1
+                "#,
+                key.email_link_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?;
+        }
+
+        tx.commit().await.map_err(report)?;
+        Ok(CalendarBackfillFailureOutcome {
+            job_transitioned: true,
+            link_reauth_transitioned: previous_link_reauth == Some(false),
+        })
+    }
+
+    #[cfg(test)]
+    async fn upsert_event_fixture(&self, upsert: CalendarEventUpsert) -> Result<Uuid, Report> {
+        self.upsert_event(CalendarEventWrite::Fixture(upsert)).await
+    }
+
+    #[cfg(test)]
+    async fn upsert_calendar_fixture(
+        &self,
+        account_id: Uuid,
+        calendar: ProviderCalendar,
+    ) -> Result<Uuid, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let id = upsert_calendar_tx(&mut tx, account_id, calendar).await?.id;
+        tx.commit().await.map_err(report)?;
+        Ok(id)
+    }
+
+    #[cfg(test)]
+    async fn upsert_google_account(&self, email_link_id: Uuid) -> Result<Uuid, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let row = sqlx::query_as!(
+            GrantRow,
+            r#"
+            SELECT
+                macro_id,
+                email_address::text AS "email_address!",
+                google_granted_scopes,
+                google_grant_version
+            FROM email_links
+            WHERE id = $1
+            "#,
+            email_link_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+        let id =
+            upsert_google_account_tx(&mut tx, email_link_id, &row.macro_id, &row.email_address)
+                .await?;
+        tx.commit().await.map_err(report)?;
+        Ok(id)
+    }
+}
+
+struct GrantRow {
+    macro_id: String,
+    email_address: String,
+    google_granted_scopes: Vec<String>,
+    google_grant_version: i64,
+}
+
+struct StoredCalendarRow {
+    id: Uuid,
+    sync_token: Option<String>,
+    materialized_starts_at: Option<DateTime<Utc>>,
+    materialized_ends_at: Option<DateTime<Utc>>,
+    materialized_start_date: Option<NaiveDate>,
+    materialized_end_date: Option<NaiveDate>,
+}
+
+struct OccurrenceJoinRow {
+    event_id: Uuid,
+    occurrence_key: String,
+    recurrence_id: Option<String>,
+    occurrence_starts_at: Option<DateTime<Utc>>,
+    occurrence_ends_at: Option<DateTime<Utc>>,
+    occurrence_start_date: Option<NaiveDate>,
+    occurrence_end_date: Option<NaiveDate>,
+    is_cancelled: bool,
+    owner_id: String,
+    ical_uid: String,
+    title: String,
+    description: Option<String>,
+    location: Option<String>,
+    status: String,
+    visibility: String,
+    transparency: String,
+    starts_at: Option<DateTime<Utc>>,
+    ends_at: Option<DateTime<Utc>>,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+    time_zone: Option<String>,
+    recurrence_lines: Vec<String>,
+    organizer_email: Option<String>,
+    organizer_name: Option<String>,
+    conference_url: Option<String>,
+    sequence: i32,
+    is_read_only: bool,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+struct AttendeeRow {
+    event_id: Uuid,
+    email: String,
+    display_name: Option<String>,
+    response_status: String,
+    is_organizer: bool,
+    is_optional: bool,
+    is_self: bool,
+    comment: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredSourceProjection {
+    event: CalendarEvent,
+    overrides: Vec<CalendarEventOverride>,
+    occurrences: Vec<CalendarOccurrence>,
+    materialized_range: OccurrenceRange,
+}
+
+impl From<&CalendarEventUpsert> for StoredSourceProjection {
+    fn from(upsert: &CalendarEventUpsert) -> Self {
+        Self {
+            event: upsert.event.clone(),
+            overrides: upsert.overrides.clone(),
+            occurrences: upsert.occurrences.clone(),
+            materialized_range: upsert.materialized_range.clone(),
+        }
+    }
+}
+
+impl CalendarRepository for PgCalendarRepository {
+    #[tracing::instrument(skip(self, scopes), err)]
+    async fn apply_google_grant(
+        &self,
+        email_link_id: Uuid,
+        scopes: GoogleScopeSet,
+    ) -> Result<AppliedGoogleGrant, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let row = sqlx::query_as!(
+            GrantRow,
+            r#"
+            SELECT
+                macro_id,
+                email_address::text AS "email_address!",
+                google_granted_scopes,
+                google_grant_version
+            FROM email_links
+            WHERE id = $1
+            FOR UPDATE
+            "#,
+            email_link_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        let old_scopes = GoogleScopeSet::from_scopes(row.google_granted_scopes);
+        let had_calendar_capability = old_scopes.has_calendar_capability();
+        let changed = old_scopes != scopes;
+        if !changed {
+            let jobs = if scopes.has_calendar_capability() {
+                retry_failed_backfills_tx(&mut tx, email_link_id, row.google_grant_version).await?
+            } else {
+                Vec::new()
+            };
+            tx.commit().await.map_err(report)?;
+            return Ok(AppliedGoogleGrant {
+                grant_version: row.google_grant_version,
+                changed: false,
+                jobs,
+            });
+        }
+
+        let grant_version = row.google_grant_version + 1;
+        let granted_scopes = scopes.clone().into_vec();
+        sqlx::query!(
+            r#"
+            UPDATE email_links
+            SET google_granted_scopes = $2,
+                google_grant_version = $3,
+                updated_at = now()
+            WHERE id = $1
+            "#,
+            email_link_id,
+            &granted_scopes,
+            grant_version,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        invalidate_stale_google_jobs_tx(&mut tx, email_link_id, grant_version).await?;
+
+        let mut jobs = Vec::new();
+        let has_calendar_capability = scopes.has_calendar_capability();
+        if had_calendar_capability && !has_calendar_capability {
+            disable_google_calendar_capability_tx(&mut tx, email_link_id).await?;
+        }
+        if has_calendar_capability {
+            let account_id =
+                upsert_google_account_tx(&mut tx, email_link_id, &row.macro_id, &row.email_address)
+                    .await?;
+            for kind in [
+                CalendarBackfillKind::GoogleCalendar,
+                CalendarBackfillKind::EmailIcs,
+            ] {
+                let job_id = Uuid::now_v7();
+                let inserted = sqlx::query_scalar!(
+                    r#"
+                    INSERT INTO calendar_backfill_jobs (
+                        id, email_link_id, account_id, kind, grant_version
+                    )
+                    VALUES ($1, $2, $3, $4, $5)
+                    ON CONFLICT (email_link_id, kind, grant_version) DO NOTHING
+                    RETURNING id
+                    "#,
+                    job_id,
+                    email_link_id,
+                    account_id,
+                    kind.as_str(),
+                    grant_version,
+                )
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(report)?;
+
+                if let Some(job_id) = inserted {
+                    sqlx::query!(
+                        r#"
+                        INSERT INTO calendar_sync_outbox (
+                            id, backfill_job_id
+                        )
+                        VALUES ($1, $2)
+                        "#,
+                        Uuid::now_v7(),
+                        job_id,
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(report)?;
+
+                    jobs.push(CalendarBackfillJob {
+                        id: job_id,
+                        email_link_id,
+                        account_id: Some(account_id),
+                        kind,
+                        grant_version,
+                    });
+                }
+            }
+        }
+
+        tx.commit().await.map_err(report)?;
+        Ok(AppliedGoogleGrant {
+            grant_version,
+            changed,
+            jobs,
+        })
+    }
+
+    #[tracing::instrument(skip(self, write), err)]
+    async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let upsert = match write {
+            CalendarEventWrite::EmailIcs(upsert) => {
+                if !matches!(upsert.source, CalendarEventSource::EmailIcs(_)) {
+                    return Err(rootcause::report!(
+                        "email ICS ingestion requires an email ICS source"
+                    ));
+                }
+                upsert
+            }
+            CalendarEventWrite::GoogleBackfill {
+                key,
+                lease_token,
+                upsert,
+            } => {
+                let CalendarEventSource::Google(source) = &upsert.source else {
+                    return Err(rootcause::report!(
+                        "Google backfill ingestion requires a Google source"
+                    ));
+                };
+                if source.email_link_id != key.email_link_id {
+                    return Err(rootcause::report!(
+                        "Google calendar event fence does not match its connected inbox"
+                    ));
+                }
+                fence_google_mutation_tx(&mut tx, key, lease_token, Some(source.account_id))
+                    .await?;
+                upsert
+            }
+            #[cfg(test)]
+            CalendarEventWrite::Fixture(upsert) => upsert,
+        };
+        let source_kind = match &upsert.source {
+            CalendarEventSource::Google(_) => "google",
+            CalendarEventSource::EmailIcs(_) => "email_ics",
+        };
+        let source_link_id = match &upsert.source {
+            CalendarEventSource::Google(source) => source.email_link_id,
+            CalendarEventSource::EmailIcs(source) => source.email_link_id,
+        };
+        let reconciliation_lock = event_reconciliation_lock(source_link_id, &upsert.event.ical_uid);
+        sqlx::query_scalar!(
+            r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock($1)"#,
+            reconciliation_lock,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+        let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
+        let proposed_id = upsert.event.id;
+
+        // Google is the authoritative source when the same RFC UID was first
+        // discovered in email. Email can still create/update entities that do
+        // not yet have a Google source.
+        let applied_id = sqlx::query_scalar!(
+            r#"
+            INSERT INTO calendar_events (
+                id, owner_id, source_link_id, ical_uid, title, description, location,
+                status, visibility, transparency,
+                starts_at, ends_at, start_date, end_date, time_zone,
+                recurrence_lines, organizer_email, organizer_name,
+                conference_url, sequence, is_read_only, canonical_source_kind,
+                canonical_source_updated_at,
+                materialized_starts_at, materialized_ends_at,
+                materialized_start_date, materialized_end_date,
+                created_at, updated_at
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7,
+                $8, $9, $10,
+                $11, $12, $13, $14, $15,
+                $16, $17, $18,
+                $19, $20, $21, $22, $28,
+                $23, $24, $25, $26,
+                $27, $28
+            )
+            ON CONFLICT (owner_id, source_link_id, ical_uid) DO UPDATE SET
+                title = EXCLUDED.title,
+                description = EXCLUDED.description,
+                location = EXCLUDED.location,
+                status = EXCLUDED.status,
+                visibility = EXCLUDED.visibility,
+                transparency = EXCLUDED.transparency,
+                starts_at = EXCLUDED.starts_at,
+                ends_at = EXCLUDED.ends_at,
+                start_date = EXCLUDED.start_date,
+                end_date = EXCLUDED.end_date,
+                time_zone = EXCLUDED.time_zone,
+                recurrence_lines = EXCLUDED.recurrence_lines,
+                organizer_email = EXCLUDED.organizer_email,
+                organizer_name = EXCLUDED.organizer_name,
+                conference_url = EXCLUDED.conference_url,
+                sequence = EXCLUDED.sequence,
+                is_read_only = EXCLUDED.is_read_only,
+                canonical_source_kind = EXCLUDED.canonical_source_kind,
+                canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
+                materialized_starts_at = EXCLUDED.materialized_starts_at,
+                materialized_ends_at = EXCLUDED.materialized_ends_at,
+                materialized_start_date = EXCLUDED.materialized_start_date,
+                materialized_end_date = EXCLUDED.materialized_end_date,
+                updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at),
+                deleted_at = NULL
+            WHERE
+                (
+                    $29 = 'google'
+                    AND (
+                        EXCLUDED.sequence > calendar_events.sequence
+                        OR (
+                            EXCLUDED.sequence = calendar_events.sequence
+                            AND EXCLUDED.canonical_source_updated_at
+                                >= calendar_events.canonical_source_updated_at
+                        )
+                        OR calendar_events.canonical_source_kind <> 'google'
+                    )
+                )
+                OR (
+                    $29 = 'email_ics'
+                    AND calendar_events.canonical_source_kind <> 'google'
+                    AND (
+                        EXCLUDED.sequence > calendar_events.sequence
+                        OR (
+                            EXCLUDED.sequence = calendar_events.sequence
+                            AND EXCLUDED.canonical_source_updated_at
+                                >= calendar_events.canonical_source_updated_at
+                        )
+                    )
+                )
+            RETURNING id
+            "#,
+            proposed_id,
+            &upsert.event.owner_id,
+            source_link_id,
+            &upsert.event.ical_uid,
+            &upsert.event.title,
+            upsert.event.description.as_deref(),
+            upsert.event.location.as_deref(),
+            upsert.event.status.as_str(),
+            upsert.event.visibility.as_str(),
+            upsert.event.transparency.as_str(),
+            starts_at,
+            ends_at,
+            start_date,
+            end_date,
+            time_zone,
+            &upsert.event.recurrence_lines,
+            upsert.event.organizer_email.as_deref(),
+            upsert.event.organizer_name.as_deref(),
+            upsert.event.conference_url.as_deref(),
+            i32::try_from(upsert.event.sequence).unwrap_or(i32::MAX),
+            upsert.event.is_read_only,
+            source_kind,
+            upsert.materialized_range.starts_at,
+            upsert.materialized_range.ends_at,
+            upsert.materialized_range.start_date,
+            upsert.materialized_range.end_date,
+            upsert.event.created_at,
+            upsert.event.updated_at,
+            source_kind,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        let event_id = match applied_id {
+            Some(id) => id,
+            None => sqlx::query_scalar!(
+                "SELECT id FROM calendar_events WHERE owner_id = $1 AND source_link_id = $2 AND ical_uid = $3",
+                &upsert.event.owner_id,
+                source_link_id,
+                &upsert.event.ical_uid,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(report)?,
+        };
+
+        persist_source(&mut tx, event_id, &upsert).await?;
+
+        // Only the source selected as canonical replaces projections and
+        // attendees. Lower-sequence/stale sources are still recorded above.
+        if applied_id.is_some() {
+            replace_attendees(&mut tx, event_id, &upsert.event.attendees).await?;
+            replace_overrides(&mut tx, event_id, &upsert.overrides).await?;
+            replace_occurrences(
+                &mut tx,
+                event_id,
+                &upsert.event.owner_id,
+                &upsert.occurrences,
+            )
+            .await?;
+        }
+
+        tx.commit().await.map_err(report)?;
+        Ok(event_id)
+    }
+
+    #[tracing::instrument(skip(self, range), err)]
+    async fn list_occurrences(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        cursor: Option<CalendarOccurrenceCursor>,
+        limit: u16,
+    ) -> Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report> {
+        let missing_coverage = sqlx::query_scalar!(
+            r#"
+            SELECT (
+              EXISTS (
+                SELECT 1
+                FROM calendar_events event
+                WHERE event.owner_id IN (
+                        SELECT $1::text
+                        UNION
+                        SELECT link.child_macro_id
+                        FROM macro_user_links link
+                        WHERE link.primary_macro_id = $1
+                  )
+                  AND event.deleted_at IS NULL
+                  AND event.status <> 'cancelled'
+                  AND (
+                        cardinality(event.recurrence_lines) > 0
+                        OR EXISTS (
+                            SELECT 1
+                            FROM calendar_event_sources source
+                            WHERE source.event_id = event.id
+                              AND source.source_kind = 'google'
+                              AND source.provider_recurring_event_id IS NOT NULL
+                        )
+                  )
+                  AND (
+                        event.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = event.source_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+                  AND (
+                        event.materialized_starts_at > $2
+                        OR event.materialized_ends_at < $3
+                        OR event.materialized_start_date > $4
+                        OR event.materialized_end_date < $5
+                  )
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM calendar_accounts account
+                WHERE account.owner_id IN (
+                        SELECT $1::text
+                        UNION
+                        SELECT link.child_macro_id
+                        FROM macro_user_links link
+                        WHERE link.primary_macro_id = $1
+                  )
+                  AND (
+                        account.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = account.email_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+                  AND account.sync_status <> 'disabled'
+                  AND (
+                        account.materialized_starts_at IS NULL
+                        OR account.materialized_ends_at IS NULL
+                        OR account.materialized_start_date IS NULL
+                        OR account.materialized_end_date IS NULL
+                        OR account.materialized_starts_at > $2
+                        OR account.materialized_ends_at < $3
+                        OR account.materialized_start_date > $4
+                        OR account.materialized_end_date < $5
+                  )
+              )
+            ) AS "missing_coverage!"
+            "#,
+            requester_id,
+            range.starts_at,
+            range.ends_at,
+            range.start_date,
+            range.end_date,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        if missing_coverage {
+            let has_covered_occurrence = sqlx::query_scalar!(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM calendar_event_occurrences occurrence
+                    JOIN calendar_events event ON event.id = occurrence.event_id
+                    WHERE occurrence.owner_id IN (
+                            SELECT $1::text
+                            UNION
+                            SELECT link.child_macro_id
+                            FROM macro_user_links link
+                            WHERE link.primary_macro_id = $1
+                      )
+                      AND event.deleted_at IS NULL
+                      AND event.materialized_starts_at <= $2
+                      AND event.materialized_ends_at >= $3
+                      AND event.materialized_start_date <= $4
+                      AND event.materialized_end_date >= $5
+                      AND NOT occurrence.is_cancelled
+                      AND (
+                            event.owner_id = $1
+                            OR EXISTS (
+                                SELECT 1
+                                FROM macro_user_links link
+                                WHERE link.link_id = event.source_link_id
+                                  AND link.primary_macro_id = $1
+                            )
+                      )
+                      AND (
+                            occurrence.timed_span && tstzrange($2, $3, '[)')
+                            OR occurrence.day_span && daterange($4, $5, '[)')
+                      )
+                ) AS "has_covered_occurrence!"
+                "#,
+                requester_id,
+                range.starts_at,
+                range.ends_at,
+                range.start_date,
+                range.end_date,
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(report)?;
+            if !has_covered_occurrence {
+                return Err(rootcause::report!(CalendarOccurrenceCoverageError).into());
+            }
+        }
+        let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
+        let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
+        let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
+        let rows = sqlx::query_as!(
+            OccurrenceJoinRow,
+            r#"
+            SELECT
+                occurrence.event_id,
+                occurrence.occurrence_key,
+                occurrence.recurrence_id,
+                occurrence.starts_at AS occurrence_starts_at,
+                occurrence.ends_at AS occurrence_ends_at,
+                occurrence.start_date AS occurrence_start_date,
+                occurrence.end_date AS occurrence_end_date,
+                occurrence.is_cancelled,
+                event.owner_id,
+                event.ical_uid,
+                event.title,
+                event.description,
+                event.location,
+                event.status,
+                event.visibility,
+                event.transparency,
+                event.starts_at,
+                event.ends_at,
+                event.start_date,
+                event.end_date,
+                event.time_zone,
+                event.recurrence_lines,
+                event.organizer_email,
+                event.organizer_name,
+                event.conference_url,
+                event.sequence,
+                event.is_read_only,
+                event.created_at,
+                event.updated_at
+            FROM calendar_event_occurrences occurrence
+            JOIN calendar_events event ON event.id = occurrence.event_id
+            WHERE occurrence.owner_id IN (
+                    SELECT $1::text
+                    UNION
+                    SELECT link.child_macro_id
+                    FROM macro_user_links link
+                    WHERE link.primary_macro_id = $1
+              )
+              AND event.deleted_at IS NULL
+              AND event.materialized_starts_at <= $2
+              AND event.materialized_ends_at >= $3
+              AND event.materialized_start_date <= $4
+              AND event.materialized_end_date >= $5
+              AND NOT occurrence.is_cancelled
+              AND (
+                    event.owner_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM macro_user_links link
+                        WHERE link.link_id = event.source_link_id
+                          AND link.primary_macro_id = $1
+                    )
+              )
+              AND (
+                    occurrence.timed_span && tstzrange($2, $3, '[)')
+                    OR occurrence.day_span && daterange($4, $5, '[)')
+              )
+              AND (
+                    $6::timestamptz IS NULL
+                    OR (
+                        COALESCE(
+                            occurrence.starts_at,
+                            occurrence.start_date::timestamp AT TIME ZONE 'UTC'
+                        ),
+                        occurrence.event_id,
+                        occurrence.occurrence_key
+                    ) > ($6, $7, $8)
+              )
+            ORDER BY
+                COALESCE(occurrence.starts_at, occurrence.start_date::timestamp AT TIME ZONE 'UTC'),
+                occurrence.event_id,
+                occurrence.occurrence_key
+            LIMIT $9
+            "#,
+            requester_id,
+            range.starts_at,
+            range.ends_at,
+            range.start_date,
+            range.end_date,
+            cursor_starts_at,
+            cursor_event_id,
+            cursor_occurrence_key,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        let event_ids: Vec<_> = rows.iter().map(|row| row.event_id).collect();
+        let attendees = fetch_attendees(&self.pool, &event_ids).await?;
+        rows.into_iter()
+            .map(|row| {
+                let event_id = row.event_id;
+                let occurrence = occurrence_from_join(&row)?;
+                let event =
+                    event_from_join(row, attendees.get(&event_id).cloned().unwrap_or_default())?;
+                Ok((event, occurrence))
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(skip(self, calendar), fields(job_id = %key.job_id), err)]
+    async fn upsert_google_calendar(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar: ProviderCalendar,
+    ) -> Result<StoredGoogleCalendar, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        let calendar = upsert_calendar_tx(&mut tx, account_id, calendar).await?;
+        tx.commit().await.map_err(report)?;
+        stored_google_calendar(calendar)
+    }
+
+    #[tracing::instrument(skip(self, snapshot), fields(job_id = %key.job_id), err)]
+    async fn reconcile_google_snapshot(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        snapshot: GoogleCalendarSnapshot,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(snapshot.account_id)).await?;
+
+        let source_calendar_ids: Vec<_> = snapshot
+            .event_sources
+            .iter()
+            .map(|source| source.calendar_id)
+            .collect();
+        let provider_event_ids: Vec<_> = snapshot
+            .event_sources
+            .iter()
+            .map(|source| source.provider_event_id.clone())
+            .collect();
+        let refreshed_calendar_ids: Vec<_> = snapshot
+            .calendar_syncs
+            .iter()
+            .filter(|sync| sync.observed_provider_event_ids.is_some())
+            .map(|sync| sync.calendar_id)
+            .collect();
+        let affected_event_ids = sqlx::query_scalar!(
+            r#"
+            WITH seen(calendar_id, provider_event_id) AS (
+                SELECT *
+                FROM unnest($3::uuid[], $4::text[])
+            ),
+            deleted_sources AS (
+                DELETE FROM calendar_event_sources source
+                WHERE source.source_kind = 'google'
+                  AND source.account_id = $1
+                  AND (
+                        source.calendar_id IS NULL
+                        OR NOT (source.calendar_id = ANY($2::uuid[]))
+                        OR (
+                            source.calendar_id = ANY($5::uuid[])
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM seen
+                                WHERE seen.calendar_id = source.calendar_id
+                                  AND seen.provider_event_id = source.provider_event_id
+                            )
+                        )
+                  )
+                RETURNING source.event_id
+            )
+            SELECT DISTINCT event_id AS "event_id!"
+            FROM deleted_sources
+            "#,
+            snapshot.account_id,
+            &snapshot.calendar_ids,
+            &source_calendar_ids,
+            &provider_event_ids,
+            &refreshed_calendar_ids,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        for event_id in affected_event_ids {
+            restore_best_source_or_delete(&mut tx, event_id).await?;
+        }
+
+        for sync in &snapshot.calendar_syncs {
+            let has_materialized_range = sync.materialized_range.is_some();
+            let materialized_starts_at = sync
+                .materialized_range
+                .as_ref()
+                .map(|range| range.starts_at);
+            let materialized_ends_at = sync.materialized_range.as_ref().map(|range| range.ends_at);
+            let materialized_start_date = sync
+                .materialized_range
+                .as_ref()
+                .map(|range| range.start_date);
+            let materialized_end_date =
+                sync.materialized_range.as_ref().map(|range| range.end_date);
+            let updated = sqlx::query!(
+                r#"
+                UPDATE calendars
+                SET sync_token = $3,
+                    materialized_starts_at = CASE
+                        WHEN $4 THEN $5
+                        ELSE materialized_starts_at
+                    END,
+                    materialized_ends_at = CASE
+                        WHEN $4 THEN $6
+                        ELSE materialized_ends_at
+                    END,
+                    materialized_start_date = CASE
+                        WHEN $4 THEN $7
+                        ELSE materialized_start_date
+                    END,
+                    materialized_end_date = CASE
+                        WHEN $4 THEN $8
+                        ELSE materialized_end_date
+                    END,
+                    updated_at = now()
+                WHERE id = $1
+                  AND account_id = $2
+                  AND NOT is_deleted
+                "#,
+                sync.calendar_id,
+                snapshot.account_id,
+                sync.next_sync_token,
+                has_materialized_range,
+                materialized_starts_at,
+                materialized_ends_at,
+                materialized_start_date,
+                materialized_end_date,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?;
+            if updated.rows_affected() != 1 {
+                return Err(rootcause::report!(
+                    "provider calendar disappeared before sync state was committed"
+                ));
+            }
+        }
+
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET is_deleted = NOT (id = ANY($2::uuid[])),
+                sync_token = CASE
+                    WHEN id = ANY($2::uuid[]) THEN sync_token
+                    ELSE NULL
+                END,
+                materialized_starts_at = CASE
+                    WHEN id = ANY($2::uuid[]) THEN materialized_starts_at
+                    ELSE NULL
+                END,
+                materialized_ends_at = CASE
+                    WHEN id = ANY($2::uuid[]) THEN materialized_ends_at
+                    ELSE NULL
+                END,
+                materialized_start_date = CASE
+                    WHEN id = ANY($2::uuid[]) THEN materialized_start_date
+                    ELSE NULL
+                END,
+                materialized_end_date = CASE
+                    WHEN id = ANY($2::uuid[]) THEN materialized_end_date
+                    ELSE NULL
+                END,
+                updated_at = now()
+            WHERE account_id = $1
+              AND is_deleted IS DISTINCT FROM NOT (id = ANY($2::uuid[]))
+            "#,
+            snapshot.account_id,
+            &snapshot.calendar_ids,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        sqlx::query!(
+            r#"
+            WITH coverage AS (
+                SELECT
+                    count(*) AS calendar_count,
+                    count(*) FILTER (
+                        WHERE materialized_starts_at IS NOT NULL
+                          AND materialized_ends_at IS NOT NULL
+                          AND materialized_start_date IS NOT NULL
+                          AND materialized_end_date IS NOT NULL
+                    ) AS covered_count,
+                    max(materialized_starts_at) AS starts_at,
+                    min(materialized_ends_at) AS ends_at,
+                    max(materialized_start_date) AS start_date,
+                    min(materialized_end_date) AS end_date
+                FROM calendars
+                WHERE account_id = $1
+                  AND NOT is_deleted
+            )
+            UPDATE calendar_accounts
+            SET materialized_starts_at = CASE
+                    WHEN coverage.calendar_count = 0 THEN $2
+                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.starts_at
+                    ELSE NULL
+                END,
+                materialized_ends_at = CASE
+                    WHEN coverage.calendar_count = 0 THEN $3
+                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.ends_at
+                    ELSE NULL
+                END,
+                materialized_start_date = CASE
+                    WHEN coverage.calendar_count = 0 THEN $4
+                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.start_date
+                    ELSE NULL
+                END,
+                materialized_end_date = CASE
+                    WHEN coverage.calendar_count = 0 THEN $5
+                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.end_date
+                    ELSE NULL
+                END,
+                updated_at = now()
+            FROM coverage
+            WHERE calendar_accounts.id = $1
+            "#,
+            snapshot.account_id,
+            snapshot.requested_range.starts_at,
+            snapshot.requested_range.ends_at,
+            snapshot.requested_range.start_date,
+            snapshot.requested_range.end_date,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        tx.commit().await.map_err(report)
+    }
+}
+
+impl GoogleCalendarSyncRepository for PgCalendarRepository {
+    #[tracing::instrument(skip(self), err)]
+    async fn schedule_due_google_syncs(&self, due_before: DateTime<Utc>) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let result = sqlx::query!(
+            r#"
+            WITH due AS (
+                UPDATE calendar_backfill_jobs job
+                SET status = 'pending',
+                    cursor = '{}',
+                    scanned_count = 0,
+                    extracted_count = 0,
+                    last_error = NULL,
+                    started_at = NULL,
+                    completed_at = NULL,
+                    lease_token = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = now()
+                FROM calendar_accounts account, email_links link
+                WHERE job.email_link_id = account.email_link_id
+                  AND job.account_id = account.id
+                  AND link.id = job.email_link_id
+                  AND job.kind = 'google_calendar'
+                  AND job.status = 'complete'
+                  AND job.grant_version = link.google_grant_version
+                  AND link.google_granted_scopes @> $2::text[]
+                  AND account.sync_status = 'ready'
+                  AND account.last_synced_at <= $1
+                RETURNING job.id
+            )
+            UPDATE calendar_sync_outbox outbox
+            SET published_at = NULL
+            FROM due
+            WHERE outbox.backfill_job_id = due.id
+            "#,
+            due_before,
+            &required_scopes,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(result.rows_affected() as usize)
+    }
+}
+
+async fn fence_google_mutation_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    key: CalendarBackfillJobKey,
+    lease_token: Uuid,
+    account_id: Option<Uuid>,
+) -> Result<(), Report> {
+    let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+    let fenced_job = sqlx::query_scalar!(
+        r#"
+        SELECT job.id
+        FROM calendar_backfill_jobs job
+        WHERE job.id = $1
+          AND job.email_link_id = $2
+          AND job.kind = 'google_calendar'
+          AND job.status = 'running'
+          AND job.lease_token = $3
+          AND job.lease_expires_at > now()
+          AND EXISTS (
+                SELECT 1
+                FROM email_links link
+                WHERE link.id = job.email_link_id
+                  AND link.google_grant_version = job.grant_version
+                  AND link.google_granted_scopes @> $5::text[]
+          )
+          AND EXISTS (
+                SELECT 1
+                FROM calendar_accounts account
+                WHERE account.id = job.account_id
+                  AND account.email_link_id = job.email_link_id
+                  AND account.sync_status <> 'disabled'
+                  AND ($4::uuid IS NULL OR account.id = $4)
+          )
+        FOR UPDATE OF job
+        "#,
+        key.job_id,
+        key.email_link_id,
+        lease_token,
+        account_id,
+        &required_scopes,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    if fenced_job.is_none() {
+        return Err(rootcause::report!(
+            "Google Calendar backfill lease was lost before provider mutation"
+        ));
+    }
+    Ok(())
+}
+
+async fn upsert_calendar_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    account_id: Uuid,
+    calendar: ProviderCalendar,
+) -> Result<StoredCalendarRow, Report> {
+    sqlx::query_as!(
+        StoredCalendarRow,
+        r#"
+        INSERT INTO calendars (
+            id, account_id, provider_calendar_id, name, description,
+            time_zone, color, access_role, is_primary, is_selected
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (account_id, provider_calendar_id) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            time_zone = EXCLUDED.time_zone,
+            color = EXCLUDED.color,
+            access_role = EXCLUDED.access_role,
+            is_primary = EXCLUDED.is_primary,
+            is_selected = EXCLUDED.is_selected,
+            is_deleted = false,
+            updated_at = now()
+        RETURNING
+            id,
+            sync_token,
+            materialized_starts_at,
+            materialized_ends_at,
+            materialized_start_date,
+            materialized_end_date
+        "#,
+        Uuid::now_v7(),
+        account_id,
+        calendar.provider_calendar_id,
+        calendar.name,
+        calendar.description,
+        calendar.time_zone,
+        calendar.color,
+        calendar.access_role,
+        calendar.is_primary,
+        calendar.is_selected,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)
+}
+
+fn stored_google_calendar(row: StoredCalendarRow) -> Result<StoredGoogleCalendar, Report> {
+    let materialized_range = match (
+        row.materialized_starts_at,
+        row.materialized_ends_at,
+        row.materialized_start_date,
+        row.materialized_end_date,
+    ) {
+        (Some(starts_at), Some(ends_at), Some(start_date), Some(end_date)) => {
+            Some(OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date,
+                end_date,
+            })
+        }
+        (None, None, None, None) => None,
+        _ => {
+            return Err(rootcause::report!(
+                "provider calendar has a partially persisted materialized range"
+            ));
+        }
+    };
+    Ok(StoredGoogleCalendar {
+        id: row.id,
+        sync_token: row.sync_token,
+        materialized_range,
+    })
+}
+
+impl CalendarBackfillRepository for PgCalendarRepository {
+    #[tracing::instrument(skip(self, message), err)]
+    async fn fail_unclaimed_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        disposition: CalendarBackfillFailureDisposition,
+        message: &str,
+    ) -> Result<CalendarBackfillFailureOutcome, Report> {
+        self.persist_google_backfill_failure(key, None, disposition, message)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn claim_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+    ) -> Result<CalendarBackfillClaim, Report> {
+        let lease_token = Uuid::now_v7();
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let claimed_account_id = sqlx::query_scalar!(
+            r#"
+            UPDATE calendar_backfill_jobs
+            SET status = 'running',
+                started_at = COALESCE(started_at, now()),
+                lease_token = $3,
+                lease_expires_at = now() + interval '2 minutes',
+                last_error = NULL,
+                updated_at = now()
+            WHERE id = $1
+              AND email_link_id = $2
+              AND kind = 'google_calendar'
+              AND EXISTS (
+                    SELECT 1
+                    FROM email_links link
+                    WHERE link.id = calendar_backfill_jobs.email_link_id
+                      AND link.google_grant_version = calendar_backfill_jobs.grant_version
+                      AND link.google_granted_scopes @> $4::text[]
+              )
+              AND EXISTS (
+                    SELECT 1
+                    FROM calendar_accounts account
+                    WHERE account.id = calendar_backfill_jobs.account_id
+                      AND account.email_link_id = calendar_backfill_jobs.email_link_id
+                      AND account.sync_status <> 'disabled'
+              )
+              AND (
+                  status = 'pending'
+                  OR (
+                      status = 'running'
+                      AND lease_expires_at < now()
+                  )
+              )
+            RETURNING account_id
+            "#,
+            key.job_id,
+            key.email_link_id,
+            lease_token,
+            &required_scopes,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        if let Some(account_id) = claimed_account_id {
+            let Some(account_id) = account_id else {
+                tx.rollback().await.map_err(report)?;
+                return Err(rootcause::report!(
+                    "Google Calendar backfill job has no calendar account"
+                ));
+            };
+            tx.commit().await.map_err(report)?;
+            return Ok(CalendarBackfillClaim::Claimed {
+                lease_token,
+                account_id,
+            });
+        }
+
+        let state = sqlx::query!(
+            r#"
+            SELECT status, account_id
+            FROM calendar_backfill_jobs
+            WHERE id = $1
+              AND email_link_id = $2
+              AND kind = 'google_calendar'
+            "#,
+            key.job_id,
+            key.email_link_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        if state
+            .as_ref()
+            .is_some_and(|state| state.account_id.is_none())
+        {
+            tx.rollback().await.map_err(report)?;
+            return Err(rootcause::report!(
+                "Google Calendar backfill job has no calendar account"
+            ));
+        }
+        let claim = match state.as_ref().map(|state| state.status.as_str()) {
+            Some("complete") => CalendarBackfillClaim::Complete,
+            Some("running" | "pending") => CalendarBackfillClaim::Busy,
+            Some("failed") => CalendarBackfillClaim::Failed,
+            _ => CalendarBackfillClaim::NotFound,
+        };
+        tx.commit().await.map_err(report)?;
+        Ok(claim)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn mark_google_account_syncing(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, None).await?;
+        sqlx::query!(
+            r#"
+            UPDATE calendar_accounts
+            SET sync_status = 'syncing',
+                last_sync_error = NULL,
+                updated_at = now()
+            WHERE email_link_id = $1
+            "#,
+            key.email_link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn maintain_google_backfill_lease(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> Result<(), Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            let updated = sqlx::query!(
+                r#"
+                UPDATE calendar_backfill_jobs
+                SET lease_expires_at = now() + interval '2 minutes',
+                    updated_at = now()
+                WHERE id = $1
+                  AND email_link_id = $2
+                  AND status = 'running'
+                  AND lease_token = $3
+                  AND lease_expires_at > now()
+                  AND EXISTS (
+                        SELECT 1
+                        FROM email_links link
+                        WHERE link.id = calendar_backfill_jobs.email_link_id
+                          AND link.google_grant_version = calendar_backfill_jobs.grant_version
+                          AND link.google_granted_scopes @> $4::text[]
+                  )
+                "#,
+                key.job_id,
+                key.email_link_id,
+                lease_token,
+                &required_scopes,
+            )
+            .execute(&self.pool)
+            .await
+            .map_err(report)?;
+            if updated.rows_affected() != 1 {
+                return Err(rootcause::report!(
+                    "Google Calendar backfill lease was lost"
+                ));
+            }
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn complete_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        extracted_count: usize,
+    ) -> Result<(), Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let completed = sqlx::query!(
+            r#"
+            UPDATE calendar_backfill_jobs
+            SET status = 'complete',
+                extracted_count = $2,
+                completed_at = now(),
+                lease_token = NULL,
+                lease_expires_at = NULL,
+                updated_at = now()
+            WHERE id = $1
+              AND email_link_id = $3
+              AND kind = 'google_calendar'
+              AND status = 'running'
+              AND lease_token = $4
+              AND lease_expires_at > now()
+              AND EXISTS (
+                    SELECT 1
+                    FROM email_links link
+                    WHERE link.id = calendar_backfill_jobs.email_link_id
+                      AND link.google_grant_version = calendar_backfill_jobs.grant_version
+                      AND link.google_granted_scopes @> $5::text[]
+              )
+            "#,
+            key.job_id,
+            i64::try_from(extracted_count).unwrap_or(i64::MAX),
+            key.email_link_id,
+            lease_token,
+            &required_scopes,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        if completed.rows_affected() != 1 {
+            return Err(rootcause::report!(
+                "Google Calendar backfill lease was lost"
+            ));
+        }
+        sqlx::query!(
+            r#"
+            UPDATE calendar_accounts
+            SET sync_status = 'ready',
+                last_synced_at = now(),
+                last_sync_error = NULL,
+                updated_at = now()
+            WHERE email_link_id = $1
+            "#,
+            key.email_link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, message), err)]
+    async fn fail_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        disposition: CalendarBackfillFailureDisposition,
+        message: &str,
+    ) -> Result<CalendarBackfillFailureOutcome, Report> {
+        self.persist_google_backfill_failure(key, Some(lease_token), disposition, message)
+            .await
+    }
+}
+
+async fn invalidate_stale_google_jobs_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+    current_grant_version: i64,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        WITH invalidated AS (
+            UPDATE calendar_backfill_jobs
+            SET status = 'failed',
+                completed_at = now(),
+                lease_token = NULL,
+                lease_expires_at = NULL,
+                last_error = 'superseded by a newer Google grant',
+                updated_at = now()
+            WHERE email_link_id = $1
+              AND kind = 'google_calendar'
+              AND grant_version <> $2
+              AND status IN ('pending', 'running')
+            RETURNING id
+        )
+        UPDATE calendar_sync_outbox outbox
+        SET published_at = COALESCE(outbox.published_at, now())
+        FROM invalidated
+        WHERE outbox.backfill_job_id = invalidated.id
+        "#,
+        email_link_id,
+        current_grant_version,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
+async fn disable_google_calendar_capability_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+) -> Result<(), Report> {
+    let account_id = sqlx::query_scalar!(
+        r#"
+        UPDATE calendar_accounts
+        SET sync_status = 'disabled',
+            materialized_starts_at = NULL,
+            materialized_ends_at = NULL,
+            materialized_start_date = NULL,
+            materialized_end_date = NULL,
+            last_sync_error = 'Google Calendar permission is no longer granted',
+            updated_at = now()
+        WHERE email_link_id = $1
+        RETURNING id
+        "#,
+        email_link_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let Some(account_id) = account_id else {
+        return Ok(());
+    };
+
+    sqlx::query!(
+        r#"
+        UPDATE calendars
+        SET is_deleted = true,
+            sync_token = NULL,
+            materialized_starts_at = NULL,
+            materialized_ends_at = NULL,
+            materialized_start_date = NULL,
+            materialized_end_date = NULL,
+            updated_at = now()
+        WHERE account_id = $1
+        "#,
+        account_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+
+    let affected_event_ids = sqlx::query_scalar!(
+        r#"
+        WITH deleted_sources AS (
+            DELETE FROM calendar_event_sources
+            WHERE source_kind = 'google'
+              AND account_id = $1
+            RETURNING event_id
+        )
+        SELECT DISTINCT event_id AS "event_id!"
+        FROM deleted_sources
+        "#,
+        account_id,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(report)?;
+    for event_id in affected_event_ids {
+        restore_best_source_or_delete(tx, event_id).await?;
+    }
+    Ok(())
+}
+
+async fn upsert_google_account_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+    owner_id: &str,
+    email_address: &str,
+) -> Result<Uuid, Report> {
+    sqlx::query_scalar!(
+        r#"
+        INSERT INTO calendar_accounts (
+            id, owner_id, email_link_id, provider, provider_account_id
+        )
+        VALUES ($1, $2, $3, 'google', $4)
+        ON CONFLICT (email_link_id) DO UPDATE SET
+            owner_id = EXCLUDED.owner_id,
+            provider_account_id = EXCLUDED.provider_account_id,
+            sync_status = CASE
+                WHEN calendar_accounts.sync_status = 'disabled' THEN 'pending'
+                ELSE calendar_accounts.sync_status
+            END,
+            last_sync_error = CASE
+                WHEN calendar_accounts.sync_status = 'disabled' THEN NULL
+                ELSE calendar_accounts.last_sync_error
+            END,
+            updated_at = now()
+        RETURNING id
+        "#,
+        Uuid::now_v7(),
+        owner_id,
+        email_link_id,
+        email_address,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)
+}
+
+async fn retry_failed_backfills_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+    grant_version: i64,
+) -> Result<Vec<CalendarBackfillJob>, Report> {
+    struct FailedJobRow {
+        id: Uuid,
+        account_id: Option<Uuid>,
+        kind: String,
+    }
+
+    let failed = sqlx::query_as!(
+        FailedJobRow,
+        r#"
+        UPDATE calendar_backfill_jobs
+        SET status = 'pending',
+            cursor = '{}',
+            scanned_count = 0,
+            extracted_count = 0,
+            last_error = NULL,
+            started_at = NULL,
+            completed_at = NULL,
+            lease_expires_at = NULL,
+            updated_at = now()
+        WHERE email_link_id = $1
+          AND grant_version = $2
+          AND status = 'failed'
+        RETURNING id, account_id, kind
+        "#,
+        email_link_id,
+        grant_version,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(report)?;
+
+    let mut jobs = Vec::with_capacity(failed.len());
+    for row in failed {
+        sqlx::query!(
+            r#"
+            UPDATE calendar_sync_outbox
+            SET published_at = NULL
+            WHERE backfill_job_id = $1
+            "#,
+            row.id,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(report)?;
+
+        let kind = match row.kind.as_str() {
+            "google_calendar" => CalendarBackfillKind::GoogleCalendar,
+            "email_ics" => CalendarBackfillKind::EmailIcs,
+            _ => return Err(rootcause::report!("invalid calendar backfill kind")),
+        };
+        jobs.push(CalendarBackfillJob {
+            id: row.id,
+            email_link_id,
+            account_id: row.account_id,
+            kind,
+            grant_version,
+        });
+    }
+    Ok(jobs)
+}
+
+async fn persist_source(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    upsert: &CalendarEventUpsert,
+) -> Result<(), Report> {
+    let normalized_payload =
+        serde_json::to_value(StoredSourceProjection::from(upsert)).map_err(report)?;
+    let source = &upsert.source;
+    match source {
+        CalendarEventSource::Google(source) => {
+            sqlx::query!(
+                r#"
+                INSERT INTO calendar_event_sources (
+                    id, event_id, source_link_id, source_kind, account_id, calendar_id,
+                    provider_event_id, provider_recurring_event_id,
+                    provider_etag, raw_payload, source_sequence,
+                    source_updated_at, normalized_payload
+                )
+                VALUES (
+                    $1, $2, $3, 'google', $4, $5, $6, $7, $8, $9,
+                    $10, $11, $12
+                )
+                ON CONFLICT (account_id, calendar_id, provider_event_id)
+                    WHERE source_kind = 'google'
+                DO UPDATE SET
+                    event_id = EXCLUDED.event_id,
+                    provider_recurring_event_id = EXCLUDED.provider_recurring_event_id,
+                    provider_etag = EXCLUDED.provider_etag,
+                    raw_payload = EXCLUDED.raw_payload,
+                    source_sequence = EXCLUDED.source_sequence,
+                    source_updated_at = EXCLUDED.source_updated_at,
+                    normalized_payload = EXCLUDED.normalized_payload,
+                    last_seen_at = now()
+                WHERE
+                    EXCLUDED.source_sequence > calendar_event_sources.source_sequence
+                    OR (
+                        EXCLUDED.source_sequence = calendar_event_sources.source_sequence
+                        AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at
+                    )
+                "#,
+                Uuid::now_v7(),
+                event_id,
+                source.email_link_id,
+                source.account_id,
+                source.calendar_id,
+                &source.provider_event_id,
+                source.provider_recurring_event_id.as_deref(),
+                source.provider_etag.as_deref(),
+                &source.raw_payload,
+                i32::try_from(upsert.event.sequence).unwrap_or(i32::MAX),
+                upsert.event.updated_at,
+                &normalized_payload,
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(report)?;
+        }
+        CalendarEventSource::EmailIcs(source) => {
+            sqlx::query!(
+                r#"
+                INSERT INTO calendar_event_sources (
+                    id, event_id, source_link_id, source_kind, email_link_id, email_thread_id,
+                    email_message_id, email_attachment_id, content_hash,
+                    raw_payload, source_sequence, source_updated_at, normalized_payload
+                )
+                VALUES (
+                    $1, $2, $3, 'email_ics', $3, $4, $5, $6, $7, $8,
+                    $9, $10, $11
+                )
+                ON CONFLICT (
+                    email_link_id,
+                    email_message_id,
+                    COALESCE(email_attachment_id, ''),
+                    content_hash,
+                    event_id
+                ) WHERE source_kind = 'email_ics'
+                DO UPDATE SET
+                    raw_payload = EXCLUDED.raw_payload,
+                    source_sequence = EXCLUDED.source_sequence,
+                    source_updated_at = EXCLUDED.source_updated_at,
+                    normalized_payload = EXCLUDED.normalized_payload,
+                    last_seen_at = now()
+                WHERE
+                    EXCLUDED.source_sequence > calendar_event_sources.source_sequence
+                    OR (
+                        EXCLUDED.source_sequence = calendar_event_sources.source_sequence
+                        AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at
+                    )
+                "#,
+                Uuid::now_v7(),
+                event_id,
+                source.email_link_id,
+                source.email_thread_id,
+                source.email_message_id,
+                source.email_attachment_id.as_deref(),
+                &source.content_hash,
+                &source.raw_payload,
+                i32::try_from(upsert.event.sequence).unwrap_or(i32::MAX),
+                upsert.event.updated_at,
+                &normalized_payload,
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(report)?;
+        }
+    }
+    Ok(())
+}
+
+async fn restore_best_source_or_delete(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+) -> Result<(), Report> {
+    let identity = sqlx::query!(
+        r#"
+        SELECT source_link_id, ical_uid
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let Some(identity) = identity else {
+        return Ok(());
+    };
+    let reconciliation_lock =
+        event_reconciliation_lock(identity.source_link_id, &identity.ical_uid);
+    sqlx::query_scalar!(
+        r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock($1)"#,
+        reconciliation_lock,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+
+    let source = sqlx::query!(
+        r#"
+        SELECT source_kind, source_updated_at, normalized_payload
+        FROM calendar_event_sources
+        WHERE event_id = $1
+        ORDER BY
+            CASE source_kind WHEN 'google' THEN 0 ELSE 1 END,
+            source_sequence DESC,
+            source_updated_at DESC,
+            last_seen_at DESC,
+            id DESC
+        LIMIT 1
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let Some(source) = source else {
+        sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(report)?;
+        return Ok(());
+    };
+
+    let projection: StoredSourceProjection =
+        serde_json::from_value(source.normalized_payload).map_err(report)?;
+    let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
+    sqlx::query!(
+        r#"
+        UPDATE calendar_events
+        SET title = $2,
+            description = $3,
+            location = $4,
+            status = $5,
+            visibility = $6,
+            transparency = $7,
+            starts_at = $8,
+            ends_at = $9,
+            start_date = $10,
+            end_date = $11,
+            time_zone = $12,
+            recurrence_lines = $13,
+            organizer_email = $14,
+            organizer_name = $15,
+            conference_url = $16,
+            sequence = $17,
+            is_read_only = $18,
+            canonical_source_kind = $19,
+            canonical_source_updated_at = $20,
+            materialized_starts_at = $21,
+            materialized_ends_at = $22,
+            materialized_start_date = $23,
+            materialized_end_date = $24,
+            created_at = $25,
+            updated_at = GREATEST(calendar_events.updated_at, $26),
+            deleted_at = NULL
+        WHERE id = $1
+        "#,
+        event_id,
+        &projection.event.title,
+        projection.event.description.as_deref(),
+        projection.event.location.as_deref(),
+        projection.event.status.as_str(),
+        projection.event.visibility.as_str(),
+        projection.event.transparency.as_str(),
+        starts_at,
+        ends_at,
+        start_date,
+        end_date,
+        time_zone,
+        &projection.event.recurrence_lines,
+        projection.event.organizer_email.as_deref(),
+        projection.event.organizer_name.as_deref(),
+        projection.event.conference_url.as_deref(),
+        i32::try_from(projection.event.sequence).unwrap_or(i32::MAX),
+        projection.event.is_read_only,
+        &source.source_kind,
+        source.source_updated_at,
+        projection.materialized_range.starts_at,
+        projection.materialized_range.ends_at,
+        projection.materialized_range.start_date,
+        projection.materialized_range.end_date,
+        projection.event.created_at,
+        projection.event.updated_at,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    replace_attendees(tx, event_id, &projection.event.attendees).await?;
+    replace_overrides(tx, event_id, &projection.overrides).await?;
+    replace_occurrences(
+        tx,
+        event_id,
+        &projection.event.owner_id,
+        &projection.occurrences,
+    )
+    .await
+}
+
+async fn replace_attendees(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    attendees: &[CalendarAttendee],
+) -> Result<(), Report> {
+    sqlx::query!(
+        "DELETE FROM calendar_event_attendees WHERE event_id = $1",
+        event_id
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    for attendee in attendees {
+        sqlx::query!(
+            r#"
+            INSERT INTO calendar_event_attendees (
+                event_id, email, display_name, response_status,
+                is_organizer, is_optional, is_self, comment
+            )
+            VALUES ($1, lower($2), $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (event_id, email) DO UPDATE SET
+                display_name = EXCLUDED.display_name,
+                response_status = EXCLUDED.response_status,
+                is_organizer = EXCLUDED.is_organizer,
+                is_optional = EXCLUDED.is_optional,
+                is_self = EXCLUDED.is_self,
+                comment = EXCLUDED.comment
+            "#,
+            event_id,
+            &attendee.email,
+            attendee.display_name.as_deref(),
+            attendee.response_status.as_str(),
+            attendee.is_organizer,
+            attendee.is_optional,
+            attendee.is_self,
+            attendee.comment.as_deref(),
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(report)?;
+    }
+    Ok(())
+}
+
+async fn replace_overrides(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    overrides: &[CalendarEventOverride],
+) -> Result<(), Report> {
+    sqlx::query!(
+        "DELETE FROM calendar_event_overrides WHERE event_id = $1",
+        event_id
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    for event_override in overrides {
+        let (starts_at, ends_at, start_date, end_date, _time_zone) =
+            split_time(&event_override.time);
+        let (original_starts_at, original_start_date) = match event_override.original_time {
+            EventStart::Timed(value) => (Some(value), None),
+            EventStart::AllDay(value) => (None, Some(value)),
+        };
+        sqlx::query!(
+            r#"
+            INSERT INTO calendar_event_overrides (
+                event_id, recurrence_id, original_starts_at, original_start_date,
+                starts_at, ends_at, start_date, end_date,
+                title, description, location, status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            "#,
+            event_id,
+            &event_override.recurrence_id,
+            original_starts_at,
+            original_start_date,
+            starts_at,
+            ends_at,
+            start_date,
+            end_date,
+            event_override.title.as_deref(),
+            event_override.description.as_deref(),
+            event_override.location.as_deref(),
+            event_override.status.map(EventStatus::as_str),
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(report)?;
+    }
+    Ok(())
+}
+
+async fn replace_occurrences(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    owner_id: &str,
+    occurrences: &[CalendarOccurrence],
+) -> Result<(), Report> {
+    sqlx::query!(
+        "DELETE FROM calendar_event_occurrences WHERE event_id = $1",
+        event_id
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    for occurrence in occurrences {
+        let (starts_at, ends_at, start_date, end_date, _time_zone) = split_time(&occurrence.time);
+        sqlx::query!(
+            r#"
+            INSERT INTO calendar_event_occurrences (
+                event_id, owner_id, occurrence_key, recurrence_id,
+                starts_at, ends_at, start_date, end_date, is_cancelled
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+            event_id,
+            owner_id,
+            &occurrence.occurrence_key,
+            occurrence.recurrence_id.as_deref(),
+            starts_at,
+            ends_at,
+            start_date,
+            end_date,
+            occurrence.is_cancelled,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(report)?;
+    }
+    Ok(())
+}
+
+async fn fetch_attendees(
+    pool: &PgPool,
+    event_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<CalendarAttendee>>, Report> {
+    if event_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = sqlx::query_as!(
+        AttendeeRow,
+        r#"
+        SELECT
+            event_id, email, display_name, response_status,
+            is_organizer, is_optional, is_self, comment
+        FROM calendar_event_attendees
+        WHERE event_id = ANY($1)
+        ORDER BY event_id, email
+        "#,
+        event_ids,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(report)?;
+    let mut by_event = HashMap::new();
+    for row in rows {
+        by_event
+            .entry(row.event_id)
+            .or_insert_with(Vec::new)
+            .push(CalendarAttendee {
+                email: row.email,
+                display_name: row.display_name,
+                response_status: attendee_status(&row.response_status),
+                is_organizer: row.is_organizer,
+                is_optional: row.is_optional,
+                is_self: row.is_self,
+                comment: row.comment,
+            });
+    }
+    Ok(by_event)
+}
+
+type SplitTime = (
+    Option<DateTime<Utc>>,
+    Option<DateTime<Utc>>,
+    Option<NaiveDate>,
+    Option<NaiveDate>,
+    Option<String>,
+);
+
+fn split_time(time: &EventTime) -> SplitTime {
+    match time {
+        EventTime::Timed {
+            starts_at,
+            ends_at,
+            time_zone,
+        } => (
+            Some(*starts_at),
+            Some(*ends_at),
+            None,
+            None,
+            time_zone.clone(),
+        ),
+        EventTime::AllDay {
+            start_date,
+            end_date,
+        } => (None, None, Some(*start_date), Some(*end_date), None),
+    }
+}
+
+fn row_time(
+    starts_at: Option<DateTime<Utc>>,
+    ends_at: Option<DateTime<Utc>>,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+    time_zone: Option<String>,
+) -> Result<EventTime, Report> {
+    match (starts_at, ends_at, start_date, end_date) {
+        (Some(starts_at), Some(ends_at), None, None) => Ok(EventTime::Timed {
+            starts_at,
+            ends_at,
+            time_zone,
+        }),
+        (None, None, Some(start_date), Some(end_date)) => Ok(EventTime::AllDay {
+            start_date,
+            end_date,
+        }),
+        _ => Err(rootcause::report!(
+            "invalid calendar time shape in database"
+        )),
+    }
+}
+
+fn event_from_join(
+    row: OccurrenceJoinRow,
+    attendees: Vec<CalendarAttendee>,
+) -> Result<CalendarEvent, Report> {
+    Ok(CalendarEvent {
+        id: row.event_id,
+        owner_id: row.owner_id,
+        ical_uid: row.ical_uid,
+        title: row.title,
+        description: row.description,
+        location: row.location,
+        status: event_status(&row.status),
+        visibility: event_visibility(&row.visibility),
+        transparency: event_transparency(&row.transparency),
+        time: row_time(
+            row.starts_at,
+            row.ends_at,
+            row.start_date,
+            row.end_date,
+            row.time_zone,
+        )?,
+        recurrence_lines: row.recurrence_lines,
+        organizer_email: row.organizer_email,
+        organizer_name: row.organizer_name,
+        conference_url: row.conference_url,
+        sequence: u32::try_from(row.sequence).unwrap_or_default(),
+        is_read_only: row.is_read_only,
+        attendees,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
+}
+
+fn occurrence_from_join(row: &OccurrenceJoinRow) -> Result<CalendarOccurrence, Report> {
+    Ok(CalendarOccurrence {
+        event_id: row.event_id,
+        occurrence_key: row.occurrence_key.clone(),
+        recurrence_id: row.recurrence_id.clone(),
+        time: row_time(
+            row.occurrence_starts_at,
+            row.occurrence_ends_at,
+            row.occurrence_start_date,
+            row.occurrence_end_date,
+            None,
+        )?,
+        is_cancelled: row.is_cancelled,
+    })
+}
+
+fn event_status(value: &str) -> EventStatus {
+    match value {
+        "tentative" => EventStatus::Tentative,
+        "cancelled" => EventStatus::Cancelled,
+        _ => EventStatus::Confirmed,
+    }
+}
+
+fn event_visibility(value: &str) -> EventVisibility {
+    match value {
+        "public" => EventVisibility::Public,
+        "private" => EventVisibility::Private,
+        "confidential" => EventVisibility::Confidential,
+        _ => EventVisibility::Default,
+    }
+}
+
+fn event_transparency(value: &str) -> EventTransparency {
+    if value == "transparent" {
+        EventTransparency::Transparent
+    } else {
+        EventTransparency::Opaque
+    }
+}
+
+fn attendee_status(value: &str) -> AttendeeResponseStatus {
+    match value {
+        "accepted" => AttendeeResponseStatus::Accepted,
+        "declined" => AttendeeResponseStatus::Declined,
+        "tentative" => AttendeeResponseStatus::Tentative,
+        _ => AttendeeResponseStatus::NeedsAction,
+    }
+}
+
+fn report(error: impl std::error::Error + Send + Sync + 'static) -> Report {
+    rootcause::report!(error).into()
+}
+
+fn event_reconciliation_lock(source_link_id: Uuid, ical_uid: &str) -> i64 {
+    // Stable FNV-1a produces the same advisory-lock key in every service
+    // process. A collision only adds harmless serialization.
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in source_link_id
+        .as_bytes()
+        .iter()
+        .copied()
+        .chain(ical_uid.bytes())
+    {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    i64::from_ne_bytes(hash.to_ne_bytes())
+}
+
+#[cfg(test)]
+mod test;

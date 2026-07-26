@@ -8,7 +8,7 @@ use crate::api::saved_views::{
 };
 use crate::{
     api::{
-        activity, annotations,
+        activity, annotations, calendar_events,
         documents::{
             self,
             export_document::ExportDocumentResponse,
@@ -140,6 +140,7 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
+        calendar_events::list_occurrences,
 
         // activity
         activity::get_recent_activity::get_recent_activity_handler,
@@ -419,6 +420,8 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
+            calendar_events::CalendarOccurrenceItem,
+            calendar_events::CalendarOccurrenceResponse,
             SoupItemWithProperties,
             SoupApiItem,
             SoupDocument<SoupPropertiesField>,

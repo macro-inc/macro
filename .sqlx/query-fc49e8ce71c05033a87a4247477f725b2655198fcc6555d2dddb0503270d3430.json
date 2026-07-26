@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_accounts\n        SET sync_status = 'disabled',\n            materialized_starts_at = NULL,\n            materialized_ends_at = NULL,\n            materialized_start_date = NULL,\n            materialized_end_date = NULL,\n            last_sync_error = 'Google Calendar permission is no longer granted',\n            updated_at = now()\n        WHERE email_link_id = $1\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fc49e8ce71c05033a87a4247477f725b2655198fcc6555d2dddb0503270d3430"
+}

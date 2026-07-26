@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE calendar_backfill_jobs\n                SET status = $4,\n                    lease_expires_at = NULL,\n                    lease_token = NULL,\n                    last_error = $2,\n                    completed_at = $5,\n                    updated_at = now()\n                WHERE id = $1\n                  AND email_link_id = $3\n                  AND kind = 'google_calendar'\n                  AND status = 'running'\n                  AND lease_token = $6\n                  AND lease_expires_at > now()\n                  AND EXISTS (\n                        SELECT 1\n                        FROM email_links link\n                        WHERE link.id = calendar_backfill_jobs.email_link_id\n                          AND link.google_grant_version = calendar_backfill_jobs.grant_version\n                          AND link.google_granted_scopes @> $7::text[]\n                  )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb6dbbf51c037743d063b5b7a1002d9bf794f6907df2cc49584b741798ab508b"
+}

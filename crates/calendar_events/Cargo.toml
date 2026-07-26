@@ -1,0 +1,28 @@
+[package]
+edition = "2024"
+name = "calendar_events"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+postgres = ["dep:sqlx", "dep:tokio"]
+schema = ["dep:utoipa"]
+
+[dependencies]
+chrono = { workspace = true }
+futures = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true }

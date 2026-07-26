@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH coverage AS (\n                SELECT\n                    count(*) AS calendar_count,\n                    count(*) FILTER (\n                        WHERE materialized_starts_at IS NOT NULL\n                          AND materialized_ends_at IS NOT NULL\n                          AND materialized_start_date IS NOT NULL\n                          AND materialized_end_date IS NOT NULL\n                    ) AS covered_count,\n                    max(materialized_starts_at) AS starts_at,\n                    min(materialized_ends_at) AS ends_at,\n                    max(materialized_start_date) AS start_date,\n                    min(materialized_end_date) AS end_date\n                FROM calendars\n                WHERE account_id = $1\n                  AND NOT is_deleted\n            )\n            UPDATE calendar_accounts\n            SET materialized_starts_at = CASE\n                    WHEN coverage.calendar_count = 0 THEN $2\n                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.starts_at\n                    ELSE NULL\n                END,\n                materialized_ends_at = CASE\n                    WHEN coverage.calendar_count = 0 THEN $3\n                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.ends_at\n                    ELSE NULL\n                END,\n                materialized_start_date = CASE\n                    WHEN coverage.calendar_count = 0 THEN $4\n                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.start_date\n                    ELSE NULL\n                END,\n                materialized_end_date = CASE\n                    WHEN coverage.calendar_count = 0 THEN $5\n                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.end_date\n                    ELSE NULL\n                END,\n                updated_at = now()\n            FROM coverage\n            WHERE calendar_accounts.id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "af51839cb5640f2b29a4c6dff2df34578f2861fac175a1db4373ad27a96964ef"
+}

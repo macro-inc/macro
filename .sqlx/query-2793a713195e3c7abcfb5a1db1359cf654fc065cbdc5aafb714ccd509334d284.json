@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (\n              EXISTS (\n                SELECT 1\n                FROM calendar_events event\n                WHERE event.owner_id IN (\n                        SELECT $1::text\n                        UNION\n                        SELECT link.child_macro_id\n                        FROM macro_user_links link\n                        WHERE link.primary_macro_id = $1\n                  )\n                  AND event.deleted_at IS NULL\n                  AND event.status <> 'cancelled'\n                  AND (\n                        cardinality(event.recurrence_lines) > 0\n                        OR EXISTS (\n                            SELECT 1\n                            FROM calendar_event_sources source\n                            WHERE source.event_id = event.id\n                              AND source.source_kind = 'google'\n                              AND source.provider_recurring_event_id IS NOT NULL\n                        )\n                  )\n                  AND (\n                        event.owner_id = $1\n                        OR EXISTS (\n                            SELECT 1\n                            FROM macro_user_links link\n                            WHERE link.link_id = event.source_link_id\n                              AND link.primary_macro_id = $1\n                        )\n                  )\n                  AND (\n                        event.materialized_starts_at > $2\n                        OR event.materialized_ends_at < $3\n                        OR event.materialized_start_date > $4\n                        OR event.materialized_end_date < $5\n                  )\n              )\n              OR EXISTS (\n                SELECT 1\n                FROM calendar_accounts account\n                WHERE account.owner_id IN (\n                        SELECT $1::text\n                        UNION\n                        SELECT link.child_macro_id\n                        FROM macro_user_links link\n                        WHERE link.primary_macro_id = $1\n                  )\n                  AND (\n                        account.owner_id = $1\n                        OR EXISTS (\n                            SELECT 1\n                            FROM macro_user_links link\n                            WHERE link.link_id = account.email_link_id\n                              AND link.primary_macro_id = $1\n                        )\n                  )\n                  AND account.sync_status <> 'disabled'\n                  AND (\n                        account.materialized_starts_at IS NULL\n                        OR account.materialized_ends_at IS NULL\n                        OR account.materialized_start_date IS NULL\n                        OR account.materialized_end_date IS NULL\n                        OR account.materialized_starts_at > $2\n                        OR account.materialized_ends_at < $3\n                        OR account.materialized_start_date > $4\n                        OR account.materialized_end_date < $5\n                  )\n              )\n            ) AS \"missing_coverage!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "missing_coverage!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2793a713195e3c7abcfb5a1db1359cf654fc065cbdc5aafb714ccd509334d284"
+}
