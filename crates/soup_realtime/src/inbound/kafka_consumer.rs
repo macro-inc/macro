@@ -70,45 +70,52 @@ fn update(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimeUpda
 }
 
 fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeUpdate> {
-    match event {
-        DocumentTopicEvent::Updated(metadata) => {
-            vec![update(EntityType::Document, &metadata.document_id)]
-        }
-        DocumentTopicEvent::Created(_)
-        | DocumentTopicEvent::Deleted(_)
-        | DocumentTopicEvent::Copied(_)
-        | DocumentTopicEvent::Interaction(_) => Vec::new(),
-    }
+    let document_id = match event {
+        DocumentTopicEvent::Created(metadata) => &metadata.document_id,
+        DocumentTopicEvent::Updated(metadata) => &metadata.document_id,
+        DocumentTopicEvent::Copied(metadata) => &metadata.document_id,
+        DocumentTopicEvent::Deleted(_) | DocumentTopicEvent::Interaction(_) => return Vec::new(),
+    };
+    vec![update(EntityType::Document, document_id)]
 }
 
 fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimeUpdate> {
-    match event {
+    let project_id = match event {
+        ProjectTopicEvent::Created(metadata) if metadata.parent_project_id.is_none() => {
+            &metadata.project_id
+        }
         ProjectTopicEvent::Updated(metadata)
             if metadata
                 .parent_id
                 .as_ref()
                 .map_or(metadata.previous_parent_id.is_none(), String::is_empty) =>
         {
-            vec![update(EntityType::Project, &metadata.project_id)]
+            &metadata.project_id
+        }
+        ProjectTopicEvent::Restored(metadata) if metadata.parent_project_id.is_none() => {
+            &metadata.project_id
+        }
+        ProjectTopicEvent::Uploaded(metadata) if metadata.parent_project_id.is_none() => {
+            &metadata.root_project_id
         }
         ProjectTopicEvent::Created(_)
         | ProjectTopicEvent::Updated(_)
         | ProjectTopicEvent::Deleted(_)
         | ProjectTopicEvent::Restored(_)
         | ProjectTopicEvent::PermanentlyDeleted(_)
-        | ProjectTopicEvent::Uploaded(_) => Vec::new(),
-    }
+        | ProjectTopicEvent::Uploaded(_) => return Vec::new(),
+    };
+    vec![update(EntityType::Project, project_id)]
 }
 
 fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
     let chat_id = match event {
+        ChatTopicEvent::Created(metadata) => &metadata.chat_id,
         ChatTopicEvent::Updated(metadata) => &metadata.chat_id,
+        ChatTopicEvent::Restored(metadata) => &metadata.chat_id,
+        ChatTopicEvent::Copied(metadata) => &metadata.chat_id,
         ChatTopicEvent::MessageSent(metadata) => &metadata.chat_id,
-        ChatTopicEvent::Created(_)
-        | ChatTopicEvent::Deleted(_)
-        | ChatTopicEvent::PermanentlyDeleted(_)
-        | ChatTopicEvent::Restored(_)
-        | ChatTopicEvent::Copied(_) => return Vec::new(),
+        ChatTopicEvent::Deleted(_) | ChatTopicEvent::PermanentlyDeleted(_) => return Vec::new(),
     };
     vec![update(EntityType::Chat, chat_id)]
 }
@@ -197,7 +204,10 @@ fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimeUpd
         ChannelTopicEvent::ParticipantRemoved(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::Created(_) | ChannelTopicEvent::Deleted(_) => Vec::new(),
+        ChannelTopicEvent::Created(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::Deleted(_) => Vec::new(),
     }
 }
 

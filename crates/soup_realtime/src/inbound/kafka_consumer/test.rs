@@ -61,35 +61,41 @@ fn updated_event() -> Event<DocumentTopicEvent> {
 
 fn ignored_events() -> Vec<DocumentTopicEvent> {
     vec![
-        DocumentTopicEvent::Created(DocumentCreatedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            owner: user(),
-            document_name: "Created".to_string(),
-            file_type: None,
-            project_id: None,
-            sub_type: None,
-            created_at: None,
-        }),
         DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
             document_id: DOCUMENT_ID.to_string(),
             actor_user_id: None,
             project_id: None,
-        }),
-        DocumentTopicEvent::Copied(DocumentCopiedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            source_document_id: "00000000-0000-0000-0000-000000000002".to_string(),
-            source_version_id: None,
-            owner: user(),
-            document_name: "Copied".to_string(),
-            file_type: None,
-            project_id: None,
-            sub_type: None,
         }),
         DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
             document_id: DOCUMENT_ID.to_string(),
             reason: InteractionReason::Edited,
         }),
     ]
+}
+
+fn created_event() -> DocumentTopicEvent {
+    DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user(),
+        document_name: "Created".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    })
+}
+
+fn copied_event() -> DocumentTopicEvent {
+    DocumentTopicEvent::Copied(DocumentCopiedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        source_document_id: "00000000-0000-0000-0000-000000000002".to_string(),
+        source_version_id: None,
+        owner: user(),
+        document_name: "Copied".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+    })
 }
 
 #[derive(Clone)]
@@ -226,6 +232,16 @@ fn channel_attachment_events_refresh_the_channel_and_root_thread() {
     assert_eq!(entities[1].access_source.entity_id, channel_id.to_string());
 }
 
+#[test]
+fn hydratable_document_creation_events_refresh_the_new_item() {
+    for event in [created_event(), copied_event()] {
+        let updates = entities_from_document_event(&event);
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].item.entity_type, EntityType::Document);
+        assert_eq!(updates[0].item.entity_id, DOCUMENT_ID);
+    }
+}
+
 #[tokio::test]
 async fn updated_payload_maps_to_document_entity() {
     let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
@@ -248,7 +264,7 @@ async fn updated_payload_maps_to_document_entity() {
 }
 
 #[tokio::test]
-async fn non_update_events_are_ignored() {
+async fn non_hydratable_document_events_are_ignored() {
     let service = flaky_service(0);
     for event in ignored_events() {
         let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
