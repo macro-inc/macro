@@ -1,5 +1,7 @@
 use crate::pubsub::backfill::process;
-use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubContext};
+use crate::pubsub::context::{
+    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker,
+};
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -7,7 +9,6 @@ use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -28,7 +29,7 @@ pub async fn run_worker(
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     crm_service: CrmServiceType,
-    macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
 ) {
     let ctx = PubSubContext {

@@ -13,8 +13,13 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use std::future::pending;
 use std::sync::Arc;
+use std::time::Duration;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::task::TaskTracker;
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -94,9 +99,11 @@ async fn main() -> anyhow::Result<()> {
         .sfs_delete_queue(&sfs_delete_queue)
         .email_link_manager_queue(&link_manager_queue);
 
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
@@ -591,21 +598,55 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("All workers started successfully");
 
-    // Wait for shutdown signal (SIGTERM from ECS or SIGINT from Ctrl+C)
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Received SIGINT (Ctrl+C)");
-        }
-        _ = async {
-            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("failed to install SIGTERM handler");
-            term.recv().await
-        } => {
-            tracing::info!("Received SIGTERM");
-        }
+    shutdown_signal().await;
+
+    event_broker_tracker.close();
+    tracing::info!("Waiting for event broker publishes to drain");
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("Event broker publishes drained"),
+        Err(error) => tracing::warn!(
+            error = ?error,
+            timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+            "Timed out waiting for event broker publishes to drain"
+        ),
     }
 
     tracing::info!("Shutdown signal received, exiting gracefully...");
 
     Ok(())
+}
+
+/// Waits for SIGINT on all platforms or SIGTERM on Unix.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => tracing::info!("Received SIGINT (Ctrl+C)"),
+            Err(error) => {
+                tracing::error!(error = ?error, "Failed to install SIGINT handler");
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+                tracing::info!("Received SIGTERM");
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "Failed to install SIGTERM handler");
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }

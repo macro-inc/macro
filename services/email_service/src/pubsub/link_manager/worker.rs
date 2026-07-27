@@ -1,11 +1,10 @@
-use crate::pubsub::context::{CrmServiceType, NotificationIngressType};
+use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use sqlx::PgPool;
 use sqs_client::SQS;
 use std::sync::Arc;
@@ -22,7 +21,7 @@ pub async fn run_worker(
     crm_service: CrmServiceType,
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
-    macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    macro_event_broker: PubSubEventBroker,
 ) {
     let ctx = LinkManagerContext {
         db,
