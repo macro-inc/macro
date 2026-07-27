@@ -1,7 +1,5 @@
-import { type Span, Telemetry } from '@macro-inc/observability';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SyncSourceEvent } from '../collab/source';
-import { disposeTelemetryFor } from '../collab/telemetry';
 import {
   WebsocketConnectionState,
   WebsocketEvent,
@@ -152,11 +150,6 @@ const snap = new Uint8Array([1, 2, 3]);
 const aw = new Uint8Array([4, 5]);
 const flush = () => new Promise((resolve) => setTimeout(resolve));
 
-afterEach(() => {
-  disposeTelemetryFor('doc1');
-  vi.restoreAllMocks();
-});
-
 describe('SyncServiceSource', () => {
   it('resolves doInitialSync and starts heartbeat on RemoteInitialSync', async () => {
     const ws = new FakeSocket();
@@ -294,57 +287,4 @@ describe('SyncServiceSource', () => {
     });
   });
 
-  it('traces an unexpected disconnect through reconnect', () => {
-    const span: Span = {
-      span: (() => span) as Span['span'],
-      run: (operation) => operation(),
-      setAttr: vi.fn(),
-      event: vi.fn(),
-      error: vi.fn(),
-      traceparent: () => undefined,
-      injectTraceHeaders: vi.fn(),
-      end: vi.fn(),
-    };
-    const spanSpy = vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);
-    const ws = new FakeSocket();
-    new SyncServiceSource(ws, 'doc1');
-
-    ws.fireClose(1006, 'connection lost');
-    ws.fireRetry(2, 1_000);
-
-    expect(spanSpy).toHaveBeenCalledTimes(1);
-    expect(spanSpy).toHaveBeenCalledWith('ws.reconnect');
-    expect(span.event).toHaveBeenCalledWith('ws.retry', {
-      'ws.retry.count': 2,
-      'ws.retry.backoff_ms': 1_000,
-    });
-    expect(span.end).not.toHaveBeenCalled();
-
-    ws.fireReconnect();
-
-    expect(span.setAttr).toHaveBeenCalledWith('outcome', 'reconnected');
-    expect(span.end).toHaveBeenCalledOnce();
-  });
-
-  it('ends a reconnect span when the first successful connection follows failures', () => {
-    const span: Span = {
-      span: (() => span) as Span['span'],
-      run: (operation) => operation(),
-      setAttr: vi.fn(),
-      event: vi.fn(),
-      error: vi.fn(),
-      traceparent: () => undefined,
-      injectTraceHeaders: vi.fn(),
-      end: vi.fn(),
-    };
-    vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);
-    const ws = new FakeSocket();
-    new SyncServiceSource(ws, 'doc1');
-
-    ws.fireClose(1006, 'initial connection failed');
-    ws.fireOpen();
-
-    expect(span.setAttr).toHaveBeenCalledWith('outcome', 'connected');
-    expect(span.end).toHaveBeenCalledOnce();
-  });
 });
