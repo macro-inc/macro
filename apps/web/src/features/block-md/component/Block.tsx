@@ -201,7 +201,8 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
           })
         );
       span?.event('doc.snapshot.attempt', { 'snapshot.source': 'dss' });
-      ingestDssSnapshot(loroManager, blockId)
+      span
+        ?.run(() => ingestDssSnapshot(loroManager, blockId))
         .then(({ outcome, bytes }) => {
           span?.event('doc.snapshot.result', {
             'snapshot.source': 'dss',
