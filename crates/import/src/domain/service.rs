@@ -62,6 +62,13 @@ const NOTION_PAGE_IMPORT_TIMEOUT: Duration = Duration::from_secs(120);
 /// enough to stay polite to Notion's MCP.
 const NOTION_IMPORT_CONCURRENCY: usize = 4;
 
+/// How many channels the deterministic Slack gather stages, mirroring the
+/// "8-15 strong candidates" the agent prompt asks for.
+const SLACK_GATHER_MAX_CHANNELS: usize = 15;
+/// How many channel-search pages the deterministic Slack gather follows
+/// before staging what it has.
+const SLACK_GATHER_MAX_PAGES: usize = 5;
+
 /// How often a running import batch touches its rows' `updated_at`. The
 /// heartbeat covers every row the batch owns — queued AND in-flight — so a
 /// fresh `updated_at` means "a live process is still responsible for this
@@ -443,6 +450,20 @@ where
         source: ImportSource,
     ) -> anyhow::Result<()> {
         let mcp_tools = self.connector_tools(user, source).await?;
+
+        // Slack discovery is a listing problem, not a language problem:
+        // enumerate channels through the connector directly and stage the
+        // strongest. The agent session only runs as a fallback, when the
+        // connector's tool surface changed under us.
+        if source == ImportSource::Slack {
+            match self.gather_slack_direct(user, &mcp_tools).await {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    tracing::warn!(error = ?e, "direct slack gather failed; trying the agent");
+                }
+            }
+        }
+
         let native = gather_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
         let context = ImportToolContext {
@@ -521,6 +542,116 @@ where
             .await
             .map_err(|e| anyhow::anyhow!("finalize failed: {e}"))?;
         Ok(())
+    }
+
+    /// Call one connector tool and surface both dispatch and tool errors as
+    /// plain errors.
+    async fn connector_tool_call(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mcp_tools: &McpToolSet,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
+        ToolSet::<()>::try_tool_call(
+            mcp_tools,
+            (),
+            RequestContext::new(user.clone()),
+            tool_name,
+            arguments,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("{tool_name} dispatch failed: {e}"))?
+        .map_err(|e| anyhow::anyhow!("{tool_name} failed: {}", e.description))
+    }
+
+    /// Stage the user's Slack channels WITHOUT a model: call the connector's
+    /// channel-search tool directly (an empty query lists every channel the
+    /// connected user can see), follow pagination, and stage the strongest
+    /// candidates. The agent-driven gather routinely finished "successfully"
+    /// having staged nothing; a direct call either produces channels or a
+    /// real error. Staged rows carry no participants — inviting teammates
+    /// stays best-effort and must never block discovery.
+    #[tracing::instrument(skip(self, user, mcp_tools), err)]
+    async fn gather_slack_direct(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mcp_tools: &McpToolSet,
+    ) -> anyhow::Result<usize> {
+        let search_tool = slack_channel_search_tool_name(mcp_tools)
+            .ok_or_else(|| anyhow::anyhow!("connector exposes no channel-search tool"))?;
+
+        let mut channels: Vec<SlackChannelCandidate> = Vec::new();
+        let mut cursor: Option<String> = None;
+        for page in 0..SLACK_GATHER_MAX_PAGES {
+            let mut arguments = serde_json::json!({ "query": "" });
+            if let Some(cursor) = &cursor {
+                arguments["cursor"] = serde_json::Value::String(cursor.clone());
+            }
+            let result = match self
+                .connector_tool_call(user, mcp_tools, &search_tool, &arguments)
+                .await
+            {
+                Ok(result) => Ok(result),
+                // Some servers reject an explicit empty query; try the first
+                // page again without one before giving up on the direct path.
+                Err(empty_query_error) if page == 0 => self
+                    .connector_tool_call(user, mcp_tools, &search_tool, &serde_json::json!({}))
+                    .await
+                    .map_err(|no_query_error| {
+                        anyhow::anyhow!(
+                            "channel search failed with an empty query ({empty_query_error}) \
+                             and without one ({no_query_error})"
+                        )
+                    }),
+                Err(e) => {
+                    // Later pages are best-effort: keep what earlier pages
+                    // already produced.
+                    tracing::warn!(page, error = ?e, "channel search page failed");
+                    break;
+                }
+            }?;
+
+            let parsed = parse_slack_channel_page(result);
+            channels.extend(parsed.channels);
+            cursor = parsed.next_cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        anyhow::ensure!(!channels.is_empty(), "channel search returned no channels");
+
+        let enumerated = channels.len();
+        let mut staged = 0usize;
+        for channel in select_slack_candidates(channels, SLACK_GATHER_MAX_CHANNELS) {
+            let foreign_id = channel.id.clone().unwrap_or_else(|| channel.name.clone());
+            let metadata = serde_json::json!({
+                "name": channel.name,
+                "channel_id": channel.id,
+                "purpose": channel.purpose,
+                "participants": [],
+            });
+            match self
+                .stage(
+                    user,
+                    Initiator::Onboarding,
+                    ImportSource::Slack,
+                    &foreign_id,
+                    metadata,
+                )
+                .await
+            {
+                Ok(StageOutcome::Staged(_)) => staged += 1,
+                // Already imported (by the user or a teammate), declined, or
+                // mid-import — the ledger already covers it.
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!(channel = %channel.name, error = ?e, "failed to stage slack channel");
+                }
+            }
+        }
+        tracing::info!(enumerated, staged, "direct slack gather finished");
+        Ok(staged)
     }
 
     /// Fallback: run a single-page Haiku session over the shared connector
@@ -1361,6 +1492,185 @@ fn is_notion_fetch_tool_name(name: &str) -> bool {
         name.rsplit_once("__").map(|(_, tool)| tool),
         Some("notion-fetch" | "fetch")
     )
+}
+
+/// The mangled name of the connector's channel-search tool. Slack's hosted
+/// MCP has shipped several tool-name spellings, so this matches the shape —
+/// a search/list over channels — rather than one literal name.
+fn slack_channel_search_tool_name(mcp_tools: &McpToolSet) -> Option<String> {
+    ToolSet::<()>::request_schemas(mcp_tools)?
+        .into_iter()
+        .map(|schema| schema.name)
+        .find(|name| is_slack_channel_search_tool_name(name))
+}
+
+fn is_slack_channel_search_tool_name(name: &str) -> bool {
+    let Some((_, tool)) = name.rsplit_once("__") else {
+        return false;
+    };
+    let tool = tool.to_ascii_lowercase().replace('-', "_");
+    let channel_noun = tool.contains("channel") || tool.contains("conversation");
+    let listing_verb = tool.contains("search") || tool.contains("list");
+    let other_surface = [
+        "member", "history", "message", "canvas", "create", "user", "emoji", "file",
+    ]
+    .iter()
+    .any(|word| tool.contains(word));
+    channel_noun && listing_verb && !other_surface
+}
+
+/// One channel parsed out of a Slack channel-search result.
+#[derive(Debug, Clone, PartialEq)]
+struct SlackChannelCandidate {
+    id: Option<String>,
+    name: String,
+    purpose: Option<String>,
+    member_count: Option<u64>,
+    archived: bool,
+}
+
+/// One page of channel-search results.
+#[derive(Debug, Default, PartialEq)]
+struct SlackChannelPage {
+    channels: Vec<SlackChannelCandidate>,
+    next_cursor: Option<String>,
+}
+
+/// Split a channel-search result into channels plus a pagination cursor.
+/// Handles structured MCP output, JSON re-encoded as text, a bare array of
+/// channels, and the channel list hiding under common wrapper keys.
+fn parse_slack_channel_page(result: serde_json::Value) -> SlackChannelPage {
+    match result {
+        serde_json::Value::String(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+            Ok(structured @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) => {
+                parse_slack_channel_page(structured)
+            }
+            _ => SlackChannelPage::default(),
+        },
+        serde_json::Value::Array(items) => SlackChannelPage {
+            channels: items.iter().filter_map(parse_slack_channel).collect(),
+            next_cursor: None,
+        },
+        serde_json::Value::Object(map) => {
+            let next_cursor = slack_next_cursor(&map);
+            for key in ["channels", "results", "items", "matches", "data"] {
+                if let Some(value) = map.get(key) {
+                    let inner = parse_slack_channel_page(value.clone());
+                    if !inner.channels.is_empty() {
+                        return SlackChannelPage {
+                            channels: inner.channels,
+                            next_cursor: inner.next_cursor.or(next_cursor),
+                        };
+                    }
+                }
+            }
+            // A single channel object at the top level.
+            let channels = parse_slack_channel(&serde_json::Value::Object(map))
+                .into_iter()
+                .collect();
+            SlackChannelPage {
+                channels,
+                next_cursor,
+            }
+        }
+        _ => SlackChannelPage::default(),
+    }
+}
+
+fn slack_next_cursor(map: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    map.get("next_cursor")
+        .or_else(|| map.get("nextCursor"))
+        .or_else(|| map.get("cursor"))
+        .or_else(|| {
+            map.get("response_metadata")
+                .and_then(|value| value.as_object())
+                .and_then(|metadata| metadata.get("next_cursor"))
+        })
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|cursor| !cursor.is_empty())
+        .map(str::to_string)
+}
+
+fn parse_slack_channel(value: &serde_json::Value) -> Option<SlackChannelCandidate> {
+    let map = value.as_object()?;
+    // DMs and group DMs are not importable channels.
+    if ["is_im", "is_mpim"]
+        .iter()
+        .any(|key| map.get(*key).and_then(serde_json::Value::as_bool) == Some(true))
+    {
+        return None;
+    }
+    let name = map
+        .get("name")
+        .or_else(|| map.get("channel_name"))
+        .and_then(|value| value.as_str())
+        .map(|name| name.trim().trim_start_matches('#'))
+        .filter(|name| !name.is_empty())?
+        .to_string();
+    let id = map
+        .get("id")
+        .or_else(|| map.get("channel_id"))
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string);
+    let purpose = slack_channel_text(map, "purpose")
+        .or_else(|| slack_channel_text(map, "topic"))
+        .or_else(|| slack_channel_text(map, "description"));
+    let member_count = map
+        .get("member_count")
+        .or_else(|| map.get("num_members"))
+        .and_then(serde_json::Value::as_u64);
+    let archived = map.get("is_archived").and_then(serde_json::Value::as_bool) == Some(true);
+    Some(SlackChannelCandidate {
+        id,
+        name,
+        purpose,
+        member_count,
+        archived,
+    })
+}
+
+/// Slack renders purpose/topic either as a plain string or as the classic
+/// API's `{ "value": "…" }` wrapper.
+fn slack_channel_text(
+    map: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Option<String> {
+    let value = map.get(key)?;
+    value
+        .as_str()
+        .or_else(|| value.get("value").and_then(|nested| nested.as_str()))
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_string)
+}
+
+/// Rank enumerated channels and keep the strongest `cap`: drop archived
+/// channels, dedupe by id (falling back to the name), prefer larger channels
+/// (member count is the best activity proxy a listing offers), and keep the
+/// listing order among ties.
+fn select_slack_candidates(
+    channels: Vec<SlackChannelCandidate>,
+    cap: usize,
+) -> Vec<SlackChannelCandidate> {
+    let mut seen = HashSet::new();
+    let mut candidates: Vec<SlackChannelCandidate> = channels
+        .into_iter()
+        .filter(|channel| !channel.archived)
+        .filter(|channel| {
+            seen.insert(
+                channel
+                    .id
+                    .clone()
+                    .unwrap_or_else(|| format!("#{}", channel.name.to_ascii_lowercase())),
+            )
+        })
+        .collect();
+    candidates.sort_by_key(|channel| std::cmp::Reverse(channel.member_count.unwrap_or(0)));
+    candidates.truncate(cap);
+    candidates
 }
 
 /// Split a Notion fetch result into its title, Markdown body, and properties.
