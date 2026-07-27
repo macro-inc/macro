@@ -186,6 +186,7 @@ pub fn build_schema() -> SchemaOnlySoupSchema {
 }
 
 /// Build a GraphQL schema backed by a query service and no-op realtime service.
+#[allow(clippy::type_complexity)]
 pub fn build_schema_with_service<S, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: S,
 ) -> SoupSchema<S, NoOpSoupRealtimeSubscriptionService, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>
@@ -210,6 +211,7 @@ where
 }
 
 /// Build a GraphQL schema backed by query and realtime Soup services.
+#[allow(clippy::type_complexity)]
 pub fn build_schema_with_services<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: S,
     realtime_service: R,
@@ -241,6 +243,7 @@ where
 }
 
 /// Build a GraphQL schema backed by an `Arc`-shared query service.
+#[allow(clippy::type_complexity)]
 pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: Arc<S>,
 ) -> SoupSchema<
@@ -279,6 +282,7 @@ where
 }
 
 /// Build a GraphQL schema backed by `Arc`-shared query and realtime services.
+#[allow(clippy::type_complexity)]
 pub fn build_schema_from_arcs<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: Arc<S>,
     realtime_service: Arc<R>,

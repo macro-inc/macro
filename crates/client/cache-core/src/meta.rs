@@ -111,9 +111,9 @@ mod tests {
     }
 
     #[test]
-    fn union_possible_types() {
-        let entity = type_meta("GraphqlSoupEntity").expect("entity union");
-        assert_eq!(entity.kind, TypeKind::Union);
+    fn interface_possible_types() {
+        let entity = type_meta("GraphqlSoupEntity").expect("entity interface");
+        assert_eq!(entity.kind, TypeKind::Interface);
         assert!(entity.possible_types.contains(&"GraphqlSoupDocument"));
         assert!(entity.possible_types.contains(&"GraphqlSoupForeignEntity"));
         assert_eq!(entity.possible_types.len(), 9);
@@ -162,15 +162,17 @@ mod tests {
         assert_eq!(f.ty.kind, FieldKind::Leaf);
         assert!(f.ty.nullable && !f.ty.list);
 
-        // metadata: JSON! (opaque scalar)
-        let f = field_meta("GraphqlSoupForeignEntity", "metadata").unwrap();
+        // sourceMetadata: JSON! (opaque scalar); metadata is now the shared
+        // structured interface field.
+        let f = field_meta("GraphqlSoupForeignEntity", "sourceMetadata").unwrap();
         assert_eq!(f.ty.kind, FieldKind::OpaqueScalar);
         assert!(!f.ty.nullable);
 
-        // entity: GraphqlSoupEntity! (composite link to a union)
-        let f = field_meta("GraphqlSoupItem", "entity").unwrap();
+        // items: [GraphqlSoupEntity!]! (composite link to the entity interface)
+        let f = field_meta("SoupPage", "items").unwrap();
         assert_eq!(f.ty.kind, FieldKind::Composite);
         assert_eq!(f.ty.name, "GraphqlSoupEntity");
+        assert!(f.ty.list);
     }
 
     #[test]
