@@ -8,6 +8,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
@@ -24,6 +25,7 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
+use crate::domain::events::CallMacroEvent;
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
 };
@@ -52,6 +54,7 @@ pub struct CallServiceImpl<
     I: CallSearchIndexer = NoOpCallSearchIndexer,
     V: VoipPushSender = (),
     Vr: VoiceRepository = NoOpVoiceRepository,
+    B: MacroEventBroker = NoopMacroEventBroker,
 > {
     repo: R,
     rtc_client: C,
@@ -67,6 +70,7 @@ pub struct CallServiceImpl<
     voip_push_sender: V,
     voice_repo: Vr,
     ring_status_base_url: Option<String>,
+    event_broker: B,
 }
 
 impl<
@@ -104,6 +108,7 @@ impl<
             voip_push_sender: (),
             voice_repo: NoOpVoiceRepository,
             ring_status_base_url: None,
+            event_broker: NoopMacroEventBroker,
         }
     }
 }
@@ -119,7 +124,8 @@ impl<
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+    B: MacroEventBroker,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 {
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
@@ -153,7 +159,7 @@ impl<
     pub fn with_voip_push_sender<V2: VoipPushSender>(
         self,
         sender: V2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2, Vr> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2, Vr, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -169,6 +175,7 @@ impl<
             voip_push_sender: sender,
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
+            event_broker: self.event_broker,
         }
     }
 
@@ -176,7 +183,7 @@ impl<
     pub fn with_search_indexer<I2: CallSearchIndexer>(
         self,
         indexer: I2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V, Vr> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V, Vr, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -192,6 +199,7 @@ impl<
             voip_push_sender: self.voip_push_sender,
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
+            event_broker: self.event_broker,
         }
     }
 
@@ -199,7 +207,7 @@ impl<
     pub fn with_voice_repo<Vr2: VoiceRepository>(
         self,
         voice_repo: Vr2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr2> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr2, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -215,7 +223,42 @@ impl<
             voip_push_sender: self.voip_push_sender,
             voice_repo,
             ring_status_base_url: self.ring_status_base_url,
+            event_broker: self.event_broker,
         }
+    }
+
+    /// Replace the event broker while preserving every other service dependency.
+    pub fn with_event_broker<B2: MacroEventBroker>(
+        self,
+        event_broker: B2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B2> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            search_indexer: self.search_indexer,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+            voip_push_sender: self.voip_push_sender,
+            voice_repo: self.voice_repo,
+            ring_status_base_url: self.ring_status_base_url,
+            event_broker,
+        }
+    }
+
+    #[allow(
+        dead_code,
+        reason = "call lifecycle events are published in follow-up changes"
+    )]
+    fn publish_call_event(&self, event: &CallMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to schedule call lifecycle event");
+        }));
     }
 
     /// Send a call event to all channel members (best-effort).
@@ -394,7 +437,8 @@ impl<
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+    B: MacroEventBroker,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -1447,7 +1491,8 @@ impl<
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+    B: MacroEventBroker,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///
