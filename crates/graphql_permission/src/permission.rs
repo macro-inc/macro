@@ -7,17 +7,8 @@ use entity_access::domain::{
 };
 use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
+use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
-
-/// Identity used to resolve the requesting user's permission for an entity.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct EntityPermissionKey {
-    /// Canonical entity type understood by the entity-access domain.
-    pub entity_type: EntityType,
-    /// Entity identifier.
-    pub entity_id: String,
-}
 
 /// The shape of an entity permission.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -164,9 +155,9 @@ pub trait EntityPermissionEdgeReader: Send + Sync + 'static {
         &'a self,
         user_id: &'a MacroUserIdStr<'static>,
         organization_id: Option<i64>,
-        keys: Vec<EntityPermissionKey>,
+        entities: Vec<Entity<'static>>,
     ) -> impl Future<
-        Output = Result<HashMap<EntityPermissionKey, Option<EntityPermission>>, rootcause::Report>,
+        Output = Result<HashMap<Entity<'static>, Option<EntityPermission>>, rootcause::Report>,
     > + Send
     + 'a;
 }
@@ -179,38 +170,42 @@ where
         &self,
         user_id: &MacroUserIdStr<'static>,
         organization_id: Option<i64>,
-        keys: Vec<EntityPermissionKey>,
-    ) -> Result<HashMap<EntityPermissionKey, Option<EntityPermission>>, rootcause::Report> {
-        let permissions = stream::iter(keys.into_iter().map(|key| async move {
-            let permission = self
-                .get_entity_permission(
-                    Some(user_id),
-                    &key.entity_id,
-                    key.entity_type,
-                    organization_id,
-                )
-                .await;
-            (key, permission)
-        }))
-        // A Soup page can contain many heterogeneous entities. Keep the edge
-        // lazy and parallel, but do not let one request consume the whole DB
-        // pool while the entity-access port has no bulk lookup yet.
-        .buffer_unordered(16)
-        .collect::<Vec<_>>()
-        .await;
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Option<EntityPermission>>, rootcause::Report> {
+        let mut futures = Vec::with_capacity(entities.len());
+        for entity in entities {
+            futures.push(async move {
+                let permission = self
+                    .get_entity_permission(
+                        Some(user_id),
+                        &entity.entity_id,
+                        entity.entity_type,
+                        organization_id,
+                    )
+                    .await;
+                (entity, permission)
+            });
+        }
+        let permissions = stream::iter(futures)
+            // A Soup page can contain many heterogeneous entities. Keep the edge
+            // lazy and parallel, but do not let one request consume the whole DB
+            // pool while the entity-access port has no bulk lookup yet.
+            .buffer_unordered(16)
+            .collect::<Vec<_>>()
+            .await;
 
         let mut result = HashMap::with_capacity(permissions.len());
-        for (key, permission) in permissions {
+        for (entity, permission) in permissions {
             match permission {
                 Ok(permission) => {
-                    result.insert(key, Some(permission));
+                    result.insert(entity, Some(permission));
                 }
                 Err(
                     AccessError::Unauthorized
                     | AccessError::UnauthorizedWithMessage(_)
                     | AccessError::NotFound(_),
                 ) => {
-                    result.insert(key, None);
+                    result.insert(entity, None);
                 }
                 Err(error) => return Err(rootcause::report!(error).into()),
             }
@@ -228,9 +223,9 @@ impl EntityPermissionEdgeReader for NoOpEntityPermissionEdgeReader {
         &self,
         _user_id: &MacroUserIdStr<'static>,
         _organization_id: Option<i64>,
-        keys: Vec<EntityPermissionKey>,
-    ) -> Result<HashMap<EntityPermissionKey, Option<EntityPermission>>, rootcause::Report> {
-        Ok(keys.into_iter().map(|key| (key, None)).collect())
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Option<EntityPermission>>, rootcause::Report> {
+        Ok(entities.into_iter().map(|entity| (entity, None)).collect())
     }
 }
 
@@ -255,7 +250,7 @@ impl<R> EntityPermissionLoader<R> {
     }
 }
 
-impl<R> async_graphql::dataloader::Loader<EntityPermissionKey> for EntityPermissionLoader<R>
+impl<R> async_graphql::dataloader::Loader<OwnedEntity> for EntityPermissionLoader<R>
 where
     R: EntityPermissionEdgeReader,
 {
@@ -264,11 +259,18 @@ where
 
     async fn load(
         &self,
-        keys: &[EntityPermissionKey],
-    ) -> Result<HashMap<EntityPermissionKey, Self::Value>, Self::Error> {
+        keys: &[OwnedEntity],
+    ) -> Result<HashMap<OwnedEntity, Self::Value>, Self::Error> {
+        let entities = keys.iter().map(|key| key.as_entity().clone()).collect();
         self.reader
-            .get_entity_permissions(&self.user_id, self.organization_id, keys.to_vec())
+            .get_entity_permissions(&self.user_id, self.organization_id, entities)
             .await
+            .map(|permissions| {
+                permissions
+                    .into_iter()
+                    .map(|(entity, permission)| (OwnedEntity::from(entity), permission))
+                    .collect()
+            })
             .map_err(|error| error.into_cloneable())
     }
 }
@@ -291,11 +293,15 @@ where
 /// Resolve a typed current-viewer permission from GraphQL request data.
 pub async fn load_entity_permission<R>(
     ctx: &Context<'_>,
-    key: EntityPermissionKey,
+    entity: Entity<'static>,
 ) -> async_graphql::Result<Option<GraphqlEntityPermission>>
 where
     R: EntityPermissionEdgeReader,
 {
     let loader = ctx.data::<DataLoader<EntityPermissionLoader<R>>>()?;
-    Ok(loader.load_one(key).await?.flatten().map(Into::into))
+    Ok(loader
+        .load_one(OwnedEntity::from(entity))
+        .await?
+        .flatten()
+        .map(Into::into))
 }

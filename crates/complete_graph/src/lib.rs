@@ -31,9 +31,9 @@ pub use graphql_notification::{
     EntityNotificationsLoader, SoupNotificationEdgeReader, entity_notifications_loader,
 };
 pub use graphql_permission::{
-    EntityPermissionEdgeReader, EntityPermissionKey, EntityPermissionLoader,
-    GraphqlChannelParticipantRole, GraphqlEntityAccessLevel, GraphqlEntityPermission,
-    GraphqlEntityPermissionKind, GraphqlTeamRole, entity_permission_loader,
+    EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlChannelParticipantRole,
+    GraphqlEntityAccessLevel, GraphqlEntityPermission, GraphqlEntityPermissionKind,
+    GraphqlTeamRole, entity_permission_loader,
 };
 pub use graphql_properties::{
     EntityPropertiesLoader, EntityPropertyReader, EntityPropertyWriter, NoOpEntityPropertyReader,

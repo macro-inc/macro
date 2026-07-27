@@ -9,8 +9,7 @@ use graphql_notification::{
     GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
 };
 use graphql_permission::{
-    EntityPermissionEdgeReader, EntityPermissionKey, GraphqlEntityPermission,
-    load_entity_permission,
+    EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
@@ -102,14 +101,7 @@ where
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
-        load_entity_permission::<AR>(
-            ctx,
-            EntityPermissionKey {
-                entity_type: self.permission_entity.entity_type,
-                entity_id: self.permission_entity.entity_id.to_string(),
-            },
-        )
-        .await
+        load_entity_permission::<AR>(ctx, self.permission_entity.clone()).await
     }
 }
 
