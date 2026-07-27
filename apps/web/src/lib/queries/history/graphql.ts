@@ -9,20 +9,8 @@ import {
   type GraphqlHistoryItemFieldsFragment,
   GraphqlHistoryItemFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
-import { debounce } from '@solid-primitives/scheduled';
-import {
-  createQuery,
-  keepPreviousData,
-  useQueryClient,
-} from '@tanstack/solid-query';
-import { onCleanup } from 'solid-js';
-import { fetchHistoryItems } from './history';
-import { historyKeys } from './keys';
 import type { DocumentHistoryItem, HistoryItem } from './types';
-
-const CACHE_REFRESH_DEBOUNCE_MS = 250;
 
 const graphqlHistorySelection = selectRecords(
   GraphqlHistoryItemFieldsFragmentDoc
@@ -164,42 +152,4 @@ export async function readCachedGraphqlHistoryItems(
         b.sortTimestamp - a.sortTimestamp || a.item.id.localeCompare(b.item.id)
     )
     .map(({ item }) => item);
-}
-
-/**
- * Returns a TanStack-compatible history query backed by normalized GraphQL
- * records, with REST history as a fallback when the cache is unavailable.
- */
-export function useGraphqlHistoryQuery() {
-  const cacheHost = getGraphqlSoupCacheHost();
-  const normalizedCacheHost = cacheHost?.disabled ? undefined : cacheHost;
-  const queryClient = useQueryClient();
-  const scheduleCacheRefresh = debounce(() => {
-    void queryClient.invalidateQueries({
-      queryKey: historyKeys.graphqlList.queryKey,
-    });
-  }, CACHE_REFRESH_DEBOUNCE_MS);
-  const unsubscribeCacheChanges =
-    normalizedCacheHost?.onCacheChanged(scheduleCacheRefresh);
-
-  onCleanup(() => {
-    unsubscribeCacheChanges?.();
-    scheduleCacheRefresh.clear();
-  });
-
-  return createQuery<HistoryItem[]>(() => ({
-    queryKey: historyKeys.graphqlList.queryKey,
-    queryFn: async () => {
-      if (!normalizedCacheHost) return fetchHistoryItems();
-      try {
-        return await readCachedGraphqlHistoryItems(normalizedCacheHost);
-      } catch {
-        return fetchHistoryItems();
-      }
-    },
-    placeholderData: keepPreviousData,
-    staleTime: Infinity,
-    refetchOnMount: 'always',
-    reconcile: 'id',
-  }));
 }
