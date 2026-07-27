@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 async-graphql = { workspace = true }
+cowlike = { path = "../cowlike" }
 entity_mutation = { path = "../entity_mutation" }
 graphql_common = { path = "../graphql_common" }
 graphql_permission = { path = "../graphql_permission" }

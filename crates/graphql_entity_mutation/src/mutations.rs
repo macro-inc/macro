@@ -1,11 +1,13 @@
-use std::{collections::HashSet, marker::PhantomData, sync::Arc};
+use std::{borrow::Cow, collections::HashSet, marker::PhantomData, sync::Arc};
 
-use async_graphql::{Context, Enum, ErrorExtensions, ID, InputObject, Object, SimpleObject};
+use async_graphql::{Context, Enum, ErrorExtensions, ID, InputObject, Object, SimpleObject, Union};
+use cowlike::CowLike;
 use entity_mutation::{
-    DuplicateEntityRequest, EntityMutationActor, EntityMutationErrorCode, EntityMutationOutcome,
-    EntityMutationService, MoveEntityRequest, RenameEntityRequest, UpdateEntitySharePolicyRequest,
+    DuplicateEntityRequest, EntityMutationActor, EntityMutationErrorCode, EntityMutationService,
+    EntityMutationSuccess, MoveEntityRequest, MutateEntitiesResult, RenameEntityRequest,
+    UpdateEntitySharePolicyRequest,
 };
-use graphql_common::GraphqlEntityType;
+use graphql_common::{GraphqlEntity, GraphqlEntityType};
 use graphql_permission::GraphqlEntityAccessLevel;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
@@ -325,54 +327,96 @@ impl From<Entity<'static>> for GraphqlEntityMutationRef {
     }
 }
 
-/// Result for one requested entity in a batch.
-#[derive(SimpleObject)]
-pub struct GraphqlEntityMutationResult {
-    /// Whether this item succeeded.
-    pub success: bool,
-    /// Original reference supplied by the caller.
-    pub requested: GraphqlEntityMutationRef,
-    /// Updated or newly created entity reference.
-    pub entity: Option<GraphqlEntityMutationRef>,
-    /// Records known to have changed, including containers and any cascade
-    /// descendants exposed by the delegated domain service.
-    pub affected_entities: Vec<GraphqlEntityMutationRef>,
-    /// Per-item failure, if any.
-    pub error: Option<GraphqlEntityMutationError>,
+struct GraphqlMutationSuccess<'a>(Cow<'a, [Entity<'a>]>);
+
+#[Object]
+impl<'a> GraphqlMutationSuccess<'a> {
+    async fn affected_entities(&self) -> Vec<GraphqlEntity<'_>> {
+        self.0
+            .iter()
+            .map(CowLike::copied)
+            .map(GraphqlEntity)
+            .collect()
+    }
 }
 
-impl From<EntityMutationOutcome> for GraphqlEntityMutationResult {
-    fn from(value: EntityMutationOutcome) -> Self {
-        Self {
-            success: value.error.is_none(),
-            requested: value.requested.into(),
-            entity: value.entity.map(Into::into),
-            affected_entities: value
-                .affected_entities
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            error: value.error.map(|error| GraphqlEntityMutationError {
-                code: error.code.into(),
-                message: error.message,
-            }),
+struct GraphqlMutationError(EntityMutationErrorCode);
+
+#[Object]
+impl GraphqlMutationError {
+    async fn error_code(&self) -> GraphqlEntityMutationErrorCode {
+        self.0.into()
+    }
+
+    async fn message(&self) -> &'static str {
+        match self.0 {
+            EntityMutationErrorCode::UnsupportedOperation(_) => {
+                "Operation is not supported for this entity"
+            }
+            EntityMutationErrorCode::InvalidInput(_) => "invalid entity mutation input",
+            EntityMutationErrorCode::Forbidden(_) => "insufficient permission for entity mutation",
+            EntityMutationErrorCode::NotFound(_) => "entity could not be found",
+            EntityMutationErrorCode::Conflict(_) => {
+                "entity mutation conflicts with current entity state"
+            }
+            EntityMutationErrorCode::Internal(_) => "An internal error occurred",
+        }
+    }
+}
+
+/// Result for one requested entity in a batch.
+#[derive(Union)]
+pub enum GraphqlEntityMutationResult<'a> {
+    /// the request succeeded
+    ///
+    Success(GraphqlMutationSuccess<'a>),
+    /// the request failed
+    Error(GraphqlMutationError),
+}
+
+impl<'a> GraphqlEntityMutationResult<'a> {
+    fn new(x: Result<&'a EntityMutationSuccess<'a>, &'a EntityMutationErrorCode>) -> Self {
+        match x {
+            Ok(r) => GraphqlEntityMutationResult::Success(GraphqlMutationSuccess(Cow::Borrowed(
+                &r.affected_entities,
+            ))),
+            Err(e) => GraphqlEntityMutationResult::Error(GraphqlMutationError(*e)),
+        }
+    }
+}
+
+impl GraphqlEntityMutationResult<'static> {
+    fn new_static(x: Result<EntityMutationSuccess<'static>, EntityMutationErrorCode>) -> Self {
+        match x {
+            Ok(r) => GraphqlEntityMutationResult::Success(GraphqlMutationSuccess(Cow::Owned(
+                r.affected_entities,
+            ))),
+            Err(e) => GraphqlEntityMutationResult::Error(GraphqlMutationError(e)),
         }
     }
 }
 
 /// Batch mutation payload. Results preserve input order and allow partial
 /// success across independently stored entity kinds.
-#[derive(SimpleObject)]
 pub struct EntityMutationPayload {
     /// Per-input mutation outcomes.
-    pub results: Vec<GraphqlEntityMutationResult>,
+    results: Vec<MutateEntitiesResult<'static>>,
 }
 
-impl From<Vec<EntityMutationOutcome>> for EntityMutationPayload {
-    fn from(outcomes: Vec<EntityMutationOutcome>) -> Self {
-        Self {
-            results: outcomes.into_iter().map(Into::into).collect(),
-        }
+impl EntityMutationPayload {
+    fn new(results: Vec<MutateEntitiesResult<'static>>) -> Self {
+        EntityMutationPayload { results }
+    }
+}
+
+#[Object]
+impl EntityMutationPayload {
+    async fn results<'a>(&'a self) -> Vec<GraphqlEntityMutationResult<'a>> {
+        self.results
+            .iter()
+            .map(Result::as_ref)
+            .map(GraphqlEntityMutationResult::new)
+            .collect()
     }
 }
 
@@ -400,13 +444,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             "renameEntities",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
         )?;
-        Ok(mutation_service::<S>(ctx)?
-            .rename_entities(
-                mutation_actor(ctx)?,
-                inputs.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .rename_entities(
+                    mutation_actor(ctx)?,
+                    inputs.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Move heterogeneous entities to a project or to the root.
@@ -419,13 +464,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             "moveEntities",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
         )?;
-        Ok(mutation_service::<S>(ctx)?
-            .move_entities(
-                mutation_actor(ctx)?,
-                inputs.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .move_entities(
+                    mutation_actor(ctx)?,
+                    inputs.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Update public and channel share policies across supported entity kinds.
@@ -439,13 +485,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             inputs.iter().map(|input| entity_input_key(&input.entity)),
         )?;
         validate_share_policy_inputs(&inputs)?;
-        Ok(mutation_service::<S>(ctx)?
-            .update_share_policies(
-                mutation_actor(ctx)?,
-                inputs.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .update_share_policies(
+                    mutation_actor(ctx)?,
+                    inputs.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Soft-delete entities with a reversible trash lifecycle.
@@ -455,13 +502,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         entities: Vec<EntityRefInput>,
     ) -> async_graphql::Result<EntityMutationPayload> {
         validate_batch("trashEntities", entities.iter().map(entity_input_key))?;
-        Ok(mutation_service::<S>(ctx)?
-            .trash_entities(
-                mutation_actor(ctx)?,
-                entities.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .trash_entities(
+                    mutation_actor(ctx)?,
+                    entities.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Restore reversibly deleted entities.
@@ -471,13 +519,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         entities: Vec<EntityRefInput>,
     ) -> async_graphql::Result<EntityMutationPayload> {
         validate_batch("restoreEntities", entities.iter().map(entity_input_key))?;
-        Ok(mutation_service::<S>(ctx)?
-            .restore_entities(
-                mutation_actor(ctx)?,
-                entities.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .restore_entities(
+                    mutation_actor(ctx)?,
+                    entities.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Irreversibly delete entities.
@@ -490,13 +539,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             "deleteEntitiesPermanently",
             entities.iter().map(entity_input_key),
         )?;
-        Ok(mutation_service::<S>(ctx)?
-            .delete_entities_permanently(
-                mutation_actor(ctx)?,
-                entities.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .delete_entities_permanently(
+                    mutation_actor(ctx)?,
+                    entities.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Duplicate supported entities.
@@ -509,13 +559,14 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             "duplicateEntities",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
         )?;
-        Ok(mutation_service::<S>(ctx)?
-            .duplicate_entities(
-                mutation_actor(ctx)?,
-                inputs.into_iter().map(Into::into).collect(),
-            )
-            .await
-            .into())
+        Ok(EntityMutationPayload::new(
+            mutation_service::<S>(ctx)?
+                .duplicate_entities(
+                    mutation_actor(ctx)?,
+                    inputs.into_iter().map(Into::into).collect(),
+                )
+                .await,
+        ))
     }
 
     /// Add or remove an entity from the actor's favorites.
@@ -524,10 +575,11 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         ctx: &Context<'_>,
         entity: EntityRefInput,
         favorite: bool,
-    ) -> async_graphql::Result<GraphqlEntityMutationResult> {
-        Ok(mutation_service::<S>(ctx)?
+    ) -> async_graphql::Result<GraphqlEntityMutationResult<'static>> {
+        let res = mutation_service::<S>(ctx)?
             .set_favorite(mutation_actor(ctx)?, entity.into(), favorite)
-            .await
-            .into())
+            .await;
+
+        Ok(GraphqlEntityMutationResult::new_static(res))
     }
 }

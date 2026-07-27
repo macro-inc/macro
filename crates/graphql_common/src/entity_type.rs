@@ -1,5 +1,5 @@
-use async_graphql::Enum;
-use model_entity::EntityType;
+use async_graphql::{Enum, ID, Object};
+use model_entity::{Entity, EntityType};
 
 /// GraphQL representation of Soup entity types.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Hash)]
@@ -131,5 +131,19 @@ impl From<GraphqlEntityType> for EntityType {
 impl From<GraphqlSoupEntityType> for GraphqlEntityType {
     fn from(entity_type: GraphqlSoupEntityType) -> Self {
         EntityType::from(entity_type).into()
+    }
+}
+
+/// Wrapper over the [model_entity::Entity]
+pub struct GraphqlEntity<'a>(pub Entity<'a>);
+
+#[Object]
+impl<'a> GraphqlEntity<'a> {
+    async fn id(&self) -> ID {
+        ID(self.0.entity_id.to_string())
+    }
+
+    async fn entity_type(&self) -> GraphqlEntityType {
+        GraphqlEntityType::from(self.0.entity_type)
     }
 }

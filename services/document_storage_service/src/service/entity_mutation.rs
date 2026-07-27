@@ -32,9 +32,8 @@ use entity_access::domain::{
 };
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, DuplicateEntityRequest, EntityMutationActor,
-    EntityMutationError, EntityMutationOutcome, EntityMutationService, MoveEntity,
-    MoveEntityRequest, RenameEntity, RenameEntityRequest, RestoreEntity, TrashEntity,
-    UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
+    EntityMutationService, MoveEntity, MoveEntityRequest, RenameEntity, RenameEntityRequest,
+    RestoreEntity, TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
     capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
 use favorites::domain::{models::FavoritesError, ports::FavoritesService};

@@ -110,6 +110,8 @@ impl EntityMutationErrorCode {
     }
 }
 
-pub struct EntityMutationSuccess {
-    pub affected_entities: Vec<Entity<'static>>,
+/// the success case for the mutated entities
+pub struct EntityMutationSuccess<'a> {
+    /// the entities which were successfully modified
+    pub affected_entities: Vec<Entity<'a>>,
 }
