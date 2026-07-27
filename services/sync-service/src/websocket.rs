@@ -34,40 +34,30 @@ pub fn deserialize_message(message: &[u8]) -> Result<FromPeer<'_>> {
     ))
 }
 
-/// Creates a bounded, protocol-specific span for an inbound WebSocket message.
-pub fn inbound_message_span(
-    message: &FromPeer<'_>,
+/// Returns the protocol-level type of an inbound WebSocket message.
+pub fn message_type(message: &FromPeer<'_>) -> &'static str {
+    match message {
+        FromPeer::PeerRegisterId { .. } => "register_id",
+        FromPeer::PeerUpdate { .. } => "update",
+        FromPeer::PeerAwareness { .. } => "awareness",
+        FromPeer::PeerRequestSince { .. } => "request_since",
+        FromPeer::PeerRequestSnapshot { .. } => "request_snapshot",
+        FromPeer::Unknown => "unknown",
+    }
+}
+
+/// Creates a span for a failed inbound WebSocket message.
+pub fn inbound_message_error_span(
+    message_type: &str,
     remote_id: &str,
     remote_parent: &str,
 ) -> tracing::Span {
-    macro_rules! span {
-        ($name:literal, $message_type:literal) => {
-            tracing::info_span!(
-                $name,
-                document.id = tracing::field::Empty,
-                ws.id = tracing::field::Empty,
-                message.type = $message_type,
-                peer.id = tracing::field::Empty,
-                op.id = tracing::field::Empty,
-                broadcast.targets = tracing::field::Empty,
-                update.bytes = tracing::field::Empty,
-                response.bytes = tracing::field::Empty,
-                trace.remote_id = %remote_id,
-                trace.remote_parent = %remote_parent,
-            )
-        };
-    }
-
-    match message {
-        FromPeer::PeerRegisterId { .. } => span!("ws.message.register-id", "register_id"),
-        FromPeer::PeerUpdate { .. } => span!("ws.message.update", "update"),
-        FromPeer::PeerAwareness { .. } => span!("ws.message.awareness", "awareness"),
-        FromPeer::PeerRequestSince { .. } => span!("ws.message.request-since", "request_since"),
-        FromPeer::PeerRequestSnapshot { .. } => {
-            span!("ws.message.request-snapshot", "request_snapshot")
-        }
-        FromPeer::Unknown => span!("ws.message.unknown", "unknown"),
-    }
+    tracing::error_span!(
+        "ws.message.error",
+        message.type = message_type,
+        trace.remote_id = %remote_id,
+        trace.remote_parent = %remote_parent,
+    )
 }
 
 /// Sends the initial sync message to the client over the websocket

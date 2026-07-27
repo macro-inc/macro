@@ -38,6 +38,11 @@ use crate::{
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
 
+#[derive(Serialize, Deserialize)]
+struct WebSocketAttachment {
+    traceparent: String,
+}
+
 pub mod status_codes {
     pub const OK: u16 = 200;
     pub const NOT_FOUND: u16 = 404;
@@ -665,11 +670,14 @@ impl DocumentSyncSession {
                 .accept_websocket_with_tags(&pair.server, &[&ws_id]);
 
             // Attach the connect request's raw trace context so later
-            // `websocket_message` spans (post-hibernation too) can join it.
+            // websocket errors (post-hibernation too) can join it.
             if let Some(traceparent) = otel::traceparent_value(&req) {
-                _ = pair.server.serialize_attachment(traceparent).inspect_err(
-                    |e| warn!(error = ?e, "failed to attach traceparent to websocket"),
-                );
+                _ = pair
+                    .server
+                    .serialize_attachment(WebSocketAttachment { traceparent })
+                    .inspect_err(
+                        |e| warn!(error = ?e, "failed to attach traceparent to websocket"),
+                    );
             }
 
             let ws_meta = WebSocketMetadata {
@@ -983,16 +991,28 @@ impl DurableObject for DocumentSyncSession {
             }
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
-        let message = websocket::deserialize_message(&binary_message)?;
-
         otel::configure(&self.env);
+        let span_checkpoint = otel::span_checkpoint();
         let traceparent = ws
-            .deserialize_attachment::<String>()
+            .deserialize_attachment::<WebSocketAttachment>()
             .ok()
             .flatten()
-            .and_then(|s| otel::TraceParent::parse(&s));
+            .and_then(|attachment| otel::TraceParent::parse(&attachment.traceparent));
         let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
-        let span = websocket::inbound_message_span(&message, &remote_id, &remote_parent);
+        let message = match websocket::deserialize_message(&binary_message) {
+            Ok(message) => message,
+            Err(error) => {
+                let span =
+                    websocket::inbound_message_error_span("invalid", &remote_id, &remote_parent);
+                {
+                    let _entered = span.enter();
+                    tracing::error!(error = ?error, "failed to deserialize websocket message");
+                }
+                otel::flush_into(&self.env, |export| self.state.wait_until(export));
+                return Err(error);
+            }
+        };
+        let message_type = websocket::message_type(&message);
 
         let res: Result<()> = async {
             let document_id = self.document_id().await?;
@@ -1020,10 +1040,19 @@ impl DurableObject for DocumentSyncSession {
 
             Ok(())
         }
-        .instrument(span)
         .await;
 
-        otel::flush_into(&self.env, |export| self.state.wait_until(export));
+        if let Err(error) = &res {
+            let span =
+                websocket::inbound_message_error_span(message_type, &remote_id, &remote_parent);
+            {
+                let _entered = span.enter();
+                tracing::error!(error = ?error, "failed to process websocket message");
+            }
+            otel::flush_into(&self.env, |export| self.state.wait_until(export));
+        } else {
+            otel::discard_spans_since(span_checkpoint);
+        }
         res
     }
 

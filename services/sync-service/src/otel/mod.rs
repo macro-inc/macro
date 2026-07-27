@@ -10,7 +10,7 @@ mod model;
 mod proto;
 mod trace_context;
 
-pub use exporter::{configure, flush_into};
+pub use exporter::{configure, discard_spans_since, flush_into, span_checkpoint};
 #[cfg(target_arch = "wasm32")]
 pub use layer::OtelLayer;
 pub use trace_context::{

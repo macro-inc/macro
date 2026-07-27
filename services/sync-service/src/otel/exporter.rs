@@ -49,6 +49,16 @@ pub(super) fn buffer_span(span: ClosedSpan) {
     });
 }
 
+/// Returns the current buffer position for an intentionally untraced entry point.
+pub fn span_checkpoint() -> usize {
+    BUFFER.with(|buffer| buffer.borrow().len())
+}
+
+/// Drops spans created after `checkpoint` without disturbing earlier work.
+pub fn discard_spans_since(checkpoint: usize) {
+    BUFFER.with(|buffer| buffer.borrow_mut().truncate(checkpoint));
+}
+
 /// Drain the span buffer and, when an exporter endpoint is configured, return
 /// a future that POSTs them as OTLP/JSON. Pass the future to `wait_until`
 /// (`worker::Context` or DO `State`). `None` means nothing to export (an
