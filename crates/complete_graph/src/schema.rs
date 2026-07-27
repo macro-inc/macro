@@ -414,21 +414,4 @@ where
         )
         .await
     }
-
-    /// Fetch one canonical expanded entity independently of a Soup view.
-    async fn entity(
-        &self,
-        ctx: &Context<'_>,
-        entity_type: graphql_common::GraphqlSoupEntityType,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<Option<graphql_soup::GraphqlSoupEntity<SoupEdges<NR, PR, ER, FR, AR>>>>
-    {
-        graphql_soup::resolve_entity::<S, E, EAS, Auth, St, SoupEdges<NR, PR, ER, FR, AR>>(
-            &self.service,
-            ctx,
-            entity_type,
-            id,
-        )
-        .await
-    }
 }

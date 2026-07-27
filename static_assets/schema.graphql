@@ -1728,6 +1728,16 @@ enum GraphqlSimpleSortMethod {
 }
 
 """
+represents the snippet subtype fields
+"""
+type GraphqlSnippetSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 GraphQL representation of a Soup group bin.
 """
 type GraphqlSoupBin {
@@ -2342,16 +2352,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-type GraphqlSoupDocumentSubType {
-	"""
-	The kind.
-	"""
-	kind: String!
-	"""
-	Whether the task is completed.
-	"""
-	isCompleted: Boolean
-}
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType
 
 """
 GraphQL representation of the soup email attachment.
@@ -3008,6 +3009,16 @@ type GraphqlStringPropertyValue {
 }
 
 """
+represents the task subtype fields
+"""
+type GraphqlTaskSubType {
+	"""
+	whether or not the task is complete
+	"""
+	isCompleted: Boolean!
+}
+
+"""
 Team role resolved for the current viewer.
 """
 enum GraphqlTeamRole {
@@ -3051,10 +3062,6 @@ type GraphqlUser {
 	Fetch a page of Soup items using the existing Soup filter AST format.
 	"""
 	soup(input: SoupInput!): SoupPage!
-	"""
-	Fetch one canonical expanded entity independently of a Soup view.
-	"""
-	entity(entityType: GraphqlSoupEntityType!, id: ID!): GraphqlSoupEntity
 }
 
 """
