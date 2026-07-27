@@ -410,7 +410,7 @@ let googleOauth2Scope = GOOGLE_GMAIL_OAUTH_SCOPES.join(' ');
 if (enableGoogleCalendarIntegration) {
   console.log('Google calendar integration enabled, adjusting oauth2Scope');
 
-  googleOauth2Scope += GOOGLE_CALENDAR_SCOPES.join(' ');
+  googleOauth2Scope = `${googleOauth2Scope} ${GOOGLE_CALENDAR_SCOPES.join(' ')}`;
 }
 
 // The google gmail identity provider
