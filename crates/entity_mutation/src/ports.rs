@@ -1,11 +1,14 @@
 use std::future::Future;
 
 use model_entity::Entity;
+use rootcause::report;
 
 use crate::{
-    DuplicateEntityRequest, EntityMutationActor, EntityMutationOutcome, MoveEntityRequest,
-    RenameEntityRequest, UpdateEntitySharePolicyRequest,
+    DuplicateEntityRequest, EntityMutationActor, EntityMutationErrorCode, MoveEntityRequest,
+    RenameEntityRequest, UpdateEntitySharePolicyRequest, models::EntityMutationSuccess,
 };
+
+pub type MutateEntitiesResult = Result<EntityMutationSuccess, EntityMutationErrorCode>;
 
 /// Domain port used by API adapters to mutate heterogeneous entities.
 ///
@@ -18,49 +21,49 @@ pub trait EntityMutationService: Send + Sync + 'static {
         &self,
         actor: EntityMutationActor,
         requests: Vec<RenameEntityRequest>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Move entities into a project, or to the root when `project_id` is absent.
     fn move_entities(
         &self,
         actor: EntityMutationActor,
         requests: Vec<MoveEntityRequest>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Update public and channel share policies.
     fn update_share_policies(
         &self,
         actor: EntityMutationActor,
         requests: Vec<UpdateEntitySharePolicyRequest>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Soft-delete entities that support a reversible trash lifecycle.
     fn trash_entities(
         &self,
         actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Restore reversibly deleted entities.
     fn restore_entities(
         &self,
         actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Irreversibly delete entities.
     fn delete_entities_permanently(
         &self,
         actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Duplicate entities that support copy semantics.
     fn duplicate_entities(
         &self,
         actor: EntityMutationActor,
         requests: Vec<DuplicateEntityRequest>,
-    ) -> impl Future<Output = Vec<EntityMutationOutcome>> + Send;
+    ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
 
     /// Add or remove an entity from the actor's favorites.
     fn set_favorite(
@@ -68,7 +71,7 @@ pub trait EntityMutationService: Send + Sync + 'static {
         actor: EntityMutationActor,
         entity: Entity<'static>,
         favorite: bool,
-    ) -> impl Future<Output = EntityMutationOutcome> + Send;
+    ) -> impl Future<Output = MutateEntitiesResult> + Send;
 }
 
 /// Schema-only implementation used when no mutation services are wired.
@@ -77,12 +80,13 @@ pub struct UnavailableEntityMutationService;
 
 /// Build unsupported outcomes for a batch handled by the schema-only service.
 fn unsupported_many(
-    operation: &str,
+    operation: &'static str,
     entities: impl IntoIterator<Item = Entity<'static>>,
-) -> Vec<EntityMutationOutcome> {
+) -> Vec<MutateEntitiesResult> {
     entities
         .into_iter()
-        .map(|entity| EntityMutationOutcome::unsupported(entity, operation))
+        .map(|entity| EntityMutationErrorCode::unsupported(report!(entity).attach(operation)))
+        .map(Result::Err)
         .collect()
 }
 
@@ -91,7 +95,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         requests: Vec<RenameEntityRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many("rename", requests.into_iter().map(|request| request.entity))
     }
 
@@ -99,7 +103,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         requests: Vec<MoveEntityRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many("move", requests.into_iter().map(|request| request.entity))
     }
 
@@ -107,7 +111,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         requests: Vec<UpdateEntitySharePolicyRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many(
             "share policy updates",
             requests.into_iter().map(|request| request.entity),
@@ -118,7 +122,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many("trash", entities)
     }
 
@@ -126,7 +130,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many("restore", entities)
     }
 
@@ -134,7 +138,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many("permanent deletion", entities)
     }
 
@@ -142,7 +146,7 @@ impl EntityMutationService for UnavailableEntityMutationService {
         &self,
         _actor: EntityMutationActor,
         requests: Vec<DuplicateEntityRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<MutateEntitiesResult> {
         unsupported_many(
             "duplication",
             requests.into_iter().map(|request| request.entity),
@@ -154,7 +158,9 @@ impl EntityMutationService for UnavailableEntityMutationService {
         _actor: EntityMutationActor,
         entity: Entity<'static>,
         _favorite: bool,
-    ) -> EntityMutationOutcome {
-        EntityMutationOutcome::unsupported(entity, "favorites")
+    ) -> MutateEntitiesResult {
+        Err(EntityMutationErrorCode::unsupported(
+            report!(entity).attach("favorites"),
+        ))
     }
 }
