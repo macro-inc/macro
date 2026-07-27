@@ -2,8 +2,8 @@
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::model::{
-    EditReceipt, EntityPropertyMutationSnapshot, PropertyAccessReceiptExt, ViewReceipt,
-    canonical_entity_type,
+    EditReceipt, EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult,
+    PropertyAccessReceiptExt, TagScope, ViewReceipt, canonical_entity_type,
 };
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
@@ -15,15 +15,18 @@ use entity_access::domain::models::{
     AccessLevel, BotId, BotReceiptScope, Entity, EntityAccessAuth, EntityAccessReceipt,
     EntityPermission, EntityType as AccessEntityType, ViewAccessLevel,
 };
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{
-    EntityType,
+    DataType, EntityType, PropertyOwner,
+    api::{CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType},
     service::{
         entity_property::EntityProperty, property_definition::PropertyDefinition,
         property_value::PropertyValue,
     },
 };
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -56,6 +59,364 @@ fn entity_property_mutation(
 
 fn caller_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct PublishedPropertyEvent {
+    topic: &'static str,
+    key: String,
+    envelope: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct RecordingEventBroker {
+    events: Arc<Mutex<Vec<PublishedPropertyEvent>>>,
+    fail_scheduling: bool,
+}
+
+impl RecordingEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail_scheduling: true,
+            ..Self::default()
+        }
+    }
+
+    fn events(&self) -> Vec<PublishedPropertyEvent> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+impl MacroEventBroker for RecordingEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail_scheduling {
+            return Err(EventBrokerError::Publish(
+                "intentional scheduling failure".to_string(),
+            ));
+        }
+
+        self.events.lock().unwrap().push(PublishedPropertyEvent {
+            topic: event.topic(),
+            key: event.key().to_string(),
+            envelope: serde_json::to_value(event.event())?,
+        });
+
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+fn service_with_event_broker<B: MacroEventBroker>(
+    repo: MockPropertiesRepo,
+    event_broker: B,
+) -> PropertiesServiceImpl<MockPropertiesRepo, MockPermissionService, MockNotificationService, B> {
+    PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    )
+    .with_event_broker(event_broker)
+}
+
+fn property_definition_for_event(
+    id: Uuid,
+    display_name: &str,
+    data_type: DataType,
+    is_multi_select: bool,
+) -> PropertyDefinition {
+    let created_at = chrono::DateTime::parse_from_rfc3339("2026-07-27T12:34:56Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+
+    PropertyDefinition {
+        id,
+        owner: PropertyOwner::User {
+            user_id: caller_user_id().to_string(),
+        },
+        display_name: display_name.to_string(),
+        data_type,
+        is_multi_select,
+        specific_entity_type: None,
+        created_at,
+        updated_at: created_at,
+        is_system: false,
+        is_metadata: false,
+    }
+}
+
+fn create_property_definition_request() -> CreatePropertyDefinitionRequest {
+    CreatePropertyDefinitionRequest {
+        scope: CreatePropertyScope::User,
+        display_name: "Priority".to_string(),
+        data_type: PropertyDataType::Entity {
+            specific_type: Some(EntityType::Document),
+            multi: true,
+        },
+    }
+}
+
+fn only_published_property_event(event_broker: &RecordingEventBroker) -> PublishedPropertyEvent {
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    events.into_iter().next().unwrap()
+}
+
+#[tokio::test]
+async fn property_definition_event_create_publishes_authoritative_snapshot() {
+    let property_definition_id = Uuid::from_u128(0xA1);
+    let mut property =
+        property_definition_for_event(property_definition_id, "Priority", DataType::Entity, true);
+    property.specific_entity_type = Some(EntityType::Document);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_create_property_definition()
+        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .create_property_definition(
+            &caller_user_id(),
+            None,
+            &create_property_definition_request(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.id, property_definition_id);
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.topic, "macro.properties");
+    assert_eq!(published.key, property_definition_id.to_string());
+    assert_eq!(published.envelope["schema_version"], 1);
+    assert_eq!(published.envelope["event_type"], "property.created");
+    assert_eq!(
+        published.envelope["metadata"]["property_definition_id"],
+        property_definition_id.to_string()
+    );
+    assert_eq!(
+        published.envelope["metadata"]["actor_user_id"],
+        caller_user_id().to_string()
+    );
+    assert_eq!(
+        published.envelope["metadata"]["owner"],
+        serde_json::json!({
+            "scope": "user",
+            "user_id": caller_user_id().to_string(),
+        })
+    );
+    assert_eq!(published.envelope["metadata"]["display_name"], "Priority");
+    assert_eq!(published.envelope["metadata"]["data_type"], "ENTITY");
+    assert_eq!(published.envelope["metadata"]["is_multi_select"], true);
+    assert_eq!(
+        published.envelope["metadata"]["specific_entity_type"],
+        "DOCUMENT"
+    );
+    assert_eq!(
+        published.envelope["metadata"]["created_at"],
+        "2026-07-27T12:34:56Z"
+    );
+}
+
+#[tokio::test]
+async fn property_definition_event_ensure_tag_set_publishes_only_when_created() {
+    let property_definition_id = Uuid::from_u128(0xA2);
+    let property =
+        property_definition_for_event(property_definition_id, "Tags", DataType::Tag, true);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_or_create_tag_definition()
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(GetOrCreateTagDefinitionResult {
+                    definition: property,
+                    created: true,
+                })
+            })
+        });
+    repo.expect_get_property_options()
+        .return_once(|_| Box::pin(async { Ok(Vec::new()) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let tag_set = service
+        .ensure_tag_set(&caller_user_id(), None, TagScope::User)
+        .await
+        .unwrap();
+
+    assert_eq!(tag_set.definition.unwrap().id, property_definition_id);
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.topic, "macro.properties");
+    assert_eq!(published.key, property_definition_id.to_string());
+    assert_eq!(published.envelope["event_type"], "property.created");
+    assert_eq!(published.envelope["metadata"]["data_type"], "TAG");
+    assert_eq!(
+        published.envelope["metadata"]["actor_user_id"],
+        caller_user_id().to_string()
+    );
+}
+
+#[tokio::test]
+async fn property_definition_event_existing_tag_set_publishes_nothing() {
+    let property =
+        property_definition_for_event(Uuid::from_u128(0xA3), "Tags", DataType::Tag, true);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_or_create_tag_definition()
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(GetOrCreateTagDefinitionResult {
+                    definition: property,
+                    created: false,
+                })
+            })
+        });
+    repo.expect_get_property_options()
+        .return_once(|_| Box::pin(async { Ok(Vec::new()) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .ensure_tag_set(&caller_user_id(), None, TagScope::User)
+        .await
+        .unwrap();
+
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn property_definition_event_delete_publishes_pre_delete_snapshot() {
+    let property_definition_id = Uuid::from_u128(0xA4);
+    let property = property_definition_for_event(
+        property_definition_id,
+        "Archived priority",
+        DataType::SelectString,
+        false,
+    );
+    let authorized_property = property.clone();
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition()
+        .return_once(move |_| Box::pin(async move { Ok(Some(property)) }));
+    repo.expect_get_property_definition_with_owner()
+        .return_once(move |_, _, _| Box::pin(async move { Ok(Some(authorized_property)) }));
+    repo.expect_delete_property_definition()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .delete_property_definition(property_definition_id, &caller_user_id(), None)
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.topic, "macro.properties");
+    assert_eq!(published.key, property_definition_id.to_string());
+    assert_eq!(published.envelope["event_type"], "property.deleted");
+    assert_eq!(
+        published.envelope["metadata"]["actor_user_id"],
+        caller_user_id().to_string()
+    );
+    assert_eq!(
+        published.envelope["metadata"]["owner"],
+        serde_json::json!({
+            "scope": "user",
+            "user_id": caller_user_id().to_string(),
+        })
+    );
+    assert_eq!(
+        published.envelope["metadata"]["display_name"],
+        "Archived priority"
+    );
+    assert_eq!(published.envelope["metadata"]["data_type"], "SELECT_STRING");
+}
+
+#[tokio::test]
+async fn property_definition_event_create_repository_failure_publishes_nothing() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_create_property_definition()
+        .return_once(|_, _, _, _, _, _| {
+            Box::pin(async { Err(anyhow!("property definition create failed")) })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .create_property_definition(
+            &caller_user_id(),
+            None,
+            &create_property_definition_request(),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn property_definition_event_ensure_tag_set_repository_failure_publishes_nothing() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_or_create_tag_definition()
+        .return_once(|_| Box::pin(async { Err(anyhow!("tag set create failed")) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .ensure_tag_set(&caller_user_id(), None, TagScope::User)
+        .await;
+
+    assert!(result.is_err());
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn property_definition_event_delete_repository_failure_publishes_nothing() {
+    let property_definition_id = Uuid::from_u128(0xA5);
+    let property =
+        property_definition_for_event(property_definition_id, "Priority", DataType::String, false);
+    let authorized_property = property.clone();
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition()
+        .return_once(move |_| Box::pin(async move { Ok(Some(property)) }));
+    repo.expect_get_property_definition_with_owner()
+        .return_once(move |_, _, _| Box::pin(async move { Ok(Some(authorized_property)) }));
+    repo.expect_delete_property_definition()
+        .return_once(|_| Box::pin(async { Err(anyhow!("property definition delete failed")) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .delete_property_definition(property_definition_id, &caller_user_id(), None)
+        .await;
+
+    assert!(result.is_err());
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn property_definition_event_broker_scheduling_failure_is_non_fatal() {
+    let property_definition_id = Uuid::from_u128(0xA6);
+    let property =
+        property_definition_for_event(property_definition_id, "Priority", DataType::Entity, true);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_create_property_definition()
+        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+    let service = service_with_event_broker(repo, RecordingEventBroker::failing());
+
+    let result = service
+        .create_property_definition(
+            &caller_user_id(),
+            None,
+            &create_property_definition_request(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.id, property_definition_id);
 }
 
 /// An edit receipt for the test caller, minted without an access check.

@@ -9,6 +9,8 @@ use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType as AccessEntityType, RequiredPermission,
 };
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::DataType;
 use models_properties::api::requests::SetPropertyValue;
@@ -29,6 +31,7 @@ use uuid::Uuid;
 use std::sync::Arc;
 
 use super::error::PropertiesErr;
+use super::events::{PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent};
 use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
@@ -57,18 +60,21 @@ fn is_search_indexed(entity_type: EntityType) -> bool {
     )
 }
 
-/// Implementation of PropertiesService using a repository and optional permission service.
+/// Implementation of [`PropertiesService`] using repository, permission,
+/// notification, search-indexing, and event-publishing ports.
 #[derive(Debug)]
-pub struct PropertiesServiceImpl<R, P, N>
+pub struct PropertiesServiceImpl<R, P, N, B = NoopMacroEventBroker>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
+    B: MacroEventBroker,
 {
     repository: R,
     permission_service: Option<P>,
     notification_service: Option<N>,
     search_indexer: Option<Arc<dyn PropertySearchIndexer>>,
+    event_broker: B,
 }
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -88,6 +94,29 @@ where
             permission_service,
             notification_service,
             search_indexer: None,
+            event_broker: NoopMacroEventBroker,
+        }
+    }
+}
+
+impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
+where
+    R: PropertiesRepo,
+    P: PermissionService,
+    N: NotificationService,
+    B: MacroEventBroker,
+{
+    /// Replace the event broker while preserving every other service dependency.
+    pub fn with_event_broker<B2: MacroEventBroker>(
+        self,
+        event_broker: B2,
+    ) -> PropertiesServiceImpl<R, P, N, B2> {
+        PropertiesServiceImpl {
+            repository: self.repository,
+            permission_service: self.permission_service,
+            notification_service: self.notification_service,
+            search_indexer: self.search_indexer,
+            event_broker,
         }
     }
 
@@ -96,6 +125,31 @@ where
     pub fn with_search_indexer(mut self, search_indexer: Arc<dyn PropertySearchIndexer>) -> Self {
         self.search_indexer = Some(search_indexer);
         self
+    }
+
+    /// Publish a property lifecycle event without coupling broker availability
+    /// to a completed mutation.
+    fn publish_property_event(&self, event: PropertyMacroEvent) {
+        drop(self.event_broker.send_event(&event).inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to schedule property event");
+        }));
+    }
+
+    /// Build a creation event from the authoritative persisted definition.
+    fn property_created_event(
+        property: &PropertyDefinition,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::created(PropertyCreatedMetadata {
+            property_definition_id: property.id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            owner: property.owner.clone(),
+            display_name: property.display_name.clone(),
+            data_type: property.data_type,
+            is_multi_select: property.is_multi_select,
+            specific_entity_type: property.specific_entity_type,
+            created_at: property.created_at,
+        })
     }
 
     /// The permission service, or the error every receipt-minting path maps a
@@ -297,11 +351,12 @@ where
     }
 }
 
-impl<R, P, N> PropertiesService for PropertiesServiceImpl<R, P, N>
+impl<R, P, N, B> PropertiesService for PropertiesServiceImpl<R, P, N, B>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
+    B: MacroEventBroker,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
@@ -875,6 +930,8 @@ where
             "successfully created property definition"
         );
 
+        self.publish_property_event(Self::property_created_event(&property, user_id));
+
         Ok(property)
     }
 
@@ -914,6 +971,14 @@ where
             .map_err(anyhow::Error::from)?;
 
         tracing::info!("successfully deleted property definition");
+
+        self.publish_property_event(PropertyMacroEvent::deleted(PropertyDeletedMetadata {
+            property_definition_id: property.id,
+            actor_user_id: Some(user_id.clone().into_owned()),
+            owner: property.owner,
+            display_name: property.display_name,
+            data_type: property.data_type,
+        }));
 
         Ok(())
     }
@@ -1158,6 +1223,10 @@ where
             .get_or_create_tag_definition(owner)
             .await
             .map_err(anyhow::Error::from)?;
+
+        if result.created {
+            self.publish_property_event(Self::property_created_event(&result.definition, user_id));
+        }
 
         self.build_tag_set(scope, Some(result.definition)).await
     }
