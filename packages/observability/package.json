@@ -5,6 +5,8 @@
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
+		"./core": "./src/core.ts",
+		"./web": "./src/web.ts",
 		"./zone": "./src/zone.ts"
 	},
 	"scripts": {

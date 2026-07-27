@@ -3,6 +3,7 @@ import './index.css';
 // the zone.js Promise patch (via the library's zone entry) before app code
 // captures unpatched Promise references.
 import { Telemetry } from '@macro-inc/observability';
+import { createWebTracingProvider } from '@macro-inc/observability/web';
 import { ZoneContextManager } from '@macro-inc/observability/zone';
 
 import '@fontsource-variable/inter';
@@ -133,7 +134,7 @@ async function main() {
   const tracesUrl =
     import.meta.env.VITE_OTEL_EXPORTER_URL ??
     (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
-  await Telemetry.init({
+  const telemetryConfig = {
     serviceName: 'web-app',
     environment:
       import.meta.env.VITE_OTEL_ENV ??
@@ -142,6 +143,11 @@ async function main() {
     logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
     contextManager: new ZoneContextManager(),
     enabled: () => browserTelemetryEnabled(Boolean(tracesUrl)),
+  };
+  await Telemetry.init({
+    ...telemetryConfig,
+    tracingProvider: (resource, getUserId) =>
+      createWebTracingProvider(telemetryConfig, resource, getUserId),
   });
   window.addEventListener('pagehide', () => void Telemetry.flush());
   window.addEventListener('error', (event) => {

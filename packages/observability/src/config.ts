@@ -2,6 +2,7 @@ import type {
 	ContextManager,
 	AttributeValue as OtelAttributeValue,
 } from "@opentelemetry/api";
+import type { TelemetryTracingProviderFactory } from "./provider";
 
 export type Attribute = OtelAttributeValue;
 export type Attributes = Record<string, Attribute | undefined>;
@@ -13,6 +14,7 @@ export interface TelemetryInitConfig {
 	tracesUrl?: string;
 	logsUrl?: string;
 	contextManager?: ContextManager;
+	tracingProvider?: TelemetryTracingProviderFactory;
 	enabled: () => Promise<boolean>;
 }
 
