@@ -309,10 +309,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   ): Promise<'applied' | 'pending' | 'reset'> {
     return this.syncLock.runExclusive(() =>
       telemetrySpan(this.syncs.live.documentId, 'edit.apply', async (span) => {
-        // The receive side of the Teo→Hutch chain: did the op apply, and did it
-        // actually change the doc (didChange=false ⇒ converged but nothing new)?
         span.setAttr('update.bytes', update.length);
-        this.log('debug', 'engine: handling remote update');
         const importResult = this.loroManager.importUpdate(update);
         await Promise.resolve();
         if (importResult.isErr()) {
@@ -342,7 +339,6 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         }
         span.setAttr('outcome', 'applied');
         span.setAttr('did_change', importResult.value);
-        this.log('debug', 'engine: remote update imported ok');
         return 'applied';
       })
     );
@@ -351,7 +347,6 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private handleSourceEvent(event: SyncSourceEvent) {
     switch (event.type) {
       case 'update':
-        this.log('debug', 'engine: source event: update');
         this.handleRemoteUpdate(event.update);
         break;
       case 'awareness':

@@ -175,4 +175,5 @@ async function main() {
   renderApp();
 }
 
-void main();
+// unawaited
+main();
