@@ -68,10 +68,6 @@ use channels::inbound::axum_router::{
     DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
     PostActivityRequest,
 };
-use channels::inbound::list_router::{
-    ApiChannelListMessage, ApiChannelListParticipant, ApiChannelListType, ApiChannelWithLatest,
-    ApiParticipantListRole,
-};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -455,6 +451,7 @@ use utoipa::OpenApi;
             GroupedSoupPage,
 
             // Channel list (comms hex)
+            channels::inbound::list_router::ApiChannelListPage,
             channels::inbound::list_router::ApiChannelWithLatest,
             channels::inbound::list_router::ApiChannelListMessage,
             channels::inbound::list_router::ApiChannelListParticipant,
