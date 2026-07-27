@@ -557,24 +557,6 @@ impl notification::domain::ports::NotificationQueue for ToolNotificationQueue {
             ToolNotificationQueue::NoOp => Ok(()),
         }
     }
-
-    async fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
-    ) -> Result<(), rootcause::Report> {
-        match self {
-            ToolNotificationQueue::Sqs(queue) => {
-                notification::domain::ports::NotificationQueue::delay_message(
-                    queue,
-                    receipt_handle,
-                    delay,
-                )
-                .await
-            }
-            ToolNotificationQueue::NoOp => Ok(()),
-        }
-    }
 }
 
 /// Type alias for the entity access management service implementation used by AI tools
