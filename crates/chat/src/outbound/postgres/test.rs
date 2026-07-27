@@ -1,6 +1,11 @@
+use std::time::Duration;
+
+use agent::types::{ChatMessageContent, Role};
+use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model::chat::NewChatMessage;
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
@@ -39,6 +44,60 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
 
     assert_eq!(row.get::<String, _>("name"), "Test Chat");
     assert_eq!(row.get::<String, _>("userId"), "macro|test@example.com");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+
+    let chat_id = repo
+        .create(
+            user_id,
+            CreateChatArgs {
+                name: "Active Chat".to_string(),
+                project_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    let original_updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    let now = Utc::now();
+    crate::domain::ports::MessageRepo::create(
+        &repo,
+        &chat_id,
+        NewChatMessage {
+            id: None,
+            content: ChatMessageContent::Text("hello".to_string()),
+            role: Role::User,
+            attachments: None,
+            model: "test-model".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+    )
+    .await
+    .unwrap();
+
+    let updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert!(updated_at > original_updated_at);
 }
 
 #[sqlx::test(
