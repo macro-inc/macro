@@ -2409,6 +2409,8 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",
