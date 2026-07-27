@@ -7,7 +7,9 @@
  *
  * Set MACRO_ACT_AS to a user id (the bot's owner, or a member of its owning
  * team) to act on behalf of that user instead of team scope.
+ * Set MACRO_ENV to 'dev' (default), 'prod', or 'local' to pick the backend.
  */
+import type { Env } from '../src/config';
 import { Macro } from '../src/macro';
 
 const recipientId = process.argv[2];
@@ -16,7 +18,8 @@ if (!recipientId) {
   process.exit(1);
 }
 
-let macro = new Macro({ env: 'dev' }); // auth from MACRO_BOT_TOKEN / MACRO_API_KEY
+const env = (process.env.MACRO_ENV ?? 'dev') as Env;
+let macro = new Macro({ env }); // auth from MACRO_BOT_TOKEN / MACRO_API_KEY
 const actAs = process.env.MACRO_ACT_AS;
 if (actAs) macro = macro.requestedAs(actAs);
 
