@@ -1,9 +1,11 @@
 mod aes_key;
+mod call_tool_result;
 mod consts;
 mod result;
 mod server;
 
 pub use aes_key::{AesKey, AesKeyError};
+pub use call_tool_result::CallToolResultExt;
 pub use consts::*;
 pub use macro_user_id::user_id::MacroUserIdStr;
 pub use result::{Error, Result};

@@ -155,6 +155,7 @@ export * from './notionDocMetaUrl';
 export * from './onboardingRow';
 export * from './onboardingRowCompletedAt';
 export * from './onboardingState';
+export * from './onboardingStateSuggestedTeamDomain';
 export * from './onboardingStatus';
 export * from './patchChatRequest';
 export * from './patchChatRequestName';

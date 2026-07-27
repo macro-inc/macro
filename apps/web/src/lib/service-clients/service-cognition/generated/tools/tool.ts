@@ -49,6 +49,10 @@ type ToolParserMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ImportNotionPage: {
+    call: types.ImportNotionPage;
+    response: types.ImportNotionPageResponse;
+  };
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
@@ -181,6 +185,10 @@ const toolParserMap = {
     response: schemas.GetEntityPropertiesResponse,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
+  ImportNotionPage: {
+    call: schemas.ImportNotionPage,
+    response: schemas.ImportNotionPageResponse,
+  },
   ListCompanies: {
     call: schemas.ListCompanies,
     response: schemas.ListCompaniesResponse,
@@ -333,6 +341,10 @@ type ToolDataMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ImportNotionPage: {
+    call: types.ImportNotionPage;
+    response: types.ImportNotionPageResponse;
+  };
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;

@@ -23,11 +23,13 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::task::TaskTracker;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =
     EntityAccessManagementServiceImpl<entity_access_management::outbound::PgRepository>;
+pub(crate) type EmailEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 pub(crate) type EmailSvc = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
@@ -37,7 +39,7 @@ pub(crate) type EmailSvc = EmailServiceImpl<
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     >,
     EmailEntityAccessManagementService,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    EmailEventBroker,
 >;
 
 #[derive(Clone, FromRef)]
@@ -60,5 +62,5 @@ pub(crate) struct ApiContext {
     pub email_thread_state:
         EmailThreadRouterState<EmailSvc, EmailEntityAccessService, AuthorizationService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
-    pub macro_event_broker: Arc<MacroEventBrokerService<KafkaEventPublisher>>,
+    pub macro_event_broker: Arc<EmailEventBroker>,
 }

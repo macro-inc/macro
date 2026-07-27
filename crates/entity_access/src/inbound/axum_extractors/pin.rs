@@ -12,11 +12,11 @@ use axum::{
     extract::{FromRef, FromRequest, Path, Request},
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
@@ -68,18 +68,20 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization = req
-            .extract_parts_with_state::<
-                OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
-                _,
-            >(state)
+            .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>, _>(
+                state,
+            )
             .await
-            .map_err(ExtractorError::from)?;
-        let macro_user_id = authorization
+            .map_err(ExtractorError::from)?
             .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone())
             .ok_or(ExtractorError::Unauthorized)?;
+        let macro_user_id = match &authorization {
+            MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
+                Some(user.macro_user_id.clone())
+            }
+            MacroAuthorization::Bot(_) => None,
+            MacroAuthorization::Internal(None) => return Err(ExtractorError::Unauthorized),
+        };
 
         let Path(PinParams { pinned_item_id }) = req
             .extract_parts_with_state(state)
@@ -101,30 +103,43 @@ where
             .parse()
             .map_err(|_| ExtractorError::BadRequest("Invalid pin_type"))?;
 
-        let access_level = match service
-            .get_access_level(Some(&macro_user_id), &pinned_item_id, entity_type)
-            .await
-            .map_err(ExtractorError::from)?
-        {
-            Some(access_level) => access_level,
-            None => return Err(ExtractorError::Unauthorized),
-        };
+        let entity_access_receipt = match authorization {
+            MacroAuthorization::Bot(authentication) => {
+                generate_bot_entity_access_receipt::<T>(
+                    service.as_ref(),
+                    &authentication,
+                    &pinned_item_id,
+                    entity_type,
+                )
+                .await?
+            }
+            MacroAuthorization::User(_) | MacroAuthorization::Internal(Some(_)) => {
+                let macro_user_id = macro_user_id.ok_or(ExtractorError::Unauthorized)?;
+                let access_level = service
+                    .get_access_level(Some(&macro_user_id), &pinned_item_id, entity_type)
+                    .await
+                    .map_err(ExtractorError::from)?
+                    .ok_or(ExtractorError::Unauthorized)?;
+                let permission = EntityPermission::AccessLevel { access_level };
+                if !permission.satisfies::<T>() {
+                    return Err(ExtractorError::Unauthorized);
+                }
 
-        let permission = EntityPermission::AccessLevel { access_level };
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
+                EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: pinned_item_id,
+                        entity_type,
+                    },
+                    auth: EntityAccessAuth::Authenticated(macro_user_id),
+                    entity_permission: permission,
+                    _marker: PhantomData,
+                }
+            }
+            MacroAuthorization::Internal(None) => return Err(ExtractorError::Unauthorized),
         };
 
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
-                    entity_id: pinned_item_id,
-                    entity_type,
-                },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+            entity_access_receipt,
             inner: serde_json::from_value(json_clone)
                 .map_err(|_| ExtractorError::BadRequest("Invalid request body"))?,
             pin_type: JsonBodyWithPinType { pin_type },

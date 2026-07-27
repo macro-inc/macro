@@ -250,6 +250,72 @@ pub struct ImportedTaskProperties {
     pub assignee_email: Option<String>,
 }
 
+/// Properties recovered from a Notion page and attached to the imported
+/// Macro document. The creator applies these best-effort after the document
+/// exists, so unsupported or invalid values never prevent the body import.
+#[derive(
+    Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedDocumentProperties {
+    /// Ordinary Notion database properties.
+    #[serde(default)]
+    pub values: Vec<ImportedDocumentProperty>,
+    /// Notion tag/label values, mapped onto Macro's personal tag set.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// One named property recovered from a Notion database page.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedDocumentProperty {
+    /// Property display name.
+    pub name: String,
+    /// Typed property value.
+    pub value: ImportedDocumentPropertyValue,
+}
+
+/// Portable property values that have direct Macro property equivalents.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum ImportedDocumentPropertyValue {
+    /// Boolean value.
+    Boolean {
+        /// Imported value.
+        value: bool,
+    },
+    /// Date or date-time value, encoded as ISO-8601.
+    Date {
+        /// Imported value.
+        value: String,
+    },
+    /// Numeric value.
+    Number {
+        /// Imported value.
+        value: f64,
+    },
+    /// Plain text value.
+    String {
+        /// Imported value.
+        value: String,
+    },
+    /// One or more select labels.
+    Select {
+        /// Imported option labels.
+        values: Vec<String>,
+        /// Whether the source property accepts multiple options.
+        multi: bool,
+    },
+    /// One or more URLs.
+    Link {
+        /// Imported URLs.
+        urls: Vec<String>,
+        /// Whether the source property accepts multiple links.
+        multi: bool,
+    },
+}
+
 /// Creates the Macro entities imports become. Implemented by the host
 /// service against its real document/channel services; the fixed
 /// source → entity-type mapping is enforced by the import service, which
@@ -271,6 +337,7 @@ pub trait EntityCreator: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
+        properties: &ImportedDocumentProperties,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create a channel, shared with `team_id` when given (public

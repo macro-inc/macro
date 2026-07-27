@@ -7,6 +7,7 @@ import { autoRegister } from '@core/component/LexicalMarkdown/plugins';
 import {
   commentPlugin,
   MARK_SELECTED_COMMENT_COMMAND,
+  REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
@@ -140,7 +141,6 @@ export const CommentsProvider: VoidComponent<{
         setMarks(markId, undefined);
         const rootId = existing.thread?.rootId;
         if (!rootId) {
-          console.error('Unable to delete comment: no root id');
           return;
         }
         deleteComment({ commentId: rootId });
@@ -259,8 +259,10 @@ export const CommentsProvider: VoidComponent<{
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
     if (!commentMarksInitializedSignal()) return;
+    if (commentThreadsData.loading || commentThreadsData.error) return;
 
     const commentThreads = commentThreadsData() ?? [];
+    const validAnchorIds = new Set<string>();
 
     const mappedAnchors = commentThreads.map((commentThread) => {
       const threadMetadata = commentThread.thread.metadata as ThreadMetadata;
@@ -273,6 +275,7 @@ export const CommentsProvider: VoidComponent<{
         console.error('Unable to find anchor id');
         return undefined;
       }
+      validAnchorIds.add(anchorId);
 
       const sortedComments = commentThread.comments.sort(sortComments);
       const rootComment = sortedComments[0];
@@ -301,6 +304,11 @@ export const CommentsProvider: VoidComponent<{
       if (!anchor) continue;
       setMarks(anchor.id, anchor);
     }
+
+    editor.dispatchCommand(
+      REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
+      validAnchorIds
+    );
   });
 
   // Navigate to comment from URL param once comments are loaded

@@ -29,8 +29,8 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -44,6 +44,7 @@ use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use sync_service_client::SyncServiceClient;
+use tokio_util::task::TaskTracker;
 
 use crate::config::Config;
 
@@ -55,7 +56,21 @@ pub struct McpContext {
     pub mcp_public_host: String,
 }
 
-pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
+struct ToolContextBuildArgs<'a> {
+    config: &'a Config,
+    db: &'a PgPool,
+    secretsmanager_client: &'a secretsmanager_client::SecretsManager,
+    sqs_client: sqs_client::SQS,
+    queue_aws_client: aws_sdk_sqs::Client,
+    document_storage_service_auth_key: String,
+    sync_service_auth_key: String,
+    event_task_tracker: TaskTracker,
+}
+
+pub async fn build_context(
+    config: &Config,
+    event_task_tracker: TaskTracker,
+) -> anyhow::Result<McpContext> {
     let db = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(10)
@@ -70,7 +85,7 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
-    let sqs_client = sqs_client::SQS::new(queue_aws_client)
+    let sqs_client = sqs_client::SQS::new(queue_aws_client.clone())
         .email_scheduled_queue(email_scheduled_queue.as_ref())
         .gmail_ops_queue(gmail_ops_queue.as_ref());
 
@@ -89,14 +104,19 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
     .await
     .context("failed to load sync service auth key")?;
 
-    let tool_context = build_tool_context(
+    let tool_context = build_tool_context(ToolContextBuildArgs {
         config,
-        &db,
-        &secretsmanager_client,
+        db: &db,
+        secretsmanager_client: &secretsmanager_client,
         sqs_client,
-        config.document_storage_service_auth_key.as_ref().to_owned(),
-        sync_service_auth_key.as_ref().to_owned(),
-    )
+        queue_aws_client,
+        document_storage_service_auth_key: config
+            .document_storage_service_auth_key
+            .as_ref()
+            .to_owned(),
+        sync_service_auth_key: sync_service_auth_key.as_ref().to_owned(),
+        event_task_tracker,
+    })
     .await?;
 
     let auth_proxy = build_auth_proxy(config, &secretsmanager_client).await?;
@@ -115,14 +135,18 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
     })
 }
 
-async fn build_tool_context(
-    config: &Config,
-    db: &PgPool,
-    secretsmanager_client: &secretsmanager_client::SecretsManager,
-    sqs_client: sqs_client::SQS,
-    document_storage_service_auth_key: String,
-    sync_service_auth_key: String,
-) -> anyhow::Result<ToolServiceContext> {
+async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<ToolServiceContext> {
+    let ToolContextBuildArgs {
+        config,
+        db,
+        secretsmanager_client,
+        sqs_client,
+        queue_aws_client,
+        document_storage_service_auth_key,
+        sync_service_auth_key,
+        event_task_tracker,
+    } = args;
+
     let dss_url = DocumentStorageServiceUrl::new()?.to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
@@ -222,6 +246,7 @@ async fn build_tool_context(
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_task_tracker,
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
@@ -313,6 +338,22 @@ async fn build_tool_context(
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
+    // Channel messages sent through MCP tools dispatch the same side effects
+    // as the document-storage channel API, so mentions and replies notify
+    // recipients and stream to connected clients.
+    let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
+        db.clone(),
+        lexical_client.clone(),
+        ai_tools::ChannelSideEffectClients {
+            connection_gateway: Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+                config.internal_api_key.to_string(),
+                ConnectionGatewayUrl::new()?.to_string(),
+            )),
+            sqs: queue_aws_client,
+            macro_event_broker: macro_event_broker.clone(),
+        },
+    );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -327,10 +368,7 @@ async fn build_tool_context(
         notification_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(
-            db.clone(),
-            lexical_client.clone(),
-        ),
+        channel_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,

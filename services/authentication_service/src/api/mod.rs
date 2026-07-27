@@ -70,6 +70,7 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
     .await
     .context("error starting service")
 }

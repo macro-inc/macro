@@ -42,7 +42,7 @@ type ChatAttachMenuProps = {
   close: () => void;
   anchorRef: HTMLDivElement;
   containerRef: HTMLElement;
-  onAttach: (attachment: Attachment) => void;
+  onAttach: (attachment: Attachment, item: HistoryItem) => void;
 };
 
 function truncate(str: string, maxLength: number = 30) {
@@ -191,11 +191,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     }
 
     const attachment = getDocumentAttachment(item.id, item.fileType);
-
-    if (attachment) {
-      props.onAttach(attachment);
-    }
-
+    if (attachment) props.onAttach(attachment, item);
     props.close();
   };
 

@@ -9,14 +9,25 @@
 
 use super::models::{ConnectedServer, OnboardingRow, OnboardingState, OnboardingStatus};
 use super::ports::{OnboardingError, OnboardingRepo, Result};
+use generic_email_domains::is_generic_email_domain;
 use import::domain::models::{ImportSource, Initiator};
 use import::domain::service::ImportService;
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
 use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
+
+/// The account email's domain when it can back a domain team (not a
+/// generic consumer provider), `None` otherwise. The same judgment the
+/// teams service applies to domain auto-join and claiming.
+fn suggested_team_domain(user: &MacroUserIdStr<'_>) -> Option<String> {
+    let email = user.email_part().lowercase();
+    let domain = email.domain_part();
+    (!is_generic_email_domain(domain)).then(|| domain.to_owned())
+}
 
 /// The API the onboarding router (and host-service hooks) talk to.
 pub trait OnboardingService: Send + Sync + 'static {
@@ -124,6 +135,7 @@ where
         Ok(OnboardingState {
             row,
             connected_servers,
+            suggested_team_domain: suggested_team_domain(&user),
         })
     }
 

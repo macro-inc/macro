@@ -39,6 +39,7 @@ vi.mock('@service-storage/client', () => ({
       project: 'project',
       chat: 'chat',
       email: 'email',
+      call: 'call',
     };
     return map[name] ?? 'document';
   },
@@ -312,6 +313,46 @@ describe('mentionsPlugin callbacks', () => {
         fileType: 'email',
       })
     );
+
+    cleanup();
+  });
+
+  test('call mentions keep the same item type when created and removed', () => {
+    const editor = createTestEditor();
+    const created: ItemMention[] = [];
+    const removed: ItemMention[] = [];
+    const cleanup = mentionsPlugin({
+      onCreateMention: (mention) => created.push(mention),
+      onRemoveMention: (mention) => removed.push(mention),
+    })(editor);
+
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: 'call-1',
+      documentName: 'Weekly sync',
+      blockName: 'call',
+    });
+    editor.read(() => {});
+
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'call',
+        itemId: 'call-1',
+        fileType: 'call',
+      })
+    );
+
+    editor.update(
+      () => {
+        $getRoot().clear().append($createParagraphNode());
+      },
+      { discrete: true }
+    );
+    editor.read(() => {});
+
+    expect(removed).toContainEqual({
+      itemType: 'call',
+      itemId: 'call-1',
+    });
 
     cleanup();
   });

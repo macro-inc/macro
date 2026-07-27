@@ -1,6 +1,5 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@icon/macro-apple.svg';
@@ -61,14 +60,6 @@ export function LoginOptions(props: {
         }
         onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
       />
-
-      <Show when={!props.signupMode && !isNativeMobilePlatform()}>
-        <LoginOption
-          icon={<IconApple />}
-          label="Continue with Apple"
-          onClick={() => startSsoLogin('Apple')}
-        />
-      </Show>
 
       <Show when={!props.signupMode}>
         <LoginOption

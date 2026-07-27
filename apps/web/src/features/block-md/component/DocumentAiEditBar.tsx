@@ -120,13 +120,12 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             if (next && event.currentTarget.contains(next)) return;
             setFocused(false);
           }}
-          use:clickOutside={collapse}
           active={focused()}
           class="w-96 max-w-full rounded-xl"
           depth={2}
           solid
         >
-          <div class="flex flex-col gap-2 p-3">
+          <div class="flex flex-col gap-2 p-3" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
               <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center text-accent">
                 <AnimatedStarIcon triggerAnimation={focused()} />

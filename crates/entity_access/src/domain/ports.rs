@@ -4,9 +4,9 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
-    EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole, UserTeamInfo,
-    ViewAccessLevel,
+    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
+    CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole,
+    UserTeamInfo, ViewAccessLevel,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::{collections::HashMap, future::Future};
@@ -59,28 +59,57 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
-    /// Get the highest access level a bot has for an entity resolved through
-    /// `entity_access` source IDs (document, chat, project, email thread, or call).
+    /// Get the highest access level available to a bot in its owning team's
+    /// scope for a document, chat, project, email thread, or call.
     ///
-    /// A bot's sources are the channels it actively participates in (using its
-    /// canonical `bot|<uuid>` principal), its owning team when team-scoped, and
-    /// the bot principal itself.
-    fn get_bot_entity_access(
+    /// Team scope includes the team, its team channels, the bot principal, and
+    /// channels in which the bot is an active participant. Email-thread
+    /// ownership and inbox delegation are intentionally excluded.
+    fn get_team_entity_access(
         &self,
         bot_id: BotId,
+        team_id: Uuid,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
-    /// Get the role a bot explicitly holds in a channel.
+    /// Get a bot's channel permission while operating in its owning team's scope.
     ///
-    /// Public and organization channels do not implicitly admit bots; an active
-    /// participant row for the bot's canonical principal is required.
-    fn get_bot_channel_role(
+    /// Active bot participation grants the stored role in any channel. Without
+    /// participation, only a channel owned by the scoped team grants view-only
+    /// access.
+    fn get_team_channel_role(
         &self,
         channel_id: &Uuid,
+        team_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
+
+    /// Check whether a scoped team or bot-principal source pair grants access
+    /// to a foreign entity.
+    fn has_team_foreign_entity_access(
+        &self,
+        foreign_entity_id: &str,
+        team_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
+    /// Get member-equivalent access to a visible CRM company owned by the
+    /// scoped team.
+    fn get_team_crm_company_access(
+        &self,
+        company_id: &str,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
+
+    /// Get member-equivalent access to a visible CRM contact owned by the
+    /// scoped team. Hidden contacts and contacts of hidden companies are
+    /// excluded.
+    fn get_team_crm_contact_access(
+        &self,
+        contact_id: &str,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
     /// Check whether a user has access to a foreign entity.
     ///
@@ -235,16 +264,17 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
 
     /// Generates an [`EntityAccessReceipt<T>`] for an authenticated bot.
     ///
-    /// Document, chat, project, email-thread, and call permissions are resolved
-    /// from the bot's entity-access sources. Channel permissions require an
-    /// explicit active participant role; public and organization channels do
-    /// not implicitly admit bots. All other entity types are unsupported.
+    /// User scope delegates to the acting user's permission path. Team scope
+    /// resolves item, channel, foreign-entity, CRM, and owning-team permissions
+    /// from the scoped team's shared pool plus explicit bot grants. Unsupported
+    /// entity types return [`AccessError::BadRequest`].
     ///
     /// The type parameter `T` specifies the minimum permission required.
     /// Returns an error if the bot does not satisfy that requirement.
     fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         bot_id: BotId,
+        scope: BotAccessScope,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
@@ -374,6 +404,7 @@ impl EntityAccessService for NoOpEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

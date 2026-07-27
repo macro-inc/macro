@@ -116,9 +116,7 @@ pub enum WebhookTopicEvent {
 impl TopicEvent for WebhookTopicEvent {
     type Topic = MacroWebhooksTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable lifecycle event for [`MacroWebhooksTopic`], keyed by webhook id.

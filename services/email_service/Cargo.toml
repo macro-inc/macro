@@ -166,6 +166,7 @@ strum_macros = { workspace = true }
 system_properties = { path = "../../crates/system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tokio-retry.workspace = true
 tower = { workspace = true }
 tower-http = { workspace = true, features = [

@@ -66,6 +66,7 @@ email_db_client = { path = "../email_db_client", optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
+entity_mutation = { path = "../entity_mutation" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
@@ -74,6 +75,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

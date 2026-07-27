@@ -4,11 +4,16 @@ import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useEmailLinks } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { whenSettled } from '@core/util/whenSettled';
-import { invalidateAllAfterLogin } from '@queries/auth/user-info';
+import {
+  invalidateAllAfterLogin,
+  useUserInfoQuery,
+} from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createSignal, onMount, Show, Suspense } from 'solid-js';
 
@@ -112,9 +117,23 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     navigate(props.successPath, { replace: true });
   };
 
+  const userInfoQuery = useUserInfoQuery();
+
   // The desktop settings split doesn't exist on mobile, so the callback
   // returns mobile users to the list view with the toast as confirmation.
   const navigateToEmailSettings = () => {
+    // A first-run user connected this inbox from the onboarding flow:
+    // return straight to it. Landing in mail settings would mount the app
+    // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
+    if (
+      ENABLE_ONBOARDING_V4 &&
+      !isMobile() &&
+      !isNativeMobilePlatform() &&
+      userInfoQuery.data?.tutorialComplete === false
+    ) {
+      navigate('/onboarding', { replace: true });
+      return;
+    }
     if (isMobile()) {
       navigateToSuccess();
       return;

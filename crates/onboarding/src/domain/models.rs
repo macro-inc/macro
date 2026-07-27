@@ -58,4 +58,10 @@ pub struct OnboardingState {
     pub row: OnboardingRow,
     /// The user's MCP server connections.
     pub connected_servers: Vec<ConnectedServer>,
+    /// The account email's domain when it can back a domain team — i.e. it
+    /// is not a generic consumer provider — `None` otherwise. Judged with
+    /// the same list the teams service uses for domain auto-join and
+    /// claiming, so the client never suggests a domain team the server
+    /// would refuse.
+    pub suggested_team_domain: Option<String>,
 }

@@ -54,12 +54,14 @@ macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
+entity_mutation = { path = "../entity_mutation" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_bulk_upload = { path = "../models_bulk_upload" }
 models_permissions = { path = "../models_permissions" }
+rootcause = { workspace = true }
 s3_key = { path = "../s3_key" }
 
 # Async runtime (for ports)
@@ -98,7 +100,6 @@ macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
 model_user = { path = "../model_user" }
-rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tower = { workspace = true }

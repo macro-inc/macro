@@ -105,6 +105,7 @@ use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
     SystemPropertiesServiceImpl,
 };
+use tokio_util::task::TaskTracker;
 use webhook::{
     domain::service::WebhookServiceImpl,
     inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
@@ -113,6 +114,9 @@ use webhook::{
         pg_repository::PgRepository as PgWebhookRepo,
     },
 };
+
+/// Event broker shared by DSS services.
+pub(crate) type DssEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
@@ -256,7 +260,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    DssEventBroker,
 >;
 
 /// Type alias for the authorization service.
@@ -274,7 +278,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     ShaCountAdapter,
     EntityAccessManagementService,
     SqsProjectSearchIndexer,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    DssEventBroker,
 >;
 
 /// Type alias for the projects router state.
@@ -299,7 +303,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<NotificationIngressType>,
             SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
-            MacroEventBrokerService<KafkaEventPublisher>,
+            DssEventBroker,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
@@ -311,8 +315,7 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
+pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo, DssEventBroker>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -392,11 +395,8 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
 /// Type alias for the product webhook service.
-pub(crate) type DssWebhookService = WebhookServiceImpl<
-    PgWebhookRepo,
-    ReqwestWebhookValidationClient,
-    MacroEventBrokerService<KafkaEventPublisher>,
->;
+pub(crate) type DssWebhookService =
+    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient, DssEventBroker>;
 
 /// Type alias for the product webhook rate limiter.
 pub(crate) type DssWebhookRateLimiter =

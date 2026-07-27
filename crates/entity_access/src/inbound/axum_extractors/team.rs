@@ -1,8 +1,8 @@
 //! Team access extractor.
 //!
 //! Unlike the other access extractors, this one does not take a team id from
-//! the path — it resolves whichever team the authenticated user belongs to
-//! and reports the role they hold.
+//! the path. It resolves the team represented by the authenticated principal
+//! and reports the role granted under that principal's access scope.
 
 #[cfg(test)]
 mod test;
@@ -16,13 +16,17 @@ use axum::{
     http::request::Parts,
 };
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::map_bot_access_scope};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
+    models::{
+        AccessError, BotAccessScope, Entity, EntityAccessAuth, EntityAccessReceipt,
+        EntityPermission, EntityType,
+    },
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AnyPrincipal, BotAuthentication, MacroAuthorization, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -51,7 +55,7 @@ impl<T: RequiredPermission> TeamAccessOutcome<T> {
     }
 }
 
-async fn team_access_outcome<T, Svc>(
+async fn user_team_access_outcome<T, Svc>(
     service: &Svc,
     macro_user_id: MacroUserIdStr<'static>,
 ) -> Result<TeamAccessOutcome<T>, ExtractorError>
@@ -85,7 +89,66 @@ where
     }))
 }
 
-/// Authorizes a user and resolves their optional team membership.
+async fn bot_team_access_outcome<T, Svc>(
+    service: &Svc,
+    authentication: &BotAuthentication,
+) -> Result<TeamAccessOutcome<T>, ExtractorError>
+where
+    T: RequiredPermission,
+    Svc: EntityAccessService,
+{
+    let scope = map_bot_access_scope(authentication)?;
+    let team_id = match &scope {
+        BotAccessScope::User { user_id, .. } => {
+            let Some(team_info) = service
+                .get_user_team(user_id)
+                .await
+                .map_err(ExtractorError::from)?
+            else {
+                return Ok(TeamAccessOutcome::NotInTeam);
+            };
+            team_info.team_id
+        }
+        BotAccessScope::Team { team_id } => *team_id,
+    };
+
+    match service
+        .generate_bot_entity_access_receipt::<T>(
+            authentication.bot_id,
+            scope,
+            &team_id.to_string(),
+            EntityType::Team,
+        )
+        .await
+    {
+        Ok(receipt) => Ok(TeamAccessOutcome::Qualifying(receipt)),
+        Err(AccessError::Unauthorized) => Ok(TeamAccessOutcome::InsufficientRole),
+        Err(error) => Err(ExtractorError::from(error)),
+    }
+}
+
+async fn principal_team_access_outcome<T, Svc>(
+    service: &Svc,
+    authorization: MacroAuthorization,
+) -> Result<TeamAccessOutcome<T>, ExtractorError>
+where
+    T: RequiredPermission,
+    Svc: EntityAccessService,
+{
+    match authorization {
+        MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
+            user_team_access_outcome::<T, Svc>(service, user.macro_user_id).await
+        }
+        MacroAuthorization::Bot(authentication) => {
+            bot_team_access_outcome::<T, Svc>(service, &authentication).await
+        }
+        MacroAuthorization::Internal(None) => {
+            Err(ExtractorError::UnauthorizedWithMessage("unauthorized"))
+        }
+    }
+}
+
+/// Authorizes a principal and resolves its optional team access.
 ///
 /// The extractor uses the required [`MacroAuthorizationExtractor`], so missing,
 /// invalid, and identity-less internal credentials are rejected. A qualifying
@@ -93,7 +156,7 @@ where
 /// `None`.
 #[derive(Debug)]
 pub struct OptionalMacroUserTeamExtractorV2<T: RequiredPermission, Svc, Auth> {
-    /// The entity access receipt, if the authorized user has a qualifying team membership.
+    /// The entity access receipt, if the principal has qualifying team access.
     pub entity_access_receipt: Option<EntityAccessReceipt<T>>,
     _marker: PhantomData<(T, Svc, Auth)>,
 }
@@ -124,15 +187,13 @@ where
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-        let authorization: MacroAuthorizationExtractor<Auth, UserOrInternal> = parts
+        let authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal> = parts
             .extract_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
-        let outcome = team_access_outcome::<T, Svc>(
-            service.as_ref(),
-            authorization.authorization.user.macro_user_id,
-        )
-        .await?;
+        let outcome =
+            principal_team_access_outcome::<T, Svc>(service.as_ref(), authorization.authorization)
+                .await?;
 
         Ok(Self {
             entity_access_receipt: outcome.into_optional_receipt(),
@@ -141,15 +202,15 @@ where
     }
 }
 
-/// Authorizes a user and resolves their required team membership.
+/// Authorizes a principal and resolves its required team access.
 ///
 /// The extractor uses [`MacroAuthorizationExtractor`] to authenticate the request.
-/// It returns an [`EntityAccessReceipt`] when the user belongs to a team and their
-/// role satisfies `T`. A user without a team receives `"not in a team"`; a user
-/// whose role does not satisfy `T` receives `"you do not have a high enough role"`.
+/// It returns an [`EntityAccessReceipt`] when the principal has team access whose
+/// role satisfies `T`. A user without a team receives `"not in a team"`; a role
+/// that does not satisfy `T` receives `"you do not have a high enough role"`.
 #[derive(Debug)]
 pub struct MacroUserTeamExtractorV2<T: RequiredPermission, Svc, Auth> {
-    /// The entity access receipt for the authorized team member.
+    /// The entity access receipt for the authorized principal.
     pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc, Auth)>,
 }
@@ -168,16 +229,14 @@ where
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-        let authorization: MacroAuthorizationExtractor<Auth, UserOrInternal> = parts
+        let authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal> = parts
             .extract_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
-        let entity_access_receipt = team_access_outcome::<T, Svc>(
-            service.as_ref(),
-            authorization.authorization.user.macro_user_id,
-        )
-        .await?
-        .into_required_receipt()?;
+        let entity_access_receipt =
+            principal_team_access_outcome::<T, Svc>(service.as_ref(), authorization.authorization)
+                .await?
+                .into_required_receipt()?;
 
         Ok(Self {
             entity_access_receipt,

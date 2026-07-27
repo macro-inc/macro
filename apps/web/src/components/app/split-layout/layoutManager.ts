@@ -419,6 +419,16 @@ export type SplitManager = {
   /** Exit preview mode and close the Preview Pair's Viewer. */
   disengagePreviewMode: (controllerId: SplitId) => void;
 
+  /**
+   * Return the Preview Pair's Viewer to its empty placeholder, e.g. when the
+   * Controller's list changes wholesale and the previewed entity no longer
+   * corresponds to a selected row. Replaces the Viewer's current entry (like
+   * Controller-originated selection navigation) rather than stacking a
+   * placeholder entry. No-op without a Viewer or when it already shows the
+   * placeholder.
+   */
+  resetPreviewMode: (controllerId: SplitId) => void;
+
   /** Preserve both splits while unlinking their Preview Pair. */
   unlinkPreviewPair: (controllerId: SplitId) => void;
 
@@ -525,6 +535,8 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   engagePreview: () => void;
   /** Exit preview mode and close this Controller's Viewer. */
   disengagePreview: () => void;
+  /** Return this Controller's Viewer to its placeholder (see SplitManager.resetPreviewMode). */
+  resetPreview: () => void;
   /** This Controller's live Viewer id, if one exists. Reactive. */
   viewerId: () => SplitId | undefined;
 } & UrlCapabilities;
@@ -1144,6 +1156,7 @@ export function createSplitLayout(
       canEngagePreview: () => canEngagePreview(currentSplit.id),
       engagePreview: () => engagePreviewMode(currentSplit.id),
       disengagePreview: () => disengagePreviewMode(currentSplit.id),
+      resetPreview: () => resetPreviewMode(currentSplit.id),
       viewerId: () => viewerOf(currentSplit.id),
     };
   };
@@ -1394,6 +1407,27 @@ export function createSplitLayout(
     const viewerId = viewerOf(controllerId);
     unlinkPreviewPair(controllerId);
     if (viewerId) removeSplit(viewerId);
+  }
+
+  function resetPreviewMode(controllerId: SplitId) {
+    const viewerId = viewerOf(controllerId);
+    if (viewerId === undefined) return;
+    const viewer = getSplit(viewerId);
+    if (!viewer) return;
+    const content = viewer.content();
+    if (
+      content.type === PREVIEW_VIEWER_EMPTY_CONTENT.type &&
+      content.id === PREVIEW_VIEWER_EMPTY_CONTENT.id
+    ) {
+      return;
+    }
+    viewer.replace({
+      next: PREVIEW_VIEWER_EMPTY_CONTENT,
+      referredFrom: null,
+      // Like Controller-originated selection navigation, the reset replaces
+      // the Viewer's current entry instead of stacking a placeholder entry.
+      mergeHistory: true,
+    });
   }
 
   const previewControllerWidth = (
@@ -1926,6 +1960,7 @@ export function createSplitLayout(
     restorePreviewPair,
     canEngagePreview,
     disengagePreviewMode,
+    resetPreviewMode,
     unlinkPreviewPair,
     previewControllerWidth,
     viewerOf,

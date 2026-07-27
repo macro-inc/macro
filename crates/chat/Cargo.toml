@@ -33,12 +33,16 @@ entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
 ] }
+entity_mutation = { path = "../entity_mutation" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 non_empty = { path = "../non_empty" }
 model-entity = { path = "../model-entity" }
 models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
+rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -73,7 +77,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
-rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

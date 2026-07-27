@@ -1069,6 +1069,66 @@ export const GetThreadResponse = z.object({
   threadId: z.string().uuid(),
 });
 
+export const ImportNotionPage = z.object({ pageUrl: z.string() });
+
+export const ImportNotionPageResponse = z.object({
+  entity: z.object({
+    entityId: z.union([z.string(), z.null()]).optional(),
+    entityType: z.union([z.string(), z.null()]).optional(),
+    foreignId: z.string(),
+    id: z.string().uuid(),
+    importedByTeammate: z.boolean(),
+    label: z.string(),
+    source: z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.literal('linear'),
+        z.literal('notion'),
+        z.literal('slack'),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    status: z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.literal('staged'),
+        z.literal('importing'),
+        z.literal('imported'),
+        z.literal('discarded'),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+  }),
+  message: z.string(),
+  outcome: z.string(),
+});
+
 export const ListCompanies = z.object({
   include_hidden: z.union([z.boolean(), z.null()]).optional(),
   limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),

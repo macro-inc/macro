@@ -49,7 +49,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(state.db.clone()),
         ),
-    );
+    )
+    .with_event_broker(state.macro_event_broker.clone());
     let chat_state = ChatRouterState::new(
         chat_service,
         access_service,

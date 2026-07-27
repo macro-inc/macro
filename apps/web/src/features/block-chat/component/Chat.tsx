@@ -1,4 +1,3 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
@@ -32,6 +31,7 @@ import {
   peekPendingSend,
 } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
+import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
 import {
@@ -140,7 +140,6 @@ function ChatInner(props: {
   loadedInputText: string | undefined;
 }) {
   const owner = getOwner();
-  const analytics = useAnalytics();
   const input = useChatInputContext();
   const chat = useChatContext();
   const canEdit = useCanEdit();
@@ -156,13 +155,12 @@ function ChatInner(props: {
   );
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
     block: 'chat',
     showOpenTabs: true,
   });
@@ -179,7 +177,9 @@ function ChatInner(props: {
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
-    input.attachments
+    input.attachments,
+    (mention) =>
+      insertChatAttachmentMention(editor.controls.getLexical(), mention)
   );
   false && droppable;
 

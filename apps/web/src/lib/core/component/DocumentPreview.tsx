@@ -1,13 +1,12 @@
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/constants';
 import {
   type BlockAlias,
   type BlockName,
-  useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -500,8 +499,6 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   const navigate = useNavigate();
 
   const blockName = useMaybeBlockName();
-  const blockId = useMaybeBlockId();
-
   const itemPreviewEntity = () => {
     const type = blockNameToItemType(props.documentInfo.type);
     let messageId: string | undefined;
@@ -571,13 +568,16 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     });
   });
 
-  // H opening document in chat
-  const openChatForAttachment = useOpenChatForAttachment();
   const handleOpenInChat = () => {
-    openChatForAttachment({
-      attachmentId: props.documentInfo.id,
-      callerBlock:
-        blockName && blockId ? { name: blockName, id: blockId } : undefined,
+    const preview = item();
+    void openChatWithAgent({
+      type: 'document',
+      id: props.documentInfo.id,
+      name:
+        (isAccessiblePreviewItem(preview) ? preview.name : undefined) ??
+        props.documentInfo.name ??
+        '',
+      fileType: targetBlockType(),
     });
   };
 

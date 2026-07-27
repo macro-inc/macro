@@ -345,6 +345,8 @@ pub fn metadata_label(source: ImportSource, metadata: &serde_json::Value) -> Str
     metadata
         .get(field)
         .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
         .unwrap_or("(unnamed)")
         .to_string()
 }

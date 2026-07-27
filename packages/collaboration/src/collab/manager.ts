@@ -22,6 +22,9 @@ import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 
 export enum LoroManagerError {
   ImportFailed = 'IMPORT_FAILED',
+  /** The update arrived ahead of its causal dependencies. Loro holds it and
+   *  applies it automatically once the gap fills — not a failure. */
+  ImportPending = 'IMPORT_PENDING',
   NotInitialized = 'NOT_INITIALIZED',
   InitializeFailed = 'INITIALIZE_FAILED',
   SyncFailed = 'SYNC_FAILED',
@@ -55,6 +58,24 @@ export type SnapshotIngest =
 export type LoroManagerOptions = {
   documentId: string;
 };
+
+/** Map Loro's {@link ImportStatus} onto our Result: ok(didChange), or
+ *  {@link LoroManagerError.ImportPending} when ops were held back waiting on
+ *  missing causal dependencies. */
+function importStatusToResult(
+  importStatus: ImportStatus
+): Result<boolean, ResultError<LoroManagerError>[]> {
+  if ((importStatus.pending?.size ?? 0) > 0) {
+    return err([
+      {
+        code: LoroManagerError.ImportPending,
+        message: 'Import held back pending missing causal dependencies',
+      },
+    ]);
+  }
+
+  return ok(importStatus.success.size > 0);
+}
 
 export interface SyncEngineManager<
   S extends GenericRootSchema = GenericRootSchema,
@@ -227,15 +248,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
-    const didChange = Object.keys(importStatus.success).length > 0;
-
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      return err([
-        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
-      ]);
-    }
-
-    return ok(didChange);
+    return importStatusToResult(importStatus);
   }
 
   importBatchUpdates(
@@ -260,15 +273,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
-    const didChange = Object.keys(importStatus.success).length > 0;
-
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      return err([
-        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
-      ]);
-    }
-
-    return ok(didChange);
+    return importStatusToResult(importStatus);
   }
 
   async initializeFromSnapshot(
@@ -439,13 +444,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      return err([
-        {
-          code: LoroManagerError.ImportFailed,
-          message: 'Snapshot import has pending updates',
-        },
-      ]);
+    const statusResult = importStatusToResult(importStatus);
+    if (statusResult.isErr()) {
+      // A reset snapshot must be self-contained; pending deps mean a bad seed.
+      return err(statusResult.error);
     }
 
     const newMirror = createMirror(newDoc, this.schema);

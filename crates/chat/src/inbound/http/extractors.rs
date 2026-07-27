@@ -159,7 +159,7 @@ mod test {
         let free = access(&[]);
         assert_eq!(free.best_model(), FREE_MODEL);
         assert!(free.has_access(FREE_MODEL));
-        assert!(!free.has_access("anthropic/claude-opus-4-8"));
+        assert!(!free.has_access("anthropic/claude-opus-5"));
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod test {
         let pro = access(&[PermissionId::ReadProfessionalFeatures]);
         assert_eq!(pro.best_model(), "anthropic/claude-sonnet-5");
         assert!(pro.has_access("anthropic/claude-sonnet-5"));
-        assert!(pro.has_access("anthropic/claude-opus-4-8"));
+        assert!(pro.has_access("anthropic/claude-opus-5"));
         assert!(pro.has_access(FREE_MODEL));
         assert!(pro.has_access("openai/gpt-5.5"));
     }
@@ -177,6 +177,6 @@ mod test {
     fn unrelated_permissions_stay_free() {
         let acc = access(&[PermissionId::WriteEmailTool, PermissionId::ReadDocxEditor]);
         assert!(!acc.professional());
-        assert!(!acc.has_access("anthropic/claude-opus-4-8"));
+        assert!(!acc.has_access("anthropic/claude-opus-5"));
     }
 }

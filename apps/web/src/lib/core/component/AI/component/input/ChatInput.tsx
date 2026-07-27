@@ -10,15 +10,18 @@ import {
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
+import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -133,6 +136,17 @@ export function ChatInput(props: ChatInputComponentProps) {
       .forEach((upload) => {
         analytics.track('ai_attachment_add');
         attachments.addAttachment(upload.attachment);
+        const metadata = upload.preview.metadata;
+        if (
+          upload.attachment.entity_type === 'document' &&
+          metadata?.type === 'document'
+        ) {
+          insertChatAttachmentMention(props.editor.controls.getLexical(), {
+            documentId: upload.attachment.entity_id,
+            documentName: metadata.document_name,
+            blockName: fileTypeToBlockName(metadata.document_type, true),
+          });
+        }
       });
   });
 
@@ -305,9 +319,17 @@ export function ChatInput(props: ChatInputComponentProps) {
               close={() => setShowAttachMenu(false)}
               containerRef={containerRef}
               open={showAttachMenu()}
-              onAttach={(attachment) => {
+              onAttach={(attachment, item) => {
                 analytics.track('ai_attachment_add');
                 attachments.addAttachment(attachment);
+                insertChatAttachmentMention(
+                  props.editor.controls.getLexical(),
+                  {
+                    documentId: item.id,
+                    documentName: item.name,
+                    blockName: getItemBlockName(item, true),
+                  }
+                );
               }}
             />
           </Show>

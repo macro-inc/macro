@@ -12,7 +12,10 @@
 //! content through `FinalizeImport` when the direct path can't cope.
 
 use super::models::*;
-use super::ports::{EntityCreator, ImportError, ImportRepo, ImportedTaskProperties, Result};
+use super::ports::{
+    EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties, ImportedDocumentProperty,
+    ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
+};
 use crate::inbound::toolset::{
     ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
 };
@@ -27,6 +30,7 @@ use mcp_client::domain::service::McpToolSet;
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -74,6 +78,14 @@ const STALE_IMPORT_AFTER: Duration = Duration::from_secs(IMPORT_HEARTBEAT.as_sec
 /// slack for retries.
 fn notion_import_max_turns(pages: usize) -> usize {
     (2 * pages + 6).min(40)
+}
+
+fn notion_import_failure_reason(outcome: &anyhow::Result<()>) -> String {
+    outcome
+        .as_ref()
+        .err()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| "the import job did not finish this item".to_string())
 }
 
 /// Pushes an "import state changed" nudge to the user's connected clients.
@@ -239,7 +251,41 @@ pub trait ImportFinalizer: Send + Sync + 'static {
         import_id: Uuid,
         name: &str,
         content_markdown: &str,
+        properties: &ImportedDocumentProperties,
     ) -> impl Future<Output = Result<ImportEntity>> + Send;
+}
+
+/// Outcome of explicitly importing one Notion page from an interactive chat.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportNotionPageOutcome {
+    /// The page now exists as a Macro document.
+    Imported {
+        /// The ledger row carrying the Macro document id.
+        entity: ImportEntity,
+        /// Whether the document existed before this request.
+        already_existed: bool,
+        /// Whether a teammate imported the existing document.
+        by_teammate: bool,
+    },
+    /// The user previously declined this page, so the explicit import did not
+    /// override that remembered decision.
+    PreviouslyDiscarded(ImportEntity),
+    /// Another request is already importing this page.
+    ImportInProgress(ImportEntity),
+}
+
+/// Workflow used by the interactive agent to import one specific Notion page.
+///
+/// Unlike [`ImportFinalizer`], this owns the complete operation: deduplication,
+/// ledger transitions, connector fetch, content normalization, document
+/// creation, and final ledger state.
+pub trait NotionPageImporter: Send + Sync + 'static {
+    /// Import a Notion page URL or page id for `user`.
+    fn import_notion_page(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        page_url_or_id: &str,
+    ) -> impl Future<Output = Result<ImportNotionPageOutcome>> + Send;
 }
 
 /// Concrete orchestrator wiring the repo, the user's MCP servers, the
@@ -448,27 +494,30 @@ where
         .map_err(|e| anyhow::anyhow!("fetch dispatch failed: {e}"))?
         .map_err(|e| anyhow::anyhow!("fetch failed: {}", e.description))?;
 
-        let text = match result {
-            serde_json::Value::String(text) => text,
-            other => other.to_string(),
-        };
-        let (fetched_title, body) = parse_notion_fetch_text(&text);
-        anyhow::ensure!(!body.trim().is_empty(), "fetched page has no content");
+        let fetched = parse_notion_fetch_result(result);
+        anyhow::ensure!(
+            !fetched.is_database,
+            "fetched object is a Notion database rather than a page"
+        );
+        anyhow::ensure!(
+            !fetched.truncated,
+            "fetched page was truncated and requires additional subtree fetches"
+        );
 
-        let name = row
-            .metadata
-            .get("title")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .or(fetched_title)
+        let name = fetched
+            .title
+            .or_else(|| {
+                row.metadata
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|title| !title.is_empty())
+                    .map(str::to_string)
+            })
             .unwrap_or_else(|| "Untitled".to_string());
-        let url = row.metadata.get("url").and_then(|v| v.as_str());
-        let markdown = match url {
-            Some(url) => format!("{}\n\n[Original in Notion]({url})", body.trim_end()),
-            None => body,
-        };
+        let markdown = prepare_notion_markdown(&fetched.body)?;
 
-        self.finalize_document(user, row.id, &name, &markdown)
+        self.finalize_document(user, row.id, &name, &markdown, &fetched.properties)
             .await
             .map_err(|e| anyhow::anyhow!("finalize failed: {e}"))?;
         Ok(())
@@ -659,6 +708,42 @@ where
         }
     }
 
+    /// Run the canonical single-page Notion pipeline for a row that is
+    /// already `importing`.
+    async fn process_notion_page(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mcp_tools: Arc<McpToolSet>,
+        row: &ImportEntity,
+    ) -> anyhow::Result<()> {
+        let outcome = tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
+            match self
+                .import_notion_page_direct(user, &mcp_tools, row)
+                .await
+            {
+                Ok(()) => Ok(()),
+                Err(direct_error) => {
+                    tracing::info!(id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
+                    self.run_notion_import_session(
+                        user,
+                        std::slice::from_ref(row),
+                        mcp_tools,
+                    )
+                    .await
+                }
+            }
+        })
+        .await
+        .unwrap_or_else(|_| Err(anyhow::anyhow!("notion import timed out")));
+
+        let _ = outcome.as_ref().inspect_err(|e| {
+            tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
+        });
+        let failure_reason = notion_import_failure_reason(&outcome);
+        self.fail_unfinished(user, &[row.id], &failure_reason).await;
+        outcome
+    }
+
     /// Run a claimed import batch in the background. Manual batches only
     /// update their entity rows; automatic batches also settle their owning
     /// run after every row reaches a terminal state.
@@ -728,39 +813,7 @@ where
                         let user = user.clone();
                         let mcp_tools = mcp_tools.clone();
                         async move {
-                            let outcome =
-                                tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
-                                    match service
-                                        .import_notion_page_direct(&user, &mcp_tools, &row)
-                                        .await
-                                    {
-                                        Ok(()) => Ok(()),
-                                        Err(direct_error) => {
-                                            tracing::info!(id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
-                                            service
-                                                .run_notion_import_session(
-                                                    &user,
-                                                    std::slice::from_ref(&row),
-                                                    mcp_tools.clone(),
-                                                )
-                                                .await
-                                        }
-                                    }
-                                })
-                                .await
-                                .unwrap_or_else(|_| {
-                                    Err(anyhow::anyhow!("notion import timed out"))
-                                });
-                            let _ = outcome.inspect_err(|e| {
-                                tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
-                            });
-                            service
-                                .fail_unfinished(
-                                    &user,
-                                    &[row.id],
-                                    "the import job did not finish this item",
-                                )
-                                .await;
+                            let _ = service.process_notion_page(&user, mcp_tools, &row).await;
                         }
                     })
                     .await;
@@ -1097,6 +1150,136 @@ where
     }
 }
 
+impl<R, S, C> NotionPageImporter for ImportServiceImpl<R, S, C>
+where
+    R: ImportRepo + Clone,
+    S: McpServerStore,
+    C: EntityCreator,
+{
+    #[tracing::instrument(skip(self, user), fields(page = page_url_or_id), err)]
+    async fn import_notion_page(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        page_url_or_id: &str,
+    ) -> Result<ImportNotionPageOutcome> {
+        let page_url_or_id = page_url_or_id.trim();
+        if page_url_or_id.is_empty() {
+            return Err(ImportError::Other(anyhow::anyhow!(
+                "Notion page URL or id must not be empty"
+            )));
+        }
+
+        let staged = self
+            .stage(
+                user,
+                Initiator::Chat,
+                ImportSource::Notion,
+                page_url_or_id,
+                serde_json::json!({
+                    "title": "",
+                    "url": page_url_or_id,
+                }),
+            )
+            .await?;
+
+        let staged_row = match staged {
+            StageOutcome::Staged(row) => row,
+            StageOutcome::AlreadyImported {
+                entity,
+                by_teammate,
+            } => {
+                return Ok(ImportNotionPageOutcome::Imported {
+                    entity,
+                    already_existed: true,
+                    by_teammate,
+                });
+            }
+            StageOutcome::PreviouslyDiscarded(row) => {
+                return Ok(ImportNotionPageOutcome::PreviouslyDiscarded(row));
+            }
+            StageOutcome::ImportInProgress(row) => {
+                return Ok(ImportNotionPageOutcome::ImportInProgress(row));
+            }
+        };
+
+        let Some(importing_row) = self
+            .repo
+            .mark_importing(user, &[staged_row.id])
+            .await?
+            .into_iter()
+            .next()
+        else {
+            let row = self.repo.get(user, staged_row.id).await?.ok_or_else(|| {
+                ImportError::Other(anyhow::anyhow!(
+                    "Notion import row {} disappeared before it could start",
+                    staged_row.id
+                ))
+            })?;
+            return match row.status {
+                ImportStatus::Imported => Ok(ImportNotionPageOutcome::Imported {
+                    entity: row,
+                    already_existed: true,
+                    by_teammate: false,
+                }),
+                ImportStatus::Importing => Ok(ImportNotionPageOutcome::ImportInProgress(row)),
+                ImportStatus::Discarded => Ok(ImportNotionPageOutcome::PreviouslyDiscarded(row)),
+                ImportStatus::Staged => Err(ImportError::Other(anyhow::anyhow!(
+                    "Notion page could not be claimed for import"
+                ))),
+            };
+        };
+        self.notify(user).await;
+
+        let mcp_tools = match self.connector_tools(user, ImportSource::Notion).await {
+            Ok(tools) => tools,
+            Err(error) => {
+                self.fail_unfinished(
+                    user,
+                    &[importing_row.id],
+                    &format!("notion unavailable: {error}"),
+                )
+                .await;
+                self.notify(user).await;
+                return Err(ImportError::Other(error));
+            }
+        };
+        let pipeline_result = self
+            .process_notion_page(user, mcp_tools, &importing_row)
+            .await;
+        self.notify(user).await;
+
+        let row = self
+            .repo
+            .get(user, importing_row.id)
+            .await?
+            .ok_or_else(|| {
+                ImportError::Other(anyhow::anyhow!(
+                    "Notion import row {} disappeared after import",
+                    importing_row.id
+                ))
+            })?;
+        match row.status {
+            ImportStatus::Imported => Ok(ImportNotionPageOutcome::Imported {
+                entity: row,
+                already_existed: false,
+                by_teammate: false,
+            }),
+            ImportStatus::Discarded => Ok(ImportNotionPageOutcome::PreviouslyDiscarded(row)),
+            ImportStatus::Importing => Ok(ImportNotionPageOutcome::ImportInProgress(row)),
+            ImportStatus::Staged => {
+                let detail = pipeline_result
+                    .err()
+                    .map(|error| error.to_string())
+                    .or(row.last_error)
+                    .unwrap_or_else(|| "the import did not create a document".to_string());
+                Err(ImportError::Other(anyhow::anyhow!(
+                    "Notion page import failed: {detail}"
+                )))
+            }
+        }
+    }
+}
+
 impl<R, S, C> ImportFinalizer for ImportServiceImpl<R, S, C>
 where
     R: ImportRepo + Clone,
@@ -1110,6 +1293,7 @@ where
         import_id: Uuid,
         name: &str,
         content_markdown: &str,
+        properties: &ImportedDocumentProperties,
     ) -> Result<ImportEntity> {
         let row = self
             .repo
@@ -1135,8 +1319,10 @@ where
                     .await
             }
             ImportSource::Notion => {
+                let content_markdown =
+                    prepare_notion_markdown(content_markdown).map_err(ImportError::Other)?;
                 self.creator
-                    .create_markdown_doc(user, name, content_markdown)
+                    .create_markdown_doc(user, name, &content_markdown, properties)
                     .await
             }
             ImportSource::Slack => {
@@ -1161,29 +1347,923 @@ where
     }
 }
 
-/// The mangled name of the connector's `notion-fetch` tool, whatever the
-/// user named their server when connecting it (`mcp__<server>__notion-fetch`).
+/// The mangled name of the connector's Notion fetch tool. Notion exposes this
+/// as `notion-fetch` generally and as `fetch` on OpenAI-compatible surfaces.
 fn notion_fetch_tool_name(mcp_tools: &McpToolSet) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()
         .map(|schema| schema.name)
-        .find(|name| name.ends_with("__notion-fetch"))
+        .find(|name| is_notion_fetch_tool_name(name))
 }
 
-/// Split a `notion-fetch` result into `(title, body)`. The tool returns a
-/// JSON document (`{id, title, text, url, …}`) as text; a result that isn't
-/// that shape is treated as the body itself.
-fn parse_notion_fetch_text(text: &str) -> (Option<String>, String) {
-    if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(text)
-        && let Some(body) = map.get("text").and_then(|v| v.as_str())
-    {
-        let title = map
-            .get("title")
-            .and_then(|v| v.as_str())
-            .map(str::to_string);
-        return (title, body.to_string());
+fn is_notion_fetch_tool_name(name: &str) -> bool {
+    matches!(
+        name.rsplit_once("__").map(|(_, tool)| tool),
+        Some("notion-fetch" | "fetch")
+    )
+}
+
+/// Split a Notion fetch result into its title, Markdown body, and properties.
+/// Structured MCP output and JSON text may use either Notion's `markdown`
+/// field or the generic MCP fetch `text` field.
+#[derive(Debug, Default, PartialEq)]
+struct ParsedNotionPage {
+    title: Option<String>,
+    body: String,
+    properties: ImportedDocumentProperties,
+    is_database: bool,
+    truncated: bool,
+}
+
+fn parse_notion_fetch_result(result: serde_json::Value) -> ParsedNotionPage {
+    match result {
+        serde_json::Value::String(text) => {
+            if let Ok(structured @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) =
+                serde_json::from_str::<serde_json::Value>(&text)
+            {
+                return parse_notion_fetch_result(structured);
+            }
+            parse_notion_tool_text(&text)
+        }
+        serde_json::Value::Object(map) => parse_notion_fetch_object(map),
+        serde_json::Value::Array(items) => {
+            let mut combined = ParsedNotionPage::default();
+            let mut bodies = Vec::new();
+            for item in items {
+                let parsed = parse_notion_fetch_result(item);
+                if combined.title.is_none() {
+                    combined.title = parsed.title;
+                }
+                if combined.properties == ImportedDocumentProperties::default()
+                    && parsed.properties != ImportedDocumentProperties::default()
+                {
+                    combined.properties = parsed.properties;
+                }
+                combined.is_database |= parsed.is_database;
+                combined.truncated |= parsed.truncated;
+                if !parsed.body.trim().is_empty() {
+                    bodies.push(parsed.body);
+                }
+            }
+            combined.body = bodies.join("\n\n");
+            combined
+        }
+        _ => ParsedNotionPage::default(),
     }
-    (None, text.to_string())
+}
+
+fn parse_notion_fetch_object(map: serde_json::Map<String, serde_json::Value>) -> ParsedNotionPage {
+    let title = notion_title_from_map(&map).or_else(|| {
+        map.get("metadata")
+            .and_then(|value| value.as_object())
+            .and_then(notion_title_from_map)
+    });
+    let properties = map
+        .get("properties")
+        .and_then(|value| value.as_object())
+        .map(imported_notion_properties)
+        .unwrap_or_default();
+    let is_database = notion_object_is_database(&map);
+    let truncated = map
+        .get("truncated")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    if let Some(body) = map
+        .get("markdown")
+        .or_else(|| map.get("text"))
+        .and_then(|value| value.as_str())
+    {
+        let mut parsed = parse_notion_tool_text(body);
+        parsed.title = title.or(parsed.title);
+        if parsed.properties == ImportedDocumentProperties::default() {
+            parsed.properties = properties;
+        }
+        parsed.is_database |= is_database;
+        parsed.truncated |= truncated;
+        return parsed;
+    }
+
+    for nested_key in ["data", "result", "resource"] {
+        if let Some(nested) = map.get(nested_key) {
+            let mut parsed = parse_notion_fetch_result(nested.clone());
+            if parsed.title.is_none() {
+                parsed.title = title.clone();
+            }
+            if parsed.properties == ImportedDocumentProperties::default() {
+                parsed.properties = properties.clone();
+            }
+            parsed.is_database |= is_database;
+            parsed.truncated |= truncated;
+            if !parsed.body.trim().is_empty() {
+                return parsed;
+            }
+        }
+    }
+
+    ParsedNotionPage {
+        title,
+        properties,
+        is_database,
+        truncated,
+        ..Default::default()
+    }
+}
+
+/// The hosted Notion MCP wraps fetched pages in narration plus
+/// `<page><properties>…</properties><content>…</content></page>`. Isolate the
+/// two source-backed sections here so neither the narration nor the metadata
+/// can ever reach the document body.
+fn parse_notion_tool_text(text: &str) -> ParsedNotionPage {
+    if !NOTION_TOOL_RESULT_PREAMBLE.is_match(text) || !text.contains("<page") {
+        return ParsedNotionPage {
+            body: text.to_string(),
+            ..Default::default()
+        };
+    }
+    let Some(content) = notion_xml_section(text, "content") else {
+        return ParsedNotionPage {
+            body: text.to_string(),
+            ..Default::default()
+        };
+    };
+
+    let mut parsed = ParsedNotionPage {
+        body: content.trim_matches('\n').to_string(),
+        ..Default::default()
+    };
+    if let Some(raw_properties) = notion_xml_section(text, "properties")
+        && let Some(map) = parse_notion_property_map(raw_properties.trim())
+    {
+        parsed.title = notion_title_from_map(&map);
+        parsed.properties = imported_notion_properties(&map);
+    }
+    parsed
+}
+
+fn notion_xml_section<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+    let opening = format!("<{tag}>");
+    let closing = format!("</{tag}>");
+    let start = text.find(&opening)? + opening.len();
+    let end = text[start..].find(&closing)? + start;
+    Some(&text[start..end])
+}
+
+fn parse_notion_property_map(text: &str) -> Option<serde_json::Map<String, serde_json::Value>> {
+    match serde_json::from_str::<serde_json::Value>(text).ok()? {
+        serde_json::Value::Object(map) => Some(map),
+        serde_json::Value::Array(values) => values
+            .into_iter()
+            .find_map(|value| value.as_object().cloned()),
+        _ => None,
+    }
+}
+
+fn notion_title_from_map(map: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    ["title", "Name", "name"].into_iter().find_map(|key| {
+        map.get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+            .map(str::to_string)
+    })
+}
+
+fn notion_object_is_database(map: &serde_json::Map<String, serde_json::Value>) -> bool {
+    let object_type = map
+        .get("object")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            map.get("metadata")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|metadata| metadata.get("type"))
+                .and_then(serde_json::Value::as_str)
+        });
+    matches!(object_type, Some("database" | "data_source"))
+}
+
+fn imported_notion_properties(
+    raw: &serde_json::Map<String, serde_json::Value>,
+) -> ImportedDocumentProperties {
+    let mut imported = ImportedDocumentProperties::default();
+
+    for (raw_name, value) in raw {
+        let name = raw_name
+            .strip_prefix("userDefined:")
+            .unwrap_or(raw_name)
+            .trim();
+        if name.is_empty()
+            || name.len() > 100
+            || name.eq_ignore_ascii_case("title")
+            || name.eq_ignore_ascii_case("name")
+        {
+            continue;
+        }
+
+        if let Some(date_name) = name
+            .strip_prefix("date:")
+            .and_then(|rest| rest.strip_suffix(":start"))
+        {
+            if let Some(value) = value.as_str().filter(|value| !value.trim().is_empty()) {
+                imported.values.push(ImportedDocumentProperty {
+                    name: date_name.to_string(),
+                    value: ImportedDocumentPropertyValue::Date {
+                        value: value.to_string(),
+                    },
+                });
+            }
+            continue;
+        }
+        if name.starts_with("date:") {
+            continue;
+        }
+
+        if is_tag_property_name(name) {
+            append_string_values(value, &mut imported.tags);
+            continue;
+        }
+
+        let value = match value {
+            serde_json::Value::Bool(value) => {
+                Some(ImportedDocumentPropertyValue::Boolean { value: *value })
+            }
+            serde_json::Value::Number(value) => value
+                .as_f64()
+                .map(|value| ImportedDocumentPropertyValue::Number { value }),
+            serde_json::Value::String(value) => {
+                let value = value.trim();
+                match value {
+                    "" => None,
+                    "__YES__" => Some(ImportedDocumentPropertyValue::Boolean { value: true }),
+                    "__NO__" => Some(ImportedDocumentPropertyValue::Boolean { value: false }),
+                    _ if is_web_url(value) => Some(ImportedDocumentPropertyValue::Link {
+                        urls: vec![value.to_string()],
+                        multi: false,
+                    }),
+                    _ => Some(ImportedDocumentPropertyValue::String {
+                        value: value.to_string(),
+                    }),
+                }
+            }
+            serde_json::Value::Array(values) => {
+                let strings: Vec<String> = values
+                    .iter()
+                    .filter_map(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                if strings.is_empty() {
+                    None
+                } else if strings.iter().all(|value| is_web_url(value)) {
+                    Some(ImportedDocumentPropertyValue::Link {
+                        urls: strings,
+                        multi: true,
+                    })
+                } else {
+                    Some(ImportedDocumentPropertyValue::Select {
+                        values: strings,
+                        multi: true,
+                    })
+                }
+            }
+            serde_json::Value::Null | serde_json::Value::Object(_) => None,
+        };
+        if let Some(value) = value {
+            imported.values.push(ImportedDocumentProperty {
+                name: name.to_string(),
+                value,
+            });
+        }
+    }
+
+    dedupe_strings(&mut imported.tags);
+    imported
+}
+
+fn is_tag_property_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "tag" | "tags" | "label" | "labels"
+    )
+}
+
+fn is_web_url(value: &str) -> bool {
+    value.starts_with("https://") || value.starts_with("http://")
+}
+
+fn append_string_values(value: &serde_json::Value, output: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(value) => {
+            let value = value.trim();
+            if !value.is_empty() {
+                output.push(value.to_string());
+            }
+        }
+        serde_json::Value::Array(values) => {
+            output.extend(
+                values
+                    .iter()
+                    .filter_map(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string),
+            );
+        }
+        _ => {}
+    }
+}
+
+fn dedupe_strings(values: &mut Vec<String>) {
+    let mut seen = HashSet::new();
+    values.retain(|value| seen.insert(value.to_ascii_lowercase()));
+}
+
+static PAIRED_NOTION_PAGE_REFS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    ["page", "mention-page"]
+        .into_iter()
+        .map(|tag| {
+            regex::Regex::new(&format!(
+                r#"(?s)<{tag}\b(?P<attrs>[^>]*)>(?P<label>.*?)</{tag}>"#
+            ))
+            .expect("valid notion page reference regex")
+        })
+        .collect()
+});
+static SELF_CLOSING_NOTION_PAGE_REF: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<(?:ancestor-\d+-)?page\b(?P<attrs>[^>]*)/?>"#)
+        .expect("valid self-closing notion page reference regex")
+});
+static PAIRED_NOTION_TEXT_MENTIONS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    ["mention-user", "mention-agent"]
+        .into_iter()
+        .map(|tag| {
+            regex::Regex::new(&format!(r#"(?s)<{tag}\b[^>]*>(?P<label>.*?)</{tag}>"#))
+                .expect("valid notion text mention regex")
+        })
+        .collect()
+});
+static NOTION_DATE_MENTION: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<mention-date\b(?P<attrs>[^>]*)/?>"#)
+        .expect("valid notion date mention regex")
+});
+static PAIRED_NOTION_MEDIA: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    ["audio", "video", "file", "pdf"]
+        .into_iter()
+        .map(|tag| {
+            regex::Regex::new(&format!(
+                r#"(?s)<{tag}\b(?P<attrs>[^>]*)>(?P<label>.*?)</{tag}>"#
+            ))
+            .expect("valid notion media regex")
+        })
+        .collect()
+});
+static NOTION_UNKNOWN_BLOCK: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<unknown\b(?P<attrs>[^>]*)/?>"#).expect("valid notion unknown-block regex")
+});
+static PAIRED_NOTION_DATABASES: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    ["database", "mention-database", "mention-data-source"]
+        .into_iter()
+        .map(|tag| {
+            regex::Regex::new(&format!(r#"(?s)<{tag}\b[^>]*>.*?</{tag}>"#))
+                .expect("valid notion database regex")
+        })
+        .collect()
+});
+static SELF_CLOSING_NOTION_DATABASE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?s)<(?:database|mention-database|mention-data-source)\b[^>]*/?>"#)
+        .expect("valid self-closing notion database regex")
+});
+static NOTION_TOGGLE_MARKER: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"[ \t]*\{toggle\s*=\s*"true"\}"#).expect("valid notion toggle marker regex")
+});
+static NOTION_BLOCK_ATTRIBUTES: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"[ \t]*\{(?:(?:toggle|color)\s*=\s*"[^"]*"[ \t]*)+\}[ \t]*$"#)
+        .expect("valid notion block-attribute regex")
+});
+static PAIRED_NOTION_SPAN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?s)<span\b[^>]*>(?P<label>.*?)</span>"#).expect("valid notion span regex")
+});
+static NOTION_SUMMARY: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?s)<summary>(?P<label>.*?)</summary>"#)
+        .expect("valid notion summary regex")
+});
+static NOTION_EMPTY_BLOCK: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?m)^[\t ]*<(?:empty-block|table_of_contents)\b[^>]*/?>[\t ]*$"#)
+        .expect("valid empty Notion block regex")
+});
+static ESCAPED_NOTION_TODO: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"^(?P<indent>[\t ]*)(?:-\s+)?\\\[(?P<state>[ xX])\\\](?P<rest>.*)$"#)
+        .expect("valid escaped Notion todo regex")
+});
+static NOTION_TOOL_RESULT_PREAMBLE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?im)^\s*Here is the result of "(?:view|fetch)"(?:\s|:)"#)
+        .expect("valid notion tool-result preamble regex")
+});
+static NOTION_SERIALIZED_TITLE_WRAPPER: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?m)^\s*(?:\[\s*)?\{\s*"[^"]+"\s*:"#)
+        .expect("valid notion serialized title wrapper regex")
+});
+static UNHANDLED_NOTION_MARKUP: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)</?(?:page|database|mention-[\w-]+|ancestor-\d+-page|details|summary|callout|columns?|synced_block(?:_reference)?|table|tr|td|th|colgroup|col|properties|content)\b"#,
+    )
+    .expect("valid unsupported Notion markup regex")
+});
+static NOTION_ATTR_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?P<name>[\w-]+)="(?P<value>[^"]*)""#)
+        .expect("valid notion attribute regex")
+});
+static INLINE_TAG_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?s)<[^>]+>").expect("valid inline tag regex"));
+static BREAK_TAG_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?i)<br\s*/?>").expect("valid HTML break regex"));
+static TABLE_ROW_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?s)<tr\b[^>]*>(?P<body>.*?)</tr>").expect("valid notion table row regex")
+});
+static TABLE_CELL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?s)<t[dh]\b[^>]*>(?P<body>.*?)</t[dh]>")
+        .expect("valid notion table cell regex")
+});
+
+/// Convert Notion's enhanced-markdown extensions into the markdown dialect
+/// consumed by Macro's Lexical service. In particular, pipe tables become
+/// native Lexical tables and Notion page references remain clickable external
+/// links even when the referenced page was not part of the import.
+fn normalize_notion_markdown(input: &str) -> String {
+    transform_outside_fenced_code(input, normalize_notion_markdown_fragment)
+}
+
+fn normalize_notion_markdown_fragment(input: &str) -> String {
+    let mut markdown = remove_notion_databases_fragment(input);
+    for regex in PAIRED_NOTION_PAGE_REFS.iter() {
+        markdown = regex
+            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+                notion_page_link(
+                    &captures["attrs"],
+                    Some(INLINE_TAG_RE.replace_all(&captures["label"], "")),
+                )
+            })
+            .into_owned();
+    }
+    markdown = SELF_CLOSING_NOTION_PAGE_REF
+        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+            notion_page_link(&captures["attrs"], None)
+        })
+        .into_owned();
+    for regex in PAIRED_NOTION_TEXT_MENTIONS.iter() {
+        markdown = regex
+            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+                let label = INLINE_TAG_RE.replace_all(&captures["label"], "");
+                let label = label.trim();
+                if label.is_empty() {
+                    String::new()
+                } else {
+                    format!("@{label}")
+                }
+            })
+            .into_owned();
+    }
+    markdown = NOTION_DATE_MENTION
+        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+            notion_date_mention(&captures["attrs"])
+        })
+        .into_owned();
+    for regex in PAIRED_NOTION_MEDIA.iter() {
+        markdown = regex
+            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+                notion_media_link(&captures["attrs"], &captures["label"])
+            })
+            .into_owned();
+    }
+    markdown = NOTION_UNKNOWN_BLOCK
+        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+            notion_unknown_block(&captures["attrs"])
+        })
+        .into_owned();
+    markdown = PAIRED_NOTION_SPAN
+        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+            captures["label"].to_string()
+        })
+        .into_owned();
+    markdown = NOTION_SUMMARY
+        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
+            captures["label"].to_string()
+        })
+        .into_owned();
+    markdown = markdown
+        .replace("<ancestor-path>\n", "")
+        .replace("\n</ancestor-path>", "")
+        .replace("<ancestor-path>", "")
+        .replace("</ancestor-path>", "");
+    markdown = NOTION_TOGGLE_MARKER.replace_all(&markdown, "").into_owned();
+    markdown = NOTION_BLOCK_ATTRIBUTES
+        .replace_all(&markdown, "")
+        .into_owned();
+    markdown = NOTION_EMPTY_BLOCK.replace_all(&markdown, "").into_owned();
+    markdown = convert_notion_tables(&markdown);
+    markdown = flatten_notion_containers(&markdown);
+    markdown = normalize_escaped_notion_todos(&markdown);
+    let input_trailing_newlines = input
+        .chars()
+        .rev()
+        .take_while(|value| *value == '\n')
+        .count();
+    let output_trailing_newlines = markdown
+        .chars()
+        .rev()
+        .take_while(|value| *value == '\n')
+        .count();
+    for _ in output_trailing_newlines..input_trailing_newlines {
+        markdown.push('\n');
+    }
+    markdown
+}
+
+fn remove_notion_databases(input: &str) -> String {
+    transform_outside_fenced_code(input, remove_notion_databases_fragment)
+}
+
+fn remove_notion_databases_fragment(input: &str) -> String {
+    let mut markdown = input.to_string();
+    for regex in PAIRED_NOTION_DATABASES.iter() {
+        markdown = regex.replace_all(&markdown, "").into_owned();
+    }
+    SELF_CLOSING_NOTION_DATABASE
+        .replace_all(&markdown, "")
+        .into_owned()
+}
+
+fn prepare_notion_markdown(input: &str) -> anyhow::Result<String> {
+    anyhow::ensure!(!input.trim().is_empty(), "fetched page has no content");
+    anyhow::ensure!(
+        !NOTION_TOOL_RESULT_PREAMBLE.is_match(input)
+            && !NOTION_SERIALIZED_TITLE_WRAPPER.is_match(input),
+        "fetched page contained tool-result metadata instead of body content"
+    );
+    anyhow::ensure!(
+        !notion_page_is_mostly_database(input),
+        "fetched page is primarily a Notion database"
+    );
+
+    let markdown = normalize_notion_markdown(input);
+    anyhow::ensure!(
+        !markdown.trim().is_empty(),
+        "fetched page has no supported body content"
+    );
+    anyhow::ensure!(
+        !contains_outside_fenced_code(&markdown, &UNHANDLED_NOTION_MARKUP),
+        "fetched page contained unsupported Notion markup after normalization"
+    );
+    Ok(markdown)
+}
+
+fn notion_page_is_mostly_database(input: &str) -> bool {
+    let without_databases = remove_notion_databases(input);
+    if without_databases == input {
+        return false;
+    }
+
+    // Database blocks often contain only a title/reference rather than their
+    // full row data. A page with fewer than roughly two paragraphs of
+    // non-database text is therefore treated as database-first and left out.
+    let remaining_text = INLINE_TAG_RE.replace_all(&without_databases, "");
+    let substantive_chars = remaining_text
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .count();
+    substantive_chars < 200
+}
+
+fn notion_page_link(attrs: &str, body_label: Option<std::borrow::Cow<'_, str>>) -> String {
+    let mut url = None;
+    let mut title = None;
+    for captures in NOTION_ATTR_RE.captures_iter(attrs) {
+        match &captures["name"] {
+            "url" => url = Some(captures["value"].to_string()),
+            "title" => title = Some(captures["value"].to_string()),
+            _ => {}
+        }
+    }
+    let Some(url) = url else {
+        return body_label.unwrap_or_default().into_owned();
+    };
+    let label = body_label
+        .as_deref()
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .or_else(|| {
+            title
+                .as_deref()
+                .map(str::trim)
+                .filter(|label| !label.is_empty())
+        })
+        .unwrap_or("Notion page");
+    format!("[{}]({url})", escape_markdown_link_label(label))
+}
+
+fn notion_media_link(attrs: &str, body_label: &str) -> String {
+    let attributes = notion_attributes(attrs);
+    let Some(url) = attributes
+        .get("src")
+        .or_else(|| attributes.get("url"))
+        .filter(|url| is_web_url(url))
+    else {
+        return INLINE_TAG_RE.replace_all(body_label, "").trim().to_string();
+    };
+    let label = INLINE_TAG_RE.replace_all(body_label, "");
+    let label = label.trim();
+    let label = if label.is_empty() {
+        "Notion file"
+    } else {
+        label
+    };
+    format!("[{}]({url})", escape_markdown_link_label(label))
+}
+
+fn notion_unknown_block(attrs: &str) -> String {
+    let attributes = notion_attributes(attrs);
+    let Some(url) = attributes.get("url").filter(|url| is_web_url(url)) else {
+        return String::new();
+    };
+    let label = attributes
+        .get("alt")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .unwrap_or("Unsupported Notion content");
+    format!("[{}]({url})", escape_markdown_link_label(label))
+}
+
+fn notion_date_mention(attrs: &str) -> String {
+    let attributes = notion_attributes(attrs);
+    let Some(start) = attributes.get("start") else {
+        return String::new();
+    };
+    let mut label = humanize_notion_date(start);
+    if let Some(time) = attributes.get("startTime").filter(|time| !time.is_empty()) {
+        label.push(' ');
+        label.push_str(time);
+    }
+    if let Some(end) = attributes
+        .get("end")
+        .filter(|end| !end.is_empty() && *end != start)
+    {
+        label.push_str(" – ");
+        label.push_str(&humanize_notion_date(end));
+    }
+    label
+}
+
+fn humanize_notion_date(value: &str) -> String {
+    chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map(|date| date.format("%B %-d, %Y").to_string())
+        .unwrap_or_else(|_| value.to_string())
+}
+
+fn notion_attributes(attrs: &str) -> std::collections::HashMap<String, String> {
+    NOTION_ATTR_RE
+        .captures_iter(attrs)
+        .map(|captures| (captures["name"].to_string(), captures["value"].to_string()))
+        .collect()
+}
+
+fn escape_markdown_link_label(label: &str) -> String {
+    label
+        .replace('\\', "\\\\")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+}
+
+#[derive(Debug)]
+enum DroppedNotionContainer {
+    Plain,
+    Callout {
+        icon: Option<String>,
+        emitted_icon: bool,
+    },
+}
+
+fn flatten_notion_containers(input: &str) -> String {
+    let mut output = Vec::new();
+    let mut containers: Vec<DroppedNotionContainer> = Vec::new();
+
+    for line in input.lines() {
+        let trimmed = line.trim();
+        if is_notion_container_close(trimmed) {
+            containers.pop();
+            continue;
+        }
+        if let Some(container) = notion_container_open(trimmed) {
+            containers.push(container);
+            continue;
+        }
+
+        let mut flattened = drop_notion_container_indentation(line, containers.len()).to_string();
+        if containers
+            .iter()
+            .any(|container| matches!(container, DroppedNotionContainer::Callout { .. }))
+        {
+            let icon = containers
+                .iter_mut()
+                .rev()
+                .find_map(|container| match container {
+                    DroppedNotionContainer::Callout { icon, emitted_icon } if !*emitted_icon => {
+                        *emitted_icon = true;
+                        icon.take()
+                    }
+                    _ => None,
+                });
+            flattened = match (icon, flattened.trim().is_empty()) {
+                (Some(icon), false) => format!("> {icon} {flattened}"),
+                (Some(icon), true) => format!("> {icon}"),
+                (None, false) => format!("> {flattened}"),
+                (None, true) => ">".to_string(),
+            };
+        }
+        output.push(flattened);
+    }
+
+    output.join("\n")
+}
+
+fn notion_container_open(line: &str) -> Option<DroppedNotionContainer> {
+    for tag in [
+        "details",
+        "columns",
+        "column",
+        "synced_block",
+        "synced_block_reference",
+    ] {
+        if line.starts_with(&format!("<{tag}")) && line.ends_with('>') {
+            return Some(DroppedNotionContainer::Plain);
+        }
+    }
+    if line.starts_with("<callout") && line.ends_with('>') {
+        let attrs = line
+            .strip_prefix("<callout")
+            .and_then(|line| line.strip_suffix('>'))
+            .unwrap_or_default();
+        return Some(DroppedNotionContainer::Callout {
+            icon: notion_attributes(attrs).remove("icon"),
+            emitted_icon: false,
+        });
+    }
+    None
+}
+
+fn is_notion_container_close(line: &str) -> bool {
+    [
+        "</details>",
+        "</callout>",
+        "</columns>",
+        "</column>",
+        "</synced_block>",
+        "</synced_block_reference>",
+    ]
+    .contains(&line)
+}
+
+fn drop_notion_container_indentation(mut line: &str, levels: usize) -> &str {
+    for _ in 0..levels {
+        if let Some(rest) = line.strip_prefix('\t') {
+            line = rest;
+        } else if let Some(rest) = line.strip_prefix("    ") {
+            line = rest;
+        } else {
+            break;
+        }
+    }
+    line
+}
+
+fn normalize_escaped_notion_todos(input: &str) -> String {
+    input
+        .lines()
+        .map(|line| {
+            ESCAPED_NOTION_TODO
+                .captures(line)
+                .map(|captures| {
+                    format!(
+                        "{}- [{}]{}",
+                        &captures["indent"],
+                        captures["state"].to_ascii_lowercase(),
+                        &captures["rest"]
+                    )
+                })
+                .unwrap_or_else(|| line.to_string())
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn transform_outside_fenced_code(input: &str, mut transform: impl FnMut(&str) -> String) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut fragment = String::new();
+    let mut fence: Option<char> = None;
+
+    for line in input.split_inclusive('\n') {
+        let trimmed = line.trim_start();
+        let marker = trimmed
+            .chars()
+            .next()
+            .filter(|marker| matches!(marker, '`' | '~'))
+            .filter(|marker| trimmed.chars().take_while(|value| value == marker).count() >= 3);
+
+        match (fence, marker) {
+            (None, Some(marker)) => {
+                output.push_str(&transform(&fragment));
+                fragment.clear();
+                output.push_str(line);
+                fence = Some(marker);
+            }
+            (Some(open), Some(close)) if open == close => {
+                output.push_str(line);
+                fence = None;
+            }
+            (Some(_), _) => output.push_str(line),
+            (None, None) => fragment.push_str(line),
+        }
+    }
+    output.push_str(&transform(&fragment));
+    output
+}
+
+fn contains_outside_fenced_code(input: &str, pattern: &regex::Regex) -> bool {
+    let mut found = false;
+    let _ = transform_outside_fenced_code(input, |fragment| {
+        found |= pattern.is_match(fragment);
+        fragment.to_string()
+    });
+    found
+}
+
+fn convert_notion_tables(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut remaining = input;
+    while let Some(start) = remaining.find("<table") {
+        output.push_str(&remaining[..start]);
+        let table = &remaining[start..];
+        let Some(close_start) = table.find("</table>") else {
+            output.push_str(table);
+            return output;
+        };
+        let close_end = close_start + "</table>".len();
+        let fragment = &table[..close_end];
+        match notion_table_to_markdown(fragment) {
+            Some(converted) => output.push_str(&converted),
+            None => output.push_str(fragment),
+        }
+        remaining = &table[close_end..];
+    }
+    output.push_str(remaining);
+    output
+}
+
+fn notion_table_to_markdown(table: &str) -> Option<String> {
+    let mut rows: Vec<Vec<String>> = TABLE_ROW_RE
+        .captures_iter(table)
+        .filter_map(|row| {
+            let cells: Vec<String> = TABLE_CELL_RE
+                .captures_iter(&row["body"])
+                .map(|cell| normalize_notion_table_cell(&cell["body"]))
+                .collect();
+            (!cells.is_empty()).then_some(cells)
+        })
+        .collect();
+    let column_count = rows.iter().map(Vec::len).max()?;
+    if column_count == 0 {
+        return None;
+    }
+    for row in &mut rows {
+        row.resize(column_count, String::new());
+    }
+
+    let mut lines = Vec::with_capacity(rows.len() + 1);
+    for (index, row) in rows.into_iter().enumerate() {
+        lines.push(format!("| {} |", row.join(" | ")));
+        if index == 0 {
+            lines.push(format!(
+                "| {} |",
+                std::iter::repeat_n("---", column_count)
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ));
+        }
+    }
+    Some(lines.join("\n"))
+}
+
+fn normalize_notion_table_cell(cell: &str) -> String {
+    let with_breaks = BREAK_TAG_RE.replace_all(cell, "\n");
+    let without_tags = INLINE_TAG_RE.replace_all(&with_breaks, "");
+    without_tags
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\\n")
+        .replace('|', "&#124;")
 }
 
 /// Map a Linear workflow status name onto Macro's task status label.

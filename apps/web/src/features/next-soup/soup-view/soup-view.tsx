@@ -336,6 +336,8 @@ export const SoupView = (props: SoupViewProps) => {
   const hasPreviewItems = useSoupPreviewAvailability({
     rows: soupView.rows,
     isLoading: soupView.source.isLoading,
+    isFetching: soupView.source.isFetching,
+    isPlaceholderData: soupView.source.isPlaceholderData,
     splitHandle: panel.handle,
   });
   const openFocusedEntityInPreview = () => {

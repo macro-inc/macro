@@ -16,6 +16,97 @@ pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
 };
 
+/// The access scope under which a bot-authorized request is resolved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BotAccessScope {
+    /// Resolve access as the verified acting user.
+    User {
+        /// The verified acting user's identifier.
+        user_id: MacroUserIdStr<'static>,
+        /// The verified acting user's organization identifier, when present.
+        user_org_id: Option<i64>,
+    },
+    /// Resolve access from a team's shared access pool.
+    Team {
+        /// The owning team's identifier.
+        team_id: Uuid,
+    },
+}
+
+impl BotAccessScope {
+    /// Returns the verified acting user's identifier for user scope.
+    pub fn user_id(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self {
+            Self::User { user_id, .. } => Some(user_id),
+            Self::Team { .. } => None,
+        }
+    }
+
+    /// Returns the verified acting user's organization identifier for user scope.
+    pub fn user_org_id(&self) -> Option<i64> {
+        match self {
+            Self::User { user_org_id, .. } => *user_org_id,
+            Self::Team { .. } => None,
+        }
+    }
+
+    /// Returns the owning team's identifier for team scope.
+    pub fn team_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Team { team_id } => Some(*team_id),
+            Self::User { .. } => None,
+        }
+    }
+}
+
+/// The bot scope context retained in an entity-access receipt.
+///
+/// User organization identifiers are intentionally omitted because they are
+/// request-time authorization context rather than receipt identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "scope", rename_all = "snake_case")]
+pub enum BotReceiptScope {
+    /// Access was resolved as a verified acting user.
+    User {
+        /// The verified acting user's identifier.
+        acting_user: MacroUserIdStr<'static>,
+    },
+    /// Access was resolved from a team's shared access pool.
+    Team {
+        /// The owning team's identifier.
+        team_id: Uuid,
+    },
+}
+
+impl BotReceiptScope {
+    /// Returns the verified acting user's identifier for user scope.
+    pub fn acting_user_id(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self {
+            Self::User { acting_user } => Some(acting_user),
+            Self::Team { .. } => None,
+        }
+    }
+
+    /// Returns the owning team's identifier for team scope.
+    pub fn team_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Team { team_id } => Some(*team_id),
+            Self::User { .. } => None,
+        }
+    }
+}
+
+impl From<&BotAccessScope> for BotReceiptScope {
+    fn from(scope: &BotAccessScope) -> Self {
+        match scope {
+            BotAccessScope::User { user_id, .. } => Self::User {
+                acting_user: user_id.clone(),
+            },
+            BotAccessScope::Team { team_id } => Self::Team { team_id: *team_id },
+        }
+    }
+}
+
 /// A user's resolved access to a CRM entity (company or contact) paired with
 /// the entity's owning team — both produced by the same ownership lookup, so
 /// the team is guaranteed to be the one that granted access (not the user's
@@ -94,6 +185,10 @@ pub struct MemberParticipantRole;
 #[derive(Debug, Clone, Copy)]
 pub struct ViewOnly;
 
+/// Permission marker that accepts every valid entity permission.
+#[derive(Debug, Clone, Copy)]
+pub struct AnyEntityPermission;
+
 /// Trait implemented by marker types that encode a permission requirement.
 pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
     /// Returns whether the provided permission satisfies this requirement.
@@ -170,6 +265,12 @@ impl EntityPermission {
     /// Returns whether this permission satisfies the provided marker type.
     pub fn satisfies<T: RequiredPermission>(&self) -> bool {
         T::is_satisfied_by(self)
+    }
+}
+
+impl RequiredPermission for AnyEntityPermission {
+    fn is_satisfied_by(_permission: &EntityPermission) -> bool {
+        true
     }
 }
 
@@ -276,14 +377,50 @@ pub struct Entity {
     pub entity_type: EntityType,
 }
 
+/// Authentication context retained for a bot entity-access receipt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BotReceiptAuth {
+    bot_id: BotIdStr<'static>,
+    #[serde(flatten)]
+    scope: BotReceiptScope,
+}
+
+impl BotReceiptAuth {
+    /// Creates receipt authentication context for a bot and its access scope.
+    pub fn new(bot_id: BotIdStr<'static>, scope: BotReceiptScope) -> Self {
+        Self { bot_id, scope }
+    }
+
+    /// Returns the bot's canonical identifier.
+    pub fn bot_id(&self) -> BotId {
+        self.bot_id.bot_id()
+    }
+
+    /// Returns the bot's canonical storage principal.
+    pub fn bot_id_str(&self) -> &BotIdStr<'static> {
+        &self.bot_id
+    }
+
+    /// Returns the scope retained in the receipt.
+    pub fn scope(&self) -> &BotReceiptScope {
+        &self.scope
+    }
+}
+
+impl std::fmt::Display for BotReceiptAuth {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.bot_id)
+    }
+}
+
 /// The entity access auth type
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum EntityAccessAuth {
     /// The user is authenticated
     Authenticated(MacroUserIdStr<'static>),
-    /// A bot is authenticated.
-    Bot(BotIdStr<'static>),
+    /// A bot is authenticated under a specific access scope.
+    Bot(BotReceiptAuth),
     /// The user is unauthenticated
     Unauthenticated,
     /// Internally authenticated
@@ -307,6 +444,17 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
+    /// Re-tag this receipt for another permission requirement after
+    /// revalidating the already-resolved permission.
+    ///
+    /// This safely supports passing a stronger receipt to a read-only domain
+    /// method without repeating the underlying access lookup.
+    pub fn try_into_requirement<U: RequiredPermission>(
+        self,
+    ) -> Result<EntityAccessReceipt<U>, AccessError> {
+        EntityAccessReceipt::<U>::try_new(self.auth, self.entity, self.entity_permission)
+    }
+
     /// Creates an access receipt for the given auth after validating the
     /// provided permission against the required level `T`.
     pub fn try_new(
@@ -342,10 +490,15 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     /// Creates an access receipt for an authenticated bot after validating the provided permission.
     pub fn try_new_bot(
         bot_id: BotIdStr<'static>,
+        scope: BotReceiptScope,
         entity: Entity,
         entity_permission: EntityPermission,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Self::try_new(EntityAccessAuth::Bot(bot_id), entity, entity_permission)
+        Self::try_new(
+            EntityAccessAuth::Bot(BotReceiptAuth::new(bot_id, scope)),
+            entity,
+            entity_permission,
+        )
     }
 
     /// Get the authenticated user or return an authorization error.
@@ -358,13 +511,27 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
         }
     }
 
-    /// Get the authenticated bot or return an authorization error.
+    /// Get the authenticated bot's canonical storage principal or return an authorization error.
     pub fn get_authenticated_bot(&self) -> Result<&BotIdStr<'static>, AccessError> {
+        Ok(self.get_authenticated_bot_auth()?.bot_id_str())
+    }
+
+    /// Get the authenticated bot and receipt scope or return an authorization error.
+    pub fn get_authenticated_bot_auth(&self) -> Result<&BotReceiptAuth, AccessError> {
         match &self.auth {
-            EntityAccessAuth::Bot(bot_id) => Ok(bot_id),
+            EntityAccessAuth::Bot(bot_auth) => Ok(bot_auth),
             EntityAccessAuth::Authenticated(_)
             | EntityAccessAuth::Unauthenticated
             | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
+        }
+    }
+
+    /// Returns the direct user or verified acting user represented by this receipt.
+    pub fn acting_user_id(&self) -> Option<&MacroUserIdStr<'static>> {
+        match &self.auth {
+            EntityAccessAuth::Authenticated(user_id) => Some(user_id),
+            EntityAccessAuth::Bot(bot_auth) => bot_auth.scope().acting_user_id(),
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
         }
     }
 
@@ -436,11 +603,12 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     /// permission.
     pub fn dangerously_assert_bot(
         bot_id: BotIdStr<'static>,
+        scope: BotReceiptScope,
         entity_id: &str,
         entity_type: EntityType,
     ) -> EntityAccessReceipt<T> {
         EntityAccessReceipt {
-            auth: EntityAccessAuth::Bot(bot_id),
+            auth: EntityAccessAuth::Bot(BotReceiptAuth::new(bot_id, scope)),
             entity: Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,

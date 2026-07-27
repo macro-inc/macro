@@ -27,10 +27,15 @@ use uuid::Uuid;
 use super::*;
 use crate::{
     domain::models::{
-        AccessError, AccessLevel, AdminTeamRole, BotId, CallChannelInfo, EntityAccessAuth,
-        EntityPermission, TeamRole, UserTeamInfo,
+        AccessError, AccessLevel, AdminTeamRole, BotAccessScope, BotId, BotReceiptScope,
+        CallChannelInfo, EntityAccessAuth, EntityPermission, MemberTeamRole, OwnerTeamRole,
+        TeamRole, UserTeamInfo,
     },
-    inbound::axum_extractors::test_support::{VALID_BOT_TOKEN, valid_bot_authentication},
+    inbound::axum_extractors::test_support::{
+        BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BOT_TEAM_ID, BotAccessCall,
+        MALFORMED_SYSTEM_BOT_TOKEN, VALID_BOT_TOKEN, malformed_system_bot_authentication,
+        valid_bot_authentication,
+    },
 };
 
 const USER_ID: &str = "macro|team-member@example.com";
@@ -44,13 +49,23 @@ type V2Extractor = OptionalMacroUserTeamExtractorV2<
     FakeEntityAccessService,
     FakeAuthorizationService,
 >;
+type OptionalMemberV2Extractor = OptionalMacroUserTeamExtractorV2<
+    MemberTeamRole,
+    FakeEntityAccessService,
+    FakeAuthorizationService,
+>;
 type RequiredV2Extractor =
     MacroUserTeamExtractorV2<AdminTeamRole, FakeEntityAccessService, FakeAuthorizationService>;
+type RequiredMemberV2Extractor =
+    MacroUserTeamExtractorV2<MemberTeamRole, FakeEntityAccessService, FakeAuthorizationService>;
+type RequiredOwnerV2Extractor =
+    MacroUserTeamExtractorV2<OwnerTeamRole, FakeEntityAccessService, FakeAuthorizationService>;
 
 #[derive(Clone, Debug, Default)]
 struct FakeEntityAccessService {
     memberships: Arc<HashMap<String, UserTeamInfo>>,
     membership_lookups: Arc<Mutex<Vec<String>>>,
+    bot_calls: Arc<Mutex<Vec<BotAccessCall>>>,
 }
 
 impl FakeEntityAccessService {
@@ -71,6 +86,13 @@ impl FakeEntityAccessService {
             .expect("membership lookups lock poisoned")
             .clone()
     }
+
+    fn bot_calls(&self) -> Vec<BotAccessCall> {
+        self.bot_calls
+            .lock()
+            .expect("bot calls lock poisoned")
+            .clone()
+    }
 }
 
 impl EntityAccessService for FakeEntityAccessService {
@@ -86,11 +108,43 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        self.bot_calls
+            .lock()
+            .expect("bot calls lock poisoned")
+            .push(BotAccessCall {
+                bot_id,
+                scope: scope.clone(),
+                entity_id: entity_id.to_string(),
+                entity_type,
+            });
+
+        let requested_team_id = Uuid::parse_str(entity_id)
+            .map_err(|_| AccessError::BadRequest("Invalid team ID format"))?;
+        let role = match &scope {
+            BotAccessScope::User { user_id, .. } => self
+                .memberships
+                .get(user_id.as_ref())
+                .filter(|team| team.team_id == requested_team_id)
+                .map(|team| team.role)
+                .ok_or(AccessError::Unauthorized)?,
+            BotAccessScope::Team { team_id } if *team_id == requested_team_id => TeamRole::Member,
+            BotAccessScope::Team { .. } => return Err(AccessError::Unauthorized),
+        };
+
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::TeamRole { role },
+        )
     }
 
     async fn get_access_level(
@@ -202,11 +256,11 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         bot_scope: BotScope,
         _claims: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
-        if token != VALID_BOT_TOKEN {
-            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        match token {
+            VALID_BOT_TOKEN => Ok(valid_bot_authentication(bot_scope)),
+            MALFORMED_SYSTEM_BOT_TOKEN => Ok(malformed_system_bot_authentication(bot_scope)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
-
-        Ok(valid_bot_authentication(bot_scope))
     }
 
     async fn authorize_internal(
@@ -272,6 +326,14 @@ fn bearer_request(token: &str) -> Request<Body> {
         .expect("request should be valid")
 }
 
+fn bot_request(token: &str, scope: BotScope) -> Request<Body> {
+    Request::builder()
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, scope.as_str())
+        .body(Body::empty())
+        .expect("request should be valid")
+}
+
 async fn extract_v2(
     request: Request<Body>,
     state: &TestState,
@@ -280,12 +342,36 @@ async fn extract_v2(
     V2Extractor::from_request_parts(&mut parts, state).await
 }
 
+async fn extract_optional_member_v2(
+    request: Request<Body>,
+    state: &TestState,
+) -> Result<OptionalMemberV2Extractor, ExtractorError> {
+    let (mut parts, _) = request.into_parts();
+    OptionalMemberV2Extractor::from_request_parts(&mut parts, state).await
+}
+
 async fn extract_required_v2(
     request: Request<Body>,
     state: &TestState,
 ) -> Result<RequiredV2Extractor, ExtractorError> {
     let (mut parts, _) = request.into_parts();
     RequiredV2Extractor::from_request_parts(&mut parts, state).await
+}
+
+async fn extract_required_member_v2(
+    request: Request<Body>,
+    state: &TestState,
+) -> Result<RequiredMemberV2Extractor, ExtractorError> {
+    let (mut parts, _) = request.into_parts();
+    RequiredMemberV2Extractor::from_request_parts(&mut parts, state).await
+}
+
+async fn extract_required_owner_v2(
+    request: Request<Body>,
+    state: &TestState,
+) -> Result<RequiredOwnerV2Extractor, ExtractorError> {
+    let (mut parts, _) = request.into_parts();
+    RequiredOwnerV2Extractor::from_request_parts(&mut parts, state).await
 }
 
 async fn response_parts(response: Response) -> (StatusCode, String) {
@@ -297,13 +383,36 @@ async fn response_parts(response: Response) -> (StatusCode, String) {
     (status, body)
 }
 
-fn assert_receipt(receipt: &EntityAccessReceipt<AdminTeamRole>, user_id: &str, role: TeamRole) {
+fn assert_receipt<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+    user_id: &str,
+    role: TeamRole,
+) {
     assert_eq!(receipt.entity().entity_id, TEAM_ID.to_string());
     assert_eq!(receipt.entity().entity_type, EntityType::Team);
     assert!(matches!(
         receipt.auth(),
         EntityAccessAuth::Authenticated(actual_user_id) if actual_user_id.to_string() == user_id
     ));
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::TeamRole { role: actual_role } if *actual_role == role
+    ));
+}
+
+fn assert_bot_receipt<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+    team_id: Uuid,
+    role: TeamRole,
+    scope: BotReceiptScope,
+) {
+    assert_eq!(receipt.entity().entity_id, team_id.to_string());
+    assert_eq!(receipt.entity().entity_type, EntityType::Team);
+    assert_eq!(receipt.get_authenticated_bot().unwrap().bot_id(), BOT_ID);
+    assert_eq!(
+        receipt.get_authenticated_bot_auth().unwrap().scope(),
+        &scope
+    );
     assert!(matches!(
         receipt.entity_permission(),
         EntityPermission::TeamRole { role: actual_role } if *actual_role == role
@@ -380,46 +489,200 @@ async fn required_v2_rejects_expired_credentials() {
 }
 
 #[tokio::test]
-async fn team_extractors_forbid_bots_without_membership_lookup() {
-    let optional_state = state(
+async fn team_scoped_bot_gets_member_receipts_from_both_extractors() {
+    let state = state(
         FakeEntityAccessService::default(),
         FakeAuthorizationService::default(),
     );
-    let optional_error = extract_v2(
-        Request::builder()
-            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
-            .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
-            .body(Body::empty())
-            .expect("request should be valid"),
-        &optional_state,
-    )
-    .await
-    .expect_err("bot credentials should be forbidden");
-    let (status, body) = response_parts(optional_error.into_response()).await;
 
-    assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(body, r#"{"message":"forbidden"}"#);
-    assert!(optional_state.entity_access.membership_lookups().is_empty());
+    let optional = extract_optional_member_v2(bot_request(VALID_BOT_TOKEN, BotScope::Team), &state)
+        .await
+        .expect("team-scoped bot should be authorized");
+    let optional_receipt = optional
+        .entity_access_receipt
+        .expect("Member should satisfy optional team access");
+    assert_bot_receipt(
+        &optional_receipt,
+        BOT_TEAM_ID,
+        TeamRole::Member,
+        BotReceiptScope::Team {
+            team_id: BOT_TEAM_ID,
+        },
+    );
 
-    let required_state = state(
+    let required = extract_required_member_v2(bot_request(VALID_BOT_TOKEN, BotScope::Team), &state)
+        .await
+        .expect("team-scoped bot should satisfy required Member access");
+    assert_bot_receipt(
+        &required.entity_access_receipt,
+        BOT_TEAM_ID,
+        TeamRole::Member,
+        BotReceiptScope::Team {
+            team_id: BOT_TEAM_ID,
+        },
+    );
+
+    assert!(state.entity_access.membership_lookups().is_empty());
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [
+            BotAccessCall {
+                bot_id: BOT_ID,
+                scope: BotAccessScope::Team {
+                    team_id: BOT_TEAM_ID,
+                },
+                entity_id: BOT_TEAM_ID.to_string(),
+                entity_type: EntityType::Team,
+            },
+            BotAccessCall {
+                bot_id: BOT_ID,
+                scope: BotAccessScope::Team {
+                    team_id: BOT_TEAM_ID,
+                },
+                entity_id: BOT_TEAM_ID.to_string(),
+                entity_type: EntityType::Team,
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn team_scoped_bot_cannot_satisfy_admin_or_owner_requirements() {
+    let state = state(
         FakeEntityAccessService::default(),
         FakeAuthorizationService::default(),
     );
-    let required_error = extract_required_v2(
-        Request::builder()
-            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
-            .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
-            .body(Body::empty())
-            .expect("request should be valid"),
-        &required_state,
+
+    let optional = extract_v2(bot_request(VALID_BOT_TOKEN, BotScope::Team), &state)
+        .await
+        .expect("insufficient optional team access should still extract");
+    assert!(optional.entity_access_receipt.is_none());
+
+    let admin_error = extract_required_v2(bot_request(VALID_BOT_TOKEN, BotScope::Team), &state)
+        .await
+        .expect_err("team-scoped bot should not receive Admin access");
+    assert!(matches!(
+        admin_error,
+        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
+    ));
+
+    let owner_error =
+        extract_required_owner_v2(bot_request(VALID_BOT_TOKEN, BotScope::Team), &state)
+            .await
+            .expect_err("team-scoped bot should not receive Owner access");
+    assert!(matches!(
+        owner_error,
+        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
+    ));
+}
+
+#[tokio::test]
+async fn user_scoped_bot_uses_acting_users_team_and_actual_admin_role() {
+    let state = state(
+        FakeEntityAccessService::default().with_membership(BOT_ACTING_USER_ID, TeamRole::Admin),
+        FakeAuthorizationService::default(),
+    );
+
+    let extracted = extract_required_v2(bot_request(VALID_BOT_TOKEN, BotScope::User), &state)
+        .await
+        .expect("acting admin should satisfy required Admin access");
+
+    assert_bot_receipt(
+        &extracted.entity_access_receipt,
+        TEAM_ID,
+        TeamRole::Admin,
+        BotReceiptScope::User {
+            acting_user: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string())
+                .expect("valid acting user id"),
+        },
+    );
+    assert_eq!(
+        state.entity_access.membership_lookups(),
+        [BOT_ACTING_USER_ID.to_string()]
+    );
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::User {
+                user_id: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string())
+                    .expect("valid acting user id"),
+                user_org_id: Some(i64::from(BOT_ACTING_USER_ORGANIZATION_ID)),
+            },
+            entity_id: TEAM_ID.to_string(),
+            entity_type: EntityType::Team,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_without_acting_user_is_unauthorized() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_v2(
+        bot_request(MALFORMED_SYSTEM_BOT_TOKEN, BotScope::User),
+        &state,
     )
     .await
-    .expect_err("bot credentials should be forbidden");
-    let (status, body) = response_parts(required_error.into_response()).await;
+    .expect_err("user scope without an acting user should fail");
 
-    assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(body, r#"{"message":"forbidden"}"#);
-    assert!(required_state.entity_access.membership_lookups().is_empty());
+    assert!(matches!(
+        error,
+        ExtractorError::UnauthorizedWithMessage("bot user scope requires an acting user")
+    ));
+    assert!(state.entity_access.membership_lookups().is_empty());
+    assert!(state.entity_access.bot_calls().is_empty());
+}
+
+#[tokio::test]
+async fn user_scoped_bot_without_team_membership_has_no_team_access() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let optional = extract_v2(bot_request(VALID_BOT_TOKEN, BotScope::User), &state)
+        .await
+        .expect("missing optional team access should still extract");
+    assert!(optional.entity_access_receipt.is_none());
+
+    let error = extract_required_v2(bot_request(VALID_BOT_TOKEN, BotScope::User), &state)
+        .await
+        .expect_err("acting user without a team should fail required extraction");
+    assert!(matches!(
+        error,
+        ExtractorError::UnauthorizedWithMessage("not in a team")
+    ));
+    assert_eq!(
+        state.entity_access.membership_lookups(),
+        [
+            BOT_ACTING_USER_ID.to_string(),
+            BOT_ACTING_USER_ID.to_string(),
+        ]
+    );
+    assert!(state.entity_access.bot_calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_scoped_bot_without_team_id_is_unauthorized() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_member_v2(
+        bot_request(MALFORMED_SYSTEM_BOT_TOKEN, BotScope::Team),
+        &state,
+    )
+    .await
+    .expect_err("team scope without an owning team should fail");
+
+    assert!(matches!(error, ExtractorError::Unauthorized));
+    assert!(state.entity_access.membership_lookups().is_empty());
+    assert!(state.entity_access.bot_calls().is_empty());
 }
 
 #[tokio::test]

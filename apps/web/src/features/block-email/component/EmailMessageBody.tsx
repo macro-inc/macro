@@ -287,9 +287,10 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         // Use zoom instead of transform: scale() so that backgrounds,
         // borders, and layout all shrink together without clipping.
         messageDiv.style.zoom = `${scale}`;
-      } else {
-        messageDiv.style.overflow = 'auto';
       }
+      // When content fits, leave overflow alone — an overflow:auto wrapper
+      // turns hidden tracking-pixel divs (e.g. max-height:1px) into a
+      // message-height scrollbar.
     };
 
     // Re-run on container resize (e.g. orientation change, split resize)

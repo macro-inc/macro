@@ -1,5 +1,8 @@
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
+#[cfg(feature = "entity_mutation")]
+/// Unified entity-mutation capability impls.
+pub mod entity_mutation;
 /// Domain events emitted by channel workflows.
 pub mod events;
 /// Legacy channel list service implementation.

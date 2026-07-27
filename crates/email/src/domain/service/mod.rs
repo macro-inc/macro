@@ -5,6 +5,9 @@ mod signature;
 mod thread;
 mod thread_labels;
 
+/// Unified entity-mutation capability impls.
+mod entity_mutation;
+
 use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{

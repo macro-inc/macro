@@ -1,19 +1,29 @@
 //! Default [`MessageService`] implementation.
 
+#[cfg(test)]
+mod test;
+
 use agent::types::ChatMessageContent;
 use attachment::{Attachable, AttachmentService, FormattedParts};
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::{AttachmentType, NewChatMessage};
 use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 
+use crate::domain::events::{ChatMacroEvent, ChatMessageSentMetadata};
 use crate::domain::models::{ChatErr, ResolvedMessageContent, Result};
 use crate::domain::ports::{MessageRepo, MessageService};
 
 /// Concrete [`MessageService`] backed by a [`MessageRepo`] and [`AttachmentService`].
-pub struct MessageServiceImpl<R, A> {
+pub struct MessageServiceImpl<R, A, B = NoopMacroEventBroker>
+where
+    B: MacroEventBroker,
+{
     repo: R,
     attachment_service: A,
+    event_broker: B,
 }
 
 impl<R: MessageRepo, A: AttachmentService> MessageServiceImpl<R, A> {
@@ -22,7 +32,28 @@ impl<R: MessageRepo, A: AttachmentService> MessageServiceImpl<R, A> {
         Self {
             repo,
             attachment_service,
+            event_broker: NoopMacroEventBroker,
         }
+    }
+}
+
+impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageServiceImpl<R, A, B> {
+    /// Replaces the event broker while preserving the other dependencies.
+    pub fn with_event_broker<B2: MacroEventBroker>(
+        self,
+        event_broker: B2,
+    ) -> MessageServiceImpl<R, A, B2> {
+        MessageServiceImpl {
+            repo: self.repo,
+            attachment_service: self.attachment_service,
+            event_broker,
+        }
+    }
+
+    fn publish_chat_event(&self, event: &ChatMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to schedule chat event");
+        }));
     }
 
     async fn resolve_attachments(
@@ -46,7 +77,9 @@ impl<R: MessageRepo, A: AttachmentService> MessageServiceImpl<R, A> {
     }
 }
 
-impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl<R, A> {
+impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
+    for MessageServiceImpl<R, A, B>
+{
     #[tracing::instrument(err, skip(self, message))]
     async fn create(
         &self,
@@ -67,6 +100,10 @@ impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl
 
         let resolved = self.resolve_attachments(user_id, &entities).await?;
 
+        let role = message.role;
+        let model = message.model.clone();
+        let attachment_count = message.attachments.as_deref().map(<[_]>::len).unwrap_or(0);
+
         let message_id = self.repo.create(chat_id, message).await?;
 
         if let Some(ref parts) = resolved {
@@ -74,6 +111,15 @@ impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl
                 .store_resolved_message(&message_id, parts.clone())
                 .await?;
         }
+
+        self.publish_chat_event(&ChatMacroEvent::message_sent(ChatMessageSentMetadata {
+            chat_id: chat_id.to_owned(),
+            message_id: message_id.clone(),
+            role: role.into(),
+            model,
+            actor_user_id: Some(user_id.clone().into_owned()),
+            attachment_count,
+        }));
 
         Ok(ResolvedMessageContent {
             message_id,
@@ -83,7 +129,22 @@ impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl
 
     #[tracing::instrument(err, skip(self, message))]
     async fn store(&self, chat_id: &str, message: NewChatMessage) -> Result<String> {
-        self.repo.create(chat_id, message).await
+        let role = message.role;
+        let model = message.model.clone();
+        let attachment_count = message.attachments.as_deref().map(<[_]>::len).unwrap_or(0);
+
+        let message_id = self.repo.create(chat_id, message).await?;
+
+        self.publish_chat_event(&ChatMacroEvent::message_sent(ChatMessageSentMetadata {
+            chat_id: chat_id.to_owned(),
+            message_id: message_id.clone(),
+            role: role.into(),
+            model,
+            actor_user_id: None,
+            attachment_count,
+        }));
+
+        Ok(message_id)
     }
 
     #[tracing::instrument(err, skip(self, content))]

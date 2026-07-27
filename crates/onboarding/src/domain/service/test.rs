@@ -273,3 +273,27 @@ async fn reconcile_ignores_users_who_never_entered_the_flow() {
     service.reconcile(user()).await.expect("reconcile");
     assert!(import.gathers.lock().unwrap().is_empty());
 }
+
+#[test]
+fn suggested_team_domain_offers_custom_domains_only() {
+    // Custom domain: worth suggesting a domain team — the same judgment
+    // the teams service applies when claiming a domain on create.
+    assert_eq!(suggested_team_domain(&user()).as_deref(), Some("macro.com"));
+
+    // Generic consumer provider: no domain team to suggest.
+    let gmail =
+        MacroUserIdStr::try_from("macro|tester@gmail.com".to_string()).expect("valid test user id");
+    assert_eq!(suggested_team_domain(&gmail), None);
+}
+
+#[tokio::test]
+async fn get_state_carries_the_suggested_team_domain() {
+    let service = OnboardingServiceImpl::new(
+        MockRepo::new(OnboardingStatus::Active),
+        Arc::new(MockStore { records: vec![] }),
+        Arc::new(MockImport::default()),
+    );
+
+    let state = service.get_state(user()).await.expect("get_state");
+    assert_eq!(state.suggested_team_domain.as_deref(), Some("macro.com"));
+}

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -15,7 +15,11 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::Serialize;
+use models_pagination::{
+    CursorOptionExt, CursorWithValAndFilter, PaginateOn, Paginated, SimpleSortMethod,
+    TypeEraseCursor,
+};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -29,6 +33,7 @@ use crate::domain::{
 };
 
 const DEFAULT_CHANNEL_LIST_LIMIT: u32 = 100;
+const MAX_CHANNEL_LIST_LIMIT: u32 = 100;
 
 /// Router state for legacy channel-list endpoints.
 pub struct ChannelListRouterState<S, Auth> {
@@ -99,8 +104,13 @@ impl IntoResponse for ChannelListRouterErr {
     path = "/channels",
     tag = "channels",
     operation_id = "get_channels",
+    params(
+        ("limit" = Option<u32>, Query, description = "Page size (1-100, default 100)"),
+        ("cursor" = Option<String>, Query, description = "Opaque cursor for the next page"),
+    ),
     responses(
-        (status = 200, body=Vec<ApiChannelWithLatest>),
+        (status = 200, body=ApiChannelListPage),
+        (status = 400, body=String),
         (status = 401, body=String),
         (status = 404, body=String),
         (status = 500, body=String),
@@ -109,31 +119,55 @@ impl IntoResponse for ChannelListRouterErr {
 async fn get_channels_handler<S, Auth>(
     State(service): State<ChannelListRouterState<S, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-) -> Result<Json<Vec<ApiChannelWithLatest>>, ChannelListRouterErr>
+    Query(params): Query<GetChannelsQueryParams>,
+    cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,
+) -> Result<Json<ApiChannelListPage>, ChannelListRouterErr>
 where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
     let user = &authorization.authorization.user;
+    let limit = params
+        .limit
+        .unwrap_or(DEFAULT_CHANNEL_LIST_LIMIT)
+        .clamp(1, MAX_CHANNEL_LIST_LIMIT);
     let res = service
         .inner
         .get_channels(GetChannelsRequest {
             macro_id: user.macro_user_id.clone(),
-            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
+            // Fetch one extra row so pagination can distinguish a full final
+            // page from a page with more results.
+            limit: Some(limit.saturating_add(1)),
             include_frecency: true,
-            query: models_pagination::Query::Sort(
-                models_pagination::SimpleSortMethod::UpdatedAt,
-                None,
-            ),
+            query: cursor
+                .into_query(SimpleSortMethod::UpdatedAt, ())
+                .map_filter(|_| None),
         })
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 
-    Ok(Json(
-        res.into_iter()
+    let has_more = res.len() > limit as usize;
+    let Paginated {
+        items, next_cursor, ..
+    } = res
+        .into_iter()
+        .paginate_on(limit as usize, SimpleSortMethod::UpdatedAt)
+        .filter_on(())
+        .into_page()
+        .type_erase();
+
+    Ok(Json(ApiChannelListPage {
+        items: items
+            .into_iter()
             .map(ApiChannelWithLatest::new_from_domain)
             .collect(),
-    ))
+        next_cursor: next_cursor.filter(|_| has_more),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct GetChannelsQueryParams {
+    limit: Option<u32>,
 }
 
 #[tracing::instrument(skip(service, authorization))]
@@ -243,6 +277,15 @@ pub struct ApiChannelWithLatest {
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Aggregate frecency score.
     pub frecency_score: Option<f64>,
+}
+
+/// A cursor-paginated channel list response.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApiChannelListPage {
+    /// Channels in this page.
+    pub items: Vec<ApiChannelWithLatest>,
+    /// Opaque cursor for the next page, if one exists.
+    pub next_cursor: Option<String>,
 }
 
 impl ApiChannelWithLatest {

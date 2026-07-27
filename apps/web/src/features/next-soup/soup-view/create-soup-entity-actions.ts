@@ -317,8 +317,8 @@ export function createSoupEntityActions(): {
 
     if (entities.length === 1 && openTagPicker) {
       middleItems.push({
-        id: 'add-label',
-        label: 'Add label',
+        id: 'add-tag',
+        label: 'Add tag',
         onClick: openTagPicker,
       });
     }

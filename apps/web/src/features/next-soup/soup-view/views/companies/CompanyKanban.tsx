@@ -19,6 +19,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  type CrmCompanyEntity,
   Entity,
   type EntityData,
   formatTimestamp,
@@ -27,10 +28,11 @@ import {
 } from '@entity';
 import CircleDashed from '@phosphor/circle-dashed.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { getSoupEntityById } from '@queries/soup/normalized-cache';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Column key for companies without a Stage value. */
 const NO_STAGE_KEY = '';
@@ -59,7 +61,41 @@ type StageColumn = {
 export function CompanyKanban() {
   const { source, soup, stageFilter, searchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
-  const saveMutation = useBulkSaveEntityPropertiesMutation();
+
+  // Stage moves made while the board is fed by search results. Search rows
+  // bypass the normalized soup cache, so the mutation's optimistic update
+  // never reaches them — without this overlay a drop wouldn't move the card.
+  const [stageOverrides, setStageOverrides] = createSignal<
+    ReadonlyMap<string, string>
+  >(new Map());
+
+  const setStageOverride = (entityId: string, stageKey: string) => {
+    setStageOverrides((prev) => new Map(prev).set(entityId, stageKey));
+  };
+
+  // Drop an override, optionally only when it still points at `stageKey`
+  // (so a failed save doesn't undo a newer drag of the same card).
+  const clearStageOverride = (entityId: string, stageKey?: string) => {
+    setStageOverrides((prev) => {
+      if (stageKey !== undefined && prev.get(entityId) !== stageKey) {
+        return prev;
+      }
+      if (!prev.has(entityId)) return prev;
+      const next = new Map(prev);
+      next.delete(entityId);
+      return next;
+    });
+  };
+
+  const saveMutation = useBulkSaveEntityPropertiesMutation({
+    onError: (_error, variables) => {
+      for (const item of variables.properties) {
+        if (item.apiValues.valueType !== 'SELECT_STRING') continue;
+        const stageKey = item.apiValues.values?.[0] ?? NO_STAGE_KEY;
+        clearStageOverride(item.entityId, stageKey);
+      }
+    },
+  });
 
   const { stages, filterStages, stageProperty, resolveStage } = useDealStages();
   const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
@@ -98,7 +134,42 @@ export function CompanyKanban() {
     );
   });
 
-  const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
+  // Search results don't carry properties, which would strand every match
+  // in "No stage" (and skip closed-stage drag gating). Backfill from the
+  // normalized soup cache, which still holds the full rows the search is
+  // narrowing.
+  const companies = createMemo(() =>
+    source
+      .data()
+      .filter(isCrmCompanyEntity)
+      .map((entity) => {
+        if (entity.properties) return entity;
+        const cached = getSoupEntityById(entity.id);
+        return cached?.tag === 'crmCompany'
+          ? { ...entity, properties: cached.data.properties }
+          : entity;
+      })
+  );
+
+  /** The stage column a company renders in: pending drag moves win. */
+  const effectiveStage = (company: CrmCompanyEntity) =>
+    stageOverrides().get(company.id) ?? resolveStage(company) ?? NO_STAGE_KEY;
+
+  // Retire overrides the entity's own data has caught up with, so later
+  // remote stage changes aren't masked by a stale overlay.
+  createEffect(() => {
+    const overrides = stageOverrides();
+    if (overrides.size === 0) return;
+    for (const company of companies()) {
+      const override = overrides.get(company.id);
+      if (
+        override !== undefined &&
+        (resolveStage(company) ?? NO_STAGE_KEY) === override
+      ) {
+        clearStageOverride(company.id);
+      }
+    }
+  });
 
   // Mirror the list view's empty states: beyond CRM-unavailable, an empty
   // board ("No customers yet" / no search or filter matches) shows the
@@ -114,7 +185,7 @@ export function CompanyKanban() {
       stageColumns().map((column) => [column.key, []])
     );
     for (const company of companies()) {
-      const key = resolveStage(company) ?? NO_STAGE_KEY;
+      const key = effectiveStage(company);
       (buckets.get(buckets.has(key) ? key : NO_STAGE_KEY) ?? []).push(company);
     }
     return stageColumns().map((column) => ({
@@ -159,9 +230,9 @@ export function CompanyKanban() {
   const moveToStage = (entityId: string, stageKey: string) => {
     const entity = companies().find((company) => company.id === entityId);
     if (!entity) return;
-    const currentStage = resolveStage(entity) ?? NO_STAGE_KEY;
-    if (currentStage === stageKey) return;
+    if (effectiveStage(entity) === stageKey) return;
 
+    setStageOverride(entityId, stageKey);
     saveMutation.mutate({
       properties: [
         {

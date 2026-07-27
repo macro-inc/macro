@@ -71,6 +71,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 entity_access = { path = "../entity_access", default-features = false }
+generic_email_domains = { path = "../generic_email_domains" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

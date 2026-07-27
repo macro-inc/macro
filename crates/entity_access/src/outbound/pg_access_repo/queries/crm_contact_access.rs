@@ -1,6 +1,9 @@
 //! Query for CRM contact access level.
 
-use crate::domain::models::{CrmEntityAccess, TeamRole};
+#[cfg(test)]
+mod test;
+
+use crate::domain::models::{AccessLevel, CrmEntityAccess, TeamRole};
 use crate::outbound::pg_access_repo::queries::crm_company_access::team_role_to_access_level;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
@@ -48,4 +51,35 @@ pub async fn get_crm_contact_access(
             team_role: r.role,
         })
     }))
+}
+
+/// Resolve team-scoped access to a visible CRM contact owned by the team.
+///
+/// A hidden contact or hidden parent company is not visible in team scope.
+#[tracing::instrument(err, skip(pool))]
+pub async fn get_team_crm_contact_access(
+    pool: &PgPool,
+    contact_id: &Uuid,
+    team_id: &Uuid,
+) -> Result<Option<CrmEntityAccess>, sqlx::Error> {
+    sqlx::query_as!(
+        CrmEntityAccess,
+        r#"
+        SELECT
+            'view'::"AccessLevel" AS "access_level!: AccessLevel",
+            c.team_id AS "team_id!",
+            'member'::team_role AS "team_role!: TeamRole"
+        FROM crm_contacts ct
+        JOIN crm_companies c
+          ON c.id = ct.company_id
+        WHERE ct.id = $1
+          AND c.team_id = $2
+          AND ct.hidden = false
+          AND c.hidden = false
+        "#,
+        contact_id,
+        team_id,
+    )
+    .fetch_optional(pool)
+    .await
 }
