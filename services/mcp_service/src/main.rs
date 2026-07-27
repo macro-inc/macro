@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("MCP server listening on http://{addr}/mcp");
 
     let server_result = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("MCP server error");
 
@@ -102,35 +102,4 @@ async fn main() -> anyhow::Result<()> {
     }
 
     server_result
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        if let Err(error) = tokio::signal::ctrl_c().await {
-            tracing::error!(error=?error, "failed to install ctrl_c handler");
-        }
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            Ok(mut signal) => {
-                signal.recv().await;
-            }
-            Err(error) => {
-                tracing::error!(error=?error, "failed to install SIGTERM handler");
-                std::future::pending::<()>().await;
-            }
-        }
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-
-    tracing::info!("shutdown signal received");
 }
