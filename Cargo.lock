@@ -6040,7 +6040,6 @@ name = "graphql_common"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "axum",
  "axum-extra",
  "filter_ast",

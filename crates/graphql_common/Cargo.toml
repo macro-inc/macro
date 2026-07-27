@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
-async-trait = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 filter_ast = { path = "../filter_ast" }
