@@ -70,6 +70,10 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
 
   const isDone = () => ctx.isThreadDone();
 
+  // Matches TopBar: a send-only thread is permanently done, so the toggle
+  // would be a no-op in both directions.
+  const showMarkDoneToggle = () => !isDone() || ctx.canMarkThreadNotDone();
+
   const toggleMarkDone = () => {
     if (isDone()) {
       ctx.markThreadNotDone();
@@ -115,18 +119,20 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
               />
             </div>
 
-            <ReplyActionButton
-              icon={(iconProps) => (
-                <Show
-                  when={isDone()}
-                  fallback={<CheckIcon class={iconProps.class} />}
-                >
-                  <CheckBoldIcon class={cn(iconProps.class, 'text-accent')} />
-                </Show>
-              )}
-              ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
-              onClick={toggleMarkDone}
-            />
+            <Show when={showMarkDoneToggle()}>
+              <ReplyActionButton
+                icon={(iconProps) => (
+                  <Show
+                    when={isDone()}
+                    fallback={<CheckIcon class={iconProps.class} />}
+                  >
+                    <CheckBoldIcon class={cn(iconProps.class, 'text-accent')} />
+                  </Show>
+                )}
+                ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
+                onClick={toggleMarkDone}
+              />
+            </Show>
           </div>
         </div>
       </FloatRegionOrInline>
