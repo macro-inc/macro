@@ -27,7 +27,7 @@ use entity_access::{
     inbound::axum_extractors::ExtractorError,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use uuid::Uuid;
 
@@ -46,9 +46,11 @@ use crate::{
 /// router state, supporting direct credentials and internal service callers.
 ///
 /// Access derives from the caller's role on the owning team: team owners
-/// get `Owner`, admins get `Edit`, members get `View`. Hidden companies are
+/// get `Owner`, admins and members get `Edit`. Hidden companies are
 /// invisible to plain members — the extractor returns `Unauthorized` rather
-/// than leak existence.
+/// than leak existence. The caller's team role rides along in the receipt
+/// so the service can gate hidden-row visibility and governance mutations
+/// on admin/owner.
 ///
 /// Reads `company_id` from the path. The access check resolves the company's
 /// owning `team_id` from the same ownership row and bundles it into the
@@ -82,12 +84,13 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing company_id path parameter"))?;
         let company_id = extract_company_id(&path_params)?.to_string();
 
-        let MacroAuthorizationExtractor { macro_user_id, .. } =
-            MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
                 .await
                 .map_err(ExtractorError::from)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
-        let (permission, team_id) = service
+        let (permission, team_id, team_role) = service
             .get_crm_entity_permission_with_team(
                 Some(&macro_user_id),
                 &company_id,
@@ -110,7 +113,7 @@ where
         )?;
 
         Ok(Self {
-            receipt: CrmCompanyReceipt::new(receipt, team_id),
+            receipt: CrmCompanyReceipt::new(receipt, team_id, team_role),
             _marker: PhantomData,
         })
     }
@@ -157,12 +160,13 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing contact_id path parameter"))?;
         let contact_id = extract_contact_id(&path_params)?.to_string();
 
-        let MacroAuthorizationExtractor { macro_user_id, .. } =
-            MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
                 .await
                 .map_err(ExtractorError::from)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
-        let (permission, team_id) = service
+        let (permission, team_id, team_role) = service
             .get_crm_entity_permission_with_team(
                 Some(&macro_user_id),
                 &contact_id,
@@ -185,7 +189,7 @@ where
         )?;
 
         Ok(Self {
-            receipt: CrmContactReceipt::new(receipt, team_id),
+            receipt: CrmContactReceipt::new(receipt, team_id, team_role),
             _marker: PhantomData,
         })
     }
@@ -233,10 +237,11 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing comment_id path parameter"))?;
         let comment_id = extract_comment_id(&path_params)?;
 
-        let MacroAuthorizationExtractor { macro_user_id, .. } =
-            MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
                 .await
                 .map_err(ExtractorError::from)?;
+        let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
         let (crm_entity_type, entity_id) = crm_service
             .get_comment_entity(&comment_id)
@@ -251,11 +256,11 @@ where
         // can't tell apart "this comment doesn't exist" (404) from "this
         // comment exists but isn't yours" (401) — comment ids would
         // otherwise be a probable existence oracle.
-        let (permission, team_id) = match access_service
+        let (permission, team_id, team_role) = match access_service
             .get_crm_entity_permission_with_team(Some(&macro_user_id), &entity_id_str, entity_type)
             .await
         {
-            Ok(pair) => pair,
+            Ok(triple) => triple,
             Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
                 return Err(ExtractorError::NotFound("CRM comment not found"));
             }
@@ -277,8 +282,8 @@ where
 
         // entity_type is CrmCompany / CrmContact by construction, so this
         // never errors; surface any future mismatch as Internal.
-        let receipt =
-            CrmCommentReceipt::new(receipt, team_id).map_err(|_| ExtractorError::Internal)?;
+        let receipt = CrmCommentReceipt::new(receipt, team_id, team_role)
+            .map_err(|_| ExtractorError::Internal)?;
 
         Ok(Self {
             receipt,

@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, GenericErrorResponse, GenericResponse};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
@@ -30,18 +30,18 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user, req, _access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, req, _access), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { document_id }): Path<Params>,
     extract::Json(req): extract::Json<UpsertUserDocumentViewLocationRequest>,
 ) -> impl IntoResponse {
     if let Err(e) =
         macro_db_client::user_document_view_location::upsert::upsert_user_document_view_location(
             &ctx.db,
-            user.macro_user_id.as_ref(),
+            user.authorization.user.macro_user_id.as_ref(),
             &document_id,
             &req.location,
         )

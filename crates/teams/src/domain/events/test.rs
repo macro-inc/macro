@@ -1,5 +1,4 @@
 use macro_event_broker::{Event, MacroEvent};
-use macro_event_topics::Topic;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -261,7 +260,7 @@ fn every_variant_round_trips() {
 
         assert_eq!(decoded.key(), TEAM_ID);
         assert_eq!(decoded.event(), original.event());
-        assert_eq!(decoded.topic().as_str(), "macro.teams");
+        assert_eq!(decoded.topic(), "macro.teams");
     }
 }
 
@@ -270,7 +269,7 @@ fn constructors_use_teams_topic_bare_uuid_key_and_schema_version_one() {
     for event in macro_events() {
         assert_eq!(event.key(), TEAM_ID);
         assert!(!event.key().starts_with("team|"));
-        assert_eq!(event.topic().as_str(), "macro.teams");
+        assert_eq!(event.topic(), "macro.teams");
         assert_eq!(event.event().schema_version, 1);
     }
 }

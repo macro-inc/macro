@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{GenericErrorResponse, GenericResponse};
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -30,16 +30,16 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     let user_access_level: Option<AccessLevel> = match ctx
         .entity_access_service
         .get_access_level(
-            Some(&user.macro_user_id),
+            Some(&user.authorization.user.macro_user_id),
             &document_id,
             EntityType::Document,
         )

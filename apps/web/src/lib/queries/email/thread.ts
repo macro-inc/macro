@@ -200,6 +200,75 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
+type MarkThreadAsUnreadParams = {
+  threadId: string;
+  /** The inbox (email_links row) the thread belongs to; selects that inbox's
+   *  UNREAD label for multi-inbox users. */
+  linkId?: string;
+};
+
+/**
+ * Resolve an inbox's UNREAD system label from the cached labels list (the
+ * endpoint returns every inbox's labels; mirrors trashEmails' TRASH lookup).
+ */
+async function fetchUnreadLabelId(linkId?: string): Promise<string> {
+  const labelsData = await queryClient.fetchQuery({
+    queryKey: emailKeys.labels.queryKey,
+    queryFn: async () =>
+      throwOnErr(async () => await emailClient.getUserLabels()),
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = labelsData?.labels ?? [];
+  const unreadLabel =
+    (linkId
+      ? labels.find(
+          (l) => l.providerLabelId === 'UNREAD' && l.linkId === linkId
+        )
+      : undefined) ?? labels.find((l) => l.providerLabelId === 'UNREAD');
+  if (!unreadLabel) {
+    throw new Error('UNREAD label not found');
+  }
+  return unreadLabel.id;
+}
+
+/**
+ * Optimistically flip the soup row to unread. The thread messages cache is
+ * intentionally left alone for the same Suspense/scroll-reset reason as
+ * threadSeenOnMutate.
+ */
+function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
+  optimisticUpdateSoupEntity({
+    tag: 'emailThread',
+    data: { id: params.threadId, isRead: false },
+    frecency_score: 0,
+  });
+}
+
+/**
+ * Mutation to mark a thread as unread: adds the UNREAD label to all its
+ * messages — the backend also flips the thread-level flag and syncs Gmail.
+ */
+export function useMarkThreadAsUnreadMutation(
+  callbacks?: MutationCallbacks<void, Error, MarkThreadAsUnreadParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (params: MarkThreadAsUnreadParams) => {
+      const labelId = await fetchUnreadLabelId(params.linkId);
+      await throwOnErr(() =>
+        emailClient.updateThreadLabel({
+          thread_id: params.threadId,
+          label_id: labelId,
+          value: true,
+        })
+      );
+    },
+    ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
+      { onMutate: threadUnreadOnMutate },
+      callbacks
+    ),
+  }));
+}
+
 type ArchiveThreadParams = {
   threadId: string;
   archive: boolean;

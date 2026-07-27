@@ -157,7 +157,7 @@ where
         // Resolve the caller's permission on this company (derived from
         // their role on the owning team). Access failures collapse to
         // "not found" so company ids can't be probed across teams.
-        let (permission, team_id) = match service_context
+        let (permission, team_id, team_role) = match service_context
             .entity_access_service
             .get_crm_entity_permission_with_team(
                 Some(&request_context.user_id),
@@ -166,7 +166,7 @@ where
             )
             .await
         {
-            Ok(pair) => pair,
+            Ok(triple) => triple,
             Err(
                 AccessError::Unauthorized
                 | AccessError::UnauthorizedWithMessage(_)
@@ -196,7 +196,7 @@ where
             description: "failed to verify access to the CRM company".to_string(),
             internal_error: e.into(),
         })?;
-        let receipt = CrmCompanyReceipt::new(receipt, team_id);
+        let receipt = CrmCompanyReceipt::new(receipt, team_id, team_role);
 
         let record = service_context
             .service

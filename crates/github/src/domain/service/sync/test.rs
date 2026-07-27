@@ -288,6 +288,14 @@ impl DocumentService for StubDocumentService {
     async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
         unimplemented!()
     }
+
+    async fn record_interaction(
+        &self,
+        _document_id: &str,
+        _reason: documents::domain::events::InteractionReason,
+    ) -> anyhow::Result<()> {
+        unimplemented!()
+    }
 }
 
 /// Stateful stub repo that tracks task IDs per github key.

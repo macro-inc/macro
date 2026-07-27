@@ -7,7 +7,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use macro_sync_service_jwt::ISSUER;
 use model::{document::DocumentPermissionsToken, response::ErrorResponse};
 use utoipa::ToSchema;
@@ -34,10 +36,13 @@ pub struct DocumentPermissionsTokenRequest {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(config_context, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(
+    skip(config_context, user),
+    fields(actor = tracing::field::Empty)
+)]
 pub async fn handler(
     State(config_context): State<Arc<Config>>,
-    user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     extract::Json(DocumentPermissionsTokenRequest { token }): extract::Json<
         DocumentPermissionsTokenRequest,
     >,
@@ -47,7 +52,14 @@ pub async fn handler(
 
     validation.set_issuer(&[ISSUER]);
 
-    let user_id = user.macro_user_id.map(|user_id| user_id.to_string());
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+    let user_id = user
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
+        .map(|user| user.macro_user_id.to_string());
 
     // Attempt to decode the token.
     let decoded_jwt: DocumentPermissionsToken = match jsonwebtoken::decode::<DocumentPermissionsToken>(

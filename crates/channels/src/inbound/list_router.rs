@@ -5,17 +5,21 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
 };
 use frecency::domain::models::AggregateFrecency;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::Serialize;
+use models_pagination::{
+    CursorOptionExt, CursorWithValAndFilter, PaginateOn, Paginated, SimpleSortMethod,
+    TypeEraseCursor,
+};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -29,6 +33,7 @@ use crate::domain::{
 };
 
 const DEFAULT_CHANNEL_LIST_LIMIT: u32 = 100;
+const MAX_CHANNEL_LIST_LIMIT: u32 = 100;
 
 /// Router state for legacy channel-list endpoints.
 pub struct ChannelListRouterState<S, Auth> {
@@ -100,8 +105,13 @@ impl IntoResponse for ChannelListRouterErr {
     path = "/comms/channels",
     tag = "channels",
     operation_id = "get_channels",
+    params(
+        ("limit" = Option<u32>, Query, description = "Page size (1-100, default 100)"),
+        ("cursor" = Option<String>, Query, description = "Opaque cursor for the next page"),
+    ),
     responses(
-        (status = 200, body=Vec<ApiChannelWithLatest>),
+        (status = 200, body=ApiChannelListPage),
+        (status = 400, body=String),
         (status = 401, body=String),
         (status = 404, body=String),
         (status = 500, body=String),
@@ -109,34 +119,59 @@ impl IntoResponse for ChannelListRouterErr {
 )]
 async fn get_channels_handler<S, Auth>(
     State(service): State<ChannelListRouterState<S, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
-) -> Result<Json<Vec<ApiChannelWithLatest>>, ChannelListRouterErr>
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(params): Query<GetChannelsQueryParams>,
+    cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,
+) -> Result<Json<ApiChannelListPage>, ChannelListRouterErr>
 where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
+    let user = &authorization.authorization.user;
+    let limit = params
+        .limit
+        .unwrap_or(DEFAULT_CHANNEL_LIST_LIMIT)
+        .clamp(1, MAX_CHANNEL_LIST_LIMIT);
     let res = service
         .inner
         .get_channels(GetChannelsRequest {
-            macro_id: macro_user_id,
-            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
+            macro_id: user.macro_user_id.clone(),
+            // Fetch one extra row so pagination can distinguish a full final
+            // page from a page with more results.
+            limit: Some(limit.saturating_add(1)),
             include_frecency: true,
-            query: models_pagination::Query::Sort(
-                models_pagination::SimpleSortMethod::UpdatedAt,
-                None,
-            ),
+            query: cursor
+                .into_query(SimpleSortMethod::UpdatedAt, ())
+                .map_filter(|_| None),
         })
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 
-    Ok(Json(
-        res.into_iter()
+    let has_more = res.len() > limit as usize;
+    let Paginated {
+        items, next_cursor, ..
+    } = res
+        .into_iter()
+        .paginate_on(limit as usize, SimpleSortMethod::UpdatedAt)
+        .filter_on(())
+        .into_page()
+        .type_erase();
+
+    Ok(Json(ApiChannelListPage {
+        items: items
+            .into_iter()
             .map(ApiChannelWithLatest::new_from_domain)
             .collect(),
-    ))
+        next_cursor: next_cursor.filter(|_| has_more),
+    }))
 }
 
-#[tracing::instrument(skip(service))]
+#[derive(Debug, Deserialize)]
+struct GetChannelsQueryParams {
+    limit: Option<u32>,
+}
+
+#[tracing::instrument(skip(service, authorization))]
 #[utoipa::path(get,
     tag = "activity",
     operation_id = "get_activity",
@@ -149,15 +184,16 @@ where
 /// Handle legacy channel activity list requests.
 pub async fn get_activity_handler<S, Auth>(
     State(service): State<ChannelListRouterState<S, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ApiActivity>>, ChannelListRouterErr>
 where
     S: ChannelListService,
     Auth: MacroAuthorizationService,
 {
+    let user = &authorization.authorization.user;
     let res = service
         .inner
-        .get_activities(macro_user_id)
+        .get_activities(user.macro_user_id.clone())
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 
@@ -229,6 +265,8 @@ pub struct ApiChannelWithLatest {
     pub org_id: Option<u32>,
     /// Team id.
     pub team_id: Option<Uuid>,
+    /// Whether team members automatically join the channel.
+    pub auto_join_team: bool,
     /// Channel creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Channel last-updated timestamp.
@@ -237,6 +275,8 @@ pub struct ApiChannelWithLatest {
     pub owner_id: String,
     /// Active participants.
     pub participants: Vec<ApiChannelListParticipant>,
+    /// Whether the requesting user is an active participant of the channel.
+    pub is_participant: bool,
     /// Latest message including thread replies.
     pub latest_message: Option<ApiChannelListMessage>,
     /// Latest top-level non-thread message.
@@ -249,6 +289,15 @@ pub struct ApiChannelWithLatest {
     pub frecency_score: Option<f64>,
 }
 
+/// A cursor-paginated channel list response.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApiChannelListPage {
+    /// Channels in this page.
+    pub items: Vec<ApiChannelWithLatest>,
+    /// Opaque cursor for the next page, if one exists.
+    pub next_cursor: Option<String>,
+}
+
 impl ApiChannelWithLatest {
     fn new_from_domain(value: ChannelWithLatest) -> Self {
         let ch = ApiChannelListItem::new_from_domain(value.channel.channel);
@@ -259,6 +308,7 @@ impl ApiChannelWithLatest {
             channel_type: ch.channel_type,
             org_id: ch.org_id,
             team_id: ch.team_id,
+            auto_join_team: ch.auto_join_team,
             created_at: ch.created_at,
             updated_at: ch.updated_at,
             owner_id: ch.owner_id.to_string(),
@@ -268,6 +318,7 @@ impl ApiChannelWithLatest {
                 .into_iter()
                 .map(ApiChannelListParticipant::new_from_domain)
                 .collect(),
+            is_participant: value.channel.is_participant,
             latest_message: latest.latest_message,
             latest_non_thread_message: latest.latest_non_thread_message,
             viewed_at: value.viewed_at,
@@ -295,6 +346,8 @@ pub struct ApiChannelListItem {
     pub org_id: Option<u32>,
     /// id of the team this channel belongs to
     pub team_id: Option<Uuid>,
+    /// whether team members automatically join the channel
+    pub auto_join_team: bool,
     /// timestamp of when the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the channel was last updated
@@ -312,6 +365,7 @@ impl ApiChannelListItem {
             channel_type: ApiChannelListType::new_from_domain(value.channel_type),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
+            auto_join_team: value.auto_join_team,
             created_at: value.created_at,
             updated_at: value.updated_at,
             owner_id: value.owner_id,

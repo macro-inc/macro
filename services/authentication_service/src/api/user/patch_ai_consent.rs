@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -67,15 +67,16 @@ impl IntoResponse for PatchAiConsentError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=user_context.user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=user_context.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroAuthorizationExtractor<AuthorizationService>,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     extract::Json(req): extract::Json<PatchAiConsentRequest>,
 ) -> Result<Json<EmptyResponse>, PatchAiConsentError> {
-    let user_id = MacroUserId::parse_from_str(&user_context.user_context.user_id)
-        .map_err(|_| PatchAiConsentError::InvalidMacroUserId)?
-        .lowercase();
+    let user_id =
+        MacroUserId::parse_from_str(&user_context.authorization.user.user_context.user_id)
+            .map_err(|_| PatchAiConsentError::InvalidMacroUserId)?
+            .lowercase();
 
     macro_db_client::user::patch::patch_ai_consent(&ctx.db, &user_id, req.ai_data_consent)
         .await

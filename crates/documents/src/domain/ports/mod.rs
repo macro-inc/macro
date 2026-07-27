@@ -16,6 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
 use super::content::DocumentContent;
+use super::events::InteractionReason;
 use super::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -487,6 +488,14 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         document_id: &str,
         bytes: Vec<u8>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Publishes a `document.interaction` event: a real edit, a peer joining,
+    /// or the last peer leaving.
+    fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
     /// Get the team-share state of a document, resolved against the owner's team.
     fn get_team_share(

@@ -56,6 +56,61 @@ impl TeamPlan {
 /// requires the owner to subscribe.
 pub const FREE_TEAM_MAX_MEMBERS: i32 = 5;
 
+/// Slug assigned when a team name cannot be converted to a valid team slug.
+pub const DEFAULT_TEAM_SLUG: &str = "MACRO";
+
+const MAX_TEAM_SLUG_LEN: usize = 20;
+
+pub(crate) fn normalize_team_slug(slug: &str) -> Result<String, TeamError> {
+    let mut normalized = String::new();
+    let mut last_was_separator = false;
+
+    for ch in slug.chars() {
+        let normalized_char = if ch.is_ascii_alphabetic() {
+            ch.to_ascii_uppercase()
+        } else if ch == '_' || ch == '-' || ch.is_ascii_whitespace() {
+            '_'
+        } else {
+            return Err(TeamError::BadRequest(
+                "team slug may only contain ASCII letters, spaces, hyphens, and underscores"
+                    .to_string(),
+            ));
+        };
+
+        if normalized_char == '_' {
+            if !normalized.is_empty() && !last_was_separator {
+                normalized.push('_');
+            }
+            last_was_separator = true;
+        } else {
+            normalized.push(normalized_char);
+            last_was_separator = false;
+        }
+    }
+
+    while normalized.ends_with('_') {
+        normalized.pop();
+    }
+
+    if normalized.is_empty() {
+        return Err(TeamError::BadRequest(
+            "team slug cannot be empty".to_string(),
+        ));
+    }
+
+    if normalized.len() > MAX_TEAM_SLUG_LEN {
+        return Err(TeamError::BadRequest(format!(
+            "team slug cannot be longer than {MAX_TEAM_SLUG_LEN} characters"
+        )));
+    }
+
+    Ok(normalized)
+}
+
+pub(crate) fn team_slug_from_name(team_name: &str) -> String {
+    normalize_team_slug(team_name).unwrap_or_else(|_| DEFAULT_TEAM_SLUG.to_string())
+}
+
 #[derive(
     Eq,
     PartialEq,
@@ -243,82 +298,11 @@ pub struct TeamCheckoutSessionRequest {
     pub team_plan: TeamPlan,
 }
 
-/// Email domains of generic (free / consumer) email providers.
-///
-/// Teams may not enable automatic domain joining for these domains — a
-/// match on e.g. `gmail.com` would auto-join complete strangers to the
-/// team. Entries must be lowercase and sorted (verified by test) so
-/// [`is_generic_email_domain`] can binary search.
-pub const GENERIC_EMAIL_DOMAINS: &[&str] = &[
-    "126.com",
-    "163.com",
-    "aol.com",
-    "att.net",
-    "bellsouth.net",
-    "btinternet.com",
-    "charter.net",
-    "comcast.net",
-    "cox.net",
-    "daum.net",
-    "duck.com",
-    "earthlink.net",
-    "fastmail.com",
-    "free.fr",
-    "gmail.com",
-    "gmx.com",
-    "gmx.de",
-    "gmx.net",
-    "googlemail.com",
-    "hey.com",
-    "hotmail.co.uk",
-    "hotmail.com",
-    "hotmail.fr",
-    "icloud.com",
-    "laposte.net",
-    "live.com",
-    "mac.com",
-    "mail.com",
-    "mail.ru",
-    "me.com",
-    "msn.com",
-    "naver.com",
-    "orange.fr",
-    "outlook.com",
-    "pm.me",
-    "proton.me",
-    "protonmail.com",
-    "qq.com",
-    "rediffmail.com",
-    "rocketmail.com",
-    "sbcglobal.net",
-    "seznam.cz",
-    "sina.com",
-    "sky.com",
-    "t-online.de",
-    "tuta.com",
-    "tutanota.com",
-    "verizon.net",
-    "wanadoo.fr",
-    "web.de",
-    "yahoo.co.in",
-    "yahoo.co.uk",
-    "yahoo.com",
-    "yahoo.fr",
-    "yandex.com",
-    "yandex.ru",
-    "ymail.com",
-    "zoho.com",
-];
-
-/// Returns true when the email domain belongs to a generic (free /
-/// consumer) email provider that may not be used for automatic team
-/// joining. Matching is case-insensitive.
-pub fn is_generic_email_domain(domain: &str) -> bool {
-    let domain = domain.to_ascii_lowercase();
-    GENERIC_EMAIL_DOMAINS
-        .binary_search(&domain.as_str())
-        .is_ok()
-}
+// Teams may not enable automatic domain joining for generic domains — a
+// match on e.g. `gmail.com` would auto-join complete strangers to the
+// team. The list lives in its own crate so lightweight consumers (the
+// onboarding flow's team suggestion) share the same judgment.
+pub use generic_email_domains::{GENERIC_EMAIL_DOMAINS, is_generic_email_domain};
 
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]

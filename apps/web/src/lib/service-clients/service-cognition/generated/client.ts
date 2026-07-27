@@ -11,6 +11,7 @@ import type {
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
+  CompleteOnboardingRequest,
   CreateChatRequest,
   DeleteMcpServerParams,
   DocumentTextPart,
@@ -25,9 +26,13 @@ import type {
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
+  OnboardingRow,
+  OnboardingState,
   PatchChatRequest,
   ProjectionStateResponse,
   RejectToolCallRequest,
+  RunImportOutcome,
+  RunImportRequest,
   SendChatMessageResponse,
   ServerResponse,
   SetPricingRequest,
@@ -1196,6 +1201,214 @@ export const healthHandler = async (
 };
 
 /**
+ * @summary Accept staged imports (starts import jobs) and/or discard staged rows.
+ */
+export type runImportHandlerResponse200 = {
+  data: RunImportOutcome;
+  status: 200;
+};
+
+export type runImportHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type runImportHandlerResponseSuccess = runImportHandlerResponse200 & {
+  headers: Headers;
+};
+export type runImportHandlerResponseError = runImportHandlerResponse500 & {
+  headers: Headers;
+};
+
+export type runImportHandlerResponse =
+  | runImportHandlerResponseSuccess
+  | runImportHandlerResponseError;
+
+export const getRunImportHandlerUrl = () => {
+  return `/import/run`;
+};
+
+export const runImportHandler = async (
+  runImportRequest: RunImportRequest,
+  options?: RequestInit
+): Promise<runImportHandlerResponse> => {
+  const res = await fetch(getRunImportHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runImportRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: runImportHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as runImportHandlerResponse;
+};
+
+/**
+ * @summary Dismiss one source's import section.
+ */
+export type dismissRunHandlerResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type dismissRunHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type dismissRunHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type dismissRunHandlerResponseSuccess = dismissRunHandlerResponse204 & {
+  headers: Headers;
+};
+export type dismissRunHandlerResponseError = (
+  | dismissRunHandlerResponse400
+  | dismissRunHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type dismissRunHandlerResponse =
+  | dismissRunHandlerResponseSuccess
+  | dismissRunHandlerResponseError;
+
+export const getDismissRunHandlerUrl = (source: string) => {
+  return `/import/runs/${source}/dismiss`;
+};
+
+export const dismissRunHandler = async (
+  source: string,
+  options?: RequestInit
+): Promise<dismissRunHandlerResponse> => {
+  const res = await fetch(getDismissRunHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissRunHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as dismissRunHandlerResponse;
+};
+
+/**
+ * @summary Restart a failed (or dismissed) gather run for one source.
+ */
+export type retryGatherHandlerResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type retryGatherHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type retryGatherHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type retryGatherHandlerResponseSuccess =
+  retryGatherHandlerResponse204 & {
+    headers: Headers;
+  };
+export type retryGatherHandlerResponseError = (
+  | retryGatherHandlerResponse400
+  | retryGatherHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type retryGatherHandlerResponse =
+  | retryGatherHandlerResponseSuccess
+  | retryGatherHandlerResponseError;
+
+export const getRetryGatherHandlerUrl = (source: string) => {
+  return `/import/runs/${source}/retry`;
+};
+
+export const retryGatherHandler = async (
+  source: string,
+  options?: RequestInit
+): Promise<retryGatherHandlerResponse> => {
+  const res = await fetch(getRetryGatherHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryGatherHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryGatherHandlerResponse;
+};
+
+/**
+ * @summary Get the authenticated user's onboarding state. While the flow is active
+this also starts any gather runs that are due, so polling this endpoint
+is what keeps onboarding moving.
+ */
+export type getStateHandlerResponse200 = {
+  data: OnboardingState;
+  status: 200;
+};
+
+export type getStateHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type getStateHandlerResponseSuccess = getStateHandlerResponse200 & {
+  headers: Headers;
+};
+export type getStateHandlerResponseError = getStateHandlerResponse500 & {
+  headers: Headers;
+};
+
+export type getStateHandlerResponse =
+  | getStateHandlerResponseSuccess
+  | getStateHandlerResponseError;
+
+export const getGetStateHandlerUrl = () => {
+  return `/onboarding`;
+};
+
+export const getStateHandler = async (
+  options?: RequestInit
+): Promise<getStateHandlerResponse> => {
+  const res = await fetch(getGetStateHandlerUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getStateHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getStateHandlerResponse;
+};
+
+/**
  * @summary List all MCP servers configured for the authenticated user.
  */
 export type listMcpServersResponse200 = {
@@ -1607,6 +1820,56 @@ export const getMemoryHandler = async (
     status: res.status,
     headers: res.headers,
   } as getMemoryHandlerResponse;
+};
+
+/**
+ * @summary Complete (or skip) onboarding. Unreserved leftover onboarding-staged
+import candidates are deleted.
+ */
+export type completeHandlerResponse200 = {
+  data: OnboardingRow;
+  status: 200;
+};
+
+export type completeHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type completeHandlerResponseSuccess = completeHandlerResponse200 & {
+  headers: Headers;
+};
+export type completeHandlerResponseError = completeHandlerResponse500 & {
+  headers: Headers;
+};
+
+export type completeHandlerResponse =
+  | completeHandlerResponseSuccess
+  | completeHandlerResponseError;
+
+export const getCompleteHandlerUrl = () => {
+  return `/onboarding/complete`;
+};
+
+export const completeHandler = async (
+  completeOnboardingRequest: CompleteOnboardingRequest,
+  options?: RequestInit
+): Promise<completeHandlerResponse> => {
+  const res = await fetch(getCompleteHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(completeOnboardingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeHandlerResponse;
 };
 
 export type getBatchPreviewResponse200 = {

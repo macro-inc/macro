@@ -29,6 +29,7 @@ fn test_context() -> ApiContext {
             api_key: TEST_INTERNAL_API_KEY.to_string(),
             default_user_id: None,
         },
+        macro_authorization::NoBotAuthorizer,
     );
 
     ApiContext {

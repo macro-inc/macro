@@ -1,0 +1,15 @@
+name: Setup Nix dev shell
+description: Enter the repository Nix dev shell without configuring a cache provider.
+
+runs:
+  using: composite
+  steps:
+    - name: Enter Nix dev shell
+      shell: bash
+      run: |
+        set -euo pipefail
+        dev_env="$RUNNER_TEMP/nix-dev-env"
+        nix print-dev-env --accept-flake-config > "$dev_env"
+        echo "BASH_ENV=$dev_env" >> "$GITHUB_ENV"
+        source "$dev_env"
+        printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"

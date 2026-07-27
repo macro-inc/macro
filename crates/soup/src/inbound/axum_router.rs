@@ -46,7 +46,7 @@ use item_filters::{
     },
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -775,7 +775,7 @@ where
 )]
 pub async fn get_soup_handler<T, U, EAS, Auth>(
     State(service): State<SoupRouterState<T, U, EAS, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>,
     Query(params): Query<Params>,
     cursor: SoupCursor<EntityFilters>,
@@ -786,6 +786,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let macro_user_id = authorization.authorization.user.macro_user_id;
     let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Team receipt is plumbed through even for GET so that paginating a
     // team-scoped query via a cursor (which carries the original filter)
@@ -847,7 +848,7 @@ type SoupCursor<R> = axum_extra::either::Either<
 #[tracing::instrument(err, skip_all)]
 pub async fn post_soup_handler<T, U, EAS, Auth>(
     State(service): State<SoupRouterState<T, U, EAS, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>,
     cursor: SoupCursor<EntityFilters>,
     Json(PostSoupRequest {
@@ -862,6 +863,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let macro_user_id = authorization.authorization.user.macro_user_id;
     let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
@@ -913,7 +915,7 @@ pub struct PostSoupAstRequest {
 #[tracing::instrument(err, skip_all)]
 pub async fn post_soup_ast_handler<T, U, EAS, Auth>(
     State(service): State<SoupRouterState<T, U, EAS, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>,
     cursor: SoupCursor<ApiEntityFilterAst>,
     Json(PostSoupAstRequest {
@@ -928,6 +930,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let macro_user_id = authorization.authorization.user.macro_user_id;
     let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
@@ -1004,7 +1007,7 @@ enum GroupedSoupRequestMode {
 #[tracing::instrument(err, skip_all)]
 pub async fn post_grouped_soup_ast_handler<T, U, EAS, Auth>(
     State(service): State<SoupRouterState<T, U, EAS, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>>,
     Json(request): Json<PostGroupedSoupAstRequest>,
 ) -> Result<Json<GroupedSoupPage>, SoupHandlerErr>
@@ -1014,6 +1017,7 @@ where
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let macro_user_id = authorization.authorization.user.macro_user_id;
     let (filters, params, mode) = match request {
         PostGroupedSoupAstRequest::Initial(request) => (
             request.filters,

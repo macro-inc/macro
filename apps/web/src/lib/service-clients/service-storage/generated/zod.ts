@@ -1332,8 +1332,16 @@ export const ingestTranscriptBody = zod
 /**
  * @summary Handler for `POST /channels`.
  */
+export const createChannelBodyAutoJoinTeamDefault = false;
+
 export const createChannelBody = zod
   .object({
+    auto_join_team: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether team members automatically join this channel. Defaults to false.'
+      ),
     channel_type: zod
       .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
@@ -1885,7 +1893,17 @@ export const patchChannelParams = zod.object({
 
 export const patchChannelBody = zod
   .object({
+    auto_join_team: zod
+      .boolean()
+      .nullish()
+      .describe('Whether team members should automatically join the channel.'),
     channel_name: zod.string().nullish().describe('New channel name.'),
+    convert_to_team_channel: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel.'
+      ),
   })
   .describe('Request to patch a channel.');
 
@@ -1963,7 +1981,9 @@ export const createChannelScopedBotBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Team owner. Omit for a user-owned bot.'),
+      .describe(
+        'Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.'
+      ),
     token_expires_at: zod.iso
       .datetime({})
       .nullish()
@@ -2865,9 +2885,14 @@ export const postChannelBotWebhookParams = zod.object({
 });
 
 export const postChannelBotWebhookHeader = zod.object({
+  'x-macro-bot-token': zod
+    .string()
+    .nullish()
+    .describe('Preferred bot authentication token'),
   'x-macro-channel-bot-token': zod
     .string()
-    .describe('Bot authentication token'),
+    .nullish()
+    .describe('Legacy channel-scoped bot authentication token'),
 });
 
 export const postChannelBotWebhookBody = zod
@@ -3281,6 +3306,121 @@ export const createCrmCommentResponse = zod
   );
 
 /**
+ * @summary Manually create a CRM company for the caller's team. Any team member
+may create one. The domain must not already be tracked by the team
+(409), and the team's CRM killswitch must be on (403). Returns the
+created company in the same shape as `GET /crm/companies/{id}` (its
+contact list is empty until emails populate it).
+ */
+export const createCrmCompanyBody = zod
+  .object({
+    domain: zod
+      .string()
+      .describe(
+        'The company\'s email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
+      ),
+    name: zod
+      .string()
+      .describe(
+        'Display name for the company. Team-scoped: overrides the\ndomain-directory name on every read path.'
+      ),
+  })
+  .describe('Request body for `POST \/crm\/companies`.');
+
+export const createCrmCompanyResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this company.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display description from the primary domain's directory entry."
+      ),
+    domains: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the domain belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the domain record was created.'),
+            domain: zod.string().describe('The domain (e.g. \"acme.com\").'),
+            id: zod.uuid().describe('The id of the domain record.'),
+          })
+          .describe('A CRM domain associated with a company.')
+      )
+      .describe(
+        'All domains associated with this company, ordered by creation\ntime ascending (primary first).'
+      ),
+    emailSync: zod
+      .boolean()
+      .describe('Whether email sync is enabled for this company.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin\/owner callers see\nhidden companies so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the company.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+      ),
+    teamId: zod
+      .uuid()
+      .describe('The id of the team that owns this company record.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this company.'),
+  })
+  .describe(
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest."
+  );
+
+/**
  * @summary Fetch a single CRM company by id, hydrated with its domains, the
 primary domain's directory display metadata (name + description),
 and the company's contacts. Access is enforced by
@@ -3434,6 +3574,65 @@ export const listCompanyContactsResponse = zod.array(
 );
 
 /**
+ * @summary Manually create a contact under a CRM company. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
+that owns the company (hidden companies are reachable for
+admin/owner only, and the new contact then inherits `hidden`). The
+email's domain must be one of the company's domains (400), the
+company must not already track the email (409), and the team's CRM
+killswitch must be on (403).
+ */
+export const createCrmContactParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to add the contact to'),
+});
+
+export const createCrmContactBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The contact\'s email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company\'s domains (400 otherwise).'
+      ),
+    name: zod.string().describe('Display name for the contact.'),
+  })
+  .describe(
+    'Request body for `POST \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+export const createCrmContactResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
  * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
 it gates whether team members can see each other's emails with
 this company. Existing CRM data is unaffected.
@@ -3474,6 +3673,27 @@ export const setCompanyHiddenBody = zod
       ),
   })
   .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
+
+/**
+ * @summary Rename a CRM company. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
+that owns the company (hidden companies are reachable for
+admin/owner only). The name is a team-scoped override
+(`custom_name`) and never touches the global domain directory.
+ */
+export const setCrmCompanyNameParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to rename'),
+});
+
+export const setCrmCompanyNameBody = zod
+  .object({
+    name: zod
+      .string()
+      .describe(
+        'New display name for the company. Stored on the team-scoped\n`crm_companies.custom_name` override, which read paths COALESCE\nover the global directory name — the shared directory is never\nmodified. Must be non-blank (400 otherwise).'
+      ),
+  })
+  .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
 
 /**
  * @summary Fetch a single CRM contact by id. Access is enforced by
@@ -3538,6 +3758,27 @@ export const setContactHiddenBody = zod
   .describe('Request body for `PUT \/contacts\/{contact_id}\/hidden`.');
 
 /**
+ * @summary Rename a CRM contact. Access is enforced by
+[`CrmContactAccessLevelExtractor`]: the caller must be on the team
+that owns the contact's company (hidden contacts are reachable for
+admin/owner only). The name overwrites the team-scoped
+`crm_contacts.name` column.
+ */
+export const setCrmContactNameParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact to rename'),
+});
+
+export const setCrmContactNameBody = zod
+  .object({
+    name: zod
+      .string()
+      .describe(
+        'New display name for the contact. Stored on `crm_contacts.name`,\nwhich is already team-scoped — unlike company renames no global\ndirectory is involved. Must be non-blank (400 otherwise).'
+      ),
+  })
+  .describe('Request body for `PUT \/contacts\/{contact_id}\/name`.');
+
+/**
  * @summary Read the caller's team CRM configuration. Any team member may read;
 teams without a settings row get the defaults.
  */
@@ -3558,17 +3799,17 @@ export const getCrmTeamSettingsResponse = zod
     delete_records_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     edit_stages_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     team_views: zod
       .unknown()
@@ -3608,7 +3849,7 @@ export const putCrmTeamSettingsBody = zod
         zod
           .enum(['admin', 'owner'])
           .describe(
-            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+            'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
           ),
       ])
       .optional(),
@@ -3618,7 +3859,7 @@ export const putCrmTeamSettingsBody = zod
         zod
           .enum(['admin', 'owner'])
           .describe(
-            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+            'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
           ),
       ])
       .optional(),
@@ -3628,7 +3869,7 @@ export const putCrmTeamSettingsBody = zod
         zod
           .enum(['admin', 'owner'])
           .describe(
-            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+            'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
           ),
       ])
       .optional(),
@@ -3658,17 +3899,17 @@ export const putCrmTeamSettingsResponse = zod
     delete_records_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     edit_stages_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     team_views: zod
       .unknown()
@@ -6633,12 +6874,21 @@ export const getEntityPermissionResponse = zod
             ),
           zod
             .object({
+              type: zod.enum(['channel_view_only']),
+            })
+            .describe(
+              'View-only permission for a channel without an active participant role.'
+            ),
+          zod
+            .object({
               role: zod
                 .enum(['owner', 'admin', 'member'])
                 .describe('The role a user has within a channel.'),
               type: zod.enum(['channel_role']),
             })
-            .describe('Permission for channel-based entities.'),
+            .describe(
+              'Permission for channel-based entities with an active participant role.'
+            ),
           zod
             .object({
               role: zod
@@ -6651,7 +6901,7 @@ export const getEntityPermissionResponse = zod
             .describe('Permission for team-based entities.'),
         ])
         .describe(
-          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use view-only permission or participant roles."
         ),
       status: zod.enum(['access']),
     }),
@@ -8414,6 +8664,12 @@ export const getItemsSoupResponse = zod
                         .describe('Update timestamp.'),
                     })
                     .describe('Channel metadata in soup payloads.'),
+                  is_participant: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                    ),
                   participants: zod
                     .array(
                       zod
@@ -9468,6 +9724,12 @@ export const postItemsSoupBody = zod
           .nullish()
           .describe(
             'Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
+        is_participant: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
           ),
         mentions: zod
           .array(zod.string())
@@ -11279,6 +11541,12 @@ export const postItemsSoupResponse = zod
                         .describe('Update timestamp.'),
                     })
                     .describe('Channel metadata in soup payloads.'),
+                  is_participant: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                    ),
                   participants: zod
                     .array(
                       zod
@@ -13672,6 +13940,12 @@ export const postItemsSoupAstResponse = zod
                         .describe('Update timestamp.'),
                     })
                     .describe('Channel metadata in soup payloads.'),
+                  is_participant: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                    ),
                   participants: zod
                     .array(
                       zod
@@ -16359,6 +16633,12 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Update timestamp.'),
                           })
                           .describe('Channel metadata in soup payloads.'),
+                        is_participant: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                          ),
                         participants: zod
                           .array(
                             zod
@@ -18760,6 +19040,12 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Update timestamp.'),
                           })
                           .describe('Channel metadata in soup payloads.'),
+                        is_participant: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Whether the requesting user is an active participant of the channel.\nFalse for team channels of the user's teams they have not joined."
+                          ),
                         participants: zod
                           .array(
                             zod

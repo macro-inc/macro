@@ -1,4 +1,4 @@
-use crate::api::search::simple::SearchError;
+use crate::api::search::simple::{SearchError, simple_channel};
 use crate::api::search::terms::split_search_terms;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
@@ -13,11 +13,12 @@ use axum::{
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
-    ChannelMessageSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
+    ChannelMessageSearchResponseItem, ChannelNameSearchRequest, ChannelNameSearchResponse,
+    ChannelNameSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
     ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
     ChannelSortTimestamp,
 };
@@ -125,6 +126,47 @@ pub(in crate::api::search) async fn enrich_channel_messages(
         channel_histories,
         message_states,
     ))
+}
+
+/// Enriches channel name hits with channel metadata.
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_channel_names(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: Vec<opensearch_client::search::model::SearchHit>,
+) -> Result<Vec<ChannelNameSearchResponseItem>, SearchError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let (channel_histories, _) = fetch_channel_enrichment(ctx, user_id, &results).await?;
+    Ok(construct_channel_name_items(results, channel_histories))
+}
+
+fn construct_channel_name_items(
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
+    channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
+) -> Vec<ChannelNameSearchResponseItem> {
+    search_results
+        .into_iter()
+        .filter_map(|hit| {
+            let info = channel_histories.get(&hit.entity_id)?;
+            Some(ChannelNameSearchResponseItem {
+                metadata: Some(models_search::channel::ChannelMetadata {
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
+                    interacted_at: info.interacted_at,
+                }),
+                id: hit.entity_id,
+                owner_id: Some(info.user_id.clone()),
+                channel_type: info.channel_type.clone(),
+                channel_id: hit.entity_id,
+                highlight: hit.highlight.into(),
+                score: hit.score,
+            })
+        })
+        .collect()
 }
 
 /// Builds one per-message item per content hit. Drops hits whose channel has
@@ -251,7 +293,72 @@ pub fn construct_search_result(
 }
 
 pub fn router() -> Router<SearchHandlerState> {
-    Router::new().route("/", post(handler))
+    Router::new()
+        .route("/", post(handler))
+        .route("/name", post(name_handler))
+}
+
+/// Internal viewer-aware channel name search used by AI NameSearch.
+pub async fn name_handler(
+    State(ctx): State<SearchHandlerState>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, InternalOnly>,
+    extract::Query(query_params): extract::Query<SearchPaginationParams>,
+    extract::Json(req): extract::Json<ChannelNameSearchRequest>,
+) -> Result<Json<ChannelNameSearchResponse>, SearchError> {
+    let user_context = authorization
+        .authorization
+        .acting_user
+        .as_ref()
+        .ok_or(SearchError::NoUserId)?
+        .user_context
+        .clone();
+
+    let query = req.query.trim();
+    if query.len() < 3 {
+        return Err(SearchError::InvalidQuerySize);
+    }
+    let page_size = query_params.page_size.unwrap_or(10);
+    if !(0..=100).contains(&page_size) {
+        return Err(SearchError::InvalidPageSize);
+    }
+
+    let user_id = MacroUserId::parse_from_str(&user_context.user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_context.user_id.clone()))?
+        .lowercase();
+    let filters = item_filters::ChannelFilters::default();
+    let channels = simple_channel::filter_channels(
+        &ctx,
+        user_id.as_ref(),
+        user_context.organization_id,
+        &filters,
+    )
+    .await?;
+    let cursor = query_params
+        .cursor
+        .as_deref()
+        .and_then(SearchMethodCursor::decode)
+        .map(|cursor| SearchCursorOption::NotDone(Some(cursor)))
+        .unwrap_or_default();
+    let (hits, next_cursor) = simple_channel::search_names(
+        &ctx.db,
+        &user_id,
+        &channels,
+        query.to_string(),
+        req.match_type == MatchType::Exact,
+        page_size,
+        cursor,
+    )
+    .await?;
+    let results = enrich_channel_names(&ctx, user_id.as_ref(), hits).await?;
+    let next_cursor = match next_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => cursor.encode(),
+        _ => None,
+    };
+
+    Ok(Json(ChannelNameSearchResponse {
+        results,
+        next_cursor,
+    }))
 }
 
 /// Channel content search.
@@ -272,11 +379,16 @@ pub fn router() -> Router<SearchHandlerState> {
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
 ) -> Result<Json<ChannelSearchResponse>, SearchError> {
-    let user_id = authorization.user_context.user_id.clone();
+    let user_id = authorization
+        .authorization
+        .user
+        .user_context
+        .user_id
+        .clone();
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
@@ -321,6 +433,28 @@ pub async fn handler(
     if filters.channel_ids.is_empty() {
         return Err(SearchError::NoChannelIds);
     }
+
+    let channel_ids = simple_channel::filter_channels(
+        &ctx,
+        user_id.as_ref(),
+        authorization
+            .authorization
+            .user
+            .user_context
+            .organization_id,
+        &filters,
+    )
+    .await?
+    .channel_ids;
+
+    if channel_ids.is_empty() {
+        return Ok(Json(ChannelSearchResponse {
+            results: vec![],
+            next_cursor: None,
+            total_count: 0,
+        }));
+    }
+
     let sort_mode = match req.sort {
         ChannelSortTimestamp::Message => ChannelSortMode::Message,
         ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
@@ -332,7 +466,7 @@ pub async fn handler(
         match_type: req.match_type.to_string(),
         cursor: cursor_option,
         terms,
-        channel_ids: filters.channel_ids,
+        channel_ids: channel_ids.into_iter().map(|id| id.to_string()).collect(),
         thread_ids: filters.thread_ids,
         mentions: filters.mentions,
         sender_ids: filters.sender_ids,

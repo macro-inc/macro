@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::annotations::edit_anchor::edit_document_anchor;
 use model::{
     annotations::{
@@ -38,10 +38,10 @@ use super::comment_error_response;
 pub async fn edit_anchor_handler(
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<EditAnchorRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = user.authorization.user.macro_user_id.as_ref();
     match edit_document_anchor(&db, user_id, req).await {
         Ok(res) => {
             let response: EditAnchorResponse = res;

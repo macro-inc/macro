@@ -4,35 +4,48 @@
 //! Every xtask command needs to locate the repository Cargo workspace root (to
 //! anchor `cargo metadata`, read member manifests, spawn `wasm-pack`, …) and
 //! the repository root (where `docker/`, `infra/`, `apps/`, and the root
-//! `justfile` live). Both are derived from this crate's own
-//! manifest dir rather than the invocation cwd, so the commands work from
-//! anywhere in the repo.
-//!
-//! Centralizing the ancestor walk here means the hardcoded depth lives in one
-//! place: this crate sits at `<workspace>/tooling/xtask/crates/xtask_paths`, so
-//! the workspace root is four levels up regardless of which command crate
-//! calls in.
+//! `justfile` live). The root is discovered at runtime by walking ancestors of
+//! the invocation directory, with the running executable's directory as a
+//! fallback, so cached xtask artifacts never retain a stale checkout path.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 /// The repository Cargo workspace root.
 ///
-/// `env!("CARGO_MANIFEST_DIR")` expands to this crate's directory, which is a
-/// fixed location, so the depth here does not depend on the caller. Packaged
-/// xtask binaries can set `MACRO_REPO_ROOT` when they run against a staged copy
-/// of the repository rather than the checkout where they were compiled.
+/// Commands can run from any directory inside the repository. Packaged xtask
+/// binaries can set `MACRO_REPO_ROOT` when they run against a staged copy or
+/// from outside the repository.
 pub fn workspace_root() -> PathBuf {
-    if let Some(root) = repo_root_override() {
-        return root;
-    }
+    repo_root_override()
+        .or_else(discover_repo_root)
+        .unwrap_or_else(|| {
+            panic!(
+                "could not discover the repository root from the current directory or executable path; set MACRO_REPO_ROOT"
+            )
+        })
+}
 
-    // <workspace>/tooling/xtask/crates/xtask_paths -> nth(4) == <workspace>.
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+fn discover_repo_root() -> Option<PathBuf> {
+    std::env::current_dir()
+        .ok()
+        .and_then(|current_dir| find_repo_root_from(&current_dir))
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|executable| executable.parent().and_then(find_repo_root_from))
+        })
+}
+
+fn find_repo_root_from(start: &Path) -> Option<PathBuf> {
+    start
         .ancestors()
-        .nth(4)
-        .expect("xtask_paths manifest dir has no workspace root four levels up")
-        .to_owned()
+        .find(|candidate| is_repo_root(candidate))
+        .map(Path::to_owned)
+}
+
+fn is_repo_root(candidate: &Path) -> bool {
+    candidate.join("Cargo.toml").is_file() && candidate.join("tooling/xtask/Cargo.toml").is_file()
 }
 
 /// The repository root, which is also the Cargo workspace root.
@@ -355,43 +368,4 @@ macro_rules! runtime_path {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn typed_paths_validate_against_the_repository() {
-        let root = repo_root();
-        repo_file!("Cargo.toml").validate_at(&root).unwrap();
-        repo_dir!("apps/web").validate_at(&root).unwrap();
-        repo_glob!("services/**/Cargo.toml")
-            .validate_at(&root)
-            .unwrap();
-        repo_glob!(".github/actions/setup-cachix/**/*")
-            .validate_at(&root)
-            .unwrap();
-        assert_eq!(runtime_path!("artifacts/*").as_str(), "artifacts/*");
-    }
-
-    #[test]
-    fn dynamic_paths_reject_unsafe_syntax() {
-        assert!(RepoFile::try_new("../Cargo.toml").is_err());
-        assert!(RepoDir::try_new("/apps/web").is_err());
-        assert!(RepoGlob::try_new("services\\**").is_err());
-        assert!(RepoFile::try_new("Cargo.*").is_err());
-    }
-
-    #[test]
-    fn missing_paths_are_reported_by_kind() {
-        let root = repo_root();
-        let file_error = RepoFile::try_new("definitely-missing.txt")
-            .unwrap()
-            .validate_at(&root)
-            .unwrap_err();
-        let glob_error = RepoGlob::try_new("definitely-missing/**")
-            .unwrap()
-            .validate_at(&root)
-            .unwrap_err();
-        assert!(file_error.to_string().contains("repository file"));
-        assert!(glob_error.to_string().contains("matches no paths"));
-    }
-}
+mod test;

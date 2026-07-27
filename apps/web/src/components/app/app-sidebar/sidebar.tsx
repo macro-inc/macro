@@ -1328,7 +1328,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     <div
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
-        isExpanded() && 'relative h-full shrink-0 max-w-60 w-60 opacity-100',
+        isExpanded() && 'relative h-full shrink-0 max-w-55 w-55 opacity-100',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1336,7 +1336,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           !overlayOpen() &&
           'left-0 inset-y-0 h-full max-w-0 w-0 opacity-0 pointer-events-none -translate-x-2',
         isOverlayExpanded() &&
-          'left-0 inset-y-0 h-full max-w-60 w-60 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
+          'left-0 inset-y-0 h-full max-w-55 w-55 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
       )}
       data-expanded={isExpandedView()}
       data-slim={isSlim()}

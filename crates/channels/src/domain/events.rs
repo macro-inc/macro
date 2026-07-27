@@ -1,8 +1,9 @@
 //! Domain events emitted by channel mutation workflows.
 
 use crate::domain::models::{
-    ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
-    MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention, TypingAction,
+    ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, EntityMention,
+    MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
+    TypingAction,
 };
 use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -192,5 +193,15 @@ pub enum ChannelEvent {
         actor: MacroUserIdStr<'static>,
         /// Users removed by this mutation.
         removed_user_ids: Vec<MacroUserIdStr<'static>>,
+    },
+    /// A generic entity mention (e.g. a doc mentioning another entity) was recorded.
+    EntityMentionCreated {
+        /// The persisted mention row.
+        mention: EntityMention,
+    },
+    /// A generic entity mention was removed.
+    EntityMentionDeleted {
+        /// The mention row that was deleted.
+        mention: EntityMention,
     },
 }

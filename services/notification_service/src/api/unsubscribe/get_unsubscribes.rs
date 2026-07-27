@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use model_notifications::UserUnsubscribe;
 
@@ -24,11 +24,11 @@ use crate::api::context::{ApiContext, AuthorizationService};
 #[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
     let unsubscribe_items = notification_db_client::unsubscribe::get::get_user_unsubscribes(
         &ctx.db,
-        &user.user_context.user_id,
+        &user.authorization.user.user_context.user_id,
     )
     .await
     .map_err(|e| {

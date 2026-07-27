@@ -121,6 +121,9 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
         uri strip_prefix /sync
         reverse_proxy sync-service:8787
     }
+    handle_path /lexical/* {
+        reverse_proxy lexical-service:8096
+    }
 "#;
 
 const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WEBROOT), so no prefix strip —

@@ -70,6 +70,18 @@ pub trait FavoritesService: Send + Sync + 'static {
         receipt: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
+    /// Add an entity after a trusted caller has already established that the
+    /// user can view it.
+    ///
+    /// This supports internal workflows, such as favoriting an entity that the
+    /// same workflow just created for the user, where no access receipt exists
+    /// at the driving boundary.
+    fn add_favorite_with_established_access(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        entity: &Entity<'_>,
+    ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
+
     /// List the user's favorites in manual order.
     fn list_favorites(
         &self,

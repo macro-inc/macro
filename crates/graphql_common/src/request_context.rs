@@ -1,6 +1,6 @@
 use axum::{extract::FromRequestParts, http::request::Parts};
 
-/// Request-scoped HTTP request parts for a Soup GraphQL query.
+/// Request-scoped HTTP request parts for a Soup GraphQL operation.
 ///
 /// Resolvers run axum `FromRequestParts` extractors against these parts on
 /// demand instead of the embedding service loading everything upfront. This
@@ -10,12 +10,12 @@ use axum::{extract::FromRequestParts, http::request::Parts};
 /// Extraction results that should be computed once per request should be
 /// wrapped in `axum_extra::extract::Cached`, which memoizes inside the parts'
 /// extensions exactly like the REST routes do.
-pub struct GraphqlSoupRequestParts {
+pub struct GraphqlRequestParts {
     /// Mutable HTTP request parts shared by lazy resolver extractors.
     parts: tokio::sync::Mutex<Parts>,
 }
 
-impl GraphqlSoupRequestParts {
+impl GraphqlRequestParts {
     /// Wrap the parts of the incoming HTTP request.
     pub fn new(parts: Parts) -> Self {
         Self {

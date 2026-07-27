@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)\n               VALUES ($1, $2, $3)\n               ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0b834789998d86d421f4dff440dacee4c0870c84360148c91b5c214c7efb217c"
+}

@@ -15,11 +15,12 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, Entity, EntityAccessReceipt, EntityPermission, EntityType,
-        MemberParticipantRole, ParticipantRole as EntityParticipantRole, RequiredPermission,
-        UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, BotReceiptScope, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -69,12 +70,20 @@ struct PermissionCall {
 #[derive(Clone)]
 struct TestAccessService {
     mode: AccessMode,
+    channel_view_only: bool,
     permission_calls: Arc<Mutex<Vec<PermissionCall>>>,
 }
 
 impl TestAccessService {
     fn allow() -> Self {
         Self::new(AccessMode::Allow)
+    }
+
+    fn channel_view_only() -> Self {
+        Self {
+            channel_view_only: true,
+            ..Self::allow()
+        }
     }
 
     fn deny() -> Self {
@@ -88,6 +97,7 @@ impl TestAccessService {
     fn new(mode: AccessMode) -> Self {
         Self {
             mode,
+            channel_view_only: false,
             permission_calls: Arc::default(),
         }
     }
@@ -127,6 +137,7 @@ impl EntityAccessService for TestAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -186,6 +197,10 @@ impl EntityAccessService for TestAccessService {
             organization_id: user_org_id,
         });
 
+        if self.channel_view_only && entity_type == EntityType::Channel {
+            return Ok(EntityPermission::ChannelViewOnly);
+        }
+
         match self.mode {
             AccessMode::Allow => match entity_type {
                 EntityType::Channel => Ok(EntityPermission::ChannelRole {
@@ -205,7 +220,7 @@ impl EntityAccessService for TestAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
+    ) -> Result<(EntityPermission, uuid::Uuid, TeamRole), AccessError> {
         unimplemented!("channels test mock does not support CRM entity access")
     }
 
@@ -236,6 +251,9 @@ fn bot_actor_from_receipt_uses_canonical_principal() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let receipt = EntityAccessReceipt::<MemberParticipantRole>::try_new_bot(
         bot_id.into_storage_id(),
+        BotReceiptScope::Team {
+            team_id: Uuid::new_v4(),
+        },
         Entity {
             entity_id: Uuid::new_v4().to_string(),
             entity_type: EntityType::Channel,
@@ -642,6 +660,7 @@ impl ChannelService for JoinLinkService {
 
 #[derive(Clone, Default)]
 struct RecordingMutationService {
+    joins: Arc<Mutex<Vec<(Sender, Uuid)>>>,
     posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
 }
 
@@ -827,9 +846,10 @@ impl ChannelService for RecordingMutationService {
 
     async fn join_channel(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        actor: Sender,
+        channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
+        self.joins.lock().unwrap().push((actor, channel_id));
         Ok(())
     }
 
@@ -897,6 +917,7 @@ fn authorization_state_with_default(
             api_key: VALID_INTERNAL_KEY.to_string(),
             default_user_id: default_user_id.map(str::to_string),
         },
+        macro_authorization::NoBotAuthorizer,
     );
     (MacroAuthorizationState::new(Arc::new(service)), validator)
 }
@@ -1298,6 +1319,103 @@ async fn authenticated_user_can_join_by_code_without_channel_access() {
     let users = joined_users.lock().unwrap();
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].as_ref(), "macro|test@example.com");
+}
+
+#[tokio::test]
+async fn channel_view_only_user_can_join_channel_by_id() {
+    let channel_id = Uuid::new_v4();
+    let mutation_service = RecordingMutationService::default();
+    let joins = mutation_service.joins.clone();
+    let access_service = TestAccessService::channel_view_only();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        access_service.clone(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let response = router
+        .oneshot(
+            Request::post(format!("/{channel_id}/join"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        access_service.permission_calls(),
+        [PermissionCall {
+            user_id: Some(TEST_USER_ID.to_string()),
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+            organization_id: None,
+        }]
+    );
+    let joins = joins.lock().unwrap();
+    assert_eq!(joins.len(), 1);
+    assert_eq!(joins[0].0.as_ref(), TEST_USER_ID);
+    assert_eq!(joins[0].1, channel_id);
+}
+
+#[tokio::test]
+async fn user_without_channel_access_cannot_join_channel_by_id() {
+    let channel_id = Uuid::new_v4();
+    let mutation_service = RecordingMutationService::default();
+    let joins = mutation_service.joins.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        TestAccessService::deny(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let response = router
+        .oneshot(
+            Request::post(format!("/{channel_id}/join"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(joins.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn malformed_channel_id_does_not_invoke_join_service() {
+    let mutation_service = RecordingMutationService::default();
+    let joins = mutation_service.joins.clone();
+    let access_service = TestAccessService::channel_view_only();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        access_service.clone(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let response = router
+        .oneshot(
+            Request::post("/not-a-uuid/join")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        access_service.permission_calls(),
+        [PermissionCall {
+            user_id: Some(TEST_USER_ID.to_string()),
+            entity_id: "not-a-uuid".to_string(),
+            entity_type: EntityType::Channel,
+            organization_id: None,
+        }]
+    );
+    assert!(joins.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

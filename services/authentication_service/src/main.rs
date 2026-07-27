@@ -3,7 +3,22 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use channels::{
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
+    outbound::{
+        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+        contacts_dispatcher::ContactsChannelDispatcher,
+        notification_sender::NotificationChannelSender,
+        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        sqs_search_indexer::SqsChannelSearchIndexer,
+    },
+};
 use config::{Config, Environment};
+use connection_gateway_client::ConnectionGatewayClient;
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -23,9 +38,9 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::AppServiceUrl;
-use macro_service_urls::DocumentStorageServiceUrl;
-use macro_service_urls::EmailServiceUrl;
+use macro_service_urls::{
+    AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+};
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
@@ -44,8 +59,7 @@ use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
         contacts_enqueuer::ContactsIngressEnqueuer, customer_repo::CustomerRepositoryImpl,
-        team_analytics::AnalyticsClientTeamAnalytics,
-        team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
+        team_analytics::AnalyticsClientTeamAnalytics, team_repo::TeamRepositoryImpl,
     },
 };
 
@@ -58,7 +72,8 @@ use crate::api::context::{
     ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
     MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+use tokio_util::task::TaskTracker;
 
 mod api;
 mod config;
@@ -147,6 +162,11 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let fusionauth_public_url = config
+        .fusionauth_public_url
+        .value()
+        .unwrap_or(config.fusionauth_base_url.as_ref())
+        .to_owned();
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id.to_string(),
         fusionauth_api_key,
@@ -156,7 +176,8 @@ async fn main() -> anyhow::Result<()> {
         config.fusionauth_oauth_redirect_uri.to_string().clone(),
         config.google_client_id.to_string().clone(),
         google_client_secret,
-    );
+    )
+    .with_public_url(fusionauth_public_url);
     tracing::trace!("initialized auth client");
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
@@ -192,6 +213,7 @@ async fn main() -> anyhow::Result<()> {
             api_key: internal_api_key.to_string(),
             default_user_id: None,
         },
+        macro_authorization::NoBotAuthorizer,
     )));
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
@@ -283,30 +305,59 @@ async fn main() -> anyhow::Result<()> {
         stripe_client.clone(),
         config.stripe_price_id.to_string().clone(),
     );
-    let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
+    let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
+        favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
+    );
     let team_crm_settings_repo_impl =
         teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl::new(db.clone());
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
+    let sqs_client = Arc::new(sqs_client);
     let contacts_ingress = Arc::new(SqsContactsIngress {
         queue: SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress);
+    let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress.clone());
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
+    let entity_access_service_impl = Arc::new(EntityAccessServiceImpl::new(
+        PgAccessRepository::new(db.clone()),
+    ));
+    let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
+        internal_api_key.to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    ));
+    // Authentication creates channels and posts support welcome messages in-process, so its
+    // channel service must dispatch the same realtime, notification, search, contact, and broker
+    // side effects as the document-storage channel API.
+    let channel_side_effects = ChannelSideEffectService::new(
+        PgChannelSideEffectContext::new(db.clone()),
+        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client),
+        NotificationChannelSender::new(notification_ingress_service.clone()),
+        SqsChannelSearchIndexer::new(sqs_client.clone()),
+        ContactsChannelDispatcher::new(contacts_ingress),
+    )
+    .with_macro_event_broker(macro_event_broker.clone());
+    let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
+    let channel_service = ChannelServiceImpl::with_dependencies(
+        PgChannelsRepo::new(db.clone()),
+        channel_event_dispatcher,
+        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service_impl.clone()),
     );
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,
         customer_repo_impl,
-        team_channels_repo_impl,
+        channel_service.clone(),
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,
@@ -345,10 +396,7 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress: notification_ingress_service.clone(),
     };
 
-    let entity_access_service_impl =
-        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
-
-    api::setup_and_serve(
+    let server_result = api::setup_and_serve(
         ApiContext {
             db,
             github_link_service: Arc::new(github_link_service_impl),
@@ -359,7 +407,7 @@ async fn main() -> anyhow::Result<()> {
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service,
-            sqs_client: Arc::new(sqs_client),
+            sqs_client,
             environment: config.environment,
             rate_limit_service: rate_limit,
             jwt_args,
@@ -376,7 +424,9 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
-            entity_access_service: Arc::new(entity_access_service_impl),
+            channel_service: Arc::new(channel_service),
+            favorites_service: Arc::new(favorites_service),
+            entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
@@ -400,9 +450,25 @@ async fn main() -> anyhow::Result<()> {
         },
         config.port,
     )
-    .await?;
-    Ok(())
+    .await;
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 // SAFETY: this is not a secret value
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";

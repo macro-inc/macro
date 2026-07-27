@@ -3,7 +3,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use models_email::email::service::address::ContactInfoWithInteraction;
 use sqlx::types::Uuid;
@@ -29,14 +29,14 @@ pub struct ListContactsResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn list_contacts_handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
     let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &authorization.authorization.user.user_context.user_id,
     )
     .await
     .map_err(|e| {

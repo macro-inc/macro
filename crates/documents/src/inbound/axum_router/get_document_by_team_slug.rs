@@ -17,7 +17,7 @@ use entity_access::{
     },
     inbound::axum_extractors::{ExtractorError, MacroUserTeamExtractorV2},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use serde::Deserialize;
 
 use super::DocumentRouterState;
@@ -56,7 +56,7 @@ where
         state: &DocumentRouterState<T, Svc, Auth>,
     ) -> Result<Self, Self::Rejection> {
         let user = parts
-            .extract_with_state::<MacroAuthorizationExtractor<Auth>, _>(state)
+            .extract_with_state::<MacroAuthorizationExtractor<Auth, UserOrInternal>, _>(state)
             .await
             .map_err(IntoResponse::into_response)?;
         let team = parts
@@ -76,8 +76,12 @@ where
         let entity_access_receipt = state
             .access_service
             .generate_entity_access_receipt::<Level>(
-                &user.macro_user_id,
-                user.user_context.organization_id.map(i64::from),
+                &user.authorization.user.macro_user_id,
+                user.authorization
+                    .user
+                    .user_context
+                    .organization_id
+                    .map(i64::from),
                 &document_id,
                 EntityType::Document,
             )

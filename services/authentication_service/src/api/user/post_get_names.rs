@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::{InternalMacroAuthorizationExtractor, MacroAuthorizationExtractor};
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::user::get_user_name::get_user_names;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -31,7 +31,7 @@ pub struct PostGetNamesRequestBody {
 #[tracing::instrument(skip(ctx, _authorization))]
 pub async fn handler_external(
     State(ctx): State<ApiContext>,
-    _authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    _authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     extract::Json(req): extract::Json<PostGetNamesRequestBody>,
 ) -> Result<Response, Response> {
     lookup_names(&ctx, req).await
@@ -39,7 +39,7 @@ pub async fn handler_external(
 
 pub async fn handler_internal(
     State(ctx): State<ApiContext>,
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<PostGetNamesRequestBody>,
 ) -> Result<Response, Response> {
     lookup_names(&ctx, req).await

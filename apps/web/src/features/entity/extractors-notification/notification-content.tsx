@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -26,6 +27,9 @@ export function DocumentMentionPill(props: {
   notification: UnifiedNotification;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  // The containing split (when any) is the navigation source, so opens from
+  // an engaged preview controller route into its viewer split.
+  const panel = useSplitPanel();
   const { markAsDone } = useNotificationActions({
     notification: props.notification,
   });
@@ -46,7 +50,13 @@ export function DocumentMentionPill(props: {
     e.stopPropagation();
     const splitManager = globalSplitManager();
     if (!splitManager) return;
-    await openNotification(props.notification, splitManager, e.shiftKey);
+    await openNotification(
+      props.notification,
+      splitManager,
+      e.shiftKey,
+      undefined,
+      panel?.handle
+    );
     await notificationSource.markAsRead(props.notification);
   };
 

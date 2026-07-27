@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM team_user\n                WHERE user_id = $1\n                  AND team_id = $2\n                  AND team_role IN ('admin'::team_role, 'owner'::team_role)\n            ) AS \"can_administer!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "can_administer!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2962547036135d2bc0b1c7c325d15964e1ec8cec583d3fe8a94dfd81c66cefca"
+}

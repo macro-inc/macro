@@ -4,7 +4,7 @@ use axum::extract::State;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::HistoryAccessExtractor;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -32,7 +32,7 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user, history_access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, history_access), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn upsert_history_handler(
     history_access: HistoryAccessExtractor<
         ViewAccessLevel,
@@ -40,7 +40,7 @@ pub async fn upsert_history_handler(
         AuthorizationService,
     >,
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
     let access_level = match history_access.entity_access_receipt.entity_permission() {
@@ -85,7 +85,7 @@ pub async fn upsert_history_handler(
 
     if let Err(e) = macro_db_client::history::upsert_user_history(
         &mut transaction,
-        user.macro_user_id.clone(),
+        user.authorization.user.macro_user_id.clone(),
         item_id.as_str(),
         item_type.as_str(),
     )
@@ -103,7 +103,7 @@ pub async fn upsert_history_handler(
         && let Err(e) = macro_db_client::document::track_document::track_document(
             &mut transaction,
             item_id.as_str(),
-            Some(user.macro_user_id.as_ref()),
+            Some(user.authorization.user.macro_user_id.as_ref()),
         )
         .await
     {

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages\n        SET\n            is_starred = $1,\n            updated_at = NOW()\n        WHERE\n            id = ANY($2)\n            AND link_id = $3\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b953e348e90811fb7c465644244fbbe6e85359ff6537ee78f3cd995c4f2d0d5d"
+}

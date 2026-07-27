@@ -10,18 +10,26 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
+/// Hook invoked after an OAuth flow completes and the credentials are saved.
+/// Hosts use this to react to a connection the moment it exists (e.g. start
+/// import gather jobs); implementations must be quick or spawn.
+pub type McpAuthCompletedHook = Arc<
+    dyn Fn(McpServerRecord) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
+>;
+
 /// Shared state for the MCP router.
 pub struct McpRouterState<S, O, Auth> {
     store: Arc<S>,
     oauth: Arc<O>,
     authorization_state: MacroAuthorizationState<Auth>,
+    on_auth_completed: Option<McpAuthCompletedHook>,
 }
 
 impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
@@ -30,6 +38,7 @@ impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
             store: self.store.clone(),
             oauth: self.oauth.clone(),
             authorization_state: self.authorization_state.clone(),
+            on_auth_completed: self.on_auth_completed.clone(),
         }
     }
 }
@@ -53,7 +62,15 @@ where
             store: Arc::new(store),
             oauth: Arc::new(oauth),
             authorization_state,
+            on_auth_completed: None,
         }
+    }
+
+    /// Invoke `hook` whenever an OAuth flow completes (see
+    /// [`McpAuthCompletedHook`]).
+    pub fn with_auth_completed_hook(mut self, hook: McpAuthCompletedHook) -> Self {
+        self.on_auth_completed = Some(hook);
+        self
     }
 
     /// Access the underlying server store.
@@ -227,7 +244,7 @@ impl IntoResponse for McpHandlerErr {
 #[tracing::instrument(skip_all, err)]
 pub async fn list_servers<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ServerResponse>>, McpHandlerErr>
 where
     S: McpServerStore,
@@ -235,9 +252,10 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let records = state
         .store
-        .list(&macro_user_id)
+        .list(&user.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -262,7 +280,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<AddServerRequest>,
 ) -> Result<(StatusCode, Json<ServerResponse>), McpHandlerErr>
 where
@@ -271,8 +289,9 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let record = McpServerRecord {
-        user_id: macro_user_id,
+        user_id: user.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
         credentials: None,
@@ -308,7 +327,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn update_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<UpdateServerRequest>,
 ) -> Result<Json<ServerResponse>, McpHandlerErr>
 where
@@ -317,9 +336,10 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let mut record = state
         .store
-        .load(&macro_user_id, &body.url)
+        .load(&user.macro_user_id, &body.url)
         .await
         .map_err(anyhow::Error::from)?
         .ok_or(McpHandlerErr::NotFound)?;
@@ -356,7 +376,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn delete_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(params): Query<DeleteServerParams>,
 ) -> Result<StatusCode, McpHandlerErr>
 where
@@ -365,9 +385,10 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     state
         .store
-        .delete(&macro_user_id, &params.url)
+        .delete(&user.macro_user_id, &params.url)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -390,7 +411,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<StartAuthRequest>,
 ) -> Result<Json<StartAuthResponse>, McpHandlerErr>
 where
@@ -398,9 +419,10 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
+    let user = &authorization.authorization.user;
     let authorization_url = state
         .oauth
-        .start_authorization(&macro_user_id, &body.server_url, &body.server_name)
+        .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
         .await?;
 
     Ok(Json(StartAuthResponse { authorization_url }))
@@ -428,10 +450,16 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
-    state
+    let record = state
         .oauth
         .exchange_authorization_code(&params.code, &params.state)
         .await?;
+
+    // Let the host react to the brand-new connection (e.g. kick off import
+    // gather jobs) before the user even returns to their original tab.
+    if let Some(hook) = &state.on_auth_completed {
+        hook(record).await;
+    }
 
     Ok("Authorization successful. You can close this tab.".to_string())
 }

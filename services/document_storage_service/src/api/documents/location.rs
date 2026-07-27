@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use crate::api::context::{AuthorizationService, EntityAccessService};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use rayon::prelude::*;
 use std::{
@@ -49,7 +49,7 @@ static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, document_context, _access_level), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, document_context, _access_level), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn get_location_handler(
     _access_level: DocumentAccessExtractor<
         ViewAccessLevel,
@@ -57,7 +57,7 @@ pub async fn get_location_handler(
         AuthorizationService,
     >,
     State(state): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     params: Query<LocationQueryParams>,

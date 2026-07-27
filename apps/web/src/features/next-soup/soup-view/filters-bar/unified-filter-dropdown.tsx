@@ -1,5 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, TAGGABLE_LIST_VIEWS } from '@app/constants/list-views';
 import {
   type FilterContext,
   NO_ASSIGNEE,
@@ -816,13 +816,12 @@ export const UnifiedFilterDropdown = (
 
   const isTasksView = () => currentView() === 'tasks';
   const isCompaniesView = () => currentView() === 'companies';
-  const isDocumentsView = () => currentView() === 'documents';
 
   const tagFilter = useTagFilter();
-  const showTagsFilter = () =>
-    tagFilter.enabled() &&
-    tagFilter.hasTags() &&
-    (isTasksView() || isDocumentsView());
+  const showTagsFilter = () => {
+    const view = currentView();
+    return tagFilter.hasTags() && !!view && TAGGABLE_LIST_VIEWS.has(view);
+  };
 
   registerHotkey({
     hotkey: 'f',

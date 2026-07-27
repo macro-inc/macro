@@ -1,6 +1,6 @@
 use macro_event_broker::{
-    Event, EventBrokerError, EventPublisher, MacroEvent, MacroEventBroker, MacroEventBrokerService,
-    TopicEvent,
+    Event, EventBrokerError, EventPublisher, GlobalSpawner, MacroEvent, MacroEventBroker,
+    MacroEventBrokerService, TopicEvent,
 };
 use macro_event_topics::{MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
@@ -9,15 +9,10 @@ use serde::{Deserialize, Serialize};
 pub struct ExampleEventPublisher;
 
 impl EventPublisher for ExampleEventPublisher {
-    async fn publish<T: Topic>(
-        &self,
-        topic: T,
-        key: &str,
-        payload: &[u8],
-    ) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
         println!(
             "publishing topic={} key={} payload={}",
-            topic.as_str(),
+            T::TOPIC_STR,
             key,
             String::from_utf8_lossy(payload)
         );
@@ -56,9 +51,7 @@ pub enum ExampleTopicEvent {
 impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroExampleTopic`].
@@ -118,7 +111,7 @@ impl ExampleConsumerEvent {
     /// Decode one Kafka message into this consumer's event enum.
     pub fn decode(topic: &str, key: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
         match topic {
-            topic if topic == MacroExampleTopic.as_str() => {
+            topic if topic == MacroExampleTopic::TOPIC_STR => {
                 Ok(Self::Example(ExampleMacroEvent::decode(key, payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
@@ -128,7 +121,7 @@ impl ExampleConsumerEvent {
 
 #[tokio::main]
 pub async fn main() -> Result<(), EventBrokerError> {
-    let service = MacroEventBrokerService::new(ExampleEventPublisher);
+    let service = MacroEventBrokerService::new(ExampleEventPublisher, GlobalSpawner);
     let event = ExampleMacroEvent::created(
         "example-123",
         ExampleCreatedMetadata {

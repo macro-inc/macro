@@ -3,7 +3,7 @@ use foreign_entity::domain::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
 };
 use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
-use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use model::document::DocumentMetadata;
 use std::sync::{Arc, Mutex};
@@ -98,9 +98,16 @@ fn bot_id() -> entity_access::domain::models::BotId {
     ))
 }
 
+fn bot_receipt_scope() -> entity_access::domain::models::BotReceiptScope {
+    entity_access::domain::models::BotReceiptScope::Team {
+        team_id: uuid::uuid!("00000000-0000-0000-0000-000000000456"),
+    }
+}
+
 fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::dangerously_assert_bot(
         bot_id().into_storage_id(),
+        bot_receipt_scope(),
         document_id,
         EntityType::Document,
     )
@@ -350,7 +357,7 @@ impl MacroEventBroker for TestEventBroker {
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
         self.published.lock().unwrap().push(PublishedEvent {
-            topic: event.topic().as_str(),
+            topic: event.topic(),
             key: event.key().to_string(),
             payload: serde_json::to_value(event.event())?,
         });
@@ -858,6 +865,7 @@ async fn bot_lifecycle_event_has_no_actor_user_id() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let receipt = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_bot(
         bot_id().into_storage_id(),
+        bot_receipt_scope(),
         "doc-1",
         EntityType::Document,
     );

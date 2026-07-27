@@ -4,7 +4,6 @@
 #[cfg(test)]
 mod test;
 use std::{
-    cmp,
     sync::{
         Arc,
         atomic::{self, AtomicU64},
@@ -22,9 +21,9 @@ use tower_http::{
     ServiceBuilderExt,
     classify::{ServerErrorsAsFailures, SharedClassifier},
     request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
-    trace::{DefaultMakeSpan, DefaultOnRequest, OnFailure, OnResponse, TraceLayer},
+    trace::{MakeSpan, OnFailure, OnResponse, TraceLayer},
 };
-use tracing::{Level, Span};
+use tracing::Span;
 
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
@@ -41,8 +40,10 @@ impl MakeRequestId for RequestIdBuilder {
     }
 }
 
-/// fork of the [DefaultOnResponse] which is deisgined to work with [RequestIdBuilder]
-/// This emits a tracing warn event if a request takes more than a certain threshold to complete.
+/// Records response telemetry on the request span.
+///
+/// Successful requests only emit an event when their latency meets or exceeds the warning
+/// threshold. Failed requests are logged by [`CustomOnFailure`].
 #[derive(Clone)]
 pub struct CustomOnResponse {
     warning_threshold: Duration,
@@ -55,62 +56,53 @@ impl CustomOnResponse {
     }
 }
 
-struct Latency {
-    duration: Duration,
+/// Creates INFO-level HTTP server spans with safe OpenTelemetry attributes.
+///
+/// Request and response headers are intentionally excluded.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MakeHttpRequestSpan;
+
+impl<B> MakeSpan<B> for MakeHttpRequestSpan {
+    fn make_span(&mut self, request: &Request<B>) -> Span {
+        let request_id = request
+            .headers()
+            .get("x-request-id")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+
+        tracing::info_span!(
+            "http.request",
+            otel.kind = "server",
+            "http.request.method" = %request.method(),
+            "url.path" = request.uri().path(),
+            "request.id" = request_id,
+            "http.response.status_code" = tracing::field::Empty,
+            latency_ms = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        )
+    }
 }
 
-impl std::fmt::Display for Latency {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ms", self.duration.as_millis())
-    }
+fn latency_millis(latency: Duration) -> u64 {
+    latency.as_millis().try_into().unwrap_or(u64::MAX)
 }
 
 impl<B> OnResponse<B> for CustomOnResponse {
     fn on_response(self, response: &Response<B>, latency: Duration, span: &Span) {
-        let level = match latency.cmp(&self.warning_threshold) {
-            cmp::Ordering::Less => Level::INFO,
-            cmp::Ordering::Equal | cmp::Ordering::Greater => Level::WARN,
-        };
+        let status = response.status();
+        let latency_ms = latency_millis(latency);
+        span.record("http.response.status_code", u64::from(status.as_u16()));
+        span.record("latency_ms", latency_ms);
 
-        let latency = Latency { duration: latency };
-
-        let response_headers = tracing::field::debug(response.headers());
-        match level {
-            Level::ERROR => tracing::error!(
+        // Server errors are logged once by CustomOnFailure after this callback returns.
+        if !status.is_server_error() && latency >= self.warning_threshold {
+            tracing::warn!(
                 parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
-            Level::WARN => tracing::warn!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
-            Level::INFO => tracing::info!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
-            Level::DEBUG => tracing::debug!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
-            Level::TRACE => tracing::trace!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
+                latency_ms,
+                status = status.as_u16(),
+                "slow http request"
+            );
         }
     }
 }
@@ -124,13 +116,19 @@ where
     FailureClass: std::fmt::Display,
 {
     fn on_failure(&mut self, failure_classification: FailureClass, latency: Duration, span: &Span) {
-        let latency = Latency { duration: latency };
+        let latency_ms = latency_millis(latency);
+        span.record("latency_ms", latency_ms);
+        span.record("otel.status_code", "ERROR");
+        span.record(
+            "otel.status_description",
+            tracing::field::display(&failure_classification),
+        );
 
         tracing::error!(
             parent: span,
-            classification = %failure_classification,
-            %latency,
-            "response failed"
+            error = %failure_classification,
+            latency_ms,
+            "http request failed"
         );
     }
 }
@@ -141,8 +139,8 @@ type ServiceBuilderAlias = ServiceBuilder<
         Stack<
             TraceLayer<
                 SharedClassifier<ServerErrorsAsFailures>,
-                DefaultMakeSpan,
-                DefaultOnRequest,
+                MakeHttpRequestSpan,
+                (),
                 CustomOnResponse,
                 tower_http::trace::DefaultOnBodyChunk,
                 tower_http::trace::DefaultOnEos,
@@ -198,7 +196,8 @@ impl MacroRequestIdAndTracingLayer {
             .set_x_request_id(RequestIdBuilder::default())
             .layer(
                 TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                    .make_span_with(MakeHttpRequestSpan)
+                    .on_request(())
                     .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
                     .on_failure(CustomOnFailure),
             )

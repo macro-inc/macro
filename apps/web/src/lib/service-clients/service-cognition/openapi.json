@@ -1045,6 +1045,118 @@
         }
       }
     },
+    "/import/run": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Accept staged imports (starts import jobs) and/or discard staged rows.",
+        "operationId": "run_import_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Import run outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunImportOutcome"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/runs/{source}/dismiss": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Dismiss one source's import section.",
+        "operationId": "dismiss_run_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Import source",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed"
+          },
+          "400": {
+            "description": "Unknown import source"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/runs/{source}/retry": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Restart a failed (or dismissed) gather run for one source.",
+        "operationId": "retry_gather_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Import source",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Retry accepted (idempotent)"
+          },
+          "400": {
+            "description": "Unknown import source"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/state": {
+      "get": {
+        "tags": ["import"],
+        "summary": "Get the authenticated user's import state: gather runs plus visible\nledger rows.",
+        "operationId": "get_state_handler",
+        "responses": {
+          "200": {
+            "description": "Current import state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportState"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/mcp/servers": {
       "get": {
         "tags": ["mcp"],
@@ -1356,6 +1468,60 @@
         }
       }
     },
+    "/onboarding": {
+      "get": {
+        "tags": ["onboarding"],
+        "summary": "Get the authenticated user's onboarding state. While the flow is active\nthis also starts any gather runs that are due, so polling this endpoint\nis what keeps onboarding moving.",
+        "operationId": "get_state_handler",
+        "responses": {
+          "200": {
+            "description": "Current onboarding state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingState"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/onboarding/complete": {
+      "post": {
+        "tags": ["onboarding"],
+        "summary": "Complete (or skip) onboarding. Unreserved leftover onboarding-staged\nimport candidates are deleted.",
+        "operationId": "complete_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteOnboardingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Completed onboarding row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingRow"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/preview": {
       "post": {
         "tags": ["get_batch_preview"],
@@ -1582,7 +1748,8 @@
           "call_summary",
           "channel_bot",
           "ai_projection",
-          "ai_editing"
+          "ai_editing",
+          "import"
         ]
       },
       "AssistantMessagePart": {
@@ -2244,6 +2411,16 @@
           }
         ]
       },
+      "CompleteOnboardingRequest": {
+        "type": "object",
+        "description": "Body for completing onboarding.",
+        "properties": {
+          "skipped": {
+            "type": "boolean",
+            "description": "Whether the user skipped rather than finished."
+          }
+        }
+      },
       "CompletionUsage": {
         "type": "object",
         "description": "A recorded completion: who, what feature, optional entity, and the cost.",
@@ -2265,6 +2442,25 @@
           "user": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "The user the completion was performed for (the [system user](SYSTEM_USER_ID)\nfor background work)."
+          }
+        }
+      },
+      "ConnectedServer": {
+        "type": "object",
+        "description": "One of the user's MCP server connections, as the setup page sees it.",
+        "required": ["name", "url", "authenticated"],
+        "properties": {
+          "authenticated": {
+            "type": "boolean",
+            "description": "Whether the user has completed OAuth against it."
+          },
+          "name": {
+            "type": "string",
+            "description": "The server's display name."
+          },
+          "url": {
+            "type": "string",
+            "description": "The server URL."
           }
         }
       },
@@ -2990,12 +3186,191 @@
           }
         }
       },
+      "ImportEntity": {
+        "type": "object",
+        "description": "One row of the import ledger.",
+        "required": [
+          "id",
+          "user_id",
+          "source",
+          "foreign_id",
+          "status",
+          "initiator",
+          "metadata",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the row was first staged."
+          },
+          "entity_id": {
+            "type": ["string", "null"],
+            "description": "The Macro entity it became, once imported."
+          },
+          "entity_type": {
+            "type": ["string", "null"],
+            "description": "The Macro entity type (`task` | `md` | `channel`), once imported."
+          },
+          "foreign_id": {
+            "type": "string",
+            "description": "Stable id in the source system (see\n[`ImportSource::normalize_foreign_id`])."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Ledger row id."
+          },
+          "initiator": {
+            "$ref": "#/components/schemas/Initiator",
+            "description": "Where it was first staged from."
+          },
+          "last_error": {
+            "type": ["string", "null"],
+            "description": "Failure detail from the last import attempt, when one failed."
+          },
+          "metadata": {
+            "description": "Per-source metadata (shape depends on `source`; see\n[`LinearIssueMeta`], [`NotionDocMeta`], [`SlackChannelMeta`])."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImportSource",
+            "description": "The external system the item comes from."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ImportStatus",
+            "description": "Where the row is in its lifecycle."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team the created entity was shared with, when it was."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the row last changed."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user who staged/imported it. Team-imported rows from teammates\nare visible with their owner's id, so clients can say \"created by a\nteammate\"."
+          }
+        }
+      },
+      "ImportRun": {
+        "type": "object",
+        "description": "Gather-run state for one user × source.",
+        "required": ["source", "status", "auto_import", "updated_at"],
+        "properties": {
+          "auto_import": {
+            "type": "boolean",
+            "description": "Whether this run should import its onboarding-staged candidates as\nsoon as gathering finishes."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Gather or automatic-import failure detail, when the run failed."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImportSource",
+            "description": "The source this run gathered from."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus",
+            "description": "Where the run is in its lifecycle."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the run state last changed."
+          }
+        }
+      },
+      "ImportSource": {
+        "type": "string",
+        "description": "External systems items can be imported from.",
+        "enum": ["linear", "notion", "slack"]
+      },
+      "ImportState": {
+        "type": "object",
+        "description": "The full import aggregate for a user: gather runs plus visible ledger\nrows (their own, and teammates' team-imported rows).",
+        "required": ["runs", "entities"],
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportEntity"
+            },
+            "description": "Visible import entities, newest first."
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRun"
+            },
+            "description": "Gather runs, one per source that ever gathered."
+          }
+        }
+      },
+      "ImportStatus": {
+        "type": "string",
+        "description": "Lifecycle of one import entity.",
+        "enum": ["staged", "importing", "imported", "discarded"]
+      },
+      "Initiator": {
+        "type": "string",
+        "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
+        "enum": ["onboarding", "chat"]
+      },
       "JwtPayload": {
         "type": "object",
         "required": ["token"],
         "properties": {
           "token": {
             "type": "string"
+          }
+        }
+      },
+      "LinearIssueMeta": {
+        "type": "object",
+        "description": "Metadata for one staged Linear issue.",
+        "required": ["title"],
+        "properties": {
+          "assignee": {
+            "type": ["string", "null"],
+            "description": "Assignee display name as Linear reports it."
+          },
+          "assignee_email": {
+            "type": ["string", "null"],
+            "description": "Assignee email, when Linear exposes it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Short markdown description."
+          },
+          "due_date": {
+            "type": ["string", "null"],
+            "description": "Due date as an ISO date (`YYYY-MM-DD`), when set."
+          },
+          "identifier": {
+            "type": ["string", "null"],
+            "description": "Linear's human identifier (e.g. `ENG-142`)."
+          },
+          "priority": {
+            "type": ["string", "null"],
+            "description": "Priority label (e.g. `Urgent`)."
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "Workflow status name (e.g. `In Progress`)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Issue title."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Deep link back to the issue in Linear."
           }
         }
       },
@@ -3106,6 +3481,77 @@
           }
         }
       },
+      "NotionDocMeta": {
+        "type": "object",
+        "description": "Metadata for one staged Notion page. Deliberately has NO content field:\npage bodies are fetched at import time, for accepted pages only.",
+        "required": ["title"],
+        "properties": {
+          "summary": {
+            "type": ["string", "null"],
+            "description": "One-line summary of what the page contains."
+          },
+          "title": {
+            "type": "string",
+            "description": "Page title."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Deep link back to the page in Notion."
+          }
+        }
+      },
+      "OnboardingRow": {
+        "type": "object",
+        "description": "One user's onboarding row.",
+        "required": ["status", "skipped", "started_at"],
+        "properties": {
+          "completed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the flow completed, if it has."
+          },
+          "skipped": {
+            "type": "boolean",
+            "description": "Whether the user skipped rather than finished."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the flow was first touched."
+          },
+          "status": {
+            "$ref": "#/components/schemas/OnboardingStatus",
+            "description": "Where the flow is in its lifecycle."
+          }
+        }
+      },
+      "OnboardingState": {
+        "type": "object",
+        "description": "The onboarding aggregate served to the setup page. Import runs and\nstaged entities are served separately by `GET /import/state`.",
+        "required": ["row", "connected_servers"],
+        "properties": {
+          "connected_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectedServer"
+            },
+            "description": "The user's MCP server connections."
+          },
+          "row": {
+            "$ref": "#/components/schemas/OnboardingRow",
+            "description": "The user's onboarding row."
+          },
+          "suggested_team_domain": {
+            "type": ["string", "null"],
+            "description": "The account email's domain when it can back a domain team — i.e. it\nis not a generic consumer provider — `None` otherwise. Judged with\nthe same list the teams service uses for domain auto-join and\nclaiming, so the client never suggests a domain team the server\nwould refuse."
+          }
+        }
+      },
+      "OnboardingStatus": {
+        "type": "string",
+        "description": "Lifecycle of the onboarding flow itself.",
+        "enum": ["active", "completed"]
+      },
       "PatchChatRequest": {
         "type": "object",
         "description": "Request body for patching a chat.",
@@ -3215,6 +3661,59 @@
         "type": "string",
         "description": "The role of a message participant.",
         "enum": ["user", "assistant", "system"]
+      },
+      "RunImportOutcome": {
+        "type": "object",
+        "description": "Outcome of accepting/declining staged rows via `POST /import/run`.",
+        "required": ["discarded", "importing"],
+        "properties": {
+          "discarded": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many rows were discarded.",
+            "minimum": 0
+          },
+          "importing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many rows flipped to `importing` (jobs are now copying them in).",
+            "minimum": 0
+          }
+        }
+      },
+      "RunImportRequest": {
+        "type": "object",
+        "description": "Body for accepting/declining staged imports.",
+        "properties": {
+          "discard_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Staged rows to discard."
+          },
+          "import_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Staged rows to import."
+          }
+        }
+      },
+      "RunStatus": {
+        "type": "string",
+        "description": "Lifecycle of a gather run (one per user × source).",
+        "enum": [
+          "running",
+          "ready",
+          "importing",
+          "completed",
+          "failed",
+          "dismissed"
+        ]
       },
       "SendChatMessagePayload": {
         "allOf": [
@@ -3356,6 +3855,47 @@
                 "description": "The level of public access"
               }
             ]
+          }
+        }
+      },
+      "SlackChannelMeta": {
+        "type": "object",
+        "description": "Metadata for one staged Slack channel.",
+        "required": ["name"],
+        "properties": {
+          "channel_id": {
+            "type": ["string", "null"],
+            "description": "Slack's channel id (e.g. `C0123456789`), stable across renames."
+          },
+          "name": {
+            "type": "string",
+            "description": "Channel name without the leading `#`."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlackParticipant"
+            },
+            "description": "The channel's most relevant members, when discoverable."
+          },
+          "purpose": {
+            "type": ["string", "null"],
+            "description": "The channel's purpose/topic, when set."
+          }
+        }
+      },
+      "SlackParticipant": {
+        "type": "object",
+        "description": "A person active in a staged Slack channel.",
+        "required": ["name"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "Email, when the workspace exposes it."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name or Slack handle."
           }
         }
       },

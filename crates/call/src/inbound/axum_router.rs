@@ -28,7 +28,7 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use uuid::Uuid;
@@ -290,14 +290,14 @@ pub async fn get_or_create_call_handler<
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
 
     let response = state
         .service
-        .get_or_create_call(&channel_id, user.macro_user_id)
+        .get_or_create_call(&channel_id, user.authorization.user.macro_user_id.clone())
         .await?;
 
     Ok(Json(response))
@@ -540,7 +540,7 @@ pub async fn get_batch_call_record_preview_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<GetBatchCallRecordPreviewRequest>,
 ) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
     if request.call_ids.len() > MAX_BATCH_CALL_IDS {
@@ -551,7 +551,7 @@ pub async fn get_batch_call_record_preview_handler<
 
     let response = state
         .service
-        .get_batch_call_record_previews(request, user.macro_user_id)
+        .get_batch_call_record_previews(request, user.authorization.user.macro_user_id.clone())
         .await?;
     Ok(Json(response))
 }
@@ -579,13 +579,13 @@ pub async fn leave_or_end_call_handler<
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
     let channel_id = access.channel_id;
 
     let response = state
         .service
-        .leave_or_end_call(&channel_id, user.macro_user_id)
+        .leave_or_end_call(&channel_id, user.authorization.user.macro_user_id.clone())
         .await?;
 
     Ok(Json(response))

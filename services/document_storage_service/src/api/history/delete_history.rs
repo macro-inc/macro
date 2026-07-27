@@ -1,7 +1,7 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use axum::extract::State;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -26,21 +26,21 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn delete_history_handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
     if let Err(e) = macro_db_client::history::delete_user_history(
         &ctx.db,
-        user.macro_user_id.as_ref(),
+        user.authorization.user.macro_user_id.as_ref(),
         item_id.as_str(),
         item_type.as_str(),
     )
     .await
     {
-        tracing::error!(error=?e, user_id=?user.macro_user_id, "unable to delete history");
+        tracing::error!(error=?e, user_id=?user.authorization.user.macro_user_id, "unable to delete history");
         return GenericResponse::builder()
             .message("unable to delete history")
             .is_error(true)

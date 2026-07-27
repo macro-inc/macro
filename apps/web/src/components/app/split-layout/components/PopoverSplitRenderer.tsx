@@ -52,7 +52,6 @@ function PopoverSplitModal(props: {
 }) {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const [previewState, setPreviewState] = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -78,6 +77,8 @@ function PopoverSplitModal(props: {
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
+    isViewerSplit: () => false,
+    isControllerSplit: () => false,
     replace: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
@@ -99,6 +100,11 @@ function PopoverSplitModal(props: {
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
+    canEngagePreview: () => false,
+    engagePreview: () => {},
+    disengagePreview: () => {},
+    resetPreview: () => {},
+    viewerId: () => undefined,
   };
 
   const stubPanelContext: SplitPanelContextType = {
@@ -111,10 +117,6 @@ function PopoverSplitModal(props: {
     setContentOffsetTop,
     bottomPanel: () => undefined,
     registerBottomPanel: () => () => {},
-    previewState: [previewState, setPreviewState] as [
-      typeof previewState,
-      typeof setPreviewState,
-    ],
     layoutRefs: {},
     titleFileMenuRef,
     setTitleFileMenuRef,

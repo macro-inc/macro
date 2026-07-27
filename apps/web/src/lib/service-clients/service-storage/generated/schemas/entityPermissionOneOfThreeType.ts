@@ -10,5 +10,5 @@ export type EntityPermissionOneOfThreeType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EntityPermissionOneOfThreeType = {
-  channel_role: 'channel_role',
+  channel_view_only: 'channel_view_only',
 } as const;

@@ -172,6 +172,67 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     }
 }
 
+#[derive(Clone)]
+struct RecordingCallRecordQueryService {
+    records: Vec<call::domain::models::CallRecord>,
+    calls: Arc<Mutex<u32>>,
+}
+
+impl RecordingCallRecordQueryService {
+    fn new(records: Vec<call::domain::models::CallRecord>) -> Self {
+        Self {
+            records,
+            calls: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    fn calls(&self) -> u32 {
+        *self.calls.lock().unwrap()
+    }
+}
+
+impl CallRecordQueryService for RecordingCallRecordQueryService {
+    async fn get_user_call_records(
+        &self,
+        _req: call::domain::models::GetCallRecordsRequest,
+    ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
+        *self.calls.lock().unwrap() += 1;
+        Ok(self.records.clone())
+    }
+}
+
+fn call_record(
+    call_id: Uuid,
+    channel_id: Uuid,
+    created_by: &str,
+    started_at: DateTime<Utc>,
+) -> call::domain::models::CallRecord {
+    call::domain::models::CallRecord {
+        call_id,
+        channel_id,
+        room_name: String::new(),
+        created_by: created_by.to_string(),
+        started_at,
+        ended_at: None,
+        duration_ms: None,
+        egress_id: None,
+        recording_started_at: None,
+        recording_key: None,
+        preview_key: None,
+        recording_url: None,
+        recording_preview_url: None,
+        channel_name: None,
+        custom_name: None,
+        summary: None,
+        share_with_team: false,
+        is_active: true,
+        status: None,
+        user_access_level: None,
+        participants: Vec::new(),
+        transcript: Vec::new(),
+    }
+}
+
 fn foreign_entity_id_from_receipt(
     receipt: EntityAccessReceipt<ViewAccessLevel>,
 ) -> Result<Uuid, ForeignEntityError> {
@@ -588,6 +649,64 @@ async fn simple_soup_includes_channel_threads() {
             assert_eq!(thread.thread.reply_count, 1);
             assert_eq!(thread.thread.preview.len(), 1);
             assert_eq!(thread.thread.preview[0].id, reply_id);
+        }
+    );
+}
+
+#[tokio::test]
+async fn simple_soup_includes_call_records() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let call_id = Uuid::from_u128(0xca11);
+    let channel_id = Uuid::from_u128(0xc4a2);
+    let call_query_service = RecordingCallRecordQueryService::new(vec![call_record(
+        call_id,
+        channel_id,
+        user.as_ref(),
+        DateTime::default() + Days::new(2),
+    )]);
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        call_query_service.clone(),
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user: user.clone(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(call_query_service.calls(), 1);
+    assert_eq!(page.items.len(), 1);
+    assert_matches!(
+        &page.items[0],
+        SoupItem::Call(call) => {
+            assert_eq!(call.call_id, call_id);
+            assert_eq!(call.channel_id, channel_id);
         }
     );
 }

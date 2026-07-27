@@ -2,7 +2,9 @@
 
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationService, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{
+    MacroAuthorizationService, OptionalMacroAuthorizationExtractor, UserOrInternalService,
+};
 use model::project::{
     request::GetBatchProjectPreviewRequest, response::GetBatchProjectPreviewResponse,
 };
@@ -22,10 +24,14 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, request), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, request),
+    fields(actor = tracing::field::Empty),
+    err
+)]
 pub async fn get_batch_preview_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: OptionalMacroAuthorizationExtractor<Auth>,
+    user: OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
     Json(request): Json<GetBatchProjectPreviewRequest>,
 ) -> Result<Json<GetBatchProjectPreviewResponse>, ProjectError>
 where
@@ -33,9 +39,17 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+    let user_id = user
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.acting_user())
+        .map(|user| user.macro_user_id.clone());
     let previews = state
         .service
-        .get_batch_preview(user.macro_user_id, request.project_ids)
+        .get_batch_preview(user_id, request.project_ids)
         .await?;
     Ok(Json(GetBatchProjectPreviewResponse { previews }))
 }

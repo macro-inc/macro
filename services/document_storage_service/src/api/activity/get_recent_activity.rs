@@ -12,7 +12,7 @@ use crate::{
     api::context::{ApiContext, AuthorizationService},
     model::response::activity::{GetActivitiesResponse, UserActivitiesResponse},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::{
     request::pagination::{Pagination, PaginationQueryParams},
     response::{GenericErrorResponse, GenericResponse},
@@ -33,11 +33,11 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user, pagination_query), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, pagination_query), fields(user_id=?user.authorization.user.macro_user_id))]
 #[deprecated]
 pub async fn get_recent_activity_handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Query(pagination_query): Query<PaginationQueryParams>,
 ) -> impl IntoResponse {
     if let Some(limit) = pagination_query.limit
@@ -55,7 +55,7 @@ pub async fn get_recent_activity_handler(
 
     let result = match macro_db_client::activity::get_recent_activities(
         ctx.db.clone(),
-        user.macro_user_id.as_ref(),
+        user.authorization.user.macro_user_id.as_ref(),
         pagination.limit,
         pagination.offset,
     )

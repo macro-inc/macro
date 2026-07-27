@@ -12,8 +12,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 #[allow(deprecated)]
 use macro_authorization::LEGACY_DSS_INTERNAL_API_KEY_HEADER;
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, InternalAuthConfig, InternalMacroAuthorizationExtractor,
-    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+    INTERNAL_API_KEY_HEADER, InternalAuthConfig, InternalOnly, MacroAuthJwtValidator,
+    MacroAuthorizationExtractor, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -60,7 +60,7 @@ impl FromRef<TestState> for Arc<Config> {
 }
 
 async fn internal_auth_probe(
-    _authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
 ) -> Json<Value> {
     Json(json!({ "authorized": true }))
 }
@@ -72,6 +72,7 @@ fn test_state() -> TestState {
             api_key: TEST_INTERNAL_API_KEY.to_string(),
             default_user_id: None,
         },
+        macro_authorization::NoBotAuthorizer,
     );
 
     TestState {

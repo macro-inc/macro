@@ -47,6 +47,27 @@ fn test_set_entity_property_schema_documents_delta_options() {
 }
 
 #[test]
+fn test_bulk_set_entity_property_options_schema_validation() {
+    let result = generate_validated_input_schema::<BulkSetEntityPropertyOptions>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "BulkSetEntityPropertyOptions");
+    assert!(
+        validated.description.contains("many entities"),
+        "Description should explain the multi-entity apply"
+    );
+
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(
+        schema_json.contains("entities")
+            && schema_json.contains("add_option_ids")
+            && schema_json.contains("remove_option_ids"),
+        "schema should expose entities and the add/remove option deltas"
+    );
+}
+
+#[test]
 fn test_list_tags_schema_validation() {
     let result = generate_validated_input_schema::<ListTags>();
     assert!(result.is_ok(), "{:?}", result);

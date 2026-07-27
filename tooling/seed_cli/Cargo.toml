@@ -12,11 +12,14 @@ chrono = { workspace = true }
 clap = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email_db_client = { path = "../../crates/email_db_client" }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+lexical_client = { path = "../../crates/lexical_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_db_client = { path = "../../crates/macro_db_client" }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
@@ -27,11 +30,17 @@ model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 models_email = { path = "../../crates/models_email" }
 models_permissions = { path = "../../crates/models_permissions" }
+models_properties = { path = "../../crates/models_properties" }
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false }
+sha2 = { workspace = true }
 sqlx = { workspace = true }
+sync_service_client = { path = "../../crates/sync_service_client" }
+system_properties = { path = "../../crates/system_properties" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }

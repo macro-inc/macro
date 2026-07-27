@@ -4,7 +4,7 @@ use crate::domain::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
         TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
+        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
@@ -22,54 +22,6 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     sqlx::Error::TypeNotFound {
         type_name: e.to_string(),
     }
-}
-
-const MAX_TEAM_SLUG_LEN: usize = 20;
-
-fn normalize_team_slug(slug: &str) -> Result<String, TeamError> {
-    let mut normalized = String::new();
-    let mut last_was_separator = false;
-
-    for ch in slug.chars() {
-        let normalized_char = if ch.is_ascii_alphabetic() {
-            ch.to_ascii_uppercase()
-        } else if ch == '_' || ch == '-' || ch.is_ascii_whitespace() {
-            '_'
-        } else {
-            return Err(TeamError::BadRequest(
-                "team slug may only contain ASCII letters, spaces, hyphens, and underscores"
-                    .to_string(),
-            ));
-        };
-
-        if normalized_char == '_' {
-            if !normalized.is_empty() && !last_was_separator {
-                normalized.push('_');
-            }
-            last_was_separator = true;
-        } else {
-            normalized.push(normalized_char);
-            last_was_separator = false;
-        }
-    }
-
-    while normalized.ends_with('_') {
-        normalized.pop();
-    }
-
-    if normalized.is_empty() {
-        return Err(TeamError::BadRequest(
-            "team slug cannot be empty".to_string(),
-        ));
-    }
-
-    if normalized.len() > MAX_TEAM_SLUG_LEN {
-        return Err(TeamError::BadRequest(format!(
-            "team slug cannot be longer than {MAX_TEAM_SLUG_LEN} characters"
-        )));
-    }
-
-    Ok(normalized)
 }
 
 #[cfg(test)]
@@ -138,6 +90,7 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
@@ -146,14 +99,16 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, 1, $4, TRUE)
+            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
+            VALUES ($1, $2, $3, $4, 1, $5, $6)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites
             "#,
             id,
             team_name,
+            team_slug,
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
+            subscription_id.is_some(),
         )
         .try_map(|row| {
             Ok(Team {
@@ -377,13 +332,14 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, subscription_id)
+        self.create_team_inner(user_id, team_name, team_slug, subscription_id)
             .await
             .map_err(|e| e.into())
     }

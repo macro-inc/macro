@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comms_channels\n            SET name = COALESCE($2, name),\n                channel_type = CASE\n                    WHEN $3 IS TRUE THEN 'team'::comms_channel_type\n                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type\n                        THEN 'private'::comms_channel_type\n                    ELSE channel_type\n                END,\n                team_id = CASE\n                    WHEN $3 IS TRUE THEN $4\n                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN NULL\n                    ELSE team_id\n                END,\n                auto_join_team = CASE\n                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN FALSE\n                    ELSE COALESCE($5, auto_join_team)\n                END\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Bool",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c77b982d340967465a952f918b3ebd357faa0b3edc9a8bf325ffafe4b90d3ca"
+}

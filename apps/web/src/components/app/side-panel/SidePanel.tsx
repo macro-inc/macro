@@ -313,6 +313,12 @@ function Section(
     defaultOpen?: boolean;
     /** Render order — lower numbers appear first. */
     order?: number;
+    /**
+     * Optional controls rendered at the right edge of the header row,
+     * outside the collapse trigger — clicking them doesn't toggle the
+     * section.
+     */
+    actions?: JSX.Element;
   }>
 ) {
   const ctx = useContext(SidePanelContext);
@@ -329,11 +335,14 @@ function Section(
       component: () => (
         <Accordion.Item value={props.id}>
           <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
-            <Accordion.Header class="group">
-              <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-xs hover:underline">
+            <Accordion.Header class="group flex items-center">
+              <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center gap-2 text-xs hover:underline">
                 <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
                 <span>{props.title}</span>
               </Accordion.Trigger>
+              <Show when={props.actions}>
+                <div class="shrink-0 pr-2">{props.actions}</div>
+              </Show>
             </Accordion.Header>
             <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
               <Suspense fallback={<Loading />}>

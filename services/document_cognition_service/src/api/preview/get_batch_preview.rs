@@ -2,7 +2,7 @@ use crate::api::context::DcsAuthorizationService;
 use anyhow::Result;
 use axum::extract::{Json, State};
 use axum::{extract, http::StatusCode};
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
 use model::chat::preview::{ChatPreview, ChatPreviewData, ChatPreviewV2, WithChatId};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -35,7 +35,7 @@ pub async fn handler(
     // Anonymous access is allowed, but supplied invalid/expired credentials
     // are still rejected with a 401 (matches the pre-migration behavior of
     // the router-wide auth layer).
-    _user: OptionalMacroAuthorizationExtractor<DcsAuthorizationService>,
+    _user: OptionalMacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternalService>,
     req: extract::Json<GetBatchPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchPreviewResponse>), (StatusCode, String)> {
     // Ensure the document ids are unique to prevent duplicate work

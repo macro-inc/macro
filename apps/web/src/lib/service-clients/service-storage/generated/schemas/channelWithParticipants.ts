@@ -13,6 +13,9 @@ import type { ChannelParticipant } from './channelParticipant';
 export interface ChannelWithParticipants {
   /** Channel metadata. */
   channel: Channel;
+  /** Whether the requesting user is an active participant of the channel.
+False for team channels of the user's teams they have not joined. */
+  is_participant?: boolean;
   /** Participants in the channel. */
   participants: ChannelParticipant[];
 }

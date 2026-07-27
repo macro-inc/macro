@@ -53,6 +53,20 @@ export const isListViewID = (id: string | null | undefined): id is ListView => {
   return LIST_VIEWS.includes(id as 'inbox');
 };
 
+/**
+ * List views whose entities are taggable, so their filter bar surfaces the tag
+ * filter. Mirrors TAGGABLE_ENTITY_TYPES (document/task/thread/project/chat/
+ * call). Channels, companies, and the mixed inbox are omitted.
+ */
+export const TAGGABLE_LIST_VIEWS: ReadonlySet<ListView> = new Set<ListView>([
+  'documents',
+  'tasks',
+  'mail',
+  'folders',
+  'agents',
+  'calls',
+]);
+
 export const soupItemMatchesListView = (
   item: SoupApiItem,
   view: ListView | undefined
@@ -114,10 +128,10 @@ export const soupItemMatchesTagFilter = (
 
 /**
  * `soupItemMatchesTagFilter` for mapped entities. Rendered rows are checked
- * against the active tag filter because the server only tag-filters the
- * document/chat/project soup unions and the document search leg. Entity types
- * without loaded properties (channels, calls, search-service email results)
- * never match, so they are excluded rather than leaking through unfiltered.
+ * against the active tag filter as a client-side backstop, since the server
+ * does not tag-filter every soup union. Rows carrying loaded properties are
+ * matched on those (emails included); rows without loaded properties never
+ * match, so they are excluded rather than leaking through unfiltered.
  */
 export const entityMatchesTagFilter = (
   entity: EntityData,

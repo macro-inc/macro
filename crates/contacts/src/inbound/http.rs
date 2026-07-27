@@ -7,7 +7,7 @@ use axum::routing::get;
 use axum::{RequestPartsExt, Router};
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rate_limit::domain::models::RateLimitOk;
@@ -48,12 +48,17 @@ pub struct AddContactRequest {
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(authorization, contacts), fields(user_id = authorization.macro_user_id.as_ref()))]
+#[instrument(
+    skip(authorization, contacts),
+    fields(actor = %authorization.acting_entity())
+)]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> impl IntoResponse {
-    match contacts.query_contacts(authorization.macro_user_id).await {
+    let user = authorization.authorization.user;
+
+    match contacts.query_contacts(user.macro_user_id.clone()).await {
         Ok(contacts) if !contacts.is_empty() => {
             (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
         }
@@ -73,15 +78,21 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(service, authorization), fields(user_id = authorization.macro_user_id.as_ref()), err)]
+#[instrument(
+    skip(service, authorization),
+    fields(actor = %authorization.acting_entity()),
+    err
+)]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Json(body): Json<AddContactRequest>,
 ) -> Result<StatusCode, StatusCode> {
+    let user = authorization.authorization.user;
+
     service
         .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([authorization.macro_user_id, body.user_id]),
+            users: HashSet::from([user.macro_user_id.clone(), body.user_id]),
         })
         .await
         .map_err(|e| {
@@ -92,7 +103,7 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
 }
 
 /// Rate limit for adding contacts: 50 requests per user per hour.
-pub struct PerUserAddContactRateLimit<Auth>(MacroAuthorizationExtractor<Auth>);
+pub struct PerUserAddContactRateLimit<Auth>(MacroAuthorizationExtractor<Auth, UserOrInternal>);
 
 impl<S, Auth> RateLimitExtractable<S> for PerUserAddContactRateLimit<Auth>
 where
@@ -109,7 +120,7 @@ where
 
     fn key(&self) -> RateLimitKey {
         RateLimitKey::builder(&"per-user-add-contact")
-            .append(&self.0.macro_user_id.as_ref())
+            .append(&self.0.authorization.user.macro_user_id.as_ref())
             .finish()
     }
 }
@@ -126,7 +137,7 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> =
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
             parts.extract_with_state(state).await?;
         Ok(Self(authorization))
     }

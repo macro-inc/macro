@@ -25,12 +25,12 @@ use model::response::ErrorResponse;
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, db_permissions), fields(user_id=?db_permissions.authorization.user_context.user_id))]
+#[tracing::instrument(skip(ctx, db_permissions), fields(user_id=?db_permissions.authorization.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     db_permissions: DbPermissionsExtractor,
 ) -> Result<Response, Response> {
-    let user_context = &db_permissions.authorization.user_context;
+    let user_context = &db_permissions.authorization.authorization.user.user_context;
 
     // If the user is premium, return NO_CONTENT.
     if db_permissions

@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, extract};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
 use std::collections::HashSet;
@@ -89,10 +89,10 @@ const MESSAGE_MAX: i64 = 100;
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id), err)]
 pub async fn get_thread_messages_handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(PathParams { id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadMessagesParams>,
 ) -> Result<Response, GetThreadError> {
@@ -100,7 +100,7 @@ pub async fn get_thread_messages_handler(
 
     let link_ids: HashSet<Uuid> = email_db_client::links::get::fetch_inboxes_for_macro_id(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &authorization.authorization.user.user_context.user_id,
     )
     .await
     .context("Failed to fetch links")?

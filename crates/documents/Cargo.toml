@@ -63,14 +63,9 @@ outbound = [
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:tokio"]
+ports = ["dep:tokio", "dep:tokio-retry"]
 schema = ["dep:utoipa", "macro_user_id/schema"]
-service = [
-  "dep:entity_access_management",
-  "dep:foreign_entity",
-  "macro_event_broker/ports",
-  "ports",
-]
+service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
 # Core
@@ -90,6 +85,7 @@ connection = { path = "../connection", default-features = false, features = [
 ] }
 document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
+entity_mutation = { path = "../entity_mutation" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "outbound",
   "ports",
@@ -113,10 +109,12 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+rootcause = { workspace = true }
 s3_key = { path = "../s3_key" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
+tokio-retry = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
@@ -157,13 +155,12 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 dotenvy = { workspace = true }
 embedding = { path = "../embedding" }
 http-body-util = { workspace = true }
+kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }
-macro_env = { path = "../macro_env" }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
 macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
-rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tower = { workspace = true }

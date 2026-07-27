@@ -1,5 +1,5 @@
 use crate::domain::models::MCP_CLIENT_NAME;
-use crate::domain::models::{MacroUserIdStr, McpServerRecord, StoredCredentials};
+use crate::domain::models::{MacroUserIdStr, McpServerRecord};
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
 #[cfg(feature = "providers")]
 use crate::domain::provider_registry::PreRegisteredProviders;
@@ -72,13 +72,15 @@ impl<S, R> OAuthService<S, R> {
                 scopes: creds.scopes.clone(),
             })
         } else {
+            let scopes = crate::domain::provider_registry::dcr_default_scopes(server_url);
+            let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
             let config = auth_manager
-                .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
+                .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &scope_refs)
                 .await?;
             Ok(ResolvedClient {
                 client_id: config.client_id,
                 client_secret: config.client_secret,
-                scopes: vec![],
+                scopes,
             })
         }
     }
@@ -153,7 +155,7 @@ where
         &self,
         code: &str,
         state: &str,
-    ) -> anyhow::Result<StoredCredentials> {
+    ) -> anyhow::Result<McpServerRecord> {
         let pending = self
             .state_store
             .take(state)
@@ -212,7 +214,7 @@ where
             .map_err(anyhow::Error::from)?;
 
         tracing::info!("OAuth flow completed successfully");
-        Ok(credentials)
+        Ok(record)
     }
 }
 

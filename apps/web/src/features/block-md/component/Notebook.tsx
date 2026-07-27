@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -7,6 +8,7 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { SidePanel } from '@components/app/side-panel';
+import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
@@ -18,6 +20,8 @@ import {
   DEV_MODE_ENV,
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
+  INLINE_AI_EDITING_FLAG,
+  INLINE_AI_EDITING_OVERRIDE,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -29,6 +33,7 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
+import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
@@ -45,6 +50,7 @@ import {
 import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DispatchAgentButton } from './DispatchAgentMenu';
+import { DocumentAiEditBar } from './DocumentAiEditBar';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -123,7 +129,12 @@ export function Notebook(props: {
   const md = mdStore.get;
   const history = useHistory();
   const { navigatedFromJK } = useNavigatedFromJK();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const documentId = props.documentId;
+  const canEdit = useCanEdit();
+  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
+    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
+  });
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -258,10 +269,11 @@ export function Notebook(props: {
     }
   });
 
-  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  // Wait for the block element before claiming focus on initial mount.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
+    if (!canAutofocusSplitContent) return;
     if (!blockElement()) return;
     blockElement()?.focus();
     hasRun = true;
@@ -367,7 +379,9 @@ export function Notebook(props: {
             </Show>
           </div>
         </SidePanel.Section>
-        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
+        <TitleEditor
+          autoFocusOnMount={canAutofocusSplitContent && !navigatedFromJK()}
+        />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -398,6 +412,11 @@ export function Notebook(props: {
             </Show>
           </div>
           <Show when={!history.isOpen()}>
+            <Show when={inlineAiEditing().enabled && canEdit() && !isMobile()}>
+              <div class="mb-2">
+                <DocumentAiEditBar documentId={props.documentId} />
+              </div>
+            </Show>
             <DocumentDiscussion />
           </Show>
         </ParamsProvider>

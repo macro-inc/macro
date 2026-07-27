@@ -11,7 +11,9 @@ use serde_json::Value;
 pub struct CrmCompanyForSoup {
     /// The underlying company record.
     pub company: CrmCompany,
-    /// Display name from the primary domain's directory entry.
+    /// Display name: the team-scoped `crm_companies.custom_name` override when
+    /// set (manual creation), otherwise the primary domain's directory
+    /// entry.
     pub name: Option<String>,
     /// Display description from the primary domain's directory entry.
     pub description: Option<String>,
@@ -31,7 +33,9 @@ pub struct CrmCompanyForSoup {
 pub struct CrmCompanyWithContacts {
     /// The underlying company record (with domains pre-populated).
     pub company: CrmCompany,
-    /// Display name from the primary domain's directory entry.
+    /// Display name: the team-scoped `crm_companies.custom_name` override when
+    /// set (manual creation), otherwise the primary domain's directory
+    /// entry.
     pub name: Option<String>,
     /// Display description from the primary domain's directory entry.
     pub description: Option<String>,
@@ -45,8 +49,10 @@ pub struct CrmCompanyWithContacts {
 /// considered to belong to the same external party.
 ///
 /// Company display metadata (name, description, icon) lives in
-/// `crm_domain_directory` keyed by domain, not on `crm_companies` —
-/// look it up via [`DomainMetadata`] when needed.
+/// `crm_domain_directory` keyed by domain — look it up via
+/// [`DomainMetadata`] when needed. Manually created companies may
+/// additionally carry a team-scoped `crm_companies.custom_name` override that
+/// read paths COALESCE over the directory name.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CrmCompany {
     /// The id of the company
@@ -240,8 +246,9 @@ pub struct CrmAddressStatus {
     pub email_sync: bool,
 }
 
-/// Minimum team role required for a CRM capability. Members are
-/// view-only at the platform level, so the configurable range is
+/// Minimum team role required for a CRM governance capability. Members
+/// can edit visible CRM records (e.g. company properties), but the
+/// governance capabilities these settings gate stay restricted to
 /// admin (default) vs owner. Maps to the `team_role` Postgres enum;
 /// `member` is deliberately not representable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -362,6 +369,18 @@ pub enum CrmError {
     /// re-enable `email_sync` on a hidden company.
     #[error("crm company is hidden")]
     CompanyHidden,
+    /// The team already tracks a company for the requested domain.
+    #[error("a crm company already exists for this domain")]
+    CompanyAlreadyExistsForTeam,
+    /// The company already has a contact with the requested email.
+    #[error("a crm contact with this email already exists for the company")]
+    ContactAlreadyExistsForCompany,
+    /// The contact's email domain is not one of the company's domains.
+    #[error("contact email domain must match one of the company's domains")]
+    ContactEmailDomainMismatch,
+    /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
+    #[error("crm is not enabled for this team")]
+    CrmDisabledForTeam,
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,

@@ -176,7 +176,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-cachix/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'tooling/xtask/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'flake.nix'\n  - 'flake.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-cachix/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'tooling/xtask/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'flake.nix'\n  - 'flake.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\n"
             ),
         ))
 }

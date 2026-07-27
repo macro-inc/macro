@@ -56,7 +56,7 @@ fn rust_ci_job() -> Job {
         .add_step(checkout())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_dev_shell())
+        .add_step(steps::setup_cachix_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
 }
 

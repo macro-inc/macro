@@ -9,6 +9,8 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
+import type { BulkUpdateEntityPropertyOptionsRequest } from './generated/schemas/bulkUpdateEntityPropertyOptionsRequest';
+import type { BulkUpdateEntityPropertyOptionsResponse } from './generated/schemas/bulkUpdateEntityPropertyOptionsResponse';
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
 import type { EnsureTagSetRequest } from './generated/schemas/ensureTagSetRequest';
 import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
@@ -51,6 +53,11 @@ type EntityPropertyOptionArgs = {
   entity_id: string;
   property_id: string;
   option_id: string;
+};
+type BulkUpdateEntityPropertyOptionsArgs = {
+  entity_type: PropertyTargetEntityType;
+  entity_id: string;
+  body: BulkUpdateEntityPropertyOptionsRequest;
 };
 type GetPropertyOptionsArgs = {
   definition_id: string;
@@ -185,6 +192,16 @@ export const propertiesServiceClient = {
       method: 'DELETE',
     });
     return result.map(() => ({ success: true }));
+  },
+
+  bulkUpdateEntityPropertyOptions: async (
+    args: BulkUpdateEntityPropertyOptionsArgs
+  ) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/options/bulk`;
+    return await propertiesFetch<BulkUpdateEntityPropertyOptionsResponse>(url, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
   },
 
   getPropertyOptions: async (args: GetPropertyOptionsArgs) => {

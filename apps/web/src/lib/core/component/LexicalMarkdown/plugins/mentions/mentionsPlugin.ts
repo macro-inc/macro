@@ -193,6 +193,9 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'email') {
       fileType = 'email';
       itemType = 'thread';
+    } else if (blockName === 'call') {
+      fileType = 'call';
+      itemType = 'call';
     } else if (blockName === 'company') {
       fileType = 'company';
       itemType = 'crm_company';

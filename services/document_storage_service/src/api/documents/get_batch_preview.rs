@@ -9,12 +9,15 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
 use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
 use model::response::{GenericErrorResponse, GenericResponse};
 use reqwest::StatusCode;
 
-#[tracing::instrument(skip(ctx, user, req), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(
+    skip(ctx, user, req),
+    fields(actor = tracing::field::Empty)
+)]
 #[utoipa::path(
     tag = "document",
     post,
@@ -28,9 +31,13 @@ use reqwest::StatusCode;
 )]
 pub async fn get_batch_preview_handler(
     State(ctx): State<ApiContext>,
-    user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     Json(req): Json<GetBatchPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchPreviewResponse>), Response> {
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+
     // Ensure the document ids are unique to prevent duplicate work
     let unique_document_ids: HashSet<String> = req.document_ids.iter().cloned().collect();
     let document_ids: Vec<String> = unique_document_ids.into_iter().collect();

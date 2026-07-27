@@ -5,6 +5,7 @@ import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isSoloSettings } from '@core/constant/SettingsState';
+import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -46,13 +47,18 @@ type SplitPanelProps = {
   index: number;
 };
 
+/**
+ * A Preview Pair Viewer displays content passively. Only record it as opened
+ * after the user lingers, so keyboard scanning does not mark every row viewed.
+ */
+const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
+
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const [previewState, setPreviewState] = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -81,6 +87,7 @@ export function SplitPanel(props: SplitPanelProps) {
       const content = props.handle.content();
       return !isListViewID(content.id);
     },
+    isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -100,6 +107,10 @@ export function SplitPanel(props: SplitPanelProps) {
   createEffect(
     on([panelRef], () => {
       if (isMobile()) return;
+      // Only the active split may claim focus on mount. A Preview Pair's Viewer
+      // is created with activate:false while its controller stays active, and
+      // must not steal the keyboard from it.
+      if (!props.active) return;
       panelRef()?.focus();
     })
   );
@@ -157,11 +168,58 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitUnfocusedStyling = () =>
     !isMobile() && !props.active && multipleSplits();
 
+  const gutterSize = () =>
+    globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
+
+  /**
+   * This split is a Viewer sitting immediately right of its Controller: the
+   * pane slides left across the gutter so it sits flush against the
+   * Controller, reading as tucked behind it.
+   */
+  const tuckedBehindController = createMemo(() => {
+    return (
+      !isMobile() && !props.handle.isSpotLight() && props.handle.isViewerSplit()
+    );
+  });
+
+  /**
+   * This split is a preview controller with its viewer tucked flush against
+   * its right edge: paint above the viewer so the controller's card and
+   * shadow read as being in front.
+   */
+  const hasTuckedViewer = createMemo(() => {
+    return (
+      !isMobile() &&
+      !props.handle.isSpotLight() &&
+      props.handle.isControllerSplit()
+    );
+  });
+
+  /**
+   * Both members of a tucked Preview Pair share the active edge color when
+   * either member is active. The active member stays solid; its partner is
+   * dashed so focus ownership remains visible without breaking the Preview
+   * Pair's shared visual treatment.
+   */
+  const previewPairFocusStyling = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager || isMobile() || props.handle.isSpotLight()) return false;
+
+    const peerId = props.handle.isControllerSplit()
+      ? manager.viewerOf(props.split.id)
+      : props.handle.isViewerSplit()
+        ? manager.controllerOf(props.split.id)
+        : undefined;
+    if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;
+
+    const activeId = manager.activeSplitId();
+    return activeId === props.split.id || activeId === peerId;
+  });
+
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
         value={{
-          previewState: [previewState, setPreviewState],
           isPanelActive: () => props.active,
           handle: props.handle,
           setContentOffsetTop,
@@ -214,6 +272,14 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
+              // Slide the preview pane left across the gutter so it sits
+              // flush against the controller, keeping its right edge in
+              // place. The gutter's drag hit-area still paints (and
+              // hit-tests) above this extension, so resizing works.
+              ...(tuckedBehindController() && {
+                'margin-left': `-${gutterSize()}px`,
+                width: `calc(100% + ${gutterSize()}px)`,
+              }),
             }}
             ref={(ref) => {
               setPanelRef(ref);
@@ -227,7 +293,7 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               edgeColor={
-                splitFocusStyling()
+                splitFocusStyling() || previewPairFocusStyling()
                   ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
                   : undefined
               }
@@ -237,6 +303,17 @@ export function SplitPanel(props: SplitPanelProps) {
                   'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
                     splitUnfocusedStyling(),
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
+                  'border-solid!': previewPairFocusStyling() && props.active,
+                  'border-dashed!': previewPairFocusStyling() && !props.active,
+                  // Drawer look: both members square their seam corners. The
+                  // seam border always belongs to the Controller — the
+                  // Viewer's seam edge stays borderless so the line never
+                  // doubles, and keeping it on one fixed member regardless
+                  // of focus means switching focus can't shift layout by the
+                  // border width (the ! beats Surface's inline border
+                  // shorthand).
+                  'rounded-l-none border-l-0!': tuckedBehindController(),
+                  'rounded-r-none': hasTuckedViewer(),
                 }
               )}
               depth={isMobile() ? 0 : 1}
@@ -259,9 +336,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
                   isMobile() && 'hidden',
-                  (!previewState() ||
-                    isListViewID(props.handle.content().id)) &&
-                    'border-b-0' /* List views draw the preview border below their filter bar instead (see SoupView). */
+                  'border-b-0'
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />
@@ -277,7 +352,15 @@ export function SplitPanel(props: SplitPanelProps) {
                   >
                     <Suspense>
                       <SoupViewContextProvider soup={nextSoup}>
-                        <Dynamic component={props.split.mount.element} />
+                        <BlockOpenTrackingDelayContext.Provider
+                          value={
+                            props.handle.isViewerSplit()
+                              ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
+                              : 0
+                          }
+                        >
+                          <Dynamic component={props.split.mount.element} />
+                        </BlockOpenTrackingDelayContext.Provider>
                       </SoupViewContextProvider>
                     </Suspense>
                   </div>

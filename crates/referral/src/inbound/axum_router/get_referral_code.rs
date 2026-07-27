@@ -1,7 +1,7 @@
 //! Handler for `GET /code`.
 
 use axum::{Json, extract::State};
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 
 use super::ReferralRouterState;
 use crate::domain::models::{ReferralCode, ReferralError};
@@ -24,11 +24,12 @@ use crate::domain::ports::ReferralService;
 #[tracing::instrument(skip(state, authorization), err)]
 pub async fn get_referral_code_handler<T: ReferralService, R, Auth: MacroAuthorizationService>(
     State(state): State<ReferralRouterState<T, R, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<ReferralCode>, ReferralError> {
+    let user = authorization.authorization.user;
     let code = state
         .service
-        .get_referral_code_for_user(&authorization.macro_user_id)
+        .get_referral_code_for_user(&user.macro_user_id)
         .await?;
 
     Ok(Json(code))

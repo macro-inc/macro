@@ -6,7 +6,9 @@ use axum::{
     response::Json,
     routing::get,
 };
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use macro_db_client::dcs::get_part_by_id::get_part_by_id;
 use model::citations::DocumentTextPart;
 use sqlx::PgPool;
@@ -32,12 +34,20 @@ pub struct Params {
       (status = 500, body = String),
   )
 )]
-#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(actor = tracing::field::Empty))]
 pub async fn get_citation_handler(
     State(db): State<PgPool>,
-    user: OptionalMacroAuthorizationExtractor<DcsAuthorizationService>,
+    user: OptionalMacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternalService>,
     Path(Params { id }): Path<Params>,
 ) -> Result<Json<DocumentTextPart>, (StatusCode, String)> {
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+    let user_id = user
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
+        .map(|user| user.macro_user_id.as_ref());
     match get_part_by_id(db, id.as_str()).await {
         Ok(Some(part)) => Ok(Json(part)),
         Ok(None) => Err((
@@ -45,7 +55,7 @@ pub async fn get_citation_handler(
             "not found - possible hallucination".to_string(),
         )),
         Err(err) => {
-            tracing::error!(user_id=?user.macro_user_id, citation_id=%id, error=%err, "failed to get citation");
+            tracing::error!(user_id, citation_id=%id, error=%err, "failed to get citation");
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "unable to get citation".to_string(),

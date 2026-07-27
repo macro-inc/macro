@@ -554,6 +554,34 @@ async fn update_db_thread_metadata(
     Ok(())
 }
 
+/// Update the denormalized thread-level read status, verified by link_id.
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn update_thread_read_status(
+    pool: &PgPool,
+    thread_id: Uuid,
+    link_id: Uuid,
+    is_read: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE email_threads
+        SET
+            is_read = $1,
+            updated_at = NOW()
+        WHERE
+            id = $2 AND
+            link_id = $3
+        "#,
+        is_read,
+        thread_id,
+        link_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// Update the project assignment for a thread. Returns `false` if the thread was not found.
 #[tracing::instrument(err, skip(pool))]
 pub(super) async fn update_thread_project(

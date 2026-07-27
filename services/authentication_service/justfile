@@ -27,4 +27,4 @@ create_queue:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name notification-queue
 
 run-local:
-    SQLX_OFFLINE=true cargo run --features macro_middleware/local_auth
+    SQLX_OFFLINE=true cargo run --features macro_middleware/local_auth,return_passwordless_code

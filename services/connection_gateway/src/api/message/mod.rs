@@ -13,7 +13,7 @@ use connection_gateway_models::{
     BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody, SendMessageResponse,
 };
 use futures::future::try_join_all;
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model_entity::Entity;
 use std::time::Instant;
 
@@ -52,7 +52,7 @@ where
 #[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn send_message_handler(
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<AppState>,
     Path(entity): Path<Entity<'static>>,
     Json(body): Json<SendMessageBody>,
@@ -95,7 +95,7 @@ pub async fn send_message_handler(
 )]
 #[tracing::instrument(skip(_internal_authorization, ctx))]
 pub async fn batch_send_message_handler(
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendMessageBody<'static>>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
@@ -147,7 +147,7 @@ pub async fn batch_send_message_handler(
 #[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn batch_send_unique_messages_handler(
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendUniqueMessagesBody>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {

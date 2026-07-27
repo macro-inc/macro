@@ -31,6 +31,34 @@ where
     pub fn new(repo: R) -> Self {
         Self { repo }
     }
+
+    async fn add_favorite_for_user(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        entity: &Entity<'_>,
+    ) -> Result<Favorite, FavoritesError> {
+        validate_entity(entity)?;
+        // Cap the collection at add time. Enforcing it here (rather than only
+        // in `reorder_favorites`) keeps table growth bounded and guarantees a
+        // reorder payload can never exceed the limit and be rejected. Re-adding
+        // an already-favorited entity while exactly at the cap is rejected too;
+        // that is a harmless, fail-closed edge.
+        let count = self
+            .repo
+            .count_favorites(user_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if count as usize >= MAX_FAVORITES_PER_COLLECTION {
+            return Err(FavoritesError::BadRequest(format!(
+                "cannot have more than {MAX_FAVORITES_PER_COLLECTION} favorites"
+            )));
+        }
+        Ok(self
+            .repo
+            .add_favorite(user_id, entity)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
 }
 
 fn validate_entity(entity: &Entity<'_>) -> Result<(), FavoritesError> {
@@ -59,27 +87,16 @@ where
         let entity = receipt_entity
             .entity_type
             .with_entity_str(&receipt_entity.entity_id);
-        validate_entity(&entity)?;
-        // Cap the collection at add time. Enforcing it here (rather than only
-        // in `reorder_favorites`) keeps table growth bounded and guarantees a
-        // reorder payload can never exceed the limit and be rejected. Re-adding
-        // an already-favorited entity while exactly at the cap is rejected too;
-        // that is a harmless, fail-closed edge.
-        let count = self
-            .repo
-            .count_favorites(user_id)
-            .await
-            .map_err(anyhow::Error::from)?;
-        if count as usize >= MAX_FAVORITES_PER_COLLECTION {
-            return Err(FavoritesError::BadRequest(format!(
-                "cannot have more than {MAX_FAVORITES_PER_COLLECTION} favorites"
-            )));
-        }
-        Ok(self
-            .repo
-            .add_favorite(user_id, &entity)
-            .await
-            .map_err(anyhow::Error::from)?)
+        self.add_favorite_for_user(user_id, &entity).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn add_favorite_with_established_access(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        entity: &Entity<'_>,
+    ) -> Result<Favorite, FavoritesError> {
+        self.add_favorite_for_user(user_id, entity).await
     }
 
     #[tracing::instrument(err, skip(self))]

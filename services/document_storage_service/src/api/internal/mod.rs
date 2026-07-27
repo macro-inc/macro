@@ -23,7 +23,7 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_middleware::cloud_storage::{
     document::ensure_document_exists, thread::ensure_thread_exists,
 };
@@ -136,6 +136,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 >,
             ),
         )
+        .route(
+            "/documents/{document_id}/interaction",
+            put(
+                documents_hex::inbound::axum_router::put_interaction::put_interaction_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
+        )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes
         .route(
@@ -189,7 +199,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
 }
 
 async fn health_handler(
-    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
 ) -> &'static str {
     "healthy"
 }

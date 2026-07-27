@@ -5,12 +5,44 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
+import { useJoinChannelMutation } from '@queries/channel/join-links';
+import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
 import { SearchContent } from '../../extractors-search/search-content';
 import { SearchSender } from '../../extractors-search/search-sender';
 import type { ChannelEntity, ChannelMessageEntity } from '../../types/entity';
 import { firstContentHit } from './shared';
+
+/**
+ * Join affordance for a channel row the viewer is not a participant of (team
+ * channels of their teams, surfaced in the Channels → Teams tab). Joins via
+ * `POST /channels/{channel_id}/join`; on success the soup refetch flips
+ * `isParticipant` and the button disappears.
+ */
+export function ChannelJoinButton(props: {
+  entity: ChannelEntity;
+  class?: string;
+}) {
+  const joinMutation = useJoinChannelMutation();
+
+  return (
+    <Button
+      type="button"
+      variant="active"
+      size="sm"
+      class={props.class ?? 'shrink-0'}
+      disabled={joinMutation.isPending}
+      onClick={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        joinMutation.mutate({ channelId: props.entity.id });
+      }}
+    >
+      {joinMutation.isPending ? 'Joining…' : 'Join'}
+    </Button>
+  );
+}
 
 function ChannelMessage(props: {
   message: NonNullable<ChannelEntity['latestMessage']>;

@@ -24,6 +24,10 @@ export const inboxFilter = config({
       emailDone: false,
       emailImportance: true,
       channelDone: false,
+      // Signal only surfaces channels the user is actually in; without this
+      // the query would also match team channels they have not joined once
+      // the backend widens the candidate set for participation-aware filters.
+      channelIsParticipant: [true],
       channelThreadDone: false,
       chatDone: false,
       folderDone: false,

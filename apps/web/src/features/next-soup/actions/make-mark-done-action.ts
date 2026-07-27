@@ -4,11 +4,11 @@ import {
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   type MarkEntitiesDoneContext,
+  openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -96,9 +96,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       splitPanel?.handle.referredFrom() === 'inbox');
 
   const { notificationSource, hotkeyGroup } = options;
-  const previewPanel = useMaybePreviewPanel();
-  const inPreview = previewPanel !== undefined;
-
   const mutation = useUndoableMutation<
     void,
     Error,
@@ -180,7 +177,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         onUndone: () => {
           if (toastId !== undefined) toast.dismiss(toastId);
           variables.restoreFocus?.();
-          restoreSoupFocus(firstEntityId, inPreview);
+          restoreSoupFocus(firstEntityId);
           variables.navigateBack?.();
         },
         onRedone: showToast,
@@ -294,6 +291,13 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     if (nextRow) {
       soup.focus.set(nextRow.id);
+      const controller = splitPanel?.handle;
+      if (controller?.isControllerSplit()) {
+        void openEntityInSplitFromUnifiedList(nextRow.original, {
+          splitHandle: controller,
+          mergeHistory: true,
+        });
+      }
       onNavigate?.(nextRow.original);
     }
 

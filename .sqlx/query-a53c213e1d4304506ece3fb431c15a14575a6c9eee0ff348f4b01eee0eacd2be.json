@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET status = 'importing', error = NULL, updated_at = NOW()\n            WHERE user_id = $1 AND source = $2\n              AND status = 'ready' AND auto_import\n            RETURNING source\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a53c213e1d4304506ece3fb431c15a14575a6c9eee0ff348f4b01eee0eacd2be"
+}

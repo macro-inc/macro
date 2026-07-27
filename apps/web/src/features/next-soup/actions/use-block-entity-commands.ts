@@ -3,7 +3,6 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -42,7 +41,6 @@ export const useBlockEntityCommands = () => {
   const notificationSource = useGlobalNotificationSource();
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
-  const previewPanel = useMaybePreviewPanel();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -91,12 +89,10 @@ export const useBlockEntityCommands = () => {
     }
   };
 
-  // The 'e' hotkey from inside a block is reserved for entities opened full
-  // screen from the inbox/mail lists, mirroring the j/k gating in
-  // use-soup-navigation-hotkeys. Blocks rendered in the preview panel fall
-  // through to the originating list's own 'e' registration.
+  // The 'e' hotkey from inside a block is reserved for entities opened from
+  // the inbox/mail lists, mirroring the j/k gating in
+  // use-soup-navigation-hotkeys.
   const canUseMarkDoneHotkey = () => {
-    if (previewPanel) return false;
     const referredFrom = splitPanel?.handle.referredFrom();
     return referredFrom === 'inbox' || referredFrom === 'mail';
   };

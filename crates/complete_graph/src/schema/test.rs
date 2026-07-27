@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::http::{Request as HttpRequest, header};
@@ -7,10 +8,11 @@ use email::domain::models::{
     UpsertEmailFilterInput,
 };
 use entity_access::domain::models::{
-    AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
-    EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
+    EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+    ViewAccessLevel,
 };
-use graphql_common::GraphqlSoupRequestParts;
+use graphql_common::GraphqlRequestParts;
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
@@ -31,10 +33,33 @@ const VALID_USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|internal@example.com";
 const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
+#[derive(Clone)]
+struct TestRealtimeSubscriptionService {
+    #[allow(clippy::type_complexity)]
+    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>>>>>,
+    subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
+}
+
+impl SoupRealtimeSubscriptionService for TestRealtimeSubscriptionService {
+    fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+        *self.subscribed_user.lock().expect("subscribed user lock") = Some(user_id);
+        self.receiver
+            .lock()
+            .expect("subscription receiver lock")
+            .take()
+            .expect("test subscription is opened once")
+    }
+}
+
 #[derive(Clone, Default)]
 struct CountingSoupService {
     raw_calls: Arc<AtomicUsize>,
+    raw_team_receipts: Arc<AtomicUsize>,
     frecency_calls: Arc<AtomicUsize>,
+    frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
 }
 
@@ -67,13 +92,16 @@ impl SoupService for CountingSoupService {
     async fn get_user_soup<T>(
         &self,
         _req: soup::domain::models::SoupRequest<T>,
-        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
     ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
     where
         soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
         T: Clone + serde::Serialize + Send,
     {
         self.raw_calls.fetch_add(1, Ordering::SeqCst);
+        if team_receipt.is_some() {
+            self.raw_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
         Err(test_soup_err())
     }
 
@@ -95,7 +123,7 @@ impl SoupService for CountingSoupService {
     async fn get_user_soup_with_frecency<T>(
         &self,
         _req: soup::domain::models::SoupRequest<T>,
-        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
     ) -> Result<
         soup::domain::ports::SoupOutput<T, soup::domain::models::EnrichedSoupItem>,
         soup::domain::models::SoupErr,
@@ -105,6 +133,9 @@ impl SoupService for CountingSoupService {
         T: Clone + serde::Serialize + Send,
     {
         self.frecency_calls.fetch_add(1, Ordering::SeqCst);
+        if team_receipt.is_some() {
+            self.frecency_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
         Err(test_soup_err())
     }
 
@@ -256,7 +287,6 @@ impl EmailService for CountingEmailService {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &Link,
         _thread_id: Uuid,
         _label_id: Uuid,
@@ -290,8 +320,7 @@ impl EmailService for CountingEmailService {
     }
 }
 
-/// Entity access service whose team lookups are counted. The user has no
-/// team, so CRM-scoped queries are rejected after the (counted) lookup.
+/// Entity access service whose team lookups are counted and return a team.
 #[derive(Clone, Default)]
 struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
@@ -311,6 +340,7 @@ impl EntityAccessService for CountingEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -360,7 +390,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         Err(AccessError::Internal)
     }
 
@@ -391,7 +421,10 @@ impl EntityAccessService for CountingEntityAccessService {
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.team_calls.fetch_add(1, Ordering::SeqCst);
-        Ok(None)
+        Ok(Some(UserTeamInfo {
+            team_id: Uuid::from_u128(42),
+            role: TeamRole::Member,
+        }))
     }
 }
 
@@ -463,21 +496,27 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
 struct TestHarness {
     schema: SoupSchema<
         CountingSoupService,
+        NoOpSoupRealtimeSubscriptionService,
         CountingEmailService,
         CountingEntityAccessService,
         FakeAuthorizationService,
         TestState,
         NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
         NoOpSoupEmailContentEdgeReader,
+        graphql_favorite::NoOpEntityFavoriteEdgeReader,
+        graphql_permission::NoOpEntityPermissionEdgeReader,
     >,
     state: TestState,
     authorization_calls: Arc<AtomicUsize>,
     inbox_calls: Arc<AtomicUsize>,
     team_calls: Arc<AtomicUsize>,
     raw_soup_calls: Arc<AtomicUsize>,
+    raw_soup_team_receipts: Arc<AtomicUsize>,
     frecency_soup_calls: Arc<AtomicUsize>,
+    frecency_soup_team_receipts: Arc<AtomicUsize>,
     grouped_soup_calls: Arc<AtomicUsize>,
 }
 
@@ -490,7 +529,9 @@ fn harness() -> TestHarness {
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let team_calls = Arc::clone(&entity_access.team_calls);
     let raw_soup_calls = Arc::clone(&soup.raw_calls);
+    let raw_soup_team_receipts = Arc::clone(&soup.raw_team_receipts);
     let frecency_soup_calls = Arc::clone(&soup.frecency_calls);
+    let frecency_soup_team_receipts = Arc::clone(&soup.frecency_team_receipts);
     let grouped_soup_calls = Arc::clone(&soup.grouped_calls);
     TestHarness {
         schema: build_schema_with_service(soup),
@@ -503,7 +544,9 @@ fn harness() -> TestHarness {
         inbox_calls,
         team_calls,
         raw_soup_calls,
+        raw_soup_team_receipts,
         frecency_soup_calls,
+        frecency_soup_team_receipts,
         grouped_soup_calls,
     }
 }
@@ -540,10 +583,67 @@ impl TestHarness {
         parts: axum::http::request::Parts,
     ) -> async_graphql::Response {
         let request = async_graphql::Request::new(query)
-            .data(GraphqlSoupRequestParts::new(parts))
+            .data(GraphqlRequestParts::new(parts))
             .data(self.state.clone());
         self.schema.execute(request).await
     }
+}
+
+#[tokio::test]
+async fn soup_updates_subscribes_as_the_authenticated_user() {
+    use async_graphql::futures_util::{StreamExt as _, pin_mut};
+
+    let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    let subscribed_user = Arc::new(Mutex::new(None));
+    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    let realtime = TestRealtimeSubscriptionService {
+        receiver: Arc::new(Mutex::new(Some(receiver))),
+        subscribed_user: Arc::clone(&subscribed_user),
+    };
+    let schema: SoupSchema<
+        NoOpSoupService,
+        TestRealtimeSubscriptionService,
+        NoOpEmailService,
+        NoOpEntityAccessService,
+        SchemaOnlyAuthorizationService,
+        SchemaOnlyState,
+        NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpSoupNotificationEdgeReader,
+        NoOpEntityPropertyReader,
+        NoOpSoupEmailContentEdgeReader,
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
+    > = build_schema_with_services(NoOpSoupService, realtime);
+    let request = async_graphql::Request::new(
+        "subscription { soupUpdates { id entityType ... on GraphqlSoupDocument { name } } }",
+    )
+    .data(user_id.clone());
+    let responses = schema.execute_stream(request);
+    pin_mut!(responses);
+
+    let document_id = Uuid::from_u128(42);
+    sender
+        .send(Arc::new(grouped_document(document_id).map_extra(|_| ())))
+        .await
+        .expect("subscription remains open");
+    let response = responses.next().await.expect("one subscription response");
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("response data is JSON");
+    assert_eq!(data["soupUpdates"]["id"], document_id.to_string());
+    assert_eq!(data["soupUpdates"]["entityType"], "DOCUMENT");
+    assert_eq!(
+        data["soupUpdates"]["name"],
+        format!("Document {document_id}")
+    );
+    assert_eq!(
+        subscribed_user
+            .lock()
+            .expect("subscribed user lock")
+            .as_ref(),
+        Some(&user_id)
+    );
 }
 
 #[tokio::test]
@@ -584,7 +684,7 @@ async fn internal_authorization_uses_the_acting_user_claim() {
 }
 
 #[tokio::test]
-async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
+async fn soup_passes_team_receipt_to_raw_path() {
     let harness = harness();
 
     let _response = harness
@@ -592,9 +692,14 @@ async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
         .await;
 
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.raw_soup_team_receipts.load(Ordering::SeqCst), 1);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
+        0
+    );
 }
 
 #[tokio::test]
@@ -615,7 +720,7 @@ async fn soup_input_rejects_initial_and_continuation_together() {
 }
 
 #[tokio::test]
-async fn soup_requests_frecency_only_when_selected() {
+async fn soup_passes_team_receipt_to_frecency_enriched_path() {
     let harness = harness();
 
     let _response = harness
@@ -623,9 +728,14 @@ async fn soup_requests_frecency_only_when_selected() {
         .await;
 
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_team_receipts.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
+        1
+    );
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -664,8 +774,8 @@ async fn crm_scoped_soup_resolves_team_membership_lazily() {
     let harness = harness();
 
     // The membership/role authorization itself lives in the soup domain
-    // and CRM service (covered by their tests); this asserts the GraphQL
-    // layer resolves the team receipt only for CRM-scoped input.
+    // and CRM service (covered by their tests); this asserts CRM-scoped
+    // input still receives the always-resolved team receipt.
     let response = harness
         .execute(
             r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { hasMore } } }"#,

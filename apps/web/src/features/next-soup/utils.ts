@@ -12,8 +12,10 @@ import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {
   ReferredFrom,
+  SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
@@ -30,9 +32,11 @@ import {
   type EntityData,
   emailQueryKeyExcludesDone,
   getSnippetHit,
+  isChannelEntity,
   isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
+  isNonMemberChannelEntity,
   isSearchEntity,
   isWithNotification,
   queryKeys,
@@ -69,6 +73,7 @@ import {
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
+import { withPreviewSourceEntityId } from './preview-history';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -183,6 +188,13 @@ const isNewerEntity = (
   return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
+/**
+ * Opens an entity via {@link openExternalUrl}. On web this is a new browser
+ * tab; inside the native Tauri shell a same-origin Macro `/app` link is routed
+ * in-app (in place) instead — `window.open` there would kick the user out to
+ * the system browser. So despite the name, this does not guarantee a separate
+ * tab/pane under Tauri.
+ */
 export const openEntityInNewTab = ({
   entity,
   location,
@@ -271,7 +283,7 @@ export const openEntityInNewTab = ({
     }
   }
 
-  window.open(entityUrl.toString(), '_blank', 'noopener');
+  openExternalUrl(entityUrl.toString());
 };
 
 /**
@@ -281,23 +293,15 @@ export const openEntityInNewTab = ({
  * like 'escape' won't work.
  *
  * @param entityId - Optional entity ID to focus on. If not provided, focuses the first entity in the list.
- * @param inPreview - Whether to check for the soup view in a preview panel
  */
-export const restoreSoupFocus = async (
-  entityId?: string,
-  inPreview = false
-): Promise<void> => {
+export const restoreSoupFocus = async (entityId?: string): Promise<void> => {
   // Get the active split's soup view DOM reference
   const activeSplitId = globalSplitManager()?.activeSplitId();
   if (!activeSplitId) return;
 
-  let domRef = document.querySelector(`[data-soup-view-id="${activeSplitId}"]`);
-
-  if (inPreview) {
-    domRef = document.querySelector(
-      `[data-soup-view-id="${activeSplitId}-preview"]`
-    );
-  }
+  const domRef = document.querySelector(
+    `[data-soup-view-id="${activeSplitId}"]`
+  );
 
   if (!(domRef instanceof HTMLElement)) return;
 
@@ -331,6 +335,37 @@ interface OpenEntityOptions {
   mergeHistory?: boolean;
   allowDuplicate?: boolean;
   referredFrom?: ReferredFrom;
+}
+
+const DUPLICATE_CONTENT_MESSAGE = 'Content already open.';
+
+/** Whether this entity is open outside the controller's own preview viewer. */
+export function isDuplicatePreviewEntityOpen(
+  entity: EntityData,
+  controller: SplitHandle
+): boolean {
+  const splitManager = globalSplitManager();
+  const viewerId = controller.viewerId();
+  if (!splitManager || !viewerId) return false;
+
+  const content = getEntitySplitContent(entity);
+  const existing = splitManager.getSplitByContent(content.type, content.id);
+  return existing !== undefined && existing.id !== viewerId;
+}
+
+/** Show the standard duplicate-content notification. */
+export function notifyDuplicateContentOpen() {
+  toast.alert(DUPLICATE_CONTENT_MESSAGE);
+}
+
+/** Reject and notify for an entity already owned by another split. */
+export function preventDuplicatePreviewEntityOpen(
+  entity: EntityData,
+  controller: SplitHandle
+): boolean {
+  if (!isDuplicatePreviewEntityOpen(entity, controller)) return false;
+  notifyDuplicateContentOpen();
+  return true;
 }
 
 /**
@@ -492,6 +527,32 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
+  // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
+  // the Join prompt in the Viewer; otherwise the row's inline Join button is
+  // the only affordance.
+  if (isNonMemberChannelEntity(entity)) {
+    if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
+      const joinPromptContent = withPreviewSourceEntityId(
+        {
+          type: 'component',
+          id: 'non-member-channel',
+          params: {
+            channelId: entity.id,
+            channelName: entity.name,
+            memberCount: entity.participantIds?.length ?? 0,
+          },
+        },
+        entity.id
+      );
+      splitManager.openWithSplit(joinPromptContent, {
+        referredFrom: options.referredFrom,
+        activate: true,
+        handle: splitHandle,
+      });
+    }
+    return;
+  }
+
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
       splitManager.openWithSplit(
@@ -514,6 +575,15 @@ export const openEntityInSplitFromUnifiedList = async (
   const blockOrchestrator = splitManager.getOrchestrator();
 
   const content = getEntitySplitContent(entity);
+
+  if (
+    !allowDuplicate &&
+    !openInNewSplit &&
+    splitHandle &&
+    preventDuplicatePreviewEntityOpen(entity, splitHandle)
+  ) {
+    return;
+  }
 
   const channelTarget = getChannelEntityTarget(entity);
   const channelMessageTarget =
@@ -541,21 +611,23 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  splitManager.openWithSplit(
-    { ...content, params },
-    {
-      referredFrom,
-      activate: true,
-      preferNewSplit: openInNewSplit,
-      handle: splitHandle,
-      mergeHistory,
-      allowDuplicate,
-      reopen:
-        entity.type === 'channel' && !location && openChannelAtLatest
-          ? 'latest'
-          : undefined,
-    }
-  );
+  let splitContent: SplitContent = { ...content, params };
+  if (splitHandle?.isControllerSplit()) {
+    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
+  }
+
+  splitManager.openWithSplit(splitContent, {
+    referredFrom,
+    activate: true,
+    preferNewSplit: openInNewSplit,
+    handle: splitHandle,
+    mergeHistory,
+    allowDuplicate,
+    reopen:
+      entity.type === 'channel' && !location && openChannelAtLatest
+        ? 'latest'
+        : undefined,
+  });
 
   // Navigate to specific location if provided
   if (location) {

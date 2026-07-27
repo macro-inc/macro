@@ -1,5 +1,6 @@
 //! Toolset inbound adapter for the Properties service.
 
+mod bulk_set_entity_property_options;
 mod create_tag;
 mod delete_tag;
 mod edit_tag;
@@ -19,6 +20,9 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use std::sync::Arc;
 
+pub use bulk_set_entity_property_options::{
+    BulkSetEntityPropertyOptions, BulkSetEntityPropertyOptionsResponse,
+};
 pub use create_tag::{CreateTag, CreateTagResponse};
 pub use delete_tag::{DeleteTag, DeleteTagResponse};
 pub use edit_tag::{EditTag, EditTagResponse};
@@ -104,6 +108,7 @@ where
     AsyncToolCollection::new()
         .add_tool::<GetEntityProperties, PropertiesToolContext<T, A>>()
         .add_tool::<SetEntityProperty, PropertiesToolContext<T, A>>()
+        .add_tool::<BulkSetEntityPropertyOptions, PropertiesToolContext<T, A>>()
         .add_tool::<ListTags, PropertiesToolContext<T, A>>()
         .add_tool::<CreateTag, PropertiesToolContext<T, A>>()
         .add_tool::<EditTag, PropertiesToolContext<T, A>>()

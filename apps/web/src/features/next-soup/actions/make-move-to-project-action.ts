@@ -1,5 +1,4 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
@@ -29,14 +28,10 @@ export const makeMoveToProjectAction = () => {
     });
   };
 
-  const previewPanel = useMaybePreviewPanel();
-
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const currentIndex = soup.focus.index();
     const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
-
-    const inPreview = previewPanel !== undefined;
 
     openBulkEditModal({
       view: 'moveToProject',
@@ -51,14 +46,14 @@ export const makeMoveToProjectAction = () => {
             ? `Moved ${entities.length} items`
             : 'Moved to folder'
         );
-        restoreSoupFocus(nextRow?.id, inPreview);
+        restoreSoupFocus(nextRow?.id);
       },
       onCancel: () => {
         const firstEntity = entities[0];
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id, inPreview);
+        restoreSoupFocus(firstEntity?.id);
       },
     });
   };

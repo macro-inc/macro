@@ -4,6 +4,7 @@ import type {
   SelectionData,
   WordcountStats,
 } from '@core/component/LexicalMarkdown/plugins';
+import type { NodeIdMappings } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
@@ -24,6 +25,8 @@ export const blockDataSignal = blockDataSignalAs<MarkdownData>('md');
  */
 export type MdData = {
   editor?: LexicalEditor;
+  /** Durable nodeId <-> nodeKey mapping for the main editor (from the nodeId plugin). */
+  mapping?: NodeIdMappings;
   titleEditor?: LexicalEditor;
   plugins?: PluginManager;
   selection?: Store<SelectionData>;

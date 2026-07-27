@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::EmptyResponse;
 use tower_cookies::{CookieManagerLayer, Cookies};
 
@@ -30,10 +30,10 @@ pub fn router() -> Router<ApiContext> {
             (status = 200, body= EmptyResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%authorization.user_context.user_id, organization_id=?authorization.user_context.organization_id))]
+#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%authorization.authorization.user.user_context.user_id, organization_id=?authorization.authorization.user.user_context.organization_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     JwtSessionContext(jwt_session): JwtSessionContext,
     cookies: Cookies,
 ) -> Result<Response, Response> {

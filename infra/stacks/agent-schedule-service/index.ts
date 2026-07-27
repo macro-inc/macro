@@ -4,7 +4,6 @@ import {
   config,
   getAiToolsInfra,
   getMacroApiToken,
-  getMacroNotify,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -26,7 +25,6 @@ const jwtSecretKeyArn = aws.secretsmanager
   .apply((secret) => secret.arn);
 
 const MACRO_API_TOKENS = getMacroApiToken();
-const { notificationIngressQueueArn } = getMacroNotify();
 
 // ── AI tools infra ───────────────────────────────────────────────────────────
 
@@ -64,7 +62,7 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     ...aiTools.secretArns,
   ],
-  queueArns: [notificationIngressQueueArn, ...aiTools.queueArns],
+  queueArns: [...aiTools.queueArns],
   bucketArns: [...aiTools.bucketArns],
   containerEnvVars: [
     {

@@ -1,6 +1,6 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';
@@ -12,7 +12,9 @@ export default function BlockEmail() {
   useBlockEntityCommands();
   const blockData = blockDataSignal.get;
   const notificationSource = useGlobalNotificationSource();
-  const isPreview = !!useMaybePreviewPanel();
+  // A Preview Pair Viewer shows the thread passively — wait longer before
+  // marking it seen so scanning/previewing doesn't clear unread state.
+  const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
   const threadId = createMemo(() => blockData()?.thread?.db_id ?? '');
 

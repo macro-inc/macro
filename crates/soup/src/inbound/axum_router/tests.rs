@@ -7,7 +7,7 @@ use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
-use entity_access::domain::models::{BotId, EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{BotAccessScope, BotId, EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_authorization::{
@@ -310,7 +310,6 @@ impl EmailService for MockEmail {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &email::domain::models::Link,
         _thread_id: uuid::Uuid,
         _label_id: uuid::Uuid,
@@ -377,6 +376,7 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
     >(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: entity_access::domain::models::EntityType,
     ) -> Result<
@@ -450,7 +450,11 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         _entity_id: &str,
         _entity_type: entity_access::domain::models::EntityType,
     ) -> Result<
-        (entity_access::domain::models::EntityPermission, uuid::Uuid),
+        (
+            entity_access::domain::models::EntityPermission,
+            uuid::Uuid,
+            entity_access::domain::models::TeamRole,
+        ),
         entity_access::domain::models::AccessError,
     > {
         unimplemented!()
@@ -729,7 +733,6 @@ impl EmailService for MockEmailLinkResult {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &email::domain::models::Link,
         _thread_id: uuid::Uuid,
         _label_id: uuid::Uuid,

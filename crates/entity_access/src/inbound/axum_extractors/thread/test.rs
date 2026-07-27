@@ -8,18 +8,24 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
 use rootcause::Report;
 use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    domain::models::{EditAccessLevel, EntityAccessAuth, ViewAccessLevel},
+    domain::models::{
+        BotAccessScope, EditAccessLevel, EntityAccessAuth, EntityPermission, ViewAccessLevel,
+    },
     inbound::axum_extractors::test_support::{
-        AccessCall, FakeEntityAccessService, INTERNAL_KEY, USER_ID,
+        AccessCall, BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BOT_TEAM_ID,
+        BotAccessCall, FakeEntityAccessService, INTERNAL_KEY, MALFORMED_SYSTEM_BOT_TOKEN, USER_ID,
+        VALID_BOT_TOKEN, malformed_system_bot_authentication, valid_bot_authentication,
     },
 };
 
@@ -50,6 +56,19 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         match jwt {
             "valid" => Ok(user_context(USER_ID)),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        }
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        bot_scope: BotScope,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        match token {
+            VALID_BOT_TOKEN => Ok(valid_bot_authentication(bot_scope)),
+            MALFORMED_SYSTEM_BOT_TOKEN => Ok(malformed_system_bot_authentication(bot_scope)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
     }
@@ -94,8 +113,22 @@ impl TestState {
         access_level: Option<AccessLevel>,
         authorization: FakeAuthorizationService,
     ) -> Self {
+        Self::with_service_and_authorization(
+            FakeEntityAccessService::new(access_level),
+            authorization,
+        )
+    }
+
+    fn with_service(entity_access: FakeEntityAccessService) -> Self {
+        Self::with_service_and_authorization(entity_access, FakeAuthorizationService::default())
+    }
+
+    fn with_service_and_authorization(
+        entity_access: FakeEntityAccessService,
+        authorization: FakeAuthorizationService,
+    ) -> Self {
         Self {
-            entity_access: Arc::new(FakeEntityAccessService::new(access_level)),
+            entity_access: Arc::new(entity_access),
             authorization: MacroAuthorizationState::new(Arc::new(authorization)),
         }
     }
@@ -292,6 +325,128 @@ async fn default_internal_user_uses_the_users_acl() {
         state.entity_access.calls(),
         [expected_call(Some(NORMALIZED_DEFAULT_INTERNAL_USER_ID))]
     );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_delegates_acting_user_access_to_the_scoped_service() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    ));
+    let response = edit_router(state.clone())
+        .oneshot(
+            request()
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response_body(response).await, "bot");
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::User {
+                user_id: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string())
+                    .expect("acting user id should be valid"),
+                user_org_id: Some(i64::from(BOT_ACTING_USER_ORGANIZATION_ID)),
+            },
+            entity_id: THREAD_ID.to_string(),
+            entity_type: EntityType::EmailThread,
+        }]
+    );
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_scoped_bot_receives_only_its_scoped_repository_access() {
+    let state = TestState::with_service(
+        FakeEntityAccessService::new(Some(AccessLevel::Owner)).with_bot_permission(
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+        ),
+    );
+    let response = view_router(state.clone())
+        .oneshot(
+            request()
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .header(BOT_SCOPE_HEADER, BotScope::Team.as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response_body(response).await, "bot");
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::Team {
+                team_id: BOT_TEAM_ID,
+            },
+            entity_id: THREAD_ID.to_string(),
+            entity_type: EntityType::EmailThread,
+        }]
+    );
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn user_scoped_bot_without_an_acting_user_is_rejected() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    ));
+    let response = view_router(state.clone())
+        .oneshot(
+            request()
+                .header(BOT_TOKEN_HEADER, MALFORMED_SYSTEM_BOT_TOKEN)
+                .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response_body(response).await,
+        r#"{"message":"bot user scope requires an acting user"}"#
+    );
+    assert!(state.entity_access.bot_calls().is_empty());
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_with_insufficient_permission_is_rejected() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+    ));
+    let response = edit_router(state.clone())
+        .oneshot(
+            request()
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .header(BOT_SCOPE_HEADER, BotScope::Team.as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(state.entity_access.bot_calls().len(), 1);
+    assert!(state.entity_access.calls().is_empty());
 }
 
 #[tokio::test]

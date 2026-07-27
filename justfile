@@ -44,6 +44,27 @@ docker_up *ARGS:
   echo "startup docker compose"
   {{ compose }} up {{ ARGS }}
 
+# Reset and seed deterministic data used by local E2E tests.
+local-e2e-seed:
+  just run_dbs -d
+  -just crates/macro_db_client/drop_db -y -f
+  just initialize_dbs
+  just tooling/seed_cli/local-e2e-smoke
+
+# Apply a seed scenario (teams/perms/entities) to the local stack, e.g.
+# `just seed-scenario apply --file seed/scenarios/team-perms.json`.
+# Add --force to drop and re-migrate the local database first (pristine world).
+# `just seed-scenario status` reports what's applied and re-prints login links.
+# Pass `--instance <name>` before the scenario subcommand to target a named
+# `run_local` stack. Omitting it targets the default `macro` instance.
+[positional-arguments]
+seed-scenario *ARGS:
+  @{{ xtask }} seed-scenario "$@"
+
+# Start only the services needed by the local E2E suites. Avoid unrelated
+# local services with extra env/dependency requirements blocking E2E.
+local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
+
 # Update the fixed-output js node_modules hash after bun.lock changes.
 update-node-modules-hash:
   tooling/scripts/update-node-modules-hash.sh

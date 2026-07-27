@@ -9,7 +9,7 @@ use axum::{
 };
 
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 
 use crate::domain::{
@@ -61,7 +61,7 @@ where
 )]
 pub async fn bulk_wakeup_handler<Svc, Auth>(
     State(state): State<SyncServiceRouterState<Svc, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth>,
+    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<BulkWakeupRequest>,
 ) -> Response
 where

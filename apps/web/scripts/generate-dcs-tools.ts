@@ -85,8 +85,40 @@ async function loadFrontendSchemas(): Promise<FrontendSchemas> {
   return parsed;
 }
 
+// json-schema-to-zod drops both `.optional()` and `.default()` for an optional
+// property whose schema is `anyOf: [<multi-literal oneOf>, null]` with a
+// `default` (e.g. an `Option<Enum>` field). The result is a required key the
+// model legitimately omits, so `deserializeToolCall` fails and the whole tool
+// card is hidden. The `default` is meaningless for parse-to-render, so strip it
+// from every optional (non-required) property; the field then renders as
+// `.optional()`.
+function stripOptionalDefaults(node: unknown): void {
+  if (Array.isArray(node)) {
+    for (const child of node) stripOptionalDefaults(child);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  const obj = node as Record<string, unknown>;
+  const properties = obj.properties;
+  if (properties && typeof properties === 'object') {
+    const required = new Set(Array.isArray(obj.required) ? obj.required : []);
+    for (const [key, propSchema] of Object.entries(properties)) {
+      if (
+        !required.has(key) &&
+        propSchema &&
+        typeof propSchema === 'object' &&
+        'default' in propSchema
+      ) {
+        delete (propSchema as Record<string, unknown>).default;
+      }
+    }
+  }
+  for (const value of Object.values(obj)) stripOptionalDefaults(value);
+}
+
 async function generateSchemasFile(schema: FrontendSchemas) {
   const resolved = await $RefParser.dereference(structuredClone(schema));
+  stripOptionalDefaults(resolved);
   const defs = (resolved as { $defs: Record<string, JsonObject> }).$defs;
   const seen = new Set<string>();
   const content: string[] = [];

@@ -6,9 +6,11 @@ const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use lexical_client::LexicalClient;
 use sync_service_client::SyncServiceClient;
+use tokio_retry::{Retry, strategy::FixedInterval};
 
 use crate::domain::models::DocumentError;
 use crate::domain::ports::markdown::{
@@ -77,22 +79,35 @@ where
         let sync_service_client = self.sync_service_client.clone();
         let document_id = document_id.to_owned();
         tokio::spawn(async move {
-            const MAX_ATTEMPTS: u32 = 3;
-            const RETRY_DELAY: u64 = 1;
-            for attempt in 1..=MAX_ATTEMPTS {
-                match sync_service_client
-                    .initialize_from_snapshot(&document_id, loro_snapshot.as_slice())
-                    .await
-                {
-                    Ok(()) => return,
-                    Err(e) if attempt < MAX_ATTEMPTS => {
-                        tracing::warn!(error=?e, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
-                        tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY)).await;
+            const MAX_ATTEMPTS: usize = 3;
+            const RETRY_DELAY: Duration = Duration::from_secs(1);
+
+            let loro_snapshot: Arc<[u8]> = loro_snapshot.into();
+            let mut attempt = 0usize;
+            let result = Retry::start(
+                FixedInterval::new(RETRY_DELAY).take(MAX_ATTEMPTS - 1),
+                || {
+                    attempt += 1;
+                    let sync_service_client = Arc::clone(&sync_service_client);
+                    let document_id = document_id.clone();
+                    let loro_snapshot = Arc::clone(&loro_snapshot);
+                    async move {
+                        let result = sync_service_client
+                            .initialize_from_snapshot(&document_id, &loro_snapshot)
+                            .await;
+                        if let Err(error) = &result
+                            && attempt < MAX_ATTEMPTS
+                        {
+                            tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
+                        }
+                        result
                     }
-                    Err(e) => {
-                        tracing::error!(error=?e, "failed to initialize sync service from snapshot after {MAX_ATTEMPTS} attempts");
-                    }
-                }
+                },
+            )
+            .await;
+
+            if let Err(error) = result {
+                tracing::error!(error=?error, "failed to initialize sync service from snapshot after {MAX_ATTEMPTS} attempts");
             }
         });
 

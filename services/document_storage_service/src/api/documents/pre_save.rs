@@ -18,7 +18,7 @@ use crate::api::context::{AuthorizationService, EntityAccessService};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::StreamExt;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::GenericErrorResponse;
 
 use model::{
@@ -50,13 +50,13 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(state, document_context, user, req, _access), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, document_context, user, req, _access), fields(user_id=?user.authorization.user.macro_user_id))]
 #[allow(deprecated, reason = "we just want deprecated to show up in utoipa")]
 #[deprecated(note = "we no longer support editing docx files as they are now converted to pdf.")]
 pub async fn presave_document_handler(
     _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<PreSaveDocumentRequest>,

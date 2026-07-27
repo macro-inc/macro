@@ -31,6 +31,28 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn create_company_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        unimplemented!()
+    }
+
+    async fn create_contact_for_company(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _email: &str,
+        _name: &str,
+        _now: DateTime<Utc>,
+        _include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
     async fn lookup_domain_metadata(
         &self,
         _domain: &str,
@@ -74,7 +96,7 @@ impl CompaniesRepository for StubRepo {
         _company_id: &uuid::Uuid,
         _email_sync: bool,
     ) -> Result<(), CrmError> {
-        unimplemented!()
+        Ok(())
     }
 
     async fn set_company_hidden(
@@ -82,6 +104,26 @@ impl CompaniesRepository for StubRepo {
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
         _hidden: bool,
+    ) -> Result<(), CrmError> {
+        Ok(())
+    }
+
+    async fn set_company_custom_name(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _name: &str,
+        _include_hidden: bool,
+    ) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn set_contact_name(
+        &self,
+        _team_id: &uuid::Uuid,
+        _contact_id: &uuid::Uuid,
+        _name: &str,
+        _include_hidden: bool,
     ) -> Result<(), CrmError> {
         unimplemented!()
     }
@@ -92,7 +134,7 @@ impl CompaniesRepository for StubRepo {
         _contact_id: &uuid::Uuid,
         _hidden: bool,
     ) -> Result<(), CrmError> {
-        unimplemented!()
+        Ok(())
     }
 
     async fn crm_scope_precheck(
@@ -318,4 +360,218 @@ async fn team_views_must_be_an_array() {
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::InvalidRequest(_)));
+}
+
+#[tokio::test]
+async fn create_company_rejects_blank_name() {
+    let access = receipt_with_role(TeamRole::Member);
+    for name in ["", "   ", "\t\n"] {
+        let err = service()
+            .create_company(&access, name, "acme.com")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
+    }
+}
+
+#[tokio::test]
+async fn create_company_rejects_overlong_name() {
+    let access = receipt_with_role(TeamRole::Member);
+    let name = "x".repeat(201);
+    let err = service()
+        .create_company(&access, &name, "acme.com")
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::InvalidRequest(_)));
+}
+
+#[tokio::test]
+async fn create_company_rejects_malformed_domains() {
+    let access = receipt_with_role(TeamRole::Member);
+    for domain in [
+        "",
+        "   ",
+        "acme",
+        ".acme.com",
+        "acme..com",
+        "https://acme.com",
+        "acme.com/about",
+        "user@acme.com",
+        "acme.com:8080",
+        "acme .com",
+    ] {
+        let err = service()
+            .create_company(&access, "Acme", domain)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, CrmError::InvalidRequest(_)),
+            "domain {domain:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn create_company_rejects_generic_email_domains() {
+    let access = receipt_with_role(TeamRole::Member);
+    for domain in ["gmail.com", "Yahoo.com", "outlook.com"] {
+        let err = service()
+            .create_company(&access, "Acme", domain)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, CrmError::InvalidRequest(_)),
+            "domain {domain:?}"
+        );
+    }
+}
+
+fn company_receipt() -> CrmCompanyReceipt<ViewAccessLevel> {
+    CrmCompanyReceipt::dangerously_internal(uuid::Uuid::now_v7(), uuid::Uuid::now_v7())
+}
+
+#[tokio::test]
+async fn set_company_name_rejects_blank_name() {
+    let access = company_receipt();
+    for name in ["", "   ", "\t\n"] {
+        let err = service().set_company_name(&access, name).await.unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
+    }
+}
+
+#[tokio::test]
+async fn set_company_name_rejects_overlong_name() {
+    let access = company_receipt();
+    let name = "x".repeat(201);
+    let err = service()
+        .set_company_name(&access, &name)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::InvalidRequest(_)));
+}
+
+fn contact_receipt() -> CrmContactReceipt<ViewAccessLevel> {
+    CrmContactReceipt::dangerously_internal(uuid::Uuid::now_v7(), uuid::Uuid::now_v7())
+}
+
+#[tokio::test]
+async fn set_contact_name_rejects_blank_name() {
+    let access = contact_receipt();
+    for name in ["", "   ", "\t\n"] {
+        let err = service().set_contact_name(&access, name).await.unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
+    }
+}
+
+#[tokio::test]
+async fn set_contact_name_rejects_overlong_name() {
+    let access = contact_receipt();
+    let name = "x".repeat(201);
+    let err = service()
+        .set_contact_name(&access, &name)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::InvalidRequest(_)));
+}
+
+#[tokio::test]
+async fn create_contact_rejects_blank_name() {
+    let access = company_receipt();
+    for name in ["", "   ", "\t\n"] {
+        let err = service()
+            .create_contact(&access, name, "jane@acme.com")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
+    }
+}
+
+#[tokio::test]
+async fn create_contact_rejects_malformed_emails() {
+    let access = company_receipt();
+    for email in [
+        "",
+        "   ",
+        "jane",
+        "jane@",
+        "@acme.com",
+        "jane@acme",
+        "ja ne@acme.com",
+        "jane@ac me.com",
+        "jane@@acme.com",
+        "jane@acme.com/path",
+    ] {
+        let err = service()
+            .create_contact(&access, "Jane", email)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, CrmError::InvalidRequest(_)),
+            "email {email:?}"
+        );
+    }
+}
+
+fn company_edit_receipt_with_role(role: TeamRole) -> CrmCompanyReceipt<EditAccessLevel> {
+    CrmCompanyReceipt::dangerously_internal_with_role(
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        role,
+    )
+}
+
+fn contact_edit_receipt_with_role(role: TeamRole) -> CrmContactReceipt<EditAccessLevel> {
+    CrmContactReceipt::dangerously_internal_with_role(
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        role,
+    )
+}
+
+#[tokio::test]
+async fn set_email_sync_requires_admin_role() {
+    let err = service()
+        .set_email_sync(&company_edit_receipt_with_role(TeamRole::Member), true)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::AdminRoleRequired));
+
+    for role in [TeamRole::Admin, TeamRole::Owner] {
+        service()
+            .set_email_sync(&company_edit_receipt_with_role(role), true)
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn set_company_hidden_requires_admin_role() {
+    let err = service()
+        .set_company_hidden(&company_edit_receipt_with_role(TeamRole::Member), true)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::AdminRoleRequired));
+
+    for role in [TeamRole::Admin, TeamRole::Owner] {
+        service()
+            .set_company_hidden(&company_edit_receipt_with_role(role), true)
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn set_contact_hidden_requires_admin_role() {
+    let err = service()
+        .set_contact_hidden(&contact_edit_receipt_with_role(TeamRole::Member), true)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::AdminRoleRequired));
+
+    for role in [TeamRole::Admin, TeamRole::Owner] {
+        service()
+            .set_contact_hidden(&contact_edit_receipt_with_role(role), true)
+            .await
+            .unwrap();
+    }
 }

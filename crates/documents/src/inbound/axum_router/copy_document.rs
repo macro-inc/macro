@@ -6,7 +6,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model::document::{DocumentBasic, FileTypeExt};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
@@ -38,7 +38,7 @@ use crate::domain::ports::DocumentService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, access, user, document_context, req), fields(user_id=%user.macro_user_id, document_version_id=?params.version_id))]
+#[tracing::instrument(skip(state, access, user, document_context, req), fields(user_id=%user.authorization.user.macro_user_id, document_version_id=?params.version_id))]
 pub async fn copy_document_handler<
     T: DocumentService,
     Svc: EntityAccessService,
@@ -46,7 +46,7 @@ pub async fn copy_document_handler<
 >(
     access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Query(params): Query<CopyDocumentQueryParams>,
@@ -61,7 +61,7 @@ pub async fn copy_document_handler<
         .copy_document(
             access.entity_access_receipt,
             document_context.0,
-            user.macro_user_id,
+            user.authorization.user.macro_user_id.clone(),
             req.document_name,
             params.version_id,
             req.version_id,

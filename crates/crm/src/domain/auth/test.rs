@@ -1,5 +1,5 @@
 use super::*;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, TeamRole, ViewAccessLevel};
 
 fn company_uuid() -> Uuid {
     Uuid::from_u128(0x1111_1111_1111_1111_1111_1111_1111_1111)
@@ -19,6 +19,7 @@ fn company_receipt_exposes_company_id_and_team() {
             EntityType::CrmCompany,
         ),
         team,
+        TeamRole::Owner,
     );
 
     assert_eq!(access.company_id().unwrap(), company);
@@ -35,6 +36,7 @@ fn company_receipt_rejects_wrong_entity_type() {
             EntityType::Team,
         ),
         team_uuid(),
+        TeamRole::Owner,
     );
 
     assert!(matches!(
@@ -52,6 +54,7 @@ fn contact_receipt_exposes_contact_id() {
             EntityType::CrmContact,
         ),
         team_uuid(),
+        TeamRole::Owner,
     );
 
     assert_eq!(access.contact_id().unwrap(), contact);
@@ -95,6 +98,7 @@ fn comment_receipt_derives_entity_and_rejects_non_crm() {
             EntityType::CrmContact,
         ),
         team_uuid(),
+        TeamRole::Owner,
     )
     .unwrap();
 
@@ -111,6 +115,7 @@ fn comment_receipt_derives_entity_and_rejects_non_crm() {
                 EntityType::Team,
             ),
             team_uuid(),
+            TeamRole::Owner,
         )
         .is_err()
     );

@@ -1,6 +1,7 @@
 pub mod attachments;
 pub mod backfill;
 pub mod contacts;
+pub mod crm_cleanup;
 pub mod histories;
 pub mod labels;
 pub mod links;

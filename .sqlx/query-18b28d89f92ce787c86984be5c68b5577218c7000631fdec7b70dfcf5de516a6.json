@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM import_entity\n            WHERE user_id = $1 AND initiator = $2 AND status = 'staged'\n              AND NOT (\n                  $2 = 'onboarding'\n                  AND EXISTS (\n                      SELECT 1\n                      FROM import_run\n                      WHERE import_run.user_id = import_entity.user_id\n                        AND import_run.source = import_entity.source\n                        AND import_run.auto_import\n                        AND import_run.status IN ('running', 'ready', 'importing', 'failed')\n                  )\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "18b28d89f92ce787c86984be5c68b5577218c7000631fdec7b70dfcf5de516a6"
+}

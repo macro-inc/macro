@@ -719,7 +719,6 @@
           sccache
           rustToolchain
           python3
-          vitejs
         ]
         ++ pkgs.lib.optionals isLinux [ mold ];
 
@@ -822,6 +821,35 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # Local dev shells favor reusable sccache artifacts across JJ
+              # workspaces. CI derivations do not inherit devShell attributes.
+              CARGO_INCREMENTAL = "0";
+              SCCACHE_CACHE_SIZE = "30G";
+              # Namespace CI runners preserve Cargo's ignored target directory.
+              # A flake update can change the Nix C compiler while leaving CMake
+              # configure state behind; CMake then drops its command-line cache
+              # entries while switching compilers, breaking aws-lc and librdkafka.
+              # Remove only caches configured by another compiler so ordinary
+              # shell entry keeps reusable native build state.
+              shellHook = pkgs.lib.optionalString isLinux ''
+                target_dir="''${CARGO_TARGET_DIR:-target}"
+                current_cc="$(type -P "''${CC:-cc}" || true)"
+                if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
+                  while IFS= read -r -d "" cache; do
+                    cached_cc=""
+                    while IFS="=" read -r key value; do
+                      case "$key" in
+                        CMAKE_C_COMPILER:*) cached_cc="$value"; break ;;
+                      esac
+                    done < "$cache"
+                    if [ -n "$cached_cc" ] && [ "$cached_cc" != "$current_cc" ]; then
+                      dir="$(dirname "$cache")"
+                      echo "purging stale CMake state in $dir ($cached_cc != $current_cc)"
+                      rm -rf "$dir/CMakeFiles" "$cache"
+                    fi
+                  done < <(find "$target_dir" -name CMakeCache.txt -print0)
+                fi
+              '';
               # rdkafka's ssl-vendored feature exists for the Lambda
               # derivations (see lambdaCommonArgs); local builds keep using
               # the Nix openssl instead of vendoring, which would need perl

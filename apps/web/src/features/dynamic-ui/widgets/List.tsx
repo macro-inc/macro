@@ -5,6 +5,8 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import type { FieldFilters } from '@app/features/next-soup/filters/filter-store/types';
+import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { CollapsibleList } from '@entity/components/CollapsibleList';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
@@ -50,12 +52,22 @@ type IdFieldName = {
     : never;
 }[keyof FieldFilters];
 
-/** Map a schema `EntityRef.type` onto the soup `FieldFilters` id field. */
+/**
+ * Map a schema `EntityRef.type` onto the soup `FieldFilters` id field.
+ *
+ * Both `email` and `email_thread` are mapped here: `EntityData`/`ListEntities`
+ * tag emails as `'email'` everywhere else in the app (see
+ * `@entity/types/entity`'s `EmailEntity`), so that's what the AI actually
+ * echoes back from prior tool results into a `list` widget's refs, but
+ * `email_thread` is also a legal `EntityType` value (see `@core/types`) —
+ * keep both so neither spelling gets silently dropped.
+ */
 const ID_FIELD_BY_TYPE: Partial<Record<EntityRef['type'], IdFieldName>> = {
   document: 'documentId',
   chat: 'chatId',
   channel: 'channelId',
   project: 'folderId',
+  email: 'threadId',
   email_thread: 'threadId',
   call: 'callId',
   foreign_entity: 'foreignEntityRecordId',
@@ -98,12 +110,19 @@ const GROUP_BY_BY_NAME: Record<
  * so it must sit in a flush container, NOT a bordered/`divide-y` card, or the
  * pill ends up boxed in by per-row dividers. `hideCheckbox` drops the
  * multi-select checkbox (read-only embed), leaving just the icon / unread dot.
+ *
+ * Clicking opens the entity in a split, exactly like the real unified list
+ * (`soup-view.tsx`) and the other standalone `ListEntity` embeds (e.g.
+ * `ContactEmailsSection`) — via `openEntityInSplitFromUnifiedList`, which
+ * dispatches per `entity.type` and works for every type here already,
+ * `email` included.
  */
 function Row(props: { entity: EntityData }) {
   return (
     <ListEntity
       entity={props.entity as WithNotification<EntityData>}
       hideCheckbox
+      onClick={() => openEntityInSplitFromUnifiedList(props.entity, {})}
     />
   );
 }
@@ -122,11 +141,23 @@ function Rows(props: {
   // and return nothing — which is the correct "No items." outcome anyway.
   // `groupBy` orders the returned entities by the requested facet (the grouped
   // select flattens groups into `data.entities` in group order).
-  const itemsQuery = useSoupAstItemsQuery(() => ({
-    params: { limit: 200 },
-    body: compileQuery(query()),
-    groupBy: props.groupBy ? GROUP_BY_BY_NAME[props.groupBy] : undefined,
-  }));
+  const itemsQuery = useSoupAstItemsQuery(
+    () => ({
+      params: { limit: 200 },
+      body: compileQuery(query()),
+      groupBy: props.groupBy ? GROUP_BY_BY_NAME[props.groupBy] : undefined,
+    }),
+    () => {
+      // Unlike the soup view, this query has no client `itemFilter`, so the
+      // normalized cache would prepend ANY optimistically/WS-inserted entity
+      // into it (a new task landing in an email-scoped list, etc.). Gate inserts
+      // on the same `Query` that produced the AST so only matching items appear.
+      const source = query();
+      return {
+        meta: { itemFilter: (item) => soupItemMatchesQuery(item, source) },
+      };
+    }
+  );
 
   const entities = createMemo<EntityData[]>(() => {
     const all = itemsQuery.data?.entities ?? [];

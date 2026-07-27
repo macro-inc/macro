@@ -4,7 +4,10 @@ import {
 } from '@block-channel/utils/link';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
-import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import type {
+  SplitHandle,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import type { BlockAlias, BlockName } from '@core/block';
 import {
   type ItemLike,
@@ -43,17 +46,27 @@ async function goToLocationInSplit(
 }
 
 /**
- * Opens a split if it is not already open.
+ * Opens a split if it is not already open. When `sourceHandle` names the
+ * split the navigation originates from and that split is an engaged preview
+ * controller, the open is redirected into its viewer split (via the
+ * openWithSplit redirect) and never steals the keyboard from the controller.
  */
 function openSplitIfNotOpen(
   layoutManager: SplitManager,
   type: BlockName | BlockAlias | 'component',
   id: string,
-  options: { newSplit?: boolean; params?: Record<string, string> } = {}
+  options: {
+    newSplit?: boolean;
+    params?: Record<string, string>;
+    sourceHandle?: SplitHandle;
+  } = {}
 ) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
-    existing.activate();
+    const isSourcesViewer =
+      options.sourceHandle?.isControllerSplit() &&
+      options.sourceHandle.viewerId() === existing.id;
+    if (!isSourcesViewer) existing.activate();
   } else {
     layoutManager.openWithSplit(
       { type, id },
@@ -61,6 +74,7 @@ function openSplitIfNotOpen(
         activate: true,
         referredFrom: null,
         preferNewSplit: options.newSplit,
+        handle: options.sourceHandle,
       }
     );
   }
@@ -100,13 +114,17 @@ export function getChannelNotificationParams(
 async function openChannelNotification(
   notification: UnifiedNotification,
   layoutManager: SplitManager,
-  newSplit: boolean = false
+  newSplit: boolean = false,
+  sourceHandle?: SplitHandle
 ) {
   const channelId = notification.entity_id;
   const { messageId, threadId } = getChannelNotificationParams(notification);
 
   if (!messageId) {
-    openSplitIfNotOpen(layoutManager, 'channel', channelId, { newSplit });
+    openSplitIfNotOpen(layoutManager, 'channel', channelId, {
+      newSplit,
+      sourceHandle,
+    });
     return;
   }
 
@@ -114,6 +132,7 @@ async function openChannelNotification(
   await navigateToChannelMessage(orchestrator, channelId, messageId, threadId, {
     splitManager: layoutManager,
     preferNewSplit: newSplit,
+    sourceHandle,
   });
 }
 
@@ -160,7 +179,8 @@ type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
-  entity?: NotificationEntityOverride
+  entity?: NotificationEntityOverride,
+  sourceHandle?: SplitHandle
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
   const tag = notification.notification_metadata.tag as NotificationType;
 
@@ -169,19 +189,25 @@ function getSupportedHandler(
       P.union(...CHANNEL_EVENT_TYPES),
       () =>
         (lm: SplitManager, newSplit: boolean = false) =>
-          openChannelNotification(notification, lm, newSplit)
+          openChannelNotification(notification, lm, newSplit, sourceHandle)
     )
     .with(
       'ai_response',
       () =>
         async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, 'chat', notification.entity_id, { newSplit })
+          openSplitIfNotOpen(lm, 'chat', notification.entity_id, {
+            newSplit,
+            sourceHandle,
+          })
     )
     .with('new_email', () => {
       const meta = notification.notification_metadata;
       if (meta.tag !== 'new_email') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
-        openSplitIfNotOpen(lm, 'email', meta.content.threadId, { newSplit });
+        openSplitIfNotOpen(lm, 'email', meta.content.threadId, {
+          newSplit,
+          sourceHandle,
+        });
       };
     })
     .with(
@@ -190,6 +216,7 @@ function getSupportedHandler(
         async (lm: SplitManager, newSplit: boolean = false) =>
           openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
             newSplit,
+            sourceHandle,
           })
     )
     .with('document_mention', () => {
@@ -214,6 +241,7 @@ function getSupportedHandler(
             {
               splitManager: lm,
               preferNewSplit: newSplit,
+              sourceHandle,
             }
           );
           return;
@@ -221,6 +249,7 @@ function getSupportedHandler(
 
         openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
           newSplit,
+          sourceHandle,
         });
       };
     })
@@ -231,13 +260,17 @@ function getSupportedHandler(
         async (lm: SplitManager, newSplit: boolean = false) =>
           openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
             newSplit,
+            sourceHandle,
           })
     )
     .with('task_assigned', () => {
       const meta = notification.notification_metadata;
       if (meta.tag !== 'task_assigned') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
-        openSplitIfNotOpen(lm, 'task', meta.content.taskId, { newSplit });
+        openSplitIfNotOpen(lm, 'task', meta.content.taskId, {
+          newSplit,
+          sourceHandle,
+        });
       };
     })
     .with(P.union(...GITHUB_EVENT_TYPES), () => {
@@ -254,7 +287,10 @@ function getSupportedHandler(
       }
       return async (lm: SplitManager, newSplit: boolean = false) => {
         if (USE_MACRO_PR_SUMMARY_BLOCK) {
-          openSplitIfNotOpen(lm, 'pr', notification.entity_id, { newSplit });
+          openSplitIfNotOpen(lm, 'pr', notification.entity_id, {
+            newSplit,
+            sourceHandle,
+          });
           return;
         }
 
@@ -282,6 +318,7 @@ function getSupportedHandler(
         openSplitIfNotOpen(lm, blockName, notification.entity_id, {
           newSplit,
           params,
+          sourceHandle,
         });
     })
     .with('replied_to_document_comment_thread', () => {
@@ -300,6 +337,7 @@ function getSupportedHandler(
         openSplitIfNotOpen(lm, blockName, notification.entity_id, {
           newSplit,
           params,
+          sourceHandle,
         });
     })
     .with('commented_on_document', () => {
@@ -318,6 +356,7 @@ function getSupportedHandler(
         openSplitIfNotOpen(lm, blockName, notification.entity_id, {
           newSplit,
           params,
+          sourceHandle,
         });
     })
     .with('inbox_reauth_required', () => null)
@@ -332,9 +371,15 @@ export function openNotification(
   notification: UnifiedNotification,
   layoutManager: SplitManager,
   newSplit: boolean = false,
-  entity?: NotificationEntityOverride
+  entity?: NotificationEntityOverride,
+  /**
+   * The split this navigation originates from (e.g. the list whose row was
+   * clicked). Routes the open through that split's preview viewer when its
+   * preview mode is engaged.
+   */
+  sourceHandle?: SplitHandle
 ): ResultAsync<void, NotSupportedError> {
-  const handler = getSupportedHandler(notification, entity);
+  const handler = getSupportedHandler(notification, entity, sourceHandle);
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
@@ -347,12 +392,19 @@ export function openNotification(
 export function openSingleStackNotification(
   notifications: UnifiedNotification[],
   layoutManager: SplitManager,
-  newSplit: boolean = false
+  newSplit: boolean = false,
+  sourceHandle?: SplitHandle
 ): boolean {
   const stacks = stackNotifications(notifications);
   if (stacks.length !== 1) return false;
   const mostRecent = getMostRecentNotification(stacks[0]!);
-  openNotification(mostRecent, layoutManager, newSplit);
+  openNotification(
+    mostRecent,
+    layoutManager,
+    newSplit,
+    undefined,
+    sourceHandle
+  );
   return true;
 }
 

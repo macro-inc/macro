@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -64,6 +65,10 @@ export function NotificationStackRow(props: {
     entityId: props.entity.id,
   });
 
+  // The containing split (when any) is the navigation source, so opens from
+  // an engaged preview controller route into its viewer split.
+  const panel = useSplitPanel();
+
   const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {
     const mostRecent = getMostRecentNotification(props.stack);
     const splitManager = globalSplitManager();
@@ -79,7 +84,8 @@ export function NotificationStackRow(props: {
       mostRecent,
       splitManager,
       e.shiftKey,
-      entityOverride
+      entityOverride,
+      panel?.handle
     );
     await notificationSource.markAsRead(mostRecent);
     props.onClick?.(e);

@@ -4,8 +4,8 @@ import { useHasPaidAccess } from '@core/auth';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { usePermissions, useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CheckIcon from '@phosphor/check.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
@@ -96,12 +96,10 @@ export const Billing = () => {
           For questions about billing,{' '}
           <a
             class="text-ink inline-flex items-center hover:text-accent"
-            href="https://cal.com/team/macro/macro-demo-call"
-            target="_blank"
-            rel="noopener"
+            href="mailto:support@macro.com"
           >
             contact us
-            <ArrowSquareOutIcon class="size-4 inline mx-1" />
+            <EnvelopeIcon class="size-4 inline mx-1" />
           </a>
         </>
       }

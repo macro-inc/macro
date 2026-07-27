@@ -113,7 +113,6 @@ const createBlock = async (spec: {
         type: blockName,
         id,
         params: createMdParams,
-        preserveParams: true,
       },
       mergeHistory: true,
       referredFrom: 'launcher',
@@ -123,9 +122,7 @@ const createBlock = async (spec: {
       {
         type: blockName,
         id,
-        ...(createMdParams
-          ? { params: createMdParams, preserveParams: true }
-          : {}),
+        ...(createMdParams ? { params: createMdParams } : {}),
       },
       {
         referredFrom: 'launcher',

@@ -1,5 +1,8 @@
 //! Foreign entity access extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -10,11 +13,12 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 use uuid::Uuid;
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -58,13 +62,37 @@ where
             })?;
         let foreign_entity_id = extract_foreign_entity_id(&path_params)?.to_string();
 
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id,
-            is_internal_access,
-            ..
-        } = OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
+                parts, state,
+            )
             .await
             .map_err(ExtractorError::from)?;
+
+        if let Some(MacroAuthorization::Bot(authentication)) = &authorization.authorization {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &foreign_entity_id,
+                EntityType::ForeignEntity,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
 
         if macro_user_id.is_none() && is_internal_access {
             return Self::from_permission(

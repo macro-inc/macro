@@ -159,6 +159,9 @@ export function getGraphqlSoupCacheHost(): CacheHost | undefined {
   return cachedCacheHost;
 }
 
+/** Shared entity GraphQL client used by both Soup queries and mutations. */
+export const getEntityGraphqlClient = getGraphqlSoupClient;
+
 export type GraphqlSoupInput = SoupInput;
 export type GraphqlSoupInitialInput = SoupInitialInput;
 export type GraphqlGroupedSoupInput = GroupedSoupInput;
@@ -174,7 +177,7 @@ export type GraphqlGroupedSoupPage = {
 };
 
 export type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
-type GraphqlSoupEntity = GraphqlSoupItem['entity'];
+type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
   { __typename: 'GraphqlSoupDocument' }
@@ -263,15 +266,15 @@ function mapGraphqlProperties(properties: GraphqlProperty[]) {
 
 function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
   if (!subType) return undefined;
-  const type = subType.kind.toLowerCase();
-  if (type === 'task') {
-    return {
+  return match(subType)
+    .with({ __typename: 'GraphqlTaskSubType' }, ({ isCompleted }) => ({
       type: 'task' as const,
-      is_completed: subType.isCompleted ?? false,
-    };
-  }
-  if (type === 'snippet') return { type: 'snippet' as const };
-  return undefined;
+      is_completed: isCompleted,
+    }))
+    .with({ __typename: 'GraphqlSnippetSubType' }, () => ({
+      type: 'snippet' as const,
+    }))
+    .exhaustive();
 }
 
 function mapChannelMessage(
@@ -279,14 +282,14 @@ function mapChannelMessage(
 ) {
   if (!message) return message;
   return {
-    message_id: message.id,
+    message_id: message.messageId,
     thread_id: message.threadId ?? undefined,
     sender_id: message.senderId,
     content: message.content,
     created_at: message.createdAt,
     updated_at: message.updatedAt,
     deleted_at: message.deletedAt ?? undefined,
-    mentions: message.mentions,
+    mentions: message.mentions ?? [],
   };
 }
 
@@ -318,19 +321,16 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
-  const frecency = item.frecencyScore;
-  // `is_favorited: false` below: the GraphQL soup surface has no favorites
-  // data; the REST `SoupApiItem` shape requires the flag, and nothing
-  // consumes it on this path yet.
+  const frecency = item.frecencyScore ?? 0;
 
-  return match(item.entity)
+  return match(item)
     .with(
       { __typename: 'GraphqlSoupDocument' },
       (entity) =>
         ({
           tag: 'document',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             name: entity.documentName,
@@ -354,7 +354,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'chat',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             name: entity.chatName,
@@ -376,7 +376,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'project',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             name: entity.projectName,
@@ -397,7 +397,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'emailThread',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             providerId: entity.providerId ?? undefined,
@@ -455,7 +455,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'channel',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             channel: {
               id: entity.id,
@@ -474,6 +474,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               joined_at: participant.joinedAt,
               left_at: participant.leftAt ?? undefined,
             })),
+            is_participant: entity.isParticipant,
             viewed_at: entity.viewedAt ?? undefined,
             interacted_at: entity.interactedAt ?? undefined,
             latest_message: mapChannelMessage(entity.latestMessage),
@@ -485,17 +486,17 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         }) as SoupApiItem
     )
     .with(
-      { __typename: 'GraphqlSoupChannelThread' },
+      { __typename: 'GraphqlSoupChannelMessage' },
       (entity) =>
         ({
           tag: 'channelThread',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             attachments: [],
             channel_id: entity.channelId,
-            content: entity.content,
+            content: entity.content ?? '',
             created_at: entity.createdAt,
             reactions: [],
             sender: {
@@ -504,9 +505,9 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
             },
             sender_id: entity.senderId,
             thread: {
-              latest_reply_at: entity.effectiveUpdatedAt,
+              latest_reply_at: entity.effectiveUpdatedAt ?? undefined,
               preview: [],
-              reply_count: entity.replyCount,
+              reply_count: entity.replyCount ?? 0,
             },
             updated_at: entity.updatedAt,
             notifications: mapGraphqlNotifications(entity.notifications),
@@ -519,7 +520,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'call',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             callId: entity.id,
             channelId: entity.channelId,
@@ -549,7 +550,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'crmCompany',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             teamId: entity.crmTeamId,
@@ -577,14 +578,14 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'foreignEntity',
           frecency_score: frecency,
-          is_favorited: false,
+          is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
             foreignEntityId: entity.foreignEntityId,
             foreignEntitySource: entity.foreignEntitySource,
             storedForId: entity.storedForId,
             storedForAuthEntity: entity.storedForAuthEntity,
-            metadata: entity.metadata,
+            metadata: entity.sourceMetadata,
             createdAt: entity.createdAt,
             updatedAt: entity.updatedAt,
             notifications: mapGraphqlNotifications(entity.notifications),

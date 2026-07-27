@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -49,7 +49,7 @@ pub struct CreateIdMappingResponse {
 #[tracing::instrument(skip(db, _user))]
 pub async fn create_id_mapping_handler(
     State(db): State<PgPool>,
-    _user: MacroAuthorizationExtractor<DcsAuthorizationService>,
+    _user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Path(Params { source_id }): Path<Params>,
     Json(req): Json<CreateIdMappingRequest>,
 ) -> Result<(StatusCode, Json<CreateIdMappingResponse>), (StatusCode, String)> {

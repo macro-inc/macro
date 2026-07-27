@@ -1,6 +1,6 @@
 use crate::api::context::AuthorizationService;
 use axum::{Extension, Json, extract::Path, http::StatusCode, response::IntoResponse};
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::document::DocumentBasic;
 use model::response::GenericErrorResponse;
 use serde::Deserialize;
@@ -28,7 +28,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(document_basic, _auth))]
 pub async fn get_document_basic_handler(
-    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Extension(document_basic): Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {

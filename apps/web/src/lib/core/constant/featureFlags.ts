@@ -288,12 +288,6 @@ const _ENABLE_SOUP_FROM_FILTER = resolveFeatureFlag(
   false
 );
 
-export const ENABLE_PREVIEW = resolveFeatureFlag('ENABLE_PREVIEW', true);
-export const ENABLE_PROJECT_VIEW_PREVIEW = resolveFeatureFlag(
-  'ENABLE_PROJECT_VIEW_PREVIEW',
-  true
-);
-
 const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
   'ENABLE_DOCK_NOTITIFCATIONS',
   DEV_MODE_ENV
@@ -340,6 +334,13 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   'ENABLE_UNIFIED_LIST_AI_INPUT',
   true
 );
+
+// Inline AI editing: the floating document AI edit pill and the AI editing
+// tool in the selection formatting menu. Gated by PostHog; use the reactive
+// `useFeatureFlag(INLINE_AI_EDITING_FLAG, { enabledOverride: INLINE_AI_EDITING_OVERRIDE })`.
+export const INLINE_AI_EDITING_FLAG = 'inline-ai-editing';
+export const INLINE_AI_EDITING_OVERRIDE =
+  resolveFeatureFlag('INLINE_AI_EDITING', DEV_MODE_ENV) || undefined;
 
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
@@ -420,6 +421,14 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   : undefined;
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+// Persist soup filters, predicates and tabs across reloads. PostHog controls
+// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+export const ENABLE_SOUP_FILTER_PERSISTENCE_FLAG =
+  'enable-soup-filter-persistence';
+export const ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_SOUP_FILTER_PERSISTENCE'
+);
 
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -523,18 +532,6 @@ export function ENABLE_NEW_INBOX() {
   return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
 }
 
-export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
-export const ENABLE_TAGS_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
-
-// Narrow rollout gate for the search-view tag surfaces (facet row + row
-// chips), layered on top of enable-tags-fe. PostHog-controlled per
-// environment with a dev-mode default. Override with
-// VITE_ENABLE_TAGS_SEARCH_FE.
-export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
-export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;
-
 // Channel mode where replying and editing do not happen inline, but in a single unified input instead.
 export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
   'UNIFIED_CHANNEL_INPUT',
@@ -546,3 +543,11 @@ export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
 export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
+
+// Onboarding v4: the full-screen stepper new users land in after signup
+// (unified with /login), driving the import machinery with auto-import.
+// Dev-mode default; override with VITE_ENABLE_ONBOARDING_V4.
+export const ENABLE_ONBOARDING_V4 = resolveFeatureFlag(
+  'ENABLE_ONBOARDING_V4',
+  DEV_MODE_ENV
+);

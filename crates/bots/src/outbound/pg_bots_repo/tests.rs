@@ -8,9 +8,7 @@ use crate::domain::{
     service::BotServiceImpl,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_event_broker::{
-    EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker, Topic as _,
-};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
@@ -18,8 +16,9 @@ use std::sync::{Arc, Mutex};
 const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
 const TEAM_MEMBER: &str = "macro|bot-team-member@example.com";
+const TEAM_ADMIN: &str = "macro|bot-team-admin@example.com";
+const TEAM_OWNER: &str = "macro|bot-team-owner@example.com";
 const TEAM_OTHER: &str = "macro|bot-team-other@example.com";
-
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
@@ -95,7 +94,7 @@ impl MacroEventBroker for RecordingEventBroker {
             .lock()
             .expect("event lock poisoned")
             .push(PublishedEvent {
-                topic: event.topic().as_str(),
+                topic: event.topic(),
                 key: event.key().to_string(),
                 payload: serde_json::to_value(event.event())?,
             });
@@ -176,30 +175,36 @@ async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn insert_team_member(pool: &PgPool, team_id: Uuid, member_id: &str) -> anyhow::Result<()> {
-    insert_user(pool, member_id).await?;
-    sqlx::query(
+async fn insert_team_user(
+    pool: &PgPool,
+    team_id: Uuid,
+    user_id: &str,
+    role: &str,
+) -> anyhow::Result<()> {
+    insert_user(pool, user_id).await?;
+    sqlx::query!(
         r#"
         INSERT INTO team (id, name, owner_id)
         VALUES ($1, $2, $3)
         ON CONFLICT (id) DO NOTHING
         "#,
+        team_id,
+        "Platform",
+        user_id,
     )
-    .bind(team_id)
-    .bind("Platform")
-    .bind(member_id)
     .execute(pool)
     .await?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO team_user (user_id, team_id, team_role)
-        VALUES ($1, $2, 'member'::team_role)
+        VALUES ($1, $2, $3::text::team_role)
         ON CONFLICT (user_id, team_id) DO NOTHING
         "#,
+        user_id,
+        team_id,
+        role,
     )
-    .bind(member_id)
-    .bind(team_id)
     .execute(pool)
     .await?;
 
@@ -263,6 +268,49 @@ async fn token_last_used_at(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_active_in_channel_returns_true_for_active_membership(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    insert_channel(&pool, channel_id).await?;
+    let repo = PgBotsRepo::new(pool);
+    repo.add_bot_to_channel(channel_id, bot_id).await?;
+
+    assert!(repo.bot_active_in_channel(channel_id, bot_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_active_in_channel_returns_false_for_non_member(pool: PgPool) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    insert_channel(&pool, channel_id).await?;
+    let repo = PgBotsRepo::new(pool);
+
+    assert!(!repo.bot_active_in_channel(channel_id, bot_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_active_in_channel_returns_false_for_soft_deleted_membership(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    insert_channel(&pool, channel_id).await?;
+    let repo = PgBotsRepo::new(pool);
+    repo.add_bot_to_channel(channel_id, bot_id).await?;
+    assert!(repo.remove_bot_from_channel(channel_id, bot_id).await?);
+
+    assert!(!repo.bot_active_in_channel(channel_id, bot_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
 
@@ -284,26 +332,62 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_team_owned_bot_requires_team_membership(pool: PgPool) -> anyhow::Result<()> {
+async fn create_team_owned_bot_requires_team_admin_or_owner(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let team_id = Uuid::new_v4();
-    insert_team_member(&pool, team_id, TEAM_MEMBER).await?;
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
 
-    let mut req = create_req("team-datadog");
+    for (creator, handle) in [(TEAM_OWNER, "team-owner"), (TEAM_ADMIN, "team-admin")] {
+        let mut req = create_req(handle);
+        req.team_id = Some(team_id);
+
+        let bot = service.create_bot(user_id(creator), req).await?;
+        assert_eq!(bot.owner, Some(BotOwner::Team { team_id }));
+    }
+
+    let mut req = create_req("team-member");
     req.team_id = Some(team_id);
-
-    let bot = service
+    let err = service
         .create_bot(user_id(TEAM_MEMBER), req.clone())
-        .await?;
-
-    assert_eq!(bot.owner, Some(BotOwner::Team { team_id }));
+        .await
+        .expect_err("ordinary team member must not create a team-owned bot");
+    assert!(matches!(err, BotError::Unauthorized));
 
     let err = service
         .create_bot(user_id(TEAM_OTHER), req)
         .await
-        .expect_err("non-team member must not create team-owned bot");
-
+        .expect_err("non-team member must not create a team-owned bot");
     assert!(matches!(err, BotError::Unauthorized));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_team_owned_channel_scoped_bot_requires_team_admin(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let team_id = Uuid::new_v4();
+    let channel_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    insert_channel(&pool, channel_id).await?;
+
+    let mut req = create_channel_scoped_req("team-scoped-channel");
+    req.team_id = Some(team_id);
+
+    let err = service
+        .create_channel_scoped_bot(user_id(TEAM_MEMBER), channel_id, req.clone())
+        .await
+        .expect_err("ordinary team member must not create a team-owned channel-scoped bot");
+    assert!(matches!(err, BotError::Unauthorized));
+
+    let created = service
+        .create_channel_scoped_bot(user_id(TEAM_ADMIN), channel_id, req)
+        .await?;
+    assert_eq!(created.bot.owner, Some(BotOwner::Team { team_id }));
 
     Ok(())
 }
@@ -666,11 +750,11 @@ async fn lifecycle_creation_publishes_exact_sanitized_events(pool: PgPool) -> an
         .await?;
 
     let team_id = Uuid::new_v4();
-    insert_team_member(&pool, team_id, TEAM_MEMBER).await?;
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
     let mut team_request = create_req("event-team");
     team_request.team_id = Some(team_id);
     let team_bot = service
-        .create_bot(user_id(TEAM_MEMBER), team_request)
+        .create_bot(user_id(TEAM_ADMIN), team_request)
         .await?;
 
     let channel_id = Uuid::new_v4();
@@ -714,7 +798,7 @@ async fn lifecycle_creation_publishes_exact_sanitized_events(pool: PgPool) -> an
             "handle": team_bot.handle,
             "description": team_bot.description,
             "avatar_url": team_bot.avatar_url,
-            "created_by_user_id": TEAM_MEMBER,
+            "created_by_user_id": TEAM_ADMIN,
             "channel_id": null,
             "created_at": team_bot.created_at,
         }),
@@ -748,13 +832,13 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::new_v4();
-    insert_team_member(&pool, team_id, TEAM_MEMBER).await?;
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
     let broker = RecordingEventBroker::default();
     let service = recording_service(&pool, broker.clone());
     let mut create_request = create_req("event-mutations");
     create_request.team_id = Some(team_id);
     let bot = service
-        .create_bot(user_id(TEAM_MEMBER), create_request)
+        .create_bot(user_id(TEAM_ADMIN), create_request)
         .await?;
     broker.clear();
 
@@ -765,7 +849,7 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
         avatar_url: None,
     };
     let patched = service
-        .patch_bot(user_id(TEAM_MEMBER), bot.id, patch_request)
+        .patch_bot(user_id(TEAM_ADMIN), bot.id, patch_request)
         .await?;
 
     let events = broker.events();
@@ -777,7 +861,7 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
         json!({
             "bot_id": bot.id,
             "owner": { "type": "team", "team_id": team_id },
-            "actor_user_id": TEAM_MEMBER,
+            "actor_user_id": TEAM_ADMIN,
             "name": "Renamed alerts",
             "handle": null,
             "description": "Replacement description",
@@ -788,7 +872,7 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
     assert_no_token_material(&events[0].payload, None);
 
     broker.clear();
-    service.delete_bot(user_id(TEAM_MEMBER), bot.id).await?;
+    service.delete_bot(user_id(TEAM_ADMIN), bot.id).await?;
     let events = broker.events();
     assert_eq!(events.len(), 1);
     assert_event(
@@ -798,7 +882,7 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
         json!({
             "bot_id": bot.id,
             "owner": { "type": "team", "team_id": team_id },
-            "actor_user_id": TEAM_MEMBER,
+            "actor_user_id": TEAM_ADMIN,
         }),
     );
     assert_no_token_material(&events[0].payload, None);

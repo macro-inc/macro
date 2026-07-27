@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent};
-use macro_event_topics::Topic;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -165,7 +164,7 @@ fn constructors_use_bot_topic_bare_uuid_key_and_schema_version_one() {
     for (event, expected_event_type) in cases.into_iter().zip(expected_event_types) {
         assert_eq!(event.key(), BOT_ID);
         assert!(!event.key().starts_with("bot|"));
-        assert_eq!(event.topic().as_str(), "macro.bots");
+        assert_eq!(event.topic(), "macro.bots");
         assert_eq!(event.event().schema_version, 1);
         assert_eq!(
             serde_json::to_value(event.event()).expect("serializable event")["event_type"],
@@ -188,7 +187,7 @@ fn every_event_variant_round_trips() {
 
         assert_eq!(decoded.key(), BOT_ID);
         assert_eq!(decoded.event(), original.event());
-        assert_eq!(decoded.topic().as_str(), "macro.bots");
+        assert_eq!(decoded.topic(), "macro.bots");
     }
 }
 

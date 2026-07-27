@@ -1,3 +1,4 @@
+use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -9,9 +10,9 @@ use axum::{
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
-        EntityPermission, EntityType, MemberTeamRole, RequiredPermission, UserTeamInfo,
-        ViewAccessLevel,
+        AccessError, AccessLevel, AnyEntityPermission, BotAccessScope, BotId, CallChannelInfo,
+        EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
+        RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -128,6 +129,7 @@ impl EntityAccessService for FakeEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -177,7 +179,7 @@ impl EntityAccessService for FakeEntityAccessService {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
@@ -188,7 +190,18 @@ impl EntityAccessService for FakeEntityAccessService {
             });
 
         match self.result {
-            PermissionResult::Allowed(permission) => Ok((permission, uuid(TEAM_ID))),
+            // Pair the permission with the team role that would have
+            // produced it (owner → Owner, edit → Admin, else Member).
+            PermissionResult::Allowed(permission) => {
+                let team_role = if permission.allows_access_level(AccessLevel::Owner) {
+                    TeamRole::Owner
+                } else if permission.allows_access_level(AccessLevel::Edit) {
+                    TeamRole::Admin
+                } else {
+                    TeamRole::Member
+                };
+                Ok((permission, uuid(TEAM_ID), team_role))
+            }
             PermissionResult::Unauthorized => Err(AccessError::Unauthorized),
         }
     }
@@ -281,6 +294,24 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_team_id_for_user call")
     }
 
+    async fn create_company(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        panic!("unexpected create_company call")
+    }
+
+    async fn create_contact(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _name: &str,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        panic!("unexpected create_contact call")
+    }
+
     async fn set_email_sync(
         &self,
         _access: &CrmCompanyReceipt<EditAccessLevel>,
@@ -295,6 +326,22 @@ impl CrmService for FakeCrmService {
         _hidden: bool,
     ) -> Result<(), CrmError> {
         panic!("unexpected set_company_hidden call")
+    }
+
+    async fn set_company_name(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _name: &str,
+    ) -> Result<(), CrmError> {
+        panic!("unexpected set_company_name call")
+    }
+
+    async fn set_contact_name(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+        _name: &str,
+    ) -> Result<(), CrmError> {
+        panic!("unexpected set_contact_name call")
     }
 
     async fn set_contact_hidden(
@@ -350,7 +397,7 @@ impl CrmService for FakeCrmService {
 
     async fn create_crm_comment(
         &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
         _owner: &str,
         _thread_id: Option<Uuid>,
         _thread_metadata: Option<Value>,
@@ -362,7 +409,7 @@ impl CrmService for FakeCrmService {
 
     async fn get_crm_comment_threads(
         &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         panic!("unexpected get_crm_comment_threads call")
     }
@@ -469,6 +516,7 @@ fn test_router(
             api_key: INTERNAL_KEY.to_string(),
             default_user_id: None,
         },
+        macro_authorization::NoBotAuthorizer,
     );
     let state: CrmRouterState<FakeCrmService, FakeEntityAccessService, TestAuthorizationService> =
         CrmRouterState {

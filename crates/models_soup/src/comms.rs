@@ -2,6 +2,9 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Organization id for soup channel payloads.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
@@ -102,7 +105,7 @@ pub struct LatestMessage {
 }
 
 /// A channel as displayed in Soup.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChannel {
     /// Channel metadata and participants.
@@ -121,7 +124,7 @@ pub struct SoupChannel {
 ///
 /// This mirrors the public channel-message API shape so soup consumers can
 /// render a thread root the same way they render a channel timeline message.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChannelThread {
     /// Message id.
@@ -260,6 +263,10 @@ pub struct ChannelWithParticipants {
     pub channel: Channel,
     /// Participants in the channel.
     pub participants: Vec<ChannelParticipant>,
+    /// Whether the requesting user is an active participant of the channel.
+    /// False for team channels of the user's teams they have not joined.
+    #[serde(default)]
+    pub is_participant: bool,
 }
 
 /// A user's membership in a channel.
@@ -442,6 +449,7 @@ impl ChannelWithParticipants {
                     ChannelParticipant::try_new_from_channels(participant).ok()
                 })
                 .collect(),
+            is_participant: channel.is_participant,
         }
     }
 }

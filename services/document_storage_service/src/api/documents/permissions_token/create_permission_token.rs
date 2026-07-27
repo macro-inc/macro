@@ -8,7 +8,9 @@ use axum::{
 use documents_hex::domain::permission_token::encode_permission_token;
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use model::response::ErrorResponse;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
@@ -43,10 +45,13 @@ pub struct DocumentPermissionsTokenResponse {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user, users_access_level), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(
+    skip(state, user, users_access_level),
+    fields(actor = tracing::field::Empty)
+)]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     users_access_level: DocumentAccessExtractor<
         ViewAccessLevel,
         EntityAccessService,
@@ -54,7 +59,14 @@ pub async fn handler(
     >,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.map(|user_id| user_id.to_string());
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+    let user_id = user
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
+        .map(|user| user.macro_user_id.to_string());
 
     let access_level = match users_access_level.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,

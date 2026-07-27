@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use email_service::pubsub::publish_email_event;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use models_email::service;
 use sqlx::types::Uuid;
@@ -43,10 +43,10 @@ pub struct UpdateLabelBatchResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(body): Json<UpdateLabelBatchRequest>,
 ) -> Result<Response, Response> {
     if body.message_ids.is_empty() || body.message_ids.len() > BATCH_UPDATE_MESSAGE_LIMIT {
@@ -66,7 +66,7 @@ pub async fn handler(
     // delegated inboxes); a single label op targets messages in one inbox.
     let link = email_db_client::links::get::fetch_owned_link_for_message(
         &ctx.db,
-        &authorization.user_context.user_id,
+        &authorization.authorization.user.user_context.user_id,
         body.message_ids[0],
     )
     .await
@@ -119,7 +119,7 @@ pub async fn handler(
     let db_messages = email_db_client::messages::get_simple_messages::get_simple_messages_batch(
         &ctx.db,
         &body.message_ids,
-        &authorization.user_context.fusion_user_id,
+        &authorization.authorization.user.user_context.fusion_user_id,
     )
     .await
     .map_err(|e| {
@@ -186,7 +186,7 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_read_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &authorization.user_context.fusion_user_id,
+                    link.id,
                     !is_adding,
                 )
                 .await
@@ -195,7 +195,7 @@ pub async fn handler(
                 email_db_client::messages::update::update_message_starred_status_batch(
                     &mut *tx,
                     message_db_ids.clone(),
-                    &authorization.user_context.fusion_user_id,
+                    link.id,
                     is_adding,
                 )
                 .await

@@ -1,10 +1,9 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
@@ -32,6 +31,7 @@ import {
   peekPendingSend,
 } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
+import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
 import {
@@ -140,7 +140,6 @@ function ChatInner(props: {
   loadedInputText: string | undefined;
 }) {
   const owner = getOwner();
-  const analytics = useAnalytics();
   const input = useChatInputContext();
   const chat = useChatContext();
   const canEdit = useCanEdit();
@@ -148,7 +147,7 @@ function ChatInner(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
-  const isPreview = !!useMaybePreviewPanel();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
   const [markdownText, setMarkdownText] = createSignal(
@@ -156,13 +155,12 @@ function ChatInner(props: {
   );
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
     block: 'chat',
     showOpenTabs: true,
   });
@@ -179,7 +177,9 @@ function ChatInner(props: {
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
-    input.attachments
+    input.attachments,
+    (mention) =>
+      insertChatAttachmentMention(editor.controls.getLexical(), mention)
   );
   false && droppable;
 
@@ -304,10 +304,12 @@ function ChatInner(props: {
     hotkeyToken: TOKENS.chat.stop,
   });
 
-  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  // J/K navigation focuses the block once it mounts, except when that block is
+  // passive content in a Preview Pair Viewer.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
+    if (!canAutofocusSplitContent) return;
     if (!blockElement()) return;
     if (!navigatedFromJK()) return;
     blockElement()?.focus();
@@ -368,7 +370,9 @@ function ChatInner(props: {
                 chatId={chat.chatId()}
                 onSend={onSend}
                 onStop={onStop}
-                autoFocusOnMount={!isPreview && !navigatedFromJK()}
+                autoFocusOnMount={
+                  canAutofocusSplitContent && !navigatedFromJK()
+                }
               />
             </div>
           </div>

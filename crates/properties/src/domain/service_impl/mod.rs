@@ -31,7 +31,8 @@ use std::sync::Arc;
 use super::error::PropertiesErr;
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityPropertyInfo, PropertyAccessReceiptExt, PropertyDefinitionOwner,
+    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
+    EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
     PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
     ViewReceipt,
 };
@@ -572,6 +573,195 @@ where
             .await;
 
         Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self, access, updates),
+        fields(
+            entity_id = %access.entity_id(),
+            entity_type = ?access.entity_type(),
+            property_count = updates.len()
+        ),
+        err
+    )]
+    async fn bulk_update_entity_property_options(
+        &self,
+        access: &EditReceipt,
+        updates: Vec<EntityPropertyOptionUpdate>,
+    ) -> Result<Vec<EntityPropertyOptionSelection>, PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
+        let entity_type = subject.storage_entity_type;
+
+        // Validate every property up front so an invalid option never triggers a
+        // partial write: the persistence below is a single transaction and only
+        // runs once all properties pass.
+        for update in &updates {
+            let property_definition = self
+                .repository
+                .get_property_definition(update.property_definition_id)
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or_else(|| {
+                    PropertiesErr::Validation(format!(
+                        "Property definition not found: {}",
+                        update.property_definition_id
+                    ))
+                })?;
+
+            if !property_definition.is_multi_select {
+                return Err(PropertiesErr::Validation(
+                    "Option add/remove is only supported for multi-select properties".to_string(),
+                ));
+            }
+
+            if !is_property_applicable_to(update.property_definition_id, entity_type) {
+                return Err(PropertiesErr::Validation(
+                    "This property cannot be attached to this entity type".to_string(),
+                ));
+            }
+
+            // Only additions need option validation; removing an id that is not a
+            // valid option is a harmless no-op. Dedupe first so an accidentally
+            // repeated id is not miscounted as an invalid one.
+            let mut add_option_ids = update.add_option_ids.clone();
+            add_option_ids.sort();
+            add_option_ids.dedup();
+            self.validate_property_options(update.property_definition_id, &add_option_ids)
+                .await?;
+        }
+
+        let selections = self
+            .repository
+            .bulk_update_entity_property_options(access.entity_id(), entity_type, &updates)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        self.enqueue_property_upsert(access.entity_id(), entity_type)
+            .await;
+
+        Ok(selections)
+    }
+
+    #[tracing::instrument(
+        skip(self, access, add_option_ids, remove_option_ids),
+        fields(
+            entity_count = access.len(),
+            property_definition_id = %property_definition_id,
+            add_count = add_option_ids.len(),
+            remove_count = remove_option_ids.len(),
+        ),
+        err
+    )]
+    async fn bulk_update_entities_property_options(
+        &self,
+        access: &[EditReceipt],
+        property_definition_id: Uuid,
+        add_option_ids: Vec<Uuid>,
+        remove_option_ids: Vec<Uuid>,
+    ) -> Result<Vec<EntityOptionUpdateOutcome>, PropertiesErr> {
+        // Validate the shared delta once. A missing property, a single-select
+        // property, or an invalid added option is a client error in the request
+        // itself, so it fails the whole call rather than producing per-entity
+        // failures.
+        let property_definition = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or_else(|| {
+                PropertiesErr::Validation(format!(
+                    "Property definition not found: {}",
+                    property_definition_id
+                ))
+            })?;
+
+        if !property_definition.is_multi_select {
+            return Err(PropertiesErr::Validation(
+                "Option add/remove is only supported for multi-select properties".to_string(),
+            ));
+        }
+
+        // Only additions need option validation; removing an unknown id is a
+        // harmless no-op. Dedupe first so a repeated id is not miscounted.
+        let mut validated_add_ids = add_option_ids.clone();
+        validated_add_ids.sort();
+        validated_add_ids.dedup();
+        self.validate_property_options(property_definition_id, &validated_add_ids)
+            .await?;
+
+        // Resolve every subject in one batch (one document-subtype lookup).
+        let subjects = self.resolve_subjects(access).await?;
+
+        let update = EntityPropertyOptionUpdate {
+            property_definition_id,
+            add_option_ids,
+            remove_option_ids,
+        };
+
+        // Acquire per-entity row locks in a consistent order across callers so
+        // two cross-entity updates touching overlapping entities can't deadlock.
+        // Each entity is its own transaction, so outcomes are still returned
+        // aligned to the input order.
+        let mut order: Vec<usize> = (0..subjects.len()).collect();
+        order.sort_by_key(|&index| {
+            (
+                subjects[index].canonical_key.entity_id.clone(),
+                format!("{:?}", subjects[index].storage_entity_type),
+            )
+        });
+
+        let mut outcomes: Vec<Option<EntityOptionUpdateOutcome>> =
+            (0..subjects.len()).map(|_| None).collect();
+        for index in order {
+            let subject = &subjects[index];
+            let entity_id = subject.canonical_key.entity_id.as_str();
+            let entity_type = subject.storage_entity_type;
+
+            if !is_property_applicable_to(property_definition_id, entity_type) {
+                outcomes[index] = Some(EntityOptionUpdateOutcome::Failed {
+                    message: "This property cannot be attached to this entity type".to_string(),
+                });
+                continue;
+            }
+
+            // Convert the repo error to a Send type up front so the raw
+            // `R::Err` is never held across the reindex await below.
+            let update_result = self
+                .repository
+                .bulk_update_entity_property_options(
+                    entity_id,
+                    entity_type,
+                    std::slice::from_ref(&update),
+                )
+                .await
+                .map_err(anyhow::Error::from);
+
+            match update_result {
+                Ok(mut selections) => {
+                    let option_ids = selections
+                        .pop()
+                        .map(|selection| selection.option_ids)
+                        .unwrap_or_default();
+                    self.enqueue_property_upsert(entity_id, entity_type).await;
+                    outcomes[index] = Some(EntityOptionUpdateOutcome::Applied { option_ids });
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        entity_id = %entity_id,
+                        "failed to apply bulk option delta to entity"
+                    );
+                    outcomes[index] = Some(EntityOptionUpdateOutcome::Failed {
+                        message: error.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(outcomes
+            .into_iter()
+            .map(|outcome| outcome.expect("every subject yields an outcome"))
+            .collect())
     }
 
     #[tracing::instrument(skip(self, team), err)]

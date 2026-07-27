@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     routing::{delete, post},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model_error_response::ErrorResponse;
 use reqwest::StatusCode;
 
@@ -28,12 +28,16 @@ where
 #[tracing::instrument(skip(state, user, req))]
 async fn register_device<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(state): State<NotificationRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .register_device(user.macro_user_id, &req.token, &req.device_type)
+        .register_device(
+            user.authorization.user.macro_user_id,
+            &req.token,
+            &req.device_type,
+        )
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to register device");
@@ -52,7 +56,7 @@ async fn register_device<S: NotificationReader, Auth: MacroAuthorizationService>
 #[tracing::instrument(skip(state, _macro_user, req))]
 async fn unregister_device<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(state): State<NotificationRouterState<S, Auth>>,
-    _macro_user: MacroAuthorizationExtractor<Auth>,
+    _macro_user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state

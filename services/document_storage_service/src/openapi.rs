@@ -4,6 +4,7 @@
 mod api;
 mod config;
 mod model;
+mod outbound;
 mod service;
 
 use utoipa::OpenApi;

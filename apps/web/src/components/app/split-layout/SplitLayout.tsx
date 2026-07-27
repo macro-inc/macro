@@ -1,17 +1,16 @@
-import { activeElement } from '@app/signal/focus';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   isSidebarVisible,
   useSidebarCollapse,
 } from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
-import { splitContainerSelector } from '@core/dom-selectors';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import { useNavigate } from '@solidjs/router';
+import { useWindowSize } from '@solid-primitives/resize-observer';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { cn } from '@ui';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSelector,
@@ -27,290 +26,44 @@ import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
 import {
   createSplitLayout,
-  type SplitContent,
   SplitEvent,
-  type SplitEventWithType,
   type SplitId,
   type SplitManager,
-  type SplitState,
 } from './layoutManager';
-import { decodePairs } from './layoutUtils';
+import { createLayoutUrlSync, restorePreviewPairs } from './layoutUrlSync';
 import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,
 } from './mobile/createMobileSwipeLayout';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
+import {
+  loadRestorablePreviewLayout,
+  PREVIEW_QUERY_PARAM,
+} from './previewPersistence';
+import { createSplitFocusTracker } from './splitFocusTracker';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
   setManager: Setter<SplitManager | undefined>;
 };
 
-function getParentSplitId(element: Element | null) {
-  if (!element || !element.isConnected) return null;
-  const splitParent = element.closest(splitContainerSelector);
-  if (!splitParent) return null;
-  const splitId = splitParent.getAttribute('data-split-id');
-  if (!splitId) return null;
-  return splitId as SplitId;
-}
-
-function sameSplitContentIdentity(a: SplitContent, b: SplitContent) {
-  return a.type === b.type && a.id === b.id;
-}
-
-function getUrlSyncAffectedSplit(
-  splitManager: SplitManager,
-  currentPairs: SplitContent[],
-  nextPairs: SplitContent[]
-) {
-  const changedIndex = nextPairs.findIndex(
-    (nextPair, index) =>
-      !currentPairs[index] ||
-      !sameSplitContentIdentity(currentPairs[index], nextPair)
-  );
-
-  if (changedIndex < 0) return undefined;
-
-  const affectedPair = nextPairs[changedIndex];
-  return splitManager
-    .splits()
-    .find((split) => sameSplitContentIdentity(split.content, affectedPair));
-}
-
-/**
- * Creates an effect that syncs the layout manager with the URL.
- *
- * @param splitManager The layout manager to sync with
- * @param pairs The accessor to the current pairs
- * @param decodedPairs The accessor to the decoded pairs
- */
-function createLayoutUrlSync(
-  splitManager: SplitManager,
-  pairs: Accessor<string[]>,
-  decodedPairs: Accessor<SplitContent[]>
-) {
-  const navigate = useNavigate();
-  const urlLayoutDrift = createMemo(
-    () => splitManager.getUrlSegments().join('/') !== pairs().join('/')
-  );
-
-  /** Syncs changes from the layout manager to the URL*/
-  createEffect(
-    on([() => splitManager.getUrlSegments().join('/')], () => {
-      if (urlLayoutDrift()) {
-        const nextUrlSegments = splitManager.getUrlSegments();
-        const nextPairs = decodePairs(nextUrlSegments);
-        const affectedSplit = getUrlSyncAffectedSplit(
-          splitManager,
-          decodedPairs(),
-          nextPairs
-        );
-        const replace = affectedSplit?.lastNavigationCause === 'replace';
-
-        // Flush the state to the url
-        navigate(`/${nextUrlSegments.join('/')}`, { replace });
-      }
-    })
-  );
-
-  /** Syncs changes from the URL to the layout manager */
-  createEffect(
-    on([pairs], () => {
-      if (urlLayoutDrift()) {
-        splitManager.reconcile(decodedPairs());
-      }
-    })
-  );
-}
-
-/**
- * Manages focus / active between splits
- *
- * When a split is focused, it should become the active split.
- * When a split looses focus to a non-split element, the active split should NOT change.
- * Inserting / Removing splits are explicitly handled:
- *   - When a split is inserted, it should be focused and activated
- *   - When a split is removed, the next split should be focused
- */
-function createSplitFocusTracker(props: {
-  splitManager: SplitManager;
-  panelRefs: Map<SplitId, HTMLDivElement>;
-  splits: Accessor<ReadonlyArray<SplitState>>;
-}) {
-  const DEBOUNCE = 40;
-  const activeSplitId = () => props.splitManager.activeSplitId();
-
-  const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
-  const lastFocusedChildBySplitId: Map<SplitId, HTMLElement | null> = new Map();
-  createEffect(
-    on(currentSplitsIds, (ids) => {
-      for (const key of lastFocusedChildBySplitId.keys()) {
-        if (!ids.has(key)) {
-          lastFocusedChildBySplitId.delete(key);
-        }
-      }
-    })
-  );
-
-  const isElementInPanel = (
-    panelId: SplitId,
-    element: Element | null
-  ): boolean => {
-    const panelRef = props.panelRefs.get(panelId);
-    if (!panelRef || element === null) return false;
-    return panelRef === element || panelRef.contains(element);
-  };
-
-  const focusSplitById = (id: SplitId) => {
-    const splitPanelRef = props.panelRefs.get(id);
-    if (!splitPanelRef) {
-      console.warn(`Tried to focus split with id ${id} but it doesn't exist`);
-      return;
-    }
-
-    // return if panel has a child already with focus.
-    if (
-      splitPanelRef.contains(document.activeElement) &&
-      splitPanelRef !== document.activeElement
-    )
-      return;
-
-    // look for a child to return focus to.
-    const child = lastFocusedChildBySplitId.get(id);
-    if (child && child.isConnected) {
-      child.focus();
-      return;
-    }
-
-    splitPanelRef.focus();
-  };
-
-  const activateFocusedSplit = (element: Element) => {
-    const splitId = activeSplitId();
-    if (!splitId) return;
-
-    const doesActiveSplitHaveFocus = isElementInPanel(splitId, element);
-
-    if (doesActiveSplitHaveFocus) {
-      return;
-    }
-
-    let splitWithFocus: SplitId | undefined;
-    // Only visible splits may claim activation — the mobile background
-    // split is excluded and can never become active.
-    for (const split of props.splitManager.getVisibleSplits()) {
-      if (isElementInPanel(split.id, element)) {
-        splitWithFocus = split.id;
-        break;
-      }
-    }
-
-    if (splitWithFocus) {
-      props.splitManager.activateSplit(splitWithFocus);
-    }
-  };
-
-  const findNextSplitToActivate = (splitIndex: number): SplitId | undefined => {
-    const nextSplitId =
-      splitIndex === 0
-        ? props.splits()[0].id
-        : props.splits()[splitIndex - 1].id;
-
-    return nextSplitId;
-  };
-
-  const focusFromEvent = (event: SplitEventWithType) => {
-    switch (event.type) {
-      case SplitEvent.Insert: {
-        if (event.activate === false) break;
-        const splitId = event.splitId;
-        focusSplitById(splitId);
-        break;
-      }
-      case SplitEvent.Remove: {
-        const splitId = findNextSplitToActivate(event.splitIndex);
-        if (splitId) {
-          focusSplitById(splitId);
-        }
-        break;
-      }
-    }
-  };
-
-  // Both of these effects need to be debounced to prevent race conditions.
-  // The button for creating a new split itself is in a SplitPanel. This means that without the debounce,
-  // the button in the old split might trigger another focus event and re-active the old split.
-  let focusTimeout: ReturnType<typeof setTimeout> | undefined;
-  let activateTimeout: ReturnType<typeof setTimeout> | undefined;
-  let lastProgrammaticActivation = 0;
-
-  /** Listens for explicit events from layoutManager that might trigger focus changes */
-  createEffect(
-    on(
-      () => props.splitManager.events(),
-      (newEvent) => {
-        if (focusTimeout) {
-          clearTimeout(focusTimeout);
-        }
-        if (newEvent.type === SplitEvent.ReturnFocus) {
-          const id = props.splitManager.activeSplitId();
-          if (id) {
-            focusSplitById(id);
-          }
-          return;
-        }
-        focusTimeout = setTimeout(() => {
-          focusFromEvent(newEvent);
-        }, DEBOUNCE);
-      }
-    )
-  );
-
-  /** Track when splits are programmatically activated */
-  createEffect(
-    on(activeSplitId, () => {
-      lastProgrammaticActivation = Date.now();
-    })
-  );
-
-  /** Listens for focus changes on the document */
-  createEffect(
-    on(activeElement, (element) => {
-      if (activateTimeout) {
-        clearTimeout(activateTimeout);
-      }
-      if (!element) return;
-
-      const parentId = getParentSplitId(element);
-      if (
-        parentId &&
-        element instanceof HTMLElement &&
-        !element.closest('[data-no-focus-restore]')
-      ) {
-        lastFocusedChildBySplitId.set(parentId, element);
-      }
-
-      activateTimeout = setTimeout(() => {
-        const timeSinceActivation = Date.now() - lastProgrammaticActivation;
-
-        // If a split was just programmatically activated, ignore this focus change
-        if (timeSinceActivation < DEBOUNCE + 50) {
-          return;
-        }
-
-        activateFocusedSplit(element);
-      }, DEBOUNCE);
-    })
-  );
-
-  return { focusSplitById };
-}
-
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
-  const decodedPairs = () => decodePairs(props.pairs);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const viewportSize = useWindowSize();
+  const previewQuery = () => location.query[PREVIEW_QUERY_PARAM];
+  const decodedLayout = createMemo(() =>
+    loadRestorablePreviewLayout(props.pairs, previewQuery(), {
+      allowPreviewPairs: !isMobile(),
+    })
+  );
+  const initialLayout = decodedLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
-  const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
+  const splitManager = createSplitLayout(
+    blockOrchestrator,
+    initialLayout.contents
+  );
+  restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
   const sidebar = useSidebarCollapse();
 
@@ -345,7 +98,17 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   // <For> on plain ids for stable referential equality
   const ids = createMemo(() => splits().map(({ id }) => id));
 
-  createLayoutUrlSync(splitManager, () => props.pairs, decodedPairs);
+  createLayoutUrlSync(
+    splitManager,
+    () => props.pairs,
+    previewQuery,
+    decodedLayout,
+    {
+      navigate,
+      search: () => location.search,
+      hash: () => location.hash,
+    }
+  );
   createSplitFocusTracker({ splitManager, panelRefs, splits });
 
   return (
@@ -369,7 +132,19 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                   <Show when={splitManager.getSplit(id)}>
                     {(handle) => (
                       <Suspense>
-                        <Resize.Panel id={id} minSize={400} index={index()}>
+                        <Resize.Panel
+                          id={id}
+                          minSize={400}
+                          // Automatic redistribution targets an engaged
+                          // Controller at its configured preferred width.
+                          // This is not a hard max: the gutter can still be
+                          // dragged past it.
+                          redistributionPreferredSize={splitManager.previewControllerWidth(
+                            id,
+                            viewportSize.width
+                          )}
+                          index={index()}
+                        >
                           <SplitPanel
                             split={splits()[index()]!}
                             handle={handle()}

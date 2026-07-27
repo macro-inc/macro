@@ -1,5 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, TAGGABLE_LIST_VIEWS } from '@app/constants/list-views';
 import {
   type FilterContext,
   type FilterID,
@@ -683,10 +683,10 @@ export function useFilterRefinements() {
       );
     };
 
-    // Tags chip (consolidated, searchable) for the documents/tasks views.
+    // Tags chip (consolidated, searchable) for every taggable list view.
     const pushTagsConsolidatedChip = () => {
-      if (view !== 'tasks' && view !== 'documents') return;
-      if (!tagFilter.enabled() || !tagFilter.hasTags()) return;
+      if (!view || !TAGGABLE_LIST_VIEWS.has(view)) return;
+      if (!tagFilter.hasTags()) return;
 
       const key = 'tags';
       const popupOpen =

@@ -185,6 +185,40 @@ fn test_include_types_foreign_entity_without_filter_keeps_foreign_entity_unfilte
 }
 
 #[test]
+fn test_list_entities_schema_documents_email_time_range_filtering() {
+    let validated = generate_validated_input_schema::<ListEntities>().unwrap();
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+
+    assert!(
+        schema_json.contains("\\\"ua\\\""),
+        "schema should document the ua (updated_at) email filter key"
+    );
+    assert!(
+        schema_json.contains("last 7 days"),
+        "schema should give a worked example for filtering emails by a recent time window (macro-2543)"
+    );
+}
+
+#[test]
+fn test_email_updated_at_range_filter_deserializes() {
+    let input = serde_json::json!({
+        "includeTypes": ["email"],
+        "ef": {
+            "&": [
+                { "l": { "ua": { "gte": "2026-07-15T00:00:00Z" } } },
+                { "l": { "ua": { "lt": "2026-07-22T00:00:00Z" } } }
+            ]
+        }
+    });
+
+    let list: ListEntities = serde_json::from_value(input).unwrap();
+    let ast = list.entity_filter_ast(None);
+
+    assert_eq!(list.effective_include_types(), Some(vec![ItemType::Email]));
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
 fn test_build_summary_empty() {
     let summary = build_summary(&[], false, &None);
     assert_eq!(summary, "No items found in workspace.");

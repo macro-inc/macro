@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::document::get_user_documents;
 use model::response::{GenericErrorResponse, GenericResponse};
 use sqlx::PgPool;
@@ -30,11 +30,11 @@ use sqlx::PgPool;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user, params), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user, params), fields(user_id=?user.authorization.user.macro_user_id))]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn get_user_documents_handler(
     State(db): State<PgPool>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Query(params): Query<GetUserDocumentsQueryParams>,
 ) -> impl IntoResponse {
     if let Some(limit) = params.limit
@@ -54,7 +54,7 @@ pub async fn get_user_documents_handler(
 
     let documents = match get_user_documents(
         &db,
-        user.macro_user_id.as_ref(),
+        user.authorization.user.macro_user_id.as_ref(),
         query_params.limit,
         query_params.offset,
         query_params.file_type,
@@ -63,7 +63,7 @@ pub async fn get_user_documents_handler(
     {
         Ok(documents) => documents,
         Err(e) => {
-            tracing::error!(error=?e, user_id=?user.macro_user_id, "failed to get user documents");
+            tracing::error!(error=?e, user_id=?user.authorization.user.macro_user_id, "failed to get user documents");
             return GenericResponse::builder()
                 .message("failed to get documents")
                 .is_error(true)

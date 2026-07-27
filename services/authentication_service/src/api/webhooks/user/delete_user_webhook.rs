@@ -7,7 +7,7 @@ use comms_db_client::{
     channels::get_channels::get_org_channels,
     participants::remove_participant::{RemoveParticipantOptions, remove_participant},
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithMacroUserId};
 use notification::domain::ports::NotificationRepository;
@@ -23,7 +23,7 @@ use sqs_client::email::LinkManagerMessage;
 #[tracing::instrument(skip(ctx, req, _internal_authorization), fields(event_id=req.event.id, email=req.event.user.email,fusionauth_user_id=req.event.user.id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<FusionAuthUserWebhook>,
 ) -> Result<Response, Response> {
     tracing::info!("delete user webhook");

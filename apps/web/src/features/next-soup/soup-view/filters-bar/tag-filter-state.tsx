@@ -1,10 +1,5 @@
 import type { PropertyFilter } from '@app/features/next-soup/filters/filter-store';
 import type { QueryStore } from '@app/features/next-soup/filters/filter-store/query-store';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_TAGS_FE_FLAG,
-  ENABLE_TAGS_FE_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { TagDot } from '@property/tags/TagDot';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
@@ -17,9 +12,6 @@ import type { SearchableOption } from './searchable-multi-select';
  * from attaching another observer to the same TanStack query.
  */
 export function createTagFilter(queryFilters: QueryStore) {
-  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
-    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
-  });
   const tagsQuery = useTagsQuery();
 
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
@@ -81,7 +73,6 @@ export function createTagFilter(queryFilters: QueryStore) {
   };
 
   return {
-    enabled: () => tagsFlag().enabled,
     hasTags: () => options().length > 0,
     tagSets,
     options,

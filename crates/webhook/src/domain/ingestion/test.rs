@@ -25,8 +25,8 @@ use documents::domain::events::{
     DocumentUpdatedMetadata,
 };
 use entity_access::domain::models::{
-    AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission, RequiredPermission,
-    UserTeamInfo,
+    AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
+    RequiredPermission, TeamRole, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use serde_json::Value;
@@ -95,6 +95,7 @@ impl EntityAccessService for MockAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -144,7 +145,7 @@ impl EntityAccessService for MockAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         unimplemented!("not used by webhook event ingestion")
     }
 

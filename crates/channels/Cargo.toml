@@ -64,7 +64,15 @@ outbound = [
   "macro_user_id/sqlx",
   "ports",
 ]
-ports = ["dep:tokio", "macro_event_broker/ports"]
+entity_mutation = [
+  "dep:entity_access",
+  "dep:entity_mutation",
+  "dep:model-entity",
+  "dep:rootcause",
+  "entity_access/ports",
+  "ports",
+]
+ports = ["dep:tokio"]
 schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
@@ -73,6 +81,7 @@ attachment = { path = "../attachment", optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
+entity_mutation = { path = "../entity_mutation", optional = true }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 contacts = { path = "../contacts", default-features = false, features = [
@@ -122,8 +131,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }
-macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
 macro_event_broker = { path = "../macro_event_broker" }

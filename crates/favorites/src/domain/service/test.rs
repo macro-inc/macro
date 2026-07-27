@@ -156,6 +156,35 @@ async fn add_favorite_forwards_authenticated_user_and_receipt_entity() {
 }
 
 #[tokio::test]
+async fn add_favorite_with_established_access_forwards_user_and_entity() {
+    let repo = FakeFavoritesRepo::new(0);
+    let service = FavoritesServiceImpl::new(repo.clone());
+    let user_id = user_id();
+    let entity = EntityType::Channel.with_entity_str("channel-123");
+
+    let favorite = service
+        .add_favorite_with_established_access(&user_id, &entity)
+        .await
+        .expect("favorite should be added");
+
+    assert_eq!(favorite.entity_type, EntityType::Channel);
+    assert_eq!(favorite.entity_id, "channel-123");
+    assert_eq!(
+        repo.recorded_calls(),
+        vec![
+            RepoCall::Count {
+                user_id: USER_ID.to_string(),
+            },
+            RepoCall::Add {
+                user_id: USER_ID.to_string(),
+                entity_type: EntityType::Channel,
+                entity_id: "channel-123".to_string(),
+            },
+        ]
+    );
+}
+
+#[tokio::test]
 async fn add_favorite_rejects_internal_receipt_before_repository_calls() {
     let repo = FakeFavoritesRepo::new(0);
     let service = FavoritesServiceImpl::new(repo.clone());

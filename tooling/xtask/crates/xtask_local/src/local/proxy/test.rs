@@ -35,6 +35,16 @@ fn websocket_services_use_a_matcher() {
     assert!(caddy.contains("handle_path /auth/* {"));
 }
 
+#[test]
+fn document_content_services_are_available_through_the_proxy() {
+    let caddy = caddyfile(Mode::Local, false);
+
+    assert!(caddy.contains("uri strip_prefix /sync"));
+    assert!(caddy.contains("reverse_proxy sync-service:8787"));
+    assert!(caddy.contains("handle_path /lexical/*"));
+    assert!(caddy.contains("reverse_proxy lexical-service:8096"));
+}
+
 /// The static-file block is the one route that differs by mode: LocalStack S3
 /// fan-out locally, the dev-pointed service in dev.
 #[test]

@@ -4,7 +4,7 @@ use crate::{
 };
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::{
     document::response::GetDocumentListResult,
     response::{GenericErrorResponse, GenericResponse},
@@ -22,21 +22,21 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn get_document_list_handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> impl IntoResponse {
     let document_search_response_date: Vec<GetDocumentListResult> =
         match macro_db_client::document::get_document_list(
             ctx.db.clone(),
-            user.macro_user_id.as_ref(),
+            user.authorization.user.macro_user_id.as_ref(),
         )
         .await
         {
             Ok(document_search_response_date) => document_search_response_date,
             Err(e) => {
-                tracing::error!(error=?e, user_id=?user.macro_user_id, "unable to get document search");
+                tracing::error!(error=?e, user_id=?user.authorization.user.macro_user_id, "unable to get document search");
                 return GenericResponse::builder()
                     .message("unable to get document search")
                     .is_error(true)

@@ -1,14 +1,10 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { useIsAuthenticated } from '@core/auth';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import {
-  ENABLE_TAGS_FE_FLAG,
-  ENABLE_TAGS_FE_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@phosphor/plus.svg';
 import DeleteIcon from '@phosphor/x.svg';
@@ -88,25 +84,29 @@ const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
 ]);
 
 export function EntityTagsSection(props: EntityTagsSectionProps) {
-  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
-    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
-  });
+  const tagsQuery = useTagsQuery();
+  const isAuthenticated = useIsAuthenticated();
 
   return (
-    <Show
-      when={tagsFlag().enabled && TAGGABLE_ENTITY_TYPES.has(props.entityType)}
-    >
+    <Show when={TAGGABLE_ENTITY_TYPES.has(props.entityType)}>
       <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
-        <Suspense fallback={<SidePanel.Loading />}>
-          <div class="text-xs">
-            <TagsRow
-              entityId={props.entityId}
-              entityType={props.entityType}
-              canEdit={props.canEdit}
-              triggerVariant="pill"
-            />
-          </div>
-        </Suspense>
+        <Show
+          when={isAuthenticated() !== false && !tagsQuery.isError}
+          fallback={
+            <span class="text-xs text-ink-extra-muted">Tags unavailable</span>
+          }
+        >
+          <Suspense fallback={<SidePanel.Loading />}>
+            <div class="text-xs">
+              <TagsRow
+                entityId={props.entityId}
+                entityType={props.entityType}
+                canEdit={props.canEdit}
+                triggerVariant="pill"
+              />
+            </div>
+          </Suspense>
+        </Show>
       </SidePanel.Section>
     </Show>
   );
@@ -118,10 +118,6 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
-
-  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
-    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
-  });
 
   const tagsQuery = useTagsQuery();
   const tagDefinitionIds = createMemo(
@@ -272,7 +268,6 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
           <Show
             when={
-              tagsFlag().enabled &&
               props.showTags !== false &&
               TAGGABLE_ENTITY_TYPES.has(props.entityType)
             }

@@ -5,7 +5,7 @@ use axum::extract::State;
 use chrono::{DateTime, Utc};
 use email_formatting::EmailDigestNotification;
 use itertools::{Either, Itertools};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
@@ -182,7 +182,7 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
     State(state): State<
         ::notification::inbound::http::NotificationRouterState<S, AuthorizationService>,
     >,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: Option<
         models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
@@ -194,12 +194,13 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
-    let cleanup_user_id = user.macro_user_id.clone();
+    let user_id = user.authorization.user.macro_user_id.clone();
+    let cleanup_user_id = user_id.clone();
     let axum::Json(response) = ::notification::inbound::http::list_user_notifications::<
         S,
         AuthorizationService,
         serde_json::Value,
-    >(&state, user.macro_user_id, query, cursor)
+    >(&state, user_id, query, cursor)
     .await?;
 
     let (notifs, failed): (Vec<_>, Vec<_>) = response
@@ -293,7 +294,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
     state: axum::extract::State<
         ::notification::inbound::http::NotificationRouterState<S, AuthorizationService>,
     >,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: Option<
         models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
@@ -351,7 +352,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
     state: axum::extract::State<
         ::notification::inbound::http::NotificationRouterState<S, AuthorizationService>,
     >,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     path: axum::extract::Path<::notification::inbound::http::EventItemIdPath>,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: Option<
@@ -408,7 +409,7 @@ async fn get_typed_notification_by_id<S: ::notification::domain::service::Notifi
     state: axum::extract::State<
         ::notification::inbound::http::NotificationRouterState<S, AuthorizationService>,
     >,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     path: axum::extract::Path<::notification::inbound::http::NotificationIdPath>,
 ) -> Result<
     axum::Json<ApiUserNotification>,
