@@ -98,7 +98,8 @@
         "group": "Account",
         "pages": [
           "account/teams",
-          "account/billing"
+          "account/billing",
+          "security"
         ]
       },
       "support",
