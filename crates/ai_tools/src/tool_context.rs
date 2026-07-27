@@ -47,6 +47,7 @@ use system_properties::{
     SystemPropertiesServiceImpl,
 };
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
+use tokio_util::task::TaskTracker;
 
 pub use ai_toolset::RequestContext;
 
@@ -81,6 +82,10 @@ pub type ToolEmailService = EmailServiceImpl<
     ToolEamService,
 >;
 
+/// Event broker used by AI tools, with spawned publish tasks tracked for
+/// graceful shutdown by the hosting process.
+pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+
 /// Type alias for the send-capable email service implementation used by user
 /// tools. Carries the real event broker: these tools mutate email state, and
 /// the Gmail-echo suppression means events skipped here are never recovered.
@@ -90,7 +95,7 @@ pub type ToolUserEmailService = EmailServiceImpl<
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    ToolEventBroker,
 >;
 
 /// Type alias for the channel list service implementation.
@@ -148,7 +153,7 @@ pub struct ChannelSideEffectClients {
     /// search-event queues.
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
-    pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    pub macro_event_broker: ToolEventBroker,
 }
 
 /// Build the channel AI tool context dispatching the same side effects as the
@@ -591,7 +596,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    ToolEventBroker,
 >;
 
 /// Type alias for the entity access service implementation

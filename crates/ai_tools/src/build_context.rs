@@ -47,6 +47,7 @@ use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+use tokio_util::task::TaskTracker;
 
 env_var! {
     struct ToolContextEnvVars {
@@ -97,9 +98,14 @@ maybe_env_var! {
 /// - `ENABLE_EMAIL_SCHEDULED_QUEUE`
 /// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
-#[tracing::instrument(skip(pool), err)]
+///
+/// `event_task_tracker` tracks event publishes started by the context. Callers
+/// must retain the original tracker, pass a clone here, and close and drain the
+/// original after the host stops broker-backed work.
+#[tracing::instrument(skip(pool, event_task_tracker), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
+    event_task_tracker: TaskTracker,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -254,6 +260,7 @@ pub async fn build_tool_service_context_from_env(
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_task_tracker,
     );
     // Channel messages sent by AI tools dispatch the same side effects as the
     // document-storage channel API (realtime, notifications, search indexing,
