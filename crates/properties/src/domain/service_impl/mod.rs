@@ -33,9 +33,9 @@ use std::sync::Arc;
 
 use super::error::PropertiesErr;
 use super::events::{
-    EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata, PropertyCreatedMetadata,
-    PropertyDeletedMetadata, PropertyMacroEvent, PropertyOptionCreatedMetadata,
-    PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata,
+    EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
+    PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
+    PropertyOptionCreatedMetadata, PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata,
 };
 use super::metadata;
 use super::model::{
@@ -215,6 +215,24 @@ where
             value: value.clone(),
             updated_at: property.updated_at,
         })
+    }
+
+    /// Publish each authoritative mutation returned by a bulk transaction.
+    fn publish_entity_property_selection_events(
+        &self,
+        selections: &[EntityPropertyOptionSelection],
+        access: &EditReceipt,
+    ) {
+        for mutation in selections
+            .iter()
+            .filter_map(|selection| selection.mutation.as_ref())
+        {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                access,
+            ));
+        }
     }
 
     /// The permission service, or the error every receipt-minting path maps a
@@ -782,6 +800,7 @@ where
 
         self.enqueue_property_upsert(access.entity_id(), entity_type)
             .await;
+        self.publish_entity_property_selection_events(&selections, access);
 
         Ok(selections)
     }
@@ -881,12 +900,13 @@ where
                 .map_err(anyhow::Error::from);
 
             match update_result {
-                Ok(mut selections) => {
+                Ok(selections) => {
                     let option_ids = selections
-                        .pop()
-                        .map(|selection| selection.option_ids)
+                        .last()
+                        .map(|selection| selection.option_ids.clone())
                         .unwrap_or_default();
                     self.enqueue_property_upsert(entity_id, entity_type).await;
+                    self.publish_entity_property_selection_events(&selections, &access[index]);
                     outcomes[index] = Some(EntityOptionUpdateOutcome::Applied { option_ids });
                 }
                 Err(error) => {
@@ -1437,11 +1457,20 @@ where
         let subject = self.resolve_subject(access).await?;
         let entity_reference =
             EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
-        Ok(self
-            .repository
+        self.repository
             .delete_entity_properties(&entity_reference)
             .await
-            .map_err(anyhow::Error::from)?)
+            .map_err(anyhow::Error::from)?;
+
+        self.publish_property_event(PropertyMacroEvent::entity_properties_cleared(
+            EntityPropertiesClearedMetadata {
+                entity_id: access.entity_id().to_string(),
+                entity_type: subject.storage_entity_type,
+                actor_user_id: access.authenticated_user().cloned(),
+            },
+        ));
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), fields(entity_property_id = %entity_property_id), err)]

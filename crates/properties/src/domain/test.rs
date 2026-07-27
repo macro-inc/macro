@@ -18,7 +18,7 @@ use entity_access::domain::models::{
     EntityPermission, EntityType as AccessEntityType, ViewAccessLevel,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_properties::{
     DataType, EntityType, PropertyOwner,
     api::{
@@ -79,6 +79,29 @@ fn entity_property_mutation(
     EntityPropertyMutationSnapshot {
         property: entity_property(entity_id, entity_type, property_definition_id),
         value,
+    }
+}
+
+fn entity_property_option_selection_for_event(
+    entity_property_id: Uuid,
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    option_ids: Vec<Uuid>,
+) -> crate::domain::model::EntityPropertyOptionSelection {
+    crate::domain::model::EntityPropertyOptionSelection {
+        property_definition_id,
+        option_ids: option_ids.clone(),
+        mutation: Some(EntityPropertyMutationSnapshot {
+            property: entity_property_for_event(
+                entity_property_id,
+                entity_id,
+                entity_type,
+                property_definition_id,
+                event_timestamp(),
+            ),
+            value: Some(PropertyValue::SelectOption(option_ids)),
+        }),
     }
 }
 
@@ -1013,6 +1036,16 @@ fn empty_update_property_option_request() -> UpdatePropertyOptionRequest {
 fn edit_receipt(entity_id: &str, entity_type: EntityType) -> EditReceipt {
     EditReceipt::dangerously_assert_authenticated_user(
         caller_user_id(),
+        entity_id,
+        canonical_entity_type(entity_type),
+    )
+}
+
+fn edit_receipt_for_user(user_id: &str, entity_id: &str, entity_type: EntityType) -> EditReceipt {
+    EditReceipt::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str(user_id)
+            .unwrap()
+            .into_owned(),
         entity_id,
         canonical_entity_type(entity_type),
     )
@@ -3002,6 +3035,392 @@ async fn mixed_document_bulk_read_batches_subtypes_and_returns_canonical_keys() 
             entity_type: AccessEntityType::Document,
         })
     );
+}
+
+#[tokio::test]
+async fn entity_properties_cleared_event_publishes_once_for_authenticated_and_internal_actors() {
+    let cases = [
+        (
+            edit_receipt("doc1", EntityType::Document),
+            serde_json::json!(caller_user_id()),
+        ),
+        (
+            EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document),
+            serde_json::Value::Null,
+        ),
+    ];
+
+    for (access, expected_actor) in cases {
+        let mut repo = MockPropertiesRepo::new();
+        repo.expect_delete_entity_properties()
+            .withf(|entity| {
+                entity.entity_id == "doc1" && entity.entity_type == EntityType::Document
+            })
+            .return_once(|_| Box::pin(async { Ok(()) }));
+        let event_broker = RecordingEventBroker::default();
+        let service = service_with_event_broker(repo, event_broker.clone());
+
+        service.delete_entity_properties(&access).await.unwrap();
+
+        let published = only_published_property_event(&event_broker);
+        assert_eq!(published.topic, "macro.properties");
+        assert_eq!(published.key, "doc1");
+        assert_eq!(
+            published.envelope["event_type"],
+            "entity_properties.cleared"
+        );
+        assert_eq!(
+            published.envelope["metadata"],
+            serde_json::json!({
+                "entity_id": "doc1",
+                "entity_type": "DOCUMENT",
+                "actor_user_id": expected_actor,
+            })
+        );
+    }
+}
+
+#[tokio::test]
+async fn entity_properties_cleared_event_repository_failure_publishes_nothing() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_delete_entity_properties()
+        .return_once(|_| Box::pin(async { Err(anyhow!("clear failed")) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .delete_entity_properties(&edit_receipt("doc1", EntityType::Document))
+        .await;
+
+    assert!(result.is_err());
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn bulk_entity_property_event_publishes_every_property_snapshot() {
+    use crate::domain::model::EntityPropertyOptionUpdate;
+
+    let first_definition_id = Uuid::from_u128(0xB001);
+    let second_definition_id = Uuid::from_u128(0xB002);
+    let first_entity_property_id = Uuid::from_u128(0xB003);
+    let second_entity_property_id = Uuid::from_u128(0xB004);
+    let first_requested_option_id = Uuid::from_u128(0xB005);
+    let second_requested_option_id = Uuid::from_u128(0xB006);
+    let first_final_option_ids = vec![Uuid::from_u128(0xB007), first_requested_option_id];
+    let second_final_option_ids = vec![Uuid::from_u128(0xB008), second_requested_option_id];
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition()
+        .times(2)
+        .returning(|property_definition_id| {
+            Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, true))) })
+        });
+    repo.expect_count_valid_property_options()
+        .times(2)
+        .returning(|_, option_ids| {
+            let option_count = option_ids.len() as i64;
+            Box::pin(async move { Ok(option_count) })
+        });
+    let persisted_first_final_option_ids = first_final_option_ids.clone();
+    let persisted_second_final_option_ids = second_final_option_ids.clone();
+    repo.expect_bulk_update_entity_property_options()
+        .return_once(move |_, _, _| {
+            Box::pin(async move {
+                Ok(vec![
+                    entity_property_option_selection_for_event(
+                        first_entity_property_id,
+                        "doc1",
+                        EntityType::Document,
+                        first_definition_id,
+                        persisted_first_final_option_ids,
+                    ),
+                    entity_property_option_selection_for_event(
+                        second_entity_property_id,
+                        "doc1",
+                        EntityType::Document,
+                        second_definition_id,
+                        persisted_second_final_option_ids,
+                    ),
+                ])
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let selections = service
+        .bulk_update_entity_property_options(
+            &edit_receipt("doc1", EntityType::Document),
+            vec![
+                EntityPropertyOptionUpdate {
+                    property_definition_id: first_definition_id,
+                    add_option_ids: vec![first_requested_option_id],
+                    remove_option_ids: Vec::new(),
+                },
+                EntityPropertyOptionUpdate {
+                    property_definition_id: second_definition_id,
+                    add_option_ids: vec![second_requested_option_id],
+                    remove_option_ids: Vec::new(),
+                },
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(selections[0].option_ids, first_final_option_ids);
+    assert_eq!(selections[1].option_ids, second_final_option_ids);
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 2);
+    for event in &events {
+        assert_eq!(event.topic, "macro.properties");
+        assert_eq!(event.key, "doc1");
+        assert_eq!(event.envelope["event_type"], "entity_property.updated");
+        assert_eq!(
+            event.envelope["metadata"]["actor_user_id"],
+            caller_user_id().to_string()
+        );
+    }
+    assert_eq!(
+        events[0].envelope["metadata"],
+        serde_json::json!({
+            "entity_property_id": first_entity_property_id,
+            "entity_id": "doc1",
+            "entity_type": "DOCUMENT",
+            "property_definition_id": first_definition_id,
+            "actor_user_id": caller_user_id(),
+            "value": {
+                "type": "SelectOption",
+                "value": first_final_option_ids,
+            },
+            "updated_at": event_timestamp(),
+        })
+    );
+    assert_eq!(
+        events[1].envelope["metadata"],
+        serde_json::json!({
+            "entity_property_id": second_entity_property_id,
+            "entity_id": "doc1",
+            "entity_type": "DOCUMENT",
+            "property_definition_id": second_definition_id,
+            "actor_user_id": caller_user_id(),
+            "value": {
+                "type": "SelectOption",
+                "value": second_final_option_ids,
+            },
+            "updated_at": event_timestamp(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn bulk_entity_property_event_cross_entity_preserves_outcomes_and_source_actors() {
+    use crate::domain::model::EntityOptionUpdateOutcome;
+
+    let property_definition_id = Uuid::from_u128(0xB101);
+    let requested_option_id = Uuid::from_u128(0xB102);
+    let a_final_option_id = Uuid::from_u128(0xB103);
+    let z_final_option_id = Uuid::from_u128(0xB104);
+    let a_entity_property_id = Uuid::from_u128(0xB105);
+    let z_entity_property_id = Uuid::from_u128(0xB106);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, true))) })
+    });
+    repo.expect_count_valid_property_options()
+        .return_once(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_bulk_update_entity_property_options()
+        .times(3)
+        .returning(move |entity_id, _, _| match entity_id {
+            "a-good" => Box::pin(async move {
+                Ok(vec![entity_property_option_selection_for_event(
+                    a_entity_property_id,
+                    "a-good",
+                    EntityType::Document,
+                    property_definition_id,
+                    vec![a_final_option_id],
+                )])
+            }),
+            "m-failed" => Box::pin(async { Err(anyhow!("entity transaction failed")) }),
+            "z-good" => Box::pin(async move {
+                Ok(vec![entity_property_option_selection_for_event(
+                    z_entity_property_id,
+                    "z-good",
+                    EntityType::Document,
+                    property_definition_id,
+                    vec![z_final_option_id],
+                )])
+            }),
+            unexpected => panic!("unexpected entity {unexpected}"),
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+    let receipts = vec![
+        edit_receipt_for_user("macro|actor-z@test.com", "z-good", EntityType::Document),
+        edit_receipt_for_user(
+            "macro|actor-failed@test.com",
+            "m-failed",
+            EntityType::Document,
+        ),
+        edit_receipt_for_user("macro|actor-a@test.com", "a-good", EntityType::Document),
+    ];
+
+    let outcomes = service
+        .bulk_update_entities_property_options(
+            &receipts,
+            property_definition_id,
+            vec![requested_option_id],
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        &outcomes[0],
+        EntityOptionUpdateOutcome::Applied { option_ids }
+            if option_ids == &[z_final_option_id]
+    ));
+    assert!(matches!(
+        &outcomes[1],
+        EntityOptionUpdateOutcome::Failed { .. }
+    ));
+    assert!(matches!(
+        &outcomes[2],
+        EntityOptionUpdateOutcome::Applied { option_ids }
+            if option_ids == &[a_final_option_id]
+    ));
+
+    // Input order is z, m, a, while lock order is a, m, z. Successful
+    // transactions publish in lock order without disturbing response alignment.
+    let events = event_broker.events();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].key, "a-good");
+    assert_eq!(events[1].key, "z-good");
+    assert_eq!(
+        events[0].envelope["metadata"]["actor_user_id"],
+        "macro|actor-a@test.com"
+    );
+    assert_eq!(
+        events[1].envelope["metadata"]["actor_user_id"],
+        "macro|actor-z@test.com"
+    );
+    assert_eq!(
+        events[0].envelope["metadata"]["value"],
+        serde_json::json!({
+            "type": "SelectOption",
+            "value": [a_final_option_id],
+        })
+    );
+    assert_eq!(
+        events[1].envelope["metadata"]["value"],
+        serde_json::json!({
+            "type": "SelectOption",
+            "value": [z_final_option_id],
+        })
+    );
+}
+
+#[tokio::test]
+async fn bulk_entity_property_event_cross_entity_invalid_type_does_not_publish() {
+    use crate::domain::model::EntityOptionUpdateOutcome;
+
+    let property_definition_id = SystemPropertyKey::STAGE_UUID;
+    let requested_option_id = Uuid::from_u128(0xB201);
+    let company_final_option_id = Uuid::from_u128(0xB202);
+    let company_entity_property_id = Uuid::from_u128(0xB203);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, true))) })
+    });
+    repo.expect_count_valid_property_options()
+        .return_once(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_bulk_update_entity_property_options()
+        .times(1)
+        .withf(|entity_id, _, _| entity_id == "company1")
+        .return_once(move |_, _, _| {
+            Box::pin(async move {
+                Ok(vec![entity_property_option_selection_for_event(
+                    company_entity_property_id,
+                    "company1",
+                    EntityType::Company,
+                    property_definition_id,
+                    vec![company_final_option_id],
+                )])
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+    let receipts = vec![
+        edit_receipt("doc1", EntityType::Document),
+        edit_receipt("company1", EntityType::Company),
+    ];
+
+    let outcomes = service
+        .bulk_update_entities_property_options(
+            &receipts,
+            property_definition_id,
+            vec![requested_option_id],
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        &outcomes[0],
+        EntityOptionUpdateOutcome::Failed { .. }
+    ));
+    assert!(matches!(
+        &outcomes[1],
+        EntityOptionUpdateOutcome::Applied { option_ids }
+            if option_ids == &[company_final_option_id]
+    ));
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.key, "company1");
+    assert_eq!(published.envelope["metadata"]["entity_type"], "COMPANY");
+}
+
+#[tokio::test]
+async fn bulk_entity_property_event_removal_only_no_row_does_not_publish() {
+    use crate::domain::model::{EntityOptionUpdateOutcome, EntityPropertyOptionSelection};
+
+    let property_definition_id = Uuid::from_u128(0xB301);
+    let absent_option_id = Uuid::from_u128(0xB302);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, true))) })
+    });
+    repo.expect_count_valid_property_options().never();
+    repo.expect_bulk_update_entity_property_options()
+        .return_once(move |_, _, _| {
+            Box::pin(async move {
+                Ok(vec![EntityPropertyOptionSelection {
+                    property_definition_id,
+                    option_ids: Vec::new(),
+                    mutation: None,
+                }])
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+    let receipts = vec![edit_receipt("doc1", EntityType::Document)];
+
+    let outcomes = service
+        .bulk_update_entities_property_options(
+            &receipts,
+            property_definition_id,
+            Vec::new(),
+            vec![absent_option_id],
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        &outcomes[0],
+        EntityOptionUpdateOutcome::Applied { option_ids } if option_ids.is_empty()
+    ));
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
