@@ -116,6 +116,16 @@ input EntitySharePolicyInput {
 }
 
 """
+Item-style permission represented by the viewer's effective access level.
+"""
+type GraphqlAccessLevelPermission {
+	"""
+	Effective access level held by the viewer.
+	"""
+	accessLevel: GraphqlEntityAccessLevel!
+}
+
+"""
 A Boolean property value.
 """
 type GraphqlBooleanPropertyValue {
@@ -312,6 +322,16 @@ enum GraphqlChannelParticipantRole {
 }
 
 """
+Channel permission represented by the viewer's participant role.
+"""
+type GraphqlChannelRolePermission {
+	"""
+	Channel participant role held by the viewer.
+	"""
+	role: GraphqlChannelParticipantRole!
+}
+
+"""
 The two operands of a recursive `ChannelThreadFilterExpr` binary expression.
 """
 input GraphqlChannelThreadBinaryExpr {
@@ -397,6 +417,16 @@ enum GraphqlChannelTypeFilter {
 	The team option.
 	"""
 	TEAM
+}
+
+"""
+View-only channel permission without participant membership.
+"""
+type GraphqlChannelViewOnlyPermission {
+	"""
+	Whether the viewer is limited to view-only channel access.
+	"""
+	isViewOnly: Boolean!
 }
 
 """
@@ -1013,49 +1043,10 @@ union GraphqlEntityMutationResult = GraphqlMutationSuccess | GraphqlMutationErro
 """
 Permission held by the current viewer for an entity.
 
-One of `accessLevel`, `channelRole`, or `teamRole` is populated as selected
-by `kind`; view-only channel access has no accompanying role field.
+The concrete union member identifies whether access comes from an item
+access level, view-only channel access, a channel role, or a team role.
 """
-type GraphqlEntityPermission {
-	"""
-	The permission model represented by this value.
-	"""
-	kind: GraphqlEntityPermissionKind!
-	"""
-	Item access level when `kind` is `ACCESS_LEVEL`.
-	"""
-	accessLevel: GraphqlEntityAccessLevel
-	"""
-	Channel participant role when `kind` is `CHANNEL_ROLE`.
-	"""
-	channelRole: GraphqlChannelParticipantRole
-	"""
-	Team membership role when `kind` is `TEAM_ROLE`.
-	"""
-	teamRole: GraphqlTeamRole
-}
-
-"""
-The shape of an entity permission.
-"""
-enum GraphqlEntityPermissionKind {
-	"""
-	Item-style view/comment/edit/owner access.
-	"""
-	ACCESS_LEVEL
-	"""
-	View-only channel access without active participant membership.
-	"""
-	CHANNEL_VIEW_ONLY
-	"""
-	Channel participant membership.
-	"""
-	CHANNEL_ROLE
-	"""
-	Team membership.
-	"""
-	TEAM_ROLE
-}
+union GraphqlEntityPermission = GraphqlAccessLevelPermission | GraphqlChannelViewOnlyPermission | GraphqlChannelRolePermission | GraphqlTeamRolePermission
 
 """
 Reference to another canonical entity embedded in entity metadata.
@@ -3046,6 +3037,16 @@ enum GraphqlTeamRole {
 	Team member.
 	"""
 	MEMBER
+}
+
+"""
+Team permission represented by the viewer's membership role.
+"""
+type GraphqlTeamRolePermission {
+	"""
+	Team membership role held by the viewer.
+	"""
+	role: GraphqlTeamRole!
 }
 
 """
