@@ -22,8 +22,8 @@ use uuid::Uuid;
 
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyDefinitionOwner, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome, ViewReceipt,
+    EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+    TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -147,13 +147,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         owner: PropertyDefinitionOwner<'a>,
     ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
 
-    /// Return the owner's tag definition, creating it on first use.
+    /// Return the owner's tag definition and whether it was created on this call.
     // Explicit lifetime required by mockall's automock expansion.
     #[allow(clippy::needless_lifetimes)]
     fn get_or_create_tag_definition<'a>(
         &self,
         owner: PropertyDefinitionOwner<'a>,
-    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<GetOrCreateTagDefinitionResult, Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(

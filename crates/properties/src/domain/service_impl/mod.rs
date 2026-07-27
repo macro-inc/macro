@@ -1151,13 +1151,13 @@ where
             ),
         };
 
-        let definition = self
+        let result = self
             .repository
             .get_or_create_tag_definition(owner)
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.build_tag_set(scope, Some(definition)).await
+        self.build_tag_set(scope, Some(result.definition)).await
     }
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]

@@ -154,6 +154,15 @@ impl<'a> PropertyDefinitionOwner<'a> {
     }
 }
 
+/// Result of getting or creating an owner's tag definition.
+#[derive(Debug, Clone)]
+pub struct GetOrCreateTagDefinitionResult {
+    /// The owner's tag property definition.
+    pub definition: PropertyDefinition,
+    /// Whether this operation created the definition.
+    pub created: bool,
+}
+
 /// Which owner a tag set belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagScope {

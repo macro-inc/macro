@@ -14,7 +14,8 @@ use super::{
     property_definition_queries, property_option_queries, task_property_queries,
 };
 use crate::domain::model::{
-    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
+    EntityPropertiesKey, EntityPropertyInfo, GetOrCreateTagDefinitionResult,
+    PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -228,7 +229,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn get_or_create_tag_definition(
         &self,
         owner: PropertyDefinitionOwner<'_>,
-    ) -> Result<PropertyDefinition, Self::Err> {
+    ) -> Result<GetOrCreateTagDefinitionResult, Self::Err> {
         property_definition_queries::get_or_create_tag_definition(&self.pool, owner).await
     }
 
