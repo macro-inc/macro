@@ -83,7 +83,7 @@ export interface MacroOpts {
   /** Signing secret for verifying incoming webhooks. Falls back to MACRO_WEBHOOK_SECRET. */
   webhookSecret?: string;
   wsVerify?: string;
-  /** User id sent as `x-requested-as` on every request. Set via
+  /** User id sent as `x-macro-bot-for-macro-user-id` on every request. Set via
    * `macro.requestedAs(userId)` rather than directly. */
   requestedAs?: string;
 }

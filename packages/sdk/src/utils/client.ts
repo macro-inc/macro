@@ -84,7 +84,7 @@ export class MacroClient {
         typeof this.token === 'function' ? await this.token() : this.token;
       request.headers.set('Authorization', `Bearer ${tok}`);
       if (this.requestedAs) {
-        request.headers.set('x-requested-as', this.requestedAs);
+        request.headers.set('x-macro-bot-for-macro-user-id', this.requestedAs);
       }
       return request;
     });
