@@ -36,7 +36,6 @@ mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
 mod sdk_check;
-mod sdk_publish;
 mod steps;
 mod vars;
 mod web_app_check_main;
@@ -267,11 +266,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
-    },
-    WorkflowFile {
-        slug: "sdk_publish",
-        file_name: "sdk-publish.yml",
-        render_yaml: || render_gh_workflow(sdk_publish::sdk_publish)(),
     },
 ];
 

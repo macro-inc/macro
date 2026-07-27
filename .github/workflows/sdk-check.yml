@@ -26,15 +26,16 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun,rust
-        path: /nix
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
