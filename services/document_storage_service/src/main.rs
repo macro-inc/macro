@@ -1100,6 +1100,7 @@ async fn main() -> anyhow::Result<()> {
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
             editing_worker_client,
+            properties_service: api_context.properties_service.clone(),
         };
 
         tokio::spawn(async move {

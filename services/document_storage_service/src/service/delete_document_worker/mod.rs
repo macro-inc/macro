@@ -4,7 +4,7 @@ use documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 use macro_sha_count_client::Redis;
 use sync_service_client::SyncServiceClient;
 
-use crate::service::s3::S3;
+use crate::{api::context::PropertiesService, service::s3::S3};
 
 mod handle;
 #[cfg(test)]
@@ -19,6 +19,7 @@ pub struct DeleteDocumentWorkerContext {
     pub redis_client: Arc<Redis>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub editing_worker_client: Arc<ReqwestEditingWorkerClient>,
+    pub properties_service: Arc<PropertiesService>,
 }
 
 /// Runs the delete document worker in an infinite loop, restarting on failure.
