@@ -73,14 +73,7 @@ input DuplicateEntityInput {
 	displayName: String
 }
 
-"""
-Batch mutation payload. Results preserve input order and allow partial
-success across independently stored entity kinds.
-"""
 type EntityMutationPayload {
-	"""
-	Per-input mutation outcomes.
-	"""
 	results: [GraphqlEntityMutationResult!]!
 }
 
@@ -864,6 +857,11 @@ enum GraphqlEmailView {
 	OTHER
 }
 
+type GraphqlEntity {
+	id: ID!
+	entityType: GraphqlEntityType!
+}
+
 """
 Item access level resolved for the current viewer.
 """
@@ -963,20 +961,6 @@ type GraphqlEntityMetadata {
 }
 
 """
-User-safe per-entity mutation error.
-"""
-type GraphqlEntityMutationError {
-	"""
-	Machine-readable error category.
-	"""
-	code: GraphqlEntityMutationErrorCode!
-	"""
-	User-safe explanation.
-	"""
-	message: String!
-}
-
-"""
 Stable machine-readable mutation error code.
 """
 enum GraphqlEntityMutationErrorCode {
@@ -1007,48 +991,9 @@ enum GraphqlEntityMutationErrorCode {
 }
 
 """
-Embedded canonical entity reference returned by mutation payloads.
-
-`entityId` is deliberately not named `id`: this object references another
-entity and must not itself become a normalized cache record.
-"""
-type GraphqlEntityMutationRef {
-	"""
-	Entity kind.
-	"""
-	type: GraphqlEntityType!
-	"""
-	Canonical entity id.
-	"""
-	entityId: ID!
-}
-
-"""
 Result for one requested entity in a batch.
 """
-type GraphqlEntityMutationResult {
-	"""
-	Whether this item succeeded.
-	"""
-	success: Boolean!
-	"""
-	Original reference supplied by the caller.
-	"""
-	requested: GraphqlEntityMutationRef!
-	"""
-	Updated or newly created entity reference.
-	"""
-	entity: GraphqlEntityMutationRef
-	"""
-	Records known to have changed, including containers and any cascade
-	descendants exposed by the delegated domain service.
-	"""
-	affectedEntities: [GraphqlEntityMutationRef!]!
-	"""
-	Per-item failure, if any.
-	"""
-	error: GraphqlEntityMutationError
-}
+union GraphqlEntityMutationResult = GraphqlMutationSuccess | GraphqlMutationError
 
 """
 Permission held by the current viewer for an entity.
@@ -1311,6 +1256,15 @@ type GraphqlLinkPropertyValue {
 	The stored URLs.
 	"""
 	urls: [String!]!
+}
+
+type GraphqlMutationError {
+	errorCode: GraphqlEntityMutationErrorCode!
+	message: String!
+}
+
+type GraphqlMutationSuccess {
+	affectedEntities: [GraphqlEntity!]!
 }
 
 """
