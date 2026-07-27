@@ -29,13 +29,14 @@ const graphqlHistorySelection = selectRecords(
 );
 
 type GraphqlHistoryRecord = GraphqlHistoryItemFieldsFragment;
-type GraphqlDocumentHistoryRecord = Extract<
-  GraphqlHistoryRecord,
+type GraphqlHistoryEntity = GraphqlHistoryRecord['entity'];
+type GraphqlDocumentHistoryEntity = Extract<
+  GraphqlHistoryEntity,
   { __typename: 'GraphqlSoupDocument' }
 >;
 
 function transformDocumentSubType(
-  subType: GraphqlDocumentHistoryRecord['subType']
+  subType: GraphqlDocumentHistoryEntity['subType']
 ): DocumentHistoryItem['subType'] {
   if (!subType) return subType;
 
@@ -52,56 +53,57 @@ function transformDocumentSubType(
   }
 }
 
-/** Maps a normalized GraphQL entity projection to the legacy history shape. */
+/** Maps a normalized GraphQL Soup item to the legacy history shape. */
 export function transformGraphqlHistoryItem(
   record: GraphqlHistoryRecord
 ): HistoryItem | undefined {
-  switch (record.__typename) {
+  const entity = record.entity;
+  switch (entity.__typename) {
     case 'GraphqlSoupDocument': {
-      const subType = transformDocumentSubType(record.subType);
+      const subType = transformDocumentSubType(entity.subType);
       const safeName = itemToSafeName({
         type: 'document',
-        name: record.name,
-        fileType: record.fileType,
+        name: entity.documentName,
+        fileType: entity.fileType,
         subType,
       });
       return {
-        id: record.id,
+        id: entity.id,
         type: 'document',
-        name: formatDocumentName(safeName, record.fileType, {
+        name: formatDocumentName(safeName, entity.fileType, {
           fullyQualifiedBlockName: true,
         }),
-        rawName: record.name,
-        ownerId: record.ownerId,
-        fileType: record.fileType,
+        rawName: entity.documentName,
+        ownerId: entity.ownerId,
+        fileType: entity.fileType,
         subType,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
-        deletedAt: record.deletedAt,
+        createdAt: entity.createdAt,
+        updatedAt: entity.updatedAt,
+        deletedAt: entity.deletedAt,
       };
     }
     case 'GraphqlSoupChat':
       return {
-        id: record.id,
+        id: entity.id,
         type: 'chat',
-        name: itemToSafeName({ type: 'chat', name: record.name }),
-        rawName: record.name,
-        ownerId: record.ownerId,
-        isPersistent: record.isPersistent,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
-        deletedAt: record.deletedAt,
+        name: itemToSafeName({ type: 'chat', name: entity.chatName }),
+        rawName: entity.chatName,
+        ownerId: entity.ownerId,
+        isPersistent: entity.isPersistent,
+        createdAt: entity.createdAt,
+        updatedAt: entity.updatedAt,
+        deletedAt: entity.deletedAt,
       };
     case 'GraphqlSoupProject':
       return {
-        id: record.id,
+        id: entity.id,
         type: 'project',
-        name: itemToSafeName({ type: 'project', name: record.name }),
-        rawName: record.name,
-        ownerId: record.ownerId,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
-        deletedAt: record.deletedAt,
+        name: itemToSafeName({ type: 'project', name: entity.projectName }),
+        rawName: entity.projectName,
+        ownerId: entity.ownerId,
+        createdAt: entity.createdAt,
+        updatedAt: entity.updatedAt,
+        deletedAt: entity.deletedAt,
       };
     default:
       return undefined;
@@ -109,12 +111,13 @@ export function transformGraphqlHistoryItem(
 }
 
 function getSortTimestamp(record: GraphqlHistoryRecord): number {
-  switch (record.__typename) {
+  const entity = record.entity;
+  switch (entity.__typename) {
     case 'GraphqlSoupDocument':
     case 'GraphqlSoupChat':
     case 'GraphqlSoupProject': {
       const timestamp = Date.parse(
-        record.viewedAt ?? record.updatedAt ?? record.createdAt
+        entity.viewedAt ?? entity.updatedAt ?? entity.createdAt
       );
       return Number.isNaN(timestamp) ? 0 : timestamp;
     }
@@ -124,8 +127,8 @@ function getSortTimestamp(record: GraphqlHistoryRecord): number {
 }
 
 /**
- * Reads complete document, chat, and project entity projections. The cache's
- * total record count also includes wrappers and nested normalized records.
+ * Reads complete Soup item projections and maps document, chat, and project
+ * entities to the history shape.
  */
 export async function readCachedGraphqlHistoryItems(
   cacheHost: Pick<CacheHost, 'readRecords'>
