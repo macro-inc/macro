@@ -25,6 +25,7 @@ use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use crate::domain::{
+    models::SoupRealtimeUpdate,
     ports::{SoupItemReader, SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
     service::SoupRealtimeServiceImpl,
 };
@@ -64,10 +65,14 @@ fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> 
     entity_type.with_entity_string(entity_id.to_string())
 }
 
-fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<Entity<'static>> {
+fn update(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimeUpdate {
+    SoupRealtimeUpdate::for_entity(entity(entity_type, entity_id))
+}
+
+fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeUpdate> {
     match event {
         DocumentTopicEvent::Updated(metadata) => {
-            vec![entity(EntityType::Document, &metadata.document_id)]
+            vec![update(EntityType::Document, &metadata.document_id)]
         }
         DocumentTopicEvent::Created(_)
         | DocumentTopicEvent::Deleted(_)
@@ -76,7 +81,7 @@ fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<Entity<'stati
     }
 }
 
-fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<Entity<'static>> {
+fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimeUpdate> {
     match event {
         ProjectTopicEvent::Updated(metadata)
             if metadata
@@ -84,7 +89,7 @@ fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<Entity<'static>
                 .as_ref()
                 .map_or(metadata.previous_parent_id.is_none(), String::is_empty) =>
         {
-            vec![entity(EntityType::Project, &metadata.project_id)]
+            vec![update(EntityType::Project, &metadata.project_id)]
         }
         ProjectTopicEvent::Created(_)
         | ProjectTopicEvent::Updated(_)
@@ -95,7 +100,7 @@ fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<Entity<'static>
     }
 }
 
-fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<Entity<'static>> {
+fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
     let chat_id = match event {
         ChatTopicEvent::Updated(metadata) => &metadata.chat_id,
         ChatTopicEvent::MessageSent(metadata) => &metadata.chat_id,
@@ -105,10 +110,10 @@ fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<Entity<'static>> {
         | ChatTopicEvent::Restored(_)
         | ChatTopicEvent::Copied(_) => return Vec::new(),
     };
-    vec![entity(EntityType::Chat, chat_id)]
+    vec![update(EntityType::Chat, chat_id)]
 }
 
-fn entities_from_email_event(event: &EmailTopicEvent) -> Vec<Entity<'static>> {
+fn entities_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimeUpdate> {
     let thread_id = match event {
         EmailTopicEvent::MessageReceived(metadata) if !metadata.is_spam_or_trash => {
             metadata.thread_id
@@ -129,29 +134,31 @@ fn entities_from_email_event(event: &EmailTopicEvent) -> Vec<Entity<'static>> {
         | EmailTopicEvent::MessageReceived(_)
         | EmailTopicEvent::ThreadTrashed(_) => return Vec::new(),
     };
-    vec![entity(EntityType::EmailThread, thread_id)]
+    vec![update(EntityType::EmailThread, thread_id)]
 }
 
 fn channel_and_thread_entities(
     channel_id: impl ToString,
     message_id: impl ToString,
     thread_id: Option<impl ToString>,
-) -> Vec<Entity<'static>> {
+) -> Vec<SoupRealtimeUpdate> {
+    let channel = entity(EntityType::Channel, channel_id);
+    let thread = entity(
+        EntityType::ChannelMessage,
+        thread_id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| message_id.to_string()),
+    );
     vec![
-        entity(EntityType::Channel, channel_id),
-        entity(
-            EntityType::ChannelMessage,
-            thread_id
-                .map(|id| id.to_string())
-                .unwrap_or_else(|| message_id.to_string()),
-        ),
+        SoupRealtimeUpdate::for_entity(channel.clone()),
+        SoupRealtimeUpdate::new(thread, channel),
     ]
 }
 
-fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<Entity<'static>> {
+fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimeUpdate> {
     match event {
         ChannelTopicEvent::Updated(metadata) => {
-            vec![entity(EntityType::Channel, metadata.channel_id)]
+            vec![update(EntityType::Channel, metadata.channel_id)]
         }
         ChannelTopicEvent::MessagePosted(metadata) => channel_and_thread_entities(
             metadata.channel_id,
@@ -164,9 +171,13 @@ fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<Entity<'static>
             metadata.thread_id,
         ),
         ChannelTopicEvent::MessageDeleted(metadata) => {
-            let mut entities = vec![entity(EntityType::Channel, metadata.channel_id)];
+            let channel = entity(EntityType::Channel, metadata.channel_id);
+            let mut entities = vec![SoupRealtimeUpdate::for_entity(channel.clone())];
             if let Some(thread_id) = metadata.thread_id {
-                entities.push(entity(EntityType::ChannelMessage, thread_id));
+                entities.push(SoupRealtimeUpdate::new(
+                    entity(EntityType::ChannelMessage, thread_id),
+                    channel,
+                ));
             }
             entities
         }
@@ -181,16 +192,16 @@ fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<Entity<'static>
             metadata.thread_id,
         ),
         ChannelTopicEvent::ParticipantAdded(metadata) => {
-            vec![entity(EntityType::Channel, metadata.channel_id)]
+            vec![update(EntityType::Channel, metadata.channel_id)]
         }
         ChannelTopicEvent::ParticipantRemoved(metadata) => {
-            vec![entity(EntityType::Channel, metadata.channel_id)]
+            vec![update(EntityType::Channel, metadata.channel_id)]
         }
         ChannelTopicEvent::Created(_) | ChannelTopicEvent::Deleted(_) => Vec::new(),
     }
 }
 
-fn entities_from_event(event: &DeclaredMacroEvent) -> Vec<Entity<'static>> {
+fn entities_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimeUpdate> {
     match event {
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
             entities_from_document_event(&event.event().event)
@@ -223,23 +234,25 @@ async fn process_event<S: SoupRealtimeService>(
     partition: i32,
     offset: i64,
 ) -> Result<EventOutcome, Report> {
-    let entities = entities_from_event(event);
-    if entities.is_empty() {
+    let updates = entities_from_event(event);
+    if updates.is_empty() {
         tracing::trace!("ignoring event without a hydratable Soup impact");
         return Ok(EventOutcome::Ignored);
     }
 
-    for entity in entities {
-        notify_with_retry(service, entity, partition, offset).await?;
+    for update in updates {
+        notify_with_retry(service, update, partition, offset).await?;
     }
     Ok(EventOutcome::Notified)
 }
 
 #[tracing::instrument(
-    skip(service),
+    skip(service, update),
     fields(
-        entity_type = %entity.entity_type,
-        entity_id = %entity.entity_id,
+        entity_type = %update.item.entity_type,
+        entity_id = %update.item.entity_id,
+        access_source_type = %update.access_source.entity_type,
+        access_source_id = %update.access_source.entity_id,
         partition,
         offset,
     ),
@@ -247,17 +260,17 @@ async fn process_event<S: SoupRealtimeService>(
 )]
 async fn notify_with_retry<S: SoupRealtimeService>(
     service: &S,
-    entity: Entity<'static>,
+    update: SoupRealtimeUpdate,
     partition: i32,
     offset: i64,
 ) -> Result<(), Report> {
     let mut attempt = 0u32;
     Retry::start(service_retry_strategy(), || {
         attempt += 1;
-        let entity = entity.clone();
+        let update = update.clone();
         async move {
             tracing::trace!(attempt, "notifying realtime Soup recipients");
-            let result = service.notify_users(entity).await;
+            let result = service.notify_users(update).await;
             match &result {
                 Ok(()) => tracing::trace!(attempt, "realtime Soup recipients notified"),
                 Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {

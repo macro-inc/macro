@@ -100,8 +100,15 @@ struct FlakyService {
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(&self, entity: Entity<'static>) -> Result<(), Report> {
-        self.entities.lock().expect("entities lock").push(entity);
+    async fn notify_users(
+        &self,
+        update: impl Into<SoupRealtimeUpdate> + Send,
+    ) -> Result<(), Report> {
+        let update = update.into();
+        self.entities
+            .lock()
+            .expect("entities lock")
+            .push(update.item);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if attempt <= self.failures {
             Err(rootcause::report!("temporary fan-out failure"))
@@ -156,7 +163,7 @@ fn project_updates_only_refresh_root_project_items() {
 
     let entities = entities_from_project_event(&root);
     assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].entity_type, EntityType::Project);
+    assert_eq!(entities[0].item.entity_type, EntityType::Project);
     assert!(entities_from_project_event(&nested).is_empty());
 }
 
@@ -173,8 +180,8 @@ fn chat_message_events_refresh_the_chat_item() {
 
     let entities = entities_from_chat_event(&event);
     assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].entity_type, EntityType::Chat);
-    assert_eq!(entities[0].entity_id, DOCUMENT_ID);
+    assert_eq!(entities[0].item.entity_type, EntityType::Chat);
+    assert_eq!(entities[0].item.entity_id, DOCUMENT_ID);
 }
 
 #[test]
@@ -191,8 +198,8 @@ fn email_thread_state_events_refresh_the_thread_item() {
 
     let entities = entities_from_email_event(&event);
     assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].entity_type, EntityType::EmailThread);
-    assert_eq!(entities[0].entity_id, thread_id.to_string());
+    assert_eq!(entities[0].item.entity_type, EntityType::EmailThread);
+    assert_eq!(entities[0].item.entity_id, thread_id.to_string());
 }
 
 #[test]
@@ -211,10 +218,12 @@ fn channel_attachment_events_refresh_the_channel_and_root_thread() {
 
     let entities = entities_from_channel_event(&event);
     assert_eq!(entities.len(), 2);
-    assert_eq!(entities[0].entity_type, EntityType::Channel);
-    assert_eq!(entities[0].entity_id, channel_id.to_string());
-    assert_eq!(entities[1].entity_type, EntityType::ChannelMessage);
-    assert_eq!(entities[1].entity_id, thread_id.to_string());
+    assert_eq!(entities[0].item.entity_type, EntityType::Channel);
+    assert_eq!(entities[0].item.entity_id, channel_id.to_string());
+    assert_eq!(entities[1].item.entity_type, EntityType::ChannelMessage);
+    assert_eq!(entities[1].item.entity_id, thread_id.to_string());
+    assert_eq!(entities[1].access_source.entity_type, EntityType::Channel);
+    assert_eq!(entities[1].access_source.entity_id, channel_id.to_string());
 }
 
 #[tokio::test]
@@ -273,9 +282,11 @@ fn malformed_and_unknown_events_are_rejected_by_the_declared_collection() {
 #[tokio::test(start_paused = true)]
 async fn transient_service_failures_retry_then_succeed() {
     let service = flaky_service(2);
-    let entity = EntityType::Document.with_entity_string(DOCUMENT_ID.to_string());
+    let update = SoupRealtimeUpdate::for_entity(
+        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
+    );
 
-    notify_with_retry(&service, entity, 2, 17)
+    notify_with_retry(&service, update, 2, 17)
         .await
         .expect("eventual success");
 
@@ -286,9 +297,11 @@ async fn transient_service_failures_retry_then_succeed() {
 #[tokio::test(start_paused = true)]
 async fn exhausted_retries_return_for_redelivery() {
     let service = flaky_service(u32::MAX);
-    let entity = EntityType::Document.with_entity_string(DOCUMENT_ID.to_string());
+    let update = SoupRealtimeUpdate::for_entity(
+        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
+    );
 
-    notify_with_retry(&service, entity, 2, 17)
+    notify_with_retry(&service, update, 2, 17)
         .await
         .expect_err("persistent failure returns without a commit");
 

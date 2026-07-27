@@ -8,13 +8,12 @@ use std::{collections::HashSet, num::NonZeroUsize, sync::Arc, time::Duration};
 use broadcast::{BroadcastManager, GlobalSpawner};
 use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use models_soup::item::SoupItem;
 use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use super::{
-    models::SoupRealtimeMessage,
+    models::{SoupRealtimeMessage, SoupRealtimeUpdate},
     ports::{
         SoupItemReader, SoupRealtimeConsumer, SoupRealtimePublisher, SoupRealtimeService,
         SoupRealtimeSubscriptionService, UserAccessExpander,
@@ -135,18 +134,38 @@ where
     P: SoupRealtimePublisher,
 {
     #[tracing::instrument(
-        skip(self),
+        skip(self, update),
         fields(
-            entity_type = %entity.entity_type,
-            entity_id = %entity.entity_id,
+            entity_type = tracing::field::Empty,
+            entity_id = tracing::field::Empty,
+            access_source_type = tracing::field::Empty,
+            access_source_id = tracing::field::Empty,
             recipient_count = tracing::field::Empty,
         ),
         err
     )]
-    async fn notify_users(&self, entity: Entity<'static>) -> Result<(), Report> {
+    async fn notify_users(
+        &self,
+        update: impl Into<SoupRealtimeUpdate> + Send,
+    ) -> Result<(), Report> {
+        let update = update.into();
+        tracing::Span::current()
+            .record(
+                "entity_type",
+                tracing::field::display(update.item.entity_type),
+            )
+            .record("entity_id", tracing::field::display(&update.item.entity_id))
+            .record(
+                "access_source_type",
+                tracing::field::display(update.access_source.entity_type),
+            )
+            .record(
+                "access_source_id",
+                tracing::field::display(&update.access_source.entity_id),
+            );
         let mut users = self
             .access_expander
-            .expand_user_access(&entity)
+            .expand_user_access(&update.access_source)
             .await
             .context("failed to expand current user access")?;
 
@@ -162,26 +181,26 @@ where
         for user_id in users {
             let item = self
                 .item_reader
-                .read_for_user(user_id.clone(), &entity)
+                .read_for_user(user_id.clone(), &update.item)
                 .await
                 .context_with(|| format!("failed to hydrate Soup item for accessor {user_id}"))?
                 .ok_or_else(|| {
                     rootcause::report!(
                         "Soup item for {} {} was missing for accessor {}",
-                        entity.entity_type,
-                        entity.entity_id,
+                        update.item.entity_type,
+                        update.item.entity_id,
                         user_id
                     )
                 })?;
 
             let hydrated_entity = item.entity();
-            if hydrated_entity != entity {
+            if hydrated_entity != update.item {
                 return Err(rootcause::report!(
                     "Soup reader returned {} {} while hydrating {} {} for accessor {}",
                     hydrated_entity.entity_type,
                     hydrated_entity.entity_id,
-                    entity.entity_type,
-                    entity.entity_id,
+                    update.item.entity_type,
+                    update.item.entity_id,
                     user_id
                 ));
             }

@@ -7,14 +7,14 @@ use model_entity::Entity;
 use models_soup::item::SoupItem;
 use rootcause::Report;
 
-use super::models::SoupRealtimeMessage;
+use super::models::{SoupRealtimeMessage, SoupRealtimeUpdate};
 
 /// Inbound use-case port driven by entity update transports.
 pub trait SoupRealtimeService: Send + Sync + 'static {
     /// Hydrates and publishes one user-scoped Soup item to every current accessor.
     fn notify_users(
         &self,
-        entity: Entity<'static>,
+        update: impl Into<SoupRealtimeUpdate> + Send,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

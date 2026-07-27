@@ -3,8 +3,39 @@
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
+
+/// One Soup item update together with the entity that determines its recipients.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoupRealtimeUpdate {
+    /// Soup item that must be rehydrated.
+    pub item: Entity<'static>,
+    /// Entity whose current accessors should receive the item.
+    pub access_source: Entity<'static>,
+}
+
+impl SoupRealtimeUpdate {
+    /// Creates an update with an explicit recipient access source.
+    pub fn new(item: Entity<'static>, access_source: Entity<'static>) -> Self {
+        Self {
+            item,
+            access_source,
+        }
+    }
+
+    /// Creates an update whose item also determines its recipients.
+    pub fn for_entity(entity: Entity<'static>) -> Self {
+        Self::new(entity.clone(), entity)
+    }
+}
+
+impl From<Entity<'static>> for SoupRealtimeUpdate {
+    fn from(entity: Entity<'static>) -> Self {
+        Self::for_entity(entity)
+    }
+}
 
 /// One full Soup item addressed to a recipient for realtime delivery.
 #[derive(Debug, Serialize, Deserialize)]
