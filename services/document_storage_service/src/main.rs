@@ -118,7 +118,7 @@ use soup_realtime::{
     },
 };
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
@@ -130,6 +130,7 @@ use task_dedup::{
         postgres::{PgTaskMatchRepo, PgTaskVectorDb},
     },
 };
+use tokio_util::task::TaskTracker;
 
 mod api;
 mod config;
@@ -266,9 +267,11 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
     let bots_service = BotServiceImpl::new(bots_repo, macro_event_broker.clone());
@@ -819,9 +822,10 @@ async fn main() -> anyhow::Result<()> {
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.
-    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
-        .await
-        .context("failed to build Macro agent tool context")?;
+    let mut macro_agent_tool_context =
+        ai_tools::build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
+            .await
+            .context("failed to build Macro agent tool context")?;
     // Wire the agent's SendChannelMessage tool to this service's own
     // side-effect pipeline so agent-posted messages share the exact instance
     // used by the HTTP API, including the in-process bot trigger sender (the
@@ -1024,7 +1028,22 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    api::setup_and_serve(api_context).await?;
+    let server_result = api::setup_and_serve(api_context).await;
 
-    Ok(())
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
