@@ -295,6 +295,10 @@ async fn main() -> anyhow::Result<()> {
     // The import pipeline sets the same task system properties on imported
     // Linear issues (status, priority, due date, assignee).
     let task_properties_for_import = task_properties_service.clone();
+    let document_properties_for_import =
+        import::outbound::document_properties::DocumentPropertiesApplicator::new(
+            properties_service.clone(),
+        );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -459,6 +463,7 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),
         task_properties: task_properties_for_import,
+        document_properties: document_properties_for_import,
         team_repository: ai_tools::build_team_repository(db.clone()),
     };
     let import_service = Arc::new(

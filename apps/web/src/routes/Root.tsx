@@ -413,11 +413,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () =>
-      isNativeMobilePlatform() ? (
-        <MobileAuthWelcome />
-      ) : (
-        <Navigate href="/login" />
-      ),
+      isNativeMobilePlatform() ? <MobileAuthWelcome /> : <Login />,
   },
   {
     // Mobile-web visitors can't sign up on a phone, so instead of pushing them

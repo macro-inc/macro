@@ -16,10 +16,33 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { invalidateChannelParticipants } from './channel-participants';
 import { channelKeys } from './keys';
 
+const CHANNEL_LIST_PAGE_SIZE = 100;
+
+export async function fetchAllChannels(
+  signal?: AbortSignal
+): Promise<ApiChannelWithLatest[]> {
+  const channels: ApiChannelWithLatest[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await throwOnErr(() =>
+      storageServiceClient.getChannels({
+        cursor,
+        limit: CHANNEL_LIST_PAGE_SIZE,
+        signal,
+      })
+    );
+    channels.push(...page.items);
+    cursor = page.next_cursor ?? undefined;
+  } while (cursor);
+
+  return channels;
+}
+
 export function useListChannelsQuery() {
   return useQuery(() => ({
     queryKey: channelKeys.listChannels.queryKey,
-    queryFn: async () => await throwOnErr(storageServiceClient.getChannels),
+    queryFn: ({ signal }) => fetchAllChannels(signal),
   }));
 }
 

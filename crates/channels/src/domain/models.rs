@@ -1340,6 +1340,36 @@ pub struct ChannelWithLatest {
     pub frecency_score: Option<frecency::domain::models::AggregateFrecency>,
 }
 
+#[cfg(feature = "list")]
+impl Identify for ChannelWithLatest {
+    type Id = Uuid;
+
+    fn id(&self) -> Self::Id {
+        self.channel.channel.id
+    }
+}
+
+#[cfg(feature = "list")]
+impl SortOn<SimpleSortMethod> for ChannelWithLatest {
+    fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
+        move |channel| {
+            let last_val = match sort {
+                SimpleSortMethod::ViewedAt => channel.viewed_at.unwrap_or_default(),
+                SimpleSortMethod::UpdatedAt => channel.channel.channel.updated_at,
+                SimpleSortMethod::CreatedAt => channel.channel.channel.created_at,
+                SimpleSortMethod::ViewedUpdated => channel
+                    .viewed_at
+                    .unwrap_or(channel.channel.channel.updated_at),
+            };
+
+            CursorVal {
+                sort_type: sort,
+                last_val,
+            }
+        }
+    }
+}
+
 /// Raw preview row returned from the repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelPreviewRow {

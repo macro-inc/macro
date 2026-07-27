@@ -645,6 +645,10 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     NoOpNotificationService,
 >;
 
+/// Imported-document property enrichment backed by the AI tool host's Properties service.
+pub type ToolDocumentPropertiesApplicator =
+    import::outbound::document_properties::DocumentPropertiesApplicator<ToolPropertiesService>;
+
 /// Type alias for the properties tool context
 pub type ToolPropertiesToolContext =
     PropertiesToolContext<ToolPropertiesService, ToolEntityAccessService>;
@@ -746,6 +750,8 @@ pub struct ToolEntityCreator {
     pub channel_service: Arc<ToolChannelMessagesService>,
     /// Task system-property writes (status / priority / due date / assignees).
     pub task_properties: TaskPropertiesAdapter,
+    /// Notion document property and tag enrichment.
+    pub document_properties: ToolDocumentPropertiesApplicator,
     /// Team roster lookups, to resolve source-tool emails to teammates.
     pub team_repository: Arc<ToolTeamService>,
 }
@@ -939,8 +945,33 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
+        properties: &import::domain::ports::ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
-        self.create_doc(user, name, markdown, false, None).await
+        let document_id = self.create_doc(user, name, markdown, false, None).await?;
+        let access = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &document_id,
+                model_entity::EntityType::Document,
+            )
+            .await
+        {
+            Ok(access) => access,
+            Err(error) => {
+                tracing::warn!(
+                    document_id,
+                    error = ?error,
+                    "failed to authorize imported document properties"
+                );
+                return Ok(document_id);
+            }
+        };
+        self.document_properties
+            .apply(user, &access, &document_id, properties)
+            .await;
+        Ok(document_id)
     }
 
     async fn create_channel(
