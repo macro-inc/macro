@@ -14,7 +14,7 @@
 
 .setup-graphic
   :is(.arc, .vent, .edge, .card-mid, .ring-small, .guide, .ring-large, .card-back, .card-front, .hairline, .panel, .knob) {
-  stroke: currentColor;
+  stroke: currentcolor;
   stroke-width: 2px;
 }
 
@@ -139,7 +139,7 @@ html[data-theme-light='false'] .setup-graphic.powered .shade {
    kept subtle like the scene's other construction lines. */
 .setup-graphic .connector {
   fill: none;
-  stroke: currentColor;
+  stroke: currentcolor;
   stroke-width: 1.3;
   stroke-dasharray: 6;
   stroke-linecap: round;

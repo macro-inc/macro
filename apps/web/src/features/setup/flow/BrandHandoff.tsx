@@ -53,6 +53,8 @@ const GRAPHIC_FADE_START = 0.58;
 const GRAPHIC_FADE_END = 0.92;
 const LOGO_FADE_START = 0.52;
 const LOGO_FADE_END = 0.84;
+/** Give the newly-rendered summary logo up to roughly one second to mount. */
+const TARGET_RETRY_LIMIT = 60;
 
 /**
  * Building → summary brand handoff: the powered-up loading scene shrinks to
@@ -99,6 +101,7 @@ export function BrandHandoff(props: {
   let logoEl: HTMLDivElement | undefined;
   let raf1 = 0;
   let raf2 = 0;
+  let targetRetries = 0;
   const anims: Animation[] = [];
   onCleanup(() => {
     cancelAnimationFrame(raf1);
@@ -110,6 +113,11 @@ export function BrandHandoff(props: {
     const run = () => {
       const target = document.querySelector(props.targetSelector);
       if (!target || !frame) {
+        targetRetries += 1;
+        if (targetRetries >= TARGET_RETRY_LIMIT) {
+          props.onDone();
+          return;
+        }
         raf1 = requestAnimationFrame(run);
         return;
       }

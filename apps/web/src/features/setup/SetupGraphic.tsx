@@ -11,6 +11,10 @@ import './SetupGraphic.css';
  * way. The connector `d` runs module→card, so the pulse flows that direction.
  */
 function DownloadPulse(props: { d: string }) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return null;
+  }
+
   let path: SVGPathElement | undefined;
   let animation: Animation | undefined;
   onCleanup(() => animation?.cancel());
@@ -18,7 +22,6 @@ function DownloadPulse(props: { d: string }) {
     if (!path) return;
     const total = path.getTotalLength();
     const segment = 70; // length of the bright streak
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // One bright dash, gap = full path (so only one is on the wire at a time);
     // sweeping the whole period runs it start→end and loops seamlessly.
     path.setAttribute('stroke-dasharray', `${segment} ${total}`);
