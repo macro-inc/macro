@@ -14,7 +14,7 @@ export const env = envsafe({
   }),
   UPSTREAM_WS_URL: url({
     devDefault: 'ws://localhost:4001',
-    desc: 'Preconfigured upstream websocket the worker dials to stream system + acp messages',
+    desc: 'Preconfigured upstream websocket; the worker adds its session id as the id query parameter',
   }),
   GITHUB_TOKEN: str({
     desc: 'Token with read access to the repos we clone into sandboxes',

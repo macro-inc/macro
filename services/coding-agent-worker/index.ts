@@ -14,9 +14,8 @@ const app = new Hono()
 app.use(logger())
 
 // Webhook flow: returns the session id immediately. All progress — the
-// booting/ready/shutting_down lifecycle and the full ACP wire — streams to the
-// preconfigured upstream (UPSTREAM_WS_URL) as system/status + tunneled acp
-// messages.
+// booting/ready/shutting_down lifecycle and the full ACP wire stream to the
+// preconfigured upstream using direct tagged messages.
 app.post('/session', zValidator('json', SessionRequest), (c) => {
   const { prompt, repoUrl } = c.req.valid('json')
   const sessionId = startSession({ prompt, repoUrl })

@@ -5,93 +5,18 @@ import type {
   NewSessionResponse,
   PromptRequest,
 } from '@zed-industries/agent-client-protocol'
-import { JSONRPCClient, JSONRPCServer, JSONRPCServerAndClient } from 'json-rpc-2.0'
 import { env } from './env'
 import { DaytonaProvider } from './providers/daytona'
 import type { AcpConnection, AgentSandbox } from './interfaces'
-import { Method, type SystemStatus } from '../shared/envelope'
+import { UpstreamLink } from './upstream'
 
 const ACP_PROTOCOL_VERSION = 1
-
-/** Outbound ws to the preconfigured upstream. Framing is delegated to a
- * json-rpc-2.0 server/client — we only send/receive notifications. Keeps a full
- * transcript; redials on drop and replays it (upstream may see duplicates on
- * reconnect — dedupe is their concern for now). */
-class UpstreamLink {
-  onAcp: (frame: unknown) => void = () => {}
-
-  private ws: WebSocket | null = null
-  private open = false
-  private closed = false
-  private readonly transcript: string[] = []
-  private readonly rpc: JSONRPCServerAndClient
-
-  constructor(private readonly url: string) {
-    const server = new JSONRPCServer()
-    const client = new JSONRPCClient((payload) => this.transport(payload))
-    this.rpc = new JSONRPCServerAndClient(server, client)
-    this.rpc.addMethod(Method.Acp, (frame) => this.onAcp(frame))
-    this.dial()
-  }
-
-  /** Send an ACP frame to the upstream. */
-  acp(frame: unknown) {
-    this.rpc.notify(Method.Acp, frame)
-  }
-
-  /** Report a lifecycle status to the upstream. */
-  status(status: SystemStatus) {
-    this.rpc.notify(Method.Status, { status })
-  }
-
-  close() {
-    this.closed = true
-    try {
-      this.ws?.close()
-    } catch {}
-  }
-
-  // The json-rpc-2.0 client hands us fully-framed payloads to put on the wire.
-  private transport(payload: unknown) {
-    const s = JSON.stringify(payload)
-    this.transcript.push(s)
-    if (this.open) this.ws?.send(s) // if not open, the reconnect replay covers it
-  }
-
-  private dial() {
-    if (this.closed) return
-    const ws = new WebSocket(this.url)
-    this.ws = ws
-    ws.addEventListener('open', () => {
-      this.open = true
-      for (const s of this.transcript) ws.send(s)
-    })
-    ws.addEventListener('message', (e) => {
-      let payload: unknown
-      try {
-        payload = JSON.parse(String(e.data))
-      } catch {
-        return console.error('[link] ignoring non-json upstream message')
-      }
-      void this.rpc.receiveAndSend(payload).catch(() => console.error('[link] ignoring invalid upstream message'))
-    })
-    ws.addEventListener('close', () => {
-      this.open = false
-      if (!this.closed) setTimeout(() => this.dial(), 1000)
-    })
-    ws.addEventListener('error', () => {
-      try {
-        ws.close()
-      } catch {}
-    })
-  }
-}
 
 /** Boot sequencer + frame router. The worker is only the ACP client for the
  * boot sequence (initialize, session/new, kickoff prompt), using namespaced
  * string ids ("sys:N") so they can never collide with upstream's ids. All
  * frames — ours, upstream's, and every byte opencode emits — are relayed to
- * the upstream verbatim as `acp` envelope notifications. */
+ * the upstream verbatim as tagged `acp` messages. */
 class SessionRouter {
   onAgentExit: () => void = () => {}
 
@@ -172,8 +97,8 @@ class SessionRouter {
           }
         }
       }
-    } catch {
-      // stream errored; treated as agent exit below
+    } catch (error) {
+      console.error('[session] agent stream failed', error)
     }
     this.onAgentExit()
   }
@@ -183,8 +108,8 @@ type LiveSession = { sandbox: AgentSandbox; router: SessionRouter; link: Upstrea
 const sessions = new Map<string, LiveSession>()
 const provider = new DaytonaProvider()
 
-/** Kick off a session: returns the id immediately (webhook flow); all progress
- * streams to the upstream as system/status + tunneled acp messages. */
+/** Kick off a session: returns the id immediately; all progress streams to the
+ * session-scoped upstream WebSocket as tagged system and ACP messages. */
 export function startSession(opts: { repoUrl: string; prompt: string }): string {
   const sessionId = randomUUID()
   void run(sessionId, opts)
@@ -192,7 +117,7 @@ export function startSession(opts: { repoUrl: string; prompt: string }): string 
 }
 
 async function run(sessionId: string, opts: { repoUrl: string; prompt: string }): Promise<void> {
-  const link = new UpstreamLink(env.UPSTREAM_WS_URL)
+  const link = new UpstreamLink(env.UPSTREAM_WS_URL, sessionId)
 
   let sandbox: AgentSandbox | null = null
   try {

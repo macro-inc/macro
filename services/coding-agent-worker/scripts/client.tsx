@@ -2,9 +2,8 @@ import { render, Box, Static, Text } from 'ink'
 import TextInput from 'ink-text-input'
 import { useEffect, useRef, useState } from 'react'
 import type { PromptRequest } from '@zed-industries/agent-client-protocol'
-import { JSONRPCClient, JSONRPCServer, JSONRPCServerAndClient } from 'json-rpc-2.0'
 import type { ServerWebSocket } from 'bun'
-import { Method, StatusParams } from '../shared/envelope'
+import type { ToRuntimeMessage, ToServerMessage } from '../src/protocol/generated'
 
 const port = Number(process.env.UPSTREAM_PORT ?? 4001)
 
@@ -37,54 +36,50 @@ function App() {
   const [lines, setLines] = useState<Line[]>([])
   const [response, setResponse] = useState('')
   const [input, setInput] = useState('')
-  const sock = useRef<ServerWebSocket<unknown> | null>(null)
+  const sock = useRef<ServerWebSocket<{ sessionId: string }> | null>(null)
   const acpSessionId = useRef<string | null>(null)
   const nextId = useRef(1)
-  const rpc = useRef<JSONRPCServerAndClient | null>(null)
 
   const log = (line: string, color?: string) => setLines((prev) => [...prev, { text: `${timestamp()} ${line}`, color }])
 
   useEffect(() => {
-    rpc.current = new JSONRPCServerAndClient(
-      new JSONRPCServer(),
-      new JSONRPCClient((payload) => {
-        sock.current?.send(JSON.stringify(payload))
-      }),
-    )
-    rpc.current.addMethod(Method.Status, (params) => {
-      StatusParams.parse(params)
-    })
-    rpc.current.addMethod(Method.Acp, (frame) => handleAcp(frame as { result?: { sessionId?: string } }, acpSessionId))
-
-    const server = Bun.serve({
+    const server = Bun.serve<{ sessionId: string }>({
       port,
       fetch(req, srv) {
-        if (srv.upgrade(req)) return undefined
+        const sessionId = new URL(req.url).searchParams.get('id')
+        if (!sessionId) return new Response('missing id query parameter', { status: 400 })
+        if (srv.upgrade(req, { data: { sessionId } })) return undefined
         return new Response('mock upstream: websocket only', { status: 426 })
       },
       websocket: {
         open(ws) {
           sock.current = ws
-          log('[upstream] worker connected')
+          log(`[upstream] worker connected: ${ws.data.sessionId}`)
         },
         message(_ws, data) {
           const text = String(data)
-          let payload: { method?: string; params?: AcpFrame } | undefined
+          let payload: ToServerMessage
           try {
-            payload = JSON.parse(text)
+            const parsed: unknown = JSON.parse(text)
+            if (!isServerMessage(parsed)) throw new Error('invalid worker message')
+            payload = parsed
           } catch {
             log(text)
             return
           }
-          const acpFrame = payload?.method === Method.Acp ? payload.params : undefined
-          log(text, acpFrame && colorFor(acpFrame))
+          if (payload.type !== 'acp') {
+            log(text)
+            return
+          }
+          const acpFrame = acpPayload(payload) as AcpFrame
+          log(text, colorFor(acpFrame))
+          handleAcp(acpFrame, acpSessionId)
 
           if (acpFrame?.method === 'session/update' && acpFrame.params?.update?.sessionUpdate === 'agent_message_chunk') {
             const chunkText = acpFrame.params.update.content?.text
             if (chunkText) setResponse((prev) => prev + chunkText)
           }
 
-          void rpc.current?.receiveAndSend(payload).catch(() => log('[upstream] ignoring invalid worker message'))
         },
         close() {
           sock.current = null
@@ -108,7 +103,14 @@ function App() {
     if (!acpSessionId.current) return log('[upstream] no ACP session yet')
     setResponse('')
     const params: PromptRequest = { sessionId: acpSessionId.current, prompt: [{ type: 'text', text: trimmed }] }
-    rpc.current?.notify(Method.Acp, { jsonrpc: '2.0', id: `up:${nextId.current++}`, method: 'session/prompt', params })
+    const message: ToRuntimeMessage = {
+      type: 'acp',
+      jsonrpc: '2.0',
+      id: `up:${nextId.current++}`,
+      method: 'session/prompt',
+      params,
+    } as unknown as ToRuntimeMessage
+    sock.current.send(JSON.stringify(message))
   }
 
   return (
@@ -137,3 +139,16 @@ function App() {
 }
 
 render(<App />)
+
+function isServerMessage(value: unknown): value is ToServerMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const type = (value as { type?: unknown }).type
+  return type === 'acp' || type === 'event'
+}
+
+/** Recover the raw ACP frame from an `acp`-tagged message: `AcpMessage` flattens
+ * the frame's own JSON-RPC fields directly alongside the `type` tag on the wire. */
+function acpPayload(message: { type: 'acp' }): unknown {
+  const { type: _type, ...frame } = message as { type: 'acp' } & Record<string, unknown>
+  return frame
+}

@@ -3,10 +3,9 @@ image := "agent-container"
 typecheck:
     nix develop --command bunx tsc --noEmit
 
-# Regenerate src/protocol/generated.ts from the Rust schema (single source of
-# truth: crates/agent_runtime_protocol/src/schema/v0). Needs cargo.
+# Regenerate src/protocol/generated.ts from the Rust types with Specta.
 gen-protocol:
-    nix develop --command bun scripts/gen-protocol.ts
+    nix develop --command cargo run -p agent_runtime_protocol --bin export_types
 
 build-image:
     cd container && docker build -t {{image}} .

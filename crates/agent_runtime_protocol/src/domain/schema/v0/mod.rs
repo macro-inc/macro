@@ -13,6 +13,8 @@
 
 use agent_client_protocol::RawJsonRpcMessage;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use specta::Type;
+use specta_typescript::Unknown;
 
 #[cfg(test)]
 mod test;
@@ -22,6 +24,12 @@ mod test;
 /// The protocol does not define an event-name catalog yet. This enum is
 /// non-exhaustive and currently contains only [`SystemEvent::Unknown`]. Every
 /// wire string round-trips through it unchanged.
+///
+/// This has a hand-written [`Serialize`]/[`Deserialize`] impl rather than a
+/// derive, so it cannot derive [`specta::Type`] either: nothing here
+/// introspects its shape for TypeScript. Every field that carries a
+/// `SystemEvent` is instead given a `#[specta(type = String)]` override at
+/// the field, matching the plain string it actually serializes as.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SystemEvent {
@@ -59,11 +67,27 @@ impl<'de> Deserialize<'de> for SystemEvent {
 
 /// One complete ACP JSON-RPC message routed between the Agent Service and the
 /// single agent execution hosted by this connection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AcpMessage(pub RawJsonRpcMessage);
+///
+/// Its own JSON-RPC fields are opaque to TypeScript consumers here (typed as
+/// an arbitrary object of unknown values): they already have a proper ACP SDK
+/// on the TypeScript side, so this crate only needs to guarantee the message
+/// round-trips unchanged. This is typed as a map rather than plain `unknown`
+/// because [`ToRuntimeMessage`]/[`ToServerMessage`] carry it in an internally
+/// tagged `Acp` variant, which requires its payload provably serialize as an
+/// object so the `"type"` tag can be merged into it. `#[serde(transparent)]`
+/// changes nothing about the actual wire format here - a single-field tuple
+/// struct already serializes transparently by default - but it does tell
+/// specta's serde-compatibility checker that this newtype is transparent, so
+/// it looks through to the map type below instead of treating `AcpMessage`
+/// itself as an opaque, non-mergeable struct.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub struct AcpMessage(
+    #[specta(type = std::collections::HashMap<String, Unknown>)] pub RawJsonRpcMessage,
+);
 
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum ToRuntimeMessage {
@@ -72,7 +96,7 @@ pub enum ToRuntimeMessage {
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum ToServerMessage {
@@ -81,6 +105,7 @@ pub enum ToServerMessage {
     /// A runtime or agent lifecycle event.
     Event {
         /// The event name.
+        #[specta(type = String)]
         event: SystemEvent,
     },
 }
