@@ -31,7 +31,10 @@ use uuid::Uuid;
 use std::sync::Arc;
 
 use super::error::PropertiesErr;
-use super::events::{PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent};
+use super::events::{
+    PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
+    PropertyOptionCreatedMetadata, PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata,
+};
 use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
@@ -149,6 +152,49 @@ where
             is_multi_select: property.is_multi_select,
             specific_entity_type: property.specific_entity_type,
             created_at: property.created_at,
+        })
+    }
+
+    /// Build an option creation event from the authoritative persisted state.
+    fn property_option_created_event(
+        option: &PropertyOption,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::property_option_created(PropertyOptionCreatedMetadata {
+            option_id: option.id,
+            property_definition_id: option.property_definition_id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            value: option.value.clone(),
+            color: option.color.clone(),
+            display_order: option.display_order,
+        })
+    }
+
+    /// Build an option update event from the authoritative post-update state.
+    fn property_option_updated_event(
+        option: &PropertyOption,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::property_option_updated(PropertyOptionUpdatedMetadata {
+            option_id: option.id,
+            property_definition_id: option.property_definition_id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            value: option.value.clone(),
+            color: option.color.clone(),
+            display_order: option.display_order,
+        })
+    }
+
+    /// Build an option deletion event from the value captured before deletion.
+    fn property_option_deleted_event(
+        option: &PropertyOption,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::property_option_deleted(PropertyOptionDeletedMetadata {
+            option_id: option.id,
+            property_definition_id: option.property_definition_id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            value: option.value.clone(),
         })
     }
 
@@ -1066,6 +1112,8 @@ where
             "successfully added property option"
         );
 
+        self.publish_property_event(Self::property_option_created_event(&option, user_id));
+
         Ok(option)
     }
 
@@ -1131,7 +1179,10 @@ where
             .await
             .map_err(anyhow::Error::from)?
         {
-            UpdatePropertyOptionOutcome::Updated(updated) => Ok(updated),
+            UpdatePropertyOptionOutcome::Updated(updated) => {
+                self.publish_property_event(Self::property_option_updated_event(&updated, user_id));
+                Ok(updated)
+            }
             UpdatePropertyOptionOutcome::NotFound => Err(PropertiesErr::OptionNotFound),
             UpdatePropertyOptionOutcome::DuplicateValue => Err(PropertiesErr::DuplicateOptionValue),
         }
@@ -1169,12 +1220,14 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        if deleted {
-            tracing::info!("successfully deleted property option");
-            Ok(())
-        } else {
-            Err(PropertiesErr::OptionNotFound)
+        if !deleted {
+            return Err(PropertiesErr::OptionNotFound);
         }
+
+        tracing::info!("successfully deleted property option");
+        self.publish_property_event(Self::property_option_deleted_event(&option, user_id));
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, team), err)]
