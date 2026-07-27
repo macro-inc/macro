@@ -2,24 +2,34 @@
  * Register a webhook and print every event Macro delivers to it.
  *
  * 1. In another terminal: `ngrok http 8787`, copy the https URL.
- * 2. MACRO_API_KEY=<user api token> bun examples/webhook-events.ts https://xxx.ngrok-free.app
+ * 2. MACRO_BOT_TOKEN=mbot_... bun examples/webhook-events.ts <public-url> <acting-user-id>
  *
- * Uses user auth (webhook registration doesn't accept bot keys yet). Set
- * MACRO_ENV to 'dev' (default), 'prod', or 'local' to pick the backend, and
- * PORT to change the local port.
+ * The bot registers the webhook on behalf of <acting-user-id> (its owner, or
+ * a member of its owning team), e.g. 'macro|wolf@macro.com'. Args are
+ * order-insensitive: the one starting with http(s) is the URL. Set MACRO_ENV
+ * to 'dev' (default), 'prod', or 'local' to pick the backend, and PORT to
+ * change the local port.
  */
 import type { Env } from '../src/config';
 import { Macro } from '../src/macro';
 
-const url = process.argv[2];
-if (!url) {
-  console.error('usage: bun examples/webhook-events.ts <public-url>');
+const args = process.argv.slice(2);
+const url = args.find((a) => a.startsWith('http'));
+const actAs = args.find((a) => !a.startsWith('http'));
+const botToken = process.env.MACRO_BOT_TOKEN;
+if (!url || !actAs || !botToken) {
+  console.error(
+    'usage: MACRO_BOT_TOKEN=mbot_... bun examples/webhook-events.ts <public-url> <acting-user-id>',
+  );
   process.exit(1);
 }
 
 const env = (process.env.MACRO_ENV ?? 'dev') as Env;
 const port = Number(process.env.PORT ?? 8787);
-const macro = new Macro({ env });
+const macro = new Macro({
+  env,
+  auth: { type: 'bot', token: botToken },
+}).requestedAs(actAs);
 
 const ALL_EVENTS = [
   'channel.created',
@@ -73,4 +83,8 @@ if (!secret)
   throw new Error('webhook registered but no signing secret returned');
 console.log(`webhook ${webhook.id} registered for ${url} — waiting for events`);
 
-receiver = new Macro({ env, webhookSecret: secret }).events.webhook();
+receiver = new Macro({
+  env,
+  auth: { type: 'bot', token: botToken },
+  webhookSecret: secret,
+}).events.webhook();
