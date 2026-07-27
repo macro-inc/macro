@@ -48,6 +48,12 @@ type CacheEntry = {
   version: string;
 };
 
+type QuickAccessHistoryQuery = {
+  readonly data: HistoryItem[] | undefined;
+  readonly isLoading: boolean;
+  refetch: () => unknown;
+};
+
 function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   const base = {
     id: item.id,
@@ -223,9 +229,11 @@ function mergeMultipleSortedIndices(arrays: IndexEntry[][]): IndexEntry[] {
   return arrays.reduce((acc, arr) => mergeSortedIndices(acc, arr));
 }
 
-export function createLegacyQuickAccessValue(): QuickAccessContextValue {
+/** Builds Quick Access from a history-compatible query and shared sources. */
+export function createHistoryQuickAccessValue(
+  historyQuery: QuickAccessHistoryQuery
+): QuickAccessContextValue {
   // queries
-  const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
   const contacts = useContacts();
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
@@ -733,4 +741,9 @@ export function createLegacyQuickAccessValue(): QuickAccessContextValue {
     refresh,
     getById,
   };
+}
+
+/** Builds Quick Access with the legacy REST history query. */
+export function createLegacyQuickAccessValue(): QuickAccessContextValue {
+  return createHistoryQuickAccessValue(useHistoryQuery());
 }
