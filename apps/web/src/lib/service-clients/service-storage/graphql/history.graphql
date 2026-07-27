@@ -1,0 +1,36 @@
+fragment GraphqlHistoryItemFields on GraphqlSoupEntity {
+	__typename
+	... on GraphqlSoupDocument {
+		id
+		name
+		ownerId
+		fileType
+		createdAt
+		updatedAt
+		viewedAt
+		deletedAt
+		subType {
+			kind
+			isCompleted
+		}
+	}
+	... on GraphqlSoupChat {
+		id
+		name
+		ownerId
+		isPersistent
+		createdAt
+		updatedAt
+		viewedAt
+		deletedAt
+	}
+	... on GraphqlSoupProject {
+		id
+		name
+		ownerId
+		createdAt
+		updatedAt
+		viewedAt
+		deletedAt
+	}
+}
