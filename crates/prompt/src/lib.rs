@@ -46,8 +46,11 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// `<m-document-mention>` tags in a chat reply) as well as chat tone/style and
 /// general tool-use instructions, which belong to the host client, not to Macro.
 /// [`document_content_links`] is the exception: it still applies over MCP
-/// because it governs content written *into* a Macro document (via
-/// `CreateDocument`/`EditDocument`), not the model's chat replies.
+/// because it governs content written *into* a Markdown document (via
+/// `CreateDocument`/`EditDocument`), not the model's chat replies. See
+/// [`mentions`] for the full statement of which surfaces (replies, channel
+/// messages, email bodies, and Markdown documents) these Markdown/mention
+/// rules cover.
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
@@ -140,5 +143,32 @@ mod tests {
         assert!(in_app.contains(
             r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
         ));
+    }
+
+    #[test]
+    fn mentions_and_document_content_links_share_an_identical_document_mention_tag() {
+        // document_content_links deliberately repeats this tag literal (rather
+        // than importing it) so it stays self-contained for MCP composition,
+        // where `mentions` is excluded. Guard against the two silently
+        // diverging by requiring both to contain the exact same string.
+        const TAG: &str = r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#;
+        assert!(mentions::PROMPT.instructions.contains(TAG));
+        assert!(document_content_links::PROMPT.instructions.contains(TAG));
+    }
+
+    #[test]
+    fn markdown_surface_scope_names_every_surface_but_the_reply_tone_exception() {
+        // The mention rule must name every Markdown-authoring surface and the
+        // non-Markdown-document exception, and the tool-use tone rule must not
+        // silently bleed into tool-authored content.
+        let in_app = TOOL_USE_PROMPT.to_string();
+        for surface in ["SendChannelMessage", "SendEmail", "CreateDocument"] {
+            assert!(
+                in_app.contains(surface),
+                "markdown surface scope should name {surface}"
+            );
+        }
+        assert!(in_app.contains("non-Markdown documents"));
+        assert!(in_app.contains("apply to your own conversational replies only"));
     }
 }
