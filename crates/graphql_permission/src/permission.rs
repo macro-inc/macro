@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use async_graphql::{Context, Enum, SimpleObject, dataloader::DataLoader};
+use async_graphql::{Context, Enum, OutputType, SimpleObject, Union, dataloader::DataLoader};
 use entity_access::domain::{
     models::{AccessError, AccessLevel, EntityPermission, ParticipantRole, TeamRole},
     ports::EntityAccessService,
@@ -9,19 +9,6 @@ use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
-
-/// The shape of an entity permission.
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
-pub enum GraphqlEntityPermissionKind {
-    /// Item-style view/comment/edit/owner access.
-    AccessLevel,
-    /// View-only channel access without active participant membership.
-    ChannelViewOnly,
-    /// Channel participant membership.
-    ChannelRole,
-    /// Team membership.
-    TeamRole,
-}
 
 /// Item access level resolved for the current viewer.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -100,49 +87,49 @@ impl From<TeamRole> for GraphqlTeamRole {
     }
 }
 
+#[derive(SimpleObject)]
+pub struct RoleContainer<T: OutputType> {
+    role: T,
+}
+
 /// Permission held by the current viewer for an entity.
 ///
 /// One of `accessLevel`, `channelRole`, or `teamRole` is populated as selected
 /// by `kind`; view-only channel access has no accompanying role field.
-#[derive(SimpleObject)]
-pub struct GraphqlEntityPermission {
-    /// The permission model represented by this value.
-    kind: GraphqlEntityPermissionKind,
-    /// Item access level when `kind` is `ACCESS_LEVEL`.
-    access_level: Option<GraphqlEntityAccessLevel>,
-    /// Channel participant role when `kind` is `CHANNEL_ROLE`.
-    channel_role: Option<GraphqlChannelParticipantRole>,
-    /// Team membership role when `kind` is `TEAM_ROLE`.
-    team_role: Option<GraphqlTeamRole>,
+#[derive(Union)]
+pub enum GraphqlEntityPermission {
+    /// Permission for item-based entities (document, chat, project, thread).
+    AccessLevel(RoleContainer<GraphqlEntityAccessLevel>),
+    /// View-only permission for a channel without an active participant role.
+    ChannelViewOnly(RoleContainer<bool>),
+    /// Permission for channel-based entities with an active participant role.
+    ChannelRole(RoleContainer<GraphqlChannelParticipantRole>),
+    /// Permission for team-based entities.
+    TeamRole(RoleContainer<GraphqlTeamRole>),
 }
 
-impl From<EntityPermission> for GraphqlEntityPermission {
-    fn from(value: EntityPermission) -> Self {
-        match value {
-            EntityPermission::AccessLevel { access_level } => Self {
-                kind: GraphqlEntityPermissionKind::AccessLevel,
-                access_level: Some(access_level.into()),
-                channel_role: None,
-                team_role: None,
-            },
-            EntityPermission::ChannelViewOnly => Self {
-                kind: GraphqlEntityPermissionKind::ChannelViewOnly,
-                access_level: None,
-                channel_role: None,
-                team_role: None,
-            },
-            EntityPermission::ChannelRole { role } => Self {
-                kind: GraphqlEntityPermissionKind::ChannelRole,
-                access_level: None,
-                channel_role: Some(role.into()),
-                team_role: None,
-            },
-            EntityPermission::TeamRole { role } => Self {
-                kind: GraphqlEntityPermissionKind::TeamRole,
-                access_level: None,
-                channel_role: None,
-                team_role: Some(role.into()),
-            },
+impl GraphqlEntityPermission {
+    /// create a new instance of self
+    fn new(perm: EntityPermission) -> Self {
+        match perm {
+            EntityPermission::AccessLevel { access_level } => {
+                GraphqlEntityPermission::AccessLevel(RoleContainer {
+                    role: GraphqlEntityAccessLevel::from(access_level),
+                })
+            }
+            EntityPermission::ChannelViewOnly => {
+                GraphqlEntityPermission::ChannelViewOnly(RoleContainer { role: true })
+            }
+            EntityPermission::ChannelRole { role } => {
+                GraphqlEntityPermission::ChannelRole(RoleContainer {
+                    role: GraphqlChannelParticipantRole::from(role),
+                })
+            }
+            EntityPermission::TeamRole { role } => {
+                GraphqlEntityPermission::TeamRole(RoleContainer {
+                    role: GraphqlTeamRole::from(role),
+                })
+            }
         }
     }
 }
@@ -303,5 +290,5 @@ where
         .load_one(OwnedEntity::from(entity))
         .await?
         .flatten()
-        .map(Into::into))
+        .map(GraphqlEntityPermission::new))
 }
