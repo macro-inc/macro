@@ -53,6 +53,23 @@ fn entity_property(
     }
 }
 
+fn entity_property_for_event(
+    id: Uuid,
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    updated_at: chrono::DateTime<chrono::Utc>,
+) -> EntityProperty {
+    EntityProperty {
+        id,
+        entity_id: entity_id.to_owned(),
+        entity_type,
+        property_definition_id,
+        created_at: updated_at,
+        updated_at,
+    }
+}
+
 fn entity_property_mutation(
     entity_id: &str,
     entity_type: EntityType,
@@ -63,6 +80,12 @@ fn entity_property_mutation(
         property: entity_property(entity_id, entity_type, property_definition_id),
         value,
     }
+}
+
+fn event_timestamp() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339("2026-07-27T18:45:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc)
 }
 
 fn caller_user_id() -> MacroUserIdStr<'static> {
@@ -1004,6 +1027,172 @@ fn view_receipt(entity_id: &str, entity_type: EntityType) -> ViewReceipt {
     )
 }
 
+#[tokio::test]
+async fn entity_property_event_set_publishes_null_authoritative_snapshot() {
+    let property_definition_id = Uuid::from_u128(0xE701);
+    let entity_property_id = Uuid::from_u128(0xE702);
+    let updated_at = event_timestamp();
+    let assignment = entity_property_for_event(
+        entity_property_id,
+        "doc1",
+        EntityType::Document,
+        property_definition_id,
+        updated_at,
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .withf(move |entity_id, entity_type, definition_id, value| {
+            entity_id == "doc1"
+                && *entity_type == EntityType::Document
+                && *definition_id == property_definition_id
+                && value.is_none()
+        })
+        .return_once(move |_, _, _, _| Box::pin(async move { Ok(assignment) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .set_entity_property(
+            &edit_receipt("doc1", EntityType::Document),
+            property_definition_id,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.topic, "macro.properties");
+    assert_eq!(published.key, "doc1");
+    assert_eq!(published.envelope["event_type"], "entity_property.updated");
+    assert_eq!(
+        published.envelope["metadata"],
+        serde_json::json!({
+            "entity_property_id": entity_property_id,
+            "entity_id": "doc1",
+            "entity_type": "DOCUMENT",
+            "property_definition_id": property_definition_id,
+            "actor_user_id": caller_user_id(),
+            "value": null,
+            "updated_at": updated_at,
+        })
+    );
+}
+
+#[tokio::test]
+async fn entity_property_event_set_failures_do_not_publish_before_commit() {
+    let property_definition_id = Uuid::from_u128(0xE703);
+
+    let mut validation_repo = MockPropertiesRepo::new();
+    validation_repo
+        .expect_get_property_definition()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    validation_repo.expect_upsert_entity_property().times(0);
+    let validation_broker = RecordingEventBroker::default();
+    let validation_service = service_with_event_broker(validation_repo, validation_broker.clone());
+
+    let validation_result = validation_service
+        .set_entity_property(
+            &edit_receipt("doc1", EntityType::Document),
+            property_definition_id,
+            None,
+        )
+        .await;
+
+    assert!(matches!(
+        validation_result,
+        Err(PropertiesErr::Validation(_))
+    ));
+    assert!(validation_broker.events().is_empty());
+
+    let mut repository_failure_repo = MockPropertiesRepo::new();
+    repository_failure_repo
+        .expect_get_property_definition()
+        .return_once(move |_| {
+            Box::pin(
+                async move { Ok(Some(multi_select_definition(property_definition_id, false))) },
+            )
+        });
+    repository_failure_repo
+        .expect_upsert_entity_property()
+        .return_once(|_, _, _, _| Box::pin(async { Err(anyhow!("upsert failed")) }));
+    let repository_failure_broker = RecordingEventBroker::default();
+    let repository_failure_service =
+        service_with_event_broker(repository_failure_repo, repository_failure_broker.clone());
+
+    let repository_result = repository_failure_service
+        .set_entity_property(
+            &edit_receipt("doc1", EntityType::Document),
+            property_definition_id,
+            None,
+        )
+        .await;
+
+    assert!(repository_result.is_err());
+    assert!(repository_failure_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn entity_property_event_actor_is_only_an_authenticated_user() {
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
+    let bot_access = EditReceipt::dangerously_assert_bot(
+        bot_id.into_storage_id(),
+        BotReceiptScope::Team {
+            team_id: Uuid::new_v4(),
+        },
+        "doc1",
+        AccessEntityType::Document,
+    );
+    let unauthenticated_access = EditReceipt::try_new(
+        EntityAccessAuth::Unauthenticated,
+        Entity {
+            entity_id: "doc1".to_string(),
+            entity_type: AccessEntityType::Document,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+    let internal_access =
+        EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document);
+
+    for access in [bot_access, unauthenticated_access, internal_access] {
+        let property_definition_id = Uuid::from_u128(0xE704);
+        let assignment = entity_property_for_event(
+            Uuid::from_u128(0xE705),
+            "doc1",
+            EntityType::Document,
+            property_definition_id,
+            event_timestamp(),
+        );
+        let mut repo = MockPropertiesRepo::new();
+        repo.expect_get_property_definition().return_once(move |_| {
+            Box::pin(
+                async move { Ok(Some(multi_select_definition(property_definition_id, false))) },
+            )
+        });
+        repo.expect_upsert_entity_property()
+            .return_once(move |_, _, _, _| Box::pin(async move { Ok(assignment) }));
+        let event_broker = RecordingEventBroker::default();
+        let service = service_with_event_broker(repo, event_broker.clone());
+
+        service
+            .set_entity_property(&access, property_definition_id, None)
+            .await
+            .unwrap();
+
+        let published = only_published_property_event(&event_broker);
+        assert_eq!(
+            published.envelope["metadata"]["actor_user_id"],
+            serde_json::Value::Null
+        );
+    }
+}
+
 #[test]
 fn bot_receipt_has_no_authenticated_user_identity() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
@@ -1135,6 +1324,227 @@ fn subtasks_value(subtask_ids: &[Uuid]) -> models_properties::api::requests::Set
             })
             .collect(),
     }
+}
+
+fn task_relationship_definition(property_definition_id: Uuid) -> PropertyDefinition {
+    PropertyDefinition {
+        id: property_definition_id,
+        owner: PropertyOwner::System,
+        display_name: "Task relationship".to_string(),
+        data_type: DataType::Entity,
+        is_multi_select: property_definition_id == SystemPropertyKey::SUBTASKS_UUID,
+        specific_entity_type: Some(EntityType::Task),
+        created_at: event_timestamp(),
+        updated_at: event_timestamp(),
+        is_system: true,
+        is_metadata: false,
+    }
+}
+
+fn expect_task_storage(repo: &mut MockPropertiesRepo, task_id: Uuid) {
+    repo.expect_get_document_sub_types()
+        .withf(move |ids| ids == [task_id])
+        .return_once(move |_| {
+            Box::pin(async move { Ok(HashMap::from([(task_id, DocumentSubType::Task)])) })
+        });
+}
+
+#[tokio::test]
+async fn entity_property_event_parent_task_uses_primary_task_snapshot_only() {
+    let task_id = Uuid::from_u128(0xE710);
+    let parent_id = Uuid::from_u128(0xE711);
+    let entity_property_id = Uuid::from_u128(0xE712);
+    let updated_at = event_timestamp();
+    let assignment = entity_property_for_event(
+        entity_property_id,
+        &task_id.to_string(),
+        EntityType::Task,
+        SystemPropertyKey::PARENT_TASK_UUID,
+        updated_at,
+    );
+    let mut repo = MockPropertiesRepo::new();
+    expect_task_storage(&mut repo, task_id);
+    repo.expect_get_property_definition().return_once(|_| {
+        Box::pin(async {
+            Ok(Some(task_relationship_definition(
+                SystemPropertyKey::PARENT_TASK_UUID,
+            )))
+        })
+    });
+    repo.expect_link_parent_task()
+        .withf(move |target_task_id, target_parent_id| {
+            *target_task_id == task_id && *target_parent_id == Some(parent_id)
+        })
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(assignment)) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    )
+    .with_event_broker(event_broker.clone());
+
+    service
+        .set_entity_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(parent_id)),
+        )
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.key, task_id.to_string());
+    assert_eq!(published.envelope["event_type"], "entity_property.updated");
+    assert_eq!(
+        published.envelope["metadata"],
+        serde_json::json!({
+            "entity_property_id": entity_property_id,
+            "entity_id": task_id,
+            "entity_type": "TASK",
+            "property_definition_id": SystemPropertyKey::PARENT_TASK_UUID,
+            "actor_user_id": caller_user_id(),
+            "value": {
+                "type": "EntityReference",
+                "value": [{
+                    "entity_id": parent_id,
+                    "entity_type": "TASK",
+                }],
+            },
+            "updated_at": updated_at,
+        })
+    );
+}
+
+#[tokio::test]
+async fn entity_property_event_subtasks_publishes_complete_primary_value_only() {
+    let task_id = Uuid::from_u128(0xE713);
+    let subtask_ids = [Uuid::from_u128(0xE714), Uuid::from_u128(0xE715)];
+    let assignment = entity_property_for_event(
+        Uuid::from_u128(0xE716),
+        &task_id.to_string(),
+        EntityType::Task,
+        SystemPropertyKey::SUBTASKS_UUID,
+        event_timestamp(),
+    );
+    let mut repo = MockPropertiesRepo::new();
+    expect_task_storage(&mut repo, task_id);
+    repo.expect_get_property_definition().return_once(|_| {
+        Box::pin(async {
+            Ok(Some(task_relationship_definition(
+                SystemPropertyKey::SUBTASKS_UUID,
+            )))
+        })
+    });
+    repo.expect_link_subtasks()
+        .withf(move |target_task_id, target_subtask_ids| {
+            *target_task_id == task_id && target_subtask_ids.as_slice() == subtask_ids
+        })
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(assignment)) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    )
+    .with_event_broker(event_broker.clone());
+
+    service
+        .set_entity_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::SUBTASKS_UUID,
+            Some(subtasks_value(&subtask_ids)),
+        )
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.key, task_id.to_string());
+    assert_eq!(published.envelope["metadata"]["entity_type"], "TASK");
+    assert_eq!(
+        published.envelope["metadata"]["value"],
+        serde_json::json!({
+            "type": "EntityReference",
+            "value": [
+                {"entity_id": subtask_ids[0], "entity_type": "TASK"},
+                {"entity_id": subtask_ids[1], "entity_type": "TASK"},
+            ],
+        })
+    );
+}
+
+#[tokio::test]
+async fn entity_property_event_task_permission_and_transaction_failures_publish_nothing() {
+    let task_id = Uuid::from_u128(0xE717);
+    let parent_id = Uuid::from_u128(0xE718);
+
+    let mut permission_repo = MockPropertiesRepo::new();
+    expect_task_storage(&mut permission_repo, task_id);
+    permission_repo
+        .expect_get_property_definition()
+        .return_once(|_| {
+            Box::pin(async {
+                Ok(Some(task_relationship_definition(
+                    SystemPropertyKey::PARENT_TASK_UUID,
+                )))
+            })
+        });
+    permission_repo.expect_link_parent_task().times(0);
+    let mut permission_service = MockPermissionService::new();
+    permission_service
+        .expect_mint_edit_receipt()
+        .return_once(|_, _, _| Box::pin(async { Err(anyhow!("permission denied")) }));
+    let permission_broker = RecordingEventBroker::default();
+    let service = PropertiesServiceImpl::new(
+        permission_repo,
+        Some(permission_service),
+        None::<MockNotificationService>,
+    )
+    .with_event_broker(permission_broker.clone());
+
+    let result = service
+        .set_entity_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(parent_id)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(PropertiesErr::PermissionDenied)));
+    assert!(permission_broker.events().is_empty());
+
+    let mut transaction_repo = MockPropertiesRepo::new();
+    expect_task_storage(&mut transaction_repo, task_id);
+    transaction_repo
+        .expect_get_property_definition()
+        .return_once(|_| {
+            Box::pin(async {
+                Ok(Some(task_relationship_definition(
+                    SystemPropertyKey::PARENT_TASK_UUID,
+                )))
+            })
+        });
+    transaction_repo
+        .expect_link_parent_task()
+        .return_once(|_, _| Box::pin(async { Err(anyhow!("transaction failed")) }));
+    let transaction_broker = RecordingEventBroker::default();
+    let service = PropertiesServiceImpl::new(
+        transaction_repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    )
+    .with_event_broker(transaction_broker.clone());
+
+    let result = service
+        .set_entity_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(parent_id)),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert!(transaction_broker.events().is_empty());
 }
 
 #[tokio::test]
@@ -1602,7 +2012,7 @@ async fn test_get_system_property_value_error_path() {
 // ============================================================================
 
 #[tokio::test]
-async fn test_delete_entity_property_rejects_receipt_for_other_entity() {
+async fn entity_property_event_delete_permission_failure_publishes_nothing() {
     let mut repo = MockPropertiesRepo::new();
     let entity_property_id = Uuid::from_u128(0xC3);
 
@@ -1617,11 +2027,8 @@ async fn test_delete_entity_property_rejects_receipt_for_other_entity() {
     });
     repo.expect_delete_entity_property().times(0);
 
-    let service = PropertiesServiceImpl::new(
-        repo,
-        Some(create_mock_permission_service()),
-        None::<MockNotificationService>,
-    );
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
 
     let err = service
         .delete_entity_property(
@@ -1631,23 +2038,22 @@ async fn test_delete_entity_property_rejects_receipt_for_other_entity() {
         .await
         .unwrap_err();
 
-    assert!(matches!(
-        err,
-        crate::domain::error::PropertiesErr::PermissionDenied
-    ));
+    assert!(matches!(err, PropertiesErr::PermissionDenied));
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
-async fn test_delete_entity_property_happy_path() {
+async fn entity_property_event_delete_uses_lookup_snapshot_and_requested_id() {
     let mut repo = MockPropertiesRepo::new();
     let entity_property_id = Uuid::from_u128(0xC3);
+    let property_definition_id = Uuid::from_u128(0xA1);
 
     repo.expect_lookup_entity_property().returning(move |_| {
         Box::pin(async move {
             Ok(Some(models_properties::EntityPropertyReference {
                 entity_id: "doc1".to_string(),
                 entity_type: EntityType::Document,
-                property_definition_id: Uuid::from_u128(0xA1),
+                property_definition_id,
             }))
         })
     });
@@ -1655,11 +2061,8 @@ async fn test_delete_entity_property_happy_path() {
         .withf(move |id| *id == entity_property_id)
         .returning(|_| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(
-        repo,
-        Some(create_mock_permission_service()),
-        None::<MockNotificationService>,
-    );
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
 
     service
         .delete_entity_property(
@@ -1668,6 +2071,79 @@ async fn test_delete_entity_property_happy_path() {
         )
         .await
         .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.key, "doc1");
+    assert_eq!(published.envelope["event_type"], "entity_property.deleted");
+    assert_eq!(
+        published.envelope["metadata"],
+        serde_json::json!({
+            "entity_property_id": entity_property_id,
+            "entity_id": "doc1",
+            "entity_type": "DOCUMENT",
+            "property_definition_id": property_definition_id,
+            "actor_user_id": caller_user_id(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn entity_property_event_delete_repository_failure_publishes_nothing() {
+    let entity_property_id = Uuid::from_u128(0xE720);
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_lookup_entity_property().return_once(|_| {
+        Box::pin(async {
+            Ok(Some(models_properties::EntityPropertyReference {
+                entity_id: "doc1".to_string(),
+                entity_type: EntityType::Document,
+                property_definition_id: Uuid::from_u128(0xE721),
+            }))
+        })
+    });
+    repo.expect_delete_entity_property()
+        .return_once(|_| Box::pin(async { Err(anyhow!("delete failed")) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .delete_entity_property(
+            &edit_receipt("doc1", EntityType::Document),
+            entity_property_id,
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn entity_property_event_required_property_failure_publishes_nothing() {
+    let task_id = Uuid::from_u128(0xE722);
+    let entity_property_id = Uuid::from_u128(0xE723);
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_lookup_entity_property().return_once(move |_| {
+        Box::pin(async move {
+            Ok(Some(models_properties::EntityPropertyReference {
+                entity_id: task_id.to_string(),
+                entity_type: EntityType::Task,
+                property_definition_id: SystemPropertyKey::STATUS_UUID,
+            }))
+        })
+    });
+    expect_task_storage(&mut repo, task_id);
+    repo.expect_delete_entity_property().times(0);
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .delete_entity_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            entity_property_id,
+        )
+        .await;
+
+    assert!(matches!(result, Err(PropertiesErr::RequiredProperty)));
+    assert!(event_broker.events().is_empty());
 }
 
 // ============================================================================
@@ -2057,11 +2533,26 @@ fn multi_select_definition(id: Uuid, is_multi_select: bool) -> PropertyDefinitio
 }
 
 #[tokio::test]
-async fn test_add_entity_property_option_happy_path() {
-    let mut repo = MockPropertiesRepo::new();
+async fn entity_property_event_add_option_uses_full_mutation_snapshot() {
     let def_id = Uuid::from_u128(0xA1);
-    let option_id = Uuid::from_u128(0xB2);
-
+    let existing_option_id = Uuid::from_u128(0xB1);
+    let added_option_id = Uuid::from_u128(0xB2);
+    let entity_property_id = Uuid::from_u128(0xE730);
+    let updated_at = event_timestamp();
+    let mutation = EntityPropertyMutationSnapshot {
+        property: entity_property_for_event(
+            entity_property_id,
+            "doc1",
+            EntityType::Document,
+            def_id,
+            updated_at,
+        ),
+        value: Some(PropertyValue::SelectOption(vec![
+            existing_option_id,
+            added_option_id,
+        ])),
+    };
+    let mut repo = MockPropertiesRepo::new();
     repo.expect_get_property_definition().returning(move |_| {
         Box::pin(async move { Ok(Some(multi_select_definition(def_id, true))) })
     });
@@ -2072,34 +2563,39 @@ async fn test_add_entity_property_option_happy_path() {
             entity_id == "doc1"
                 && *entity_type == EntityType::Document
                 && *prop == def_id
-                && *opt == option_id
+                && *opt == added_option_id
         })
-        .returning(
-            move |entity_id, entity_type, property_definition_id, option_id| {
-                let mutation = entity_property_mutation(
-                    entity_id,
-                    entity_type,
-                    property_definition_id,
-                    Some(PropertyValue::SelectOption(vec![option_id])),
-                );
-                Box::pin(async move { Ok(mutation) })
-            },
-        );
-
-    let service = PropertiesServiceImpl::new(
-        repo,
-        Some(create_mock_permission_service()),
-        None::<MockNotificationService>,
-    );
+        .return_once(move |_, _, _, _| Box::pin(async move { Ok(mutation) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
 
     service
         .add_entity_property_option(
             &edit_receipt("doc1", EntityType::Document),
             def_id,
-            option_id,
+            added_option_id,
         )
         .await
         .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.key, "doc1");
+    assert_eq!(published.envelope["event_type"], "entity_property.updated");
+    assert_eq!(
+        published.envelope["metadata"],
+        serde_json::json!({
+            "entity_property_id": entity_property_id,
+            "entity_id": "doc1",
+            "entity_type": "DOCUMENT",
+            "property_definition_id": def_id,
+            "actor_user_id": caller_user_id(),
+            "value": {
+                "type": "SelectOption",
+                "value": [existing_option_id, added_option_id],
+            },
+            "updated_at": updated_at,
+        })
+    );
 }
 
 #[tokio::test]
@@ -2166,33 +2662,71 @@ async fn test_add_entity_property_option_rejects_invalid_option() {
 }
 
 #[tokio::test]
-async fn test_remove_entity_property_option_happy_path() {
-    let mut repo = MockPropertiesRepo::new();
+async fn entity_property_event_remove_option_uses_full_mutation_snapshot() {
     let def_id = Uuid::from_u128(0xA1);
-    let option_id = Uuid::from_u128(0xB2);
-
+    let removed_option_id = Uuid::from_u128(0xB2);
+    let remaining_option_id = Uuid::from_u128(0xB3);
+    let entity_property_id = Uuid::from_u128(0xE731);
+    let updated_at = event_timestamp();
+    let mutation = EntityPropertyMutationSnapshot {
+        property: entity_property_for_event(
+            entity_property_id,
+            "doc1",
+            EntityType::Document,
+            def_id,
+            updated_at,
+        ),
+        value: Some(PropertyValue::SelectOption(vec![remaining_option_id])),
+    };
+    let mut repo = MockPropertiesRepo::new();
     repo.expect_remove_entity_property_option()
         .withf(move |entity_id, entity_type, prop, opt| {
             entity_id == "doc1"
                 && *entity_type == EntityType::Document
                 && *prop == def_id
-                && *opt == option_id
+                && *opt == removed_option_id
         })
-        .returning(move |entity_id, entity_type, property_definition_id, _| {
-            let mutation = entity_property_mutation(
-                entity_id,
-                entity_type,
-                property_definition_id,
-                Some(PropertyValue::SelectOption(Vec::new())),
-            );
-            Box::pin(async move { Ok(Some(mutation)) })
-        });
+        .return_once(move |_, _, _, _| Box::pin(async move { Ok(Some(mutation)) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
 
-    let service = PropertiesServiceImpl::new(
-        repo,
-        Some(create_mock_permission_service()),
-        None::<MockNotificationService>,
+    service
+        .remove_entity_property_option(
+            &edit_receipt("doc1", EntityType::Document),
+            def_id,
+            removed_option_id,
+        )
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(published.key, "doc1");
+    assert_eq!(
+        published.envelope["metadata"]["entity_property_id"],
+        entity_property_id.to_string()
     );
+    assert_eq!(
+        published.envelope["metadata"]["updated_at"],
+        updated_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    );
+    assert_eq!(
+        published.envelope["metadata"]["value"],
+        serde_json::json!({
+            "type": "SelectOption",
+            "value": [remaining_option_id],
+        })
+    );
+}
+
+#[tokio::test]
+async fn entity_property_event_remove_option_no_mutation_publishes_nothing() {
+    let def_id = Uuid::from_u128(0xE732);
+    let option_id = Uuid::from_u128(0xE733);
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_remove_entity_property_option()
+        .return_once(|_, _, _, _| Box::pin(async { Ok(None) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
 
     service
         .remove_entity_property_option(
@@ -2202,6 +2736,8 @@ async fn test_remove_entity_property_option_happy_path() {
         )
         .await
         .unwrap();
+
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]

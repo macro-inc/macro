@@ -19,6 +19,7 @@ use models_properties::api::{
     PropertyDataType, UpdatePropertyOptionRequest, is_valid_hex_color,
 };
 use models_properties::convert_set_property_value_to_property_value;
+use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -32,8 +33,9 @@ use std::sync::Arc;
 
 use super::error::PropertiesErr;
 use super::events::{
-    PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
-    PropertyOptionCreatedMetadata, PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata,
+    EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata, PropertyCreatedMetadata,
+    PropertyDeletedMetadata, PropertyMacroEvent, PropertyOptionCreatedMetadata,
+    PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata,
 };
 use super::metadata;
 use super::model::{
@@ -195,6 +197,23 @@ where
             property_definition_id: option.property_definition_id,
             actor_user_id: Some(actor_user_id.clone().into_owned()),
             value: option.value.clone(),
+        })
+    }
+
+    /// Build an entity-property update event from committed persistence state.
+    fn entity_property_updated_event(
+        property: &EntityProperty,
+        value: &Option<PropertyValue>,
+        access: &EditReceipt,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+            entity_property_id: property.id,
+            entity_id: property.entity_id.clone(),
+            entity_type: property.entity_type,
+            property_definition_id: property.property_definition_id,
+            actor_user_id: access.authenticated_user().cloned(),
+            value: value.clone(),
+            updated_at: property.updated_at,
         })
     }
 
@@ -549,6 +568,11 @@ where
             let property = self
                 .handle_task_relationship_property(access, property_definition_id, value)
                 .await?;
+            self.publish_property_event(Self::entity_property_updated_event(
+                &property,
+                &property_value,
+                access,
+            ));
             return Ok(EntityPropertyWithDefinition {
                 property,
                 definition: property_definition,
@@ -576,6 +600,11 @@ where
             .map_err(anyhow::Error::from)?;
 
         self.enqueue_property_upsert(entity_id, entity_type).await;
+        self.publish_property_event(Self::entity_property_updated_event(
+            &property,
+            &property_value,
+            access,
+        ));
 
         Ok(EntityPropertyWithDefinition {
             property,
@@ -628,7 +657,7 @@ where
         self.validate_property_options(property_definition_id, &[option_id])
             .await?;
 
-        let _mutation = self
+        let mutation = self
             .repository
             .add_entity_property_option(
                 access.entity_id(),
@@ -641,6 +670,11 @@ where
 
         self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
             .await;
+        self.publish_property_event(Self::entity_property_updated_event(
+            &mutation.property,
+            &mutation.value,
+            access,
+        ));
 
         Ok(())
     }
@@ -661,7 +695,7 @@ where
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
         let subject = self.resolve_subject(access).await?;
-        let _mutation = self
+        let mutation = self
             .repository
             .remove_entity_property_option(
                 access.entity_id(),
@@ -674,6 +708,13 @@ where
 
         self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
             .await;
+        if let Some(mutation) = mutation {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                access,
+            ));
+        }
 
         Ok(())
     }
@@ -1467,6 +1508,16 @@ where
             .map_err(anyhow::Error::from)?;
 
         tracing::info!("successfully removed entity property");
+
+        self.publish_property_event(PropertyMacroEvent::entity_property_deleted(
+            EntityPropertyDeletedMetadata {
+                entity_property_id,
+                entity_id: property_info.entity_id,
+                entity_type: property_info.entity_type,
+                property_definition_id: property_info.property_definition_id,
+                actor_user_id: access.authenticated_user().cloned(),
+            },
+        ));
 
         Ok(())
     }
