@@ -302,6 +302,7 @@ describe('SyncServiceSource', () => {
       event: vi.fn(),
       error: vi.fn(),
       traceparent: () => undefined,
+      injectTraceHeaders: vi.fn(),
       end: vi.fn(),
     };
     const spanSpy = vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);
@@ -333,6 +334,7 @@ describe('SyncServiceSource', () => {
       event: vi.fn(),
       error: vi.fn(),
       traceparent: () => undefined,
+      injectTraceHeaders: vi.fn(),
       end: vi.fn(),
     };
     vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);

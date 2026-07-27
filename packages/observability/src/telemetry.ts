@@ -46,6 +46,11 @@ export class Telemetry {
 		});
 	}
 
+	/** Start an HTTP client span. Callers must end the returned span. */
+	static clientSpan(name: string): Span {
+		return Telemetry.#tracing.clientSpan(name);
+	}
+
 	static debug(message: string, attributes?: LogAttributes): void {
 		Telemetry.#logging.debug(message, attributes);
 	}

@@ -1,4 +1,4 @@
-import { type Context, context, trace } from "@opentelemetry/api";
+import { type Context, context, SpanKind, trace } from "@opentelemetry/api";
 import type { Resource } from "@opentelemetry/resources";
 import type { TelemetryInitConfig } from "./config";
 import { INSTRUMENTATION_SCOPE_NAME } from "./constants";
@@ -20,6 +20,10 @@ export class Tracing {
 		return this.#startSpan(name, context.active());
 	}
 
+	clientSpan(name: string): Span {
+		return this.#startSpan(name, context.active(), SpanKind.CLIENT);
+	}
+
 	async flush(): Promise<void> {
 		await this.#provider?.forceFlush();
 	}
@@ -29,10 +33,10 @@ export class Tracing {
 		this.#provider = undefined;
 	}
 
-	#startSpan(name: string, parent: Context): Span {
+	#startSpan(name: string, parent: Context, kind?: SpanKind): Span {
 		const otelSpan = trace
 			.getTracer(INSTRUMENTATION_SCOPE_NAME)
-			.startSpan(name, undefined, parent);
+			.startSpan(name, kind === undefined ? undefined : { kind }, parent);
 		return new SpanImpl(
 			otelSpan,
 			trace.setSpan(parent, otelSpan),

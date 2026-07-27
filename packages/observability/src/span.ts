@@ -3,6 +3,7 @@ import {
 	context,
 	isSpanContextValid,
 	type Attributes as OtelAttributes,
+	propagation,
 	type Span as OtelSpan,
 	SpanStatusCode,
 } from "@opentelemetry/api";
@@ -23,6 +24,8 @@ export interface Span {
 	error(error: unknown): void;
 	/** Return this span's W3C trace context for transports without headers. */
 	traceparent(): string | undefined;
+	/** Inject this span's W3C trace context into an HTTP header carrier. */
+	injectTraceHeaders(headers: Record<string, string>): void;
 	/** End the span. Safe to call more than once. */
 	end(): void;
 }
@@ -83,6 +86,10 @@ export class SpanImpl implements Span {
 		if (!isSpanContextValid(spanContext)) return undefined;
 		const { traceId, spanId, traceFlags } = spanContext;
 		return `00-${traceId}-${spanId}-${traceFlags.toString(16).padStart(2, "0")}`;
+	}
+
+	injectTraceHeaders(headers: Record<string, string>): void {
+		if (!this.#ended) propagation.inject(this.ctx, headers);
 	}
 
 	end(): void {

@@ -132,6 +132,7 @@ describe('WALSyncer', () => {
       event: vi.fn(),
       error: vi.fn(),
       traceparent: () => undefined,
+      injectTraceHeaders: vi.fn(),
       end: vi.fn(),
     };
     const spanSpy = vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);

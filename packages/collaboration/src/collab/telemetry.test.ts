@@ -13,6 +13,7 @@ function mockSpan() {
     event: vi.fn(),
     error,
     traceparent: () => undefined,
+    injectTraceHeaders: vi.fn(),
     end: vi.fn(),
   };
   vi.spyOn(Telemetry, 'span').mockImplementation(((
