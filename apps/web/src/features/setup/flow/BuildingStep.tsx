@@ -1,12 +1,12 @@
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ModuleLogo } from '../Module';
 import { MODULE_LOGOS } from '../moduleLogos';
 import { type ModuleConfig, SetupGraphic } from '../SetupGraphic';
 import { type BrandHandoffSource, logoBoxForMark } from './BrandHandoff';
 
-/** Which tools the user connected during the flow — decides which build
- *  phrases are truthful. */
+/** Which tools the user connected during the flow — decides which modules
+ *  appear in the loading scene. */
 export type ConnectedTools = {
   google: boolean;
   linear: boolean;
@@ -14,32 +14,6 @@ export type ConnectedTools = {
   slack: boolean;
   github: boolean;
 };
-
-/** The breather before the summary: brand animation + cycling phrases for a
- * fixed ~15s, then auto-advance. Pure theater — nothing waits on real work;
- * only which phrases show depends on what was connected. */
-
-/** Each phrase with the connections that make it true. A phrase with no
- *  `requires` is generic (always shown); one with `requires` is dropped
- *  unless at least one of those tools was connected — so we never claim to
- *  process an inbox or pull in tasks the user didn't connect. */
-const BUILDING_PHRASES: {
-  text: string;
-  requires?: (keyof ConnectedTools)[];
-}[] = [
-  { text: 'Building your unified workspace…' },
-  { text: 'Processing your inbox…', requires: ['google'] },
-  {
-    text: 'Linking people, docs, and threads…',
-    requires: ['google', 'notion', 'slack'],
-  },
-  {
-    text: 'Distilling months of context…',
-    requires: ['google', 'linear', 'notion', 'slack', 'github'],
-  },
-  { text: 'Bringing in your tasks and docs…', requires: ['linear', 'notion'] },
-  { text: 'Waking up your Macro…' },
-];
 
 /** The theatrical hold scales with how many accounts connected: a quick 5s
  *  when there's nothing to show, up to the full 15s once more than two are
@@ -72,11 +46,11 @@ const BAR_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 /** Slots the connected accounts fill, in populate order. */
 const SLOT_ORDER = [
-  'midPort',
-  'midBack',
-  'midFar',
   'frontPill',
+  'midBack',
   'backFar',
+  'midFar',
+  'midPort',
 ] as const;
 
 /** Tools in the order they're assigned to {@link SLOT_ORDER}, each with its
@@ -106,17 +80,6 @@ export function BuildingStep(props: {
   connected: ConnectedTools;
   onDone: (source: BrandHandoffSource | null) => void;
 }) {
-  // Drop phrases that would be false given what was connected. The total hold
-  // stays fixed, so a shorter list just lingers a little longer on each.
-  const phrases = createMemo(() =>
-    BUILDING_PHRASES.filter(
-      (phrase) =>
-        !phrase.requires ||
-        phrase.requires.some((tool) => props.connected[tool])
-    ).map((phrase) => phrase.text)
-  );
-
-  const [phraseIndex, setPhraseIndex] = createSignal(0);
   // Bar fill % and the transition duration for the current burst — set
   // together per segment so each burst eases over its own `fill` time.
   const [progress, setProgress] = createSignal(0);
@@ -148,11 +111,6 @@ export function BuildingStep(props: {
     const holdMs =
       MIN_HOLD_MS + (MAX_HOLD_MS - MIN_HOLD_MS) * (Math.min(n, 3) / 3);
     const scale = holdMs / MAX_HOLD_MS;
-
-    const count = phrases().length;
-    const phraseTimer = setInterval(() => {
-      setPhraseIndex((index) => Math.min(index + 1, count - 1));
-    }, holdMs / count);
 
     // Cycle each module idle → downloading → linked, evenly spaced across the
     // hold and reserving a tail for the powered-up finale. Each module
@@ -245,7 +203,6 @@ export function BuildingStep(props: {
     }
 
     onCleanup(() => {
-      clearInterval(phraseTimer);
       for (const timer of timers) clearTimeout(timer);
       for (const timer of moduleTimers) clearTimeout(timer);
       clearTimeout(powerTimer);
@@ -255,16 +212,6 @@ export function BuildingStep(props: {
 
   return (
     <div class="flex flex-col items-center gap-8 py-16">
-      <style>{
-        /*css*/ `
-        @keyframes obf-phrase-in {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0);   }
-        }
-        .obf-phrase { animation: obf-phrase-in 400ms ease-out both; }
-      `
-      }</style>
-
       {/* The isometric scene: three cards always present, with connected
           accounts cycling in before resolving into the powered Macro mark.
           Its exact final SVG is captured and carried by the parent handoff. */}
@@ -277,15 +224,6 @@ export function BuildingStep(props: {
           />
         </div>
       </div>
-
-      {/* Keyed so each phrase re-enters with the fade-up animation. */}
-      <Show when={phrases()[phraseIndex()]} keyed>
-        {(phrase) => (
-          <p class="obf-phrase min-h-6 text-center text-base text-ink">
-            {phrase}
-          </p>
-        )}
-      </Show>
 
       <div class="h-1 w-48 overflow-hidden rounded-full bg-ink/10">
         <div

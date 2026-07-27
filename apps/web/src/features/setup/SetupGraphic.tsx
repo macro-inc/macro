@@ -50,28 +50,28 @@ function DownloadPulse(props: { d: string }) {
 const SLOTS = {
   // Tethers to the pill cutout on the front card.
   frontPill: {
-    place: 'translate(140 235) scale(0.667) translate(-447.5 -168.3)',
-    connector: { d: 'M106.7 257.4 L106.7 544.1 L228.7 495.4', layer: 'front' },
+    place: 'translate(90 275) scale(0.667) translate(-447.5 -48.3)',
+    connector: { d: 'M56.7 336.5 L56.7 564.1 L228.7 495.4', layer: 'front' },
   },
   // Tethers to the back side of the middle card.
   midBack: {
-    place: 'translate(300 150) scale(0.667) translate(-447.5 -48.3)',
-    connector: { d: 'M266.7 153.3 L266.7 340 L374.6 442.3', layer: 'back' },
+    place: 'translate(270 190) scale(0.667) translate(-447.5 -168.3)',
+    connector: { d: 'M236.7 175.3 L236.7 311.6 L374.6 442.3', layer: 'back' },
   },
   // Tethers to the small circular port on the middle card.
   midPort: {
-    place: 'translate(405 100) scale(0.667) translate(-447.5 -208.3)',
-    connector: { d: 'M371.7 90.6 L371.7 579.9 L429.5 556.8', layer: 'front' },
+    place: 'translate(410 145) scale(0.667) translate(-447.5 98.3)',
+    connector: { d: 'M376.7 304.3 L376.7 577.9 L429.5 556.8', layer: 'front' },
   },
   // Tethers to the far side of the middle card.
   midFar: {
-    place: 'translate(625 168) scale(0.667) translate(-507.5 -168.3)',
-    connector: { d: 'M551.7 191.1 L551.7 441 L489.8 465.7', layer: 'mid' },
+    place: 'translate(670 210) scale(0.667) translate(-507.5 -128.3)',
+    connector: { d: 'M596.7 214 L596.7 423 L489.8 465.7', layer: 'mid' },
   },
   // Tethers to the far side of the back card.
   backFar: {
-    place: 'translate(800 248) scale(0.667) translate(-507.5 -168.3)',
-    connector: { d: 'M726.6 266.8 L726.6 453 L694.8 465.7', layer: 'back' },
+    place: 'translate(855 290) scale(0.667) translate(-507.5 -248.3)',
+    connector: { d: 'M781.6 217.5 L781.6 431.1 L694.8 465.7', layer: 'back' },
   },
 } satisfies Record<
   string,
@@ -205,20 +205,20 @@ export function SetupGraphic(props: {
     const motion = !reducedMotion();
 
     leds.forEach(({ inset, halo, spark }, index) => {
-      const delay = index * 240;
+      const delay = index * 110;
       const onset = inset.animate(
         [
           { fill: ink, opacity: 0.4, filter: 'drop-shadow(0 0 0 transparent)' },
           { fill: accent, opacity: 1, filter: lit },
         ],
-        { duration: 420, delay, easing: 'ease-out', fill: 'both' }
+        { duration: 300, delay, easing: 'ease-out', fill: 'both' }
       );
       ledAnimations.push(onset);
       // Spark fades in over the same onset window and holds.
       if (spark) {
         ledAnimations.push(
           spark.animate([{ opacity: 0 }, { opacity: 0.9 }], {
-            duration: 420,
+            duration: 300,
             delay,
             easing: 'ease-out',
             fill: 'both',
@@ -235,7 +235,7 @@ export function SetupGraphic(props: {
             { transform: 'scale(2.4)', opacity: 0.6, offset: 0.45 },
             { transform: 'scale(0.85)', opacity: 0.28 },
           ],
-          { duration: 620, delay, easing: 'ease-out', fill: 'both' }
+          { duration: 450, delay, easing: 'ease-out', fill: 'both' }
         );
         ledAnimations.push(flash);
         flash.finished
@@ -292,20 +292,23 @@ export function SetupGraphic(props: {
     darkenLeds();
     slideAnimation = animatingCard.animate(
       [
-        { transform: 'translate(0, 0)', easing: 'ease-in-out' },
         {
-          transform: 'translate(34.8px, 33.1px)',
-          offset: 0.35,
-          easing: 'ease-in-out',
+          transform: 'translate(0, 0)',
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
         },
         {
           transform: 'translate(34.8px, 33.1px)',
-          offset: 0.5,
-          easing: 'ease-in-out',
+          offset: 0.2,
+          easing: 'linear',
+        },
+        {
+          transform: 'translate(34.8px, 33.1px)',
+          offset: 0.4,
+          easing: 'cubic-bezier(0.3, 0, 0.2, 1)',
         },
         { transform: 'translate(0, 0)' },
       ],
-      { duration: 2400 }
+      { duration: 2600 }
     );
     slideAnimation.finished.then(illuminateLeds).catch(() => {
       // finished rejects if a fresh slide cancels this one; that slide
@@ -385,7 +388,7 @@ export function SetupGraphic(props: {
       // below the blocks. The padding absorbs the modules' bob/breathe. `meet`
       // then always shows the whole scene, and the tighter frame keeps the
       // modules near the top edge and the blocks near the bottom.
-      viewBox="20 -28 833 676"
+      viewBox="-10 -28 930 700"
       fill="currentColor"
       class={`setup-graphic text-ink cursor-pointer ${props.poweredUp ? 'powered ' : ''}${props.class ?? ''}`}
       onClick={playSlide}
