@@ -72,7 +72,8 @@ use crate::api::context::{
     ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
     MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+use tokio_util::task::TaskTracker;
 
 mod api;
 mod config;
@@ -322,9 +323,11 @@ async fn main() -> anyhow::Result<()> {
     });
     let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress.clone());
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
     let entity_access_service_impl = Arc::new(EntityAccessServiceImpl::new(
         PgAccessRepository::new(db.clone()),
@@ -393,7 +396,7 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress: notification_ingress_service.clone(),
     };
 
-    api::setup_and_serve(
+    let server_result = api::setup_and_serve(
         ApiContext {
             db,
             github_link_service: Arc::new(github_link_service_impl),
@@ -447,9 +450,25 @@ async fn main() -> anyhow::Result<()> {
         },
         config.port,
     )
-    .await?;
-    Ok(())
+    .await;
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 // SAFETY: this is not a secret value
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";
