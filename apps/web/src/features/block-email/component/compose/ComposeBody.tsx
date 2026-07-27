@@ -10,8 +10,6 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
 
-const logger = Telemetry;
-
 import { cn, Scroll } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -91,7 +89,7 @@ export function ComposeBody(props: {
 
   const logComposeBody = (event: string, details?: Record<string, unknown>) => {
     if (!props.debugName) return;
-    logger.info(`[ComposeBody] ${event}`, {
+    Telemetry.info(`[ComposeBody] ${event}`, {
       debugName: props.debugName,
       ...details,
     });
