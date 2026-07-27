@@ -572,6 +572,10 @@
       "crates/model-error-response",
       "crates/workspace-hack"
     ],
+    "calendar_events": [
+      "crates/calendar_events",
+      "crates/workspace-hack"
+    ],
     "call": [
       "crates/agent",
       "crates/ai_toolset",
@@ -1521,6 +1525,7 @@
       "crates/bots",
       "crates/broadcast",
       "crates/cal",
+      "crates/calendar_events",
       "crates/call",
       "crates/channel_bots",
       "crates/channel_sender",
