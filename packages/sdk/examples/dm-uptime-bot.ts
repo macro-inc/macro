@@ -18,8 +18,14 @@ if (!recipientId) {
   process.exit(1);
 }
 
+const botToken = process.env.MACRO_BOT_TOKEN;
+if (!botToken) {
+  console.error('set MACRO_BOT_TOKEN to a bot API key (mbot_...)');
+  process.exit(1);
+}
+
 const env = (process.env.MACRO_ENV ?? 'dev') as Env;
-let macro = new Macro({ env }); // auth from MACRO_BOT_TOKEN / MACRO_API_KEY
+let macro = new Macro({ env, auth: { type: 'bot', token: botToken } });
 const actAs = process.env.MACRO_ACT_AS;
 if (actAs) macro = macro.requestedAs(actAs);
 
