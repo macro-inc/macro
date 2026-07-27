@@ -69,61 +69,137 @@ fn update(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimeUpda
     SoupRealtimeUpdate::for_entity(entity(entity_type, entity_id))
 }
 
+fn push_unique_update(
+    updates: &mut Vec<SoupRealtimeUpdate>,
+    entity_type: EntityType,
+    entity_id: &str,
+) {
+    if entity_id.is_empty()
+        || updates.iter().any(|update| {
+            update.item.entity_type == entity_type && update.item.entity_id == entity_id
+        })
+    {
+        return;
+    }
+    updates.push(update(entity_type, entity_id));
+}
+
 fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeUpdate> {
-    let document_id = match event {
-        DocumentTopicEvent::Created(metadata) => &metadata.document_id,
-        DocumentTopicEvent::Updated(metadata) => &metadata.document_id,
-        DocumentTopicEvent::Copied(metadata) => &metadata.document_id,
+    let mut updates = Vec::new();
+    match event {
+        DocumentTopicEvent::Created(metadata) => {
+            push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+        DocumentTopicEvent::Updated(metadata) => {
+            push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+                if metadata.previous_project_id.as_deref() != Some(project_id)
+                    && let Some(previous_project_id) = metadata.previous_project_id.as_deref()
+                {
+                    push_unique_update(&mut updates, EntityType::Project, previous_project_id);
+                }
+            }
+        }
+        DocumentTopicEvent::Deleted(metadata) => {
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+        DocumentTopicEvent::Copied(metadata) => {
+            push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
+        }
         DocumentTopicEvent::Interaction(metadata)
             if metadata.reason == InteractionReason::Edited =>
         {
-            &metadata.document_id
+            push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
-        DocumentTopicEvent::Deleted(_) | DocumentTopicEvent::Interaction(_) => return Vec::new(),
-    };
-    vec![update(EntityType::Document, document_id)]
+        DocumentTopicEvent::Interaction(_) => {}
+    }
+    updates
 }
 
 fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimeUpdate> {
-    let project_id = match event {
-        ProjectTopicEvent::Created(metadata) if metadata.parent_project_id.is_none() => {
-            &metadata.project_id
+    let mut updates = Vec::new();
+    match event {
+        ProjectTopicEvent::Created(metadata) => {
+            push_unique_update(&mut updates, EntityType::Project, &metadata.project_id);
+            if let Some(parent_id) = metadata.parent_project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, parent_id);
+            }
         }
-        ProjectTopicEvent::Updated(metadata)
-            if metadata
-                .parent_id
-                .as_ref()
-                .map_or(metadata.previous_parent_id.is_none(), String::is_empty) =>
-        {
-            &metadata.project_id
+        ProjectTopicEvent::Updated(metadata) => {
+            push_unique_update(&mut updates, EntityType::Project, &metadata.project_id);
+            if let Some(previous_parent_id) = metadata.previous_parent_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, previous_parent_id);
+            }
+            if let Some(parent_id) = metadata.parent_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, parent_id);
+            }
         }
-        ProjectTopicEvent::Restored(metadata) if metadata.parent_project_id.is_none() => {
-            &metadata.project_id
+        ProjectTopicEvent::Deleted(metadata) => {
+            if let Some(parent_id) = metadata.parent_project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, parent_id);
+            }
         }
-        ProjectTopicEvent::Uploaded(metadata) if metadata.parent_project_id.is_none() => {
-            &metadata.root_project_id
+        ProjectTopicEvent::Restored(metadata) => {
+            push_unique_update(&mut updates, EntityType::Project, &metadata.project_id);
         }
-        ProjectTopicEvent::Created(_)
-        | ProjectTopicEvent::Updated(_)
-        | ProjectTopicEvent::Deleted(_)
-        | ProjectTopicEvent::Restored(_)
-        | ProjectTopicEvent::PermanentlyDeleted(_)
-        | ProjectTopicEvent::Uploaded(_) => return Vec::new(),
-    };
-    vec![update(EntityType::Project, project_id)]
+        ProjectTopicEvent::PermanentlyDeleted(_) => {}
+        ProjectTopicEvent::Uploaded(metadata) => {
+            for project_id in &metadata.project_ids {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+    }
+    updates
 }
 
 fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
-    let chat_id = match event {
-        ChatTopicEvent::Created(metadata) => &metadata.chat_id,
-        ChatTopicEvent::Updated(metadata) => &metadata.chat_id,
-        ChatTopicEvent::Restored(metadata) => &metadata.chat_id,
-        ChatTopicEvent::Copied(metadata) => &metadata.chat_id,
-        ChatTopicEvent::Deleted(_)
-        | ChatTopicEvent::PermanentlyDeleted(_)
-        | ChatTopicEvent::MessageSent(_) => return Vec::new(),
-    };
-    vec![update(EntityType::Chat, chat_id)]
+    let mut updates = Vec::new();
+    match event {
+        ChatTopicEvent::Created(metadata) => {
+            push_unique_update(&mut updates, EntityType::Chat, &metadata.chat_id);
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+        ChatTopicEvent::Updated(metadata) => {
+            push_unique_update(&mut updates, EntityType::Chat, &metadata.chat_id);
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+                if metadata.previous_project_id.as_deref() != Some(project_id)
+                    && let Some(previous_project_id) = metadata.previous_project_id.as_deref()
+                {
+                    push_unique_update(&mut updates, EntityType::Project, previous_project_id);
+                }
+            }
+        }
+        ChatTopicEvent::Deleted(metadata) => {
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+        ChatTopicEvent::PermanentlyDeleted(metadata) => {
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+        ChatTopicEvent::Restored(metadata) => {
+            push_unique_update(&mut updates, EntityType::Chat, &metadata.chat_id);
+            if let Some(project_id) = metadata.project_id.as_deref() {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
+        }
+        ChatTopicEvent::Copied(metadata) => {
+            push_unique_update(&mut updates, EntityType::Chat, &metadata.chat_id);
+        }
+        ChatTopicEvent::MessageSent(_) => {}
+    }
+    updates
 }
 
 fn entities_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimeUpdate> {

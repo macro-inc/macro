@@ -143,7 +143,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
 }
 
 #[test]
-fn project_updates_only_refresh_root_project_items() {
+fn project_updates_refresh_the_item_and_affected_parent() {
     let root = ProjectTopicEvent::Updated(ProjectUpdatedMetadata {
         project_id: DOCUMENT_ID.to_string(),
         owner: user(),
@@ -153,12 +153,13 @@ fn project_updates_only_refresh_root_project_items() {
         parent_id: None,
         share_permission_updated: false,
     });
+    let parent_id = Uuid::now_v7().to_string();
     let nested = ProjectTopicEvent::Updated(ProjectUpdatedMetadata {
         project_id: DOCUMENT_ID.to_string(),
         owner: user(),
         actor_user_id: None,
         name: Some("Renamed".to_string()),
-        previous_parent_id: Some(Uuid::now_v7().to_string()),
+        previous_parent_id: Some(parent_id.clone()),
         parent_id: None,
         share_permission_updated: false,
     });
@@ -166,7 +167,11 @@ fn project_updates_only_refresh_root_project_items() {
     let entities = entities_from_project_event(&root);
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].item.entity_type, EntityType::Project);
-    assert!(entities_from_project_event(&nested).is_empty());
+
+    let nested_entities = entities_from_project_event(&nested);
+    assert_eq!(nested_entities.len(), 2);
+    assert_eq!(nested_entities[0].item.entity_id, DOCUMENT_ID);
+    assert_eq!(nested_entities[1].item.entity_id, parent_id);
 }
 
 #[test]
@@ -249,6 +254,28 @@ fn document_edit_interactions_refresh_the_document_item() {
     assert_eq!(updates.len(), 1);
     assert_eq!(updates[0].item.entity_type, EntityType::Document);
     assert_eq!(updates[0].item.entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn document_moves_refresh_both_affected_projects() {
+    let previous_project_id = Uuid::now_v7().to_string();
+    let project_id = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user(),
+        actor_user_id: None,
+        document_name: None,
+        previous_project_id: Some(previous_project_id.clone()),
+        project_id: Some(project_id.clone()),
+        file_type: None,
+        share_permission_updated: false,
+    });
+
+    let updates = entities_from_document_event(&event);
+    assert_eq!(updates.len(), 3);
+    assert_eq!(updates[0].item.entity_id, DOCUMENT_ID);
+    assert_eq!(updates[1].item.entity_id, project_id);
+    assert_eq!(updates[2].item.entity_id, previous_project_id);
 }
 
 #[tokio::test]
