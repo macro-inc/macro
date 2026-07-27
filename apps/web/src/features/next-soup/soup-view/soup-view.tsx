@@ -96,19 +96,11 @@ import {
   type SearchLocation,
 } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
-import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
-import { useQueryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
-import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
-import {
-  invalidateSoupEntity,
-  refetchSoupEntity,
-} from '@queries/soup/normalized-cache';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
@@ -212,85 +204,6 @@ const MobileTabLoadingBar = () => (
     <div class="h-full w-2/5 rounded-full bg-accent animate-indeterminate-bar" />
   </div>
 );
-
-const useSoupNotificationInvalidators = () => {
-  const notificationSource = useGlobalNotificationSource();
-  const entityQueryClient = useQueryClient();
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'channel',
-    (notification) => {
-      const meta = notification.notification_metadata;
-
-      let threadId;
-
-      if (
-        meta.tag === 'channel_mention' ||
-        meta.tag === 'channel_message_reply'
-      ) {
-        threadId = meta.content.threadId?.toString();
-      }
-
-      refetchSoupEntity(notification.entity_id, 'channel');
-      invalidateSoupEntity(notification.entity_id);
-      invalidateEntityNotifications(notification.entity_id);
-
-      // For new inbox, we want to display channel threads so we should refetch the thread
-      // item if this notification was for a thread
-      if (threadId) {
-        refetchSoupEntity(threadId, 'channelThread');
-        invalidateSoupEntity(threadId);
-        invalidateEntityNotifications(threadId);
-      }
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'chat',
-    (notification) => {
-      refetchSoupEntity(notification.entity_id, 'chat');
-      invalidateSoupEntity(notification.entity_id);
-      invalidateEntityNotifications(notification.entity_id);
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'email_thread',
-    (notification) => {
-      refetchSoupEntity(notification.entity_id, 'emailThread');
-      invalidateSoupEntity(notification.entity_id);
-      // invalidate thread cache so thread gets fetched (with new message) on next load
-      entityQueryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
-      });
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'document',
-    (notification) => {
-      if (notification.notification_event_type === 'task_assigned') {
-        refetchSoupEntity(notification.entity_id, 'document');
-        invalidateSoupEntity(notification.entity_id);
-        invalidateEntityNotifications(notification.entity_id);
-      }
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'foreign_entity',
-    (notification) => {
-      refetchSoupEntity(notification.entity_id, 'foreignEntity');
-      invalidateSoupEntity(notification.entity_id);
-      invalidateEntityNotifications(notification.entity_id);
-    }
-  );
-};
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
 type SoupListEntryState = {
@@ -532,8 +445,6 @@ export const SoupView = (props: SoupViewProps) => {
       { defer: true }
     )
   );
-
-  useSoupNotificationInvalidators();
 
   const component = createMemo(() => {
     const content = panel.handle.content();
