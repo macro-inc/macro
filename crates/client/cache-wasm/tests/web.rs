@@ -11,7 +11,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { nextCursor hasMore items { id } } }
+    user { id soup(input: $input) { nextCursor hasMore items { __typename id } } }
 }"#;
 
 fn js(json: serde_json::Value) -> JsValue {
@@ -27,7 +27,7 @@ async fn write_then_read_through_js_boundary() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let data = serde_json::json!({
-        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
+        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}] } }
     });
 
     // Miss first.
@@ -87,7 +87,7 @@ async fn write_then_read_through_js_boundary() {
 
     // Cross-instance invalidation path: evict + report local dependents.
     let affected =
-        JsFuture::from(engine.invalidate_keys(vec!["GraphqlSoupItem:doc-1".to_string()]))
+        JsFuture::from(engine.invalidate_keys(vec!["GraphqlSoupDocument:doc-1".to_string()]))
             .await
             .unwrap();
     let affected: Vec<String> = serde_wasm_bindgen::from_value(affected).unwrap();
@@ -100,10 +100,11 @@ async fn write_then_read_through_js_boundary() {
 }
 
 const PROPERTY_QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { hasMore items { id entity {
+    user { id soup(input: $input) { hasMore items {
         __typename
-        ... on GraphqlSoupDocument { id properties { id displayName } }
-    } } } }
+        id
+        ... on GraphqlSoupDocument { properties { id displayName } }
+    } } }
 }"#;
 
 const PROPERTY_MUTATION: &str = r#"mutation SetEntityProperty($input: SetEntityPropertyInput!) {
@@ -120,12 +121,9 @@ async fn optimistic_write_round_trip() {
     let vars = serde_json::json!({"input": {"limit": 1}});
     let base = serde_json::json!({
         "user": { "id": "user-1", "soup": { "hasMore": false, "items": [{
-            "id": "item-1",
-            "entity": {
-                "__typename": "GraphqlSoupDocument",
-                "id": "doc-1",
-                "properties": [{ "id": "prop-1", "displayName": "Status" }]
-            }
+            "__typename": "GraphqlSoupDocument",
+            "id": "doc-1",
+            "properties": [{ "id": "prop-1", "displayName": "Status" }]
         }] } }
     });
     JsFuture::from(engine.write_query(
@@ -189,7 +187,7 @@ async fn optimistic_write_round_trip() {
     .unwrap();
     let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
     assert_eq!(
-        read["data"]["user"]["soup"]["items"][0]["entity"]["properties"][0]["displayName"],
+        read["data"]["user"]["soup"]["items"][0]["properties"][0]["displayName"],
         serde_json::json!("Stage")
     );
 
