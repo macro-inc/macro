@@ -25,13 +25,15 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
-use crate::domain::events::{CallMacroEvent, CallStartedMetadata};
+use crate::domain::events::{
+    CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallStartedMetadata,
+};
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
 };
 
 use super::models::{
-    AddParticipantError, Call, CallActiveResponse, CallError, CallRecord,
+    AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError, CallRecord,
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse, RingStatus,
@@ -255,6 +257,38 @@ impl<
         drop(self.event_broker.send_event(event).inspect_err(|error| {
             tracing::error!(error = ?error, "failed to schedule call lifecycle event");
         }));
+    }
+
+    fn publish_archived_call_event(
+        &self,
+        archived: &ArchivedCall,
+        archive_reason: CallArchiveReason,
+    ) {
+        let created_by = match MacroUserIdStr::parse_from_str(&archived.created_by) {
+            Ok(created_by) => created_by.into_owned(),
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    call_id = %archived.call_id,
+                    "failed to parse stored call creator; skipping archived event"
+                );
+                return;
+            }
+        };
+
+        self.publish_call_event(&CallMacroEvent::record_archived(
+            CallRecordArchivedMetadata {
+                call_id: archived.call_id,
+                channel_id: archived.channel_id,
+                created_by,
+                started_at: archived.started_at,
+                ended_at: archived.ended_at,
+                duration_ms: Some(archived.duration_ms),
+                participant_count: archived.participant_count,
+                has_recording: archived.has_recording,
+                archive_reason,
+            },
+        ));
     }
 
     /// Send a call event to all channel members (best-effort).
@@ -868,6 +902,7 @@ impl<
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
 
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
@@ -978,6 +1013,10 @@ impl<
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    self.publish_archived_call_event(
+                        &archived,
+                        CallArchiveReason::LastParticipantLeft,
+                    );
 
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.

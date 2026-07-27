@@ -14,10 +14,10 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Call, CallError, CallParticipant, CallWebhookEvent, EgressS3Config, RingStatus,
+    ArchivedCall, Call, CallError, CallParticipant, CallWebhookEvent, EgressS3Config, RingStatus,
     VerifiedRingToken, VoipPushPayloadRequest,
 };
-use crate::domain::ports::{CallRtcClient, CallService, MockCallRepository};
+use crate::domain::ports::{CallRtcClient, CallService, MockCallRepository, MockCallRtcClient};
 
 use super::{
     CallServiceImpl, NoopCallSummarizer, derive_preview_key_from_recording_key,
@@ -150,11 +150,14 @@ impl CallRtcClient for MockRtcClient {
     }
 }
 
-// `get_or_create_call` does not clone the repository. The bound comes from
-// unrelated spawned workflows on the same service implementation.
+// Spawned post-archive workflows clone the repository. Give each clone the
+// empty stable-voice result needed by the default voice-processing path.
 impl Clone for MockCallRepository {
     fn clone(&self) -> Self {
-        unreachable!("repository cloning is not exercised by get_or_create_call tests")
+        let mut repo = Self::new();
+        repo.expect_get_stable_speaker_voices_for_call_record()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        repo
     }
 }
 
@@ -530,6 +533,280 @@ async fn malformed_stored_creator_skips_only_started_event() {
 
     assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
     assert!(broker.events().is_empty());
+}
+
+const ARCHIVED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6d8);
+const ARCHIVED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x4f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a91);
+const ARCHIVED_EVENT_ROOM_NAME: &str = "archived-event-room";
+const ARCHIVED_EVENT_CREATOR: &str = "macro|archiver@example.com";
+const ARCHIVED_EVENT_PARTICIPANT: &str = "participant@example.com";
+
+fn archived_event_started_at() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-07-27T18:01:02Z")
+        .expect("valid timestamp")
+        .with_timezone(&Utc)
+}
+
+fn archived_event_ended_at() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-07-27T18:04:05Z")
+        .expect("valid timestamp")
+        .with_timezone(&Utc)
+}
+
+fn active_call_for_archived_event(created_by: &str, egress_id: Option<&str>) -> Call {
+    Call {
+        id: ARCHIVED_EVENT_CALL_ID,
+        channel_id: ARCHIVED_EVENT_CHANNEL_ID,
+        room_name: ARCHIVED_EVENT_ROOM_NAME.to_string(),
+        created_by: created_by.to_string(),
+        created_at: archived_event_started_at(),
+        egress_id: egress_id.map(str::to_string),
+    }
+}
+
+fn archived_call_for_event(
+    created_by: &str,
+    participant_count: usize,
+    has_recording: bool,
+) -> ArchivedCall {
+    ArchivedCall {
+        call_id: ARCHIVED_EVENT_CALL_ID,
+        channel_id: ARCHIVED_EVENT_CHANNEL_ID,
+        created_by: created_by.to_string(),
+        started_at: archived_event_started_at(),
+        ended_at: archived_event_ended_at(),
+        duration_ms: 183_000,
+        has_recording,
+        participant_count,
+    }
+}
+
+fn webhook_rtc_client(
+    event_type: &str,
+    participant_identity: Option<&'static str>,
+) -> MockCallRtcClient {
+    let event = CallWebhookEvent {
+        event: event_type.to_string(),
+        id: format!("{event_type}-event-id"),
+        room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
+        participant_identity: participant_identity.map(|email| user(email).into_owned()),
+        egress_id: None,
+        file_url: None,
+        created_at: 1_775_000_000,
+    };
+    let mut rtc_client = MockCallRtcClient::new();
+    rtc_client
+        .expect_receive_webhook()
+        .times(1)
+        .return_once(move |body, auth_token| {
+            assert_eq!(body, "webhook-body");
+            assert_eq!(auth_token, "webhook-token");
+            Ok(event)
+        });
+    rtc_client
+}
+
+type BaseWebhookCallService = CallServiceImpl<
+    MockCallRepository,
+    MockCallRtcClient,
+    StubConnectionService,
+    NoOpEntityAccessService,
+    StubNotificationIngress,
+    StubRecordingStorage,
+    NoopCallSummarizer,
+>;
+
+fn build_webhook_service(
+    repo: MockCallRepository,
+    rtc_client: MockCallRtcClient,
+    event_broker: RecordingEventBroker,
+) -> impl CallService {
+    let service: BaseWebhookCallService = CallServiceImpl::new(
+        repo,
+        rtc_client,
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    service.with_event_broker(event_broker)
+}
+
+fn assert_archived_event(
+    event_broker: &RecordingEventBroker,
+    archive_reason: &str,
+    participant_count: usize,
+    has_recording: bool,
+) {
+    let events = event_broker.events();
+    let [published] = events.as_slice() else {
+        panic!("expected exactly one call event")
+    };
+    assert_eq!(published.topic, "macro.calls");
+    assert_eq!(published.key, ARCHIVED_EVENT_CALL_ID.to_string());
+
+    let event_id = published.envelope["event_id"]
+        .as_str()
+        .expect("event id is a string");
+    Uuid::parse_str(event_id).expect("event id is a UUID");
+
+    let mut envelope = published.envelope.clone();
+    envelope
+        .as_object_mut()
+        .expect("event envelope is an object")
+        .remove("event_id");
+    assert_eq!(
+        envelope,
+        json!({
+            "schema_version": 1,
+            "event_type": "call.record_archived",
+            "metadata": {
+                "call_id": ARCHIVED_EVENT_CALL_ID,
+                "channel_id": ARCHIVED_EVENT_CHANNEL_ID,
+                "created_by": ARCHIVED_EVENT_CREATOR,
+                "started_at": "2026-07-27T18:01:02Z",
+                "ended_at": "2026-07-27T18:04:05Z",
+                "duration_ms": 183_000,
+                "participant_count": participant_count,
+                "has_recording": has_recording,
+                "archive_reason": archive_reason,
+            },
+        })
+    );
+}
+
+#[tokio::test]
+async fn participant_left_publishes_last_participant_archived_event() {
+    let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    let archived_call = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 4, false);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |room_name| {
+            assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
+            Box::pin(async move { Ok(Some(active_call)) })
+        });
+    repo.expect_remove_participant()
+        .times(1)
+        .returning(|call_id, participant_identity| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            assert_eq!(
+                participant_identity.as_ref(),
+                user(ARCHIVED_EVENT_PARTICIPANT).as_ref()
+            );
+            Box::pin(async { Ok(()) })
+        });
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|call_id| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            Box::pin(async { Ok(0) })
+        });
+    repo.expect_archive_call()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(archived_call) })
+        });
+
+    let mut rtc_client = webhook_rtc_client("participant_left", Some(ARCHIVED_EVENT_PARTICIPANT));
+    rtc_client
+        .expect_delete_room()
+        .times(1)
+        .returning(|room_name| {
+            assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
+            Box::pin(async { Ok(()) })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("participant-left webhook succeeds");
+
+    assert_archived_event(&event_broker, "last_participant_left", 4, false);
+}
+
+#[tokio::test]
+async fn room_finished_publishes_room_finished_archived_event() {
+    let active_call = active_call_for_archived_event(
+        "macro|stale-active-creator@example.com",
+        Some("archived-event-egress"),
+    );
+    let archived_call = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 3, true);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |room_name| {
+            assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
+            Box::pin(async move { Ok(Some(active_call)) })
+        });
+    repo.expect_archive_call()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(archived_call) })
+        });
+
+    let rtc_client = webhook_rtc_client("room_finished", None);
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("room-finished webhook succeeds");
+
+    assert_archived_event(&event_broker, "room_finished", 3, true);
+}
+
+#[tokio::test]
+async fn failed_archive_does_not_publish_archived_event() {
+    let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
+    repo.expect_archive_call()
+        .times(1)
+        .returning(|_| Box::pin(async { Err(anyhow::anyhow!("archive failed")) }));
+
+    let rtc_client = webhook_rtc_client("room_finished", None);
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    assert!(
+        service
+            .process_webhook_event("webhook-body", "webhook-token")
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn malformed_archived_creator_skips_event_without_undoing_archival() {
+    let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    let archived_call = archived_call_for_event("malformed-user-id", 1, false);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
+    repo.expect_archive_call()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(archived_call) }));
+
+    let rtc_client = webhook_rtc_client("room_finished", None);
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("malformed creator does not undo archival");
+    assert!(event_broker.events().is_empty());
 }
 
 #[cfg(feature = "outbound")]
