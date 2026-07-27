@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use connection::domain::models::{ConnectionError, InvalidationEvent};
@@ -16,11 +18,14 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ArchivedCall, Call, CallError, CallParticipant, CallRecord, CallWebhookEvent,
-    DeletedCallRecordStorageKeys, EditCallRecordRequest, EgressS3Config, RingStatus,
-    VerifiedRingToken, VoipPushPayloadRequest,
+    ArchivedCall, Call, CallError, CallParticipant, CallRecord, CallRecordTranscriptSegment,
+    CallWebhookEvent, DeletedCallRecordStorageKeys, EditCallRecordRequest, EgressS3Config,
+    RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
 };
-use crate::domain::ports::{CallRtcClient, CallService, MockCallRepository, MockCallRtcClient};
+use crate::domain::ports::{
+    CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
+    NoOpCallSearchIndexer, NoOpVoiceRepository,
+};
 
 use super::{
     CallServiceImpl, NoopCallSummarizer, derive_preview_key_from_recording_key,
@@ -153,10 +158,34 @@ impl CallRtcClient for MockRtcClient {
     }
 }
 
-// Spawned post-archive workflows clone the repository. Give each clone the
-// empty stable-voice result needed by the default voice-processing path.
+fn configured_repository_clones() -> &'static Mutex<HashMap<usize, MockCallRepository>> {
+    static REPOSITORIES: OnceLock<Mutex<HashMap<usize, MockCallRepository>>> = OnceLock::new();
+    REPOSITORIES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn configure_repository_clone(repo: &MockCallRepository, cloned_repo: MockCallRepository) {
+    let repo_address = repo as *const MockCallRepository as usize;
+    let previous = configured_repository_clones()
+        .lock()
+        .unwrap()
+        .insert(repo_address, cloned_repo);
+    assert!(previous.is_none(), "repository clone already configured");
+}
+
+// Spawned post-archive workflows clone the repository. Tests that exercise a
+// spawned repository operation install a purpose-built clone; other tests get
+// the empty stable-voice result needed by the default voice-processing path.
 impl Clone for MockCallRepository {
     fn clone(&self) -> Self {
+        let repo_address = self as *const Self as usize;
+        if let Some(repo) = configured_repository_clones()
+            .lock()
+            .unwrap()
+            .remove(&repo_address)
+        {
+            return repo;
+        }
+
         let mut repo = Self::new();
         repo.expect_get_stable_speaker_voices_for_call_record()
             .returning(|_| Box::pin(async { Ok(Vec::new()) }));
@@ -174,6 +203,7 @@ struct PublishedCallEvent {
 #[derive(Clone, Default)]
 struct RecordingEventBroker {
     events: Arc<Mutex<Vec<PublishedCallEvent>>>,
+    attempts: Arc<AtomicUsize>,
     fail_scheduling: bool,
 }
 
@@ -188,6 +218,10 @@ impl RecordingEventBroker {
     fn events(&self) -> Vec<PublishedCallEvent> {
         self.events.lock().unwrap().clone()
     }
+
+    fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::SeqCst)
+    }
 }
 
 impl MacroEventBroker for RecordingEventBroker {
@@ -195,6 +229,7 @@ impl MacroEventBroker for RecordingEventBroker {
         &self,
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        self.attempts.fetch_add(1, Ordering::SeqCst);
         if self.fail_scheduling {
             return Err(EventBrokerError::Publish(
                 "intentional scheduling failure".to_string(),
@@ -381,7 +416,7 @@ type BaseGetOrCreateCallService = CallServiceImpl<
     NoopCallSummarizer,
 >;
 
-fn build_get_or_create_service<B: MacroEventBroker>(
+fn build_get_or_create_service<B: MacroEventBroker + Clone>(
     repo: MockCallRepository,
     event_broker: B,
     recording_enabled: bool,
@@ -1280,6 +1315,432 @@ async fn delete_entity_permanently_publishes_one_deleted_event() {
         .expect("entity mutation deletion succeeds");
 
     assert_deleted_event(&event_broker);
+}
+
+const SUMMARIZED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b700);
+const SUMMARIZED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x6f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a93);
+const SUMMARIZED_EVENT_SUMMARY: &str = "Private generated summary text";
+const SUMMARIZED_EVENT_NAME: &str = "Private generated call name";
+
+#[derive(Clone, Copy)]
+enum GeneratedNameResult {
+    Generated,
+    NoName,
+    Failed,
+}
+
+#[derive(Clone)]
+struct StubCallSummarizer {
+    summary: Option<&'static str>,
+    generated_name: GeneratedNameResult,
+    summary_calls: Arc<AtomicUsize>,
+    name_calls: Arc<AtomicUsize>,
+}
+
+impl StubCallSummarizer {
+    fn new(summary: Option<&'static str>, generated_name: GeneratedNameResult) -> Self {
+        Self {
+            summary,
+            generated_name,
+            summary_calls: Arc::new(AtomicUsize::new(0)),
+            name_calls: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    fn name_calls(&self) -> usize {
+        self.name_calls.load(Ordering::SeqCst)
+    }
+}
+
+impl CallSummarizer for StubCallSummarizer {
+    type Err = anyhow::Error;
+
+    async fn summarize_call(
+        &self,
+        call_id: &Uuid,
+        transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> Result<Option<String>, Self::Err> {
+        assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+        assert_eq!(transcript.len(), 1);
+        self.summary_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self.summary.map(str::to_string))
+    }
+
+    async fn generate_call_name(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+        assert_eq!(summary, SUMMARIZED_EVENT_SUMMARY);
+        self.name_calls.fetch_add(1, Ordering::SeqCst);
+
+        match self.generated_name {
+            GeneratedNameResult::Generated => Ok(Some(SUMMARIZED_EVENT_NAME.to_string())),
+            GeneratedNameResult::NoName => Ok(None),
+            GeneratedNameResult::Failed => Err(anyhow::anyhow!("call naming failed")),
+        }
+    }
+
+    async fn generate_custom_speakers(
+        &self,
+        _transcript: Vec<crate::domain::models::EnrichedCallTranscript>,
+        _candidate_speakers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<Vec<crate::domain::models::CallTranscriptCustomSpeakerResult>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
+#[derive(Clone, Copy)]
+enum NamePersistence {
+    NotAttempted,
+    Persisted(bool),
+    Failed,
+}
+
+fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
+    CallRecord {
+        call_id: SUMMARIZED_EVENT_CALL_ID,
+        channel_id: SUMMARIZED_EVENT_CHANNEL_ID,
+        room_name: SUMMARIZED_EVENT_CHANNEL_ID.to_string(),
+        created_by: "macro|creator@example.com".to_string(),
+        started_at: started_event_timestamp(),
+        ended_at: Some(started_event_timestamp()),
+        duration_ms: Some(10_000),
+        egress_id: None,
+        recording_started_at: None,
+        recording_key: None,
+        preview_key: None,
+        recording_url: None,
+        recording_preview_url: None,
+        channel_name: None,
+        custom_name: custom_name.map(str::to_string),
+        summary: None,
+        share_with_team: false,
+        is_active: false,
+        status: None,
+        user_access_level: None,
+        participants: Vec::new(),
+        transcript: vec![CallRecordTranscriptSegment {
+            transcript_id: Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b701),
+            segment_id: Some("segment-1".to_string()),
+            speaker_id: "macro|speaker@example.com".to_string(),
+            diarized_speaker_id: Some("speaker-1".to_string()),
+            content: "Discuss the event publication behavior.".to_string(),
+            started_at: started_event_timestamp(),
+            ended_at: Some(started_event_timestamp()),
+            sequence_num: 1,
+        }],
+    }
+}
+
+fn mock_summarization_repo(
+    custom_name: Option<&str>,
+    summary_persisted: Option<bool>,
+    name_persistence: NamePersistence,
+) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_enhanced_call_record_transcripts()
+        .times(1)
+        .returning(|call_id| {
+            assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+            Box::pin(async { Ok(Vec::new()) })
+        });
+
+    let record = summarized_call_record(custom_name);
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(Some(record)) })
+        });
+
+    if let Some(summary_persisted) = summary_persisted {
+        repo.expect_insert_call_summary()
+            .times(1)
+            .returning(move |call_id, summary| {
+                assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+                assert_eq!(summary, SUMMARIZED_EVENT_SUMMARY);
+                Box::pin(async move { Ok(summary_persisted) })
+            });
+    }
+
+    match name_persistence {
+        NamePersistence::NotAttempted => {}
+        NamePersistence::Persisted(name_persisted) => {
+            repo.expect_set_custom_name_if_null()
+                .times(1)
+                .returning(move |call_id, name| {
+                    assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+                    assert_eq!(name, SUMMARIZED_EVENT_NAME);
+                    Box::pin(async move { Ok(name_persisted) })
+                });
+        }
+        NamePersistence::Failed => {
+            repo.expect_set_custom_name_if_null()
+                .times(1)
+                .returning(|call_id, name| {
+                    assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+                    assert_eq!(name, SUMMARIZED_EVENT_NAME);
+                    Box::pin(async { Err(anyhow::anyhow!("name persistence failed")) })
+                });
+        }
+    }
+
+    repo
+}
+
+type SummarizationCallService<B> = CallServiceImpl<
+    MockCallRepository,
+    MockRtcClient,
+    StubConnectionService,
+    NoOpEntityAccessService,
+    StubNotificationIngress,
+    StubRecordingStorage,
+    StubCallSummarizer,
+    NoOpCallSearchIndexer,
+    (),
+    NoOpVoiceRepository,
+    B,
+>;
+
+fn build_summarization_service<B: MacroEventBroker>(
+    repo: MockCallRepository,
+    summarizer: StubCallSummarizer,
+    event_broker: B,
+) -> SummarizationCallService<B> {
+    let service = CallServiceImpl::new(
+        repo,
+        MockRtcClient::new(),
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    )
+    .with_summarizer(summarizer);
+
+    service.with_event_broker(event_broker)
+}
+
+async fn run_direct_summarization(
+    custom_name: Option<&str>,
+    summary: Option<&'static str>,
+    summary_persisted: Option<bool>,
+    generated_name: GeneratedNameResult,
+    name_persistence: NamePersistence,
+    event_broker: RecordingEventBroker,
+) -> (RecordingEventBroker, StubCallSummarizer) {
+    let repo = mock_summarization_repo(custom_name, summary_persisted, name_persistence);
+    let summarizer = StubCallSummarizer::new(summary, generated_name);
+    let observed_broker = event_broker.clone();
+    let service = build_summarization_service(repo, summarizer.clone(), event_broker);
+
+    service
+        .summarize_call(&SUMMARIZED_EVENT_CALL_ID)
+        .await
+        .expect("summarization succeeds");
+
+    (observed_broker, summarizer)
+}
+
+fn assert_summarized_event(event_broker: &RecordingEventBroker, ai_name_generated: bool) {
+    let events = event_broker.events();
+    let [published] = events.as_slice() else {
+        panic!("expected exactly one summarized event")
+    };
+    assert_eq!(published.topic, "macro.calls");
+    assert_eq!(published.key, SUMMARIZED_EVENT_CALL_ID.to_string());
+
+    let event_id = published.envelope["event_id"]
+        .as_str()
+        .expect("event id is a string");
+    Uuid::parse_str(event_id).expect("event id is a UUID");
+
+    let mut envelope = published.envelope.clone();
+    envelope
+        .as_object_mut()
+        .expect("event envelope is an object")
+        .remove("event_id");
+    assert_eq!(
+        envelope,
+        json!({
+            "schema_version": 1,
+            "event_type": "call.record_summarized",
+            "metadata": {
+                "call_id": SUMMARIZED_EVENT_CALL_ID,
+                "channel_id": SUMMARIZED_EVENT_CHANNEL_ID,
+                "ai_name_generated": ai_name_generated,
+            },
+        })
+    );
+
+    let serialized_event = published.envelope.to_string();
+    assert!(!serialized_event.contains(SUMMARIZED_EVENT_SUMMARY));
+    assert!(!serialized_event.contains(SUMMARIZED_EVENT_NAME));
+}
+
+async fn wait_for_spawned_work(mut is_complete: impl FnMut() -> bool) {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !is_complete() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("spawned summarization completed before timeout");
+}
+
+#[tokio::test]
+async fn summarize_call_publishes_record_summarized_event() {
+    let (broker, _) = run_direct_summarization(
+        None,
+        Some(SUMMARIZED_EVENT_SUMMARY),
+        Some(true),
+        GeneratedNameResult::Generated,
+        NamePersistence::Persisted(true),
+        RecordingEventBroker::default(),
+    )
+    .await;
+    assert_summarized_event(&broker, true);
+
+    let (no_summary_broker, no_summary_summarizer) = run_direct_summarization(
+        None,
+        None,
+        None,
+        GeneratedNameResult::Generated,
+        NamePersistence::NotAttempted,
+        RecordingEventBroker::default(),
+    )
+    .await;
+    assert!(no_summary_broker.events().is_empty());
+    assert_eq!(no_summary_summarizer.name_calls(), 0);
+
+    let (deleted_record_broker, _) = run_direct_summarization(
+        None,
+        Some(SUMMARIZED_EVENT_SUMMARY),
+        Some(false),
+        GeneratedNameResult::Generated,
+        NamePersistence::Persisted(false),
+        RecordingEventBroker::default(),
+    )
+    .await;
+    assert!(deleted_record_broker.events().is_empty());
+
+    let failing_broker = RecordingEventBroker::failing();
+    let (observed_failing_broker, _) = run_direct_summarization(
+        Some("User-provided name"),
+        Some(SUMMARIZED_EVENT_SUMMARY),
+        Some(true),
+        GeneratedNameResult::Generated,
+        NamePersistence::NotAttempted,
+        failing_broker,
+    )
+    .await;
+    assert_eq!(observed_failing_broker.attempts(), 1);
+    assert!(observed_failing_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn spawned_summarization_publishes_record_summarized_event() {
+    let event_broker = RecordingEventBroker::default();
+    let summarizer = StubCallSummarizer::new(
+        Some(SUMMARIZED_EVENT_SUMMARY),
+        GeneratedNameResult::Generated,
+    );
+    let service =
+        build_summarization_service(MockCallRepository::new(), summarizer, event_broker.clone());
+    configure_repository_clone(
+        &service.repo,
+        mock_summarization_repo(None, Some(true), NamePersistence::Persisted(true)),
+    );
+
+    service.spawn_summarize_call(SUMMARIZED_EVENT_CALL_ID);
+    wait_for_spawned_work(|| !event_broker.events().is_empty()).await;
+    assert_summarized_event(&event_broker, true);
+
+    let failing_broker = RecordingEventBroker::failing();
+    let summarizer = StubCallSummarizer::new(
+        Some(SUMMARIZED_EVENT_SUMMARY),
+        GeneratedNameResult::Generated,
+    );
+    let service = build_summarization_service(
+        MockCallRepository::new(),
+        summarizer,
+        failing_broker.clone(),
+    );
+    configure_repository_clone(
+        &service.repo,
+        mock_summarization_repo(None, Some(true), NamePersistence::Persisted(true)),
+    );
+
+    service.spawn_summarize_call(SUMMARIZED_EVENT_CALL_ID);
+    wait_for_spawned_work(|| failing_broker.attempts() == 1).await;
+    assert!(failing_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn summarized_event_reports_ai_name_persistence() {
+    let cases = [
+        (
+            None,
+            GeneratedNameResult::Generated,
+            NamePersistence::Persisted(true),
+            true,
+            1,
+        ),
+        (
+            Some("User-provided name"),
+            GeneratedNameResult::Generated,
+            NamePersistence::NotAttempted,
+            false,
+            0,
+        ),
+        (
+            None,
+            GeneratedNameResult::NoName,
+            NamePersistence::NotAttempted,
+            false,
+            1,
+        ),
+        (
+            None,
+            GeneratedNameResult::Failed,
+            NamePersistence::NotAttempted,
+            false,
+            1,
+        ),
+        (
+            None,
+            GeneratedNameResult::Generated,
+            NamePersistence::Persisted(false),
+            false,
+            1,
+        ),
+        (
+            None,
+            GeneratedNameResult::Generated,
+            NamePersistence::Failed,
+            false,
+            1,
+        ),
+    ];
+
+    for (custom_name, generated_name, name_persistence, expected_ai_name, expected_name_calls) in
+        cases
+    {
+        let (broker, summarizer) = run_direct_summarization(
+            custom_name,
+            Some(SUMMARIZED_EVENT_SUMMARY),
+            Some(true),
+            generated_name,
+            name_persistence,
+            RecordingEventBroker::default(),
+        )
+        .await;
+
+        assert_summarized_event(&broker, expected_ai_name);
+        assert_eq!(summarizer.name_calls(), expected_name_calls);
+    }
 }
 
 #[cfg(feature = "outbound")]

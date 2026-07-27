@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::domain::events::{
     CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
-    CallRecordUpdatedMetadata, CallStartedMetadata,
+    CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallStartedMetadata,
 };
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
@@ -256,9 +256,7 @@ impl<
     }
 
     fn publish_call_event(&self, event: &CallMacroEvent) {
-        drop(self.event_broker.send_event(event).inspect_err(|error| {
-            tracing::error!(error = ?error, "failed to schedule call lifecycle event");
-        }));
+        publish_call_event(&self.event_broker, event);
     }
 
     fn publish_archived_call_event(
@@ -478,7 +476,7 @@ impl<
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
-    B: MacroEventBroker,
+    B: MacroEventBroker + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
@@ -1524,39 +1522,30 @@ impl<
             return Ok(());
         };
 
-        let _summary_persisted = self
+        let summary_persisted = self
             .repo
             .insert_call_summary(call_id, &summary)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        // Auto-generate a display name from the summary; only persisted when
-        // the user has not already set one (`set_custom_name_if_null`). Best
-        // effort — naming failures must not fail summarization.
-        if record.custom_name.is_none() {
-            match summarizer.generate_call_name(call_id, &summary).await {
-                Ok(Some(name)) => {
-                    if let Err(e) = self.repo.set_custom_name_if_null(call_id, &name).await {
-                        tracing::error!(
-                            error=?e, %call_id,
-                            "failed to persist ai-generated call name"
-                        );
-                    }
-                }
-                Ok(None) => {
-                    tracing::info!(
-                        %call_id,
-                        "ai call naming returned no title; leaving name unset"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        error=?e, %call_id,
-                        "ai call naming failed after summary; leaving name unset"
-                    );
-                }
-            }
+        let ai_name_generated = generate_and_persist_call_name(
+            &self.repo,
+            summarizer,
+            call_id,
+            &summary,
+            record.custom_name.is_none(),
+        )
+        .await;
+
+        if summary_persisted {
+            self.publish_call_event(&CallMacroEvent::record_summarized(
+                CallRecordSummarizedMetadata {
+                    call_id: *call_id,
+                    channel_id: record.channel_id,
+                    ai_name_generated,
+                },
+            ));
         }
 
         Ok(())
@@ -1600,21 +1589,22 @@ impl<
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
-    B: MacroEventBroker,
+    B: MacroEventBroker + Clone,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///
     /// Called after the `call_records` row is persisted so that summarization
     /// can run off the request path without blocking call completion. The
-    /// spawned task owns cloned handles to `repo` and `summarizer`; errors
-    /// are logged, never propagated. When no summarizer is configured this is
-    /// a no-op and no task is spawned.
+    /// spawned task owns cloned handles to `repo`, `summarizer`, and the event
+    /// broker; errors are logged, never propagated. When no summarizer is
+    /// configured this is a no-op and no task is spawned.
     fn spawn_summarize_call(&self, call_id: Uuid) {
         let Some(summarizer) = self.summarizer.clone() else {
             return;
         };
         let repo = self.repo.clone();
+        let event_broker = self.event_broker.clone();
         tokio::spawn(async move {
             if let Err(e) = generate_and_persist_custom_speakers(&repo, &summarizer, &call_id).await
             {
@@ -1653,7 +1643,7 @@ impl<
                 }
             };
 
-            let _summary_persisted = match repo.insert_call_summary(&call_id, &summary).await {
+            let summary_persisted = match repo.insert_call_summary(&call_id, &summary).await {
                 Ok(persisted) => persisted,
                 Err(e) => {
                     tracing::error!(error=?e, %call_id, "failed to persist call summary");
@@ -1661,29 +1651,24 @@ impl<
                 }
             };
 
-            if record.custom_name.is_none() {
-                match summarizer.generate_call_name(&call_id, &summary).await {
-                    Ok(Some(name)) => {
-                        if let Err(e) = repo.set_custom_name_if_null(&call_id, &name).await {
-                            tracing::error!(
-                                error=?e, %call_id,
-                                "failed to persist ai-generated call name"
-                            );
-                        }
-                    }
-                    Ok(None) => {
-                        tracing::info!(
-                            %call_id,
-                            "ai call naming returned no title; leaving name unset"
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            error=?e, %call_id,
-                            "ai call naming failed after summary; leaving name unset"
-                        );
-                    }
-                }
+            let ai_name_generated = generate_and_persist_call_name(
+                &repo,
+                &summarizer,
+                &call_id,
+                &summary,
+                record.custom_name.is_none(),
+            )
+            .await;
+
+            if summary_persisted {
+                publish_call_event(
+                    &event_broker,
+                    &CallMacroEvent::record_summarized(CallRecordSummarizedMetadata {
+                        call_id,
+                        channel_id: record.channel_id,
+                        ai_name_generated,
+                    }),
+                );
             }
         });
     }
@@ -1701,6 +1686,55 @@ impl<
         tokio::spawn(async move {
             enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
         });
+    }
+}
+
+fn publish_call_event<B: MacroEventBroker>(event_broker: &B, event: &CallMacroEvent) {
+    drop(event_broker.send_event(event).inspect_err(|error| {
+        tracing::error!(error = ?error, "failed to schedule call lifecycle event");
+    }));
+}
+
+async fn generate_and_persist_call_name<R, Sm>(
+    repo: &R,
+    summarizer: &Sm,
+    call_id: &Uuid,
+    summary: &str,
+    should_generate_name: bool,
+) -> bool
+where
+    R: CallRepository,
+    Sm: CallSummarizer,
+{
+    if !should_generate_name {
+        return false;
+    }
+
+    match summarizer.generate_call_name(call_id, summary).await {
+        Ok(Some(name)) => match repo.set_custom_name_if_null(call_id, &name).await {
+            Ok(name_persisted) => name_persisted,
+            Err(e) => {
+                tracing::error!(
+                    error=?e, %call_id,
+                    "failed to persist ai-generated call name"
+                );
+                false
+            }
+        },
+        Ok(None) => {
+            tracing::info!(
+                %call_id,
+                "ai call naming returned no title; leaving name unset"
+            );
+            false
+        }
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_id,
+                "ai call naming failed after summary; leaving name unset"
+            );
+            false
+        }
     }
 }
 
