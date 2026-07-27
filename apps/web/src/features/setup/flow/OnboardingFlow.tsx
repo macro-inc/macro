@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
 import LogoIcon from '@icon/macro-logo.svg';
 import { authKeys } from '@queries/auth/keys';
@@ -26,6 +27,11 @@ import { BuildingStep } from './BuildingStep';
 import { ConnectorStep } from './ConnectorStep';
 import { createFlowFinish } from './createFlowFinish';
 import { EmailStep } from './EmailStep';
+import {
+  ONBOARDING_CONNECTORS_FEATURE_FLAG,
+  type OnboardingConnectorServerName,
+  resolveOnboardingConnectorNames,
+} from './onboardingConnectorConfig';
 import { PlanStep } from './PlanStep';
 import { SummaryStep } from './SummaryStep';
 import {
@@ -109,12 +115,10 @@ const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
   },
 };
 
-/** Connector steps, in spec order, dropping tools absent from this build
- * (Slack is dev-only in production FEATURED_MCP_SERVERS). */
-const CONNECTOR_STEP_NAMES = ['Linear', 'Notion', 'Slack', 'GitHub'];
-
-function buildSteps(): StepDef[] {
-  const connectorSteps: StepDef[] = CONNECTOR_STEP_NAMES.flatMap((name) => {
+function buildSteps(
+  connectorNames: readonly OnboardingConnectorServerName[]
+): StepDef[] {
+  const connectorSteps: StepDef[] = connectorNames.flatMap((name) => {
     const server = FEATURED_MCP_SERVERS.find(
       (candidate) => candidate.server_name === name
     );
@@ -230,10 +234,17 @@ function FlowContent() {
   const serversQuery = useMcpServersQuery({ neverSuspend: true });
   const analytics = useAnalytics();
 
-  const steps = buildSteps();
+  const connectorConfig = useFeatureFlag(ONBOARDING_CONNECTORS_FEATURE_FLAG);
+  const steps = createMemo(() => {
+    const config = connectorConfig();
+    return buildSteps(
+      resolveOnboardingConnectorNames(config.enabled, config.payload)
+    );
+  });
 
   const [stepIndex, setStepIndex] = createSignal(0);
-  const currentStep = createMemo(() => steps[stepIndex()]);
+  const currentStep = createMemo(() => steps()[stepIndex()]);
+  const currentStepKey = createMemo(() => currentStep().key);
   const userId = () => userInfoQuery.data?.userId;
 
   // Resume where a full-page OAuth round-trip left off — only for the user
@@ -253,7 +264,7 @@ function FlowContent() {
         sessionStorage.removeItem(FLOW_NEXT_STORAGE_KEY);
         return;
       }
-      const index = steps.findIndex((step) => step.key === saved.step);
+      const index = steps().findIndex((step) => step.key === saved.step);
       if (index !== -1) setStepIndex(index);
     } catch {
       sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
@@ -270,14 +281,14 @@ function FlowContent() {
     startedTracked = true;
     analytics.track('onboarding_v4_started', {
       signup_method: links.length > 0 ? 'google' : 'email_code',
-      entry_step: currentStep().key,
+      entry_step: currentStepKey(),
     });
   });
 
   createEffect(() => {
     if (!needsOnboarding()) return;
     analytics.track('onboarding_v4_step', {
-      step: currentStep().key,
+      step: currentStepKey(),
       index: stepIndex(),
       state: 'viewed',
     });
@@ -286,15 +297,15 @@ function FlowContent() {
   // Forward-only: there is no back.
   const advance = (state: 'completed' | 'skipped') => {
     analytics.track('onboarding_v4_step', {
-      step: currentStep().key,
+      step: currentStepKey(),
       index: stepIndex(),
       state,
     });
-    const index = Math.min(stepIndex() + 1, steps.length - 1);
+    const index = Math.min(stepIndex() + 1, steps().length - 1);
     setStepIndex(index);
     sessionStorage.setItem(
       FLOW_STEP_STORAGE_KEY,
-      JSON.stringify({ user: userId(), step: steps[index].key })
+      JSON.stringify({ user: userId(), step: steps()[index].key })
     );
   };
 
@@ -396,7 +407,7 @@ function FlowContent() {
             </Show>
 
             <Stepper step={stepIndex()} transition={Stepper.transitions.scale}>
-              <For each={steps}>
+              <For each={steps()}>
                 {(step) => (
                   <Stepper.Step>
                     {/* Per-step boundary: a first-load query suspending
@@ -412,14 +423,14 @@ function FlowContent() {
 
             <Show when={!currentStep().noDot}>
               <div class="flex gap-1.5">
-                <Index each={steps.filter((step) => !step.noDot)}>
+                <Index each={steps().filter((step) => !step.noDot)}>
                   {(step) => (
                     <div
                       class={cn(
                         'size-1.5 rounded-full transition-colors',
-                        stepIndex() === steps.indexOf(step())
+                        stepIndex() === steps().indexOf(step())
                           ? 'bg-accent'
-                          : stepIndex() > steps.indexOf(step())
+                          : stepIndex() > steps().indexOf(step())
                             ? 'bg-ink/40'
                             : 'bg-ink/15'
                       )}
