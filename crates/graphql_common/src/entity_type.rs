@@ -137,12 +137,15 @@ impl From<GraphqlSoupEntityType> for GraphqlEntityType {
 /// Wrapper over the [model_entity::Entity]
 pub struct GraphqlEntity<'a>(pub Entity<'a>);
 
+/// Canonical reference to an entity affected by a mutation.
 #[Object]
 impl<'a> GraphqlEntity<'a> {
+    /// The entity's canonical identifier.
     async fn id(&self) -> ID {
         ID(self.0.entity_id.to_string())
     }
 
+    /// The entity's canonical type.
     async fn entity_type(&self) -> GraphqlEntityType {
         GraphqlEntityType::from(self.0.entity_type)
     }

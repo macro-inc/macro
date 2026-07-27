@@ -329,8 +329,10 @@ impl From<Entity<'static>> for GraphqlEntityMutationRef {
 
 struct GraphqlMutationSuccess<'a>(Cow<'a, [Entity<'a>]>);
 
+/// Successful result for one requested entity mutation.
 #[Object]
 impl<'a> GraphqlMutationSuccess<'a> {
+    /// Canonical references to every entity changed by the mutation.
     async fn affected_entities(&self) -> Vec<GraphqlEntity<'_>> {
         self.0
             .iter()
@@ -342,12 +344,15 @@ impl<'a> GraphqlMutationSuccess<'a> {
 
 struct GraphqlMutationError(EntityMutationErrorCode);
 
+/// User-safe failure for one requested entity mutation.
 #[Object]
 impl GraphqlMutationError {
+    /// Stable machine-readable error category.
     async fn error_code(&self) -> GraphqlEntityMutationErrorCode {
         self.0.into()
     }
 
+    /// User-safe explanation of the failure.
     async fn message(&self) -> &'static str {
         match self.0 {
             EntityMutationErrorCode::UnsupportedOperation(_) => {
@@ -409,8 +414,10 @@ impl EntityMutationPayload {
     }
 }
 
+/// Results for a batch mutation, preserving the input order.
 #[Object]
 impl EntityMutationPayload {
+    /// Per-input mutation outcomes.
     async fn results<'a>(&'a self) -> Vec<GraphqlEntityMutationResult<'a>> {
         self.results
             .iter()

@@ -73,7 +73,13 @@ input DuplicateEntityInput {
 	displayName: String
 }
 
+"""
+Results for a batch mutation, preserving the input order.
+"""
 type EntityMutationPayload {
+	"""
+	Per-input mutation outcomes.
+	"""
 	results: [GraphqlEntityMutationResult!]!
 }
 
@@ -857,8 +863,17 @@ enum GraphqlEmailView {
 	OTHER
 }
 
+"""
+Canonical reference to an entity affected by a mutation.
+"""
 type GraphqlEntity {
+	"""
+	The entity's canonical identifier.
+	"""
 	id: ID!
+	"""
+	The entity's canonical type.
+	"""
 	entityType: GraphqlEntityType!
 }
 
@@ -1258,12 +1273,27 @@ type GraphqlLinkPropertyValue {
 	urls: [String!]!
 }
 
+"""
+User-safe failure for one requested entity mutation.
+"""
 type GraphqlMutationError {
+	"""
+	Stable machine-readable error category.
+	"""
 	errorCode: GraphqlEntityMutationErrorCode!
+	"""
+	User-safe explanation of the failure.
+	"""
 	message: String!
 }
 
+"""
+Successful result for one requested entity mutation.
+"""
 type GraphqlMutationSuccess {
+	"""
+	Canonical references to every entity changed by the mutation.
+	"""
 	affectedEntities: [GraphqlEntity!]!
 }
 

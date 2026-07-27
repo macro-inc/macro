@@ -16,7 +16,7 @@ impl QueryRoot {
 }
 
 #[tokio::test]
-async fn mutation_results_return_stable_entity_refs() {
+async fn mutation_results_return_typed_errors() {
     let service = Arc::new(UnavailableEntityMutationService);
     let actor = EntityMutationActor {
         user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
@@ -32,11 +32,14 @@ async fn mutation_results_return_stable_entity_refs() {
             }]
           ) {
             results {
-              success
-              requested { type entityId }
-              entity { type entityId }
-              affectedEntities { type entityId }
-              error { code message }
+              __typename
+              ... on GraphqlMutationSuccess {
+                affectedEntities { id entityType }
+              }
+              ... on GraphqlMutationError {
+                errorCode
+                message
+              }
             }
           }
         }
@@ -60,17 +63,9 @@ async fn mutation_results_return_stable_entity_refs() {
         value!({
             "renameEntities": {
                 "results": [{
-                    "success": false,
-                    "requested": {
-                        "type": "DOCUMENT",
-                        "entityId": "document-1",
-                    },
-                    "entity": null,
-                    "affectedEntities": [],
-                    "error": {
-                        "code": "UNSUPPORTED_OPERATION",
-                        "message": "rename is not supported for document entities",
-                    },
+                    "__typename": "GraphqlMutationError",
+                    "errorCode": "UNSUPPORTED_OPERATION",
+                    "message": "Operation is not supported for this entity",
                 }],
             },
         })
