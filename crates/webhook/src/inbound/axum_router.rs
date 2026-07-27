@@ -16,7 +16,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::domain::models::RateLimitOk;
@@ -79,7 +79,7 @@ pub struct WebhookPath {
 
 /// Per-user validation attempt rate limit.
 pub struct PerUserValidateWebhookRateLimit<Auth> {
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     webhook_id: WebhookId,
 }
 
@@ -116,7 +116,7 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, ActingUser>> =
             parts
                 .extract_with_state(state)
                 .await
@@ -227,7 +227,7 @@ where
 )]
 pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
     let webhook = service
@@ -251,12 +251,15 @@ pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
 )]
 pub async fn get_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(path): Path<WebhookPath>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
     Ok(Json(
         service
-            .get_webhook(authorization.macro_user_id, path.webhook_id)
+            .get_webhook(
+                authorization.authorization.user.macro_user_id,
+                path.webhook_id,
+            )
             .await?,
     ))
 }
@@ -274,10 +277,12 @@ pub async fn get_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
 )]
 pub async fn list_webhooks<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
 ) -> Result<Json<ListWebhooksResponse>, WebhookHandlerError> {
     Ok(Json(
-        service.list_webhooks(authorization.macro_user_id).await?,
+        service
+            .list_webhooks(authorization.authorization.user.macro_user_id)
+            .await?,
     ))
 }
 
@@ -298,7 +303,7 @@ pub async fn list_webhooks<S: WebhookService, Auth: MacroAuthorizationService>(
 )]
 pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
@@ -328,7 +333,7 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
 )]
 pub async fn delete_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(path): Path<WebhookPath>,
 ) -> Result<StatusCode, WebhookHandlerError> {
     service
@@ -356,7 +361,7 @@ pub async fn delete_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
 )]
 pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, ActingUser>>,
     Path(path): Path<WebhookPath>,
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
     Ok(Json(
