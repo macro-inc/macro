@@ -74,8 +74,6 @@ pub enum ChannelEvent {
         actor: Sender,
         /// Message whose attachments changed.
         message_id: Uuid,
-        /// Thread parent id when the changed message is a thread reply.
-        thread_id: Option<Uuid>,
         /// Current attachment set for the message.
         attachments: Vec<MutatedAttachment>,
         /// Attachments added by this mutation.

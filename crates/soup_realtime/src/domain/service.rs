@@ -1,21 +1,21 @@
-//! Realtime Soup orchestration.
+//! Realtime Soup patch orchestration.
 
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{collections::HashSet, num::NonZeroUsize, time::Duration};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
 use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::item::SoupItem;
+use model_entity::Entity;
 use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use super::{
-    models::{SoupRealtimeMessage, SoupRealtimeUpdate},
+    models::{Patch, SoupRealtimeMessage, SoupRealtimePatch},
     ports::{
-        SoupItemReader, SoupRealtimeConsumer, SoupRealtimePublisher, SoupRealtimeService,
+        SoupRealtimeConsumer, SoupRealtimePublisher, SoupRealtimeService,
         SoupRealtimeSubscriptionService, UserAccessExpander,
     },
 };
@@ -34,13 +34,13 @@ fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
         .take(MAX_RECEIVE_ATTEMPTS - 1)
 }
 
-/// Service for distributing recipient-targeted realtime Soup messages.
+/// Service for distributing recipient-targeted realtime Soup patches.
 pub struct SoupRealtimeConsumerService<C>
 where
     C: SoupRealtimeConsumer,
 {
     consumer: C,
-    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, Arc<SoupItem<()>>>,
+    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, Patch<Entity<'static>>>,
 }
 
 impl<C> SoupRealtimeConsumerService<C>
@@ -55,7 +55,7 @@ where
         }
     }
 
-    /// Subscribes to realtime Soup items addressed to `user_id`.
+    /// Subscribes to realtime Soup patches addressed to `user_id`.
     ///
     /// The returned receiver is closed if its buffer fills, ensuring a slow
     /// subscriber cannot delay the shared consumer or other subscribers.
@@ -63,32 +63,32 @@ where
     pub fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+    ) -> tokio::sync::mpsc::Receiver<Patch<Entity<'static>>> {
         self.broadcasts
             .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
     }
 
-    /// Receives messages and distributes them to subscribers until reception fails.
+    /// Receives patches and distributes them to subscribers until reception fails.
     ///
-    /// Callers should run this future in a supervised task. A message for a user
+    /// Callers should run this future in a supervised task. A patch for a user
     /// without active subscribers is intentionally dropped.
     #[tracing::instrument(skip(self), err)]
     pub async fn run(&self) -> Result<(), Report> {
         loop {
-            let SoupRealtimeMessage { user_id, item } = Retry::start(
+            let SoupRealtimeMessage { user_id, patch } = Retry::start(
                 receive_retry_strategy(),
                 || self.consumer.recv(),
             )
             .await
             .context(format!(
-                "failed to receive realtime Soup message after {MAX_RECEIVE_ATTEMPTS} attempts"
+                "failed to receive realtime Soup patch after {MAX_RECEIVE_ATTEMPTS} attempts"
             ))?;
 
-            match self.broadcasts.publish(&user_id, Arc::new(item)) {
+            match self.broadcasts.publish(&user_id, patch) {
                 Ok(subscriber_count) => {
-                    tracing::trace!(subscriber_count, "distributed realtime Soup message")
+                    tracing::trace!(subscriber_count, "distributed realtime Soup patch")
                 }
-                Err(_) => tracing::trace!("dropping realtime Soup message without subscribers"),
+                Err(_) => tracing::trace!("dropping realtime Soup patch without subscribers"),
             }
         }
     }
@@ -101,7 +101,7 @@ where
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+    ) -> tokio::sync::mpsc::Receiver<Patch<Entity<'static>>> {
         SoupRealtimeConsumerService::subscribe(self, user_id)
     }
 }
@@ -109,45 +109,42 @@ where
 /// Maximum number of Kafka publications polled concurrently.
 const PUBLISH_CONCURRENCY: usize = 16;
 
-/// Domain service that expands access, hydrates each user-scoped item, and fans out.
-pub struct SoupRealtimeServiceImpl<A, R, P> {
+/// Domain service that expands entity access and fans out lightweight patches.
+pub struct SoupRealtimeServiceImpl<A, P> {
     access_expander: A,
-    item_reader: R,
     publisher: P,
 }
 
-impl<A, R, P> SoupRealtimeServiceImpl<A, R, P> {
-    /// Creates a realtime Soup service from its three outbound capabilities.
-    pub fn new(access_expander: A, item_reader: R, publisher: P) -> Self {
+impl<A, P> SoupRealtimeServiceImpl<A, P> {
+    /// Creates a realtime Soup service from its outbound capabilities.
+    pub fn new(access_expander: A, publisher: P) -> Self {
         Self {
             access_expander,
-            item_reader,
             publisher,
         }
     }
 }
 
-impl<A, R, P> SoupRealtimeService for SoupRealtimeServiceImpl<A, R, P>
+impl<A, P> SoupRealtimeService for SoupRealtimeServiceImpl<A, P>
 where
     A: UserAccessExpander,
-    R: SoupItemReader,
     P: SoupRealtimePublisher,
 {
     #[tracing::instrument(
         skip(self),
         fields(
-            entity_type = %update.item.entity_type,
-            entity_id = %update.item.entity_id,
-            access_source_type = %update.access_source.entity_type,
-            access_source_id = %update.access_source.entity_id,
+            entity_type = %patch.patch.value().entity_type,
+            entity_id = %patch.patch.value().entity_id,
+            access_source_type = %patch.access_source.entity_type,
+            access_source_id = %patch.access_source.entity_id,
             recipient_count = tracing::field::Empty,
         ),
         err
     )]
-    async fn notify_users(&self, update: SoupRealtimeUpdate) -> Result<(), Report> {
+    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
         let mut users = self
             .access_expander
-            .expand_user_access(&update.access_source)
+            .expand_user_access(&patch.access_source)
             .await
             .context("failed to expand current user access")?;
 
@@ -155,41 +152,10 @@ where
         users.retain(|user_id| seen.insert(user_id.clone()));
         tracing::Span::current().record("recipient_count", users.len());
 
-        if users.is_empty() {
-            return Ok(());
-        }
-
-        let mut messages = Vec::with_capacity(users.len());
-        for user_id in users {
-            let item = self
-                .item_reader
-                .read_for_user(user_id.clone(), &update.item)
-                .await
-                .context_with(|| format!("failed to hydrate Soup item for accessor {user_id}"))?
-                .ok_or_else(|| {
-                    rootcause::report!(
-                        "Soup item for {} {} was missing for accessor {}",
-                        update.item.entity_type,
-                        update.item.entity_id,
-                        user_id
-                    )
-                })?;
-
-            let hydrated_entity = item.entity();
-            if hydrated_entity != update.item {
-                return Err(rootcause::report!(
-                    "Soup reader returned {} {} while hydrating {} {} for accessor {}",
-                    hydrated_entity.entity_type,
-                    hydrated_entity.entity_id,
-                    update.item.entity_type,
-                    update.item.entity_id,
-                    user_id
-                ));
-            }
-
-            messages.push(SoupRealtimeMessage::new(user_id, item));
-        }
-
+        let messages = users
+            .into_iter()
+            .map(|user_id| SoupRealtimeMessage::new(user_id, patch.patch.clone()))
+            .collect::<Vec<_>>();
         let results = stream::iter(
             messages
                 .into_iter()

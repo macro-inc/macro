@@ -1,6 +1,5 @@
 //! Domain models, ports, and project service definitions.
 
-#[cfg(feature = "service")]
 /// Unified entity-mutation capability impls.
 pub mod entity_mutation;
 pub mod events;

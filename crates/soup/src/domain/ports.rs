@@ -72,29 +72,6 @@ pub trait SoupRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self::GroupedItems, Self::Err>> + Send;
 }
 
-/// Reads one complete Soup item through an individual user's visibility scope.
-pub trait SoupItemService: Send + Sync + 'static {
-    /// Fetch `entity` as it should be rendered for `user_id`.
-    fn get_user_soup_item(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        entity: model_entity::Entity<'static>,
-    ) -> impl Future<Output = Result<Option<SoupItem<()>>, SoupErr>> + Send;
-}
-
-impl<S> SoupItemService for Arc<S>
-where
-    S: SoupItemService,
-{
-    async fn get_user_soup_item(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        entity: model_entity::Entity<'static>,
-    ) -> Result<Option<SoupItem<()>>, SoupErr> {
-        (**self).get_user_soup_item(user_id, entity).await
-    }
-}
-
 /// type alias which represents the posible outputs of soup
 /// The response is a paginated cursor where
 /// 1. The item type is the requested raw or enriched Soup representation

@@ -1279,7 +1279,6 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     ChannelMessageAttachmentCreatedMetadata {
                         channel_id: *channel_id,
                         message_id: message.id,
-                        thread_id: message.thread_id,
                         actor: message.sender_id.clone(),
                         attachments: attachments
                             .iter()
@@ -1324,7 +1323,6 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             channel_id,
             actor,
             message_id,
-            thread_id,
             added,
             removed,
             ..
@@ -1335,7 +1333,6 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     ChannelMessageAttachmentCreatedMetadata {
                         channel_id: *channel_id,
                         message_id: *message_id,
-                        thread_id: *thread_id,
                         actor: actor.clone(),
                         attachments: added.iter().map(ChannelEventAttachment::from).collect(),
                     },
@@ -1346,7 +1343,6 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     ChannelMessageAttachmentRemovedMetadata {
                         channel_id: *channel_id,
                         message_id: *message_id,
-                        thread_id: *thread_id,
                         actor: actor.clone(),
                         attachments: removed.iter().map(ChannelEventAttachment::from).collect(),
                     },

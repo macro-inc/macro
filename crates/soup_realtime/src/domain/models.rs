@@ -1,65 +1,91 @@
-//! Realtime Soup message and broker event models.
+//! Realtime Soup patch and broker event models.
 
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
 
-/// One Soup item update together with the entity that determines its recipients.
+/// A change to one value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum Patch<T> {
+    /// The value was created or updated.
+    #[serde(rename = "soup.updated")]
+    Updated(T),
+    /// The value was deleted.
+    #[serde(rename = "soup.deleted")]
+    Deleted(T),
+}
+
+impl<T> Patch<T> {
+    /// Maps the value carried by this patch while preserving its operation.
+    pub fn map<U>(self, map: impl FnOnce(T) -> U) -> Patch<U> {
+        match self {
+            Self::Updated(value) => Patch::Updated(map(value)),
+            Self::Deleted(value) => Patch::Deleted(map(value)),
+        }
+    }
+
+    /// Returns the value carried by this patch.
+    pub fn value(&self) -> &T {
+        match self {
+            Self::Updated(value) | Self::Deleted(value) => value,
+        }
+    }
+}
+
+/// A patch paired with the entity used to resolve its recipients.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SoupRealtimeUpdate {
-    /// Soup item that must be rehydrated.
-    pub item: Entity<'static>,
-    /// Entity whose current accessors should receive the item.
+pub struct SoupRealtimePatch {
+    /// Patch delivered to each recipient.
+    pub patch: Patch<Entity<'static>>,
+    /// Entity whose current accessors should receive the patch.
     pub access_source: Entity<'static>,
 }
 
-impl SoupRealtimeUpdate {
-    /// Creates an update with an explicit recipient access source.
-    pub fn new(item: Entity<'static>, access_source: Entity<'static>) -> Self {
+impl SoupRealtimePatch {
+    /// Creates a patch with an explicit recipient access source.
+    pub fn new(patch: Patch<Entity<'static>>, access_source: Entity<'static>) -> Self {
         Self {
-            item,
+            patch,
             access_source,
         }
     }
 
-    /// Creates an update whose item also determines its recipients.
-    pub fn for_entity(entity: Entity<'static>) -> Self {
-        Self::new(entity.clone(), entity)
+    /// Creates a patch whose entity also determines its recipients.
+    pub fn for_entity(patch: Patch<Entity<'static>>) -> Self {
+        let access_source = patch.value().clone();
+        Self::new(patch, access_source)
     }
 }
 
-/// One full Soup item addressed to a recipient for realtime delivery.
-#[derive(Debug, Serialize, Deserialize)]
+/// One recipient-targeted patch after decoding the Soup topic event.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoupRealtimeMessage {
-    /// User to whom the Soup item is addressed.
+    /// User to whom the patch is addressed.
     pub user_id: MacroUserIdStr<'static>,
-    /// Complete Soup item hydrated through this recipient's visibility scope.
-    pub item: SoupItem<()>,
+    /// Entity patch addressed to the user.
+    pub patch: Patch<Entity<'static>>,
 }
 
 impl SoupRealtimeMessage {
-    /// Creates a message addressed to a recipient.
-    pub fn new(user_id: MacroUserIdStr<'static>, item: SoupItem<()>) -> Self {
-        Self { user_id, item }
+    /// Creates a patch addressed to a recipient.
+    pub fn new(user_id: MacroUserIdStr<'static>, patch: Patch<Entity<'static>>) -> Self {
+        Self { user_id, patch }
     }
 }
 
-/// Events published to [`MacroSoupRealtimeTopic`].
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "event_type", content = "metadata")]
-pub enum SoupTopicEvent {
-    /// A complete Soup item changed and should be delivered to its recipient.
-    #[serde(rename = "soup.item.updated")]
-    ItemUpdated(SoupRealtimeMessage),
-}
+/// Wire payload for [`MacroSoupRealtimeTopic`].
+///
+/// The recipient is included in the patch payload and repeated as the Kafka
+/// key so consumers can route without hydrating a Soup item.
+pub type SoupTopicEvent = Patch<(MacroUserIdStr<'static>, Entity<'static>)>;
 
 impl TopicEvent for SoupTopicEvent {
     type Topic = MacroSoupRealtimeTopic;
 
-    const SCHEMA_VERSION: u8 = 1;
+    const SCHEMA_VERSION: u8 = 2;
 }
 
 /// Publishable realtime Soup event keyed by recipient user ID.
@@ -69,10 +95,12 @@ pub struct SoupMacroEvent {
 }
 
 impl SoupMacroEvent {
-    /// Creates a recipient-keyed item update event.
-    pub fn item_updated(message: SoupRealtimeMessage) -> Self {
-        let key = message.user_id.as_ref().to_string();
-        Self::with_event(key, Event::new(SoupTopicEvent::ItemUpdated(message)))
+    /// Creates a recipient-keyed patch event.
+    pub fn from_message(message: SoupRealtimeMessage) -> Self {
+        let SoupRealtimeMessage { user_id, patch } = message;
+        let key = user_id.as_ref().to_string();
+        let event = patch.map(|entity| (user_id, entity));
+        Self::with_event(key, Event::new(event))
     }
 
     /// Builds an event from its Kafka key and pre-built envelope.
@@ -83,10 +111,15 @@ impl SoupMacroEvent {
         }
     }
 
-    /// Returns the recipient-targeted message carried by this event.
+    /// Returns the recipient and entity patch carried by this event.
     pub fn into_message(self) -> SoupRealtimeMessage {
         match self.event.event {
-            SoupTopicEvent::ItemUpdated(message) => message,
+            Patch::Updated((user_id, entity)) => {
+                SoupRealtimeMessage::new(user_id, Patch::Updated(entity))
+            }
+            Patch::Deleted((user_id, entity)) => {
+                SoupRealtimeMessage::new(user_id, Patch::Deleted(entity))
+            }
         }
     }
 }

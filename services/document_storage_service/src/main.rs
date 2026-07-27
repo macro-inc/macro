@@ -114,7 +114,7 @@ use soup_realtime::{
     domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
     outbound::{
         entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
-        soup_consumer::SoupTopicConsumer, soup_item_reader::SoupServiceItemReader,
+        soup_consumer::SoupTopicConsumer,
     },
 };
 use sqlx::postgres::PgPoolOptions;
@@ -931,7 +931,6 @@ async fn main() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
-        let soup_service = soup_service.clone();
         let macro_event_broker = macro_event_broker.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -942,7 +941,6 @@ async fn main() -> anyhow::Result<()> {
 
                 let fanout_service = SoupRealtimeServiceImpl::new(
                     EntityAccessExpander::new(entity_access_service.clone()),
-                    SoupServiceItemReader::new(soup_service.clone()),
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
                 tracing::info!("starting realtime Soup entity consumer");

@@ -1280,7 +1280,6 @@ async fn handle_publishes_attachment_deltas() {
     let service = broker_service(broker.clone());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
-    let thread_id = Uuid::new_v4();
     let added = attachment(channel_id, message_id);
     let removed = attachment(channel_id, message_id);
 
@@ -1289,7 +1288,6 @@ async fn handle_publishes_attachment_deltas() {
             channel_id,
             actor: Sender::new_from_user(user("alice@example.com")),
             message_id,
-            thread_id: Some(thread_id),
             attachments: vec![added.clone()],
             added: vec![added.clone()],
             removed: vec![removed.clone()],
@@ -1307,10 +1305,6 @@ async fn handle_publishes_attachment_deltas() {
     assert_eq!(
         published[0].envelope["metadata"]["attachments"][0]["attachment_id"],
         added.id.to_string()
-    );
-    assert_eq!(
-        published[0].envelope["metadata"]["thread_id"],
-        thread_id.to_string()
     );
     assert_eq!(
         published[1].envelope["event_type"],

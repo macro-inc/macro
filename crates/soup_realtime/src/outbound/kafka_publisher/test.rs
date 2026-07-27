@@ -1,14 +1,15 @@
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Utc};
 use macro_event_broker::{
     EventBrokerError, EventPublisher, GlobalSpawner, MacroEvent, MacroEventBrokerService, Topic,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::{document::SoupDocument, item::SoupItem};
-use uuid::Uuid;
+use model_entity::{Entity, EntityType};
 
 use super::*;
+use crate::domain::models::Patch;
+
+const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
 
 #[derive(Debug)]
 struct PublishedRecord {
@@ -44,36 +45,16 @@ fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|recipient@example.com".to_string()).expect("valid user id")
 }
 
-fn timestamp(seconds: i64) -> DateTime<Utc> {
-    DateTime::from_timestamp(seconds, 0).expect("valid timestamp")
+fn document() -> Entity<'static> {
+    EntityType::Document.with_entity_string(DOCUMENT_ID.to_string())
 }
 
 fn message() -> SoupRealtimeMessage {
-    SoupRealtimeMessage::new(
-        user(),
-        SoupItem::Document(SoupDocument {
-            id: Uuid::parse_str("00000000-0000-0000-0000-000000000001").expect("valid document id"),
-            document_version_id: 9,
-            owner_id: user(),
-            name: "Published document".to_string(),
-            file_type: Some("md".to_string()),
-            sha: Some("sha".to_string()),
-            project_id: None,
-            branched_from_id: None,
-            branched_from_version_id: None,
-            document_family_id: None,
-            created_at: timestamp(1),
-            updated_at: timestamp(2),
-            viewed_at: Some(timestamp(3)),
-            sub_type: None,
-            deleted_at: None,
-            extra: (),
-        }),
-    )
+    SoupRealtimeMessage::new(user(), Patch::Updated(document()))
 }
 
 #[tokio::test]
-async fn publishes_typed_recipient_keyed_event_to_soup_topic() {
+async fn publishes_recipient_and_entity_patch_in_the_soup_topic_payload() {
     let records = Arc::new(Mutex::new(Vec::new()));
     let broker = MacroEventBrokerService::new(
         RecordingPublisher {
@@ -94,22 +75,42 @@ async fn publishes_typed_recipient_keyed_event_to_soup_topic() {
 
     let json: serde_json::Value = serde_json::from_slice(&record.payload).expect("payload is JSON");
     assert!(json["event_id"].is_string());
-    assert_eq!(json["schema_version"], 1);
-    assert_eq!(json["event_type"], "soup.item.updated");
-    assert_eq!(json["metadata"]["user_id"], "macro|recipient@example.com");
+    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["event_type"], "soup.updated");
+    assert_eq!(json["metadata"][0], "macro|recipient@example.com");
+    assert_eq!(json["metadata"][1]["entity_type"], "document");
+    assert_eq!(json["metadata"][1]["entity_id"], DOCUMENT_ID);
+    assert!(json.to_string().find("document_version_id").is_none());
 
     let decoded = SoupMacroEvent::decode(record.key, &record.payload).expect("event round-trips");
-    assert_eq!(decoded.event().schema_version, 1);
-    let decoded = decoded.into_message();
-    assert_eq!(decoded.user_id.as_ref(), "macro|recipient@example.com");
-    match decoded.item {
-        SoupItem::Document(document) => {
-            assert_eq!(document.name, "Published document");
-            assert_eq!(document.document_version_id, 9);
-            assert_eq!(document.viewed_at, Some(timestamp(3)));
-        }
-        _ => panic!("expected document item"),
-    }
+    assert_eq!(decoded.event().schema_version, 2);
+    assert_eq!(
+        decoded.into_message(),
+        SoupRealtimeMessage::new(user(), Patch::Updated(document()))
+    );
+}
+
+#[tokio::test]
+async fn publishes_deleted_patches() {
+    let records = Arc::new(Mutex::new(Vec::new()));
+    let broker = MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: records.clone(),
+            fail: false,
+        },
+        GlobalSpawner,
+    );
+    let adapter = KafkaSoupRealtimePublisher::new(broker);
+
+    adapter
+        .publish(SoupRealtimeMessage::new(user(), Patch::Deleted(document())))
+        .await
+        .expect("publish succeeds");
+
+    let records = records.lock().expect("records lock");
+    let json: serde_json::Value =
+        serde_json::from_slice(&records[0].payload).expect("payload is JSON");
+    assert_eq!(json["event_type"], "soup.deleted");
 }
 
 #[tokio::test]

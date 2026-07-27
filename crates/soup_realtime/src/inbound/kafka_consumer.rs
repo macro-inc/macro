@@ -25,8 +25,8 @@ use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use crate::domain::{
-    models::SoupRealtimeUpdate,
-    ports::{SoupItemReader, SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
+    models::{Patch, SoupRealtimePatch},
+    ports::{SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
     service::SoupRealtimeServiceImpl,
 };
 
@@ -65,26 +65,40 @@ fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> 
     entity_type.with_entity_string(entity_id.to_string())
 }
 
-fn update(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimeUpdate {
-    SoupRealtimeUpdate::for_entity(entity(entity_type, entity_id))
+fn update(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimePatch {
+    SoupRealtimePatch::for_entity(Patch::Updated(entity(entity_type, entity_id)))
 }
 
-fn push_unique_update(
-    updates: &mut Vec<SoupRealtimeUpdate>,
-    entity_type: EntityType,
-    entity_id: &str,
-) {
-    if entity_id.is_empty()
-        || updates.iter().any(|update| {
-            update.item.entity_type == entity_type && update.item.entity_id == entity_id
-        })
+fn delete(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimePatch {
+    SoupRealtimePatch::for_entity(Patch::Deleted(entity(entity_type, entity_id)))
+}
+
+fn push_unique_patch(patches: &mut Vec<SoupRealtimePatch>, patch: Patch<Entity<'static>>) {
+    if patch.value().entity_id.is_empty()
+        || patches.iter().any(|candidate| candidate.patch == patch)
     {
         return;
     }
-    updates.push(update(entity_type, entity_id));
+    patches.push(SoupRealtimePatch::for_entity(patch));
 }
 
-fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeUpdate> {
+fn push_unique_update(
+    patches: &mut Vec<SoupRealtimePatch>,
+    entity_type: EntityType,
+    entity_id: &str,
+) {
+    push_unique_patch(patches, Patch::Updated(entity(entity_type, entity_id)));
+}
+
+fn push_unique_delete(
+    patches: &mut Vec<SoupRealtimePatch>,
+    entity_type: EntityType,
+    entity_id: &str,
+) {
+    push_unique_patch(patches, Patch::Deleted(entity(entity_type, entity_id)));
+}
+
+fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePatch> {
     let mut updates = Vec::new();
     match event {
         DocumentTopicEvent::Created(metadata) => {
@@ -105,6 +119,7 @@ fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeU
             }
         }
         DocumentTopicEvent::Deleted(metadata) => {
+            push_unique_delete(&mut updates, EntityType::Document, &metadata.document_id);
             if let Some(project_id) = metadata.project_id.as_deref() {
                 push_unique_update(&mut updates, EntityType::Project, project_id);
             }
@@ -122,7 +137,7 @@ fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeU
     updates
 }
 
-fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimeUpdate> {
+fn patches_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimePatch> {
     let mut updates = Vec::new();
     match event {
         ProjectTopicEvent::Created(metadata) => {
@@ -141,12 +156,25 @@ fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimeUpd
             }
         }
         ProjectTopicEvent::Deleted(metadata) => {
+            push_unique_delete(&mut updates, EntityType::Project, &metadata.project_id);
+            for project_id in &metadata.deleted_project_ids {
+                push_unique_delete(&mut updates, EntityType::Project, project_id);
+            }
+            for document_id in &metadata.deleted_document_ids {
+                push_unique_delete(&mut updates, EntityType::Document, document_id);
+            }
+            for chat_id in &metadata.deleted_chat_ids {
+                push_unique_delete(&mut updates, EntityType::Chat, chat_id);
+            }
             if let Some(parent_id) = metadata.parent_project_id.as_deref() {
                 push_unique_update(&mut updates, EntityType::Project, parent_id);
             }
         }
         ProjectTopicEvent::Restored(metadata) => {
             push_unique_update(&mut updates, EntityType::Project, &metadata.project_id);
+            for project_id in &metadata.restored_project_ids {
+                push_unique_update(&mut updates, EntityType::Project, project_id);
+            }
         }
         ProjectTopicEvent::PermanentlyDeleted(_) => {}
         ProjectTopicEvent::Uploaded(metadata) => {
@@ -158,7 +186,7 @@ fn entities_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimeUpd
     updates
 }
 
-fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
+fn patches_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimePatch> {
     let mut updates = Vec::new();
     match event {
         ChatTopicEvent::Created(metadata) => {
@@ -179,6 +207,7 @@ fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
             }
         }
         ChatTopicEvent::Deleted(metadata) => {
+            push_unique_delete(&mut updates, EntityType::Chat, &metadata.chat_id);
             if let Some(project_id) = metadata.project_id.as_deref() {
                 push_unique_update(&mut updates, EntityType::Project, project_id);
             }
@@ -202,7 +231,13 @@ fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
     updates
 }
 
-fn entities_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimeUpdate> {
+fn patches_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimePatch> {
+    if let EmailTopicEvent::ThreadTrashed(metadata) = event
+        && metadata.trashed
+    {
+        return vec![delete(EntityType::EmailThread, metadata.thread_id)];
+    }
+
     let thread_id = match event {
         EmailTopicEvent::MessageReceived(metadata) if !metadata.is_spam_or_trash => {
             metadata.thread_id
@@ -230,7 +265,7 @@ fn channel_and_thread_entities(
     channel_id: impl ToString,
     message_id: impl ToString,
     thread_id: Option<impl ToString>,
-) -> Vec<SoupRealtimeUpdate> {
+) -> Vec<SoupRealtimePatch> {
     let channel = entity(EntityType::Channel, channel_id);
     let thread = entity(
         EntityType::ChannelMessage,
@@ -239,12 +274,12 @@ fn channel_and_thread_entities(
             .unwrap_or_else(|| message_id.to_string()),
     );
     vec![
-        SoupRealtimeUpdate::for_entity(channel.clone()),
-        SoupRealtimeUpdate::new(thread, channel),
+        SoupRealtimePatch::for_entity(Patch::Updated(channel.clone())),
+        SoupRealtimePatch::new(Patch::Updated(thread), channel),
     ]
 }
 
-fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimeUpdate> {
+fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
         ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
@@ -261,25 +296,21 @@ fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimeUpd
         ),
         ChannelTopicEvent::MessageDeleted(metadata) => {
             let channel = entity(EntityType::Channel, metadata.channel_id);
-            let mut entities = vec![SoupRealtimeUpdate::for_entity(channel.clone())];
-            if let Some(thread_id) = metadata.thread_id {
-                entities.push(SoupRealtimeUpdate::new(
-                    entity(EntityType::ChannelMessage, thread_id),
-                    channel,
-                ));
-            }
-            entities
+            let thread_patch = match metadata.thread_id {
+                Some(thread_id) => Patch::Updated(entity(EntityType::ChannelMessage, thread_id)),
+                None => Patch::Deleted(entity(EntityType::ChannelMessage, metadata.message_id)),
+            };
+            vec![
+                SoupRealtimePatch::for_entity(Patch::Updated(channel.clone())),
+                SoupRealtimePatch::new(thread_patch, channel),
+            ]
         }
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => channel_and_thread_entities(
-            metadata.channel_id,
-            metadata.message_id,
-            metadata.thread_id,
-        ),
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => channel_and_thread_entities(
-            metadata.channel_id,
-            metadata.message_id,
-            metadata.thread_id,
-        ),
+        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
         ChannelTopicEvent::ParticipantAdded(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
@@ -289,24 +320,26 @@ fn entities_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimeUpd
         ChannelTopicEvent::Created(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::Deleted(_) => Vec::new(),
+        ChannelTopicEvent::Deleted(metadata) => {
+            vec![delete(EntityType::Channel, metadata.channel_id)]
+        }
     }
 }
 
-fn entities_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimeUpdate> {
+fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     match event {
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
-            entities_from_document_event(&event.event().event)
+            patches_from_document_event(&event.event().event)
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
-            entities_from_project_event(&event.event().event)
+            patches_from_project_event(&event.event().event)
         }
-        DeclaredMacroEvent::ChatMacroEvent(event) => entities_from_chat_event(&event.event().event),
+        DeclaredMacroEvent::ChatMacroEvent(event) => patches_from_chat_event(&event.event().event),
         DeclaredMacroEvent::EmailMacroEvent(event) => {
-            entities_from_email_event(&event.event().event)
+            patches_from_email_event(&event.event().event)
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
-            entities_from_channel_event(&event.event().event)
+            patches_from_channel_event(&event.event().event)
         }
     }
 }
@@ -315,7 +348,7 @@ fn entities_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimeUpdate> {
 enum EventOutcome {
     /// Every affected item was successfully sent through the domain service.
     Notified,
-    /// A recognized event does not update a currently hydratable Soup item.
+    /// A recognized event does not change a Soup-visible entity.
     Ignored,
 }
 
@@ -326,25 +359,25 @@ async fn process_event<S: SoupRealtimeService>(
     partition: i32,
     offset: i64,
 ) -> Result<EventOutcome, Report> {
-    let updates = entities_from_event(event);
-    if updates.is_empty() {
-        tracing::trace!("ignoring event without a hydratable Soup impact");
+    let patches = patches_from_event(event);
+    if patches.is_empty() {
+        tracing::trace!("ignoring event without a Soup patch");
         return Ok(EventOutcome::Ignored);
     }
 
-    for update in updates {
-        notify_with_retry(service, update, partition, offset).await?;
+    for patch in patches {
+        notify_with_retry(service, patch, partition, offset).await?;
     }
     Ok(EventOutcome::Notified)
 }
 
 #[tracing::instrument(
-    skip(service, update),
+    skip(service, patch),
     fields(
-        entity_type = %update.item.entity_type,
-        entity_id = %update.item.entity_id,
-        access_source_type = %update.access_source.entity_type,
-        access_source_id = %update.access_source.entity_id,
+        entity_type = %patch.patch.value().entity_type,
+        entity_id = %patch.patch.value().entity_id,
+        access_source_type = %patch.access_source.entity_type,
+        access_source_id = %patch.access_source.entity_id,
         partition,
         offset,
     ),
@@ -352,17 +385,17 @@ async fn process_event<S: SoupRealtimeService>(
 )]
 async fn notify_with_retry<S: SoupRealtimeService>(
     service: &S,
-    update: SoupRealtimeUpdate,
+    patch: SoupRealtimePatch,
     partition: i32,
     offset: i64,
 ) -> Result<(), Report> {
     let mut attempt = 0u32;
     Retry::start(service_retry_strategy(), || {
         attempt += 1;
-        let update = update.clone();
+        let patch = patch.clone();
         async move {
             tracing::trace!(attempt, "notifying realtime Soup recipients");
-            let result = service.notify_users(update).await;
+            let result = service.notify_users(patch).await;
             match &result {
                 Ok(()) => tracing::trace!(attempt, "realtime Soup recipients notified"),
                 Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {
@@ -406,10 +439,9 @@ fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage
     }
 }
 
-impl<A, R, P> SoupRealtimeServiceImpl<A, R, P>
+impl<A, P> SoupRealtimeServiceImpl<A, P>
 where
     A: UserAccessExpander,
-    R: SoupItemReader,
     P: SoupRealtimePublisher,
 {
     /// Runs the Soup-affecting entity event consumer until `shutdown` resolves.

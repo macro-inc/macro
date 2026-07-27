@@ -152,7 +152,6 @@ fn event_type_strings_follow_dot_convention() {
     let attachment_metadata = ChannelMessageAttachmentCreatedMetadata {
         channel_id,
         message_id: Uuid::nil(),
-        thread_id: None,
         actor: actor.clone(),
         attachments: vec![],
     };
@@ -198,7 +197,6 @@ fn event_type_strings_follow_dot_convention() {
                 ChannelMessageAttachmentRemovedMetadata {
                     channel_id,
                     message_id: Uuid::nil(),
-                    thread_id: None,
                     actor,
                     attachments: attachment_metadata.attachments,
                 },

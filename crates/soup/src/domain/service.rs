@@ -4,7 +4,7 @@ use crate::domain::{
         GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
         SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType, grouping::ItemGroupingInfo,
     },
-    ports::{SoupItemService, SoupOutput, SoupRepo, SoupService},
+    ports::{SoupOutput, SoupRepo, SoupService},
 };
 use call::domain::{models::GetCallRecordsRequest, ports::CallRecordQueryService};
 use channels::domain::{
@@ -16,11 +16,10 @@ use crm::domain::service::CrmService;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
-    models::{EnrichedEmailThreadPreview, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
+    models::{EnrichedEmailThreadPreview, GetEmailsRequest},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::{ForeignEntityListQuery, ForeignEntityService},
@@ -31,13 +30,8 @@ use frecency::domain::{
     },
     ports::FrecencyQueryService,
 };
-use item_filters::ast::{
-    EntityFilterAst,
-    channel::{ChannelLiteral, ChannelThreadLiteral},
-    email::EmailLiteral,
-};
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Paginated, Query,
     SimpleSortMethod, SortOn,
@@ -55,7 +49,7 @@ use models_soup::{
     item::SoupItem,
 };
 use serde::Serialize;
-use std::{cmp::Ordering, sync::Arc};
+use std::cmp::Ordering;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -105,39 +99,6 @@ fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem<()> {
         created_at: entity.created_at,
         updated_at: entity.updated_at,
     })
-}
-
-fn email_preview_to_soup_item(preview: EnrichedEmailThreadPreview) -> SoupItem<()> {
-    let EnrichedEmailThreadPreview {
-        thread,
-        attachments,
-        labels,
-        participants,
-        ..
-    } = preview;
-    SoupItem::EmailThread(SoupEnrichedEmailThreadPreview {
-        thread: SoupEmailThreadPreview::mirror(thread),
-        attachments: Vec::<SoupAttachment>::mirror(attachments),
-        participants: Vec::<SoupContact>::mirror(participants),
-        labels: Vec::<SoupLabel>::mirror(labels),
-        extra: (),
-    })
-}
-
-fn one_matching_item(
-    requested: &model_entity::Entity<'static>,
-    items: impl IntoIterator<Item = SoupItem<()>>,
-) -> Result<Option<SoupItem<()>>, SoupErr> {
-    let mut matches = items.into_iter().filter(|item| item.entity() == *requested);
-    let item = matches.next();
-    if matches.next().is_some() {
-        return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
-            "Soup query returned duplicate items for {} {}",
-            requested.entity_type,
-            requested.entity_id
-        )));
-    }
-    Ok(item)
 }
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
@@ -413,10 +374,26 @@ where
         let items: Vec<SoupItem<()>> = email_response
             .items
             .into_iter()
-            .map(|mut preview| {
-                frecency_scores.push(preview.frecency_score.take());
-                email_preview_to_soup_item(preview)
-            })
+            .map(
+                |EnrichedEmailThreadPreview {
+                     thread,
+                     attachments,
+                     labels,
+                     mut frecency_score,
+                     participants,
+                     ..
+                 }| {
+                    frecency_scores.push(frecency_score.take());
+                    let soup_email = SoupEnrichedEmailThreadPreview {
+                        thread: SoupEmailThreadPreview::mirror(thread),
+                        attachments: Vec::<SoupAttachment>::mirror(attachments),
+                        participants: Vec::<SoupContact>::mirror(participants),
+                        labels: Vec::<SoupLabel>::mirror(labels),
+                        extra: (),
+                    };
+                    SoupItem::EmailThread(soup_email)
+                },
+            )
             .collect();
 
         Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
@@ -861,153 +838,6 @@ where
                     .into_page(),
             )),
         }
-    }
-}
-
-impl<T, U, V, C, K, Crm, F> SoupItemService for SoupImpl<T, U, V, C, K, Crm, F>
-where
-    T: SoupRepo,
-    anyhow::Error: From<T::Err>,
-    U: FrecencyQueryService,
-    V: EmailPreviewServiceReadOnly,
-    C: ChannelListService,
-    K: CallRecordQueryService,
-    Crm: CrmService,
-    F: ForeignEntityService,
-{
-    #[tracing::instrument(
-        skip(self),
-        fields(
-            user_id = %user_id,
-            entity_type = %entity.entity_type,
-            entity_id = %entity.entity_id,
-        ),
-        err
-    )]
-    async fn get_user_soup_item(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        entity: Entity<'static>,
-    ) -> Result<Option<SoupItem<()>>, SoupErr> {
-        let items = match entity.entity_type {
-            EntityType::Document | EntityType::Chat => {
-                let requested = [entity.clone()];
-                self.soup_storage
-                    .expanded_soup_by_ids(AdvancedSortParams {
-                        entities: &requested,
-                        user_id,
-                    })
-                    .await
-                    .map_err(anyhow::Error::from)?
-            }
-            EntityType::Project => {
-                let requested = [entity.clone()];
-                self.soup_storage
-                    .unexpanded_soup_by_ids(AdvancedSortParams {
-                        entities: &requested,
-                        user_id,
-                    })
-                    .await
-                    .map_err(anyhow::Error::from)?
-            }
-            EntityType::EmailThread => {
-                let thread_id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
-                    SoupErr::SoupDbErr(anyhow::anyhow!(
-                        "invalid email thread entity id {}: {error}",
-                        entity.entity_id
-                    ))
-                })?;
-                let link_ids = self
-                    .email_service
-                    .get_inboxes_for_macro_id(user_id.clone())
-                    .await?
-                    .into_iter()
-                    .map(|link| link.id)
-                    .collect::<Vec<_>>();
-                if link_ids.is_empty() {
-                    return Ok(None);
-                }
-                let response = self
-                    .email_service
-                    .get_email_thread_previews(GetEmailsRequest {
-                        view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
-                        link_ids,
-                        macro_id: user_id,
-                        limit: Some(2),
-                        query: Query::Sort(
-                            SimpleSortMethod::UpdatedAt,
-                            Some(Arc::new(Expr::val(EmailLiteral::ThreadId(thread_id)))),
-                        ),
-                        include_frecency: false,
-                        team_receipt: None,
-                        crm_scope: None,
-                    })
-                    .await?;
-                response
-                    .items
-                    .into_iter()
-                    .map(email_preview_to_soup_item)
-                    .collect()
-            }
-            EntityType::Channel => {
-                let channel_id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
-                    SoupErr::SoupDbErr(anyhow::anyhow!(
-                        "invalid channel entity id {}: {error}",
-                        entity.entity_id
-                    ))
-                })?;
-                self.comms_service
-                    .get_channels(GetChannelsRequest {
-                        macro_id: user_id,
-                        limit: Some(2),
-                        include_frecency: false,
-                        query: Query::Sort(
-                            SimpleSortMethod::UpdatedAt,
-                            Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(channel_id)))),
-                        ),
-                    })
-                    .await
-                    .map_err(|_| SoupErr::CommsErr)?
-                    .into_iter()
-                    .map(|channel| SoupItem::Channel(SoupChannel::new_from_channels(channel)))
-                    .collect()
-            }
-            EntityType::ChannelMessage => {
-                let thread_id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
-                    SoupErr::SoupDbErr(anyhow::anyhow!(
-                        "invalid channel thread entity id {}: {error}",
-                        entity.entity_id
-                    ))
-                })?;
-                self.comms_service
-                    .get_thread_messages(GetThreadReplyRowsRequest {
-                        macro_id: user_id,
-                        limit: Some(2),
-                        query: Query::Sort(
-                            SimpleSortMethod::UpdatedAt,
-                            Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
-                                thread_id,
-                            )))),
-                        ),
-                    })
-                    .await
-                    .map_err(|_| SoupErr::CommsErr)?
-                    .into_iter()
-                    .map(|message| {
-                        SoupItem::ChannelThread(SoupChannelThread::new_from_channel_message(
-                            message,
-                        ))
-                    })
-                    .collect()
-            }
-            unsupported => {
-                return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
-                    "realtime Soup hydration does not support entity type {unsupported}"
-                )));
-            }
-        };
-
-        one_matching_item(&entity, items)
     }
 }
 

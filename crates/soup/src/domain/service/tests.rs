@@ -55,13 +55,6 @@ impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
             .paginate_on(0, SimpleSortMethod::CreatedAt)
             .into_page())
     }
-
-    async fn get_inboxes_for_macro_id(
-        &self,
-        _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
-        Ok(Vec::new())
-    }
 }
 
 struct NoopCommsService;
@@ -597,77 +590,6 @@ fn channel_thread_message(
         reactions: Vec::new(),
         attachments: Vec::new(),
     }
-}
-
-#[tokio::test]
-async fn user_soup_item_reads_documents_through_expanded_access() {
-    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
-    let document_id = Uuid::from_u128(0xdddd);
-    let entity = EntityType::Document.with_entity_string(document_id.to_string());
-    let expected_entity = entity.clone();
-    let mut soup_mock = MockSoupRepo::new();
-    soup_mock
-        .expect_expanded_soup_by_ids()
-        .times(1)
-        .returning(move |params| {
-            assert_eq!(params.entities, [expected_entity.clone()]);
-            Box::pin(async move {
-                Ok(vec![SoupItem::Document(soup_document_uuid_with_updated(
-                    document_id,
-                    DateTime::default(),
-                ))])
-            })
-        });
-
-    let item = SoupImpl::new(
-        soup_mock,
-        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailPreviewService,
-        NoopCommsService,
-        NoopCallRecordQueryService,
-        NoOpCrmService,
-        NoopForeignEntityService,
-    )
-    .get_user_soup_item(user, entity)
-    .await
-    .expect("item lookup succeeds")
-    .expect("document exists");
-
-    assert_matches!(item, SoupItem::Document(document) => assert_eq!(document.id, document_id));
-}
-
-#[tokio::test]
-async fn user_soup_item_reads_channel_threads_in_the_viewers_scope() {
-    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
-    let channel_id = Uuid::from_u128(0xaaaa);
-    let thread_id = Uuid::from_u128(0xbbbb);
-    let comms_service = RecordingCommsService::new(vec![channel_thread_message(
-        channel_id,
-        thread_id,
-        Uuid::from_u128(0xcccc),
-        DateTime::default(),
-    )]);
-
-    let item = SoupImpl::new(
-        MockSoupRepo::new(),
-        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailPreviewService,
-        comms_service.clone(),
-        NoopCallRecordQueryService,
-        NoOpCrmService,
-        NoopForeignEntityService,
-    )
-    .get_user_soup_item(
-        user,
-        EntityType::ChannelMessage.with_entity_string(thread_id.to_string()),
-    )
-    .await
-    .expect("item lookup succeeds")
-    .expect("thread exists");
-
-    assert_matches!(item, SoupItem::ChannelThread(thread) => assert_eq!(thread.id, thread_id));
-    assert_eq!(comms_service.thread_filters().len(), 1);
-    assert!(comms_service.thread_filters()[0].contains(&thread_id.to_string()));
 }
 
 #[tokio::test]
