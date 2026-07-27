@@ -327,7 +327,11 @@ impl From<Entity<'static>> for GraphqlEntityMutationRef {
     }
 }
 
-struct GraphqlMutationSuccess<'a>(Cow<'a, [Entity<'a>]>);
+/// Successful result for one requested entity mutation.
+pub struct GraphqlMutationSuccess<'a>(
+    /// Canonical entities changed by the mutation.
+    Cow<'a, [Entity<'a>]>,
+);
 
 /// Successful result for one requested entity mutation.
 #[Object]
@@ -342,7 +346,11 @@ impl<'a> GraphqlMutationSuccess<'a> {
     }
 }
 
-struct GraphqlMutationError(EntityMutationErrorCode);
+/// User-safe failure for one requested entity mutation.
+pub struct GraphqlMutationError(
+    /// Stable domain error category for the failed mutation.
+    EntityMutationErrorCode,
+);
 
 /// User-safe failure for one requested entity mutation.
 #[Object]
@@ -380,6 +388,7 @@ pub enum GraphqlEntityMutationResult<'a> {
 }
 
 impl<'a> GraphqlEntityMutationResult<'a> {
+    /// Convert a borrowed domain mutation outcome into its GraphQL union variant.
     fn new(x: Result<&'a EntityMutationSuccess<'a>, &'a EntityMutationErrorCode>) -> Self {
         match x {
             Ok(r) => GraphqlEntityMutationResult::Success(GraphqlMutationSuccess(Cow::Borrowed(
@@ -391,6 +400,7 @@ impl<'a> GraphqlEntityMutationResult<'a> {
 }
 
 impl GraphqlEntityMutationResult<'static> {
+    /// Convert an owned domain mutation outcome into its GraphQL union variant.
     fn new_static(x: Result<EntityMutationSuccess<'static>, EntityMutationErrorCode>) -> Self {
         match x {
             Ok(r) => GraphqlEntityMutationResult::Success(GraphqlMutationSuccess(Cow::Owned(
@@ -409,6 +419,7 @@ pub struct EntityMutationPayload {
 }
 
 impl EntityMutationPayload {
+    /// Construct a batch payload from ordered domain mutation outcomes.
     fn new(results: Vec<MutateEntitiesResult<'static>>) -> Self {
         EntityMutationPayload { results }
     }

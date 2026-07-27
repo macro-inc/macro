@@ -87,8 +87,10 @@ impl From<TeamRole> for GraphqlTeamRole {
     }
 }
 
+/// simple object wrapper for the roles on this entity
 #[derive(SimpleObject)]
 pub struct RoleContainer<T: OutputType> {
+    /// the role on this entity
     role: T,
 }
 

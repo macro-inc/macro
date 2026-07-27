@@ -22,7 +22,8 @@ pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
     EntityRefInput, EntitySharePolicyInput, GraphqlEntityMutationError,
     GraphqlEntityMutationErrorCode, GraphqlEntityMutationRef, GraphqlEntityMutationResult,
-    GraphqlSharePolicyOperation, MoveEntityInput, RenameEntityInput, UpdateEntitySharePolicyInput,
+    GraphqlMutationError, GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput,
+    RenameEntityInput, UpdateEntitySharePolicyInput,
 };
 pub use graphql_favorite::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,
