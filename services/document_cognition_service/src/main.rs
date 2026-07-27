@@ -567,7 +567,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         ai_projections_service_impl.clone(),
     );
-    tokio::spawn(async move {
+    let ai_projection_worker_task = tokio::spawn(async move {
         ai_projection_worker.poll().await;
     });
 
@@ -668,6 +668,22 @@ async fn main() -> anyhow::Result<()> {
     })
     .await
     .context("failed to setup and serve api");
+
+    ai_projection_worker_task.abort();
+    match ai_projection_worker_task.await {
+        Err(error) if error.is_cancelled() => {
+            tracing::info!("ai projection worker stopped");
+        }
+        Err(error) => {
+            tracing::error!(error = ?error, "ai projection worker exited unexpectedly");
+        }
+        Ok(()) => {
+            tracing::error!(
+                error = "worker exited naturally",
+                "ai projection worker exited unexpectedly"
+            );
+        }
+    }
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
