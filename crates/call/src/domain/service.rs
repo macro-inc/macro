@@ -802,27 +802,27 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
-                    let channel_id = call.channel_id;
-                    self.repo
+                    let archived = self
+                        .repo
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
 
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
-                    self.spawn_summarize_call(call.id);
-                    self.spawn_process_voices_for_call(call.id);
+                    self.spawn_summarize_call(archived.call_id);
+                    self.spawn_process_voices_for_call(archived.call_id);
 
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
-                        tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
+                    if let Err(e) = self.search_indexer.enqueue_upsert(&archived.call_id).await {
+                        tracing::error!(error=?e, call_id=%archived.call_id, "failed to enqueue call record for search indexing");
                     }
 
                     self.send_call_event(
-                        &channel_id,
+                        &archived.channel_id,
                         "call_ended",
                         &serde_json::json!({
-                            "channel_id": channel_id,
-                            "call_id": call.id,
+                            "channel_id": archived.channel_id,
+                            "call_id": archived.call_id,
                         }),
                         None,
                     )
@@ -911,20 +911,20 @@ impl<
 
                 if remaining == 0 {
                     tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
-                    let channel_id = call.channel_id;
                     let egress_id = call.egress_id.clone();
-                    self.repo
+                    let archived = self
+                        .repo
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
 
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
-                    self.spawn_summarize_call(call.id);
-                    self.spawn_process_voices_for_call(call.id);
+                    self.spawn_summarize_call(archived.call_id);
+                    self.spawn_process_voices_for_call(archived.call_id);
 
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
-                        tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
+                    if let Err(e) = self.search_indexer.enqueue_upsert(&archived.call_id).await {
+                        tracing::error!(error=?e, call_id=%archived.call_id, "failed to enqueue call record for search indexing");
                     }
 
                     // Stop egress explicitly before deleting the room. DeleteRoom
@@ -948,11 +948,11 @@ impl<
                         .ok();
 
                     self.send_call_event(
-                        &channel_id,
+                        &archived.channel_id,
                         "call_ended",
                         &serde_json::json!({
-                            "channel_id": channel_id,
-                            "call_id": call.id,
+                            "channel_id": archived.channel_id,
+                            "call_id": archived.call_id,
                         }),
                         None,
                     )

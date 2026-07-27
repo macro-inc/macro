@@ -504,9 +504,9 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
             .await?;
     }
 
-    let call_record_id = call_repo.archive_call(&CALL1).await?;
+    let archived = call_repo.archive_call(&CALL1).await?;
 
-    super::enroll_stable_speaker_voices_for_call_record(&call_repo, &voice_repo, call_record_id)
+    super::enroll_stable_speaker_voices_for_call_record(&call_repo, &voice_repo, archived.call_id)
         .await;
 
     let mut user_a_voices = voice_repo.get_user_voices(&MACRO_USER_A).await?;

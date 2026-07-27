@@ -8,7 +8,7 @@ mod test;
 use std::collections::{HashMap, HashSet};
 
 use channels::outbound::channel_name::batch_resolve_channel_names;
-use chrono::Utc;
+use chrono::{SubsecRound, Utc};
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::{
@@ -22,7 +22,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
+    AddParticipantError, ArchivedCall, Call, CallParticipant, CallRecord, CallRecordParticipant,
     CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
     DeletedCallRecordStorageKeys, EditCallRecordRequest, EnrichedCallTranscript,
     TranscriptSegmentRequest, WithCallId,
@@ -697,7 +697,7 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
+    async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         // Fetch and lock the active call so concurrent archive_call callers serialize.
@@ -742,11 +742,12 @@ impl CallRepository for PgCallRepo {
             }
         }
 
-        let now = Utc::now();
-        let duration_ms = now
+        let ended_at = Utc::now().trunc_subsecs(6);
+        let duration_ms = ended_at
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
+        let has_recording = call.egress_id.is_some();
         // Insert into call_records (including egress_id and any early recording keys).
         // The record keeps the same id as the original call.
         sqlx::query!(
@@ -759,7 +760,7 @@ impl CallRepository for PgCallRepo {
             call.room_name,
             call.created_by,
             call.created_at,
-            now,
+            ended_at,
             duration_ms,
             call.egress_id,
             call.recording_key,
@@ -771,8 +772,9 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
-        // Copy all participants (including soft-deleted) to call_record_participants.
-        sqlx::query!(
+        // Copy all lifetime-distinct participants (including soft-deleted) to
+        // call_record_participants. Each inserted row represents one participant.
+        let participant_count = sqlx::query!(
             r#"
             INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
             SELECT $1, user_id, joined_at, left_at
@@ -783,7 +785,8 @@ impl CallRepository for PgCallRepo {
             call_id,
         )
         .execute(tx.as_mut())
-        .await?;
+        .await?
+        .rows_affected() as usize;
 
         // Copy transcripts to call_record_transcripts, rolling up consecutive
         // segments that share both speaker_id and diarized_speaker_id when the
@@ -875,8 +878,19 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
+        let archived = ArchivedCall {
+            call_id: call.id,
+            channel_id: call.channel_id,
+            created_by: call.created_by,
+            started_at: call.created_at,
+            ended_at,
+            duration_ms,
+            has_recording,
+            participant_count,
+        };
+
         tx.commit().await?;
-        Ok(*call_id)
+        Ok(archived)
     }
 
     #[tracing::instrument(err, skip(self))]

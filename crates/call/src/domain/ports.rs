@@ -18,8 +18,8 @@ use crate::domain::models::{
 };
 
 use super::models::{
-    AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
+    AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError, CallParticipant,
+    CallRecord, CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
     CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
     LeaveCallResponse, RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken,
@@ -135,8 +135,11 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
-    /// Returns the new `call_records` id.
-    fn archive_call(&self, call_id: &Uuid) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+    /// Returns facts committed by the archive transaction.
+    fn archive_call(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<ArchivedCall, Self::Err>> + Send;
 
     /// Set the recording key on an archived call record.
     fn set_recording_key(
