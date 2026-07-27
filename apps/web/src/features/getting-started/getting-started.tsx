@@ -1,4 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
+import { HomeBackfillProgress } from '@app/features/home/home-backfill-progress';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -11,7 +13,7 @@ import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
-import { useUserInfo } from '@core/context/user';
+import { useUserId, useUserInfo } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { setActiveTabId } from '@core/signal/settingsTab';
 import { createChat } from '@core/util/create';
@@ -22,7 +24,6 @@ import PlugsIcon from '@phosphor/plugs.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useHistoryQuery } from '@queries/history/history';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useStarterDocsQuery } from '@queries/starter-docs';
 import {
@@ -48,10 +49,16 @@ import type {
  * a Preview Pair Controller — action results open in the adjacent Viewer.
  */
 export function GettingStarted() {
+  const userId = useUserId();
+
   return (
-    <GettingStartedProvider>
-      <GettingStartedContent />
-    </GettingStartedProvider>
+    <Show when={userId()} keyed>
+      {(id) => (
+        <GettingStartedProvider userId={id}>
+          <GettingStartedContent />
+        </GettingStartedProvider>
+      )}
+    </Show>
   );
 }
 
@@ -73,10 +80,6 @@ function GettingStartedContent() {
   const userInfo = useUserInfo();
   const ownUserName = useOwnUserName();
   const starterDocs = useStarterDocsQuery();
-  // Opens are recorded here by BlockLoader (via upsertItemToUserHistory),
-  // whatever surface opened them; the mutation invalidates this key, so an
-  // open elsewhere in the app flips the guide row without a poll.
-  const history = useHistoryQuery();
   const hasPaidAccess = useHasPaidAccess();
 
   /**
@@ -181,18 +184,33 @@ function GettingStartedContent() {
           },
           // Completes on the guide actually being opened — from here, the
           // Favorites row, search, or a past session — not merely on clicking
-          // this row. Reading the server-side open history is what makes it
-          // entry-point agnostic, and resolves retroactively for an open that
-          // happened while this page wasn't mounted. Latched via markComplete
-          // (rather than a live isComplete) so it survives the guide later
-          // being deleted.
-          observe: (markComplete) =>
+          // this row. History *membership* can't be the signal: seeding
+          // writes a history row at creation (deliberately — it feeds the
+          // command menu's recents), so the server reports "opened" as the
+          // row's updatedAt moving past its createdAt. Latched via
+          // markComplete so it survives the guide later being deleted.
+          observe: (markComplete) => {
+            // Retroactive: an open from a past session or another device.
+            createEffect(() => {
+              if (starterDocs.isSuccess && starterDocs.data?.howToGuideOpened) {
+                markComplete();
+              }
+            });
+            // Live: the guide visible in any split right now (this
+            // checklist's Viewer, a Favorites or search open) — the server
+            // flag is only as fresh as the starter-docs query.
             createEffect(() => {
               const documentId = howToGuideId();
               if (!documentId) return;
-              const items = history.isSuccess ? history.data : undefined;
-              if (items?.some((item) => item.id === documentId)) markComplete();
-            }),
+              const manager = globalSplitManager();
+              if (!manager) return;
+              const open = manager.splits().some((split) => {
+                const content = manager.getSplit(split.id)?.content();
+                return content?.type === 'md' && content.id === documentId;
+              });
+              if (open) markComplete();
+            });
+          },
         },
         {
           id: 'set-name',
@@ -283,6 +301,8 @@ function GettingStartedContent() {
               A few actions to get the most out of Macro.
             </p>
           </header>
+          {/* Renders nothing once no inbox is importing. */}
+          <HomeBackfillProgress />
           <For each={sections}>
             {(section) => (
               <GettingStartedSection

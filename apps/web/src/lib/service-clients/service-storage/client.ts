@@ -1082,11 +1082,16 @@ export const storageServiceClient = {
    */
   async getStarterDocs() {
     return (
-      await dssFetch<{ how_to_guide_id: string | null }>(
-        '/documents/starter_docs'
-      )
+      await dssFetch<{
+        how_to_guide_id: string | null;
+        how_to_guide_opened?: boolean;
+      }>('/documents/starter_docs')
     ).map((result) => ({
       howToGuideId: result.how_to_guide_id ?? undefined,
+      // Server-computed "opened since seeding" (the history row's updatedAt
+      // moved past its createdAt) — history membership alone can't tell,
+      // since creation seeds a row.
+      howToGuideOpened: result.how_to_guide_opened ?? false,
     }));
   },
 

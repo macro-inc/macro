@@ -7,14 +7,10 @@ export type GettingStartedSnapshot = {
   collapsedSectionIds: string[];
 };
 
-/**
- * Persistence seam for Getting Started progress. Async so a backend-backed
- * implementation can slot in without touching consumers; the default is
- * user-scoped localStorage.
- */
+/** Persistence seam for user-scoped Getting Started progress. */
 export interface GettingStartedStore {
-  load(userId: string): Promise<GettingStartedSnapshot | null>;
-  save(userId: string, snapshot: GettingStartedSnapshot): Promise<void>;
+  load(userId: string): GettingStartedSnapshot | null;
+  save(userId: string, snapshot: GettingStartedSnapshot): void;
 }
 
 const storage = createUserScopedStorage('macro:getting-started');
@@ -48,12 +44,9 @@ export function parseGettingStartedSnapshot(
 
 export const localStorageGettingStartedStore: GettingStartedStore = {
   load(userId) {
-    return Promise.resolve(
-      parseGettingStartedSnapshot(storage.read(userId))
-    );
+    return parseGettingStartedSnapshot(storage.read(userId));
   },
   save(userId, snapshot) {
     storage.write(userId, JSON.stringify(snapshot));
-    return Promise.resolve();
   },
 };

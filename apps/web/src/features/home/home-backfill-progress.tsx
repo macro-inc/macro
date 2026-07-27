@@ -8,6 +8,13 @@ import { SyncStatus } from '@service-email/generated/schemas';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 
 /**
+ * Dev override: flip to `true` to keep the card on screen (with the
+ * indeterminate bar) when no inbox is actually importing, for working on its
+ * UI. Real progress data still takes over when present. Leave `false`.
+ */
+const FORCE_SHOW_BACKFILL_PROGRESS = false;
+
+/**
  * Slim inbox-import line for the home header. Shows a spinner, label, a thin
  * progress bar, and the count while one or more connected inboxes are
  * backfilling. Renders nothing when nothing is importing.
@@ -22,6 +29,7 @@ export function HomeBackfillProgress() {
   );
 
   const isImporting = () =>
+    FORCE_SHOW_BACKFILL_PROGRESS ||
     (linksQuery.data?.links ?? []).some(
       (link) => link.sync_status === SyncStatus.SYNCING
     );

@@ -1,8 +1,10 @@
 use sqlx::{Pool, Postgres};
 mod delete_history;
+mod get_history_opened;
 mod upsert_history;
 pub use delete_history::delete_user_history;
 use document_sub_type::DocumentSubType;
+pub use get_history_opened::user_history_item_opened;
 use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},

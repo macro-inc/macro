@@ -225,10 +225,17 @@ const useSoupNotificationInvalidators = () => {
 
       let threadId;
 
-      if (
-        meta.tag === 'channel_mention' ||
-        meta.tag === 'channel_message_reply'
-      ) {
+      if (meta.tag === 'channel_mention') {
+        // A mention's thread row is keyed by its thread root: threadId is
+        // only present for mentions inside replies; a top-level mention's
+        // root is the message itself. Same totalization as
+        // channelThreadNotificationIds and the backend's secondary entity —
+        // without the fallback a live top-level mention never pulls its
+        // thread row into the loaded list, and only shows after a refresh.
+        threadId = (
+          meta.content.threadId ?? meta.content.messageId
+        )?.toString();
+      } else if (meta.tag === 'channel_message_reply') {
         threadId = meta.content.threadId?.toString();
       }
 
