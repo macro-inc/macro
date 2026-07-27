@@ -7,6 +7,9 @@
 import type { CalendarEvent } from './calendarEvent';
 import type { CalendarOccurrence } from './calendarOccurrence';
 
+/**
+ * One materialized occurrence paired with its stable calendar event entity.
+ */
 export interface CalendarOccurrenceItem {
   event: CalendarEvent;
   occurrence: CalendarOccurrence;

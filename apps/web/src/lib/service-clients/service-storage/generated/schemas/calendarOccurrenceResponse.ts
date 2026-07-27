@@ -7,6 +7,9 @@
 import type { CalendarOccurrenceItem } from './calendarOccurrenceItem';
 import type { CalendarOccurrenceResponseNextCursor } from './calendarOccurrenceResponseNextCursor';
 
+/**
+ * Paginated calendar occurrence viewport response.
+ */
 export interface CalendarOccurrenceResponse {
   hasMore: boolean;
   items: CalendarOccurrenceItem[];

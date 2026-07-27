@@ -92,6 +92,18 @@ pub enum CalendarEventWrite {
     Fixture(CalendarEventUpsert),
 }
 
+/// Inbound service port for querying calendar occurrence projections.
+pub trait CalendarOccurrenceService: Send + Sync + 'static {
+    /// Return occurrences visible to a requester in a bounded viewport.
+    fn list_occurrences(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        cursor: Option<CalendarOccurrenceCursor>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+}
+
 /// Persistence operations used by calendar business logic.
 pub trait CalendarRepository: Send + Sync + 'static {
     /// Apply the actual scopes returned by Google and atomically schedule any

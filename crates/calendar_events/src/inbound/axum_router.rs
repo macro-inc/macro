@@ -1,26 +1,82 @@
-use crate::api::context::{ApiContext, AuthorizationService};
+//! Axum router for calendar occurrence queries.
+
+#[cfg(test)]
+mod test;
+
+use std::sync::Arc;
+
 use axum::{
-    Json,
-    extract::{Query, State},
+    Json, Router,
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    routing::get,
 };
-use calendar_events::domain::{
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
+use models_pagination::Base64Str;
+use serde::{Deserialize, Serialize};
+
+use crate::domain::{
     models::{
         CalendarEvent, CalendarOccurrence, CalendarOccurrenceCoverageError,
         CalendarOccurrenceCursor, OccurrenceRange,
     },
+    ports::CalendarOccurrenceService,
     service::CalendarValidationError,
 };
-use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_pagination::Base64Str;
-use serde::{Deserialize, Serialize};
 
+/// Router state for authenticated calendar occurrence queries.
+pub struct CalendarRouterState<S, Auth> {
+    service: Arc<S>,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<S, Auth> Clone for CalendarRouterState<S, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: Arc::clone(&self.service),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<S, Auth> CalendarRouterState<S, Auth> {
+    /// Create router state from a shared calendar service and authorization state.
+    pub fn new(service: Arc<S>, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+        Self {
+            service,
+            authorization_state,
+        }
+    }
+}
+
+impl<S, Auth> FromRef<CalendarRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &CalendarRouterState<S, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+/// Build the authenticated calendar occurrence router.
+pub fn calendar_router<S, Auth, T>(state: CalendarRouterState<S, Auth>) -> Router<T>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+{
+    Router::new()
+        .route("/calendar-events", get(list_occurrences::<S, Auth>))
+        .route("/calendar-events/", get(list_occurrences::<S, Auth>))
+        .with_state(state)
+}
+
+/// Query parameters for a calendar occurrence viewport.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct CalendarOccurrenceQuery {
+pub struct CalendarOccurrenceQuery {
     /// Inclusive UTC viewport start.
     start: DateTime<Utc>,
     /// Exclusive UTC viewport end.
@@ -35,23 +91,26 @@ pub(crate) struct CalendarOccurrenceQuery {
     cursor: Option<String>,
 }
 
+/// One materialized occurrence paired with its stable calendar event entity.
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct CalendarOccurrenceItem {
+pub struct CalendarOccurrenceItem {
     event: CalendarEvent,
     occurrence: CalendarOccurrence,
 }
 
+/// Paginated calendar occurrence viewport response.
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct CalendarOccurrenceResponse {
+pub struct CalendarOccurrenceResponse {
     items: Vec<CalendarOccurrenceItem>,
     has_more: bool,
     next_cursor: Option<String>,
 }
 
+/// HTTP error returned by the calendar occurrence adapter.
 #[derive(Debug)]
-pub(super) struct CalendarApiError {
+pub struct CalendarApiError {
     status: StatusCode,
     message: &'static str,
 }
@@ -72,10 +131,12 @@ impl IntoResponse for CalendarApiError {
     }
 }
 
-#[tracing::instrument(skip(ctx, user), fields(user_id = %user.authorization.user.macro_user_id), err)]
+/// Return calendar occurrences visible to the authenticated requester.
+#[tracing::instrument(skip_all, err)]
 #[utoipa::path(
     get,
     path = "/calendar-events",
+    tag = "calendar_events",
     params(CalendarOccurrenceQuery),
     responses(
         (status = 200, description = "Calendar occurrences in the requested viewport", body = CalendarOccurrenceResponse),
@@ -84,11 +145,15 @@ impl IntoResponse for CalendarApiError {
         (status = 500, description = "Calendar query failed"),
     )
 )]
-pub(super) async fn list_occurrences(
-    State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+pub async fn list_occurrences<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(query): Query<CalendarOccurrenceQuery>,
-) -> Result<Json<CalendarOccurrenceResponse>, CalendarApiError> {
+) -> Result<Json<CalendarOccurrenceResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
     let default_end_date = default_end_date(query.end);
     let range = OccurrenceRange {
         starts_at: query.start,
@@ -104,8 +169,8 @@ pub(super) async fn list_occurrences(
     };
     let (limit, repository_limit) = query_limits(query.limit)?;
     let cursor = decode_cursor(query.cursor)?;
-    let mut occurrences = ctx
-        .calendar_service
+    let mut occurrences = state
+        .service
         .list_occurrences(
             user.authorization.user.macro_user_id.as_ref(),
             range,
@@ -187,6 +252,3 @@ fn default_end_date(end: DateTime<Utc>) -> Option<NaiveDate> {
         end.date_naive().succ_opt()
     }
 }
-
-#[cfg(test)]
-mod test;

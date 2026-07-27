@@ -573,7 +573,18 @@
       "crates/workspace-hack"
     ],
     "calendar_events": [
+      "crates/bot_id",
       "crates/calendar_events",
+      "crates/cowlike",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/models_pagination",
+      "crates/remote_env_var",
       "crates/workspace-hack"
     ],
     "call": [

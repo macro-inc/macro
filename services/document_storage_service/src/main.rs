@@ -20,6 +20,7 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::inbound::axum_router::CalendarRouterState;
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -981,9 +982,12 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
-    let calendar_service = Arc::new(calendar_events::domain::service::CalendarService::new(
-        calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
-    ));
+    let calendar_state = CalendarRouterState::new(
+        Arc::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+        )),
+        authorization_state.clone(),
+    );
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
@@ -1051,7 +1055,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         channel_list_state,
         entity_access_service: entity_access_service.clone(),
-        calendar_service,
+        calendar_state,
         projects_state: ProjectRouterState {
             service: project_service,
             access_service: entity_access_service.clone(),

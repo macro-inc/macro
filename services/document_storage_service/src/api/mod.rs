@@ -5,7 +5,6 @@ use axum::extract::FromRef;
 use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
-use axum::routing::get;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
@@ -28,7 +27,6 @@ mod middleware;
 // Routes
 mod activity;
 mod annotations;
-mod calendar_events;
 mod documents;
 mod graphql_soup;
 mod health;
@@ -205,8 +203,9 @@ fn api_router(state: ApiContext) -> Router {
             channels::inbound::list_router::channel_list_router(state.channel_list_state.clone()),
         )
         .nest("/entity", entity::router())
-        .route("/calendar-events", get(calendar_events::list_occurrences))
-        .route("/calendar-events/", get(calendar_events::list_occurrences))
+        .merge(calendar_events::inbound::axum_router::calendar_router(
+            state.calendar_state.clone(),
+        ))
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),

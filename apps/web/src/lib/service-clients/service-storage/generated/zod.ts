@@ -893,6 +893,9 @@ export const removeBotFromChannelByBotParams = zod.object({
   channel_id: zod.uuid().describe('Channel ID'),
 });
 
+/**
+ * @summary Return calendar occurrences visible to the authenticated requester.
+ */
 export const listOccurrencesQueryLimitMin = 0;
 
 export const listOccurrencesQueryParams = zod.object({
@@ -919,181 +922,204 @@ export const listOccurrencesQueryParams = zod.object({
 
 export const listOccurrencesResponseItemsItemEventSequenceMin = 0;
 
-export const listOccurrencesResponse = zod.object({
-  hasMore: zod.boolean(),
-  items: zod.array(
-    zod.object({
-      event: zod
+export const listOccurrencesResponse = zod
+  .object({
+    hasMore: zod.boolean(),
+    items: zod.array(
+      zod
         .object({
-          attendees: zod
-            .array(
-              zod
-                .object({
-                  comment: zod
-                    .string()
-                    .nullish()
-                    .describe('Optional attendee comment.'),
-                  displayName: zod
-                    .string()
-                    .nullish()
-                    .describe('Provider display name.'),
-                  email: zod.string().describe('Normalized email address.'),
-                  isOptional: zod
-                    .boolean()
-                    .describe('Whether attendance is optional.'),
-                  isOrganizer: zod
-                    .boolean()
-                    .describe('Whether this attendee is the organizer.'),
-                  isSelf: zod
-                    .boolean()
-                    .describe(
-                      'Whether this attendee represents the connected account.'
-                    ),
-                  responseStatus: zod
-                    .enum(['needs_action', 'accepted', 'declined', 'tentative'])
-                    .describe('RSVP state for an attendee.'),
-                })
-                .describe('An attendee on a calendar event.')
-            )
-            .describe('Attendees, keyed by email during persistence.'),
-          conferenceUrl: zod
-            .string()
-            .nullish()
-            .describe('Direct join URL when known.'),
-          createdAt: zod.iso.datetime({}).describe('Entity creation time.'),
-          description: zod.string().nullish().describe('Optional event body.'),
-          icalUid: zod
-            .string()
-            .describe(
-              'RFC 5545 UID used to reconcile provider and email sources.'
-            ),
-          id: zod.uuid().describe('Macro entity identifier.'),
-          isReadOnly: zod
-            .boolean()
-            .describe(
-              'Whether the current user can edit the canonical source.'
-            ),
-          location: zod
-            .string()
-            .nullish()
-            .describe('Optional physical or virtual location label.'),
-          organizerEmail: zod.string().nullish().describe('Organizer email.'),
-          organizerName: zod
-            .string()
-            .nullish()
-            .describe('Organizer display name.'),
-          ownerId: zod
-            .string()
-            .describe('Macro user who owns this event entity.'),
-          recurrenceLines: zod
-            .array(zod.string())
-            .describe(
-              'Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).'
-            ),
-          sequence: zod
-            .number()
-            .min(listOccurrencesResponseItemsItemEventSequenceMin)
-            .describe('Provider\/iCalendar sequence number.'),
-          status: zod
-            .enum(['confirmed', 'tentative', 'cancelled'])
-            .describe('Canonical event status.'),
-          time: zod
-            .union([
-              zod
-                .object({
-                  ends_at: zod.iso
-                    .datetime({})
-                    .describe('Exclusive end instant.'),
-                  kind: zod.enum(['timed']),
-                  starts_at: zod.iso
-                    .datetime({})
-                    .describe('Inclusive start instant.'),
-                  time_zone: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Original IANA time-zone identifier, when supplied.'
-                    ),
-                })
-                .describe('An event with absolute instants.'),
-              zod
-                .object({
-                  end_date: zod.iso
-                    .date()
-                    .describe('Exclusive local end date.'),
-                  kind: zod.enum(['allDay']),
-                  start_date: zod.iso
-                    .date()
-                    .describe('Inclusive local start date.'),
-                })
+          event: zod
+            .object({
+              attendees: zod
+                .array(
+                  zod
+                    .object({
+                      comment: zod
+                        .string()
+                        .nullish()
+                        .describe('Optional attendee comment.'),
+                      displayName: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider display name.'),
+                      email: zod.string().describe('Normalized email address.'),
+                      isOptional: zod
+                        .boolean()
+                        .describe('Whether attendance is optional.'),
+                      isOrganizer: zod
+                        .boolean()
+                        .describe('Whether this attendee is the organizer.'),
+                      isSelf: zod
+                        .boolean()
+                        .describe(
+                          'Whether this attendee represents the connected account.'
+                        ),
+                      responseStatus: zod
+                        .enum([
+                          'needs_action',
+                          'accepted',
+                          'declined',
+                          'tentative',
+                        ])
+                        .describe('RSVP state for an attendee.'),
+                    })
+                    .describe('An attendee on a calendar event.')
+                )
+                .describe('Attendees, keyed by email during persistence.'),
+              conferenceUrl: zod
+                .string()
+                .nullish()
+                .describe('Direct join URL when known.'),
+              createdAt: zod.iso.datetime({}).describe('Entity creation time.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe('Optional event body.'),
+              icalUid: zod
+                .string()
                 .describe(
-                  "An all-day event using RFC 5545's exclusive end date."
+                  'RFC 5545 UID used to reconcile provider and email sources.'
                 ),
-            ])
-            .describe('The mutually exclusive time shape of a calendar event.'),
-          title: zod.string().describe('Display title.'),
-          transparency: zod
-            .enum(['opaque', 'transparent'])
-            .describe('Whether an event blocks availability.'),
-          updatedAt: zod.iso.datetime({}).describe('Entity update time.'),
-          visibility: zod
-            .enum(['default', 'public', 'private', 'confidential'])
-            .describe('Visibility of event details.'),
-        })
-        .describe('A stable, first-class Macro calendar event entity.'),
-      occurrence: zod
-        .object({
-          eventId: zod.uuid().describe('Owning event entity.'),
-          isCancelled: zod
-            .boolean()
-            .describe('Whether the instance was cancelled.'),
-          occurrenceKey: zod.string().describe('Stable key within the event.'),
-          recurrenceId: zod
-            .string()
-            .nullish()
-            .describe('Provider recurrence identifier, when applicable.'),
-          time: zod
-            .union([
-              zod
-                .object({
-                  ends_at: zod.iso
-                    .datetime({})
-                    .describe('Exclusive end instant.'),
-                  kind: zod.enum(['timed']),
-                  starts_at: zod.iso
-                    .datetime({})
-                    .describe('Inclusive start instant.'),
-                  time_zone: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Original IANA time-zone identifier, when supplied.'
-                    ),
-                })
-                .describe('An event with absolute instants.'),
-              zod
-                .object({
-                  end_date: zod.iso
-                    .date()
-                    .describe('Exclusive local end date.'),
-                  kind: zod.enum(['allDay']),
-                  start_date: zod.iso
-                    .date()
-                    .describe('Inclusive local start date.'),
-                })
+              id: zod.uuid().describe('Macro entity identifier.'),
+              isReadOnly: zod
+                .boolean()
                 .describe(
-                  "An all-day event using RFC 5545's exclusive end date."
+                  'Whether the current user can edit the canonical source.'
                 ),
-            ])
-            .describe('The mutually exclusive time shape of a calendar event.'),
+              location: zod
+                .string()
+                .nullish()
+                .describe('Optional physical or virtual location label.'),
+              organizerEmail: zod
+                .string()
+                .nullish()
+                .describe('Organizer email.'),
+              organizerName: zod
+                .string()
+                .nullish()
+                .describe('Organizer display name.'),
+              ownerId: zod
+                .string()
+                .describe('Macro user who owns this event entity.'),
+              recurrenceLines: zod
+                .array(zod.string())
+                .describe(
+                  'Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).'
+                ),
+              sequence: zod
+                .number()
+                .min(listOccurrencesResponseItemsItemEventSequenceMin)
+                .describe('Provider\/iCalendar sequence number.'),
+              status: zod
+                .enum(['confirmed', 'tentative', 'cancelled'])
+                .describe('Canonical event status.'),
+              time: zod
+                .union([
+                  zod
+                    .object({
+                      ends_at: zod.iso
+                        .datetime({})
+                        .describe('Exclusive end instant.'),
+                      kind: zod.enum(['timed']),
+                      starts_at: zod.iso
+                        .datetime({})
+                        .describe('Inclusive start instant.'),
+                      time_zone: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Original IANA time-zone identifier, when supplied.'
+                        ),
+                    })
+                    .describe('An event with absolute instants.'),
+                  zod
+                    .object({
+                      end_date: zod.iso
+                        .date()
+                        .describe('Exclusive local end date.'),
+                      kind: zod.enum(['allDay']),
+                      start_date: zod.iso
+                        .date()
+                        .describe('Inclusive local start date.'),
+                    })
+                    .describe(
+                      "An all-day event using RFC 5545's exclusive end date."
+                    ),
+                ])
+                .describe(
+                  'The mutually exclusive time shape of a calendar event.'
+                ),
+              title: zod.string().describe('Display title.'),
+              transparency: zod
+                .enum(['opaque', 'transparent'])
+                .describe('Whether an event blocks availability.'),
+              updatedAt: zod.iso.datetime({}).describe('Entity update time.'),
+              visibility: zod
+                .enum(['default', 'public', 'private', 'confidential'])
+                .describe('Visibility of event details.'),
+            })
+            .describe('A stable, first-class Macro calendar event entity.'),
+          occurrence: zod
+            .object({
+              eventId: zod.uuid().describe('Owning event entity.'),
+              isCancelled: zod
+                .boolean()
+                .describe('Whether the instance was cancelled.'),
+              occurrenceKey: zod
+                .string()
+                .describe('Stable key within the event.'),
+              recurrenceId: zod
+                .string()
+                .nullish()
+                .describe('Provider recurrence identifier, when applicable.'),
+              time: zod
+                .union([
+                  zod
+                    .object({
+                      ends_at: zod.iso
+                        .datetime({})
+                        .describe('Exclusive end instant.'),
+                      kind: zod.enum(['timed']),
+                      starts_at: zod.iso
+                        .datetime({})
+                        .describe('Inclusive start instant.'),
+                      time_zone: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Original IANA time-zone identifier, when supplied.'
+                        ),
+                    })
+                    .describe('An event with absolute instants.'),
+                  zod
+                    .object({
+                      end_date: zod.iso
+                        .date()
+                        .describe('Exclusive local end date.'),
+                      kind: zod.enum(['allDay']),
+                      start_date: zod.iso
+                        .date()
+                        .describe('Inclusive local start date.'),
+                    })
+                    .describe(
+                      "An all-day event using RFC 5545's exclusive end date."
+                    ),
+                ])
+                .describe(
+                  'The mutually exclusive time shape of a calendar event.'
+                ),
+            })
+            .describe(
+              'A materialized recurrence instance optimized for range queries.'
+            ),
         })
         .describe(
-          'A materialized recurrence instance optimized for range queries.'
-        ),
-    })
-  ),
-  nextCursor: zod.string().nullish(),
-});
+          'One materialized occurrence paired with its stable calendar event entity.'
+        )
+    ),
+    nextCursor: zod.string().nullish(),
+  })
+  .describe('Paginated calendar occurrence viewport response.');
 
 /**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the

@@ -14,10 +14,10 @@ use super::{
         GoogleEventSnapshotKey, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
-        EmailCalendarBackfillPublisher, EmailCalendarBackfillRepository, GoogleCalendarProvider,
-        GoogleCalendarSyncRepository, GoogleEventSyncContext, GoogleProviderError,
-        GoogleProviderErrorKind,
+        CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
+        CalendarRepository, EmailCalendarBackfillPublisher, EmailCalendarBackfillRepository,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        GoogleProviderError, GoogleProviderErrorKind,
     },
 };
 
@@ -236,6 +236,29 @@ where
         self.repository
             .list_occurrences(requester_id, range, cursor, limit)
             .await
+    }
+}
+
+impl<R> CalendarOccurrenceService for CalendarService<R>
+where
+    R: CalendarRepository,
+{
+    fn list_occurrences(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        cursor: Option<CalendarOccurrenceCursor>,
+        limit: u16,
+    ) -> impl Future<
+        Output = Result<
+            Vec<(
+                super::models::CalendarEvent,
+                super::models::CalendarOccurrence,
+            )>,
+            Report,
+        >,
+    > + Send {
+        CalendarService::list_occurrences(self, requester_id, range, cursor, limit)
     }
 }
 

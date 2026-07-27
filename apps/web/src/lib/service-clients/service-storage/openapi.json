@@ -782,6 +782,7 @@
     "/calendar-events": {
       "get": {
         "tags": ["calendar_events"],
+        "summary": "Return calendar occurrences visible to the authenticated requester.",
         "operationId": "list_occurrences",
         "parameters": [
           {
@@ -12453,6 +12454,7 @@
       },
       "CalendarOccurrenceItem": {
         "type": "object",
+        "description": "One materialized occurrence paired with its stable calendar event entity.",
         "required": ["event", "occurrence"],
         "properties": {
           "event": {
@@ -12465,6 +12467,7 @@
       },
       "CalendarOccurrenceResponse": {
         "type": "object",
+        "description": "Paginated calendar occurrence viewport response.",
         "required": ["items", "hasMore"],
         "properties": {
           "hasMore": {
