@@ -61,7 +61,7 @@ type SnapshotResult = {
 const snapshotStepNames = {
   optimistic: 'doc.snapshot.optimistic',
   local: 'doc.snapshot.local-cache',
-  dss: 'doc.snapshot.dss-cache',
+  s3: 'doc.snapshot.s3-cache',
   remote: 'doc.snapshot.remote-sync',
 } as const;
 
@@ -130,9 +130,12 @@ async function ingestLocalSnapshot(
     walUpdates: walEntries.map((entry) => entry.update),
   });
 
-  // Only the local winner replayed this WAL, so only it can safely fold the
-  // replayed edits into the next persisted snapshot.
-  if (seeded && walEntries.length >= 1) {
+  // Fold the replayed WAL edits into a fresh local snapshot so they don't have
+  // to be replayed on the next cold load. This is for a race condition where
+  // we recover from a snapshot and replay WAL logs, deleting the WAL logs as
+  // we replay, and then reload, and now we are in a state where we have an old
+  // document until the new one loads in
+  if (walEntries.length >= 1) {
     const doc = loroManager.doc;
     const snapshot = doc.export({
       mode: 'shallow-snapshot',
@@ -161,20 +164,20 @@ async function ingestRemoteSnapshot(
   }
   const bytes = sync.value.snapshot.length;
   const seeded = await loroManager.ingest({
-    kind: 'sync-service',
+    kind: 'dss',
     snapshot: sync.value.snapshot,
   });
   return { outcome: seeded ? 'seeded' : 'discarded', bytes };
 }
 
-async function ingestDssSnapshot(
+async function ingestS3Snapshot(
   loroManager: MarkdownLoroManager,
   blockId: string
 ): Promise<SnapshotResult> {
   const result = await storageServiceClient.fetchCachedSnapshot(blockId);
   if (result.isErr()) return { outcome: 'unavailable' };
   const seeded = await loroManager.ingest({
-    kind: 'dss',
+    kind: 's3',
     snapshot: result.value,
   });
   return {
@@ -238,8 +241,8 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       startSnapshotIngest(span, 'local', loroManager, () =>
         ingestLocalSnapshot(loroManager, snapshotStore, walStore)
       );
-      startSnapshotIngest(span, 'dss', loroManager, () =>
-        ingestDssSnapshot(loroManager, blockId)
+      startSnapshotIngest(span, 's3', loroManager, () =>
+        ingestS3Snapshot(loroManager, blockId)
       );
       startSnapshotIngest(span, 'remote', loroManager, () =>
         ingestRemoteSnapshot(loroManager, data.doInitialSync)

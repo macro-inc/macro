@@ -58,8 +58,8 @@ export type SnapshotIngest =
       /** Optional WAL update entries to replay on top of the snapshot. */
       walUpdates?: RawUpdate[];
     }
-  | { kind: 'dss'; snapshot: RawUpdate }
-  | { kind: 'sync-service'; snapshot: RawUpdate };
+  | { kind: 's3'; snapshot: RawUpdate }
+  | { kind: 'dss'; snapshot: RawUpdate };
 
 export type LoroManagerOptions = {
   documentId: string;
