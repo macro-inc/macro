@@ -130,7 +130,7 @@ use task_dedup::{
         postgres::{PgTaskMatchRepo, PgTaskVectorDb},
     },
 };
-use tokio_util::task::TaskTracker;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 mod api;
 mod config;
@@ -267,6 +267,8 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let consumer_cancellation_token = CancellationToken::new();
+    let consumer_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
@@ -733,22 +735,39 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let webhook_consumer_brokers = config.kafka_brokers.as_ref().to_string();
-    tokio::spawn(async move {
-        loop {
-            tracing::info!("starting webhook event consumer");
-            let result = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
-                &webhook_consumer_brokers,
-                webhook_ingestion_service.clone(),
-                std::future::pending::<()>(),
-            )
-            .await;
-            match result {
-                Ok(()) => tracing::error!("webhook event consumer exited unexpectedly"),
-                Err(error) => {
-                    tracing::error!(error = ?error, "webhook event consumer exited unexpectedly");
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting webhook event consumer");
+                let result = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
+                    &webhook_consumer_brokers,
+                    webhook_ingestion_service.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("webhook event consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "webhook event consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     });
 
@@ -869,28 +888,49 @@ async fn main() -> anyhow::Result<()> {
             anyhow::anyhow!("failed to create realtime Soup topic consumer: {error:?}")
         })?,
     ));
-    tokio::spawn({
+    consumer_tracker.spawn({
         let soup_realtime_service = Arc::clone(&soup_realtime_service);
+        let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
-                let _ = soup_realtime_service.run().await.inspect_err(|error| {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = soup_realtime_service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
                     tracing::error!(
                         error = ?error,
                         "realtime Soup subscription consumer stopped"
                     );
                 });
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
             }
         }
     });
 
-    tokio::spawn({
+    consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
         let soup_pool = readonly_pool::ReadOnlyPool(readonly_db.clone());
         let macro_event_broker = macro_event_broker.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
                 let fanout_service = SoupRealtimeServiceImpl::new(
                     EntityAccessExpander::new(entity_access_service.clone()),
                     SoupRepoItemReader::new(PgSoupRepo::new(soup_pool.clone())),
@@ -898,8 +938,13 @@ async fn main() -> anyhow::Result<()> {
                 );
                 tracing::info!("starting realtime Soup document consumer");
                 let result = fanout_service
-                    .run_document_update_consumer(&brokers, std::future::pending::<()>())
+                    .run_document_update_consumer(&brokers, cancellation_token.cancelled())
                     .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
                 match result {
                     Ok(()) => {
                         tracing::error!("realtime Soup document consumer exited unexpectedly")
@@ -909,7 +954,12 @@ async fn main() -> anyhow::Result<()> {
                         "realtime Soup document consumer exited unexpectedly"
                     ),
                 }
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
             }
         }
     });
@@ -1029,6 +1079,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let server_result = api::setup_and_serve(api_context).await;
+
+    tracing::info!("stopping event consumers");
+    consumer_cancellation_token.cancel();
+    consumer_tracker.close();
+    consumer_tracker.wait().await;
+    tracing::info!("event consumers stopped");
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
