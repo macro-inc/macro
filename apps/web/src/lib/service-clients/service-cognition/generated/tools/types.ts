@@ -1950,6 +1950,31 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
+ * Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, fetches through the user's connected Notion MCP, normalizes the page, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases and database-first pages are intentionally not imported.
+ */
+export interface ImportNotionPage {
+  /**
+   * The exact Notion page URL or stable 32-character Notion page id to import.
+   */
+  pageUrl: string;
+}
+/**
+ * Response from importing one Notion page.
+ */
+export interface ImportNotionPageResponse {
+  entity: ImportEntityView;
+  /**
+   * Human-readable result and next action.
+   */
+  message: string;
+  /**
+   * What happened: `imported`, `already_imported`,
+   * `already_imported_by_teammate`, `previously_declined`, or
+   * `import_in_progress`.
+   */
+  outcome: string;
+}
+/**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
  */
 export interface ListCompanies {

@@ -16,6 +16,7 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
 import { listEntitiesHandler } from './ListEntities';
@@ -66,6 +67,7 @@ import { webSearchHandler } from './WebSearch';
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
+  ImportNotionPage: importNotionPageHandler,
   GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
