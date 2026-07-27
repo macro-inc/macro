@@ -16440,6 +16440,7 @@ dependencies = [
  "idna",
  "indexmap 2.14.0",
  "ipnet",
+ "itertools 0.10.5",
  "lazy_static",
  "libc",
  "linux-raw-sys 0.12.1",
