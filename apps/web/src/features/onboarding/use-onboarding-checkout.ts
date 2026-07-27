@@ -18,6 +18,22 @@ interface OnboardingCheckoutResult {
   checkoutUrl: string;
 }
 
+/** Creates a Stripe checkout session that returns to onboarding completion. */
+export async function createOnboardingCheckoutSession(
+  tier: PaidPlanTier
+): Promise<OnboardingCheckoutResult> {
+  const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
+  const checkoutUrl = await stripeServiceClient.createCheckoutSessionV2({
+    successUrl,
+  });
+
+  if (!checkoutUrl) {
+    throw new Error('No checkout URL returned');
+  }
+
+  return { checkoutUrl };
+}
+
 // Pending team info is saved to localStorage before checkout redirect,
 // then retrieved and used to create the team after successful payment return.
 export function savePendingTeam(team: PendingTeamInfo): void {
@@ -45,19 +61,8 @@ export function useOnboardingCheckoutMutation(callbacks?: {
   return useMutation(() => ({
     mutationFn: async (
       args: OnboardingCheckoutArgs
-    ): Promise<OnboardingCheckoutResult> => {
-      const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${args.tier}`;
-      const checkoutUrl = await stripeServiceClient.createCheckoutSession({
-        tier: args.tier,
-        successUrl,
-      });
-
-      if (!checkoutUrl) {
-        throw new Error('No checkout URL returned');
-      }
-
-      return { checkoutUrl };
-    },
+    ): Promise<OnboardingCheckoutResult> =>
+      await createOnboardingCheckoutSession(args.tier),
     onSuccess: callbacks?.onSuccess,
     onError: callbacks?.onError,
   }));

@@ -19,7 +19,6 @@ import ArrowRight from '@phosphor/arrow-right.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
-  invalidateUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
@@ -35,8 +34,10 @@ import { Stepper } from '@ui/components/Stepper';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -433,6 +434,10 @@ export function LoginNew() {
   );
   const userInfo = useUserInfo();
   const analytics = useAnalytics();
+  const authenticatedUserId = createMemo(() => {
+    const user = userInfo();
+    return user?.authenticated ? user.id : undefined;
+  });
 
   onMount(() => {
     analytics.pageView('login');
@@ -450,11 +455,11 @@ export function LoginNew() {
     });
   };
 
-  createEffect(() => {
-    if (userInfo()?.authenticated) {
-      invalidateUserInfo().then(identifyUser);
-    }
-  });
+  createEffect(
+    on(authenticatedUserId, (userId) => {
+      if (userId) identifyUser();
+    })
+  );
 
   createEffect(() => {
     // token may be an array if the redirect URL contained duplicate token params;

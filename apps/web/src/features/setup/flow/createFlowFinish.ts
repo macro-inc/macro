@@ -1,4 +1,4 @@
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { createOnboardingCheckoutSession } from '@app/features/onboarding/use-onboarding-checkout';
 import type { PaidPlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
@@ -7,7 +7,6 @@ import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useCompleteOnboardingMutation } from '@queries/onboarding';
-import { stripeServiceClient } from '@service-stripe/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createEffect, createSignal } from 'solid-js';
 import { FLOW_NEXT_STORAGE_KEY, FLOW_STEP_STORAGE_KEY } from './shared';
@@ -116,13 +115,7 @@ export function createFlowFinish(options?: {
       if (!(await completeFlow())) return;
       trackCompleted('premium', false);
       try {
-        // /welcome bounces authenticated users into the app.
-        const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
-        const checkoutUrl = await stripeServiceClient.createCheckoutSession({
-          tier,
-          successUrl,
-        });
-        if (!checkoutUrl) throw new Error('No checkout URL returned');
+        const { checkoutUrl } = await createOnboardingCheckoutSession(tier);
         window.location.href = checkoutUrl;
       } catch {
         toast.failure(
