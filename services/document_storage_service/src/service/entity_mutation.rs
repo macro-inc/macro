@@ -32,8 +32,9 @@ use entity_access::domain::{
 };
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, DuplicateEntityRequest, EntityMutationActor,
-    EntityMutationService, MoveEntity, MoveEntityRequest, RenameEntity, RenameEntityRequest,
-    RestoreEntity, TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
+    EntityMutationErrorCode, EntityMutationService, EntityMutationSuccess, MoveEntity,
+    MoveEntityRequest, MutateEntitiesResult, RenameEntity, RenameEntityRequest, RestoreEntity,
+    TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
     capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
 use favorites::domain::{models::FavoritesError, ports::FavoritesService};
@@ -51,12 +52,16 @@ mod test;
 const MAX_CONCURRENT_ENTITY_MUTATIONS: usize = 16;
 
 /// Error returned by [`EntityLifecycleService`] operations.
+#[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
     /// The requested entity does not exist.
+    #[error("entity not found")]
     NotFound,
     /// The request violates an input invariant.
+    #[error("invalid lifecycle input: {0}")]
     InvalidInput(String),
     /// Infrastructure or persistence failed.
+    #[error("internal lifecycle failure: {0}")]
     Internal(rootcause::Report),
 }
 
@@ -88,66 +93,83 @@ pub trait EntityLifecycleService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
 }
 
+/// Result of one mutation routed by this service.
+type EntityMutationResult = MutateEntitiesResult<'static>;
+
 /// Map an access failure on the requested entity onto the public vocabulary.
-fn access_failure(error: AccessError) -> EntityMutationError {
+fn access_failure(error: AccessError) -> EntityMutationErrorCode {
     match error {
-        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-            EntityMutationError::forbidden("insufficient permission for entity mutation")
+        error @ (AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
+            EntityMutationErrorCode::forbidden(rootcause::report!(error))
         }
-        AccessError::NotFound(_) => EntityMutationError::not_found("entity not found"),
-        AccessError::BadRequest(message) => EntityMutationError::invalid(message),
+        error @ AccessError::NotFound(_) => {
+            EntityMutationErrorCode::not_found(rootcause::report!(error))
+        }
+        error @ AccessError::BadRequest(_) => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
         error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
-            EntityMutationError::internal(&error)
+            EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
 }
 
 /// Map an access failure on the target project of a move.
-fn target_project_failure(error: AccessError) -> EntityMutationError {
-    match error {
-        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-            EntityMutationError::forbidden("insufficient permission for the target project")
-        }
-        AccessError::NotFound(_) => EntityMutationError::not_found("target project not found"),
-        AccessError::BadRequest(message) => EntityMutationError::invalid(message),
-        error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
-            EntityMutationError::internal(&error)
-        }
-    }
+fn target_project_failure(error: AccessError) -> EntityMutationErrorCode {
+    access_failure(error)
 }
 
 /// Map a favorites-domain failure onto the public vocabulary.
-fn favorites_failure(error: FavoritesError) -> EntityMutationError {
+fn favorites_failure(error: FavoritesError) -> EntityMutationErrorCode {
     match error {
-        FavoritesError::NotFound => EntityMutationError::not_found("favorite not found"),
-        FavoritesError::BadRequest(message) => EntityMutationError::invalid(message),
-        FavoritesError::Unauthorized => {
-            EntityMutationError::forbidden("you do not have access to this entity")
+        error @ FavoritesError::NotFound => {
+            EntityMutationErrorCode::not_found(rootcause::report!(error))
         }
-        error @ FavoritesError::Internal(_) => EntityMutationError::internal(&error),
+        error @ FavoritesError::BadRequest(_) => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
+        error @ FavoritesError::Unauthorized => {
+            EntityMutationErrorCode::forbidden(rootcause::report!(error))
+        }
+        error @ FavoritesError::Internal(_) => {
+            EntityMutationErrorCode::internal(rootcause::report!(error))
+        }
     }
 }
 
 /// Map a lifecycle-port failure onto the public vocabulary.
-fn lifecycle_failure(error: LifecycleError) -> EntityMutationError {
+fn lifecycle_failure(error: LifecycleError) -> EntityMutationErrorCode {
     match error {
-        LifecycleError::NotFound => EntityMutationError::not_found("entity not found"),
-        LifecycleError::InvalidInput(message) => EntityMutationError::invalid(message),
-        LifecycleError::Internal(report) => EntityMutationError::internal(&report),
+        LifecycleError::NotFound => {
+            EntityMutationErrorCode::not_found(rootcause::report!(LifecycleError::NotFound))
+        }
+        LifecycleError::InvalidInput(message) => EntityMutationErrorCode::invalid(
+            rootcause::report!(LifecycleError::InvalidInput(message)),
+        ),
+        LifecycleError::Internal(report) => {
+            EntityMutationErrorCode::internal(rootcause::report!(LifecycleError::Internal(report)))
+        }
     }
 }
 
-/// Build a success outcome, guaranteeing the requested entity itself is
+/// Build an unsupported-operation result for an entity.
+fn unsupported(entity: Entity<'static>, operation: &'static str) -> EntityMutationResult {
+    Err(EntityMutationErrorCode::unsupported(
+        rootcause::report!(entity).attach(operation),
+    ))
+}
+
+/// Build a success result, guaranteeing the requested entity itself is
 /// listed as affected ahead of any extra records the domain reported.
 fn success_with_affected(
     requested: Entity<'static>,
     affected: Vec<Entity<'static>>,
-) -> EntityMutationOutcome {
+) -> EntityMutationResult {
     let mut affected_entities = affected;
     if !affected_entities.contains(&requested) {
-        affected_entities.insert(0, requested.clone());
+        affected_entities.insert(0, requested);
     }
-    EntityMutationOutcome::success_with(requested.clone(), Some(requested), affected_entities)
+    Ok(EntityMutationSuccess { affected_entities })
 }
 
 /// Entity kinds a user may favorite.
@@ -170,9 +192,9 @@ fn favoritable(entity_type: EntityType) -> bool {
     }
 }
 
-async fn collect_ordered<F>(futures: impl IntoIterator<Item = F>) -> Vec<EntityMutationOutcome>
+async fn collect_ordered<F>(futures: impl IntoIterator<Item = F>) -> Vec<EntityMutationResult>
 where
-    F: Future<Output = EntityMutationOutcome>,
+    F: Future<Output = EntityMutationResult>,
 {
     stream::iter(futures)
         .buffered(MAX_CONCURRENT_ENTITY_MUTATIONS)
@@ -260,7 +282,7 @@ where
         &self,
         actor: &EntityMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<EntityAccessReceipt<T>, EntityMutationError> {
+    ) -> Result<EntityAccessReceipt<T>, EntityMutationErrorCode> {
         self.access
             .generate_entity_access_receipt::<T>(
                 &actor.user_id,
@@ -277,7 +299,7 @@ where
         &self,
         actor: &EntityMutationActor,
         project_id: &str,
-    ) -> Result<EntityAccessReceipt<EditAccessLevel>, EntityMutationError> {
+    ) -> Result<EntityAccessReceipt<EditAccessLevel>, EntityMutationErrorCode> {
         self.access
             .generate_entity_access_receipt::<EditAccessLevel>(
                 &actor.user_id,
@@ -296,12 +318,11 @@ where
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
         display_name: String,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .rename_entity(requested.clone(), receipt, display_name)
             .await
-            .map_err(Into::into)
     }
 
     /// Resolve receipts and dispatch a move to the owning domain.
@@ -311,7 +332,7 @@ where
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
         project_id: Option<String>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         let request = match project_id {
             Some(project_id) => {
@@ -328,7 +349,7 @@ where
                 receipt,
             },
         };
-        service.move_entity(request).await.map_err(Into::into)
+        service.move_entity(request).await
     }
 
     /// Resolve a receipt and dispatch a share-policy update.
@@ -338,12 +359,11 @@ where
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .update_share_policy(requested.clone(), receipt, policy)
             .await
-            .map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a trash operation.
@@ -352,12 +372,9 @@ where
         service: &S,
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
-        service
-            .trash_entity(requested.clone(), receipt)
-            .await
-            .map_err(Into::into)
+        service.trash_entity(requested.clone(), receipt).await
     }
 
     /// Resolve a receipt and dispatch a restore operation.
@@ -366,12 +383,9 @@ where
         service: &S,
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
-        service
-            .restore_entity(requested.clone(), receipt)
-            .await
-            .map_err(Into::into)
+        service.restore_entity(requested.clone(), receipt).await
     }
 
     /// Resolve a receipt and dispatch a permanent deletion.
@@ -380,12 +394,11 @@ where
         service: &S,
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .delete_entity_permanently(requested.clone(), receipt)
             .await
-            .map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a duplication.
@@ -395,7 +408,7 @@ where
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
         display_name: Option<String>,
-    ) -> Result<Entity<'static>, EntityMutationError> {
+    ) -> Result<Entity<'static>, EntityMutationErrorCode> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .duplicate_entity(
@@ -405,7 +418,6 @@ where
                 display_name,
             )
             .await
-            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]
@@ -413,7 +425,7 @@ where
         &self,
         actor: &EntityMutationActor,
         request: RenameEntityRequest,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let RenameEntityRequest {
             entity: requested,
             display_name,
@@ -447,12 +459,12 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "rename");
+                return unsupported(requested, "rename");
             }
         };
         match result {
             Ok(affected) => success_with_affected(requested, affected),
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Err(error) => Err(error),
         }
     }
 
@@ -461,7 +473,7 @@ where
         &self,
         actor: &EntityMutationActor,
         request: MoveEntityRequest,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let MoveEntityRequest {
             entity: requested,
             project_id,
@@ -492,12 +504,12 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "move");
+                return unsupported(requested, "move");
             }
         };
         match result {
             Ok(affected) => success_with_affected(requested, affected),
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Err(error) => Err(error),
         }
     }
 
@@ -506,7 +518,7 @@ where
         &self,
         actor: &EntityMutationActor,
         request: UpdateEntitySharePolicyRequest,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let UpdateEntitySharePolicyRequest {
             entity: requested,
             policy,
@@ -539,12 +551,12 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "share policy updates");
+                return unsupported(requested, "share policy updates");
             }
         };
         match result {
             Ok(affected) => success_with_affected(requested, affected),
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Err(error) => Err(error),
         }
     }
 
@@ -554,7 +566,7 @@ where
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
         self.lifecycle
@@ -568,7 +580,7 @@ where
         &self,
         actor: &EntityMutationActor,
         requested: Entity<'static>,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let result = match requested.entity_type {
             EntityType::Document => self.trash_with(&*self.documents, actor, &requested).await,
             EntityType::Chat => self.trash_with(&*self.chats, actor, &requested).await,
@@ -583,12 +595,12 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "trash");
+                return unsupported(requested, "trash");
             }
         };
         match result {
             Ok(affected) => success_with_affected(requested, affected),
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Err(error) => Err(error),
         }
     }
 
@@ -597,7 +609,7 @@ where
         &self,
         actor: &EntityMutationActor,
         requested: Entity<'static>,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let result = match requested.entity_type {
             EntityType::Document => self.restore_document(actor, &requested).await,
             EntityType::Chat => self.restore_with(&*self.chats, actor, &requested).await,
@@ -612,12 +624,12 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "restore");
+                return unsupported(requested, "restore");
             }
         };
         match result {
             Ok(affected) => success_with_affected(requested, affected),
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Err(error) => Err(error),
         }
     }
 
@@ -626,7 +638,7 @@ where
         &self,
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
         self.lifecycle
@@ -640,7 +652,7 @@ where
         &self,
         actor: &EntityMutationActor,
         requested: Entity<'static>,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let result = match requested.entity_type {
             EntityType::Document => self.delete_document_permanently(actor, &requested).await,
             EntityType::Chat => self.delete_with(&*self.chats, actor, &requested).await,
@@ -655,12 +667,12 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "permanent deletion");
+                return unsupported(requested, "permanent deletion");
             }
         };
         match result {
             Ok(affected) => success_with_affected(requested, affected),
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Err(error) => Err(error),
         }
     }
 
@@ -669,7 +681,7 @@ where
         &self,
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
         self.lifecycle
@@ -683,7 +695,7 @@ where
         &self,
         actor: &EntityMutationActor,
         request: DuplicateEntityRequest,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         let DuplicateEntityRequest {
             entity: requested,
             display_name,
@@ -708,14 +720,14 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
-                return EntityMutationOutcome::unsupported(requested, "duplication");
+                return unsupported(requested, "duplication");
             }
         };
         match result {
-            Ok(created) => {
-                EntityMutationOutcome::success_with(requested, Some(created.clone()), vec![created])
-            }
-            Err(error) => EntityMutationOutcome::failure(requested, error),
+            Ok(created) => Ok(EntityMutationSuccess {
+                affected_entities: vec![created],
+            }),
+            Err(error) => Err(error),
         }
     }
 
@@ -724,7 +736,7 @@ where
         actor: &EntityMutationActor,
         entity: &Entity<'static>,
         favorite: bool,
-    ) -> Result<(), EntityMutationError> {
+    ) -> Result<(), EntityMutationErrorCode> {
         if favorite {
             // The view receipt both proves visibility and carries the actor
             // and entity for the favorites domain.
@@ -778,7 +790,7 @@ where
         &self,
         actor: EntityMutationActor,
         requests: Vec<RenameEntityRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         collect_ordered(
             requests
                 .into_iter()
@@ -791,7 +803,7 @@ where
         &self,
         actor: EntityMutationActor,
         requests: Vec<MoveEntityRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         collect_ordered(
             requests
                 .into_iter()
@@ -804,7 +816,7 @@ where
         &self,
         actor: EntityMutationActor,
         requests: Vec<UpdateEntitySharePolicyRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         collect_ordered(
             requests
                 .into_iter()
@@ -817,7 +829,7 @@ where
         &self,
         actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         let mut futures = Vec::with_capacity(entities.len());
         for entity in entities {
             futures.push(self.trash_one(&actor, entity));
@@ -829,7 +841,7 @@ where
         &self,
         actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         let mut futures = Vec::with_capacity(entities.len());
         for entity in entities {
             futures.push(self.restore_one(&actor, entity));
@@ -841,7 +853,7 @@ where
         &self,
         actor: EntityMutationActor,
         entities: Vec<Entity<'static>>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         let mut futures = Vec::with_capacity(entities.len());
         for entity in entities {
             futures.push(self.delete_permanently_one(&actor, entity));
@@ -853,7 +865,7 @@ where
         &self,
         actor: EntityMutationActor,
         requests: Vec<DuplicateEntityRequest>,
-    ) -> Vec<EntityMutationOutcome> {
+    ) -> Vec<EntityMutationResult> {
         collect_ordered(
             requests
                 .into_iter()
@@ -868,13 +880,15 @@ where
         actor: EntityMutationActor,
         entity: Entity<'static>,
         favorite: bool,
-    ) -> EntityMutationOutcome {
+    ) -> EntityMutationResult {
         if !favoritable(entity.entity_type) {
-            return EntityMutationOutcome::unsupported(entity, "favorites");
+            return unsupported(entity, "favorites");
         }
         match self.set_favorite_one(&actor, &entity, favorite).await {
-            Ok(()) => EntityMutationOutcome::success(entity),
-            Err(error) => EntityMutationOutcome::failure(entity, error),
+            Ok(()) => Ok(EntityMutationSuccess {
+                affected_entities: vec![entity],
+            }),
+            Err(error) => Err(error),
         }
     }
 }
