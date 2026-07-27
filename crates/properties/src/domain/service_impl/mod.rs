@@ -527,7 +527,8 @@ where
         self.validate_property_options(property_definition_id, &[option_id])
             .await?;
 
-        self.repository
+        let _mutation = self
+            .repository
             .add_entity_property_option(
                 access.entity_id(),
                 subject.storage_entity_type,
@@ -559,7 +560,8 @@ where
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
         let subject = self.resolve_subject(access).await?;
-        self.repository
+        let _mutation = self
+            .repository
             .remove_entity_property_option(
                 access.entity_id(),
                 subject.storage_entity_type,

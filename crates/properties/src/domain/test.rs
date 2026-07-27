@@ -2,7 +2,8 @@
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::model::{
-    EditReceipt, PropertyAccessReceiptExt, ViewReceipt, canonical_entity_type,
+    EditReceipt, EntityPropertyMutationSnapshot, PropertyAccessReceiptExt, ViewReceipt,
+    canonical_entity_type,
 };
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
@@ -38,6 +39,18 @@ fn entity_property(
         property_definition_id,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+    }
+}
+
+fn entity_property_mutation(
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    value: Option<PropertyValue>,
+) -> EntityPropertyMutationSnapshot {
+    EntityPropertyMutationSnapshot {
+        property: entity_property(entity_id, entity_type, property_definition_id),
+        value,
     }
 }
 
@@ -1133,7 +1146,17 @@ async fn test_add_entity_property_option_happy_path() {
                 && *prop == def_id
                 && *opt == option_id
         })
-        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+        .returning(
+            move |entity_id, entity_type, property_definition_id, option_id| {
+                let mutation = entity_property_mutation(
+                    entity_id,
+                    entity_type,
+                    property_definition_id,
+                    Some(PropertyValue::SelectOption(vec![option_id])),
+                );
+                Box::pin(async move { Ok(mutation) })
+            },
+        );
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -1227,7 +1250,15 @@ async fn test_remove_entity_property_option_happy_path() {
                 && *prop == def_id
                 && *opt == option_id
         })
-        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+        .returning(move |entity_id, entity_type, property_definition_id, _| {
+            let mutation = entity_property_mutation(
+                entity_id,
+                entity_type,
+                property_definition_id,
+                Some(PropertyValue::SelectOption(Vec::new())),
+            );
+            Box::pin(async move { Ok(Some(mutation)) })
+        });
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -1539,6 +1570,12 @@ async fn test_bulk_update_entity_property_options_happy_path() {
                 Ok(vec![EntityPropertyOptionSelection {
                     property_definition_id: def_id,
                     option_ids: vec![add_id],
+                    mutation: Some(entity_property_mutation(
+                        "doc1",
+                        EntityType::Document,
+                        def_id,
+                        Some(PropertyValue::SelectOption(vec![add_id])),
+                    )),
                 }])
             })
         });
@@ -1564,6 +1601,15 @@ async fn test_bulk_update_entity_property_options_happy_path() {
     assert_eq!(selections.len(), 1);
     assert_eq!(selections[0].property_definition_id, def_id);
     assert_eq!(selections[0].option_ids, vec![add_id]);
+    let mutation = selections[0]
+        .mutation
+        .as_ref()
+        .expect("persisted update should carry its mutation snapshot");
+    assert_eq!(mutation.property.entity_id, "doc1");
+    assert_eq!(
+        mutation.value,
+        Some(PropertyValue::SelectOption(vec![add_id]))
+    );
 }
 
 #[tokio::test]
@@ -1665,6 +1711,7 @@ async fn test_bulk_update_entity_property_options_dedupes_added_options() {
                 Ok(vec![EntityPropertyOptionSelection {
                     property_definition_id: def_id,
                     option_ids: vec![add_id],
+                    mutation: None,
                 }])
             })
         });
@@ -1724,6 +1771,7 @@ async fn test_bulk_update_entities_applies_delta_in_input_order() {
                 Ok(vec![EntityPropertyOptionSelection {
                     property_definition_id: def_id,
                     option_ids: vec![final_id],
+                    mutation: None,
                 }])
             })
         });
@@ -1787,6 +1835,7 @@ async fn test_bulk_update_entities_is_best_effort_on_per_entity_write_failure() 
                     Ok(vec![EntityPropertyOptionSelection {
                         property_definition_id: def_id,
                         option_ids: vec![add_id],
+                        mutation: None,
                     }])
                 })
             }
@@ -1842,6 +1891,7 @@ async fn test_bulk_update_entities_fails_entity_that_rejects_property_type() {
                 Ok(vec![EntityPropertyOptionSelection {
                     property_definition_id: def_id,
                     option_ids: vec![add_id],
+                    mutation: None,
                 }])
             })
         });

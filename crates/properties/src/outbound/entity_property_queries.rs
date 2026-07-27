@@ -5,7 +5,40 @@ use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::{EntityPropertyOptionSelection, EntityPropertyOptionUpdate};
+use crate::domain::model::{
+    EntityPropertyMutationSnapshot, EntityPropertyOptionSelection, EntityPropertyOptionUpdate,
+};
+
+struct EntityPropertyMutationRow {
+    id: Uuid,
+    entity_id: String,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    value: Option<serde_json::Value>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl EntityPropertyMutationRow {
+    fn into_snapshot(self) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+        let value = match self.value {
+            Some(value) if !value.is_null() => Some(serde_json::from_value(value)?),
+            Some(_) | None => None,
+        };
+
+        Ok(EntityPropertyMutationSnapshot {
+            property: EntityProperty {
+                id: self.id,
+                entity_id: self.entity_id,
+                entity_type: self.entity_type,
+                property_definition_id: self.property_definition_id,
+                created_at: self.created_at,
+                updated_at: self.updated_at,
+            },
+            value,
+        })
+    }
+}
 
 /// Upsert an entity property value (insert or update).
 /// If the property doesn't exist, it will be created and attached to the entity.
@@ -72,10 +105,11 @@ pub async fn add_entity_property_option(
     entity_type: EntityType,
     property_definition_id: Uuid,
     option_id: Uuid,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<EntityPropertyMutationSnapshot> {
     let id = macro_uuid::generate_uuid_v7();
 
-    sqlx::query!(
+    let row = sqlx::query_as!(
+        EntityPropertyMutationRow,
         r#"
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
         VALUES (
@@ -97,6 +131,14 @@ pub async fn add_entity_property_option(
                 ELSE jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($5::text))
             END,
             updated_at = NOW()
+        RETURNING
+            id,
+            entity_id,
+            entity_type as "entity_type: EntityType",
+            property_definition_id,
+            values as "value: serde_json::Value",
+            created_at,
+            updated_at
         "#,
         id,
         entity_id,
@@ -104,10 +146,10 @@ pub async fn add_entity_property_option(
         property_definition_id,
         option_id.to_string(),
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
-    Ok(())
+    row.into_snapshot()
 }
 
 /// Atomically remove one option from a multi-select entity property value. A
@@ -120,8 +162,9 @@ pub async fn remove_entity_property_option(
     entity_type: EntityType,
     property_definition_id: Uuid,
     option_id: Uuid,
-) -> anyhow::Result<()> {
-    sqlx::query!(
+) -> anyhow::Result<Option<EntityPropertyMutationSnapshot>> {
+    let row = sqlx::query_as!(
+        EntityPropertyMutationRow,
         r#"
         UPDATE entity_properties
         SET values = jsonb_set(
@@ -142,16 +185,25 @@ pub async fn remove_entity_property_option(
           AND property_definition_id = $3
           AND values ->> 'type' = 'SelectOption'
           AND values -> 'value' @> jsonb_build_array($4::text)
+        RETURNING
+            id,
+            entity_id,
+            entity_type as "entity_type: EntityType",
+            property_definition_id,
+            values as "value: serde_json::Value",
+            created_at,
+            updated_at
         "#,
         entity_id,
         entity_type as EntityType,
         property_definition_id,
         option_id.to_string(),
     )
-    .execute(pool)
+    .fetch_optional(pool)
     .await?;
 
-    Ok(())
+    row.map(EntityPropertyMutationRow::into_snapshot)
+        .transpose()
 }
 
 /// Apply option deltas to several of an entity's multi-select property values in
@@ -235,29 +287,42 @@ pub async fn bulk_update_entity_property_options(
         );
 
         // Nothing to add and no row to remove from: a no-op, leave the DB alone.
-        if row_exists {
+        let mutation = if row_exists {
             let value_json = serde_json::json!({
                 "type": "SelectOption",
                 "value": final_ids,
             });
-            sqlx::query!(
+            let row = sqlx::query_as!(
+                EntityPropertyMutationRow,
                 r#"
                 UPDATE entity_properties
                 SET values = $4, updated_at = NOW()
                 WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+                RETURNING
+                    id,
+                    entity_id,
+                    entity_type as "entity_type: EntityType",
+                    property_definition_id,
+                    values as "value: serde_json::Value",
+                    created_at,
+                    updated_at
                 "#,
                 entity_id,
                 entity_type as EntityType,
                 update.property_definition_id,
                 value_json,
             )
-            .execute(&mut *tx)
+            .fetch_one(&mut *tx)
             .await?;
-        }
+            Some(row.into_snapshot()?)
+        } else {
+            None
+        };
 
         selections.push(EntityPropertyOptionSelection {
             property_definition_id: update.property_definition_id,
             option_ids: final_ids,
+            mutation,
         });
     }
 
