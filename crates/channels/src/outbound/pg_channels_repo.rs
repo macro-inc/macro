@@ -3071,7 +3071,8 @@ impl ChannelRepo for PgChannelsRepo {
                 auto_join_team = CASE
                     WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN FALSE
                     ELSE COALESCE($5, auto_join_team)
-                END
+                END,
+                updated_at = NOW()
             WHERE id = $1
             "#,
             channel_id,
