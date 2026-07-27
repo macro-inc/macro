@@ -24,17 +24,23 @@ Security is a split between what we run and what you configure.
 
 Macro maintains a **SOC 2 Type II** audit and an **ISO 27001** certification, covering the hosted product at `macro.com`.
 
-If you need audit reports, a data processing agreement, or answers to a security questionnaire as part of a vendor review, email [security@macro.com](mailto:security@macro.com).
+A few things we set up per customer rather than by default. Email [support@macro.com](mailto:support@macro.com) for any of them:
+
+- **GDPR** — a data processing agreement and the accompanying subprocessor list
+- **HIPAA** — a Business Associate Agreement, for teams handling protected health information
+- **EU hosting** — see [Data storage and regions](#data-storage-and-regions)
+
+For audit reports or a security questionnaire as part of a vendor review, email [security@macro.com](mailto:security@macro.com).
 
 <Note>
-  For HIPAA, FedRAMP, or other requirements that need Macro running inside your own infrastructure, contact [self-host@macro.com](mailto:self-host@macro.com). Self-hosting under the AGPLv3 is covered in the [FAQ](/faq).
+  FedRAMP, or anything else that needs Macro running inside your own infrastructure, is a different conversation — contact [self-host@macro.com](mailto:self-host@macro.com). Self-hosting under the AGPLv3 is covered in the [FAQ](/faq).
 </Note>
 
 ## Data storage and regions
 
-The hosted version of Macro runs on **AWS in the United States**. There is currently no option to pin a workspace to another region — if regional data residency is a hard requirement for you, self-hosting is the path today, and [self-host@macro.com](mailto:self-host@macro.com) is the place to start.
+By default, the hosted version of Macro runs on **AWS in the United States**. **EU hosting is available on request** — email [support@macro.com](mailto:support@macro.com) and we'll set your workspace up in an EU region.
 
-Your data is stored across a few systems, all inside that same AWS environment:
+Whichever region your workspace lives in, your data is stored across a few systems inside it:
 
 - **Postgres** for blocks and their relationships — docs, emails, tasks, channels, messages, calls, CRM records
 - **S3** for files, attachments, images, and call recordings
@@ -111,7 +117,11 @@ Please include steps to reproduce, the affected surface (web, iOS, API, or MCP),
   </Accordion>
 
   <Accordion title="Can I keep my data in the EU?">
-    Not on the hosted version — it runs on AWS in the US. Self-hosting is the option today; email [self-host@macro.com](mailto:self-host@macro.com).
+    Yes, on request. The default is AWS in the US; email [support@macro.com](mailto:support@macro.com) and we'll host your workspace in an EU region instead.
+  </Accordion>
+
+  <Accordion title="Can you sign a DPA or a BAA?">
+    Yes to both. Email [support@macro.com](mailto:support@macro.com) for a data processing agreement under GDPR, or a Business Associate Agreement if you're handling protected health information.
   </Accordion>
 
   <Accordion title="Who at Macro can see my workspace?">
