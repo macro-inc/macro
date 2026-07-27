@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-use std::{future::pending, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use ai_tools::build_tool_service_context_from_env;
 use anyhow::{Context, Result};
@@ -22,11 +22,13 @@ use scheduled_action::inbound::axum_router::{
 };
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
-use scheduled_action::outbound::pg_polling_dispatcher::PgPollingDispatcher;
+use scheduled_action::outbound::pg_polling_dispatcher::{
+    PgPollingDispatcher, PgPollingDispatcherLifecycle,
+};
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
 use sqlx::postgres::PgPoolOptions;
-use tokio_util::task::TaskTracker;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -92,7 +94,14 @@ async fn main() -> Result<()> {
         live_updates,
     ));
 
-    let dispatcher = PgPollingDispatcher::new(Arc::clone(&repo), dispatcher_executor);
+    let dispatcher_cancellation_token = CancellationToken::new();
+    let dispatcher_tracker = TaskTracker::new();
+    let dispatcher_lifecycle = PgPollingDispatcherLifecycle::new(
+        dispatcher_cancellation_token.clone(),
+        dispatcher_tracker.clone(),
+    );
+    let dispatcher = PgPollingDispatcher::new(Arc::clone(&repo), dispatcher_executor)
+        .with_lifecycle(dispatcher_lifecycle);
     let (dispatcher_tx, _execution_rx) = dispatcher.begin_dispatch_loop();
 
     let service = Arc::new(ScheduledActionServiceImpl::new(
@@ -136,9 +145,15 @@ async fn main() -> Result<()> {
     tracing::info!("scheduled_action service listening on {addr}");
 
     let server_result = axum::serve(listener, router.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("server closed");
+
+    tracing::info!("stopping scheduled action dispatcher");
+    dispatcher_cancellation_token.cancel();
+    dispatcher_tracker.close();
+    dispatcher_tracker.wait().await;
+    tracing::info!("scheduled action dispatcher stopped");
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
@@ -154,40 +169,4 @@ async fn main() -> Result<()> {
     }
 
     server_result
-}
-
-/// Waits for Ctrl+C on all platforms or SIGTERM on Unix.
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {}
-            Err(error) => {
-                tracing::error!(error=?error, "failed to install Ctrl+C handler");
-                pending::<()>().await;
-            }
-        }
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            Ok(mut signal) => {
-                signal.recv().await;
-            }
-            Err(error) => {
-                tracing::error!(error=?error, "failed to install SIGTERM handler");
-                pending::<()>().await;
-            }
-        }
-    };
-
-    #[cfg(not(unix))]
-    let terminate = pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-
-    tracing::info!("shutdown signal received");
 }
