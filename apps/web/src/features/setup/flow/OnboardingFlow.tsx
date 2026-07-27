@@ -31,6 +31,7 @@ import {
   ONBOARDING_CONNECTORS_FEATURE_FLAG,
   type OnboardingConnectorServerName,
   resolveOnboardingConnectorNames,
+  resolveOnboardingStepIndex,
 } from './onboardingConnectorConfig';
 import { PlanStep } from './PlanStep';
 import { SummaryStep } from './SummaryStep';
@@ -242,7 +243,13 @@ function FlowContent() {
     );
   });
 
-  const [stepIndex, setStepIndex] = createSignal(0);
+  const [activeStepKey, setActiveStepKey] = createSignal('email');
+  const stepIndex = createMemo(() =>
+    resolveOnboardingStepIndex(
+      steps().map((step) => step.key),
+      activeStepKey()
+    )
+  );
   const currentStep = createMemo(() => steps()[stepIndex()]);
   const currentStepKey = createMemo(() => currentStep().key);
   const userId = () => userInfoQuery.data?.userId;
@@ -264,8 +271,7 @@ function FlowContent() {
         sessionStorage.removeItem(FLOW_NEXT_STORAGE_KEY);
         return;
       }
-      const index = steps().findIndex((step) => step.key === saved.step);
-      if (index !== -1) setStepIndex(index);
+      setActiveStepKey(saved.step ?? 'email');
     } catch {
       sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
     }
@@ -302,10 +308,11 @@ function FlowContent() {
       state,
     });
     const index = Math.min(stepIndex() + 1, steps().length - 1);
-    setStepIndex(index);
+    const nextStep = steps()[index];
+    setActiveStepKey(nextStep.key);
     sessionStorage.setItem(
       FLOW_STEP_STORAGE_KEY,
-      JSON.stringify({ user: userId(), step: steps()[index].key })
+      JSON.stringify({ user: userId(), step: nextStep.key })
     );
   };
 
