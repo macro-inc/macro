@@ -655,7 +655,7 @@ export function Appearance() {
       <SettingsPage title="Appearance">
         <SettingsSection title="Color Theme">
           {/* Establish a container so the rows can stack (label/description over
-              the picker) when the panel is narrower than 520px. */}
+              the picker) when the panel is narrower than 460px. */}
           <SettingsCard class="@container">
             {/* Active theme: pin a specific theme by name, or follow the OS. */}
             <ActiveThemeRow />
