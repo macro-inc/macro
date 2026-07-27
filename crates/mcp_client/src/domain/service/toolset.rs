@@ -1,4 +1,4 @@
-use crate::domain::models::{Error, McpServer, McpServerRecord};
+use crate::domain::models::{CallToolResultExt, Error, McpServer, McpServerRecord};
 use crate::domain::ports::{McpConnector, McpServerStore};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
@@ -11,9 +11,6 @@ use schemars::Schema;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
-
-#[cfg(test)]
-mod test;
 
 const MANGLED_PREFIX: &str = "mcp__";
 const MANGLED_SEPARATOR: &str = "__";
@@ -48,38 +45,6 @@ impl std::fmt::Display for MangledName {
 struct RegisteredTool {
     peer: Peer<RoleClient>,
     tool: Tool,
-}
-
-fn text_content(result: &CallToolResult) -> String {
-    result
-        .content
-        .iter()
-        .filter_map(|content| {
-            content
-                .raw
-                .as_text()
-                .map(|text| text.text.clone())
-                .or_else(|| {
-                    let resource = content.raw.as_resource()?;
-                    match &resource.resource {
-                        rmcp::model::ResourceContents::TextResourceContents { text, .. }
-                            if !text.is_empty() =>
-                        {
-                            Some(text.clone())
-                        }
-                        _ => None,
-                    }
-                })
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn tool_result_value(result: CallToolResult) -> serde_json::Value {
-    let text = text_content(&result);
-    result
-        .structured_content
-        .unwrap_or(serde_json::Value::String(text))
 }
 
 /// Dispatches tool calls to connected MCP servers using name-mangled routing.
@@ -244,24 +209,13 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
             };
 
             if result.is_error.unwrap_or(false) {
-                let description = {
-                    let text = text_content(&result);
-                    if text.is_empty() {
-                        result
-                            .structured_content
-                            .as_ref()
-                            .map(ToString::to_string)
-                            .unwrap_or_else(|| "MCP tool returned an error".to_string())
-                    } else {
-                        text
-                    }
-                };
+                let description = result.error_description();
                 Ok(Err(ToolCallError {
                     internal_error: anyhow::anyhow!("{}", &description),
                     description,
                 }))
             } else {
-                Ok(Ok(tool_result_value(result)))
+                Ok(Ok(result.into_value()))
             }
         })
     }

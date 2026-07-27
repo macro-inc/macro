@@ -382,6 +382,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 properties_service.clone(),
                 entity_access_service.clone(),
             ),
+            document_properties:
+                import::outbound::document_properties::DocumentPropertiesApplicator::new(
+                    properties_service.clone(),
+                ),
             team_repository: ai_tools::build_team_repository(pool.clone()),
         };
         let import_service = Arc::new(import::domain::service::ImportServiceImpl::new(
