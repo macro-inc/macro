@@ -11,8 +11,8 @@ use crate::domain::{
 use anyhow::anyhow;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    AccessLevel, BotId, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    EntityType as AccessEntityType, ViewAccessLevel,
+    AccessLevel, BotId, BotReceiptScope, Entity, EntityAccessAuth, EntityAccessReceipt,
+    EntityPermission, EntityType as AccessEntityType, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{
@@ -68,6 +68,9 @@ fn bot_receipt_has_no_authenticated_user_identity() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_bot(
         bot_id.into_storage_id(),
+        BotReceiptScope::Team {
+            team_id: Uuid::new_v4(),
+        },
         "document-1",
         entity_access::domain::models::EntityType::Document,
     );
@@ -298,6 +301,9 @@ async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let bot_access = EditReceipt::dangerously_assert_bot(
         bot_id.into_storage_id(),
+        BotReceiptScope::Team {
+            team_id: Uuid::new_v4(),
+        },
         &task_id.to_string(),
         AccessEntityType::Document,
     );

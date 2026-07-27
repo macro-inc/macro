@@ -2,7 +2,7 @@
 
 mod queries;
 
-pub use queries::{SourceIds, get_bot_source_ids, get_user_source_ids};
+pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 
 #[cfg(test)]
 mod test;
@@ -46,6 +46,16 @@ fn foreign_entity_source_pairs(
     }
 
     (source_ids, source_auth_entities)
+}
+
+fn team_foreign_entity_source_pairs(
+    team_id: Uuid,
+    bot_principal: &str,
+) -> (Vec<String>, Vec<String>) {
+    (
+        vec![team_id.to_string(), bot_principal.to_string()],
+        vec!["team".to_string(), "user".to_string()],
+    )
 }
 
 impl AccessRepository for PgAccessRepository {
@@ -149,9 +159,10 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_bot_entity_access(
+    async fn get_team_entity_access(
         &self,
         bot_id: BotId,
+        team_id: Uuid,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
@@ -159,7 +170,7 @@ impl AccessRepository for PgAccessRepository {
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
         let bot_principal = bot_id.into_storage_id();
-        let source_ids = queries::get_bot_source_ids(&self.pool, &bot_principal)
+        let source_ids = queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
             .await
             .map_err(|_| AccessError::Internal)?;
 
@@ -196,7 +207,7 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::CrmCompany
             | EntityType::CrmContact => {
                 return Err(AccessError::BadRequest(
-                    "Unsupported entity type for bot access",
+                    "Unsupported entity type for team item access",
                 ));
             }
         };
@@ -205,16 +216,87 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_bot_channel_role(
+    async fn get_team_channel_role(
         &self,
         channel_id: &Uuid,
+        team_id: Uuid,
         bot_id: BotId,
     ) -> Result<ChannelRoleResult, AccessError> {
         let bot_principal = bot_id.into_storage_id();
-        Ok(
-            queries::channel_role::get_bot_channel_role(&self.pool, channel_id, &bot_principal)
-                .await?,
+        Ok(queries::channel_role::get_team_channel_role(
+            &self.pool,
+            channel_id,
+            &team_id,
+            &bot_principal,
         )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn has_team_foreign_entity_access(
+        &self,
+        foreign_entity_id: &str,
+        team_id: Uuid,
+        bot_id: BotId,
+    ) -> Result<bool, AccessError> {
+        let foreign_entity_uuid = foreign_entity_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid foreign entity ID format"))?;
+        let bot_principal = bot_id.into_storage_id();
+        let scope_sources =
+            queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
+                .await
+                .map_err(|_| AccessError::Internal)?;
+
+        if !scope_sources.0.contains(&team_id.to_string())
+            || !scope_sources.0.contains(&bot_principal.to_string())
+        {
+            return Ok(false);
+        }
+
+        let (source_ids, source_auth_entities) =
+            team_foreign_entity_source_pairs(team_id, bot_principal.as_ref());
+        Ok(queries::foreign_entity_access::has_foreign_entity_access(
+            &self.pool,
+            &foreign_entity_uuid,
+            &source_ids,
+            &source_auth_entities,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_crm_company_access(
+        &self,
+        company_id: &str,
+        team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        let company_uuid = company_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM company ID format"))?;
+        Ok(queries::crm_company_access::get_team_crm_company_access(
+            &self.pool,
+            &company_uuid,
+            &team_id,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_crm_contact_access(
+        &self,
+        contact_id: &str,
+        team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        let contact_uuid = contact_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM contact ID format"))?;
+        Ok(queries::crm_contact_access::get_team_crm_contact_access(
+            &self.pool,
+            &contact_uuid,
+            &team_id,
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]

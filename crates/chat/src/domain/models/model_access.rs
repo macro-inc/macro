@@ -6,7 +6,7 @@
 /// The chat models offered to users, best-first.
 pub const CHAT_MODELS: &[&str] = &[
     "anthropic/claude-sonnet-5",
-    "anthropic/claude-opus-4-8",
+    "anthropic/claude-opus-5",
     "anthropic/claude-haiku-4-5",
     "anthropic/claude-opus-4-7",
     "anthropic/claude-sonnet-4-6",

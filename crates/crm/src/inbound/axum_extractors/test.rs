@@ -10,9 +10,9 @@ use axum::{
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
-        EntityPermission, EntityType, MemberTeamRole, RequiredPermission, UserTeamInfo,
-        ViewAccessLevel,
+        AccessError, AccessLevel, AnyEntityPermission, BotAccessScope, BotId, CallChannelInfo,
+        EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
+        RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -129,6 +129,7 @@ impl EntityAccessService for FakeEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -396,7 +397,7 @@ impl CrmService for FakeCrmService {
 
     async fn create_crm_comment(
         &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
         _owner: &str,
         _thread_id: Option<Uuid>,
         _thread_metadata: Option<Value>,
@@ -408,7 +409,7 @@ impl CrmService for FakeCrmService {
 
     async fn get_crm_comment_threads(
         &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         panic!("unexpected get_crm_comment_threads call")
     }

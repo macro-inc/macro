@@ -76,8 +76,8 @@ const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
   Linear: {
     subtitle: 'Bring your issues into your unified workspace.',
     features: [
-      'Macro imports a small set of your recent issues — and your tags — as Macro tasks, ready to work on.',
-      'Macro AI can create and update Linear issues without leaving Macro.',
+      'Macro imports a small set of your recent issues and tags as Macro tasks, ready to work on.',
+      'Macro AI can create, read, and update Linear issues without leaving Macro.',
     ],
     gatherHint:
       "We're already looking through your Linear — you'll see what we found before you finish.",
@@ -85,26 +85,27 @@ const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
   Notion: {
     subtitle: 'Bring your docs and wikis into your unified workspace.',
     features: [
-      'Macro imports a small set of your key pages — and your tags — as Macro docs.',
-      'Macro AI can search your pages and wikis; Notion itself is never changed.',
+      'Macro imports a small set of your pages as Macro docs.',
+      'Macro AI can search your pages and wikis.',
     ],
     gatherHint:
       "We're already looking through your Notion — you'll see what we found before you finish.",
   },
   Slack: {
-    subtitle: 'Bring the conversations where decisions happen.',
+    subtitle: 'Bring your conversations into your unified workspace.',
     features: [
-      'Macro imports a small set of your most active channels for your team.',
+      'Macro creates channels based on your existing Slack channels, with the right participants.',
       'Macro AI can search conversations and post updates for you.',
     ],
     gatherHint:
       "We're already looking through your Slack — you'll see what we found before you finish.",
   },
   GitHub: {
-    subtitle: 'Give Macro AI eyes on your code.',
+    subtitle: 'Bring your repos into your unified workspace.',
     features: [
-      'Ask Macro AI about your repos, pull requests, and issues.',
-      'Nothing syncs on its own — GitHub stays exactly as it is until you ask.',
+      'Pull requests show up in Macro.',
+      'Tasks get auto-updating branch names.',
+      'Macro AI can answer questions about your repos, pull requests, and issues.',
     ],
   },
 };
@@ -143,7 +144,7 @@ function buildSteps(): StepDef[] {
       key: 'email',
       title: 'Connect your Google accounts',
       subtitle:
-        'Macro builds one unified memory across everything you do. Connecting work and personal brings your email, docs, and calendar together — so nothing lives in a silo.',
+        'Macro builds one unified memory across everything you do. Connecting multiple email accounts brings your email, docs, and calendar together, so nothing lives in a silo.',
       render: (controls) => (
         <EmailStep onContinue={controls.next} onSkip={controls.skip} />
       ),
@@ -153,7 +154,7 @@ function buildSteps(): StepDef[] {
       key: 'team',
       title: 'Set up your team',
       subtitle:
-        'Macro is designed as a multiplayer tool — your unified memory gets sharper with every teammate who joins.',
+        'Macro is built to be used with others. Invite your team to share docs, channels, and context from day one.',
       render: (controls) => (
         <TeamStep onContinue={controls.next} onSkip={controls.skip} />
       ),

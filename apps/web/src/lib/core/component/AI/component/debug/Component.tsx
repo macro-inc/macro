@@ -486,7 +486,7 @@ function ProviderFailureChat() {
   return (
     <ProviderFailureDemo
       label="Provider failure - switch-model fallback"
-      initialModel={Model.opus48}
+      initialModel={Model.opus5}
       availableModels={GALLERY_MODELS}
     />
   );

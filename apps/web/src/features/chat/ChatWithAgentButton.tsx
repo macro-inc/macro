@@ -2,25 +2,20 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
+import {
+  type ChatAttachmentMention,
+  chatAttachmentMentionToMarkdown,
+} from '@core/component/AI/util/chatAttachmentMention';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
-import { match } from 'ts-pattern';
 
 export { AnimatedStarIcon as ChatWithAgentIcon };
-
-const CHANNEL_TYPE_VALUES = new Set<string>(Object.values(ChannelType));
-
-function _toChatChannelType(
-  t: string | undefined | null
-): ChannelType | undefined {
-  if (t && CHANNEL_TYPE_VALUES.has(t)) return t as ChannelType;
-  return undefined;
-}
 
 type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
@@ -33,25 +28,31 @@ type ChatWithAgentEntity =
   | { type: 'project'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
 
-function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
-  return match(entity)
-    .with({ type: 'email' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'email_thread' as const,
-    }))
-    .with({ type: 'document' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'document' as const,
-    }))
-    .with({ type: 'project' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'project' as const,
-    }))
-    .with({ type: 'channel' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'channel' as const,
-    }))
-    .exhaustive();
+function buildSeed(entity: ChatWithAgentEntity): {
+  mention: ChatAttachmentMention;
+  attachment: Attachment;
+} {
+  const attachmentType: Attachment['entity_type'] =
+    entity.type === 'email' ? 'email_thread' : entity.type;
+  const blockName =
+    entity.type === 'document'
+      ? fileTypeToBlockName(entity.fileType, true)
+      : entity.type === 'email'
+        ? 'email'
+        : entity.type;
+
+  return {
+    mention: {
+      documentId: entity.id,
+      documentName: entity.name,
+      blockName,
+      ...(entity.type === 'channel' ? { channelType: entity.channelType } : {}),
+    },
+    attachment: {
+      entity_id: entity.id,
+      entity_type: attachmentType,
+    },
+  };
 }
 
 async function createAndOpenChat(seed: {
@@ -84,13 +85,9 @@ async function createAndOpenChat(seed: {
 }
 
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const attachment = buildAttachment(entity);
-  if (!attachment) {
-    console.warn('openChatWithAgent: unable to build attachment', entity);
-    toast.failure("Can't attach this item to a chat");
-    return;
-  }
-  await createAndOpenChat({ attachments: [attachment] });
+  const { mention, attachment } = buildSeed(entity);
+  const input = chatAttachmentMentionToMarkdown(mention);
+  await createAndOpenChat({ input, attachments: [attachment] });
 }
 
 export async function openChatWithInput(initialInput: string) {

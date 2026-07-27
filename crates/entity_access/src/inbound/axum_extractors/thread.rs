@@ -13,11 +13,11 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -54,20 +54,12 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
                 parts, state,
             )
             .await
-            .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let macro_user_id = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone());
+            .map_err(ExtractorError::from)?
+            .authorization;
 
         let Path(path_params): Path<HashMap<String, String>> = parts
             .extract()
@@ -80,6 +72,29 @@ where
                 "missing thread_id path parameter",
             ))?
             .clone();
+
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.as_ref() {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &thread_id,
+                EntityType::EmailThread,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {

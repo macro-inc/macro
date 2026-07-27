@@ -10,12 +10,12 @@ use axum::{
     extract::{FromRef, FromRequest, Request},
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 use serde::{Deserialize, de::DeserializeOwned};
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
@@ -28,7 +28,7 @@ struct EntityBodyFields {
     entity_id: String,
 }
 
-/// Validates that an authenticated user has access to an entity identified in the request body.
+/// Validates that an authenticated principal has access to an entity identified in the request body.
 ///
 /// Type parameter `T` specifies the required access level, `Svc` is the entity access service,
 /// `V` is the typed request body, and `Auth` is the authorization service. This extractor consumes
@@ -49,7 +49,7 @@ where
     Svc: EntityAccessService,
     MacroAuthorizationState<Auth>: FromRef<S>,
     Auth: MacroAuthorizationService,
-    V: DeserializeOwned,
+    V: DeserializeOwned + Send,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -57,18 +57,17 @@ where
     #[tracing::instrument(err, skip(req, state))]
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let authorization = req
-            .extract_parts_with_state::<
-                OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
-                _,
-            >(state)
+            .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>, _>(
+                state,
+            )
             .await
-            .map_err(ExtractorError::from)?;
-        let user = authorization
+            .map_err(ExtractorError::from)?
             .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone())
             .ok_or(ExtractorError::Unauthorized)?;
+
+        if matches!(authorization, MacroAuthorization::Internal(None)) {
+            return Err(ExtractorError::Unauthorized);
+        }
 
         let Json(json): Json<serde_json::Value> = req
             .extract()
@@ -81,6 +80,31 @@ where
             .map_err(|_| ExtractorError::BadRequest("Invalid entity body"))?;
 
         let service = Arc::<Svc>::from_ref(state);
+        if let MacroAuthorization::Bot(authentication) = &authorization {
+            let inner = deserialize_body(json)?;
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &entity_id,
+                entity_type,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                inner,
+                _marker: PhantomData,
+            });
+        }
+
+        let user = match authorization {
+            MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
+                user.macro_user_id
+            }
+            MacroAuthorization::Bot(_) | MacroAuthorization::Internal(None) => {
+                unreachable!("bot and identity-less internal access returned above")
+            }
+        };
         let access_level = service
             .get_access_level(Some(&user), &entity_id, entity_type)
             .await
@@ -101,9 +125,12 @@ where
                 entity_permission,
                 _marker: PhantomData,
             },
-            inner: serde_json::from_value(json)
-                .map_err(|_| ExtractorError::BadRequest("Invalid request body"))?,
+            inner: deserialize_body(json)?,
             _marker: PhantomData,
         })
     }
+}
+
+fn deserialize_body<V: DeserializeOwned>(json: serde_json::Value) -> Result<V, ExtractorError> {
+    serde_json::from_value(json).map_err(|_| ExtractorError::BadRequest("Invalid request body"))
 }

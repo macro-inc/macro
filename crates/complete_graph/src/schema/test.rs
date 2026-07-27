@@ -8,8 +8,9 @@ use email::domain::models::{
     UpsertEmailFilterInput,
 };
 use entity_access::domain::models::{
-    AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
-    EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
+    EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+    ViewAccessLevel,
 };
 use graphql_common::GraphqlRequestParts;
 use macro_authorization::{
@@ -339,6 +340,7 @@ impl EntityAccessService for CountingEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

@@ -160,6 +160,7 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
   const [inviteSlots, setInviteSlots] = createSignal<string[]>([
     ...INITIAL_INVITE_SLOTS,
   ]);
+  let inviteListEl: HTMLDivElement | undefined;
 
   const validInvites = () =>
     [...new Set(inviteSlots().map((value) => value.trim()))].filter(
@@ -186,6 +187,16 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
       const empty = slots.findIndex((value) => value.trim() === '');
       if (empty === -1) return [...slots, address];
       return slots.map((value, i) => (i === empty ? address : value));
+    });
+  };
+
+  const addEmptyInvite = () => {
+    setInviteSlots((slots) => [...slots, '']);
+    requestAnimationFrame(() => {
+      inviteListEl?.scrollTo({
+        top: inviteListEl.scrollHeight,
+        behavior: 'smooth',
+      });
     });
   };
 
@@ -224,27 +235,32 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
 
       {/* Index, not For: slots are edited strings, and For keys by value —
           each keystroke would recreate the input node and drop focus. */}
-      <Index each={inviteSlots()}>
-        {(slot, i) => (
-          <FormInput
-            id={`invite-${i}`}
-            type="email"
-            placeholder="teammate@company.com"
-            value={slot()}
-            onInput={(value) =>
-              setInviteSlots((slots) =>
-                slots.map((v, j) => (j === i ? value : v))
-              )
-            }
-          />
-        )}
-      </Index>
+      <div
+        ref={(el) => (inviteListEl = el)}
+        class="flex max-h-48 flex-col gap-3 overflow-y-auto overscroll-contain"
+      >
+        <Index each={inviteSlots()}>
+          {(slot, i) => (
+            <FormInput
+              id={`invite-${i}`}
+              type="email"
+              placeholder="teammate@company.com"
+              value={slot()}
+              onInput={(value) =>
+                setInviteSlots((slots) =>
+                  slots.map((v, j) => (j === i ? value : v))
+                )
+              }
+            />
+          )}
+        </Index>
+      </div>
 
       <Button
         variant="ghost"
         size="sm"
         class="self-center text-ink-muted"
-        onClick={() => setInviteSlots((slots) => [...slots, ''])}
+        onClick={addEmptyInvite}
       >
         <Plus class="size-4" />
         Add another teammate

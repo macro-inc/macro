@@ -27,8 +27,9 @@ mod self_read_guard {
     use ai_toolset::tool_object::UserToolResponse;
     use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
     use entity_access::domain::models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, Entity, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, TeamRole,
+        UserTeamInfo,
     };
     use entity_access::domain::ports::EntityAccessService;
     use macro_user_id::lowercased::Lowercase;
@@ -188,6 +189,7 @@ mod self_read_guard {
         async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
             &self,
             _bot_id: BotId,
+            _scope: BotAccessScope,
             _entity_id: &str,
             _entity_type: EntityType,
         ) -> std::result::Result<EntityAccessReceipt<T>, AccessError> {
@@ -460,6 +462,7 @@ mod self_read_guard {
         async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
             &self,
             _bot_id: BotId,
+            _scope: BotAccessScope,
             entity_id: &str,
             entity_type: EntityType,
         ) -> std::result::Result<EntityAccessReceipt<T>, AccessError> {

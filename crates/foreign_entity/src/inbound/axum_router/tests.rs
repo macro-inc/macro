@@ -10,8 +10,8 @@ use axum::{
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -160,6 +160,7 @@ impl EntityAccessService for NoopEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

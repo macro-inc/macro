@@ -5,11 +5,12 @@ import PencilIcon from '@phosphor/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { Button, Layer } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
 import { CollapsibleMessage } from './CollapsibleMessage';
 import { EditableChatMessage } from './EditableChatMessage';
+import { getVisibleUserMessageAttachments } from './userMessageAttachments';
 
 // Function to insert soft hyphens into long words / urls / etc so that they won't lock the width
 function insertSoftHyphens(text: string): string {
@@ -64,13 +65,16 @@ export function UserMessage(props: {
     return rawContent?.trim() ? rawContent : undefined;
   };
 
-  const imageAttachments = () =>
-    props.message.attachments.filter((a) => a.entity_type === 'static_file');
+  const visibleAttachments = createMemo(() =>
+    getVisibleUserMessageAttachments(
+      props.message.content.toString(),
+      props.message.attachments
+    )
+  );
 
-  const itemPreviewAttachments = () =>
-    props.message.attachments.filter((a) =>
-      ['channel', 'document', 'email_thread', 'project'].includes(a.entity_type)
-    );
+  const hasVisibleAttachments = () =>
+    visibleAttachments().images.length > 0 ||
+    visibleAttachments().items.length > 0;
 
   return (
     <div class="flex flex-col group">
@@ -82,9 +86,9 @@ export function UserMessage(props: {
           </div>
         </div>
       </Show>
-      <Show when={props.message.attachments.length > 0}>
+      <Show when={hasVisibleAttachments()}>
         <div class="flex flex-col items-end gap-1 ml-auto max-w-[calc(100%-8rem)] mb-2">
-          <For each={imageAttachments()}>
+          <For each={visibleAttachments().images}>
             {(attachment) => (
               <ImagePreview
                 image={{ id: attachment.entity_id }}
@@ -93,7 +97,7 @@ export function UserMessage(props: {
               />
             )}
           </For>
-          <For each={itemPreviewAttachments()}>
+          <For each={visibleAttachments().items}>
             {(attachment) => (
               <div class="max-w-full overflow-hidden p-[0.5px]">
                 <ItemPreview

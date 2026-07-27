@@ -98,9 +98,16 @@ fn bot_id() -> entity_access::domain::models::BotId {
     ))
 }
 
+fn bot_receipt_scope() -> entity_access::domain::models::BotReceiptScope {
+    entity_access::domain::models::BotReceiptScope::Team {
+        team_id: uuid::uuid!("00000000-0000-0000-0000-000000000456"),
+    }
+}
+
 fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::dangerously_assert_bot(
         bot_id().into_storage_id(),
+        bot_receipt_scope(),
         document_id,
         EntityType::Document,
     )
@@ -858,6 +865,7 @@ async fn bot_lifecycle_event_has_no_actor_user_id() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let receipt = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_bot(
         bot_id().into_storage_id(),
+        bot_receipt_scope(),
         "doc-1",
         EntityType::Document,
     );
