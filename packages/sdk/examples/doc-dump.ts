@@ -1,6 +1,9 @@
 /**
- * Dump a document's raw content using a bot API key — exercises the
- * bot-accessible document routes that are live upstream today.
+ * Dump a document's extracted text using a bot API key — exercises the one
+ * document read route that is fully bot-accessible upstream today
+ * (`GET /documents/{id}/text`; the export/location routes still carry a
+ * humans-only side extractor, and this route is missing from the OpenAPI
+ * spec, hence the raw fetch instead of the generated client).
  *
  * Usage:
  *   MACRO_BOT_TOKEN=mbot_... bun examples/doc-dump.ts <doc-id-or-url> [acting-user-id]
@@ -10,8 +13,7 @@
  * its owning team) the bot reads with that user's access; without one it uses
  * the owning team's access. Set MACRO_ENV to 'dev' (default) / 'prod' / 'local'.
  */
-import type { Env } from '../src/config';
-import { Macro } from '../src/macro';
+import { type Env, HOSTS } from '../src/config';
 
 const [docArg, actAs] = process.argv.slice(2);
 const botToken = process.env.MACRO_BOT_TOKEN;
@@ -26,13 +28,23 @@ const docId = docArg.startsWith('http')
   : docArg;
 
 const env = (process.env.MACRO_ENV ?? 'dev') as Env;
-let macro = new Macro({ env, auth: { type: 'bot', token: botToken } });
+const headers: Record<string, string> = {
+  'x-macro-bot-token': botToken,
+  'x-macro-bot-scope': actAs ? 'user' : 'team',
+};
 if (actAs) {
-  macro = macro.requestedAs(actAs);
+  headers['x-macro-bot-for-macro-user-id'] = actAs;
   console.error(`acting as ${actAs} (user scope)`);
 } else {
   console.error('no acting user given (team scope)');
 }
 
-const doc = macro.documents.byId(docId);
-console.log(await doc.content());
+const res = await fetch(`${HOSTS[env].storage}/documents/${docId}/text`, {
+  headers,
+});
+if (!res.ok) {
+  console.error(`${res.status} ${await res.text()}`);
+  process.exit(1);
+}
+const { text } = (await res.json()) as { text: string };
+console.log(text);
