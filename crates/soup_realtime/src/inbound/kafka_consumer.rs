@@ -409,7 +409,9 @@ where
                                 .inner()
                                 .pause_message_partition(kafka_message)
                                 .context("failed to pause Kafka partition after fan-out failure")?;
-                            continue;
+                            return Err(error
+                                .context("realtime Soup entity consumer requires restart for redelivery")
+                                .into_dynamic());
                         }
                     }
 

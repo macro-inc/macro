@@ -21,14 +21,19 @@ struct FakeAccessExpander {
     users: Vec<MacroUserIdStr<'static>>,
     fail: bool,
     calls: Arc<AtomicUsize>,
+    entities: Arc<Mutex<Vec<Entity<'static>>>>,
 }
 
 impl UserAccessExpander for FakeAccessExpander {
     async fn expand_user_access(
         &self,
-        _entity: &Entity<'static>,
+        entity: &Entity<'static>,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.entities
+            .lock()
+            .expect("access entities lock")
+            .push(entity.clone());
         if self.fail {
             Err(rootcause::report!("access unavailable"))
         } else {
@@ -105,6 +110,7 @@ impl SoupRealtimePublisher for FakePublisher {
 struct Harness {
     service: SoupRealtimeServiceImpl<FakeAccessExpander, FakeReader, FakePublisher>,
     access_calls: Arc<AtomicUsize>,
+    access_entities: Arc<Mutex<Vec<Entity<'static>>>>,
     read_calls: Arc<AtomicUsize>,
     messages: Arc<Mutex<Vec<SoupRealtimeMessage>>>,
 }
@@ -156,6 +162,7 @@ fn harness(
     fail_users: HashSet<String>,
 ) -> Harness {
     let access_calls = Arc::new(AtomicUsize::new(0));
+    let access_entities = Arc::new(Mutex::new(Vec::new()));
     let read_calls = Arc::new(AtomicUsize::new(0));
     let messages = Arc::new(Mutex::new(Vec::new()));
     let service = SoupRealtimeServiceImpl::new(
@@ -163,6 +170,7 @@ fn harness(
             users,
             fail: access_fails,
             calls: access_calls.clone(),
+            entities: access_entities.clone(),
         },
         FakeReader {
             responses: Mutex::new(responses),
@@ -176,6 +184,7 @@ fn harness(
     Harness {
         service,
         access_calls,
+        access_entities,
         read_calls,
         messages,
     }
@@ -261,13 +270,40 @@ async fn zero_users_skips_reads_and_publications() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect("zero recipients is successful");
 
     assert_eq!(harness.access_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.read_calls.load(Ordering::SeqCst), 0);
     assert!(harness.messages.lock().expect("messages lock").is_empty());
+}
+
+#[tokio::test]
+async fn recipient_expansion_can_use_a_different_entity_from_the_soup_item() {
+    let recipient = user("one");
+    let responses = HashMap::from([item_response(
+        &recipient,
+        document_item(DOCUMENT_ID, "Thread-shaped test item", None),
+    )]);
+    let harness = harness(vec![recipient], responses, false, HashSet::new());
+    let channel = EntityType::Channel.with_entity_string(OTHER_DOCUMENT_ID.to_string());
+
+    harness
+        .service
+        .notify_users(SoupRealtimeUpdate::new(document_entity(), channel.clone()))
+        .await
+        .expect("fan-out succeeds");
+
+    assert_eq!(
+        harness
+            .access_entities
+            .lock()
+            .expect("access entities lock")
+            .as_slice(),
+        &[channel]
+    );
+    assert_eq!(harness.messages.lock().expect("messages lock").len(), 1);
 }
 
 #[tokio::test]
@@ -282,7 +318,7 @@ async fn one_user_receives_one_full_message() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect("fan-out succeeds");
 
@@ -317,7 +353,7 @@ async fn three_unique_users_receive_exactly_three_messages() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect("fan-out succeeds");
 
@@ -358,7 +394,7 @@ async fn duplicate_accessors_are_deduplicated() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect("fan-out succeeds");
 
@@ -378,7 +414,7 @@ async fn each_recipient_gets_their_user_scoped_item() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect("fan-out succeeds");
 
@@ -413,7 +449,7 @@ async fn access_failure_prevents_reads_and_publications() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect_err("access failure propagates");
 
@@ -429,7 +465,7 @@ async fn missing_item_prevents_all_publication() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect_err("missing item is an error");
 
@@ -447,7 +483,7 @@ async fn mismatched_item_prevents_all_publication() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect_err("mismatched item is an error");
 
@@ -463,7 +499,7 @@ async fn any_reader_failure_prevents_all_publication() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect_err("reader failure propagates");
 
@@ -492,7 +528,7 @@ async fn publisher_failure_is_returned_after_all_messages_are_attempted() {
 
     harness
         .service
-        .notify_users(document_entity())
+        .notify_users(SoupRealtimeUpdate::for_entity(document_entity()))
         .await
         .expect_err("publication failure propagates");
 

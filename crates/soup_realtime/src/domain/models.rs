@@ -31,12 +31,6 @@ impl SoupRealtimeUpdate {
     }
 }
 
-impl From<Entity<'static>> for SoupRealtimeUpdate {
-    fn from(entity: Entity<'static>) -> Self {
-        Self::for_entity(entity)
-    }
-}
-
 /// One full Soup item addressed to a recipient for realtime delivery.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SoupRealtimeMessage {

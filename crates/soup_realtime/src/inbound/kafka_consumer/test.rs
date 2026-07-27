@@ -106,11 +106,7 @@ struct FlakyService {
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(
-        &self,
-        update: impl Into<SoupRealtimeUpdate> + Send,
-    ) -> Result<(), Report> {
-        let update = update.into();
+    async fn notify_users(&self, update: SoupRealtimeUpdate) -> Result<(), Report> {
         self.entities
             .lock()
             .expect("entities lock")

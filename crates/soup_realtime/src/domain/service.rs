@@ -134,35 +134,17 @@ where
     P: SoupRealtimePublisher,
 {
     #[tracing::instrument(
-        skip(self, update),
+        skip(self),
         fields(
-            entity_type = tracing::field::Empty,
-            entity_id = tracing::field::Empty,
-            access_source_type = tracing::field::Empty,
-            access_source_id = tracing::field::Empty,
+            entity_type = %update.item.entity_type,
+            entity_id = %update.item.entity_id,
+            access_source_type = %update.access_source.entity_type,
+            access_source_id = %update.access_source.entity_id,
             recipient_count = tracing::field::Empty,
         ),
         err
     )]
-    async fn notify_users(
-        &self,
-        update: impl Into<SoupRealtimeUpdate> + Send,
-    ) -> Result<(), Report> {
-        let update = update.into();
-        tracing::Span::current()
-            .record(
-                "entity_type",
-                tracing::field::display(update.item.entity_type),
-            )
-            .record("entity_id", tracing::field::display(&update.item.entity_id))
-            .record(
-                "access_source_type",
-                tracing::field::display(update.access_source.entity_type),
-            )
-            .record(
-                "access_source_id",
-                tracing::field::display(&update.access_source.entity_id),
-            );
+    async fn notify_users(&self, update: SoupRealtimeUpdate) -> Result<(), Report> {
         let mut users = self
             .access_expander
             .expand_user_access(&update.access_source)

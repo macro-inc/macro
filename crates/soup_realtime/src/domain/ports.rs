@@ -14,7 +14,7 @@ pub trait SoupRealtimeService: Send + Sync + 'static {
     /// Hydrates and publishes one user-scoped Soup item to every current accessor.
     fn notify_users(
         &self,
-        update: impl Into<SoupRealtimeUpdate> + Send,
+        update: SoupRealtimeUpdate,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
