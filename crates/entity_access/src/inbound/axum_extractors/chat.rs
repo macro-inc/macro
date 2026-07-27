@@ -12,11 +12,11 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -57,25 +57,53 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
                 parts, state,
             )
             .await
-            .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let macro_user_id = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone());
+            .map_err(ExtractorError::from)?
+            .authorization;
 
         let chat_context: Extension<ChatBasic> = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
+
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.as_ref() {
+            let receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &chat_context.id,
+                EntityType::Chat,
+            )
+            .await?;
+
+            if chat_context.deleted_at.is_some()
+                && !matches!(
+                    receipt.entity_permission(),
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner
+                    }
+                )
+            {
+                return Err(ExtractorError::UnauthorizedWithMessage(
+                    "only owner can access deleted resource",
+                ));
+            }
+
+            return Ok(Self {
+                entity_access_receipt: receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
@@ -94,7 +122,7 @@ where
             });
         }
 
-        // Check ownership only if authenticated
+        // Bots always resolve ownership through the scoped domain policy.
         if let Some(ref user_id) = macro_user_id
             && chat_context.user_id == *user_id
         {

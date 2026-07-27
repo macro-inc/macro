@@ -1,5 +1,8 @@
 //! Query for CRM company access level.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::{AccessLevel, CrmEntityAccess, TeamRole};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
@@ -45,6 +48,32 @@ pub async fn get_crm_company_access(
             team_role: r.role,
         })
     }))
+}
+
+/// Resolve team-scoped access to a visible CRM company owned by the team.
+#[tracing::instrument(err, skip(pool))]
+pub async fn get_team_crm_company_access(
+    pool: &PgPool,
+    company_id: &Uuid,
+    team_id: &Uuid,
+) -> Result<Option<CrmEntityAccess>, sqlx::Error> {
+    sqlx::query_as!(
+        CrmEntityAccess,
+        r#"
+        SELECT
+            'view'::"AccessLevel" AS "access_level!: AccessLevel",
+            team_id AS "team_id!",
+            'member'::team_role AS "team_role!: TeamRole"
+        FROM crm_companies
+        WHERE id = $1
+          AND team_id = $2
+          AND hidden = false
+        "#,
+        company_id,
+        team_id,
+    )
+    .fetch_optional(pool)
+    .await
 }
 
 /// Map a team role + hidden flag to an [`AccessLevel`].

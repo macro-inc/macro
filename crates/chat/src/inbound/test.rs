@@ -25,8 +25,8 @@ use crate::inbound::http::router::{
 };
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
-    AccessError, AccessLevel, BotId, EditAccessLevel, EntityAccessReceipt, EntityPermission,
-    EntityType, OwnerAccessLevel, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, BotAccessScope, BotId, EditAccessLevel, EntityAccessReceipt,
+    EntityPermission, EntityType, OwnerAccessLevel, UserTeamInfo, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::lowercased::Lowercase;
@@ -395,6 +395,7 @@ impl EntityAccessService for MockAccessService {
     >(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> std::result::Result<entity_access::domain::models::EntityAccessReceipt<T>, AccessError>

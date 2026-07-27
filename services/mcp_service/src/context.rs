@@ -56,6 +56,17 @@ pub struct McpContext {
     pub mcp_public_host: String,
 }
 
+struct ToolContextBuildArgs<'a> {
+    config: &'a Config,
+    db: &'a PgPool,
+    secretsmanager_client: &'a secretsmanager_client::SecretsManager,
+    sqs_client: sqs_client::SQS,
+    queue_aws_client: aws_sdk_sqs::Client,
+    document_storage_service_auth_key: String,
+    sync_service_auth_key: String,
+    event_task_tracker: TaskTracker,
+}
+
 pub async fn build_context(
     config: &Config,
     event_task_tracker: TaskTracker,
@@ -93,16 +104,19 @@ pub async fn build_context(
     .await
     .context("failed to load sync service auth key")?;
 
-    let tool_context = build_tool_context(
+    let tool_context = build_tool_context(ToolContextBuildArgs {
         config,
-        &db,
-        &secretsmanager_client,
+        db: &db,
+        secretsmanager_client: &secretsmanager_client,
         sqs_client,
         queue_aws_client,
-        config.document_storage_service_auth_key.as_ref().to_owned(),
-        sync_service_auth_key.as_ref().to_owned(),
+        document_storage_service_auth_key: config
+            .document_storage_service_auth_key
+            .as_ref()
+            .to_owned(),
+        sync_service_auth_key: sync_service_auth_key.as_ref().to_owned(),
         event_task_tracker,
-    )
+    })
     .await?;
 
     let auth_proxy = build_auth_proxy(config, &secretsmanager_client).await?;
@@ -121,16 +135,18 @@ pub async fn build_context(
     })
 }
 
-async fn build_tool_context(
-    config: &Config,
-    db: &PgPool,
-    secretsmanager_client: &secretsmanager_client::SecretsManager,
-    sqs_client: sqs_client::SQS,
-    queue_aws_client: aws_sdk_sqs::Client,
-    document_storage_service_auth_key: String,
-    sync_service_auth_key: String,
-    event_task_tracker: TaskTracker,
-) -> anyhow::Result<ToolServiceContext> {
+async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<ToolServiceContext> {
+    let ToolContextBuildArgs {
+        config,
+        db,
+        secretsmanager_client,
+        sqs_client,
+        queue_aws_client,
+        document_storage_service_auth_key,
+        sync_service_auth_key,
+        event_task_tracker,
+    } = args;
+
     let dss_url = DocumentStorageServiceUrl::new()?.to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();

@@ -27,7 +27,7 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     expect(free).toEqual([FREE_DEFAULT_MODEL]);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
-    expect(free).not.toContain(Model.opus48);
+    expect(free).not.toContain(Model.opus5);
     expect(free).not.toContain(Model.gpt55);
   });
 });
@@ -62,7 +62,7 @@ describe('alternateProviderModel', () => {
     // Candidates model the user's accessible models. The suggestion must be
     // one of them, never a model outside the accessible set.
     const candidates: TModel[] = [Model.haiku45, Model.gpt5Mini];
-    const alt = alternateProviderModel(Model.opus48, { candidates });
+    const alt = alternateProviderModel(Model.opus5, { candidates });
     expect(candidates).toContain(alt);
     expect(PROVIDER_OF(alt!)).toBe('openai'); // the only different-provider candidate
   });
@@ -75,7 +75,7 @@ describe('alternateProviderModel', () => {
     ).toBeUndefined();
     // Likewise when every candidate shares the current (Anthropic) provider.
     expect(
-      alternateProviderModel(Model.opus48, {
+      alternateProviderModel(Model.opus5, {
         candidates: [Model.haiku45, Model.sonnet46],
       })
     ).toBeUndefined();
@@ -87,7 +87,7 @@ describe('alternateProviderModel', () => {
     // just the current model's provider.
     const candidates = [...Object.values(Model)] as TModel[];
     const failedProviders = new Set<string>();
-    let current: TModel = Model.opus48; // anthropic
+    let current: TModel = Model.opus5; // anthropic
 
     // Anthropic has an outage → suggest a different provider.
     failedProviders.add(PROVIDER_OF(current));
@@ -110,7 +110,7 @@ describe('alternateProviderModel', () => {
   });
 
   it('still avoids the current provider when no failures are recorded', () => {
-    const alt = alternateProviderModel(Model.opus48, {
+    const alt = alternateProviderModel(Model.opus5, {
       candidates: [...Object.values(Model)] as TModel[],
       failedProviders: new Set(),
     });

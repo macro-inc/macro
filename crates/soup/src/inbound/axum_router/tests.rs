@@ -7,7 +7,7 @@ use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
-use entity_access::domain::models::{BotId, EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{BotAccessScope, BotId, EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_authorization::{
@@ -376,6 +376,7 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
     >(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: entity_access::domain::models::EntityType,
     ) -> Result<

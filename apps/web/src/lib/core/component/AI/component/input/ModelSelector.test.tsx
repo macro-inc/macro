@@ -89,7 +89,7 @@ describe('ModelSelector: availability', () => {
     expect(available.className).not.toContain('opacity-50');
     expect(available.querySelector('[data-testid="lock-icon"]')).toBeNull();
 
-    const locked = itemFor(container, Model.opus48);
+    const locked = itemFor(container, Model.opus5);
     expect(locked.className).toContain('opacity-50');
     expect(locked.querySelector('[data-testid="lock-icon"]')).not.toBeNull();
   });
@@ -123,8 +123,8 @@ describe('ModelSelector: selection routing', () => {
       <ModelSelector models={options} onSelect={onSelect} onLocked={onLocked} />
     ));
 
-    fireEvent.click(itemFor(container, Model.opus48)); // locked for a free user
-    expect(onLocked).toHaveBeenCalledWith(Model.opus48);
+    fireEvent.click(itemFor(container, Model.opus5)); // locked for a free user
+    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
@@ -134,7 +134,7 @@ describe('ModelSelector: what is shown is what is sent', () => {
   // model accessor. Picking a model updates that single source, so the request
   // can never diverge from what the selector displays.
   function Harness() {
-    const [model, setModel] = createSignal<TModel>(Model.opus48);
+    const [model, setModel] = createSignal<TModel>(Model.opus5);
     return (
       <>
         {/* stand-in for the value sendMessage() reads */}
@@ -153,8 +153,8 @@ describe('ModelSelector: what is shown is what is sent', () => {
 
     // Initial state: trigger shows the selected model.
     const trigger = container.querySelector('[data-trigger]')!;
-    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.opus48]);
-    expect(getByTestId('would-send').textContent).toBe(Model.opus48);
+    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.opus5]);
+    expect(getByTestId('would-send').textContent).toBe(Model.opus5);
 
     // Select a different model -> both the trigger and the would-send value move
     // together to exactly that model.
@@ -185,10 +185,10 @@ describe('ModelSelector: what is shown is what is sent', () => {
     }
     const { container, getByTestId } = render(() => <FreeHarness />);
 
-    fireEvent.click(itemFor(container, Model.opus48)); // locked
+    fireEvent.click(itemFor(container, Model.opus5)); // locked
     // The would-send value is unchanged; only the paywall fired.
     expect(getByTestId('would-send').textContent).toBe(Model.haiku45);
-    expect(onLocked).toHaveBeenCalledWith(Model.opus48);
+    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
   });
 });
 

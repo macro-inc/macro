@@ -12,13 +12,13 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
 
-use super::{ExtractorError, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -59,100 +59,97 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
                 parts, state,
             )
             .await
             .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let macro_user_id = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone());
 
         let project_context: Extension<BasicProject> = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        if macro_user_id.is_none() && is_internal_access {
+        if matches!(
+            authorization.authorization.as_ref(),
+            Some(MacroAuthorization::Internal(None))
+        ) {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: project_context.id.clone(),
-                        entity_type: EntityType::Project,
-                    },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
+                entity_access_receipt: project_access_receipt(
+                    &project_context.id,
+                    EntityAccessAuth::Internal,
+                    EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
-                    _marker: PhantomData,
-                },
+                ),
                 _marker: PhantomData,
             });
         }
 
-        // Check ownership only if authenticated
+        let macro_user_id = match authorization.authorization.as_ref() {
+            Some(MacroAuthorization::User(user))
+            | Some(MacroAuthorization::Internal(Some(user))) => Some(user.macro_user_id.clone()),
+            Some(MacroAuthorization::Bot(_)) | Some(MacroAuthorization::Internal(None)) | None => {
+                None
+            }
+        };
+
         if let Some(ref user_id) = macro_user_id
             && project_context.user_id == *user_id
         {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: project_context.id.clone(),
-                        entity_type: EntityType::Project,
-                    },
-                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
-                    entity_permission: EntityPermission::AccessLevel {
+                entity_access_receipt: project_access_receipt(
+                    &project_context.id,
+                    EntityAccessAuth::Authenticated(user_id.clone()),
+                    EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
-                    _marker: PhantomData,
-                },
+                ),
                 _marker: PhantomData,
             });
         }
 
-        // Deleted items are only accessible by owner
+        if let Some(MacroAuthorization::Bot(bot)) = authorization.authorization.as_ref() {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                bot,
+                &project_context.id,
+                EntityType::Project,
+            )
+            .await?;
+
+            if project_context.deleted_at.is_some()
+                && !matches!(
+                    entity_access_receipt.entity_permission(),
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner
+                    }
+                )
+            {
+                return Err(ExtractorError::UnauthorizedWithMessage(
+                    "only owner can access deleted resource",
+                ));
+            }
+
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        // Deleted items are only accessible by owner.
         if project_context.deleted_at.is_some() {
             return Err(ExtractorError::UnauthorizedWithMessage(
                 "only owner can access deleted resource",
             ));
         }
 
-        let access_level = match service
-            .get_access_level(
-                macro_user_id.as_deref(),
-                &project_context.id,
-                EntityType::Project,
-            )
-            .await
-            .map_err(ExtractorError::from)?
-        {
-            Some(access_level) => access_level,
-            None => return Err(ExtractorError::Unauthorized),
-        };
-
-        let permission = EntityPermission::AccessLevel { access_level };
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        };
+        let entity_access_receipt =
+            get_project_access_receipt(service.as_ref(), macro_user_id, &project_context.id)
+                .await?;
 
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
-                    entity_id: project_context.id.clone(),
-                    entity_type: EntityType::Project,
-                },
-                auth: macro_user_id
-                    .map(EntityAccessAuth::Authenticated)
-                    .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+            entity_access_receipt,
             _marker: PhantomData,
         })
     }
@@ -208,8 +205,8 @@ impl ProjectOrParentId {
 ///
 /// Downstream consumers also use the body (which is an antipattern) so we need
 /// to keep the value around. Identity is resolved through
-/// [`OptionalMacroAuthorizationExtractor`], which natively supports internal
-/// authorization. Type parameter `T` specifies the required project access
+/// [`OptionalMacroAuthorizationExtractor`], which natively supports all
+/// principals. Type parameter `T` specifies the required project access
 /// level, `V` is the request body, `Svc` is the entity access service, and
 /// `Auth` is the authorization service.
 #[derive(Debug)]
@@ -276,22 +273,12 @@ where
 
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-        let authorization: OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService> = req
+        let authorization: OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal> = req
             .extract_parts_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let macro_user_id = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone());
-        let has_internal_owner_access = macro_user_id.is_none() && is_internal_access;
 
-        extract_project_body_access(req, service, macro_user_id, has_internal_owner_access)
+        extract_project_body_access(req, service, authorization.authorization)
             .await
             .map(Self::from_outcome)
     }
@@ -311,8 +298,7 @@ enum ProjectBodyAccessOutcome<T: RequiredPermission, V> {
 async fn extract_project_body_access<T, V, Svc>(
     req: Request,
     service: Arc<Svc>,
-    macro_user_id: Option<MacroUserIdStr<'static>>,
-    has_internal_owner_access: bool,
+    authorization: Option<MacroAuthorization>,
 ) -> Result<ProjectBodyAccessOutcome<T, V>, ExtractorError>
 where
     T: RequiredPermission,
@@ -338,29 +324,28 @@ where
         });
     }
 
-    let entity_access_receipt = if has_internal_owner_access {
-        project_access_receipt(
+    let entity_access_receipt = match authorization {
+        Some(MacroAuthorization::Internal(None)) => project_access_receipt(
             project.id(),
             EntityAccessAuth::Internal,
             EntityPermission::AccessLevel {
                 access_level: AccessLevel::Owner,
             },
-        )
-    } else {
-        let access_level = service
-            .get_access_level(macro_user_id.as_deref(), project.id(), EntityType::Project)
-            .await
-            .map_err(ExtractorError::from)?
-            .ok_or(ExtractorError::Unauthorized)?;
-        let permission = EntityPermission::AccessLevel { access_level };
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
+        ),
+        Some(MacroAuthorization::Bot(bot)) => {
+            generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                &bot,
+                project.id(),
+                EntityType::Project,
+            )
+            .await?
         }
-        let auth = macro_user_id
-            .map(EntityAccessAuth::Authenticated)
-            .unwrap_or(EntityAccessAuth::Unauthenticated);
-
-        project_access_receipt(project.id(), auth, permission)
+        Some(MacroAuthorization::User(user)) | Some(MacroAuthorization::Internal(Some(user))) => {
+            get_project_access_receipt(service.as_ref(), Some(user.macro_user_id), project.id())
+                .await?
+        }
+        None => get_project_access_receipt(service.as_ref(), None, project.id()).await?,
     };
 
     Ok(ProjectBodyAccessOutcome::FoundProject {
@@ -368,6 +353,27 @@ where
         entity_access_receipt,
         body: deserialize_body(json)?,
     })
+}
+
+async fn get_project_access_receipt<T: RequiredPermission>(
+    service: &impl EntityAccessService,
+    macro_user_id: Option<MacroUserIdStr<'static>>,
+    project_id: &str,
+) -> Result<EntityAccessReceipt<T>, ExtractorError> {
+    let access_level = service
+        .get_access_level(macro_user_id.as_deref(), project_id, EntityType::Project)
+        .await
+        .map_err(ExtractorError::from)?
+        .ok_or(ExtractorError::Unauthorized)?;
+    let permission = EntityPermission::AccessLevel { access_level };
+    if !permission.satisfies::<T>() {
+        return Err(ExtractorError::Unauthorized);
+    }
+    let auth = macro_user_id
+        .map(EntityAccessAuth::Authenticated)
+        .unwrap_or(EntityAccessAuth::Unauthenticated);
+
+    Ok(project_access_receipt(project_id, auth, permission))
 }
 
 fn deserialize_body<V: DeserializeOwned>(json: serde_json::Value) -> Result<V, ExtractorError> {

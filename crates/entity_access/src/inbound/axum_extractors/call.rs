@@ -15,12 +15,12 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 use uuid::Uuid;
 
-use super::ExtractorError;
+use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -75,20 +75,11 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
                 parts, state,
             )
             .await
             .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let macro_user_id = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone());
 
         let Path(CallAccessParams { call_id }) = parts
             .extract::<Path<CallAccessParams>>()
@@ -103,6 +94,34 @@ where
             .await
             .map_err(ExtractorError::from)?
             .ok_or(ExtractorError::NotFound("call not found"))?;
+
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.authorization.as_ref()
+        {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &call_id,
+                EntityType::Call,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                share_permission_id: call_info.share_permission_id,
+                channel_id: call_info.channel_id,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
@@ -189,21 +208,11 @@ where
         let service = <Arc<Svc>>::from_ref(state);
 
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
                 parts, state,
             )
             .await
             .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let (macro_user_id, user_context) = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
-            .unwrap_or_default();
 
         let Path(CallWithChannelIdAccessParams { channel_id }) = parts
             .extract::<Path<CallWithChannelIdAccessParams>>()
@@ -218,6 +227,35 @@ where
             .await
             .map_err(ExtractorError::from)?
             .ok_or(ExtractorError::NotFound("call not found for channel"))?;
+
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.authorization.as_ref()
+        {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &channel_id,
+                EntityType::Channel,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                share_permission_id: call_info.share_permission_id,
+                channel_id: channel_id_uuid,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let (macro_user_id, user_context) = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
+            .unwrap_or_default();
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {

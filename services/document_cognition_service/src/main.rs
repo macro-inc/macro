@@ -352,10 +352,13 @@ async fn main() -> anyhow::Result<()> {
             static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         )),
     };
-    let message_service = Arc::new(chat::domain::service::MessageServiceImpl::new(
-        chat::outbound::postgres::PgChatRepo::new(db.clone()),
-        attachment_provider,
-    ));
+    let message_service = Arc::new(
+        chat::domain::service::MessageServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            attachment_provider,
+        )
+        .with_event_broker(macro_event_broker.clone()),
+    );
 
     tracing::info!("initialized attachment provider");
 
@@ -656,6 +659,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_state,
         import_service,
         onboarding_service,
+        macro_event_broker: macro_event_broker.clone(),
     })
     .await
     .context("failed to setup and serve api");

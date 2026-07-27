@@ -20,10 +20,14 @@ use uuid::Uuid;
 use super::*;
 use crate::{
     domain::models::{
-        AccessError, BotId, CallChannelInfo, EditAccessLevel, EntityAccessAuth, UserTeamInfo,
-        ViewAccessLevel,
+        AccessError, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel, EntityAccessAuth,
+        UserTeamInfo, ViewAccessLevel,
     },
-    inbound::axum_extractors::test_support::{VALID_BOT_TOKEN, valid_bot_authentication},
+    inbound::axum_extractors::test_support::{
+        BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BOT_TEAM_ID, BotAccessCall,
+        MALFORMED_SYSTEM_BOT_TOKEN, VALID_BOT_TOKEN, malformed_system_bot_authentication,
+        valid_bot_authentication,
+    },
 };
 
 const PROJECT_ID: &str = "project-1";
@@ -52,19 +56,31 @@ struct AccessCall {
 #[derive(Clone, Debug)]
 struct FakeEntityAccessService {
     access_level: Option<AccessLevel>,
+    bot_permission: Option<EntityPermission>,
     calls: Arc<Mutex<Vec<AccessCall>>>,
+    bot_calls: Arc<Mutex<Vec<BotAccessCall>>>,
 }
 
 impl FakeEntityAccessService {
     fn new(access_level: Option<AccessLevel>) -> Self {
         Self {
             access_level,
+            bot_permission: access_level
+                .map(|access_level| EntityPermission::AccessLevel { access_level }),
             calls: Arc::new(Mutex::new(Vec::new())),
+            bot_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
     fn calls(&self) -> Vec<AccessCall> {
         self.calls.lock().expect("calls lock poisoned").clone()
+    }
+
+    fn bot_calls(&self) -> Vec<BotAccessCall> {
+        self.bot_calls
+            .lock()
+            .expect("bot calls lock poisoned")
+            .clone()
     }
 }
 
@@ -81,11 +97,31 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        self.bot_calls
+            .lock()
+            .expect("bot calls lock poisoned")
+            .push(BotAccessCall {
+                bot_id,
+                scope: scope.clone(),
+                entity_id: entity_id.to_string(),
+                entity_type,
+            });
+
+        let permission = self.bot_permission.ok_or(AccessError::Unauthorized)?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            permission,
+        )
     }
 
     async fn get_access_level(
@@ -193,11 +229,11 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         bot_scope: BotScope,
         _claims: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
-        if token != VALID_BOT_TOKEN {
-            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        match token {
+            VALID_BOT_TOKEN => Ok(valid_bot_authentication(bot_scope)),
+            MALFORMED_SYSTEM_BOT_TOKEN => Ok(malformed_system_bot_authentication(bot_scope)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
-
-        Ok(valid_bot_authentication(bot_scope))
     }
 
     async fn authorize_internal(
@@ -277,11 +313,11 @@ fn bearer_request(body: &str, token: &str) -> Request<Body> {
         .expect("request should be valid")
 }
 
-fn bot_request(body: &str) -> Request<Body> {
+fn bot_request(body: &str, scope: BotScope, token: &str) -> Request<Body> {
     Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
-        .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
-        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, scope.as_str())
         .body(Body::from(body.to_string()))
         .expect("request should be valid")
 }
@@ -300,9 +336,13 @@ fn internal_request(body: &str, user_id: Option<&str>) -> Request<Body> {
 }
 
 fn project(deleted: bool) -> BasicProject {
+    project_owned_by(deleted, OWNER_ID)
+}
+
+fn project_owned_by(deleted: bool, owner_id: &'static str) -> BasicProject {
     BasicProject {
         id: PROJECT_ID.to_string(),
-        user_id: MacroUserIdStr::parse_from_str(OWNER_ID).expect("owner id should be valid"),
+        user_id: MacroUserIdStr::parse_from_str(owner_id).expect("owner id should be valid"),
         parent_id: None,
         name: "Test project".to_string(),
         deleted_at: deleted.then(|| {
@@ -324,6 +364,12 @@ fn project_request(token: Option<&str>, project: BasicProject) -> Request<Body> 
                 .expect("header should be valid"),
         );
     }
+    request
+}
+
+fn bot_project_request(scope: BotScope, token: &str, project: BasicProject) -> Request<Body> {
+    let mut request = bot_request("", scope, token);
+    request.extensions_mut().insert(project);
     request
 }
 
@@ -379,31 +425,136 @@ async fn authenticated_project_owner_bypasses_access_lookup() {
 }
 
 #[tokio::test]
-async fn bot_project_access_is_forbidden_before_acl_lookup() {
+async fn user_scoped_bot_project_owner_delegates_to_the_service() {
     let state = TestState::new(Some(AccessLevel::Owner));
-    let mut request = project_request(None, project(false));
-    request.headers_mut().insert(
-        BOT_TOKEN_HEADER,
-        VALID_BOT_TOKEN.parse().expect("bot token should be valid"),
-    );
-    request.headers_mut().insert(
-        BOT_SCOPE_HEADER,
-        BotScope::User
-            .as_str()
-            .parse()
-            .expect("bot scope should be valid"),
-    );
-    let error = extract_project_access::<ViewAccessLevel>(request, &state)
-        .await
-        .expect_err("bot credentials should be forbidden");
-    let response = error.into_response();
+    let extracted = extract_project_access::<EditAccessLevel>(
+        bot_project_request(
+            BotScope::User,
+            VALID_BOT_TOKEN,
+            project_owned_by(false, BOT_ACTING_USER_ID),
+        ),
+        &state,
+    )
+    .await
+    .expect("the scoped service should delegate owner access");
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("response body should be readable");
-    assert_eq!(body.as_ref(), br#"{"message":"forbidden"}"#);
+    assert_eq!(
+        extracted
+            .entity_access_receipt
+            .get_authenticated_bot()
+            .expect("receipt should authenticate the bot")
+            .bot_id(),
+        BOT_ID
+    );
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::User {
+                user_id: MacroUserIdStr::parse_from_str(BOT_ACTING_USER_ID)
+                    .expect("bot acting user id should be valid"),
+                user_org_id: Some(i64::from(BOT_ACTING_USER_ORGANIZATION_ID)),
+            },
+            entity_id: PROJECT_ID.to_string(),
+            entity_type: EntityType::Project,
+        }]
+    );
     assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_scoped_bot_project_access_uses_the_scoped_service() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let extracted = extract_project_access::<EditAccessLevel>(
+        bot_project_request(BotScope::Team, VALID_BOT_TOKEN, project(false)),
+        &state,
+    )
+    .await
+    .expect("team-scoped project access should be allowed");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.auth(),
+        EntityAccessAuth::Bot(_)
+    ));
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::Team {
+                team_id: BOT_TEAM_ID,
+            },
+            entity_id: PROJECT_ID.to_string(),
+            entity_type: EntityType::Project,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_without_acting_user_is_rejected() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let result = extract_project_access::<ViewAccessLevel>(
+        bot_project_request(BotScope::User, MALFORMED_SYSTEM_BOT_TOKEN, project(false)),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(ExtractorError::UnauthorizedWithMessage(
+            "bot user scope requires an acting user"
+        ))
+    ));
+    assert!(state.entity_access.bot_calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_project_access_below_the_required_level_is_rejected() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let result = extract_project_access::<EditAccessLevel>(
+        bot_project_request(BotScope::Team, VALID_BOT_TOKEN, project(false)),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(result, Err(ExtractorError::Unauthorized)));
+    assert_eq!(state.entity_access.bot_calls().len(), 1);
+}
+
+#[tokio::test]
+async fn deleted_project_requires_owner_permission_from_the_bot_service() {
+    let owner_state = TestState::new(Some(AccessLevel::Owner));
+    let extracted = extract_project_access::<ViewAccessLevel>(
+        bot_project_request(BotScope::Team, VALID_BOT_TOKEN, project(true)),
+        &owner_state,
+    )
+    .await
+    .expect("a bot receipt with owner permission should access a deleted project");
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+
+    let view_state = TestState::new(Some(AccessLevel::View));
+    let result = extract_project_access::<ViewAccessLevel>(
+        bot_project_request(BotScope::Team, VALID_BOT_TOKEN, project(true)),
+        &view_state,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(ExtractorError::UnauthorizedWithMessage(
+            "only owner can access deleted resource"
+        ))
+    ));
+    assert_eq!(view_state.entity_access.bot_calls().len(), 1);
 }
 
 #[tokio::test]
@@ -511,22 +662,125 @@ async fn direct_project_id_with_sufficient_access_returns_receipt_and_body() {
 }
 
 #[tokio::test]
-async fn bot_project_body_access_is_forbidden_before_acl_lookup() {
+async fn user_scoped_bot_project_body_access_preserves_the_typed_body() {
     let state = TestState::new(Some(AccessLevel::Owner));
-    let error = EditExtractor::from_request(
-        bot_request(r#"{"name":"document","projectId":"project-1"}"#),
+    let result = EditExtractor::from_request(
+        bot_request(
+            r#"{"name":"document","projectId":"project-1"}"#,
+            BotScope::User,
+            VALID_BOT_TOKEN,
+        ),
         &state,
     )
     .await
-    .expect_err("bot credentials should be forbidden");
-    let response = error.into_response();
+    .expect("the user-scoped bot should receive delegated owner access");
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("response body should be readable");
-    assert_eq!(body.as_ref(), br#"{"message":"forbidden"}"#);
+    let ProjectBodyAccessLevelExtractorV2::FoundProject {
+        entity_access_receipt,
+        body,
+        ..
+    } = result
+    else {
+        panic!("project should be found")
+    };
+
+    assert_eq!(body.name, "document");
+    assert_eq!(body.project_id.as_deref(), Some(PROJECT_ID));
+    assert!(matches!(
+        entity_access_receipt.auth(),
+        EntityAccessAuth::Bot(_)
+    ));
+    assert!(matches!(
+        entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::User {
+                user_id: MacroUserIdStr::parse_from_str(BOT_ACTING_USER_ID)
+                    .expect("bot acting user id should be valid"),
+                user_org_id: Some(i64::from(BOT_ACTING_USER_ORGANIZATION_ID)),
+            },
+            entity_id: PROJECT_ID.to_string(),
+            entity_type: EntityType::Project,
+        }]
+    );
     assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_scoped_bot_project_body_access_uses_the_scoped_service() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let result = EditExtractor::from_request(
+        bot_request(
+            r#"{"name":"document","projectParentId":"parent-project"}"#,
+            BotScope::Team,
+            VALID_BOT_TOKEN,
+        ),
+        &state,
+    )
+    .await
+    .expect("team-scoped bot access should be allowed");
+
+    let ProjectBodyAccessLevelExtractorV2::FoundProject { project, body, .. } = result else {
+        panic!("parent project should be found")
+    };
+    assert_eq!(project.id(), "parent-project");
+    assert_eq!(body.project_parent_id.as_deref(), Some("parent-project"));
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::Team {
+                team_id: BOT_TEAM_ID,
+            },
+            entity_id: "parent-project".to_string(),
+            entity_type: EntityType::Project,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_project_body_without_acting_user_is_rejected() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let result = EditExtractor::from_request(
+        bot_request(
+            r#"{"name":"document","projectId":"project-1"}"#,
+            BotScope::User,
+            MALFORMED_SYSTEM_BOT_TOKEN,
+        ),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(ExtractorError::UnauthorizedWithMessage(
+            "bot user scope requires an acting user"
+        ))
+    ));
+    assert!(state.entity_access.bot_calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_project_body_access_below_the_required_level_is_rejected() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let result = EditExtractor::from_request(
+        bot_request(
+            r#"{"name":"document","projectId":"project-1"}"#,
+            BotScope::Team,
+            VALID_BOT_TOKEN,
+        ),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(result, Err(ExtractorError::Unauthorized)));
+    assert_eq!(state.entity_access.bot_calls().len(), 1);
 }
 
 #[tokio::test]
@@ -627,6 +881,37 @@ async fn malformed_json_and_invalid_body_are_distinguished() {
         invalid_body,
         Err(ExtractorError::BadRequest("Invalid request body"))
     ));
+}
+
+#[tokio::test]
+async fn bot_project_body_parse_failures_are_preserved() {
+    let malformed_state = TestState::new(Some(AccessLevel::Edit));
+    let malformed_json = EditExtractor::from_request(
+        bot_request("{", BotScope::Team, VALID_BOT_TOKEN),
+        &malformed_state,
+    )
+    .await;
+    assert!(matches!(
+        malformed_json,
+        Err(ExtractorError::BadRequest("Invalid JSON body"))
+    ));
+    assert!(malformed_state.entity_access.bot_calls().is_empty());
+
+    let invalid_body_state = TestState::new(Some(AccessLevel::Edit));
+    let invalid_body = EditExtractor::from_request(
+        bot_request(
+            r#"{"name":42,"projectId":"project-1"}"#,
+            BotScope::Team,
+            VALID_BOT_TOKEN,
+        ),
+        &invalid_body_state,
+    )
+    .await;
+    assert!(matches!(
+        invalid_body,
+        Err(ExtractorError::BadRequest("Invalid request body"))
+    ));
+    assert_eq!(invalid_body_state.entity_access.bot_calls().len(), 1);
 }
 
 #[tokio::test]

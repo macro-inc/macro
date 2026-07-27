@@ -15,7 +15,9 @@ use crate::domain::{
     },
 };
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
+use entity_access::domain::models::{
+    AnyEntityPermission, EditAccessLevel, MemberTeamRole, ViewAccessLevel,
+};
 use serde_json::Value;
 
 /// The CrmService exposes operations over CRM records (companies, their
@@ -325,7 +327,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     #[allow(clippy::too_many_arguments)]
     fn create_crm_comment(
         &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
+        access: &CrmCommentReceipt<AnyEntityPermission>,
         owner: &str,
         thread_id: Option<uuid::Uuid>,
         thread_metadata: Option<Value>,
@@ -339,7 +341,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// [`CompaniesRepository::get_crm_comment_threads`].
     fn get_crm_comment_threads(
         &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
+        access: &CrmCommentReceipt<AnyEntityPermission>,
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
     /// Edit the text of `comment_id`, scoped to the team in `access`
@@ -874,7 +876,7 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn create_crm_comment(
         &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
+        access: &CrmCommentReceipt<AnyEntityPermission>,
         owner: &str,
         thread_id: Option<uuid::Uuid>,
         thread_metadata: Option<Value>,
@@ -902,7 +904,7 @@ where
     #[tracing::instrument(skip(self, access), err)]
     async fn get_crm_comment_threads(
         &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
+        access: &CrmCommentReceipt<AnyEntityPermission>,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         let (entity_type, entity_id) = access.comment_entity()?;
         let team_id = access.team_id();
@@ -1169,7 +1171,7 @@ impl CrmService for NoOpCrmService {
     #[allow(clippy::too_many_arguments)]
     async fn create_crm_comment(
         &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
         _owner: &str,
         _thread_id: Option<uuid::Uuid>,
         _thread_metadata: Option<Value>,
@@ -1181,7 +1183,7 @@ impl CrmService for NoOpCrmService {
 
     async fn get_crm_comment_threads(
         &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         Ok(Vec::new())
     }
