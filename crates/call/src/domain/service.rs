@@ -1113,7 +1113,7 @@ impl<
                 tracing::info!(egress_id, recording_key, "egress recording completed");
 
                 // Find the archived call record by egress_id and update the recording key.
-                if let Some(call_record_id) = self
+                if let Some((call_record_id, _channel_id)) = self
                     .repo
                     .get_call_record_by_egress_id(egress_id)
                     .await
@@ -1524,7 +1524,8 @@ impl<
             return Ok(());
         };
 
-        self.repo
+        let _summary_persisted = self
+            .repo
             .insert_call_summary(call_id, &summary)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
@@ -1652,10 +1653,13 @@ impl<
                 }
             };
 
-            if let Err(e) = repo.insert_call_summary(&call_id, &summary).await {
-                tracing::error!(error=?e, %call_id, "failed to persist call summary");
-                return;
-            }
+            let _summary_persisted = match repo.insert_call_summary(&call_id, &summary).await {
+                Ok(persisted) => persisted,
+                Err(e) => {
+                    tracing::error!(error=?e, %call_id, "failed to persist call summary");
+                    return;
+                }
+            };
 
             if record.custom_name.is_none() {
                 match summarizer.generate_call_name(&call_id, &summary).await {

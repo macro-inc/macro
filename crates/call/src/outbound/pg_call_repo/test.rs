@@ -804,6 +804,40 @@ async fn archive_call_preserves_id_and_share_permission(
     Ok(())
 }
 
+// -- get_call_record_by_egress_id --------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_by_egress_id_returns_call_and_channel_context(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let context = repo.get_call_record_by_egress_id("egress-arch-1").await?;
+
+    assert_eq!(context, Some((CALL_ARCHIVED, CH1)));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_by_egress_id_returns_none_for_unknown_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let context = repo
+        .get_call_record_by_egress_id("unknown-egress-id")
+        .await?;
+
+    assert_eq!(context, None);
+    Ok(())
+}
+
 // -- set_active_call_recording_key --------------------------------------------
 
 #[sqlx::test(
@@ -2740,9 +2774,11 @@ async fn set_custom_name_if_null_writes_when_column_is_null(
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated Name")
+    let persisted = repo
+        .set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated Name")
         .await?;
 
+    assert!(persisted);
     let stored = sqlx::query_scalar!(
         r#"SELECT custom_name FROM call_records WHERE id = $1"#,
         CALL_ARCHIVED,
@@ -2770,9 +2806,11 @@ async fn set_custom_name_if_null_does_not_overwrite_existing_name(
     .execute(&pool)
     .await?;
 
-    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated")
+    let persisted = repo
+        .set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated")
         .await?;
 
+    assert!(!persisted);
     let stored = sqlx::query_scalar!(
         r#"SELECT custom_name FROM call_records WHERE id = $1"#,
         CALL_ARCHIVED,
@@ -2790,9 +2828,11 @@ async fn set_custom_name_if_null_does_not_overwrite_existing_name(
 async fn set_custom_name_if_null_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    // Idempotent on missing rows — must not error.
-    repo.set_custom_name_if_null(&Uuid::now_v7(), "Whatever")
+    let persisted = repo
+        .set_custom_name_if_null(&Uuid::now_v7(), "Whatever")
         .await?;
+
+    assert!(!persisted);
     Ok(())
 }
 
@@ -2806,8 +2846,9 @@ async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::
     let repo = repo(pool.clone());
     let summary = "A short synopsis of the call.";
 
-    repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
+    let persisted = repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
 
+    assert!(persisted);
     let stored = sqlx::query_scalar!(
         r#"SELECT summary FROM call_records WHERE id = $1"#,
         CALL_ARCHIVED,
@@ -2826,10 +2867,11 @@ async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::
 async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    // Unknown id should be an idempotent no-op (not an error).
-    repo.insert_call_summary(&Uuid::now_v7(), "irrelevant")
+    let persisted = repo
+        .insert_call_summary(&Uuid::now_v7(), "irrelevant")
         .await?;
 
+    assert!(!persisted);
     // The archived fixture row must remain untouched.
     let stored = sqlx::query_scalar!(
         r#"SELECT summary FROM call_records WHERE id = $1"#,

@@ -915,15 +915,16 @@ impl CallRepository for PgCallRepo {
     async fn get_call_record_by_egress_id(
         &self,
         egress_id: &str,
-    ) -> Result<Option<Uuid>, Self::Err> {
-        sqlx::query_scalar!(
+    ) -> Result<Option<(Uuid, Uuid)>, Self::Err> {
+        let record = sqlx::query!(
             r#"
-            SELECT id FROM call_records WHERE egress_id = $1
+            SELECT id, channel_id FROM call_records WHERE egress_id = $1
             "#,
             egress_id,
         )
         .fetch_optional(&self.pool)
-        .await
+        .await?;
+        Ok(record.map(|record| (record.id, record.channel_id)))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1926,9 +1927,9 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(skip(self, summary), err)]
-    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<(), Self::Err> {
+    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<bool, Self::Err> {
         // Tolerate missing rows: summarization can race with record deletion.
-        sqlx::query!(
+        let result = sqlx::query!(
             r#"
             UPDATE call_records SET summary = $2 WHERE id = $1
             "#,
@@ -1937,14 +1938,14 @@ impl CallRepository for PgCallRepo {
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     #[tracing::instrument(skip(self, name), err)]
-    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<(), Self::Err> {
+    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
-        edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
+        let persisted = edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
         tx.commit().await?;
-        Ok(())
+        Ok(persisted)
     }
 }
