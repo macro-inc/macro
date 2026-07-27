@@ -25,7 +25,7 @@ pub use graphql_entity_mutation::{
     GraphqlSharePolicyOperation, MoveEntityInput, RenameEntityInput, UpdateEntitySharePolicyInput,
 };
 pub use graphql_favorite::{
-    EntityFavoriteEdgeReader, EntityFavoriteKey, EntityFavoriteLoader, entity_favorite_loader,
+    EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,
 };
 pub use graphql_notification::{
     EntityNotificationsLoader, SoupNotificationEdgeReader, entity_notifications_loader,

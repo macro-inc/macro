@@ -7,9 +7,9 @@ use crate::{
     api::util::count_occurrences,
     service::entity_mutation::{EntityLifecycleService, LifecycleError},
 };
-use entity_mutation::{EntityMutationActor, EntityRef};
+use entity_mutation::EntityMutationActor;
 use macro_sha_count_client::Redis;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::PgPool;
 use sqs_client::search::{SearchQueueMessage, document::DocumentId};
@@ -43,14 +43,13 @@ impl DssEntityLifecycleAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl EntityLifecycleService for DssEntityLifecycleAdapter {
     async fn update_thread_share_policy(
         &self,
         _actor: &EntityMutationActor,
-        entity: &EntityRef,
+        entity: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, LifecycleError> {
+    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
         // Threads get their share-permission row lazily; mirror the REST
         // middleware's get-or-create so a first-time share succeeds. The
         // caller has already proven Owner access, so the thread exists.
@@ -82,8 +81,8 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
     async fn restore_document(
         &self,
         _actor: &EntityMutationActor,
-        entity: &EntityRef,
-    ) -> Result<Vec<EntityRef>, LifecycleError> {
+        entity: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
         let document = macro_db_client::document::get_basic_document(&self.db, &entity.entity_id)
             .await
             .map_err(row_error)?;
@@ -97,15 +96,15 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
         Ok(document
             .project_id
             .into_iter()
-            .map(|id| EntityRef::new(EntityType::Project, id))
+            .map(|id| EntityType::Project.with_entity_string(id))
             .collect())
     }
 
     async fn delete_document_permanently(
         &self,
         _actor: &EntityMutationActor,
-        entity: &EntityRef,
-    ) -> Result<Vec<EntityRef>, LifecycleError> {
+        entity: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
         let document = macro_db_client::document::get_basic_document(&self.db, &entity.entity_id)
             .await
             .map_err(row_error)?;
@@ -125,7 +124,7 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
             .map_err(|error| internal!(error))?;
         comms_db_client::entity_mentions::delete_entity_mentions_by_source(
             &self.db,
-            vec![entity.entity_id.clone()],
+            vec![entity.entity_id.to_string()],
         )
         .await
         .inspect_err(|error| tracing::error!(error = ?error, "unable to delete entity mentions"))
@@ -136,14 +135,14 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
             .map_err(|error| internal!(error))?;
         self.sqs
             .send_message_to_search_event_queue(SearchQueueMessage::RemoveDocument(DocumentId {
-                document_id: entity.entity_id.clone(),
+                document_id: entity.entity_id.to_string(),
             }))
             .await
             .map_err(|error| internal!(error))?;
         Ok(document
             .project_id
             .into_iter()
-            .map(|id| EntityRef::new(EntityType::Project, id))
+            .map(|id| EntityType::Project.with_entity_string(id))
             .collect())
     }
 }

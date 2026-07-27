@@ -32,13 +32,14 @@ use entity_access::domain::{
 };
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, DuplicateEntityRequest, EntityMutationActor,
-    EntityMutationError, EntityMutationOutcome, EntityMutationService, EntityRef, MoveEntity,
+    EntityMutationError, EntityMutationOutcome, EntityMutationService, MoveEntity,
     MoveEntityRequest, RenameEntity, RenameEntityRequest, RestoreEntity, TrashEntity,
     UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
+    capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
 use favorites::domain::{models::FavoritesError, ports::FavoritesService};
 use futures::{StreamExt, stream};
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use projects_hex::domain::ports::ProjectService;
 
@@ -66,27 +67,26 @@ pub enum LifecycleError {
 /// Each method should migrate behind the domain port that owns its entity
 /// kind and become a capability-trait impl there (projects already
 /// graduated); delete this trait once it is empty.
-#[async_trait::async_trait]
 pub trait EntityLifecycleService: Send + Sync + 'static {
     /// Update an email thread's share policy.
-    async fn update_thread_share_policy(
+    fn update_thread_share_policy(
         &self,
         actor: &EntityMutationActor,
-        entity: &EntityRef,
+        entity: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, LifecycleError>;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
     /// Restore a document.
-    async fn restore_document(
+    fn restore_document(
         &self,
         actor: &EntityMutationActor,
-        entity: &EntityRef,
-    ) -> Result<Vec<EntityRef>, LifecycleError>;
+        entity: &Entity<'static>,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
     /// Permanently delete a document.
-    async fn delete_document_permanently(
+    fn delete_document_permanently(
         &self,
         actor: &EntityMutationActor,
-        entity: &EntityRef,
-    ) -> Result<Vec<EntityRef>, LifecycleError>;
+        entity: &Entity<'static>,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
 }
 
 /// Map an access failure on the requested entity onto the public vocabulary.
@@ -140,7 +140,10 @@ fn lifecycle_failure(error: LifecycleError) -> EntityMutationError {
 
 /// Build a success outcome, guaranteeing the requested entity itself is
 /// listed as affected ahead of any extra records the domain reported.
-fn success_with_affected(requested: EntityRef, affected: Vec<EntityRef>) -> EntityMutationOutcome {
+fn success_with_affected(
+    requested: Entity<'static>,
+    affected: Vec<Entity<'static>>,
+) -> EntityMutationOutcome {
     let mut affected_entities = affected;
     if !affected_entities.contains(&requested) {
         affected_entities.insert(0, requested.clone());
@@ -257,7 +260,7 @@ where
     async fn receipt<T: RequiredPermission>(
         &self,
         actor: &EntityMutationActor,
-        entity: &EntityRef,
+        entity: &Entity<'static>,
     ) -> Result<EntityAccessReceipt<T>, EntityMutationError> {
         self.access
             .generate_entity_access_receipt::<T>(
@@ -270,15 +273,12 @@ where
             .map_err(access_failure)
     }
 
-    /// Require edit access on the target project of a move, when one is set.
+    /// Require edit access on the target project of a move.
     async fn target_project(
         &self,
         actor: &EntityMutationActor,
-        project_id: Option<&str>,
-    ) -> Result<Option<EntityAccessReceipt<EditAccessLevel>>, EntityMutationError> {
-        let Some(project_id) = project_id else {
-            return Ok(None);
-        };
+        project_id: &str,
+    ) -> Result<EntityAccessReceipt<EditAccessLevel>, EntityMutationError> {
         self.access
             .generate_entity_access_receipt::<EditAccessLevel>(
                 &actor.user_id,
@@ -287,7 +287,6 @@ where
                 EntityType::Project,
             )
             .await
-            .map(Some)
             .map_err(target_project_failure)
     }
 
@@ -296,13 +295,14 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
+        requested: &Entity<'static>,
         display_name: String,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .rename_entity(requested.clone(), receipt, display_name)
             .await
+            .map_err(Into::into)
     }
 
     /// Resolve receipts and dispatch a move to the owning domain.
@@ -310,14 +310,26 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
+        requested: &Entity<'static>,
         project_id: Option<String>,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
-        let project_receipt = self.target_project(actor, project_id.as_deref()).await?;
-        service
-            .move_entity(requested.clone(), receipt, project_id, project_receipt)
-            .await
+        let request = match project_id {
+            Some(project_id) => {
+                let project_receipt = self.target_project(actor, &project_id).await?;
+                CapabilityMoveEntityRequest::MoveToProject {
+                    entity: requested.clone(),
+                    receipt,
+                    project_id,
+                    project_receipt,
+                }
+            }
+            None => CapabilityMoveEntityRequest::MoveToRoot {
+                entity: requested.clone(),
+                receipt,
+            },
+        };
+        service.move_entity(request).await.map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a share-policy update.
@@ -325,13 +337,14 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
+        requested: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .update_share_policy(requested.clone(), receipt, policy)
             .await
+            .map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a trash operation.
@@ -339,10 +352,13 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        requested: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
-        service.trash_entity(requested.clone(), receipt).await
+        service
+            .trash_entity(requested.clone(), receipt)
+            .await
+            .map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a restore operation.
@@ -350,10 +366,13 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        requested: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
-        service.restore_entity(requested.clone(), receipt).await
+        service
+            .restore_entity(requested.clone(), receipt)
+            .await
+            .map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a permanent deletion.
@@ -361,12 +380,13 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        requested: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .delete_entity_permanently(requested.clone(), receipt)
             .await
+            .map_err(Into::into)
     }
 
     /// Resolve a receipt and dispatch a duplication.
@@ -374,9 +394,9 @@ where
         &self,
         service: &S,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
+        requested: &Entity<'static>,
         display_name: Option<String>,
-    ) -> Result<EntityRef, EntityMutationError> {
+    ) -> Result<Entity<'static>, EntityMutationError> {
         let receipt = self.receipt::<S::Receipt>(actor, requested).await?;
         service
             .duplicate_entity(
@@ -386,6 +406,7 @@ where
                 display_name,
             )
             .await
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]
@@ -532,9 +553,9 @@ where
     async fn share_email_thread(
         &self,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
+        requested: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
         self.lifecycle
@@ -547,7 +568,7 @@ where
     async fn trash_one(
         &self,
         actor: &EntityMutationActor,
-        requested: EntityRef,
+        requested: Entity<'static>,
     ) -> EntityMutationOutcome {
         let result = match requested.entity_type {
             EntityType::Document => self.trash_with(&*self.documents, actor, &requested).await,
@@ -576,7 +597,7 @@ where
     async fn restore_one(
         &self,
         actor: &EntityMutationActor,
-        requested: EntityRef,
+        requested: Entity<'static>,
     ) -> EntityMutationOutcome {
         let result = match requested.entity_type {
             EntityType::Document => self.restore_document(actor, &requested).await,
@@ -605,8 +626,8 @@ where
     async fn restore_document(
         &self,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        requested: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
         self.lifecycle
@@ -619,7 +640,7 @@ where
     async fn delete_permanently_one(
         &self,
         actor: &EntityMutationActor,
-        requested: EntityRef,
+        requested: Entity<'static>,
     ) -> EntityMutationOutcome {
         let result = match requested.entity_type {
             EntityType::Document => self.delete_document_permanently(actor, &requested).await,
@@ -648,8 +669,8 @@ where
     async fn delete_document_permanently(
         &self,
         actor: &EntityMutationActor,
-        requested: &EntityRef,
-    ) -> Result<Vec<EntityRef>, EntityMutationError> {
+        requested: &Entity<'static>,
+    ) -> Result<Vec<Entity<'static>>, EntityMutationError> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
         self.lifecycle
@@ -702,7 +723,7 @@ where
     async fn set_favorite_one(
         &self,
         actor: &EntityMutationActor,
-        entity: &EntityRef,
+        entity: &Entity<'static>,
         favorite: bool,
     ) -> Result<(), EntityMutationError> {
         if favorite {
@@ -714,11 +735,8 @@ where
                 .await
                 .map_err(favorites_failure)?;
         } else {
-            let domain_entity = entity
-                .entity_type
-                .with_entity_str(entity.entity_id.as_str());
             self.favorites
-                .remove_favorite_by_entity(&actor.user_id, &domain_entity)
+                .remove_favorite_by_entity(&actor.user_id, entity)
                 .await
                 .map_err(favorites_failure)?;
         }
@@ -726,7 +744,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<D, H, C, K, E, P, A, F, L> EntityMutationService
     for DssEntityMutationService<D, H, C, K, E, P, A, F, L>
 where
@@ -800,40 +817,37 @@ where
     async fn trash_entities(
         &self,
         actor: EntityMutationActor,
-        entities: Vec<EntityRef>,
+        entities: Vec<Entity<'static>>,
     ) -> Vec<EntityMutationOutcome> {
-        collect_ordered(
-            entities
-                .into_iter()
-                .map(|entity| self.trash_one(&actor, entity)),
-        )
-        .await
+        let mut futures = Vec::with_capacity(entities.len());
+        for entity in entities {
+            futures.push(self.trash_one(&actor, entity));
+        }
+        collect_ordered(futures).await
     }
 
     async fn restore_entities(
         &self,
         actor: EntityMutationActor,
-        entities: Vec<EntityRef>,
+        entities: Vec<Entity<'static>>,
     ) -> Vec<EntityMutationOutcome> {
-        collect_ordered(
-            entities
-                .into_iter()
-                .map(|entity| self.restore_one(&actor, entity)),
-        )
-        .await
+        let mut futures = Vec::with_capacity(entities.len());
+        for entity in entities {
+            futures.push(self.restore_one(&actor, entity));
+        }
+        collect_ordered(futures).await
     }
 
     async fn delete_entities_permanently(
         &self,
         actor: EntityMutationActor,
-        entities: Vec<EntityRef>,
+        entities: Vec<Entity<'static>>,
     ) -> Vec<EntityMutationOutcome> {
-        collect_ordered(
-            entities
-                .into_iter()
-                .map(|entity| self.delete_permanently_one(&actor, entity)),
-        )
-        .await
+        let mut futures = Vec::with_capacity(entities.len());
+        for entity in entities {
+            futures.push(self.delete_permanently_one(&actor, entity));
+        }
+        collect_ordered(futures).await
     }
 
     async fn duplicate_entities(
@@ -853,7 +867,7 @@ where
     async fn set_favorite(
         &self,
         actor: EntityMutationActor,
-        entity: EntityRef,
+        entity: Entity<'static>,
         favorite: bool,
     ) -> EntityMutationOutcome {
         if !favoritable(entity.entity_type) {

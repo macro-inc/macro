@@ -4,7 +4,7 @@ use async_graphql::{Context, Object};
 use graphql_email::{
     EmailContentKey, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader, load_latest_email_message,
 };
-use graphql_favorite::{EntityFavoriteEdgeReader, EntityFavoriteKey, load_entity_favorite};
+use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
     GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
 };
@@ -95,14 +95,7 @@ where
     }
 
     async fn resolve_is_favorited(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        load_entity_favorite::<FR>(
-            ctx,
-            EntityFavoriteKey {
-                entity_type: self.entity.entity_type,
-                entity_id: self.entity.entity_id.to_string(),
-            },
-        )
-        .await
+        load_entity_favorite::<FR>(ctx, self.entity.clone()).await
     }
 
     async fn resolve_viewer_permission(

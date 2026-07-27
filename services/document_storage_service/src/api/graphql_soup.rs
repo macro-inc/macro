@@ -132,33 +132,33 @@ fn graphql_query_context_data(
     );
     let favorite_reader = state.favorites_service.clone();
     let permission_reader = state.entity_access_service.clone();
-    let mutation_actor = entity_mutation::EntityMutationActor {
-        user_id: macro_user_id.clone(),
-        organization_id,
-    };
-
-    req.data(mutation_actor)
-        .data(state.graphql_entity_mutation_service.clone())
-        .data(complete_graph::entity_properties_loader(
-            macro_user_id.clone(),
-            property_reader,
-        ))
-        .data(complete_graph::email_content_loader(
-            macro_user_id.clone(),
-            email_content_reader,
-        ))
-        .data(complete_graph::entity_favorite_loader(
-            macro_user_id.clone(),
-            favorite_reader,
-        ))
-        .data(complete_graph::entity_permission_loader(
-            macro_user_id.clone(),
+    let req = req
+        .data(entity_mutation::EntityMutationActor {
+            user_id: macro_user_id.clone(),
             organization_id,
-            permission_reader,
-        ))
-        .data(property_writer)
-        .data(complete_graph::entity_notifications_loader(
-            macro_user_id,
-            state.graphql_notification_reader.clone(),
-        ))
+        })
+        .data(state.graphql_entity_mutation_service.clone());
+
+    req.data(complete_graph::entity_properties_loader(
+        macro_user_id.clone(),
+        property_reader,
+    ))
+    .data(complete_graph::email_content_loader(
+        macro_user_id.clone(),
+        email_content_reader,
+    ))
+    .data(complete_graph::entity_favorite_loader(
+        macro_user_id.clone(),
+        favorite_reader,
+    ))
+    .data(complete_graph::entity_permission_loader(
+        macro_user_id.clone(),
+        organization_id,
+        permission_reader,
+    ))
+    .data(property_writer)
+    .data(complete_graph::entity_notifications_loader(
+        macro_user_id,
+        state.graphql_notification_reader.clone(),
+    ))
 }

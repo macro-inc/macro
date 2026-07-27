@@ -2892,6 +2892,7 @@ dependencies = [
  "axum",
  "email",
  "entity_access",
+ "entity_mutation",
  "graphql_common",
  "graphql_email",
  "graphql_entity_mutation",

@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Schema, value};
-use entity_mutation::{
-    EntityMutationActor, EntityMutationService, UnavailableEntityMutationService,
-};
+use entity_mutation::{EntityMutationActor, UnavailableEntityMutationService};
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Minimal query root used to exercise the mutation module in isolation.
@@ -19,7 +17,7 @@ impl QueryRoot {
 
 #[tokio::test]
 async fn mutation_results_return_stable_entity_refs() {
-    let service: Arc<dyn EntityMutationService> = Arc::new(UnavailableEntityMutationService);
+    let service = Arc::new(UnavailableEntityMutationService);
     let actor = EntityMutationActor {
         user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
         organization_id: Some(42),
@@ -47,10 +45,14 @@ async fn mutation_results_return_stable_entity_refs() {
     .data(service)
     .data(actor);
 
-    let response = Schema::build(QueryRoot, crate::EntityMutationRoot, EmptySubscription)
-        .finish()
-        .execute(request)
-        .await;
+    let response = Schema::build(
+        QueryRoot,
+        crate::EntityMutationRoot::<UnavailableEntityMutationService>::new(),
+        EmptySubscription,
+    )
+    .finish()
+    .execute(request)
+    .await;
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(

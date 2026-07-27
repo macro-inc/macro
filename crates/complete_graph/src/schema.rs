@@ -10,6 +10,7 @@ use email::{
     inbound::axum::previews_router::EmailRouterState,
 };
 use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService};
+use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
 use graphql_common::require_authorized_user;
 use graphql_email::{NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader};
 use graphql_entity_mutation::EntityMutationRoot;
@@ -39,15 +40,18 @@ use crate::SoupEdges;
 /// Mutation root combining property-specific and capability-oriented entity
 /// mutations without coupling either domain adapter to the other.
 #[derive(MergedObject)]
-pub struct CompleteMutationRoot<W: EntityPropertyWriter>(
+pub struct CompleteMutationRoot<W: EntityPropertyWriter, M: EntityMutationService>(
     PropertiesMutationRoot<W>,
-    EntityMutationRoot,
+    EntityMutationRoot<M>,
 );
 
-impl<W: EntityPropertyWriter> CompleteMutationRoot<W> {
+impl<W: EntityPropertyWriter, M: EntityMutationService> CompleteMutationRoot<W, M> {
     /// Construct the composed mutation root.
     fn new() -> Self {
-        Self(PropertiesMutationRoot::<W>::new(), EntityMutationRoot)
+        Self(
+            PropertiesMutationRoot::<W>::new(),
+            EntityMutationRoot::<M>::new(),
+        )
     }
 }
 
@@ -56,18 +60,18 @@ impl<W: EntityPropertyWriter> CompleteMutationRoot<W> {
 /// `S` is the soup query service, `R` the realtime subscription service, `E`
 /// the email service, `EAS` the entity access service, `Auth` the authorization
 /// service, `St` the embedding axum router state, `W` the property mutation
-/// writer, `NR` the notification edge reader, `PR` the property edge reader,
-/// `ER` the email-content edge reader, `FR` the favorite edge reader, and `AR`
-/// the access edge reader.
-pub type SoupSchema<S, R, E, EAS, Auth, St, W, NR, PR, ER, FR, AR> = Schema<
+/// writer, `M` the entity mutation service, `NR` the notification edge reader,
+/// `PR` the property edge reader, `ER` the email-content edge reader, `FR` the
+/// favorite edge reader, and `AR` the access edge reader.
+pub type SoupSchema<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR> = Schema<
     SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR>,
-    CompleteMutationRoot<W>,
+    CompleteMutationRoot<W, M>,
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR>,
 >;
 
 /// GraphQL Soup schema type backed by shared query and realtime services.
-pub type SharedSoupSchema<S, R, E, EAS, Auth, St, W, NR, PR, ER, FR, AR> =
-    SoupSchema<Arc<S>, Arc<R>, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>;
+pub type SharedSoupSchema<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR> =
+    SoupSchema<Arc<S>, Arc<R>, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>;
 
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
@@ -79,6 +83,7 @@ pub type SchemaOnlySoupSchema = SoupSchema<
     SchemaOnlyAuthorizationService,
     SchemaOnlyState,
     NoOpEntityPropertyWriter,
+    UnavailableEntityMutationService,
     NoOpSoupNotificationEdgeReader,
     NoOpEntityPropertyReader,
     NoOpSoupEmailContentEdgeReader,
@@ -181,9 +186,9 @@ pub fn build_schema() -> SchemaOnlySoupSchema {
 }
 
 /// Build a GraphQL schema backed by a query service and no-op realtime service.
-pub fn build_schema_with_service<S, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>(
+pub fn build_schema_with_service<S, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: S,
-) -> SoupSchema<S, NoOpSoupRealtimeSubscriptionService, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>
+) -> SoupSchema<S, NoOpSoupRealtimeSubscriptionService, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>
 where
     S: SoupService + Clone,
     E: EmailService,
@@ -194,6 +199,7 @@ where
     Arc<EAS>: FromRef<St>,
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
+    M: EntityMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
@@ -204,10 +210,10 @@ where
 }
 
 /// Build a GraphQL schema backed by query and realtime Soup services.
-pub fn build_schema_with_services<S, R, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>(
+pub fn build_schema_with_services<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: S,
     realtime_service: R,
-) -> SoupSchema<S, R, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>
+) -> SoupSchema<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>
 where
     S: SoupService + Clone,
     R: SoupRealtimeSubscriptionService + Clone,
@@ -219,6 +225,7 @@ where
     Arc<EAS>: FromRef<St>,
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
+    M: EntityMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
@@ -227,16 +234,30 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W>::new(),
+        CompleteMutationRoot::<W, M>::new(),
         SoupSubscriptionRoot::new(realtime_service),
     )
     .finish()
 }
 
 /// Build a GraphQL schema backed by an `Arc`-shared query service.
-pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>(
+pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: Arc<S>,
-) -> SoupSchema<Arc<S>, NoOpSoupRealtimeSubscriptionService, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>
+) -> SoupSchema<
+    Arc<S>,
+    NoOpSoupRealtimeSubscriptionService,
+    E,
+    EAS,
+    Auth,
+    St,
+    W,
+    M,
+    NR,
+    PR,
+    ER,
+    FR,
+    AR,
+>
 where
     S: SoupService,
     E: EmailService,
@@ -247,6 +268,7 @@ where
     Arc<EAS>: FromRef<St>,
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
+    M: EntityMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
@@ -257,10 +279,10 @@ where
 }
 
 /// Build a GraphQL schema backed by `Arc`-shared query and realtime services.
-pub fn build_schema_from_arcs<S, R, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>(
+pub fn build_schema_from_arcs<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>(
     service: Arc<S>,
     realtime_service: Arc<R>,
-) -> SharedSoupSchema<S, R, E, EAS, Auth, St, W, NR, PR, ER, FR, AR>
+) -> SharedSoupSchema<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR>
 where
     S: SoupService,
     R: SoupRealtimeSubscriptionService,
@@ -272,6 +294,7 @@ where
     Arc<EAS>: FromRef<St>,
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
+    M: EntityMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,

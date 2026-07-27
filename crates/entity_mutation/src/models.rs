@@ -103,3 +103,133 @@ impl EntityMutationErrorCode {
         EntityMutationErrorCode::Conflict(Sentinel(()))
     }
 }
+
+/// Safe error returned for one item in a batch mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityMutationError {
+    /// Machine-readable failure category.
+    pub code: EntityMutationErrorCode,
+    /// User-safe explanation of the failure.
+    pub message: String,
+}
+
+impl EntityMutationError {
+    /// Construct a mutation error from a category and user-safe message.
+    pub fn new(code: EntityMutationErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+
+    /// Log an internal failure and return the generic user-safe error.
+    pub fn internal(detail: &dyn std::fmt::Debug) -> Self {
+        tracing::error!(error = ?detail, "unified entity mutation failed");
+        Self::new(
+            EntityMutationErrorCode::Internal(Sentinel(())),
+            "entity mutation failed",
+        )
+    }
+
+    /// Construct a not-found error.
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(EntityMutationErrorCode::NotFound(Sentinel(())), message)
+    }
+
+    /// Construct a forbidden error.
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(EntityMutationErrorCode::Forbidden(Sentinel(())), message)
+    }
+
+    /// Construct an invalid-input error.
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self::new(EntityMutationErrorCode::InvalidInput(Sentinel(())), message)
+    }
+
+    /// Construct a state-conflict error.
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(EntityMutationErrorCode::Conflict(Sentinel(())), message)
+    }
+}
+
+impl From<EntityMutationErrorCode> for EntityMutationError {
+    fn from(code: EntityMutationErrorCode) -> Self {
+        let message = match code {
+            EntityMutationErrorCode::UnsupportedOperation(_) => {
+                "operation is not supported for this entity"
+            }
+            EntityMutationErrorCode::InvalidInput(_) => "invalid entity mutation input",
+            EntityMutationErrorCode::Forbidden(_) => "insufficient permission for entity mutation",
+            EntityMutationErrorCode::NotFound(_) => "entity not found",
+            EntityMutationErrorCode::Conflict(_) => {
+                "entity mutation conflicts with current entity state"
+            }
+            EntityMutationErrorCode::Internal(_) => "entity mutation failed",
+        };
+        Self::new(code, message)
+    }
+}
+
+/// Result for one requested entity in a batch mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityMutationOutcome {
+    /// Entity reference supplied by the caller.
+    pub requested: Entity<'static>,
+    /// Entity produced or updated by the operation. Duplicate operations use
+    /// this field for the newly created entity.
+    pub entity: Option<Entity<'static>>,
+    /// Canonical records known to have changed as a consequence of the
+    /// request. This includes affected containers and includes cascade
+    /// descendants when the delegated domain service exposes their ids.
+    pub affected_entities: Vec<Entity<'static>>,
+    /// Per-item failure. A missing error denotes success.
+    pub error: Option<EntityMutationError>,
+}
+
+impl EntityMutationOutcome {
+    /// Build a successful outcome that changed only the requested entity.
+    pub fn success(requested: Entity<'static>) -> Self {
+        Self {
+            entity: Some(requested.clone()),
+            affected_entities: vec![requested.clone()],
+            requested,
+            error: None,
+        }
+    }
+
+    /// Build a successful outcome with an explicit result and affected set.
+    pub fn success_with(
+        requested: Entity<'static>,
+        entity: Option<Entity<'static>>,
+        affected_entities: Vec<Entity<'static>>,
+    ) -> Self {
+        Self {
+            requested,
+            entity,
+            affected_entities,
+            error: None,
+        }
+    }
+
+    /// Build a failed outcome.
+    pub fn failure(requested: Entity<'static>, error: EntityMutationError) -> Self {
+        Self {
+            requested,
+            entity: None,
+            affected_entities: Vec::new(),
+            error: Some(error),
+        }
+    }
+
+    /// Build a standard unsupported-operation outcome.
+    pub fn unsupported(requested: Entity<'static>, operation: &str) -> Self {
+        let kind = requested.entity_type.to_string();
+        Self::failure(
+            requested,
+            EntityMutationError::new(
+                EntityMutationErrorCode::UnsupportedOperation(Sentinel(())),
+                format!("{operation} is not supported for {kind} entities"),
+            ),
+        )
+    }
+}

@@ -166,6 +166,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     AuthorizationService,
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
+    DssEntityMutationService,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
@@ -367,6 +368,27 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
+/// Chat service used by the unified entity mutation adapter.
+pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
+    chat::outbound::postgres::PgChatRepo,
+    (),
+    EntityAccessManagementService,
+>;
+
+/// Concrete unified entity mutation service wired into GraphQL.
+pub(crate) type DssEntityMutationService =
+    crate::service::entity_mutation::DssEntityMutationService<
+        DocumentService,
+        DssChatMutationService,
+        DssChannelService,
+        DssCallService,
+        DssEmailService,
+        ProjectService,
+        EntityAccessService,
+        FavoritesServiceType,
+        crate::outbound::entity_mutation::DssEntityLifecycleAdapter,
+    >;
+
 /// Type alias for the favorites service.
 pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 
@@ -420,8 +442,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
-    #[cfg(feature = "graphql")]
-    pub graphql_entity_mutation_service: Arc<dyn ::entity_mutation::EntityMutationService>,
+    pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,

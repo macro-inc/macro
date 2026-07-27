@@ -7,6 +7,6 @@
 mod favorite;
 
 pub use favorite::{
-    EntityFavoriteEdgeReader, EntityFavoriteKey, EntityFavoriteLoader,
-    NoOpEntityFavoriteEdgeReader, entity_favorite_loader, load_entity_favorite,
+    EntityFavoriteEdgeReader, EntityFavoriteLoader, NoOpEntityFavoriteEdgeReader,
+    entity_favorite_loader, load_entity_favorite,
 };

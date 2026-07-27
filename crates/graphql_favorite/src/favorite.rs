@@ -3,20 +3,11 @@ use std::{collections::HashMap, sync::Arc};
 use async_graphql::{Context, dataloader::DataLoader};
 use favorites::domain::ports::FavoritesService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
+use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
 
 #[cfg(test)]
 mod test;
-
-/// Identity used to resolve whether an entity is favorited by the current viewer.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct EntityFavoriteKey {
-    /// Canonical entity type understood by the favorites domain.
-    pub entity_type: EntityType,
-    /// Entity identifier.
-    pub entity_id: String,
-}
 
 /// Favorites reader used by GraphQL entity edges.
 pub trait EntityFavoriteEdgeReader: Send + Sync + 'static {
@@ -24,8 +15,8 @@ pub trait EntityFavoriteEdgeReader: Send + Sync + 'static {
     fn get_entity_favorites<'a>(
         &'a self,
         user_id: &'a MacroUserIdStr<'static>,
-        keys: Vec<EntityFavoriteKey>,
-    ) -> impl Future<Output = Result<HashMap<EntityFavoriteKey, bool>, rootcause::Report>> + Send + 'a;
+        entities: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<HashMap<Entity<'static>, bool>, rootcause::Report>> + Send + 'a;
 }
 
 impl<T> EntityFavoriteEdgeReader for Arc<T>
@@ -35,23 +26,18 @@ where
     async fn get_entity_favorites(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: Vec<EntityFavoriteKey>,
-    ) -> Result<HashMap<EntityFavoriteKey, bool>, rootcause::Report> {
-        let entities = keys
-            .iter()
-            .map(|key| key.entity_type.with_entity_str(&key.entity_id))
-            .collect::<Vec<_>>();
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, bool>, rootcause::Report> {
         let favorites = self
             .favorited_entities(user_id, &entities)
             .await
             .map_err(|error| rootcause::report!(error))?;
 
-        Ok(keys
+        Ok(entities
             .into_iter()
-            .map(|key| {
-                let entity = key.entity_type.with_entity_str(&key.entity_id);
+            .map(|entity| {
                 let is_favorited = favorites.contains(&entity);
-                (key, is_favorited)
+                (entity, is_favorited)
             })
             .collect())
     }
@@ -65,9 +51,9 @@ impl EntityFavoriteEdgeReader for NoOpEntityFavoriteEdgeReader {
     async fn get_entity_favorites(
         &self,
         _user_id: &MacroUserIdStr<'static>,
-        keys: Vec<EntityFavoriteKey>,
-    ) -> Result<HashMap<EntityFavoriteKey, bool>, rootcause::Report> {
-        Ok(keys.into_iter().map(|key| (key, false)).collect())
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, bool>, rootcause::Report> {
+        Ok(entities.into_iter().map(|entity| (entity, false)).collect())
     }
 }
 
@@ -86,7 +72,7 @@ impl<R> EntityFavoriteLoader<R> {
     }
 }
 
-impl<R> async_graphql::dataloader::Loader<EntityFavoriteKey> for EntityFavoriteLoader<R>
+impl<R> async_graphql::dataloader::Loader<OwnedEntity> for EntityFavoriteLoader<R>
 where
     R: EntityFavoriteEdgeReader,
 {
@@ -95,14 +81,18 @@ where
 
     async fn load(
         &self,
-        keys: &[EntityFavoriteKey],
-    ) -> Result<HashMap<EntityFavoriteKey, Self::Value>, Self::Error> {
+        keys: &[OwnedEntity],
+    ) -> Result<HashMap<OwnedEntity, Self::Value>, Self::Error> {
+        let entities = keys.iter().map(|key| key.as_entity().clone()).collect();
         match self
             .reader
-            .get_entity_favorites(&self.user_id, keys.to_vec())
+            .get_entity_favorites(&self.user_id, entities)
             .await
         {
-            Ok(favorites) => Ok(favorites),
+            Ok(favorites) => Ok(favorites
+                .into_iter()
+                .map(|(entity, is_favorited)| (OwnedEntity::from(entity), is_favorited))
+                .collect()),
             Err(error) => {
                 // Favorite state is an optional presentation edge. Preserve the
                 // REST Soup contract: a favorites outage must not make the
@@ -128,11 +118,14 @@ where
 /// Resolve favorite state from GraphQL request data.
 pub async fn load_entity_favorite<R>(
     ctx: &Context<'_>,
-    key: EntityFavoriteKey,
+    entity: Entity<'static>,
 ) -> async_graphql::Result<bool>
 where
     R: EntityFavoriteEdgeReader,
 {
     let loader = ctx.data::<DataLoader<EntityFavoriteLoader<R>>>()?;
-    Ok(loader.load_one(key).await?.unwrap_or(false))
+    Ok(loader
+        .load_one(OwnedEntity::from(entity))
+        .await?
+        .unwrap_or(false))
 }
