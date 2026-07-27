@@ -1,4 +1,6 @@
-use async_graphql::{Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject};
+use async_graphql::{
+    Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
+};
 use graphql_common::{GraphqlEntity, GraphqlSoupEntityType};
 use graphql_permission::GraphqlEntityPermission;
 use models_pagination::PaginatedOpaqueCursor;
@@ -441,27 +443,39 @@ where
     }
 }
 
-/// GraphQL representation of the soup document sub type.
+/// represents the task subtype fields
 #[derive(SimpleObject)]
-pub struct GraphqlSoupDocumentSubType {
-    /// The kind.
-    kind: &'static str,
-    /// Whether the task is completed.
-    is_completed: Option<bool>,
+pub struct GraphqlTaskSubType {
+    /// whether or not the task is complete
+    is_completed: bool,
+}
+
+/// represents the snippet subtype fields
+#[derive(SimpleObject)]
+pub struct GraphqlSnippetSubType {
+    /// this object has nothing as a field but we need at least 1 field
+    nothing: bool,
+}
+
+/// GraphQL representation of the soup document sub type.
+#[derive(Union)]
+pub enum GraphqlSoupDocumentSubType {
+    /// the subtype is a task
+    Task(GraphqlTaskSubType),
+    /// the sub type is a snippet
+    Snippet(GraphqlSnippetSubType),
 }
 
 impl GraphqlSoupDocumentSubType {
     /// Construct a GraphQL document subtype from the Soup model.
     pub fn new(value: &SoupDocumentSubType) -> Self {
         match value {
-            SoupDocumentSubType::Task { is_completed } => Self {
-                kind: "task",
-                is_completed: Some(*is_completed),
-            },
-            SoupDocumentSubType::Snippet {} => Self {
-                kind: "snippet",
-                is_completed: None,
-            },
+            SoupDocumentSubType::Task { is_completed } => Self::Task(GraphqlTaskSubType {
+                is_completed: *is_completed,
+            }),
+            SoupDocumentSubType::Snippet {} => {
+                Self::Snippet(GraphqlSnippetSubType { nothing: false })
+            }
         }
     }
 }
