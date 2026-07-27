@@ -44,6 +44,7 @@ use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use sync_service_client::SyncServiceClient;
+use tokio_util::task::TaskTracker;
 
 use crate::config::Config;
 
@@ -55,7 +56,10 @@ pub struct McpContext {
     pub mcp_public_host: String,
 }
 
-pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
+pub async fn build_context(
+    config: &Config,
+    event_task_tracker: TaskTracker,
+) -> anyhow::Result<McpContext> {
     let db = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(10)
@@ -97,6 +101,7 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
         queue_aws_client,
         config.document_storage_service_auth_key.as_ref().to_owned(),
         sync_service_auth_key.as_ref().to_owned(),
+        event_task_tracker,
     )
     .await?;
 
@@ -124,6 +129,7 @@ async fn build_tool_context(
     queue_aws_client: aws_sdk_sqs::Client,
     document_storage_service_auth_key: String,
     sync_service_auth_key: String,
+    event_task_tracker: TaskTracker,
 ) -> anyhow::Result<ToolServiceContext> {
     let dss_url = DocumentStorageServiceUrl::new()?.to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
@@ -224,6 +230,7 @@ async fn build_tool_context(
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_task_tracker,
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
