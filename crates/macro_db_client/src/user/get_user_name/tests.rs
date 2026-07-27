@@ -174,3 +174,18 @@ async fn uses_macro_names_if_either_first_or_last_present(
 
     Ok(())
 }
+
+#[sqlx::test]
+async fn test_get_user_name_without_info_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // The macro_user_info row is created lazily by the first name write, so a
+    // brand-new user has none — the lookup must report "no name yet", not
+    // error.
+    let user_id = "00000000-0000-0000-0000-000000000042";
+
+    let name = get_user_name(&pool, user_id).await?;
+
+    assert_eq!(name.id, user_id);
+    assert_eq!(name.first_name, None);
+    assert_eq!(name.last_name, None);
+    Ok(())
+}

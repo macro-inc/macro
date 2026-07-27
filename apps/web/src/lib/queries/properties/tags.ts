@@ -32,6 +32,16 @@ export function invalidateTags() {
   queryClient.invalidateQueries({ queryKey: propertiesKeys.tags.queryKey });
 }
 
+/**
+ * Invalidate the whole properties namespace — tag sets, definitions, options,
+ * and cached entity values. For backend-originated bulk changes (signup
+ * seeding applies tags and priorities server-side) where per-key invalidation
+ * would have to enumerate ids the client doesn't know.
+ */
+export function invalidateAllProperties() {
+  queryClient.invalidateQueries({ queryKey: propertiesKeys._def });
+}
+
 function invalidatePropertyOptions(propertyDefinitionId: string) {
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,

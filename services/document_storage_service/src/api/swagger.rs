@@ -156,6 +156,7 @@ use utoipa::OpenApi;
 
         // documents
         documents::get_user_documents::get_user_documents_handler,
+        documents::get_starter_docs::handler,
         documents_hex::inbound::axum_router::get_document::get_document_handler,
         documents_hex::inbound::axum_router::get_document_by_team_slug::get_document_by_team_slug_handler,
         documents::get_document_version::handler,
@@ -377,6 +378,7 @@ use utoipa::OpenApi;
             EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
+            documents::get_starter_docs::StarterDocumentsResponse, // Get starter documents
             GetDocumentProcessingResult,
             GetDocumentProcessingResultResponse, // Document processing result
             GetDocumentKeyResponseData,

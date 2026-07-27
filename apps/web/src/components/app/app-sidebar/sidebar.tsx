@@ -5,6 +5,7 @@ import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unr
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
+import { createGettingStartedSidebarVisibility } from '@app/features/getting-started/sidebar-visibility';
 import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
@@ -41,6 +42,7 @@ import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_ACTIVITY,
@@ -77,12 +79,18 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
+import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import XIcon from '@phosphor/x.svg';
+import {
+  isRealNamePart,
+  useOwnUserName,
+} from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useJoinTeamMutation,
@@ -90,19 +98,17 @@ import {
   useUserInvitesQuery,
 } from '@queries/team/invitations';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { authServiceClient } from '@service-auth/client';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
+import { Button, cn, Dropdown, Hotkey, NavRow, Tooltip } from '@ui';
 import {
   type Component,
   type ComponentProps,
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   type JSX,
@@ -801,17 +807,14 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const email = useEmail();
   const logout = useLogout();
 
-  const [userName] = createResource(async () => {
-    const response = await authServiceClient.getUserName();
-    return response.isOk() ? response.value : null;
-  });
+  const userName = useOwnUserName();
 
   // Prefer the user's real name (first/last); fall back to their email.
   const displayName = createMemo(() => {
     const name = userName();
     const parts = [name?.first_name, name?.last_name]
       .map((part) => part?.trim())
-      .filter((part): part is string => Boolean(part) && part !== 'N/A');
+      .filter((part): part is string => isRealNamePart(part));
     return parts.length > 0 ? parts.join(' ') : (email() ?? 'Macro User');
   });
 
@@ -952,6 +955,15 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+const GETTING_STARTED_LINK: SidebarItem = {
+  id: 'getting-started',
+  label: 'Getting Started',
+  href: '/getting-started',
+  icon: CompassIcon,
+  hotkey: 's',
+  hotkeyToken: TOKENS.sidebar.goTo.gettingStarted,
+};
+
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   label: 'Activity',
@@ -962,8 +974,9 @@ const ACTIVITY_LINK: SidebarItem = {
 };
 
 /**
- * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Activity, Calls, and CRM entries in their correct positions.
+ * Assemble the ordered sidebar link list: the static links plus Home, Getting
+ * started, and the flag-gated Activity, Calls, and CRM entries in their
+ * correct positions.
  * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
  * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
  * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
@@ -971,7 +984,11 @@ const ACTIVITY_LINK: SidebarItem = {
  * hotkeys but no sidebar row.
  */
 const buildSidebarLinks = (): SidebarItem[] => {
-  let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
+  let links: SidebarItem[] = [
+    DASHBOARD_LINK,
+    GETTING_STARTED_LINK,
+    ...SIDEBAR_LINKS,
+  ];
 
   if (ENABLE_ACTIVITY) {
     const idx = links.findIndex((link) => link.id === 'inbox');
@@ -1057,6 +1074,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const allLinks = createMemo((): SidebarItem[] => buildSidebarLinks());
+
+  // Hides only the rendered row: the g+s hotkey and command menu entry keep
+  // working (like `hiddenFromSidebar` links), so the page stays reachable.
+  const gettingStartedVisibility = createGettingStartedSidebarVisibility();
 
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
@@ -1184,6 +1205,23 @@ export const AppSidebar = (props: AppSidebarProps) => {
       sidebarState={sidebarDisplayState()}
       hotkeyVisible={goToHotkeyVisible()}
       onContextMenuOpenChange={handleOverlayDropdownOpenChange}
+      removeAction={
+        link.id === 'getting-started'
+          ? {
+              tooltip: 'Remove from sidebar',
+              onRemove: () => {
+                gettingStartedVisibility.hide();
+                // Hiding drops the row only — the go-to hotkey and its
+                // command-menu entry stay registered (see buildSidebarLinks),
+                // so this stays true.
+                toast.success('Removed from sidebar', {
+                  subtext:
+                    'You can always find Getting Started in the command menu.',
+                });
+              },
+            }
+          : undefined
+      }
     />
   );
 
@@ -1199,7 +1237,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox', 'activity']
+    ['home', 'getting-started', 'inbox', 'activity']
+      .filter(
+        (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
+      )
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
   );
@@ -1559,6 +1600,12 @@ interface SidebarLinkProps extends SidebarItem {
    * Email link's expand chevron.
    */
   trailingWhenActive?: JSX.Element;
+  /**
+   * Swaps the icon for an X while the row is hovered (expanded sidebar only —
+   * in slim mode the icon is the whole row, so the swap would hijack
+   * navigation). Clicking the X calls `onRemove` instead of navigating.
+   */
+  removeAction?: { tooltip: string; onRemove: () => void };
 }
 
 const SidebarLink = (props: SidebarLinkProps) => {
@@ -1679,7 +1726,53 @@ const SidebarLink = (props: SidebarLinkProps) => {
         >
           <Show when={props.icon}>
             <div class="size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+              <Show
+                when={
+                  isHovering() && props.sidebarState !== 'slim'
+                    ? props.removeAction
+                    : undefined
+                }
+                fallback={
+                  <Dynamic
+                    component={props.icon}
+                    triggerAnimation={isHovering()}
+                  />
+                }
+              >
+                {(removeAction) => (
+                  <Tooltip
+                    label={removeAction().tooltip}
+                    as="span"
+                    placement="top"
+                  >
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={removeAction().tooltip}
+                      class="flex items-center justify-center text-ink-muted
+                     rounded-md hover:bg-failure hover:text-surface p-1"
+                      onMouseDown={(e) => {
+                        // The row navigates on mousedown; the X must not.
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeAction().onRemove();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeAction().onRemove();
+                        }
+                      }}
+                    >
+                      <XIcon />
+                    </span>
+                  </Tooltip>
+                )}
+              </Show>
             </div>
           </Show>
 

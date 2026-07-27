@@ -1,3 +1,4 @@
+import { AFTER_SETUP_ROUTE, DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { toast } from '@core/component/Toast/Toast';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
@@ -29,7 +30,8 @@ function sleep(ms: number): Promise<void> {
  * The "leave /setup" workflow, as a composable primitive: derives the
  * current selection, and `finish()` imports it (holding while rows land),
  * completes onboarding + the legacy tutorial, and navigates into the app —
- * to the deep link the redirect preserved (`?next=`), or home.
+ * to the deep link the redirect preserved (`?next=`), or the Getting
+ * Started checklist.
  *
  * `skippedSources` is read reactively (pass the store proxy itself).
  */
@@ -53,11 +55,12 @@ export function createSetupFinish(options: {
   // Where to land after setup. Same-app relative paths only.
   const afterSetupTarget = () => {
     const next = searchParams.next;
-    return typeof next === 'string' &&
+    const isDeepLink =
+      typeof next === 'string' &&
       next.startsWith('/') &&
-      !next.startsWith('//')
-      ? next
-      : '/';
+      !next.startsWith('//') &&
+      !next.startsWith(DEFAULT_ROUTE);
+    return isDeepLink ? next : AFTER_SETUP_ROUTE;
   };
 
   /**

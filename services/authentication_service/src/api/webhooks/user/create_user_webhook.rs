@@ -259,9 +259,10 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Seed the "Macro how to guide" document and pin it to the new user's
-    // sidebar favorites. Fire-and-forget with retries — signup must not fail
-    // if document storage is temporarily unavailable.
+    // Seed the starter documents (the "Macro how to guide" and the starter
+    // tasks it links to) and pin the guide to the new user's sidebar
+    // favorites. Fire-and-forget with retries — signup must not fail if
+    // document storage is temporarily unavailable.
     tokio::spawn({
         let document_storage_service_client = ctx.document_storage_service_client.clone();
         let user_id = user_id.clone();
@@ -270,16 +271,16 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             const RETRY_DELAY_SECS: u64 = 2;
             for attempt in 1..=MAX_ATTEMPTS {
                 match document_storage_service_client
-                    .initialize_how_to_guide(&user_id)
+                    .initialize_starter_docs(&user_id)
                     .await
                 {
                     Ok(()) => return,
                     Err(e) if attempt < MAX_ATTEMPTS => {
-                        tracing::warn!(error=?e, attempt, "failed to initialize how to guide, retrying");
+                        tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
                         tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
                     }
                     Err(e) => {
-                        tracing::error!(error=?e, "failed to initialize how to guide after {MAX_ATTEMPTS} attempts");
+                        tracing::error!(error=?e, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
                     }
                 }
             }

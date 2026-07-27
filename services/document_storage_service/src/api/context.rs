@@ -446,6 +446,9 @@ pub(crate) struct ApiContext {
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
+    /// Shared channel service, for calling channel domain operations outside
+    /// the channels router (starter-doc seeding records mention backlinks).
+    pub channel_service: Arc<DssChannelService>,
     pub bots_state: DssBotsState,
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,

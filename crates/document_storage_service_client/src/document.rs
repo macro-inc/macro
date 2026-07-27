@@ -384,11 +384,12 @@ impl DocumentStorageServiceClient {
         Ok(response_data)
     }
 
-    /// Create the "Macro how to guide" onboarding document for a user and pin
-    /// it to their sidebar favorites
+    /// Create the starter documents for a user — the "Macro how to guide"
+    /// plus the starter tasks it links to — and pin the guide to their
+    /// sidebar favorites
     #[tracing::instrument(skip(self))]
-    pub async fn initialize_how_to_guide(&self, user_id: &str) -> Result<()> {
-        let url = format!("{}/internal/documents/initialize_how_to_guide", self.url);
+    pub async fn initialize_starter_docs(&self, user_id: &str) -> Result<()> {
+        let url = format!("{}/internal/documents/initialize_starter_docs", self.url);
 
         let res = self
             .client

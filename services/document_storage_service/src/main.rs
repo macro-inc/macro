@@ -942,6 +942,7 @@ async fn main() -> anyhow::Result<()> {
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),
+        channel_service: channels_service.clone(),
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),

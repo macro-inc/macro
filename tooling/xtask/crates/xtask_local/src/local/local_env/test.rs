@@ -65,6 +65,39 @@ fn emits_webhook_fifo_queue_override_url() {
     );
 }
 
+/// In-network callers must resolve these through the docker alias. The
+/// `Environment::Local` defaults are host port mappings, which inside a
+/// container point back at the caller itself.
+#[test]
+fn emits_in_network_service_url_overrides() {
+    let env = local_env();
+    for (key, expected) in [
+        (
+            "OVERRIDE_CONNECTION_GATEWAY_URL",
+            "http://connection-gateway:8080",
+        ),
+        (
+            "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+            "http://document-storage-service:8080",
+        ),
+    ] {
+        assert_eq!(env.get(key).map(String::as_str), Some(expected));
+    }
+}
+
+/// The auth service presents `SERVICE_INTERNAL_AUTH_KEY` to document storage,
+/// which validates against `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`. Dev/prod point
+/// both at one secret; locally they must match too or every auth-service
+/// internal call (starter docs seeding at signup) is a 401.
+#[test]
+fn auth_service_internal_key_matches_dss_auth_key() {
+    let env = local_env();
+    assert_eq!(
+        env.get("SERVICE_INTERNAL_AUTH_KEY"),
+        env.get("DOCUMENT_STORAGE_SERVICE_AUTH_KEY"),
+    );
+}
+
 #[test]
 fn aws_creds_are_dummy() {
     let env = local_env();

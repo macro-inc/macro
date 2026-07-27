@@ -1076,6 +1076,20 @@ export const storageServiceClient = {
     }));
   },
 
+  /**
+   * Ids of the starter documents seeded at signup, so the client can open
+   * them directly instead of identifying them by name.
+   */
+  async getStarterDocs() {
+    return (
+      await dssFetch<{ how_to_guide_id: string | null }>(
+        '/documents/starter_docs'
+      )
+    ).map((result) => ({
+      howToGuideId: result.how_to_guide_id ?? undefined,
+    }));
+  },
+
   async initializeUserDocuments() {
     return (
       await dssFetch<{ success: boolean }>(

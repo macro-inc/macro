@@ -106,6 +106,16 @@ impl InfraEnv {
             "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
             "http://connection-gateway:8080".into(),
         );
+        // Same trap for document storage: the Environment::Local default is
+        // http://localhost:8086, the *host* port mapping, which resolves to
+        // the calling container. Callers like the authentication service's
+        // signup hook (starter docs) then fail with a connection error.
+        // `DOCUMENT_STORAGE_SERVICE_URL` (from Doppler) only covers the older
+        // call sites that read that var directly, not `macro_service_urls`.
+        env.insert(
+            "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
+            "http://document-storage-service:8080".into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -190,7 +200,6 @@ impl MailEnv {
 /// container (services, sync, lexical) agrees. `INTERNAL_API_SECRET_KEY` is the
 /// literal `"local"` to match the FusionAuth webhook's `x-internal-auth-key`.
 struct ServiceAuthEnv {
-    service_internal: String,
     dss_auth: String,
     doc_perm_jwt: String,
     internal_call: String,
@@ -200,7 +209,6 @@ struct ServiceAuthEnv {
 impl ServiceAuthEnv {
     fn for_instance(name: &str) -> Self {
         ServiceAuthEnv {
-            service_internal: identity::instance_secret("service-internal", name),
             dss_auth: identity::instance_secret("dss-auth", name),
             // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
             // ("local") so locally-minted tokens verify. This is ONLY for local
@@ -225,10 +233,12 @@ impl ServiceAuthEnv {
             "SYNC_SERVICE_AUTH_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
-        env.insert(
-            "SERVICE_INTERNAL_AUTH_KEY".into(),
-            self.service_internal.clone(),
-        );
+        // The key the authentication service presents to document storage on
+        // internal calls (e.g. seeding starter docs at signup). In dev/prod
+        // Doppler points it at the *same* secret as DSS's own auth key
+        // (document-storage-service-auth-key-*), so locally the two must be
+        // one value or DSS 401s every auth-service internal call.
+        env.insert("SERVICE_INTERNAL_AUTH_KEY".into(), self.dss_auth.clone());
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
             self.dss_auth.clone(),
