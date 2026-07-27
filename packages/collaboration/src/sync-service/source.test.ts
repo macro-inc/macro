@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SyncSourceEvent } from '../collab/source';
+import { disposeTelemetryFor } from '../collab/telemetry';
 import {
   WebsocketConnectionState,
   WebsocketEvent,
@@ -23,7 +25,11 @@ class FakeSocket implements SyncSocket {
   reconnects = 0;
   closed = false;
   private msg = new Set<AnyListener>();
+  private openListeners = new Set<AnyListener>();
   private recon = new Set<AnyListener>();
+  private closeListeners = new Set<AnyListener>();
+  private retryListeners = new Set<AnyListener>();
+  private heartbeatMissedListeners = new Set<AnyListener>();
 
   send(message: IFromPeer) {
     this.sent.push(message);
@@ -43,15 +49,27 @@ class FakeSocket implements SyncSocket {
     listener: WebsocketEventListener<K, IFromPeer, FromRemote>
   ) {
     if (type === WebsocketEvent.Message) this.msg.add(listener as AnyListener);
+    else if (type === WebsocketEvent.Open)
+      this.openListeners.add(listener as AnyListener);
     else if (type === WebsocketEvent.Reconnect)
       this.recon.add(listener as AnyListener);
+    else if (type === WebsocketEvent.Close)
+      this.closeListeners.add(listener as AnyListener);
+    else if (type === WebsocketEvent.retry)
+      this.retryListeners.add(listener as AnyListener);
+    else if (type === WebsocketEvent.HeartbeatMissed)
+      this.heartbeatMissedListeners.add(listener as AnyListener);
   }
   removeEventListener<K extends WebsocketEvent>(
     _type: K,
     listener: WebsocketEventListener<K, IFromPeer, FromRemote>
   ) {
     this.msg.delete(listener as AnyListener);
+    this.openListeners.delete(listener as AnyListener);
     this.recon.delete(listener as AnyListener);
+    this.closeListeners.delete(listener as AnyListener);
+    this.retryListeners.delete(listener as AnyListener);
+    this.heartbeatMissedListeners.delete(listener as AnyListener);
   }
 
   // test drivers
@@ -63,6 +81,28 @@ class FakeSocket implements SyncSocket {
     this.connectionState = WebsocketConnectionState.Open;
     const event = {} as Parameters<AnyListener>[1];
     for (const listener of [...this.recon]) listener(this as never, event);
+  }
+  fireOpen() {
+    this.connectionState = WebsocketConnectionState.Open;
+    const event = {} as Parameters<AnyListener>[1];
+    for (const listener of [...this.openListeners])
+      listener(this as never, event);
+  }
+  fireClose(code: number, reason: string) {
+    const event = {
+      code,
+      reason,
+      wasClean: false,
+    } as Parameters<AnyListener>[1];
+    for (const listener of [...this.closeListeners])
+      listener(this as never, event);
+  }
+  fireRetry(retries: number, backoff: number) {
+    const event = {
+      detail: { retries, backoff },
+    } as Parameters<AnyListener>[1];
+    for (const listener of [...this.retryListeners])
+      listener(this as never, event);
   }
 }
 
@@ -111,6 +151,11 @@ const remote = {
 const snap = new Uint8Array([1, 2, 3]);
 const aw = new Uint8Array([4, 5]);
 const flush = () => new Promise((resolve) => setTimeout(resolve));
+
+afterEach(() => {
+  disposeTelemetryFor('doc1');
+  vi.restoreAllMocks();
+});
 
 describe('SyncServiceSource', () => {
   it('resolves doInitialSync and starts heartbeat on RemoteInitialSync', async () => {
@@ -247,5 +292,57 @@ describe('SyncServiceSource', () => {
       snapshot: snap,
       awareness: aw,
     });
+  });
+
+  it('traces an unexpected disconnect through reconnect', () => {
+    const span: Span = {
+      span: (() => span) as Span['span'],
+      run: (operation) => operation(),
+      setAttr: vi.fn(),
+      event: vi.fn(),
+      error: vi.fn(),
+      traceparent: () => undefined,
+      end: vi.fn(),
+    };
+    const spanSpy = vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);
+    const ws = new FakeSocket();
+    new SyncServiceSource(ws, 'doc1');
+
+    ws.fireClose(1006, 'connection lost');
+    ws.fireRetry(2, 1_000);
+
+    expect(spanSpy).toHaveBeenCalledTimes(1);
+    expect(spanSpy).toHaveBeenCalledWith('ws.reconnect');
+    expect(span.event).toHaveBeenCalledWith('ws.retry', {
+      'ws.retry.count': 2,
+      'ws.retry.backoff_ms': 1_000,
+    });
+    expect(span.end).not.toHaveBeenCalled();
+
+    ws.fireReconnect();
+
+    expect(span.setAttr).toHaveBeenCalledWith('outcome', 'reconnected');
+    expect(span.end).toHaveBeenCalledOnce();
+  });
+
+  it('ends a reconnect span when the first successful connection follows failures', () => {
+    const span: Span = {
+      span: (() => span) as Span['span'],
+      run: (operation) => operation(),
+      setAttr: vi.fn(),
+      event: vi.fn(),
+      error: vi.fn(),
+      traceparent: () => undefined,
+      end: vi.fn(),
+    };
+    vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);
+    const ws = new FakeSocket();
+    new SyncServiceSource(ws, 'doc1');
+
+    ws.fireClose(1006, 'initial connection failed');
+    ws.fireOpen();
+
+    expect(span.setAttr).toHaveBeenCalledWith('outcome', 'connected');
+    expect(span.end).toHaveBeenCalledOnce();
   });
 });

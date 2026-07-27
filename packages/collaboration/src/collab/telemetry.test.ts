@@ -7,7 +7,7 @@ const documentId = 'telemetry-test-document';
 function mockSpan() {
   const error = vi.fn();
   const span: Span = {
-    span: () => span,
+    span: (() => span) as Span['span'],
     run: (operation) => operation(),
     setAttr: vi.fn(),
     event: vi.fn(),

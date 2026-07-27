@@ -231,6 +231,15 @@ export class WALSyncer<T> {
   private hasNewPending = false;
   public pendingFlush: Promise<void> = Promise.resolve();
   private cleanupFns: Array<() => void> = [];
+  private deliveryOutage:
+    | {
+        id: string;
+        span: Span;
+        startedAt: number;
+        failedAttempts: number;
+        maxUndelivered: number;
+      }
+    | undefined;
 
   /**
    * Exists so that we can not "do stuff" until we have pruned expired entries
@@ -305,6 +314,10 @@ export class WALSyncer<T> {
   }
 
   public destroy(): void {
+    if (this.deliveryOutage) {
+      this.deliveryOutage.span.setAttr('outcome', 'abandoned');
+      this.finishDeliveryOutage();
+    }
     for (const fn of this.cleanupFns) fn();
     this.cleanupFns = [];
   }
@@ -325,13 +338,6 @@ export class WALSyncer<T> {
       const undelivered = entries.filter((e) => !e.delivered);
       if (undelivered.length === 0) return; // nothing to do
 
-      // Span duration = how long the batch took to be acked; outcome tells you
-      // whether edits are stranded undelivered (the WAL side of a stuck sync).
-      const span: Span | undefined = this.label
-        ? telemetrySpan(this.label, 'wal.flush')
-        : undefined;
-      span?.setAttr('wal.dirty', undelivered.length);
-
       if (this.label)
         logSyncService({
           documentId: this.label,
@@ -344,17 +350,13 @@ export class WALSyncer<T> {
       try {
         delivered = await this.push(undelivered.map((e) => e.update));
       } catch (e) {
-        span?.error(e);
-        span?.setAttr('outcome', 'error');
-        span?.end();
+        this.recordDeliveryFailure('push_error', undelivered.length, e);
         throw e;
       }
 
       if (delivered) {
         await this.store.markDelivered(undelivered.map((e) => e.id));
-        span?.setAttr('outcome', 'delivered');
-        span?.setAttr('wal.delivered', undelivered.length);
-        span?.end();
+        this.recordDeliveryRecovery(undelivered.length);
         if (this.label)
           logSyncService({
             documentId: this.label,
@@ -363,18 +365,7 @@ export class WALSyncer<T> {
             message: `WAL flush: delivered ${undelivered.length} entries`,
           });
       } else {
-        // Undelivered edits stranded in the WAL — record as an error so the
-        // span always exports (successes may be sampled).
-        span?.error('push not acked; entries remain undelivered');
-        span?.setAttr('outcome', 'not_acked');
-        span?.end();
-        if (this.label)
-          logSyncService({
-            documentId: this.label,
-            level: 'warn',
-            context: { wal: await this.summary() },
-            message: `WAL flush: push not acked (${undelivered.length} entries)`,
-          });
+        this.recordDeliveryFailure('not_acked', undelivered.length);
         succeeded = false;
       }
     } finally {
@@ -385,6 +376,98 @@ export class WALSyncer<T> {
       this.pendingFlush = this.doFlush();
       return this.pendingFlush;
     }
+  }
+
+  private recordDeliveryFailure(
+    kind: 'not_acked' | 'push_error',
+    undelivered: number,
+    error?: unknown
+  ): void {
+    if (!this.label) return;
+
+    if (this.deliveryOutage) {
+      this.deliveryOutage.failedAttempts++;
+      this.deliveryOutage.maxUndelivered = Math.max(
+        this.deliveryOutage.maxUndelivered,
+        undelivered
+      );
+      this.deliveryOutage.span.setAttr(
+        'wal.failed_attempts',
+        this.deliveryOutage.failedAttempts
+      );
+      this.deliveryOutage.span.setAttr(
+        'wal.max_undelivered',
+        this.deliveryOutage.maxUndelivered
+      );
+      return;
+    }
+
+    const id = crypto.randomUUID();
+    const span = telemetrySpan(this.label, 'wal.delivery_outage');
+    span.setAttr('wal.outage.id', id);
+    span.setAttr('wal.first_failure', kind);
+    span.setAttr('wal.failed_attempts', 1);
+    span.setAttr('wal.max_undelivered', undelivered);
+    span.error(error ?? 'push not acked; entries remain undelivered');
+    this.deliveryOutage = {
+      id,
+      span,
+      startedAt: Date.now(),
+      failedAttempts: 1,
+      maxUndelivered: undelivered,
+    };
+    logSyncService({
+      documentId: this.label,
+      level: 'warn',
+      context: {
+        misc: {
+          'wal.outage.id': id,
+          'wal.first_failure': kind,
+          'wal.undelivered': undelivered,
+        },
+      },
+      message: `WAL delivery outage started (${undelivered} entries)`,
+    });
+  }
+
+  private recordDeliveryRecovery(delivered: number): void {
+    if (!this.deliveryOutage || !this.label) return;
+
+    const { id, span, startedAt, failedAttempts, maxUndelivered } =
+      this.deliveryOutage;
+    const outageMs = Date.now() - startedAt;
+    span.event('wal.ack.confirmed', { 'wal.delivered': delivered });
+    span.setAttr('outcome', 'recovered');
+    span.setAttr('wal.outage_ms', outageMs);
+    span.setAttr('wal.failed_attempts', failedAttempts);
+    span.setAttr('wal.max_undelivered', maxUndelivered);
+    span.setAttr('wal.delivered', delivered);
+    span.end();
+    this.deliveryOutage = undefined;
+    logSyncService({
+      documentId: this.label,
+      level: 'info',
+      context: {
+        misc: {
+          'wal.outage.id': id,
+          'wal.outage_ms': outageMs,
+          'wal.failed_attempts': failedAttempts,
+          'wal.max_undelivered': maxUndelivered,
+          'wal.delivered': delivered,
+        },
+      },
+      message: 'WAL delivery recovered',
+    });
+  }
+
+  private finishDeliveryOutage(): void {
+    if (!this.deliveryOutage) return;
+    this.deliveryOutage.span.setAttr(
+      'wal.outage_ms',
+      Date.now() - this.deliveryOutage.startedAt
+    );
+    this.deliveryOutage.span.end();
+    this.deliveryOutage = undefined;
   }
 }
 

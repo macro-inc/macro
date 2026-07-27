@@ -146,9 +146,8 @@ pub async fn process_message(
         // Should extract binary update and broadcast it to all other connected peers
         // Should also store the update in the operation log to be applied to the remote doc
         FromPeer::PeerUpdate { updates, id } => {
-            // Same id the client stamps on its `edit.push` span (`op.id`), so
-            // the client send and this server processing — separate traces —
-            // correlate by attribute in the tracing backend.
+            // Preserve the client-generated operation id so update processing
+            // and ACK-send failures can be correlated in the tracing backend.
             tracing::Span::current().record("op.id", id);
             tracing::Span::current().record(
                 "update.bytes",
@@ -197,7 +196,11 @@ pub async fn process_message(
                 let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;
-                ws.send_with_bytes(serialized).context("failed to send")?;
+                ws.send_with_bytes(serialized)
+                    .inspect_err(|error| {
+                        tracing::error!(error = ?error, op.id = %id, "failed to send update ack");
+                    })
+                    .context("failed to send update ack")?;
             }
 
             // Peers receiving the rebroadcast (everyone but the sender). The
