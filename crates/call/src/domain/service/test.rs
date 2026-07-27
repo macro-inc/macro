@@ -1,20 +1,28 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
+use connection::domain::models::{ConnectionError, InvalidationEvent};
+use connection::domain::ports::ConnectionService;
+use entity_access::domain::ports::NoOpEntityAccessService;
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
+use notification::domain::service::NotificationIngress;
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Call, CallError, CallWebhookEvent, EgressS3Config, RingStatus, VerifiedRingToken,
-    VoipPushPayloadRequest,
+    Call, CallError, CallParticipant, CallWebhookEvent, EgressS3Config, RingStatus,
+    VerifiedRingToken, VoipPushPayloadRequest,
 };
-use crate::domain::ports::CallRtcClient;
+use crate::domain::ports::{CallRtcClient, CallService, MockCallRepository};
 
 use super::{
-    derive_preview_key_from_recording_key, derive_preview_keys_from_recording_key,
-    exclude_voip_recipients, extract_recording_key, resolve_ring_status,
+    CallServiceImpl, NoopCallSummarizer, derive_preview_key_from_recording_key,
+    derive_preview_keys_from_recording_key, exclude_voip_recipients, extract_recording_key,
+    resolve_ring_status,
 };
 
 #[cfg(feature = "outbound")]
@@ -51,7 +59,7 @@ impl MockRtcClient {
 
 impl CallRtcClient for MockRtcClient {
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
-        unreachable!("create_room not exercised by these tests")
+        Ok(())
     }
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
@@ -118,7 +126,7 @@ impl CallRtcClient for MockRtcClient {
         _room_name: &str,
         _s3_config: &EgressS3Config,
     ) -> anyhow::Result<String> {
-        unreachable!("start_room_composite_egress not exercised by these tests")
+        Ok("egress-id".to_string())
     }
 
     async fn stop_egress(&self, _egress_id: &str) -> anyhow::Result<()> {
@@ -138,8 +146,390 @@ impl CallRtcClient for MockRtcClient {
     }
 
     async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
-        unreachable!("dispatch_transcription_agent not exercised by these tests")
+        Ok(())
     }
+}
+
+// `get_or_create_call` does not clone the repository. The bound comes from
+// unrelated spawned workflows on the same service implementation.
+impl Clone for MockCallRepository {
+    fn clone(&self) -> Self {
+        unreachable!("repository cloning is not exercised by get_or_create_call tests")
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct PublishedCallEvent {
+    topic: &'static str,
+    key: String,
+    envelope: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct RecordingEventBroker {
+    events: Arc<Mutex<Vec<PublishedCallEvent>>>,
+    fail_scheduling: bool,
+}
+
+impl RecordingEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail_scheduling: true,
+            ..Self::default()
+        }
+    }
+
+    fn events(&self) -> Vec<PublishedCallEvent> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+impl MacroEventBroker for RecordingEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail_scheduling {
+            return Err(EventBrokerError::Publish(
+                "intentional scheduling failure".to_string(),
+            ));
+        }
+
+        self.events.lock().unwrap().push(PublishedCallEvent {
+            topic: event.topic(),
+            key: event.key().to_string(),
+            envelope: serde_json::to_value(event.event())?,
+        });
+
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StubConnectionService;
+
+impl ConnectionService for StubConnectionService {
+    async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
+        &self,
+        _invalidation_event: InvalidationEvent<'a, T>,
+    ) -> Result<(), ConnectionError> {
+        Ok(())
+    }
+
+    async fn send_channel_message<'a>(
+        &self,
+        _users: &[MacroUserIdStr<'a>],
+        _message_type: &str,
+        _message: serde_json::Value,
+    ) -> Result<(), ConnectionError> {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StubNotificationIngress;
+
+impl NotificationIngress for StubNotificationIngress {
+    async fn send_notification<
+        'a,
+        T: notification::domain::models::Notification + Clone + 'static,
+        U: serde::Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        _request: notification::domain::models::request::SendNotificationRequest<'a, T, U>,
+    ) -> Result<
+        Option<notification::domain::models::NotificationResult<'a>>,
+        rootcause::Report<notification::domain::service::SendNotificationError>,
+    > {
+        unreachable!("notification sending is not exercised by get_or_create_call tests")
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StubRecordingStorage;
+
+impl crate::domain::ports::RecordingStorage for StubRecordingStorage {
+    async fn presign_recording_url(&self, _recording_key: &str) -> anyhow::Result<String> {
+        unreachable!("recording reads are not exercised by get_or_create_call tests")
+    }
+
+    async fn presign_recording_preview_url(&self, _preview_key: &str) -> anyhow::Result<String> {
+        unreachable!("recording reads are not exercised by get_or_create_call tests")
+    }
+
+    async fn delete_recording(&self, _recording_key: &str) -> anyhow::Result<()> {
+        unreachable!("recording deletion is not exercised by get_or_create_call tests")
+    }
+
+    async fn delete_recording_preview(&self, _preview_key: &str) -> anyhow::Result<()> {
+        unreachable!("recording deletion is not exercised by get_or_create_call tests")
+    }
+}
+
+const STARTED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6c7);
+const STARTED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x3f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a90);
+const STARTED_EVENT_CREATOR: &str = "macro|creator@example.com";
+
+#[derive(Clone, Copy)]
+enum GetOrCreateScenario {
+    CreatorWins,
+    RaceLoses,
+    ExistingCall,
+}
+
+fn started_event_timestamp() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-07-27T18:01:02Z")
+        .expect("valid timestamp")
+        .with_timezone(&Utc)
+}
+
+fn started_event_call(created_by: &str) -> Call {
+    Call {
+        id: STARTED_EVENT_CALL_ID,
+        channel_id: STARTED_EVENT_CHANNEL_ID,
+        room_name: STARTED_EVENT_CHANNEL_ID.to_string(),
+        created_by: created_by.to_string(),
+        created_at: started_event_timestamp(),
+        egress_id: None,
+    }
+}
+
+fn mock_get_or_create_repo(
+    scenario: GetOrCreateScenario,
+    call: Call,
+    recording_enabled: bool,
+) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+
+    match scenario {
+        GetOrCreateScenario::CreatorWins => {
+            repo.expect_get_call_by_channel_id()
+                .times(1)
+                .returning(|_| Box::pin(async { Ok(None) }));
+
+            repo.expect_create_call()
+                .times(1)
+                .return_once(move |_, _, _, _| Box::pin(async move { Ok(Some(call)) }));
+
+            repo.expect_resolve_channel_name()
+                .times(1)
+                .returning(|_, _| {
+                    Box::pin(async {
+                        Err(anyhow::anyhow!(
+                            "skip push notifications in get_or_create_call tests"
+                        ))
+                    })
+                });
+        }
+        GetOrCreateScenario::RaceLoses => {
+            let mut sequence = mockall::Sequence::new();
+            repo.expect_get_call_by_channel_id()
+                .times(1)
+                .in_sequence(&mut sequence)
+                .returning(|_| Box::pin(async { Ok(None) }));
+            repo.expect_get_call_by_channel_id()
+                .times(1)
+                .in_sequence(&mut sequence)
+                .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
+            repo.expect_create_call()
+                .times(1)
+                .returning(|_, _, _, _| Box::pin(async { Ok(None) }));
+        }
+        GetOrCreateScenario::ExistingCall => {
+            repo.expect_get_call_by_channel_id()
+                .times(1)
+                .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
+        }
+    }
+
+    if recording_enabled {
+        repo.expect_set_egress_id()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+    }
+
+    repo.expect_find_active_call_for_user()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_add_participant()
+        .times(1)
+        .returning(|call_id, user_id| {
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: user_id.as_ref().to_string(),
+                joined_at: started_event_timestamp(),
+            };
+            Box::pin(async move { Ok(participant) })
+        });
+
+    repo
+}
+
+type BaseGetOrCreateCallService = CallServiceImpl<
+    MockCallRepository,
+    MockRtcClient,
+    StubConnectionService,
+    NoOpEntityAccessService,
+    StubNotificationIngress,
+    StubRecordingStorage,
+    NoopCallSummarizer,
+>;
+
+fn build_get_or_create_service<B: MacroEventBroker>(
+    repo: MockCallRepository,
+    event_broker: B,
+    recording_enabled: bool,
+) -> impl CallService {
+    let service: BaseGetOrCreateCallService = CallServiceImpl::new(
+        repo,
+        MockRtcClient::new(),
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    let service = if recording_enabled {
+        service.with_egress(EgressS3Config {
+            bucket: "recordings".to_string(),
+            region: "us-east-1".to_string(),
+            access_key: "access-key".to_string(),
+            secret: "secret".to_string(),
+        })
+    } else {
+        service
+    };
+
+    service.with_event_broker(event_broker)
+}
+
+async fn get_or_create_call(
+    scenario: GetOrCreateScenario,
+    created_by: &str,
+    broker: RecordingEventBroker,
+    recording_enabled: bool,
+) -> Result<crate::domain::models::CallTokenResponse, CallError> {
+    let call = started_event_call(created_by);
+    let repo = mock_get_or_create_repo(scenario, call, recording_enabled);
+    let service = build_get_or_create_service(repo, broker, recording_enabled);
+
+    service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await
+}
+
+#[tokio::test]
+async fn get_or_create_call_publishes_started_event() {
+    let broker = RecordingEventBroker::default();
+
+    let response = get_or_create_call(
+        GetOrCreateScenario::CreatorWins,
+        STARTED_EVENT_CREATOR,
+        broker.clone(),
+        true,
+    )
+    .await
+    .expect("call creation succeeds");
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+    let events = broker.events();
+    let [published] = events.as_slice() else {
+        panic!("expected exactly one call event")
+    };
+    assert_eq!(published.topic, "macro.calls");
+    assert_eq!(published.key, STARTED_EVENT_CALL_ID.to_string());
+    assert!(!published.key.starts_with("call|"));
+
+    let event_id = published.envelope["event_id"]
+        .as_str()
+        .expect("event id is a string");
+    Uuid::parse_str(event_id).expect("event id is a UUID");
+
+    let mut envelope = published.envelope.clone();
+    envelope
+        .as_object_mut()
+        .expect("event envelope is an object")
+        .remove("event_id");
+    assert_eq!(
+        envelope,
+        json!({
+            "schema_version": 1,
+            "event_type": "call.started",
+            "metadata": {
+                "call_id": STARTED_EVENT_CALL_ID,
+                "channel_id": STARTED_EVENT_CHANNEL_ID,
+                "created_by": STARTED_EVENT_CREATOR,
+                "created_at": "2026-07-27T18:01:02Z",
+                "recording_enabled": true,
+            },
+        })
+    );
+}
+
+#[tokio::test]
+async fn get_or_create_call_race_loser_does_not_publish_started_event() {
+    let broker = RecordingEventBroker::default();
+
+    get_or_create_call(
+        GetOrCreateScenario::RaceLoses,
+        STARTED_EVENT_CREATOR,
+        broker.clone(),
+        false,
+    )
+    .await
+    .expect("race loser joins the winning call");
+
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn get_or_create_call_existing_call_does_not_publish_started_event() {
+    let broker = RecordingEventBroker::default();
+
+    get_or_create_call(
+        GetOrCreateScenario::ExistingCall,
+        STARTED_EVENT_CREATOR,
+        broker.clone(),
+        false,
+    )
+    .await
+    .expect("existing call can be joined");
+
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn broker_scheduling_failure_does_not_fail_call_creation() {
+    let broker = RecordingEventBroker::failing();
+
+    let response = get_or_create_call(
+        GetOrCreateScenario::CreatorWins,
+        STARTED_EVENT_CREATOR,
+        broker.clone(),
+        false,
+    )
+    .await
+    .expect("broker failure is best-effort");
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn malformed_stored_creator_skips_only_started_event() {
+    let broker = RecordingEventBroker::default();
+
+    let response = get_or_create_call(
+        GetOrCreateScenario::CreatorWins,
+        "malformed-user-id",
+        broker.clone(),
+        false,
+    )
+    .await
+    .expect("malformed stored creator does not fail call creation");
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+    assert!(broker.events().is_empty());
 }
 
 #[cfg(feature = "outbound")]

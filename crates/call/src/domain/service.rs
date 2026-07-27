@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
-use crate::domain::events::CallMacroEvent;
+use crate::domain::events::{CallMacroEvent, CallStartedMetadata};
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
 };
@@ -251,10 +251,6 @@ impl<
         }
     }
 
-    #[allow(
-        dead_code,
-        reason = "call lifecycle events are published in follow-up changes"
-    )]
     fn publish_call_event(&self, event: &CallMacroEvent) {
         drop(self.event_broker.send_event(event).inspect_err(|error| {
             tracing::error!(error = ?error, "failed to schedule call lifecycle event");
@@ -522,6 +518,27 @@ impl<
                                 Err(e) => {
                                     tracing::error!(error=?e, "failed to start egress recording");
                                 }
+                            }
+                        }
+
+                        match MacroUserIdStr::parse_from_str(&call.created_by) {
+                            Ok(created_by) => {
+                                self.publish_call_event(&CallMacroEvent::started(
+                                    CallStartedMetadata {
+                                        call_id: call.id,
+                                        channel_id: call.channel_id,
+                                        created_by: created_by.into_owned(),
+                                        created_at: call.created_at,
+                                        recording_enabled: self.egress_s3_config.is_some(),
+                                    },
+                                ));
+                            }
+                            Err(error) => {
+                                tracing::error!(
+                                    error = ?error,
+                                    call_id = %call.id,
+                                    "failed to parse stored call creator; skipping started event"
+                                );
                             }
                         }
 
