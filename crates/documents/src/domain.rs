@@ -2,6 +2,7 @@
 
 pub mod branch_name;
 pub mod content;
+#[cfg(feature = "service")]
 /// Unified entity-mutation capability impls.
 pub mod entity_mutation;
 pub mod events;

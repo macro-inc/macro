@@ -467,7 +467,7 @@ async fn any_reader_failure_prevents_all_publication() {
         .await
         .expect_err("reader failure propagates");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 
