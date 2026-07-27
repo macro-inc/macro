@@ -251,6 +251,28 @@ async fn authorizes_current_team_member_and_rejects_non_member() {
 }
 
 #[tokio::test]
+async fn rejects_consistent_claims_for_a_user_who_is_not_the_owner() {
+    let non_owner = ResolvedBotActingUser {
+        macro_user_id: MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
+        fusion_user_id: "fusion-other".to_string(),
+        organization_id: Some(ORGANIZATION_ID),
+    };
+    let claims = BotActingUserClaims {
+        user_id: Some(non_owner.macro_user_id.as_ref().to_string()),
+        fusion_user_id: Some(non_owner.fusion_user_id.clone()),
+        organization_id: non_owner.organization_id,
+    };
+    let mut repo = FakeRepo::owned_by_user();
+    repo.acting_user = Some(non_owner);
+
+    let result = BotAuthorizerService::new(repo)
+        .authorize_bot(RAW_TOKEN, BotScope::User, Some(claims))
+        .await;
+
+    assert_error(result, MacroAuthorizationError::ActingUserNotAuthorized);
+}
+
+#[tokio::test]
 async fn rejects_system_bot_claims_before_user_lookups() {
     let mut repo = FakeRepo::owned_by_user();
     repo.token.as_mut().unwrap().owner = BotAuthorizationOwner::System;
