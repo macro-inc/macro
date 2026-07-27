@@ -28,7 +28,8 @@ use uuid::Uuid;
 
 use crate::domain::events::{
     CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
-    CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallStartedMetadata,
+    CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
+    CallStartedMetadata,
 };
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
@@ -1111,16 +1112,22 @@ impl<
                 tracing::info!(egress_id, recording_key, "egress recording completed");
 
                 // Find the archived call record by egress_id and update the recording key.
-                if let Some((call_record_id, _channel_id)) = self
+                if let Some((call_id, channel_id)) = self
                     .repo
                     .get_call_record_by_egress_id(egress_id)
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
                     self.repo
-                        .set_recording_key(&call_record_id, recording_key)
+                        .set_recording_key(&call_id, recording_key)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    self.publish_call_event(&CallMacroEvent::recording_ready(
+                        CallRecordingReadyMetadata {
+                            call_id,
+                            channel_id,
+                        },
+                    ));
                 } else {
                     // Call not yet archived — store on the active call so
                     // archive_call can carry it forward.

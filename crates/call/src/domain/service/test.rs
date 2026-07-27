@@ -578,6 +578,10 @@ const ARCHIVED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x4f6f8b0a_6f9f_4a3f_9c3
 const ARCHIVED_EVENT_ROOM_NAME: &str = "archived-event-room";
 const ARCHIVED_EVENT_CREATOR: &str = "macro|archiver@example.com";
 const ARCHIVED_EVENT_PARTICIPANT: &str = "participant@example.com";
+const RECORDING_READY_EGRESS_ID: &str = "recording-ready-egress";
+const RECORDING_READY_FILE_URL: &str =
+    "https://recordings.example.com/calls/0198a1b2-c3d4-7e5f-8061-728394a5b6d8/recording.mp4";
+const RECORDING_READY_KEY: &str = "0198a1b2-c3d4-7e5f-8061-728394a5b6d8/recording.mp4";
 
 fn archived_event_started_at() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-07-27T18:01:02Z")
@@ -617,6 +621,28 @@ fn archived_call_for_event(
         has_recording,
         participant_count,
     }
+}
+
+fn egress_ended_rtc_client(egress_id: Option<&str>, file_url: Option<&str>) -> MockCallRtcClient {
+    let event = CallWebhookEvent {
+        event: "egress_ended".to_string(),
+        id: "egress-ended-event-id".to_string(),
+        room_name: None,
+        participant_identity: None,
+        egress_id: egress_id.map(str::to_string),
+        file_url: file_url.map(str::to_string),
+        created_at: 1_775_000_000,
+    };
+    let mut rtc_client = MockCallRtcClient::new();
+    rtc_client
+        .expect_receive_webhook()
+        .times(1)
+        .return_once(move |body, auth_token| {
+            assert_eq!(body, "webhook-body");
+            assert_eq!(auth_token, "webhook-token");
+            Ok(event)
+        });
+    rtc_client
 }
 
 fn webhook_rtc_client(
@@ -844,6 +870,171 @@ async fn malformed_archived_creator_skips_event_without_undoing_archival() {
         .process_webhook_event("webhook-body", "webhook-token")
         .await
         .expect("malformed creator does not undo archival");
+    assert!(event_broker.events().is_empty());
+}
+
+fn assert_recording_ready_event(event_broker: &RecordingEventBroker) {
+    let events = event_broker.events();
+    let [published] = events.as_slice() else {
+        panic!("expected exactly one recording-ready event")
+    };
+    assert_eq!(published.topic, "macro.calls");
+    assert_eq!(published.key, ARCHIVED_EVENT_CALL_ID.to_string());
+
+    let event_id = published.envelope["event_id"]
+        .as_str()
+        .expect("event id is a string");
+    Uuid::parse_str(event_id).expect("event id is a UUID");
+
+    let mut envelope = published.envelope.clone();
+    envelope
+        .as_object_mut()
+        .expect("event envelope is an object")
+        .remove("event_id");
+    assert_eq!(
+        envelope,
+        json!({
+            "schema_version": 1,
+            "event_type": "call.recording_ready",
+            "metadata": {
+                "call_id": ARCHIVED_EVENT_CALL_ID,
+                "channel_id": ARCHIVED_EVENT_CHANNEL_ID,
+            },
+        })
+    );
+    assert!(!published.envelope.to_string().contains(RECORDING_READY_KEY));
+}
+
+#[tokio::test]
+async fn archived_egress_ended_publishes_recording_ready_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_egress_id()
+        .times(1)
+        .returning(|egress_id| {
+            assert_eq!(egress_id, RECORDING_READY_EGRESS_ID);
+            Box::pin(async { Ok(Some((ARCHIVED_EVENT_CALL_ID, ARCHIVED_EVENT_CHANNEL_ID))) })
+        });
+    repo.expect_set_recording_key()
+        .times(1)
+        .returning(|call_id, recording_key| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            assert_eq!(recording_key, RECORDING_READY_KEY);
+            Box::pin(async { Ok(()) })
+        });
+    let rtc_client = egress_ended_rtc_client(
+        Some(RECORDING_READY_EGRESS_ID),
+        Some(RECORDING_READY_FILE_URL),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("archived egress-ended webhook succeeds");
+
+    assert_recording_ready_event(&event_broker);
+}
+
+#[tokio::test]
+async fn active_egress_ended_does_not_publish_recording_ready_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_egress_id()
+        .times(1)
+        .returning(|egress_id| {
+            assert_eq!(egress_id, RECORDING_READY_EGRESS_ID);
+            Box::pin(async { Ok(None) })
+        });
+    repo.expect_set_active_call_recording_key()
+        .times(1)
+        .returning(|egress_id, recording_key| {
+            assert_eq!(egress_id, RECORDING_READY_EGRESS_ID);
+            assert_eq!(recording_key, RECORDING_READY_KEY);
+            Box::pin(async { Ok(true) })
+        });
+    let rtc_client = egress_ended_rtc_client(
+        Some(RECORDING_READY_EGRESS_ID),
+        Some(RECORDING_READY_FILE_URL),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("active egress-ended webhook succeeds");
+
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn egress_ended_with_missing_fields_does_not_publish_recording_ready_event() {
+    for (egress_id, file_url) in [
+        (None, Some(RECORDING_READY_FILE_URL)),
+        (Some(RECORDING_READY_EGRESS_ID), None),
+    ] {
+        let repo = MockCallRepository::new();
+        let rtc_client = egress_ended_rtc_client(egress_id, file_url);
+        let event_broker = RecordingEventBroker::default();
+        let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+        service
+            .process_webhook_event("webhook-body", "webhook-token")
+            .await
+            .expect("incomplete egress-ended webhook is ignored");
+
+        assert!(event_broker.events().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn unknown_egress_ended_does_not_publish_recording_ready_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_egress_id()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_set_active_call_recording_key()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(false) }));
+    let rtc_client = egress_ended_rtc_client(
+        Some(RECORDING_READY_EGRESS_ID),
+        Some(RECORDING_READY_FILE_URL),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("unknown egress-ended webhook is ignored");
+
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn failed_recording_key_persistence_does_not_publish_recording_ready_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_egress_id()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async { Ok(Some((ARCHIVED_EVENT_CALL_ID, ARCHIVED_EVENT_CHANNEL_ID))) })
+        });
+    repo.expect_set_recording_key()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("recording key write failed")) }));
+    let rtc_client = egress_ended_rtc_client(
+        Some(RECORDING_READY_EGRESS_ID),
+        Some(RECORDING_READY_FILE_URL),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc_client, event_broker.clone());
+
+    assert!(
+        service
+            .process_webhook_event("webhook-body", "webhook-token")
+            .await
+            .is_err()
+    );
     assert!(event_broker.events().is_empty());
 }
 
