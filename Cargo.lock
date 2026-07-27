@@ -8428,6 +8428,7 @@ dependencies = [
  "rootcause",
  "rootcause-tracing",
  "serde_json",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "tracing-panic",
