@@ -114,8 +114,9 @@ fn entities_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimeUpdate> {
         ChatTopicEvent::Updated(metadata) => &metadata.chat_id,
         ChatTopicEvent::Restored(metadata) => &metadata.chat_id,
         ChatTopicEvent::Copied(metadata) => &metadata.chat_id,
-        ChatTopicEvent::MessageSent(metadata) => &metadata.chat_id,
-        ChatTopicEvent::Deleted(_) | ChatTopicEvent::PermanentlyDeleted(_) => return Vec::new(),
+        ChatTopicEvent::Deleted(_)
+        | ChatTopicEvent::PermanentlyDeleted(_)
+        | ChatTopicEvent::MessageSent(_) => return Vec::new(),
     };
     vec![update(EntityType::Chat, chat_id)]
 }

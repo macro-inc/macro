@@ -5,7 +5,7 @@ use channels::domain::{
     broker_events::{ChannelMessageAttachmentCreatedMetadata, ChannelTopicEvent},
     models::ChannelSender,
 };
-use chat::domain::events::{ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent};
+use chat::domain::events::{ChatTopicEvent, ChatUpdatedMetadata};
 use documents::domain::events::{
     DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentInteractionMetadata, DocumentUpdatedMetadata, InteractionReason,
@@ -170,14 +170,14 @@ fn project_updates_only_refresh_root_project_items() {
 }
 
 #[test]
-fn chat_message_events_refresh_the_chat_item() {
-    let event = ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+fn chat_metadata_events_refresh_the_chat_item() {
+    let event = ChatTopicEvent::Updated(ChatUpdatedMetadata {
         chat_id: DOCUMENT_ID.to_string(),
-        message_id: Uuid::now_v7().to_string(),
-        role: ChatMessageRole::Assistant,
-        model: "model".to_string(),
-        actor_user_id: None,
-        attachment_count: 0,
+        actor_user_id: user(),
+        name: Some("Renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        share_permission_updated: false,
     });
 
     let entities = entities_from_chat_event(&event);
