@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::messages::replying_to_id::update_thread_messages_replying_to;
 use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, messages, parse};
