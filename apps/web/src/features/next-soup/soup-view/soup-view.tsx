@@ -206,6 +206,7 @@ const MobileTabLoadingBar = () => (
 );
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
+const INBOX_PREVIEW_OPEN_PREFERENCE_KEY = 'macro:pref:soup:inbox:preview-open';
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -293,6 +294,10 @@ export const SoupView = (props: SoupViewProps) => {
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
   );
+  const [inboxPreviewOpenPreference, setInboxPreviewOpenPreference] =
+    usePreference<boolean>(INBOX_PREVIEW_OPEN_PREFERENCE_KEY, {
+      default: true,
+    });
 
   // Shared CRM view opened via a `?crmView=` link — only honored on the
   // Customers view; its pieces win over persisted/preset values in init.
@@ -396,7 +401,7 @@ export const SoupView = (props: SoupViewProps) => {
   createEffect(() => {
     if (initialInboxPreviewResolved || soupView.source.isLoading()) return;
     initialInboxPreviewResolved = true;
-    if (contentId !== 'inbox') return;
+    if (contentId !== 'inbox' || !inboxPreviewOpenPreference()) return;
     if (panel.handle.lastNavigationCause() !== 'fresh') return;
     if (panel.handle.isViewerSplit()) return;
     if (!hasPreviewItems()) return;
@@ -636,6 +641,9 @@ export const SoupView = (props: SoupViewProps) => {
         variant={props.filterBarVariant}
         hasPreviewItems={hasPreviewItems()}
         onPreviewEngage={openFocusedEntityInPreview}
+        onPreviewOpenChange={(open) => {
+          if (contentId === 'inbox') setInboxPreviewOpenPreference(open);
+        }}
       />
       <Show when={applyDefaultCrmView}>
         <CrmDefaultViewLoader />
