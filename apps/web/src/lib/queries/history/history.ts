@@ -37,10 +37,16 @@ type HistoryQueryFnResult = HistoryItem[];
 function setHistoryData(
   updater: Updater<HistoryQueryFnResult, HistoryQueryFnResult>
 ) {
-  return queryClient.setQueryData(historyQueryOptions.queryKey, (prev) => {
+  const applyUpdater = (prev: HistoryQueryFnResult | undefined) => {
     if (!prev) return prev;
     return typeof updater === 'function' ? updater(prev) : updater;
-  });
+  };
+  const data = queryClient.setQueryData(
+    historyQueryOptions.queryKey,
+    applyUpdater
+  );
+  queryClient.setQueryData(historyKeys.graphqlList.queryKey, applyUpdater);
+  return data;
 }
 
 /** Sets the history data on the query cache directly for a single item */
@@ -258,9 +264,15 @@ export async function removeHistoryItem(
  * For use in standalone functions outside component context.
  */
 export function getHistoryItems() {
-  const data = queryClient.getQueryData(historyQueryOptions.queryKey);
-  if (!data) return [];
-  return data;
+  return (
+    queryClient.getQueryData<HistoryQueryFnResult>(
+      historyKeys.graphqlList.queryKey
+    ) ??
+    queryClient.getQueryData<HistoryQueryFnResult>(
+      historyQueryOptions.queryKey
+    ) ??
+    []
+  );
 }
 
 /**
