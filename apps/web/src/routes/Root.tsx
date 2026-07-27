@@ -579,8 +579,8 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
-    // The new split-screen onboarding replaces this modal on desktop; the
-    // Layout redirect sends first-time users to /setup instead.
+    // Onboarding-v4 replaces this modal on desktop; the Layout redirect
+    // sends first-time users to /onboarding instead.
     (!ENABLE_ONBOARDING_V4 || isMobile()) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
