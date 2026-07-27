@@ -38,7 +38,8 @@ chrono = { workspace = true}
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 agent = { path = "../../crates/agent" }
 ai_usage = { path = "../../crates/ai_usage" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 futures = { workspace = true }
 tracing = { workspace = true }
 axum = { workspace = true }
