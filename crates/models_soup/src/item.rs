@@ -86,6 +86,7 @@ impl<T> SoupItem<T> {
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
             SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
+            // Calls intentionally lack `updated_at`; recency follows their lifecycle timestamps.
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
@@ -146,6 +147,7 @@ impl<T> SoupItem<T> {
                 .unwrap_or(soup_channel.channel.channel.updated_at),
             (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => thread.created_at,
             (SoupItem::ChannelThread(thread), _) => thread.effective_updated_at(),
+            // Calls intentionally lack `updated_at`; recency follows their lifecycle timestamps.
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
