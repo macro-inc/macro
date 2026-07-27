@@ -1,4 +1,3 @@
-import type { Span } from '@macro-inc/observability';
 import type { VersionVector } from 'loro-crdt';
 import { ResultAsync } from 'neverthrow';
 import { logSyncService } from '../collab/logger';
@@ -11,7 +10,6 @@ import {
   SyncSourceStatus,
   type TimeoutError,
 } from '../collab/source';
-import { telemetrySpan } from '../collab/telemetry';
 import { arrayEquals } from '../internal/compare';
 import {
   WebsocketConnectionState,
@@ -98,9 +96,6 @@ export class SyncServiceSource implements LiveSyncSource {
   private readonly waiters = new Set<MessageWaiter>();
   private initialSyncReceived = false;
   private readonly initialSyncPromise: ResultAsync<InitialSync, TimeoutError>;
-  private reconnectSpan:
-    | { span: Span; startedAt: number; closeRecorded: boolean }
-    | undefined;
 
   public constructor(
     ws: SyncSocket,
@@ -138,9 +133,7 @@ export class SyncServiceSource implements LiveSyncSource {
     });
 
     this.ws.addEventListener(WebsocketEvent.Message, this.onMessage);
-    this.ws.addEventListener(WebsocketEvent.Open, this.onOpen);
     this.ws.addEventListener(WebsocketEvent.Close, this.onClose);
-    this.ws.addEventListener(WebsocketEvent.retry, this.onRetry);
     this.ws.addEventListener(
       WebsocketEvent.HeartbeatMissed,
       this.onHeartbeatMissed
@@ -255,19 +248,12 @@ export class SyncServiceSource implements LiveSyncSource {
       document.removeEventListener('visibilitychange', this.onVisibilityChange);
     }
     this.ws.removeEventListener(WebsocketEvent.Message, this.onMessage);
-    this.ws.removeEventListener(WebsocketEvent.Open, this.onOpen);
     this.ws.removeEventListener(WebsocketEvent.Close, this.onClose);
-    this.ws.removeEventListener(WebsocketEvent.retry, this.onRetry);
     this.ws.removeEventListener(
       WebsocketEvent.HeartbeatMissed,
       this.onHeartbeatMissed
     );
     this.ws.removeEventListener(WebsocketEvent.Reconnect, this.onReconnect);
-    if (this.reconnectSpan) {
-      this.reconnectSpan.span.setAttr('outcome', 'abandoned');
-      this.reconnectSpan.span.end();
-      this.reconnectSpan = undefined;
-    }
     this.ws.close();
   };
 
@@ -336,46 +322,11 @@ export class SyncServiceSource implements LiveSyncSource {
     }
   };
 
-  private startReconnectSpan(trigger: 'close' | 'heartbeat'): Span {
-    if (this.reconnectSpan) return this.reconnectSpan.span;
-    const span = telemetrySpan(this.documentId, 'ws.reconnect');
-    span.setAttr('ws.trigger', trigger);
-    this.reconnectSpan = { span, startedAt: Date.now(), closeRecorded: false };
-    return span;
-  }
-
-  private finishReconnectSpan(outcome: 'connected' | 'reconnected'): void {
-    if (!this.reconnectSpan) return;
-    this.reconnectSpan.span.setAttr('outcome', outcome);
-    this.reconnectSpan.span.setAttr(
-      'ws.downtime_ms',
-      Date.now() - this.reconnectSpan.startedAt
-    );
-    this.reconnectSpan.span.end();
-    this.reconnectSpan = undefined;
-  }
-
-  private onOpen: WebsocketEventListener<
-    WebsocketEvent.Open,
-    IFromPeer,
-    FromRemote
-  > = () => this.finishReconnectSpan('connected');
-
   private onClose: WebsocketEventListener<
     WebsocketEvent.Close,
     IFromPeer,
     FromRemote
   > = (_ws, event) => {
-    const outageStarted = this.reconnectSpan === undefined;
-    const span = this.startReconnectSpan('close');
-    if (!this.reconnectSpan?.closeRecorded) {
-      span.setAttr('ws.close.code', event.code);
-      span.setAttr('ws.close.clean', event.wasClean);
-      if (event.reason)
-        span.setAttr('ws.close.reason', event.reason.slice(0, 256));
-      if (this.reconnectSpan) this.reconnectSpan.closeRecorded = true;
-    }
-    if (!outageStarted) return;
     logSyncService({
       documentId: this.documentId,
       level: 'warn',
@@ -392,28 +343,12 @@ export class SyncServiceSource implements LiveSyncSource {
     });
   };
 
-  private onRetry: WebsocketEventListener<
-    WebsocketEvent.retry,
-    IFromPeer,
-    FromRemote
-  > = (_ws, event) => {
-    const span = this.startReconnectSpan('close');
-    span.event('ws.retry', {
-      'ws.retry.count': event.detail.retries,
-      'ws.retry.backoff_ms': event.detail.backoff,
-    });
-  };
-
   private onHeartbeatMissed: WebsocketEventListener<
     WebsocketEvent.HeartbeatMissed,
     IFromPeer,
     FromRemote
   > = (_ws, event) => {
     if (!event.detail.willReconnect) return;
-    const span = this.startReconnectSpan('heartbeat');
-    span.event('ws.heartbeat_missed', {
-      'ws.heartbeat.missed': event.detail.missedHeartbeats,
-    });
     logSyncService({
       documentId: this.documentId,
       level: 'warn',
@@ -431,7 +366,6 @@ export class SyncServiceSource implements LiveSyncSource {
     IFromPeer,
     FromRemote
   > = () => {
-    this.finishReconnectSpan('reconnected');
     logSyncService({
       documentId: this.documentId,
       level: 'debug',
