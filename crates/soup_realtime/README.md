@@ -1,9 +1,11 @@
 # soup_realtime
 
-Hexagonal components for expanding `document.updated` Kafka events into one full `SoupItem<()>` message per current accessor. The item is loaded once through the first accessor and its user-specific `viewed_at` field is set to `None` before fan-out.
+Hexagonal components for turning existing document, project, chat, email, and channel Kafka events into recipient-targeted `SoupItem<()>` messages.
 
-This crate intentionally does not start a consumer or wire itself into a service binary. A later composition root can combine the domain service with the entity-access, Soup repository, Kafka publisher, and Kafka consumer adapters exposed here.
+The inbound consumer maps each event to the Soup items it changes. The domain service expands current access, hydrates each item through every recipient's own visibility scope, and publishes the complete user-scoped values to `macro.soup`. Channel threads use their containing channel as the access source.
 
-Delivery is at least once. If publication partially succeeds and processing is retried, downstream consumers may receive duplicate messages.
+`document_storage_service` wires the consumer to the existing Soup domain service, entity-access service, and Kafka publisher. Delivery is at least once: offsets are committed only after successful fan-out, and exhausted retries stop the consumer so its supervisor can restart it for redelivery. Downstream consumers must tolerate duplicate messages.
 
-`SoupRealtimeConsumerService` can run a realtime consumer adapter and distribute received items through instance-local, user-keyed subscriptions. Subscription values are shared as `Arc<SoupItem<()>>` so multiple subscribers do not require cloning the underlying item.
+Events for values that can no longer be hydrated, such as deletions and moves out of a visible collection, are currently ignored because the realtime topic carries complete updated items rather than tombstones.
+
+`SoupRealtimeConsumerService` consumes recipient-targeted Soup messages and distributes them through instance-local, user-keyed subscriptions. Subscription values are shared as `Arc<SoupItem<()>>` so multiple subscribers do not require cloning the underlying item.
