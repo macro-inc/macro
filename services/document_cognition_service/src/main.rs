@@ -46,9 +46,10 @@ use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 use sync_service_client::SyncServiceClient;
+use tokio_util::task::TaskTracker;
 
 mod api;
 mod config;
@@ -295,9 +296,11 @@ async fn main() -> anyhow::Result<()> {
     // The import pipeline sets the same task system properties on imported
     // Linear issues (status, priority, due date, assignee).
     let task_properties_for_import = task_properties_service.clone();
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
     let document_service = DocumentServiceImpl::new(
         document_repo,
@@ -619,7 +622,7 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
-    api::setup_and_serve(ApiContext {
+    let api_result = api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external,
         sqs_client: Arc::new(sqs_client),
@@ -655,6 +658,20 @@ async fn main() -> anyhow::Result<()> {
         onboarding_service,
     })
     .await
-    .context("failed to setup and serve api")?;
-    Ok(())
+    .context("failed to setup and serve api");
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => tracing::warn!(
+            error=?error,
+            timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for event broker publishes to drain"
+        ),
+    }
+
+    api_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
