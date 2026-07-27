@@ -1,5 +1,5 @@
 use async_graphql::{Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject};
-use graphql_common::{GraphqlEntityType, GraphqlSoupEntityType};
+use graphql_common::{GraphqlEntity, GraphqlSoupEntityType};
 use graphql_permission::GraphqlEntityPermission;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
@@ -188,23 +188,12 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
     }
 }
 
-/// Reference to another canonical entity embedded in entity metadata.
-#[derive(SimpleObject)]
-pub struct GraphqlEntityRef {
-    /// Referenced entity kind.
-    entity_type: GraphqlEntityType,
-    /// Referenced canonical identifier.
-    entity_id: ID,
-}
-
-impl GraphqlEntityRef {
-    /// Construct an embedded entity reference.
-    fn new(entity_type: impl Into<GraphqlEntityType>, entity_id: impl ToString) -> Self {
-        Self {
-            entity_type: entity_type.into(),
-            entity_id: ID(entity_id.to_string()),
-        }
-    }
+/// Construct a canonical GraphQL entity reference.
+fn graphql_entity(
+    entity_type: model_entity::EntityType,
+    entity_id: impl ToString,
+) -> GraphqlEntity<'static> {
+    GraphqlEntity(entity_type.with_entity_string(entity_id.to_string()))
 }
 
 /// Metadata shared by every canonical Soup entity.
@@ -213,7 +202,7 @@ pub struct GraphqlEntityMetadata {
     /// Owning user, when applicable.
     owner_id: Option<String>,
     /// Parent project, channel, or team, when applicable.
-    parent: Option<GraphqlEntityRef>,
+    parent: Option<GraphqlEntity<'static>>,
     /// Creation timestamp in RFC 3339 form.
     created_at: Option<String>,
     /// Last-update timestamp in RFC 3339 form.
@@ -390,7 +379,7 @@ where
             parent: self
                 .0
                 .project_id
-                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -513,7 +502,7 @@ where
             parent: self
                 .0
                 .project_id
-                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -604,7 +593,7 @@ where
             parent: self
                 .0
                 .parent_id
-                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -806,7 +795,7 @@ where
                 .thread
                 .project_id
                 .as_ref()
-                .map(|id| GraphqlEntityRef::new(GraphqlSoupEntityType::Project, id)),
+                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
             created_at: Some(self.0.thread.created_at.to_rfc3339()),
             updated_at: Some(self.0.thread.updated_at.to_rfc3339()),
             viewed_at: self.0.thread.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -1110,7 +1099,7 @@ where
                 .channel
                 .channel
                 .team_id
-                .map(|id| GraphqlEntityRef::new(GraphqlEntityType::Team, id)),
+                .map(|id| graphql_entity(model_entity::EntityType::Team, id)),
             created_at: Some(self.0.channel.channel.created_at.to_rfc3339()),
             updated_at: Some(self.0.channel.channel.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -1265,8 +1254,8 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.sender_id.clone()),
-            parent: Some(GraphqlEntityRef::new(
-                GraphqlSoupEntityType::Channel,
+            parent: Some(graphql_entity(
+                model_entity::EntityType::Channel,
                 self.0.channel_id,
             )),
             created_at: Some(self.0.created_at.to_rfc3339()),
@@ -1370,8 +1359,8 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.created_by.clone()),
-            parent: Some(GraphqlEntityRef::new(
-                GraphqlSoupEntityType::Channel,
+            parent: Some(graphql_entity(
+                model_entity::EntityType::Channel,
                 self.0.channel_id,
             )),
             created_at: Some(self.0.started_at.to_rfc3339()),
@@ -1511,8 +1500,8 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: None,
-            parent: Some(GraphqlEntityRef::new(
-                GraphqlEntityType::Team,
+            parent: Some(graphql_entity(
+                model_entity::EntityType::Team,
                 self.0.team_id,
             )),
             created_at: Some(self.0.created_at.to_rfc3339()),

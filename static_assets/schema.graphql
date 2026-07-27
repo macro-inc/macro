@@ -894,7 +894,7 @@ enum GraphqlEmailView {
 }
 
 """
-Canonical reference to an entity affected by a mutation.
+Canonical reference to an entity.
 """
 type GraphqlEntity {
 	"""
@@ -986,7 +986,7 @@ type GraphqlEntityMetadata {
 	"""
 	Parent project, channel, or team, when applicable.
 	"""
-	parent: GraphqlEntityRef
+	parent: GraphqlEntity
 	"""
 	Creation timestamp in RFC 3339 form.
 	"""
@@ -1047,20 +1047,6 @@ The concrete union member identifies whether access comes from an item
 access level, view-only channel access, a channel role, or a team role.
 """
 union GraphqlEntityPermission = GraphqlAccessLevelPermission | GraphqlChannelViewOnlyPermission | GraphqlChannelRolePermission | GraphqlTeamRolePermission
-
-"""
-Reference to another canonical entity embedded in entity metadata.
-"""
-type GraphqlEntityRef {
-	"""
-	Referenced entity kind.
-	"""
-	entityType: GraphqlEntityType!
-	"""
-	Referenced canonical identifier.
-	"""
-	entityId: ID!
-}
 
 """
 Input identifying an entity referenced by a property value.

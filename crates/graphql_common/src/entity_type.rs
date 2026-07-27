@@ -134,10 +134,10 @@ impl From<GraphqlSoupEntityType> for GraphqlEntityType {
     }
 }
 
-/// Wrapper over the [model_entity::Entity]
+/// GraphQL wrapper over a canonical [`model_entity::Entity`].
 pub struct GraphqlEntity<'a>(pub Entity<'a>);
 
-/// Canonical reference to an entity affected by a mutation.
+/// Canonical reference to an entity.
 #[Object]
 impl<'a> GraphqlEntity<'a> {
     /// The entity's canonical identifier.

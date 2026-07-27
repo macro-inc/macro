@@ -34,11 +34,17 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupChat implements GraphqlSoupEntity {",
         "deletedAt: String",
         "type GraphqlSoupProject implements GraphqlSoupEntity {",
+        "parent: GraphqlEntity",
         "type SoupSubscriptionRoot {",
         "soupUpdates: GraphqlSoupEntity!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
+    assert!(
+        !sdl.lines()
+            .any(|line| line.trim() == "type GraphqlEntityRef {"),
+        "Soup metadata must reuse the canonical GraphqlEntity object"
+    );
 }
 
 #[test]
