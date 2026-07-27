@@ -11,7 +11,7 @@ use std::{future::Future, time::Duration};
 
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
-use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent};
+use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
@@ -74,6 +74,11 @@ fn entities_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimeU
         DocumentTopicEvent::Created(metadata) => &metadata.document_id,
         DocumentTopicEvent::Updated(metadata) => &metadata.document_id,
         DocumentTopicEvent::Copied(metadata) => &metadata.document_id,
+        DocumentTopicEvent::Interaction(metadata)
+            if metadata.reason == InteractionReason::Edited =>
+        {
+            &metadata.document_id
+        }
         DocumentTopicEvent::Deleted(_) | DocumentTopicEvent::Interaction(_) => return Vec::new(),
     };
     vec![update(EntityType::Document, document_id)]

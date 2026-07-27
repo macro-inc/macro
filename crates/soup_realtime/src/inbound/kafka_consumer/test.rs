@@ -68,7 +68,7 @@ fn ignored_events() -> Vec<DocumentTopicEvent> {
         }),
         DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
             document_id: DOCUMENT_ID.to_string(),
-            reason: InteractionReason::Edited,
+            reason: InteractionReason::FirstJoin,
         }),
     ]
 }
@@ -236,6 +236,19 @@ fn hydratable_document_creation_events_refresh_the_new_item() {
         assert_eq!(updates[0].item.entity_type, EntityType::Document);
         assert_eq!(updates[0].item.entity_id, DOCUMENT_ID);
     }
+}
+
+#[test]
+fn document_edit_interactions_refresh_the_document_item() {
+    let event = DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        reason: InteractionReason::Edited,
+    });
+
+    let updates = entities_from_document_event(&event);
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].item.entity_type, EntityType::Document);
+    assert_eq!(updates[0].item.entity_id, DOCUMENT_ID);
 }
 
 #[tokio::test]
