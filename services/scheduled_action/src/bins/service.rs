@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-use std::sync::Arc;
+use std::{future::pending, sync::Arc, time::Duration};
 
 use ai_tools::build_tool_service_context_from_env;
 use anyhow::{Context, Result};
@@ -26,8 +26,11 @@ use scheduled_action::outbound::pg_polling_dispatcher::PgPollingDispatcher;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
 use sqlx::postgres::PgPoolOptions;
+use tokio_util::task::TaskTracker;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -44,9 +47,11 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
-    let tool_context = build_tool_service_context_from_env(db.clone())
-        .await
-        .context("failed to build tool service context")?;
+    let event_broker_tracker = TaskTracker::new();
+    let tool_context =
+        build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
+            .await
+            .context("failed to build tool service context")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notification_ingress = Arc::new(SqsNotificationIngress {
@@ -130,8 +135,59 @@ async fn main() -> Result<()> {
 
     tracing::info!("scheduled_action service listening on {addr}");
 
-    axum::serve(listener, router.into_make_service())
+    let server_result = axum::serve(listener, router.into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
         .await
-        .context("server closed")?;
-    unreachable!();
+        .context("server closed");
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
+}
+
+/// Waits for Ctrl+C on all platforms or SIGTERM on Unix.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install Ctrl+C handler");
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install SIGTERM handler");
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("shutdown signal received");
 }
