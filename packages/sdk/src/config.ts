@@ -71,9 +71,29 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
  * function form lets you refresh tokens without reconfiguring. */
 export type TokenSource = string | (() => string | Promise<string>);
 
+/** Access scope for bot-authenticated requests. `user` acts with the
+ * requested-as user's access (requires `requestedAs`); `team` acts with the
+ * bot's owning team's access (team-owned bots only). */
+export type BotScope = 'user' | 'team';
+
+/** How the SDK authenticates with Macro.
+ *
+ * - `user`: a human's Macro API token, sent as `Authorization: Bearer`.
+ * - `bot`: an `mbot_` API key, sent as `x-macro-bot-token` together with
+ *   `x-macro-bot-scope`. When `scope` is omitted it defaults to `user` when
+ *   `requestedAs` is set (user scope requires an acting user) and `team`
+ *   otherwise.
+ */
+export type MacroAuth =
+  | { type: 'user'; token: TokenSource }
+  | { type: 'bot'; token: TokenSource; scope?: BotScope };
+
 /** Options passed to `new Macro(opts)` and stored on `MacroClient`. */
 export interface MacroOpts {
-  /** API token. Falls back to the MACRO_API_KEY env var. */
+  /** How to authenticate. Takes precedence over `token`. Falls back to the
+   * MACRO_API_KEY (user auth) or MACRO_BOT_TOKEN (bot auth) env var. */
+  auth?: MacroAuth;
+  /** Shorthand for `auth: { type: 'user', token }`. */
   token?: TokenSource;
   env?: Env;
   /** Override individual service hosts (e.g. point one at localhost). */
@@ -83,7 +103,8 @@ export interface MacroOpts {
   /** Signing secret for verifying incoming webhooks. Falls back to MACRO_WEBHOOK_SECRET. */
   webhookSecret?: string;
   wsVerify?: string;
-  /** User id sent as `x-macro-bot-for-macro-user-id` on every request. Set via
-   * `macro.requestedAs(userId)` rather than directly. */
+  /** User id the bot acts for, sent as `x-macro-bot-for-macro-user-id` on
+   * every request. Bot auth only. Set via `macro.requestedAs(userId)` rather
+   * than directly. */
   requestedAs?: string;
 }

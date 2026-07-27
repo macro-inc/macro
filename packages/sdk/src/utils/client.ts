@@ -10,6 +10,7 @@ import { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import {
   type Env,
   HOSTS,
+  type MacroAuth,
   type MacroOpts,
   type ServiceName,
   WEB_APP_URLS,
@@ -28,7 +29,8 @@ export class MacroClient {
   readonly webAppUrl: string;
   readonly wsVerify?: string;
   readonly events?: MacroEvents;
-  private readonly token: string | (() => string | Promise<string>);
+  /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
+  readonly authConfig: MacroAuth;
   private readonly requestedAs?: string;
 
   constructor(opts: MacroOpts) {
@@ -37,18 +39,14 @@ export class MacroClient {
     const envWebUrl =
       typeof process !== 'undefined' ? process.env.MACRO_WEB_URL : undefined;
     this.webAppUrl = opts.webAppUrl ?? envWebUrl ?? WEB_APP_URLS[env];
-    const env_token =
-      typeof process !== 'undefined' ? process.env.MACRO_API_KEY : undefined;
-    this.token =
-      opts.token ??
-      env_token ??
-      (() => {
-        throw new Error(
-          'no Macro API token — set MACRO_API_KEY or pass token to new Macro()',
-        );
-      });
-    this.wsVerify = opts.wsVerify;
+    this.authConfig = resolveAuth(opts);
     this.requestedAs = opts.requestedAs;
+    if (this.requestedAs && this.authConfig.type !== 'bot') {
+      throw new Error(
+        'requestedAs() requires bot auth — a user token always acts as its own user',
+      );
+    }
+    this.wsVerify = opts.wsVerify;
 
     this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
     this.cognition = new CognitionSdk({
@@ -80,16 +78,57 @@ export class MacroClient {
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {
-      const tok =
-        typeof this.token === 'function' ? await this.token() : this.token;
-      request.headers.set('Authorization', `Bearer ${tok}`);
-      if (this.requestedAs) {
-        request.headers.set('x-macro-bot-for-macro-user-id', this.requestedAs);
+      const source = this.authConfig.token;
+      const tok = typeof source === 'function' ? await source() : source;
+      if (this.authConfig.type === 'bot') {
+        request.headers.set('x-macro-bot-token', tok);
+        request.headers.set(
+          'x-macro-bot-scope',
+          this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
+        );
+        if (this.requestedAs) {
+          request.headers.set(
+            'x-macro-bot-for-macro-user-id',
+            this.requestedAs,
+          );
+        }
+      } else {
+        if (tok.startsWith('mbot_')) {
+          throw new Error(
+            "bot API key passed as a user token — use auth: { type: 'bot', token } (or MACRO_BOT_TOKEN)",
+          );
+        }
+        request.headers.set('Authorization', `Bearer ${tok}`);
       }
       return request;
     });
     return c;
   }
+}
+
+function resolveAuth(opts: MacroOpts): MacroAuth {
+  if (opts.auth) return opts.auth;
+  if (opts.token) return { type: 'user', token: opts.token };
+  const envApiKey =
+    typeof process !== 'undefined' ? process.env.MACRO_API_KEY : undefined;
+  const envBotToken =
+    typeof process !== 'undefined' ? process.env.MACRO_BOT_TOKEN : undefined;
+  if (envApiKey && envBotToken) {
+    throw new Error(
+      'both MACRO_API_KEY and MACRO_BOT_TOKEN are set — pass auth to new Macro() to pick one',
+    );
+  }
+  if (envBotToken) return { type: 'bot', token: envBotToken };
+  return {
+    type: 'user',
+    token:
+      envApiKey ??
+      (() => {
+        throw new Error(
+          'no Macro API token — set MACRO_API_KEY / MACRO_BOT_TOKEN or pass token/auth to new Macro()',
+        );
+      }),
+  };
 }
 
 export type { ServiceName };

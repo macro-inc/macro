@@ -16,6 +16,30 @@ import { Macro } from '@macro/sdk';
 const macro = new Macro({ }); // uses MACRO_API_KEY env var
 ```
 
+### Authenticating
+
+The SDK can authenticate as a **user** (a Macro API token, sent as an
+`Authorization` bearer) or as a **bot** (an `mbot_` API key, created under
+Settings → Bots in the web app). With no explicit `auth`, the SDK falls back
+to the `MACRO_API_KEY` (user) or `MACRO_BOT_TOKEN` (bot) env var.
+
+```ts
+const asUser = new Macro({ auth: { type: 'user', token: myApiToken } });
+const asBot = new Macro({ auth: { type: 'bot', token: myBotKey } });
+```
+
+A bot can act on behalf of a user it's authorized for (its owner, or a member
+of its owning team):
+
+```ts
+const asWolf = asBot.requestedAs('macro|wolf@macro.com');
+```
+
+Bot requests carry an access scope: `user` (the requested-as user's access —
+the default whenever `requestedAs` is used) or `team` (the owning team's
+access, for team-owned bots — the default otherwise). Pass
+`auth: { type: 'bot', token, scope: ... }` to override.
+
 ### Accessing our API
 
 Our SDK acts lets you easily access any Macro "resource":

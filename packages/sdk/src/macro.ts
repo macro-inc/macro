@@ -81,7 +81,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.webAppUrl = client.webAppUrl;
   }
 
-  /** Clone of this SDK whose requests all carry `x-macro-bot-for-macro-user-id: userId`. */
+  /** Clone of this SDK acting on behalf of `userId` (sent as
+   * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
+   * since a user token always acts as its own user. */
   requestedAs(userId: string): Macro<T> {
     return new Macro({ ...this.opts, requestedAs: userId });
   }
