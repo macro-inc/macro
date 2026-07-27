@@ -5,7 +5,8 @@ mod test;
 
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
@@ -26,7 +27,8 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::domain::events::{
-    CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallStartedMetadata,
+    CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
+    CallRecordUpdatedMetadata, CallStartedMetadata,
 };
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
@@ -385,6 +387,15 @@ fn resolve_ring_status(
         Some(call) if call.id != *requested_call_id => RingStatus::Ended,
         Some(_) if is_participant => RingStatus::Answered,
         Some(_) => RingStatus::Ringing,
+    }
+}
+
+fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
+    match auth {
+        EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone().into_owned()),
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -1210,6 +1221,7 @@ impl<
         }
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
 
         // Look up channel_id before deletion to keep the search-remove message id unique.
         let channel_id = self
@@ -1224,6 +1236,16 @@ impl<
             .delete_call_record(&call_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+
+        if storage_keys.is_some()
+            && let Some(channel_id) = channel_id
+        {
+            self.publish_call_event(&CallMacroEvent::record_deleted(CallRecordDeletedMetadata {
+                call_id,
+                channel_id,
+                actor_user_id,
+            }));
+        }
 
         if let Some(channel_id) = channel_id
             && let Err(e) = self
@@ -1346,11 +1368,32 @@ impl<
 
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
+        let custom_name = request.custom_name.clone();
+        let share_with_team = request.share_with_team;
+        let channel_id = self
+            .repo
+            .get_call_record_by_call_id(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .map(|record| record.channel_id);
 
         self.repo
             .patch_call_record(&call_id, &request)
             .await
-            .map_err(|e| CallError::Internal(e.into()))
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        if let Some(channel_id) = channel_id {
+            self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
+                call_id,
+                channel_id,
+                actor_user_id,
+                custom_name,
+                share_with_team,
+            }));
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self, request), fields(num_assignments = request.assignments.len()))]
@@ -1391,12 +1434,21 @@ impl<
 
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
 
         let (new_value, channel_id) = self
             .repo
             .toggle_share_with_team(&call_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+
+        self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
+            call_id,
+            channel_id,
+            actor_user_id,
+            custom_name: None,
+            share_with_team: Some(new_value),
+        }));
 
         self.send_call_participant_event(
             &call_id,

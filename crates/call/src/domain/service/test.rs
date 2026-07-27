@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use connection::domain::models::{ConnectionError, InvalidationEvent};
 use connection::domain::ports::ConnectionService;
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
 use entity_access::domain::ports::NoOpEntityAccessService;
+use entity_mutation::DeleteEntityPermanently;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -14,7 +16,8 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ArchivedCall, Call, CallError, CallParticipant, CallWebhookEvent, EgressS3Config, RingStatus,
+    ArchivedCall, Call, CallError, CallParticipant, CallRecord, CallWebhookEvent,
+    DeletedCallRecordStorageKeys, EditCallRecordRequest, EgressS3Config, RingStatus,
     VerifiedRingToken, VoipPushPayloadRequest,
 };
 use crate::domain::ports::{CallRtcClient, CallService, MockCallRepository, MockCallRtcClient};
@@ -807,6 +810,476 @@ async fn malformed_archived_creator_skips_event_without_undoing_archival() {
         .await
         .expect("malformed creator does not undo archival");
     assert!(event_broker.events().is_empty());
+}
+
+const MUTATED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6e9);
+const MUTATED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x5f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a92);
+const MUTATED_EVENT_ACTOR: &str = "macro|editor@example.com";
+
+fn call_record_for_mutation() -> CallRecord {
+    CallRecord {
+        call_id: MUTATED_EVENT_CALL_ID,
+        channel_id: MUTATED_EVENT_CHANNEL_ID,
+        room_name: "mutation-event-room".to_string(),
+        created_by: "macro|creator@example.com".to_string(),
+        started_at: archived_event_started_at(),
+        ended_at: Some(archived_event_ended_at()),
+        duration_ms: Some(183_000),
+        egress_id: None,
+        recording_started_at: None,
+        recording_key: None,
+        preview_key: None,
+        recording_url: None,
+        recording_preview_url: None,
+        channel_name: None,
+        custom_name: None,
+        summary: None,
+        share_with_team: false,
+        is_active: false,
+        status: None,
+        user_access_level: None,
+        participants: Vec::new(),
+        transcript: Vec::new(),
+    }
+}
+
+fn authenticated_mutation_receipt() -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user("editor@example.com"),
+        &MUTATED_EVENT_CALL_ID.to_string(),
+        EntityType::Call,
+    )
+}
+
+fn internal_mutation_receipt() -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_internal_user(
+        &MUTATED_EVENT_CALL_ID.to_string(),
+        EntityType::Call,
+    )
+}
+
+type BaseMutationCallService = CallServiceImpl<
+    MockCallRepository,
+    MockRtcClient,
+    StubConnectionService,
+    NoOpEntityAccessService,
+    StubNotificationIngress,
+    StubRecordingStorage,
+    NoopCallSummarizer,
+>;
+
+fn build_mutation_service(
+    repo: MockCallRepository,
+    event_broker: RecordingEventBroker,
+) -> impl CallService + DeleteEntityPermanently<Receipt = EditAccessLevel> {
+    let service: BaseMutationCallService = CallServiceImpl::new(
+        repo,
+        MockRtcClient::new(),
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    service.with_event_broker(event_broker)
+}
+
+fn assert_updated_event(
+    event_broker: &RecordingEventBroker,
+    actor_user_id: Option<&str>,
+    custom_name: Option<&str>,
+    share_with_team: Option<bool>,
+) {
+    let events = event_broker.events();
+    let [published] = events.as_slice() else {
+        panic!("expected exactly one call event")
+    };
+    assert_eq!(published.topic, "macro.calls");
+    assert_eq!(published.key, MUTATED_EVENT_CALL_ID.to_string());
+
+    let mut envelope = published.envelope.clone();
+    envelope
+        .as_object_mut()
+        .expect("event envelope is an object")
+        .remove("event_id");
+    assert_eq!(
+        envelope,
+        json!({
+            "schema_version": 1,
+            "event_type": "call.record_updated",
+            "metadata": {
+                "call_id": MUTATED_EVENT_CALL_ID,
+                "channel_id": MUTATED_EVENT_CHANNEL_ID,
+                "actor_user_id": actor_user_id,
+                "custom_name": custom_name,
+                "share_with_team": share_with_team,
+            },
+        })
+    );
+}
+
+fn assert_deleted_event(event_broker: &RecordingEventBroker) {
+    let events = event_broker.events();
+    let [published] = events.as_slice() else {
+        panic!("expected exactly one call event")
+    };
+    assert_eq!(published.topic, "macro.calls");
+    assert_eq!(published.key, MUTATED_EVENT_CALL_ID.to_string());
+
+    let mut envelope = published.envelope.clone();
+    envelope
+        .as_object_mut()
+        .expect("event envelope is an object")
+        .remove("event_id");
+    assert_eq!(
+        envelope,
+        json!({
+            "schema_version": 1,
+            "event_type": "call.record_deleted",
+            "metadata": {
+                "call_id": MUTATED_EVENT_CALL_ID,
+                "channel_id": MUTATED_EVENT_CHANNEL_ID,
+                "actor_user_id": MUTATED_EVENT_ACTOR,
+            },
+        })
+    );
+}
+
+fn mock_edit_repo(
+    record: Option<CallRecord>,
+    expected_custom_name: Option<&'static str>,
+    expected_share_with_team: Option<bool>,
+    expect_share_permission: bool,
+    patch_result: anyhow::Result<()>,
+) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(record) })
+        });
+    repo.expect_patch_call_record()
+        .times(1)
+        .return_once(move |call_id, request| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            assert_eq!(request.custom_name.as_deref(), expected_custom_name);
+            assert_eq!(request.share_with_team, expected_share_with_team);
+            assert_eq!(request.share_permission.is_some(), expect_share_permission);
+            Box::pin(async move { patch_result })
+        });
+    repo
+}
+
+#[tokio::test]
+async fn edit_call_record_publishes_updated_event() {
+    let repo = mock_edit_repo(
+        Some(call_record_for_mutation()),
+        Some("Weekly sync"),
+        None,
+        false,
+        Ok(()),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .edit_call_record(
+            authenticated_mutation_receipt(),
+            EditCallRecordRequest {
+                share_permission: None,
+                share_with_team: None,
+                custom_name: Some("Weekly sync".to_string()),
+            },
+        )
+        .await
+        .expect("rename succeeds");
+
+    assert_updated_event(
+        &event_broker,
+        Some(MUTATED_EVENT_ACTOR),
+        Some("Weekly sync"),
+        None,
+    );
+}
+
+#[tokio::test]
+async fn edit_call_record_publishes_updated_event_when_name_is_cleared() {
+    let repo = mock_edit_repo(
+        Some(call_record_for_mutation()),
+        Some(""),
+        None,
+        false,
+        Ok(()),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .edit_call_record(
+            authenticated_mutation_receipt(),
+            EditCallRecordRequest {
+                share_permission: None,
+                share_with_team: None,
+                custom_name: Some(String::new()),
+            },
+        )
+        .await
+        .expect("clearing the name succeeds");
+
+    assert_updated_event(&event_broker, Some(MUTATED_EVENT_ACTOR), Some(""), None);
+}
+
+#[tokio::test]
+async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
+    let repo = mock_edit_repo(Some(call_record_for_mutation()), None, None, true, Ok(()));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .edit_call_record(
+            authenticated_mutation_receipt(),
+            EditCallRecordRequest {
+                share_permission: Some(
+                    models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                        is_public: Some(true),
+                        public_access_level: None,
+                        channel_share_permissions: None,
+                    },
+                ),
+                share_with_team: None,
+                custom_name: None,
+            },
+        )
+        .await
+        .expect("share-permission update succeeds");
+
+    assert_updated_event(&event_broker, Some(MUTATED_EVENT_ACTOR), None, None);
+    assert!(
+        !event_broker.events()[0]
+            .envelope
+            .to_string()
+            .contains("share_permission")
+    );
+}
+
+#[tokio::test]
+async fn edit_call_record_publishes_updated_event_without_an_internal_actor() {
+    let repo = mock_edit_repo(
+        Some(call_record_for_mutation()),
+        Some("Internal rename"),
+        Some(false),
+        false,
+        Ok(()),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .edit_call_record(
+            internal_mutation_receipt(),
+            EditCallRecordRequest {
+                share_permission: None,
+                share_with_team: Some(false),
+                custom_name: Some("Internal rename".to_string()),
+            },
+        )
+        .await
+        .expect("internal edit succeeds");
+
+    assert_updated_event(&event_broker, None, Some("Internal rename"), Some(false));
+}
+
+#[tokio::test]
+async fn edit_call_record_skips_updated_event_for_unknown_record() {
+    let repo = mock_edit_repo(None, Some("Unknown"), None, false, Ok(()));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .edit_call_record(
+            authenticated_mutation_receipt(),
+            EditCallRecordRequest {
+                share_permission: None,
+                share_with_team: None,
+                custom_name: Some("Unknown".to_string()),
+            },
+        )
+        .await
+        .expect("unknown record edit remains idempotent");
+
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn failed_edit_call_record_does_not_publish_updated_event() {
+    let repo = mock_edit_repo(
+        Some(call_record_for_mutation()),
+        Some("Failed rename"),
+        None,
+        false,
+        Err(anyhow::anyhow!("patch failed")),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    assert!(
+        service
+            .edit_call_record(
+                authenticated_mutation_receipt(),
+                EditCallRecordRequest {
+                    share_permission: None,
+                    share_with_team: None,
+                    custom_name: Some("Failed rename".to_string()),
+                },
+            )
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn toggle_share_with_team_publishes_updated_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_toggle_share_with_team()
+        .times(1)
+        .returning(|call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async { Ok((true, MUTATED_EVENT_CHANNEL_ID)) })
+        });
+    repo.expect_get_participants()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    let share_with_team = service
+        .toggle_share_with_team(authenticated_mutation_receipt())
+        .await
+        .expect("share toggle succeeds");
+
+    assert!(share_with_team);
+    assert_updated_event(&event_broker, Some(MUTATED_EVENT_ACTOR), None, Some(true));
+}
+
+#[tokio::test]
+async fn failed_toggle_share_with_team_does_not_publish_updated_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_toggle_share_with_team()
+        .times(1)
+        .returning(|_| Box::pin(async { Err(anyhow::anyhow!("toggle failed")) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    assert!(
+        service
+            .toggle_share_with_team(authenticated_mutation_receipt())
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
+}
+
+fn mock_delete_repo(
+    record: Option<CallRecord>,
+    delete_result: anyhow::Result<Option<DeletedCallRecordStorageKeys>>,
+) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(record) })
+        });
+    repo.expect_delete_call_record()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async move { delete_result })
+        });
+    repo
+}
+
+#[tokio::test]
+async fn delete_call_record_publishes_deleted_event() {
+    let repo = mock_delete_repo(
+        Some(call_record_for_mutation()),
+        Ok(Some(DeletedCallRecordStorageKeys::default())),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .delete_call_record(authenticated_mutation_receipt())
+        .await
+        .expect("deletion succeeds");
+
+    assert_deleted_event(&event_broker);
+}
+
+#[tokio::test]
+async fn no_op_delete_call_record_does_not_publish_deleted_event() {
+    let repo = mock_delete_repo(None, Ok(None));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    service
+        .delete_call_record(authenticated_mutation_receipt())
+        .await
+        .expect("unknown record deletion remains idempotent");
+
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn failed_delete_call_record_does_not_publish_deleted_event() {
+    let repo = mock_delete_repo(
+        Some(call_record_for_mutation()),
+        Err(anyhow::anyhow!("delete failed")),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    assert!(
+        service
+            .delete_call_record(authenticated_mutation_receipt())
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn delete_entity_permanently_publishes_one_deleted_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(2)
+        .returning(|call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async { Ok(Some(call_record_for_mutation())) })
+        });
+    repo.expect_resolve_channel_name()
+        .times(1)
+        .returning(|channel_id, user_id| {
+            assert_eq!(*channel_id, MUTATED_EVENT_CHANNEL_ID);
+            assert_eq!(user_id.as_ref(), MUTATED_EVENT_ACTOR);
+            Box::pin(async { Ok(None) })
+        });
+    repo.expect_delete_call_record()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(DeletedCallRecordStorageKeys::default())) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+    let entity =
+        model_entity::EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string());
+
+    service
+        .delete_entity_permanently(entity, authenticated_mutation_receipt())
+        .await
+        .expect("entity mutation deletion succeeds");
+
+    assert_deleted_event(&event_broker);
 }
 
 #[cfg(feature = "outbound")]
