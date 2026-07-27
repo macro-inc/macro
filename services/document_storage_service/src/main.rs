@@ -673,7 +673,8 @@ async fn main() -> anyhow::Result<()> {
     let call_service = Arc::new(
         call_service_builder
             .with_search_indexer(call_search_indexer)
-            .with_voice_repo(PgVoiceRepo::new(db.clone())),
+            .with_voice_repo(PgVoiceRepo::new(db.clone()))
+            .with_event_broker(macro_event_broker.clone()),
     );
 
     let call_state = CallRouterState::new(
