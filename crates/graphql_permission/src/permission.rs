@@ -23,8 +23,9 @@ pub enum GraphqlEntityAccessLevel {
     Owner,
 }
 
-impl From<AccessLevel> for GraphqlEntityAccessLevel {
-    fn from(value: AccessLevel) -> Self {
+impl GraphqlEntityAccessLevel {
+    /// Construct a GraphQL access level from the entity-access model.
+    pub fn new(value: AccessLevel) -> Self {
         match value {
             AccessLevel::View => Self::View,
             AccessLevel::Comment => Self::Comment,
@@ -32,15 +33,14 @@ impl From<AccessLevel> for GraphqlEntityAccessLevel {
             AccessLevel::Owner => Self::Owner,
         }
     }
-}
 
-impl From<GraphqlEntityAccessLevel> for AccessLevel {
-    fn from(value: GraphqlEntityAccessLevel) -> Self {
-        match value {
-            GraphqlEntityAccessLevel::View => Self::View,
-            GraphqlEntityAccessLevel::Comment => Self::Comment,
-            GraphqlEntityAccessLevel::Edit => Self::Edit,
-            GraphqlEntityAccessLevel::Owner => Self::Owner,
+    /// Convert this GraphQL access level into the entity-access model.
+    pub fn into_model(self) -> AccessLevel {
+        match self {
+            Self::View => AccessLevel::View,
+            Self::Comment => AccessLevel::Comment,
+            Self::Edit => AccessLevel::Edit,
+            Self::Owner => AccessLevel::Owner,
         }
     }
 }
@@ -56,8 +56,9 @@ pub enum GraphqlChannelParticipantRole {
     Member,
 }
 
-impl From<ParticipantRole> for GraphqlChannelParticipantRole {
-    fn from(value: ParticipantRole) -> Self {
+impl GraphqlChannelParticipantRole {
+    /// Construct a GraphQL channel role from the entity-access model.
+    pub fn new(value: ParticipantRole) -> Self {
         match value {
             ParticipantRole::Owner => Self::Owner,
             ParticipantRole::Admin => Self::Admin,
@@ -77,8 +78,9 @@ pub enum GraphqlTeamRole {
     Member,
 }
 
-impl From<TeamRole> for GraphqlTeamRole {
-    fn from(value: TeamRole) -> Self {
+impl GraphqlTeamRole {
+    /// Construct a GraphQL team role from the entity-access model.
+    pub fn new(value: TeamRole) -> Self {
         match value {
             TeamRole::Owner => Self::Owner,
             TeamRole::Admin => Self::Admin,
@@ -137,18 +139,20 @@ impl GraphqlEntityPermission {
         match permission {
             EntityPermission::AccessLevel { access_level } => {
                 Self::AccessLevel(GraphqlAccessLevelPermission {
-                    access_level: access_level.into(),
+                    access_level: GraphqlEntityAccessLevel::new(access_level),
                 })
             }
             EntityPermission::ChannelViewOnly => {
                 Self::ChannelViewOnly(GraphqlChannelViewOnlyPermission { is_view_only: true })
             }
             EntityPermission::ChannelRole { role } => {
-                Self::ChannelRole(GraphqlChannelRolePermission { role: role.into() })
+                Self::ChannelRole(GraphqlChannelRolePermission {
+                    role: GraphqlChannelParticipantRole::new(role),
+                })
             }
-            EntityPermission::TeamRole { role } => {
-                Self::TeamRole(GraphqlTeamRolePermission { role: role.into() })
-            }
+            EntityPermission::TeamRole { role } => Self::TeamRole(GraphqlTeamRolePermission {
+                role: GraphqlTeamRole::new(role),
+            }),
         }
     }
 }

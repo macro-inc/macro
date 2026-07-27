@@ -86,29 +86,25 @@ pub struct SoupPage<E: SoupEntityEdges> {
     has_more: bool,
 }
 
-impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<SoupItem<()>>> for SoupPage<E> {
-    fn from(page: PaginatedOpaqueCursor<SoupItem<()>>) -> Self {
+impl<E: SoupEntityEdges> SoupPage<E> {
+    /// Construct a GraphQL page from plain Soup items.
+    pub fn new(page: PaginatedOpaqueCursor<SoupItem<()>>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
-            items: page
-                .items
-                .into_iter()
-                .map(GraphqlSoupEntity::from)
-                .collect(),
+            items: page.items.into_iter().map(GraphqlSoupEntity::new).collect(),
             next_cursor: page.next_cursor,
             has_more,
         }
     }
-}
 
-impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<EnrichedSoupItem>> for SoupPage<E> {
-    fn from(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
+    /// Construct a GraphQL page from frecency-enriched Soup items.
+    pub fn new_from_enriched(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
             items: page
                 .items
                 .into_iter()
-                .map(GraphqlSoupEntity::from)
+                .map(GraphqlSoupEntity::new_from_enriched)
                 .collect(),
             next_cursor: page.next_cursor,
             has_more,
@@ -123,8 +119,9 @@ pub struct GroupedSoup<E: SoupEntityEdges> {
     bins: Vec<GraphqlSoupBin<E>>,
 }
 
-impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for GroupedSoup<E> {
-    fn from(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
+impl<E: SoupEntityEdges> GroupedSoup<E> {
+    /// Construct grouped GraphQL Soup bins from the domain grouping model.
+    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
         Self {
             bins: groups
                 .into_bins()
@@ -134,7 +131,7 @@ impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for Grouped
                     next_cursor: bin.next_cursor().map(ToOwned::to_owned),
                     items: bin
                         .into_items()
-                        .map(|item| GraphqlSoupEntity::from(item.map_extra(|_| ())))
+                        .map(|item| GraphqlSoupEntity::new(item.map_extra(|_| ())))
                         .collect(),
                 })
                 .collect(),
@@ -155,22 +152,18 @@ pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     items: Vec<GraphqlSoupEntity<E>>,
 }
 
-impl<E> From<EnrichedSoupItem> for GraphqlSoupEntity<E>
-where
-    E: SoupEntityEdges,
-{
-    fn from(item: EnrichedSoupItem) -> Self {
+impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
+    /// Construct a GraphQL entity from a frecency-enriched Soup item.
+    pub fn new_from_enriched(item: EnrichedSoupItem) -> Self {
         let EnrichedSoupItem {
             item,
             frecency_score,
             ..
         } = item;
         let score = frecency_score.map(|f| f.data.frecency_score);
-        Self::from(item.map_extra(|_| ())).with_frecency(score)
+        Self::new(item.map_extra(|_| ())).with_frecency(score)
     }
-}
 
-impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
     /// Attach the viewer's frecency score for this entity.
     fn with_frecency(mut self, score: Option<f64>) -> Self {
         match &mut self {
@@ -284,11 +277,12 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     ForeignEntity(GraphqlSoupForeignEntity<E>),
 }
 
-impl<E> From<SoupItem<()>> for GraphqlSoupEntity<E>
+impl<E> GraphqlSoupEntity<E>
 where
     E: SoupEntityEdges,
 {
-    fn from(item: SoupItem<()>) -> Self {
+    /// Construct a GraphQL entity from a plain Soup item.
+    pub fn new(item: SoupItem<()>) -> Self {
         match item {
             SoupItem::Document(item) => {
                 let edges = E::from_entity(
@@ -432,7 +426,7 @@ where
         self.0
             .sub_type
             .as_ref()
-            .map(GraphqlSoupDocumentSubType::from)
+            .map(GraphqlSoupDocumentSubType::new)
     }
 
     #[graphql(flatten)]
@@ -456,8 +450,9 @@ pub struct GraphqlSoupDocumentSubType {
     is_completed: Option<bool>,
 }
 
-impl From<&SoupDocumentSubType> for GraphqlSoupDocumentSubType {
-    fn from(value: &SoupDocumentSubType) -> Self {
+impl GraphqlSoupDocumentSubType {
+    /// Construct a GraphQL document subtype from the Soup model.
+    pub fn new(value: &SoupDocumentSubType) -> Self {
         match value {
             SoupDocumentSubType::Task { is_completed } => Self {
                 kind: "task",
@@ -663,8 +658,9 @@ pub struct GraphqlSoupEmailParticipant {
     sfs_photo_url: Option<String>,
 }
 
-impl From<&SoupContact> for GraphqlSoupEmailParticipant {
-    fn from(value: &SoupContact) -> Self {
+impl GraphqlSoupEmailParticipant {
+    /// Construct a GraphQL email participant from the Soup model.
+    pub fn new(value: &SoupContact) -> Self {
         Self {
             id: ID(value.id.to_string()),
             link_id: ID(value.link_id.to_string()),
@@ -697,8 +693,9 @@ pub struct GraphqlSoupEmailLabel {
     type_: &'static str,
 }
 
-impl From<&SoupLabel> for GraphqlSoupEmailLabel {
-    fn from(value: &SoupLabel) -> Self {
+impl GraphqlSoupEmailLabel {
+    /// Construct a GraphQL email label from the Soup model.
+    pub fn new(value: &SoupLabel) -> Self {
         Self {
             id: ID(value.id.to_string()),
             link_id: ID(value.link_id.to_string()),
@@ -743,8 +740,9 @@ pub struct GraphqlSoupEmailAttachment {
     created_at: String,
 }
 
-impl From<&SoupAttachment> for GraphqlSoupEmailAttachment {
-    fn from(value: &SoupAttachment) -> Self {
+impl GraphqlSoupEmailAttachment {
+    /// Construct a GraphQL email attachment from the Soup model.
+    pub fn new(value: &SoupAttachment) -> Self {
         Self {
             id: ID(value.id.to_string()),
             message_id: ID(value.message_id.to_string()),
@@ -908,7 +906,7 @@ where
         self.0
             .participants
             .iter()
-            .map(GraphqlSoupEmailParticipant::from)
+            .map(GraphqlSoupEmailParticipant::new)
             .collect()
     }
 
@@ -917,7 +915,7 @@ where
         self.0
             .attachments
             .iter()
-            .map(GraphqlSoupEmailAttachment::from)
+            .map(GraphqlSoupEmailAttachment::new)
             .collect()
     }
 
@@ -926,7 +924,7 @@ where
         self.0
             .labels
             .iter()
-            .map(GraphqlSoupEmailLabel::from)
+            .map(GraphqlSoupEmailLabel::new)
             .collect()
     }
 
@@ -1318,8 +1316,9 @@ pub struct GraphqlSoupCallParticipant {
     left_at: Option<String>,
 }
 
-impl From<&SoupCallRecordParticipant> for GraphqlSoupCallParticipant {
-    fn from(value: &SoupCallRecordParticipant) -> Self {
+impl GraphqlSoupCallParticipant {
+    /// Construct a GraphQL call participant from the Soup model.
+    pub fn new(value: &SoupCallRecordParticipant) -> Self {
         Self {
             user_id: value.user_id.clone(),
             joined_at: value.joined_at.to_rfc3339(),
@@ -1456,7 +1455,7 @@ where
         self.0
             .participants
             .iter()
-            .map(GraphqlSoupCallParticipant::from)
+            .map(GraphqlSoupCallParticipant::new)
             .collect()
     }
 

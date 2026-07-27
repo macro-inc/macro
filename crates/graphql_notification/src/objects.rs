@@ -23,7 +23,7 @@ impl GraphqlSoupNotification {
 
     /// The type of the associated entity.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
-        GraphqlSoupEntityType::from(self.0.entity.entity_type)
+        GraphqlSoupEntityType::new(self.0.entity.entity_type)
     }
 
     /// The identifier of the associated entity.

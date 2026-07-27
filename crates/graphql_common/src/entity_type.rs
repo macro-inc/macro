@@ -55,8 +55,9 @@ pub enum GraphqlEntityType {
     CrmContact,
 }
 
-impl From<EntityType> for GraphqlSoupEntityType {
-    fn from(entity_type: EntityType) -> Self {
+impl GraphqlSoupEntityType {
+    /// Construct a GraphQL Soup entity type from the canonical model type.
+    pub fn new(entity_type: EntityType) -> Self {
         match entity_type {
             EntityType::Document => Self::Document,
             EntityType::Chat => Self::Chat,
@@ -70,26 +71,26 @@ impl From<EntityType> for GraphqlSoupEntityType {
             unsupported => panic!("{unsupported} is not a Soup entity type"),
         }
     }
-}
 
-impl From<GraphqlSoupEntityType> for EntityType {
-    fn from(entity_type: GraphqlSoupEntityType) -> Self {
-        match entity_type {
-            GraphqlSoupEntityType::Document => Self::Document,
-            GraphqlSoupEntityType::Chat => Self::Chat,
-            GraphqlSoupEntityType::Project => Self::Project,
-            GraphqlSoupEntityType::EmailThread => Self::EmailThread,
-            GraphqlSoupEntityType::Channel => Self::Channel,
-            GraphqlSoupEntityType::ChannelMessage => Self::ChannelMessage,
-            GraphqlSoupEntityType::Call => Self::Call,
-            GraphqlSoupEntityType::CrmCompany => Self::CrmCompany,
-            GraphqlSoupEntityType::ForeignEntity => Self::ForeignEntity,
+    /// Convert this GraphQL Soup entity type into the canonical model type.
+    pub fn into_model(self) -> EntityType {
+        match self {
+            Self::Document => EntityType::Document,
+            Self::Chat => EntityType::Chat,
+            Self::Project => EntityType::Project,
+            Self::EmailThread => EntityType::EmailThread,
+            Self::Channel => EntityType::Channel,
+            Self::ChannelMessage => EntityType::ChannelMessage,
+            Self::Call => EntityType::Call,
+            Self::CrmCompany => EntityType::CrmCompany,
+            Self::ForeignEntity => EntityType::ForeignEntity,
         }
     }
 }
 
-impl From<EntityType> for GraphqlEntityType {
-    fn from(entity_type: EntityType) -> Self {
+impl GraphqlEntityType {
+    /// Construct a GraphQL entity type from the canonical model type.
+    pub fn new(entity_type: EntityType) -> Self {
         match entity_type {
             EntityType::Document => Self::Document,
             EntityType::Chat => Self::Chat,
@@ -106,31 +107,29 @@ impl From<EntityType> for GraphqlEntityType {
             EntityType::CrmContact => Self::CrmContact,
         }
     }
-}
 
-impl From<GraphqlEntityType> for EntityType {
-    fn from(entity_type: GraphqlEntityType) -> Self {
-        match entity_type {
-            GraphqlEntityType::Document => Self::Document,
-            GraphqlEntityType::Chat => Self::Chat,
-            GraphqlEntityType::Project => Self::Project,
-            GraphqlEntityType::EmailThread => Self::EmailThread,
-            GraphqlEntityType::Channel => Self::Channel,
-            GraphqlEntityType::ChannelMessage => Self::ChannelMessage,
-            GraphqlEntityType::Call => Self::Call,
-            GraphqlEntityType::CrmCompany => Self::CrmCompany,
-            GraphqlEntityType::ForeignEntity => Self::ForeignEntity,
-            GraphqlEntityType::User => Self::User,
-            GraphqlEntityType::Team => Self::Team,
-            GraphqlEntityType::StaticFile => Self::StaticFile,
-            GraphqlEntityType::CrmContact => Self::CrmContact,
-        }
+    /// Construct a canonical GraphQL entity type from a Soup entity type.
+    pub fn new_from_soup_entity_type(entity_type: GraphqlSoupEntityType) -> Self {
+        Self::new(entity_type.into_model())
     }
-}
 
-impl From<GraphqlSoupEntityType> for GraphqlEntityType {
-    fn from(entity_type: GraphqlSoupEntityType) -> Self {
-        EntityType::from(entity_type).into()
+    /// Convert this GraphQL entity type into the canonical model type.
+    pub fn into_model(self) -> EntityType {
+        match self {
+            Self::Document => EntityType::Document,
+            Self::Chat => EntityType::Chat,
+            Self::Project => EntityType::Project,
+            Self::EmailThread => EntityType::EmailThread,
+            Self::Channel => EntityType::Channel,
+            Self::ChannelMessage => EntityType::ChannelMessage,
+            Self::Call => EntityType::Call,
+            Self::CrmCompany => EntityType::CrmCompany,
+            Self::ForeignEntity => EntityType::ForeignEntity,
+            Self::User => EntityType::User,
+            Self::Team => EntityType::Team,
+            Self::StaticFile => EntityType::StaticFile,
+            Self::CrmContact => EntityType::CrmContact,
+        }
     }
 }
 
@@ -147,6 +146,6 @@ impl<'a> GraphqlEntity<'a> {
 
     /// The entity's canonical type.
     async fn entity_type(&self) -> GraphqlEntityType {
-        GraphqlEntityType::from(self.0.entity_type)
+        GraphqlEntityType::new(self.0.entity_type)
     }
 }

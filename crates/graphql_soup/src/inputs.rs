@@ -126,7 +126,7 @@ impl GroupedSoupInitialInput {
             .unwrap_or_default();
         let sort_method = self
             .sort_method
-            .map(SimpleSortMethod::from)
+            .map(GraphqlSimpleSortMethod::into_model)
             .unwrap_or(SimpleSortMethod::ViewedUpdated);
         let limit = self.limit.unwrap_or(20).min(500);
 
@@ -271,7 +271,7 @@ impl SoupInitialInput {
             .unwrap_or_default();
         let sort = self
             .sort_method
-            .map(SimpleSortMethod::from)
+            .map(GraphqlSimpleSortMethod::into_model)
             .unwrap_or(SimpleSortMethod::ViewedAt);
 
         Ok(SoupRequest {
@@ -608,7 +608,7 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             Self::NotificationDone(done) => DocumentLiteral::NotificationDone(done),
             Self::NotificationSeen(seen) => DocumentLiteral::NotificationSeen(seen),
             Self::IncludeCbmAtmNc(include) => DocumentLiteral::IncludeCbmAtmNc(include),
-            Self::SubType(sub_type) => DocumentLiteral::SubType(sub_type.into()),
+            Self::SubType(sub_type) => DocumentLiteral::SubType(sub_type.into_model()),
             Self::IsEmailAttachment(value) => DocumentLiteral::IsEmailAttachment(value),
             Self::CreatedAt(date) => DocumentLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => DocumentLiteral::UpdatedAt(date.into_ast()?),
@@ -626,11 +626,12 @@ enum GraphqlDocumentSubType {
     Snippet,
 }
 
-impl From<GraphqlDocumentSubType> for DocumentSubType {
-    fn from(value: GraphqlDocumentSubType) -> Self {
-        match value {
-            GraphqlDocumentSubType::Task => Self::Task,
-            GraphqlDocumentSubType::Snippet => Self::Snippet,
+impl GraphqlDocumentSubType {
+    /// Convert this GraphQL subtype into the document-filter model.
+    fn into_model(self) -> DocumentSubType {
+        match self {
+            Self::Task => DocumentSubType::Task,
+            Self::Snippet => DocumentSubType::Snippet,
         }
     }
 }
@@ -703,7 +704,7 @@ impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<ChatLiteral>> {
         let literal = match self {
             Self::ProjectId(id) => ChatLiteral::ProjectId(parse_id(id, "projectId")?),
-            Self::Role(role) => ChatLiteral::Role(role.into()),
+            Self::Role(role) => ChatLiteral::Role(role.into_model()),
             Self::ChatId(id) => ChatLiteral::ChatId(parse_id(id, "chatId")?),
             Self::Owner(owner) => ChatLiteral::Owner(parse_macro_user_id(owner, "owner")?),
             Self::Importance(importance) => ChatLiteral::Importance(importance),
@@ -727,12 +728,13 @@ enum GraphqlChatRole {
     Assistant,
 }
 
-impl From<GraphqlChatRole> for ChatRole {
-    fn from(value: GraphqlChatRole) -> Self {
-        match value {
-            GraphqlChatRole::User => Self::User,
-            GraphqlChatRole::System => Self::System,
-            GraphqlChatRole::Assistant => Self::Assistant,
+impl GraphqlChatRole {
+    /// Convert this GraphQL role into the chat-filter model.
+    fn into_model(self) -> ChatRole {
+        match self {
+            Self::User => ChatRole::User,
+            Self::System => ChatRole::System,
+            Self::Assistant => ChatRole::Assistant,
         }
     }
 }
@@ -784,7 +786,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Importance(importance) => EmailLiteral::Importance(importance),
             Self::NotificationDone(done) => EmailLiteral::NotificationDone(done),
             Self::NotificationSeen(seen) => EmailLiteral::NotificationSeen(seen),
-            Self::Shared(shared) => EmailLiteral::Shared(shared.into()),
+            Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
@@ -834,12 +836,13 @@ enum GraphqlSharedEmailFilter {
     Only,
 }
 
-impl From<GraphqlSharedEmailFilter> for SharedEmailFilter {
-    fn from(value: GraphqlSharedEmailFilter) -> Self {
-        match value {
-            GraphqlSharedEmailFilter::Exclude => Self::Exclude,
-            GraphqlSharedEmailFilter::Include => Self::Include,
-            GraphqlSharedEmailFilter::Only => Self::Only,
+impl GraphqlSharedEmailFilter {
+    /// Convert this GraphQL option into the shared-email filter model.
+    fn into_model(self) -> SharedEmailFilter {
+        match self {
+            Self::Exclude => SharedEmailFilter::Exclude,
+            Self::Include => SharedEmailFilter::Include,
+            Self::Only => SharedEmailFilter::Only,
         }
     }
 }
@@ -885,7 +888,9 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
             Self::TeamId(id) => ChannelLiteral::TeamId(parse_id(id, "teamId")?),
             Self::ChannelId(id) => ChannelLiteral::ChannelId(parse_id(id, "channelId")?),
             Self::Sender(sender) => ChannelLiteral::Sender(parse_macro_user_id(sender, "sender")?),
-            Self::ChannelType(channel_type) => ChannelLiteral::ChannelType(channel_type.into()),
+            Self::ChannelType(channel_type) => {
+                ChannelLiteral::ChannelType(channel_type.into_model())
+            }
             Self::Importance(importance) => ChannelLiteral::Importance(importance),
             Self::IsParticipant(is_participant) => ChannelLiteral::IsParticipant(is_participant),
             Self::NotificationDone(done) => ChannelLiteral::NotificationDone(done),
@@ -908,13 +913,14 @@ enum GraphqlChannelTypeFilter {
     Team,
 }
 
-impl From<GraphqlChannelTypeFilter> for ChannelTypeFilter {
-    fn from(value: GraphqlChannelTypeFilter) -> Self {
-        match value {
-            GraphqlChannelTypeFilter::Public => Self::Public,
-            GraphqlChannelTypeFilter::Private => Self::Private,
-            GraphqlChannelTypeFilter::DirectMessage => Self::DirectMessage,
-            GraphqlChannelTypeFilter::Team => Self::Team,
+impl GraphqlChannelTypeFilter {
+    /// Convert this GraphQL option into the channel-filter model.
+    fn into_model(self) -> ChannelTypeFilter {
+        match self {
+            Self::Public => ChannelTypeFilter::Public,
+            Self::Private => ChannelTypeFilter::Private,
+            Self::DirectMessage => ChannelTypeFilter::DirectMessage,
+            Self::Team => ChannelTypeFilter::Team,
         }
     }
 }
@@ -979,7 +985,7 @@ impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
             Self::Speaker(speaker) => {
                 CallLiteral::Speaker(parse_macro_user_id(speaker, "speaker")?)
             }
-            Self::Status(status) => CallLiteral::Status(status.into()),
+            Self::Status(status) => CallLiteral::Status(status.into_model()),
             Self::Attended(attended) => CallLiteral::Attended(attended),
         };
         Ok(Expr::val(literal))
@@ -997,12 +1003,13 @@ enum GraphqlCallStatus {
     Unattended,
 }
 
-impl From<GraphqlCallStatus> for CallStatus {
-    fn from(value: GraphqlCallStatus) -> Self {
-        match value {
-            GraphqlCallStatus::Attended => Self::Attended,
-            GraphqlCallStatus::Missed => Self::Missed,
-            GraphqlCallStatus::Unattended => Self::Unattended,
+impl GraphqlCallStatus {
+    /// Convert this GraphQL status into the call-filter model.
+    fn into_model(self) -> CallStatus {
+        match self {
+            Self::Attended => CallStatus::Attended,
+            Self::Missed => CallStatus::Missed,
+            Self::Unattended => CallStatus::Unattended,
         }
     }
 }
@@ -1077,13 +1084,14 @@ pub enum GraphqlSimpleSortMethod {
     ViewedUpdated,
 }
 
-impl From<GraphqlSimpleSortMethod> for SimpleSortMethod {
-    fn from(value: GraphqlSimpleSortMethod) -> Self {
-        match value {
-            GraphqlSimpleSortMethod::ViewedAt => SimpleSortMethod::ViewedAt,
-            GraphqlSimpleSortMethod::CreatedAt => SimpleSortMethod::CreatedAt,
-            GraphqlSimpleSortMethod::UpdatedAt => SimpleSortMethod::UpdatedAt,
-            GraphqlSimpleSortMethod::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
+impl GraphqlSimpleSortMethod {
+    /// Convert this GraphQL sort method into the Soup-domain model.
+    pub fn into_model(self) -> SimpleSortMethod {
+        match self {
+            Self::ViewedAt => SimpleSortMethod::ViewedAt,
+            Self::CreatedAt => SimpleSortMethod::CreatedAt,
+            Self::UpdatedAt => SimpleSortMethod::UpdatedAt,
+            Self::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
         }
     }
 }

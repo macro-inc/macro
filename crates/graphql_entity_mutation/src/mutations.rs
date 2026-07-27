@@ -9,7 +9,7 @@ use entity_mutation::{
 };
 use graphql_common::{GraphqlEntity, GraphqlEntityType};
 use graphql_permission::GraphqlEntityAccessLevel;
-use model_entity::{Entity, EntityType};
+use model_entity::Entity;
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
@@ -51,7 +51,7 @@ fn validate_batch_with_limit(
 
     let mut seen = HashSet::with_capacity(refs.len());
     if let Some((entity_type, entity_id)) = refs.into_iter().find(|key| !seen.insert(key.clone())) {
-        let entity_type = EntityType::from(entity_type);
+        let entity_type = entity_type.into_model();
         return Err(invalid_request(format!(
             "{operation} contains duplicate entity {entity_type}:{entity_id}"
         )));
@@ -95,9 +95,10 @@ pub struct EntityRefInput {
     pub id: ID,
 }
 
-impl From<EntityRefInput> for Entity<'static> {
-    fn from(value: EntityRefInput) -> Self {
-        EntityType::from(value.entity_type).with_entity_string(value.id.0)
+impl EntityRefInput {
+    /// Convert this GraphQL reference into the canonical entity model.
+    pub fn into_model(self) -> Entity<'static> {
+        self.entity_type.into_model().with_entity_string(self.id.0)
     }
 }
 
@@ -110,11 +111,12 @@ pub struct RenameEntityInput {
     pub display_name: String,
 }
 
-impl From<RenameEntityInput> for RenameEntityRequest {
-    fn from(value: RenameEntityInput) -> Self {
-        Self {
-            entity: value.entity.into(),
-            display_name: value.display_name,
+impl RenameEntityInput {
+    /// Convert this GraphQL input into a domain rename request.
+    pub fn into_model(self) -> RenameEntityRequest {
+        RenameEntityRequest {
+            entity: self.entity.into_model(),
+            display_name: self.display_name,
         }
     }
 }
@@ -128,11 +130,12 @@ pub struct MoveEntityInput {
     pub project_id: Option<ID>,
 }
 
-impl From<MoveEntityInput> for MoveEntityRequest {
-    fn from(value: MoveEntityInput) -> Self {
-        Self {
-            entity: value.entity.into(),
-            project_id: value.project_id.map(|id| id.0),
+impl MoveEntityInput {
+    /// Convert this GraphQL input into a domain move request.
+    pub fn into_model(self) -> MoveEntityRequest {
+        MoveEntityRequest {
+            entity: self.entity.into_model(),
+            project_id: self.project_id.map(|id| id.0),
         }
     }
 }
@@ -146,11 +149,12 @@ pub struct DuplicateEntityInput {
     pub display_name: Option<String>,
 }
 
-impl From<DuplicateEntityInput> for DuplicateEntityRequest {
-    fn from(value: DuplicateEntityInput) -> Self {
-        Self {
-            entity: value.entity.into(),
-            display_name: value.display_name,
+impl DuplicateEntityInput {
+    /// Convert this GraphQL input into a domain duplication request.
+    pub fn into_model(self) -> DuplicateEntityRequest {
+        DuplicateEntityRequest {
+            entity: self.entity.into_model(),
+            display_name: self.display_name,
         }
     }
 }
@@ -166,12 +170,13 @@ pub enum GraphqlSharePolicyOperation {
     Replace,
 }
 
-impl From<GraphqlSharePolicyOperation> for UpdateOperation {
-    fn from(value: GraphqlSharePolicyOperation) -> Self {
-        match value {
-            GraphqlSharePolicyOperation::Add => Self::Add,
-            GraphqlSharePolicyOperation::Remove => Self::Remove,
-            GraphqlSharePolicyOperation::Replace => Self::Replace,
+impl GraphqlSharePolicyOperation {
+    /// Convert this GraphQL operation into the permissions-domain model.
+    pub fn into_model(self) -> UpdateOperation {
+        match self {
+            Self::Add => UpdateOperation::Add,
+            Self::Remove => UpdateOperation::Remove,
+            Self::Replace => UpdateOperation::Replace,
         }
     }
 }
@@ -187,12 +192,13 @@ pub struct ChannelSharePolicyInput {
     pub access_level: Option<GraphqlEntityAccessLevel>,
 }
 
-impl From<ChannelSharePolicyInput> for UpdateChannelSharePermission {
-    fn from(value: ChannelSharePolicyInput) -> Self {
-        Self {
-            operation: value.operation.into(),
-            channel_id: value.channel_id.0,
-            access_level: value.access_level.map(Into::into),
+impl ChannelSharePolicyInput {
+    /// Convert this GraphQL input into a channel share-permission update.
+    pub fn into_model(self) -> UpdateChannelSharePermission {
+        UpdateChannelSharePermission {
+            operation: self.operation.into_model(),
+            channel_id: self.channel_id.0,
+            access_level: self.access_level.map(GraphqlEntityAccessLevel::into_model),
         }
     }
 }
@@ -208,14 +214,20 @@ pub struct EntitySharePolicyInput {
     pub channel_share_permissions: Option<Vec<ChannelSharePolicyInput>>,
 }
 
-impl From<EntitySharePolicyInput> for UpdateSharePermissionRequestV2 {
-    fn from(value: EntitySharePolicyInput) -> Self {
-        Self {
-            is_public: value.is_public,
-            public_access_level: value.public_access_level.map(Into::into),
-            channel_share_permissions: value
-                .channel_share_permissions
-                .map(|entries| entries.into_iter().map(Into::into).collect()),
+impl EntitySharePolicyInput {
+    /// Convert this GraphQL input into a shared permission update.
+    pub fn into_model(self) -> UpdateSharePermissionRequestV2 {
+        UpdateSharePermissionRequestV2 {
+            is_public: self.is_public,
+            public_access_level: self
+                .public_access_level
+                .map(GraphqlEntityAccessLevel::into_model),
+            channel_share_permissions: self.channel_share_permissions.map(|entries| {
+                entries
+                    .into_iter()
+                    .map(ChannelSharePolicyInput::into_model)
+                    .collect()
+            }),
         }
     }
 }
@@ -229,11 +241,12 @@ pub struct UpdateEntitySharePolicyInput {
     pub policy: EntitySharePolicyInput,
 }
 
-impl From<UpdateEntitySharePolicyInput> for UpdateEntitySharePolicyRequest {
-    fn from(value: UpdateEntitySharePolicyInput) -> Self {
-        Self {
-            entity: value.entity.into(),
-            policy: value.policy.into(),
+impl UpdateEntitySharePolicyInput {
+    /// Convert this GraphQL input into a domain share-policy request.
+    pub fn into_model(self) -> UpdateEntitySharePolicyRequest {
+        UpdateEntitySharePolicyRequest {
+            entity: self.entity.into_model(),
+            policy: self.policy.into_model(),
         }
     }
 }
@@ -282,8 +295,9 @@ pub enum GraphqlEntityMutationErrorCode {
     Internal,
 }
 
-impl From<EntityMutationErrorCode> for GraphqlEntityMutationErrorCode {
-    fn from(value: EntityMutationErrorCode) -> Self {
+impl GraphqlEntityMutationErrorCode {
+    /// Construct a GraphQL error code from the entity-mutation domain model.
+    pub fn new(value: EntityMutationErrorCode) -> Self {
         match value {
             EntityMutationErrorCode::UnsupportedOperation(_) => Self::UnsupportedOperation,
             EntityMutationErrorCode::InvalidInput(_) => Self::InvalidInput,
@@ -317,9 +331,10 @@ pub struct GraphqlEntityMutationRef {
     pub entity_id: ID,
 }
 
-impl From<Entity<'static>> for GraphqlEntityMutationRef {
-    fn from(value: Entity<'static>) -> Self {
-        let entity_type = GraphqlEntityType::from(value.entity_type);
+impl GraphqlEntityMutationRef {
+    /// Construct a GraphQL mutation reference from a canonical entity.
+    pub fn new(value: Entity<'static>) -> Self {
+        let entity_type = GraphqlEntityType::new(value.entity_type);
         Self {
             entity_type,
             entity_id: ID(value.entity_id.into_owned()),
@@ -357,7 +372,7 @@ pub struct GraphqlMutationError(
 impl GraphqlMutationError {
     /// Stable machine-readable error category.
     async fn error_code(&self) -> GraphqlEntityMutationErrorCode {
-        self.0.into()
+        GraphqlEntityMutationErrorCode::new(self.0)
     }
 
     /// User-safe explanation of the failure.
@@ -466,7 +481,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .rename_entities(
                     mutation_actor(ctx)?,
-                    inputs.into_iter().map(Into::into).collect(),
+                    inputs
+                        .into_iter()
+                        .map(RenameEntityInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -486,7 +504,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .move_entities(
                     mutation_actor(ctx)?,
-                    inputs.into_iter().map(Into::into).collect(),
+                    inputs
+                        .into_iter()
+                        .map(MoveEntityInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -507,7 +528,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .update_share_policies(
                     mutation_actor(ctx)?,
-                    inputs.into_iter().map(Into::into).collect(),
+                    inputs
+                        .into_iter()
+                        .map(UpdateEntitySharePolicyInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -524,7 +548,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .trash_entities(
                     mutation_actor(ctx)?,
-                    entities.into_iter().map(Into::into).collect(),
+                    entities
+                        .into_iter()
+                        .map(EntityRefInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -541,7 +568,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .restore_entities(
                     mutation_actor(ctx)?,
-                    entities.into_iter().map(Into::into).collect(),
+                    entities
+                        .into_iter()
+                        .map(EntityRefInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -561,7 +591,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .delete_entities_permanently(
                     mutation_actor(ctx)?,
-                    entities.into_iter().map(Into::into).collect(),
+                    entities
+                        .into_iter()
+                        .map(EntityRefInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -581,7 +614,10 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
             mutation_service::<S>(ctx)?
                 .duplicate_entities(
                     mutation_actor(ctx)?,
-                    inputs.into_iter().map(Into::into).collect(),
+                    inputs
+                        .into_iter()
+                        .map(DuplicateEntityInput::into_model)
+                        .collect(),
                 )
                 .await,
         ))
@@ -595,7 +631,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         favorite: bool,
     ) -> async_graphql::Result<GraphqlEntityMutationResult<'static>> {
         let res = mutation_service::<S>(ctx)?
-            .set_favorite(mutation_actor(ctx)?, entity.into(), favorite)
+            .set_favorite(mutation_actor(ctx)?, entity.into_model(), favorite)
             .await;
 
         Ok(GraphqlEntityMutationResult::new_static(res))
