@@ -1,4 +1,4 @@
-use crate::domain::models::{Error, McpServer, McpServerRecord};
+use crate::domain::models::{CallToolResultExt, Error, McpServer, McpServerRecord};
 use crate::domain::ports::{McpConnector, McpServerStore};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
@@ -208,20 +208,14 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
                 }
             };
 
-            let text = result
-                .content
-                .into_iter()
-                .filter_map(|c| c.raw.as_text().map(|t| t.text.clone()))
-                .collect::<Vec<_>>()
-                .join("");
-
             if result.is_error.unwrap_or(false) {
+                let description = result.error_description();
                 Ok(Err(ToolCallError {
-                    internal_error: anyhow::anyhow!("{}", &text),
-                    description: text,
+                    internal_error: anyhow::anyhow!("{}", &description),
+                    description,
                 }))
             } else {
-                Ok(Ok(serde_json::Value::String(text)))
+                Ok(Ok(result.into_value()))
             }
         })
     }

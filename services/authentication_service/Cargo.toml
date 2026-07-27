@@ -135,7 +135,8 @@ strum = { workspace = true }
 teams = { path = "../../crates/teams" }
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-cookies = { version = "0.11.0" }
 tower-http = { workspace = true }

@@ -1,6 +1,13 @@
 //! Default [`ChatService`] implementation backed by a [`ChatRepo`].
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
+    events::{
+        ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMacroEvent,
+        ChatPermanentlyDeletedMetadata, ChatRestoredMetadata, ChatUpdatedMetadata,
+    },
     models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs, Result},
     ports::{ChatRepo, ChatService},
 };
@@ -11,6 +18,7 @@ use entity_access::domain::models::{
     OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
@@ -18,15 +26,28 @@ use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Concrete service implementation that delegates to a [`ChatRepo`]
-pub struct ChatServiceImpl<R, ToolSetContext, Eam>
+pub struct ChatServiceImpl<R, ToolSetContext, Eam, B = NoopMacroEventBroker>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
 {
     // toolset should be replaced with trait;
     toolset: Arc<AsyncToolCollection<ToolSetContext>>,
     context: ToolSetContext,
     repo: R,
     entity_access_management_service: Eam,
+    event_broker: B,
+}
+
+/// The user id to attribute a chat lifecycle event to, when the caller is an
+/// authenticated user.
+fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
+    match auth {
+        EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
+    }
 }
 
 impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService>
@@ -46,6 +67,7 @@ where
             toolset,
             context,
             entity_access_management_service,
+            event_broker: NoopMacroEventBroker,
         }
     }
 }
@@ -63,8 +85,35 @@ impl<R: ChatRepo, Eam: EntityAccessManagementService> ChatServiceImpl<R, (), Eam
     }
 }
 
-impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService> ChatService
-    for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService, B: MacroEventBroker>
+    ChatServiceImpl<R, ToolSetContext, Eam, B>
+where
+    ToolSetContext: Clone + Send + Sync + 'static,
+{
+    /// Replaces the event broker while preserving every other service dependency.
+    pub fn with_event_broker<B2: MacroEventBroker>(
+        self,
+        event_broker: B2,
+    ) -> ChatServiceImpl<R, ToolSetContext, Eam, B2> {
+        ChatServiceImpl {
+            toolset: self.toolset,
+            context: self.context,
+            repo: self.repo,
+            entity_access_management_service: self.entity_access_management_service,
+            event_broker,
+        }
+    }
+
+    /// Publish a chat lifecycle event; failures are logged and dropped.
+    fn publish_chat_event(&self, event: &ChatMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to schedule chat event");
+        }));
+    }
+}
+
+impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService, B: MacroEventBroker>
+    ChatService for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
@@ -79,7 +128,8 @@ where
         }
 
         let project_id = args.project_id.clone();
-        let chat_id = self.repo.create(user_id, args).await?;
+        let name = args.name.clone();
+        let chat_id = self.repo.create(user_id.clone(), args).await?;
 
         if let Some(project_id) = &project_id
             && !project_id.is_empty()
@@ -97,6 +147,13 @@ where
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
+
+        self.publish_chat_event(&ChatMacroEvent::created(ChatCreatedMetadata {
+            chat_id: chat_id.clone(),
+            owner: user_id,
+            name,
+            project_id,
+        }));
 
         Ok(chat_id)
     }
@@ -154,16 +211,27 @@ where
         let chat_id = &entity_access_receipt.entity().entity_id;
 
         let chat = self.repo.get_metadata(chat_id).await?;
-        self.repo
+        let name = format!("{} Copy", chat.name);
+        let new_chat_id = self
+            .repo
             .copy_chat(
                 user_id.to_owned(),
                 chat_id,
                 CopyChatArgs {
-                    name: format!("{} Copy", chat.name),
+                    name: name.clone(),
                     project_id: None,
                 },
             )
-            .await
+            .await?;
+
+        self.publish_chat_event(&ChatMacroEvent::copied(ChatCopiedMetadata {
+            chat_id: new_chat_id.clone(),
+            source_chat_id: chat_id.clone(),
+            owner: user_id.clone(),
+            name,
+        }));
+
+        Ok(new_chat_id)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -196,6 +264,12 @@ where
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
+
+        self.publish_chat_event(&ChatMacroEvent::deleted(ChatDeletedMetadata {
+            chat_id: chat_id.clone(),
+            actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+            project_id,
+        }));
 
         Ok(())
     }
@@ -231,6 +305,14 @@ where
             );
         }
 
+        self.publish_chat_event(&ChatMacroEvent::permanently_deleted(
+            ChatPermanentlyDeletedMetadata {
+                chat_id: chat_id.clone(),
+                actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+                project_id,
+            },
+        ));
+
         Ok(())
     }
 
@@ -257,6 +339,8 @@ where
         let new_project_id = args.project_id.clone();
         let project_changing =
             new_project_id.is_some() && new_project_id.as_deref() != old_project_id.as_deref();
+        let name = args.name.clone();
+        let share_permission_updated = args.share_permission.is_some();
 
         self.repo.patch(user_id.to_owned(), chat_id, args).await?;
 
@@ -297,6 +381,15 @@ where
             );
         }
 
+        self.publish_chat_event(&ChatMacroEvent::updated(ChatUpdatedMetadata {
+            chat_id: chat_id.clone(),
+            actor_user_id: user_id.clone(),
+            name,
+            previous_project_id: old_project_id,
+            project_id: new_project_id,
+            share_permission_updated,
+        }));
+
         Ok(())
     }
 
@@ -309,7 +402,15 @@ where
         let chat = self.repo.get_metadata(chat_id).await?;
         self.repo
             .revert_delete(chat_id, chat.project_id.as_deref())
-            .await
+            .await?;
+
+        self.publish_chat_event(&ChatMacroEvent::restored(ChatRestoredMetadata {
+            chat_id: chat_id.clone(),
+            actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+            project_id: chat.project_id,
+        }));
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -461,8 +562,8 @@ where
     }
 }
 
-impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService>
-    ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService, B: MacroEventBroker>
+    ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
 {

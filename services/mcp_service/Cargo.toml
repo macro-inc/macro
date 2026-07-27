@@ -71,7 +71,8 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 sync_service_client = { path = "../../crates/sync_service_client" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }

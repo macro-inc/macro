@@ -223,7 +223,8 @@ function mergeMultipleSortedIndices(arrays: IndexEntry[][]): IndexEntry[] {
   return arrays.reduce((acc, arr) => mergeSortedIndices(acc, arr));
 }
 
-export function createLegacyQuickAccessValue(): QuickAccessContextValue {
+/** Builds Quick Access from history and its supporting entity sources. */
+export function createQuickAccessValue(): QuickAccessContextValue {
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();

@@ -28,7 +28,7 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
-import type { ApiChannelWithLatest } from './channel-list-types';
+import type { ApiChannelListPage } from './channel-list-types';
 import type {
   AccessLevel,
   AddFavoriteRequest,
@@ -514,11 +514,24 @@ export const storageServiceClient = {
   // The channel list is still served by the comms hex, mounted at
   // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
   // list moves into the channels hex (alongside the comms teardown).
-  async getChannels() {
+  async getChannels(args: {
+    cursor?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }) {
+    const params = new URLSearchParams();
+    if (args.cursor) params.set('cursor', args.cursor);
+    if (args.limit != null) params.set('limit', String(args.limit));
+    const query = params.toString();
+
     return (
-      await dssFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
-        method: 'GET',
-      })
+      await dssFetch<ApiChannelListPage>(
+        `/comms/channels${query ? `?${query}` : ''}`,
+        {
+          method: 'GET',
+          signal: args.signal,
+        }
+      )
     ).map((result) => result);
   },
 

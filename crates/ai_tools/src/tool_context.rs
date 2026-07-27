@@ -47,6 +47,7 @@ use system_properties::{
     SystemPropertiesServiceImpl,
 };
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
+use tokio_util::task::TaskTracker;
 
 pub use ai_toolset::RequestContext;
 
@@ -81,6 +82,10 @@ pub type ToolEmailService = EmailServiceImpl<
     ToolEamService,
 >;
 
+/// Event broker used by AI tools, with spawned publish tasks tracked for
+/// graceful shutdown by the hosting process.
+pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+
 /// Type alias for the send-capable email service implementation used by user
 /// tools. Carries the real event broker: these tools mutate email state, and
 /// the Gmail-echo suppression means events skipped here are never recovered.
@@ -90,7 +95,7 @@ pub type ToolUserEmailService = EmailServiceImpl<
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    ToolEventBroker,
 >;
 
 /// Type alias for the channel list service implementation.
@@ -148,7 +153,7 @@ pub struct ChannelSideEffectClients {
     /// search-event queues.
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
-    pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    pub macro_event_broker: ToolEventBroker,
 }
 
 /// Build the channel AI tool context dispatching the same side effects as the
@@ -557,24 +562,6 @@ impl notification::domain::ports::NotificationQueue for ToolNotificationQueue {
             ToolNotificationQueue::NoOp => Ok(()),
         }
     }
-
-    async fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
-    ) -> Result<(), rootcause::Report> {
-        match self {
-            ToolNotificationQueue::Sqs(queue) => {
-                notification::domain::ports::NotificationQueue::delay_message(
-                    queue,
-                    receipt_handle,
-                    delay,
-                )
-                .await
-            }
-            ToolNotificationQueue::NoOp => Ok(()),
-        }
-    }
 }
 
 /// Type alias for the entity access management service implementation used by AI tools
@@ -591,7 +578,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    ToolEventBroker,
 >;
 
 /// Type alias for the entity access service implementation
@@ -644,6 +631,10 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
 >;
+
+/// Imported-document property enrichment backed by the AI tool host's Properties service.
+pub type ToolDocumentPropertiesApplicator =
+    import::outbound::document_properties::DocumentPropertiesApplicator<ToolPropertiesService>;
 
 /// Type alias for the properties tool context
 pub type ToolPropertiesToolContext =
@@ -746,6 +737,8 @@ pub struct ToolEntityCreator {
     pub channel_service: Arc<ToolChannelMessagesService>,
     /// Task system-property writes (status / priority / due date / assignees).
     pub task_properties: TaskPropertiesAdapter,
+    /// Notion document property and tag enrichment.
+    pub document_properties: ToolDocumentPropertiesApplicator,
     /// Team roster lookups, to resolve source-tool emails to teammates.
     pub team_repository: Arc<ToolTeamService>,
 }
@@ -939,8 +932,33 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
+        properties: &import::domain::ports::ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
-        self.create_doc(user, name, markdown, false, None).await
+        let document_id = self.create_doc(user, name, markdown, false, None).await?;
+        let access = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &document_id,
+                model_entity::EntityType::Document,
+            )
+            .await
+        {
+            Ok(access) => access,
+            Err(error) => {
+                tracing::warn!(
+                    document_id,
+                    error = ?error,
+                    "failed to authorize imported document properties"
+                );
+                return Ok(document_id);
+            }
+        };
+        self.document_properties
+            .apply(user, &access, &document_id, properties)
+            .await;
+        Ok(document_id)
     }
 
     async fn create_channel(

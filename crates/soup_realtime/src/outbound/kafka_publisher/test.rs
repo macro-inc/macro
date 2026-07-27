@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 use macro_event_broker::{
-    EventBrokerError, EventPublisher, MacroEvent, MacroEventBrokerService, Topic,
+    EventBrokerError, EventPublisher, GlobalSpawner, MacroEvent, MacroEventBrokerService, Topic,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::{document::SoupDocument, item::SoupItem};
@@ -75,10 +75,13 @@ fn message() -> SoupRealtimeMessage {
 #[tokio::test]
 async fn publishes_typed_recipient_keyed_event_to_soup_topic() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let broker = MacroEventBrokerService::new(RecordingPublisher {
-        records: records.clone(),
-        fail: false,
-    });
+    let broker = MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: records.clone(),
+            fail: false,
+        },
+        GlobalSpawner,
+    );
     let adapter = KafkaSoupRealtimePublisher::new(broker);
 
     adapter.publish(message()).await.expect("publish succeeds");
@@ -111,10 +114,13 @@ async fn publishes_typed_recipient_keyed_event_to_soup_topic() {
 
 #[tokio::test]
 async fn propagates_delivery_failures_from_event_broker_service() {
-    let broker = MacroEventBrokerService::new(RecordingPublisher {
-        records: Arc::new(Mutex::new(Vec::new())),
-        fail: true,
-    });
+    let broker = MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: Arc::new(Mutex::new(Vec::new())),
+            fail: true,
+        },
+        GlobalSpawner,
+    );
     let adapter = KafkaSoupRealtimePublisher::new(broker);
 
     adapter

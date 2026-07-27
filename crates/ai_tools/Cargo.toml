@@ -80,6 +80,7 @@ strum.workspace = true
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
 tokio.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true

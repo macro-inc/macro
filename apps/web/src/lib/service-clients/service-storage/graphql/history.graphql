@@ -1,4 +1,4 @@
-fragment QuickAccessSoupItemFields on GraphqlSoupItem {
+fragment GraphqlHistoryItemFields on GraphqlSoupItem {
 	id
 	entityType
 	frecencyScore
