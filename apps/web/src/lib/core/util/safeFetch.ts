@@ -83,7 +83,8 @@ function recordSpanError(span: Span, error: unknown): void {
 
 function tracedFetch(
   input: RequestInfo,
-  init: RequestInit & { headers: Record<string, string> }
+  init: RequestInit & { headers: Record<string, string> },
+  traceOptions?: SafeFetchTraceOptions
 ): Promise<Response> {
   const url = requestUrl(input);
   if (!url) return platformFetch(input, init);
@@ -108,6 +109,13 @@ function tracedFetch(
         const response = await platformFetch(input, init);
         span.setAttribute('http.status_code', response.status);
         if (!response.ok) {
+          const expected = traceOptions?.expectedStatusCodes?.includes(
+            response.status
+          );
+          if (expected) {
+            span.setAttribute('http.expected_status', true);
+            return response;
+          }
           // An error response has no JS exception, so record a synthetic
           // one: the message says what failed, and the (async) stack shows
           // which call path issued the request.
@@ -187,11 +195,18 @@ export interface RetryConfig {
   delay?: 'exponential' | number;
 }
 
+/** Trace-only classification for responses that are expected by the caller. */
+export interface SafeFetchTraceOptions {
+  /** Non-OK responses that should not mark the HTTP span as failed. */
+  expectedStatusCodes?: readonly number[];
+}
+
 /**
  * Extended RequestInit interface that includes retry configuration.
  */
 export interface SafeFetchInit extends RequestInit {
   retry?: RetryConfig;
+  trace?: SafeFetchTraceOptions;
 }
 
 export type TextResponse = { contentType: 'text/plain'; body: string };
@@ -286,7 +301,7 @@ export async function safeFetch<
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const { retry, ...fetchInit } = init || {};
+  const { retry, trace, ...fetchInit } = init || {};
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
   type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
@@ -296,20 +311,24 @@ export async function safeFetch<
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
     try {
-      const response = await tracedFetch(input, {
-        ...fetchInit,
-        headers: {
-          ...(fetchInit?.method !== 'GET' &&
-            fetchInit?.method !== 'HEAD' &&
-            !(fetchInit?.body instanceof FormData) && {
-              'Content-Type':
-                (fetchInit?.headers as Record<string, string> | undefined)?.[
-                  'Content-Type'
-                ] ?? 'application/json',
-            }),
-          ...fetchInit?.headers,
-        } as Record<string, string>,
-      });
+      const response = await tracedFetch(
+        input,
+        {
+          ...fetchInit,
+          headers: {
+            ...(fetchInit?.method !== 'GET' &&
+              fetchInit?.method !== 'HEAD' &&
+              !(fetchInit?.body instanceof FormData) && {
+                'Content-Type':
+                  (fetchInit?.headers as Record<string, string> | undefined)?.[
+                    'Content-Type'
+                  ] ?? 'application/json',
+              }),
+            ...fetchInit?.headers,
+          } as Record<string, string>,
+        },
+        trace
+      );
 
       if (!response.ok) {
         if (errorResponseHandler) {

@@ -10,7 +10,8 @@ import type { Attribute, Attributes } from "./config";
 
 /** A manually managed span. Calling {@link Span.end} ends it. */
 export interface Span {
-	/** Start a child span. */
+	/** Start a child span, or run and end one around an async operation. */
+	span<T>(name: string, operation: (span: Span) => Promise<T>): Promise<T>;
 	span(name: string): Span;
 	/** Run with this span as the active OpenTelemetry context. */
 	run<T>(operation: () => T): T;
@@ -35,8 +36,22 @@ export class SpanImpl implements Span {
 		private readonly startChild: (name: string, parent: Context) => Span,
 	) {}
 
-	span(name: string): Span {
-		return this.startChild(name, this.ctx);
+	span<T>(name: string, operation: (span: Span) => Promise<T>): Promise<T>;
+	span(name: string): Span;
+	span<T>(
+		name: string,
+		operation?: (span: Span) => Promise<T>,
+	): Span | Promise<T> {
+		const span = this.startChild(name, this.ctx);
+		if (!operation) return span;
+
+		return span.run(async () => {
+			try {
+				return await operation(span);
+			} finally {
+				span.end();
+			}
+		});
 	}
 
 	run<T>(operation: () => T): T {

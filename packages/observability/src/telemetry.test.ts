@@ -115,6 +115,34 @@ describe("Telemetry", () => {
 		);
 	});
 
+	test("ends a callback child span after the async operation", async () => {
+		const root = Telemetry.span("doc.open");
+		let complete: () => void = () => {};
+		const operation = root.span("doc.snapshot.dss-cache", async (span) => {
+			span.setAttr("snapshot.source", "dss");
+			await new Promise<void>((resolve) => {
+				complete = resolve;
+			});
+			return "unavailable";
+		});
+
+		await Promise.resolve();
+		expect(spanExporter.getFinishedSpans()).toHaveLength(0);
+		complete();
+		expect(await operation).toBe("unavailable");
+		root.end();
+
+		const spans = new Map(
+			spanExporter.getFinishedSpans().map((span) => [span.name, span]),
+		);
+		expect(spans.get("doc.snapshot.dss-cache")?.attributes).toMatchObject({
+			"snapshot.source": "dss",
+		});
+		expect(spans.get("doc.snapshot.dss-cache")?.parentSpanContext?.spanId).toBe(
+			spans.get("doc.open")?.spanContext().spanId,
+		);
+	});
+
 	test("run makes the span active", () => {
 		const root = Telemetry.span("doc.open");
 		const child = root.run(() => Telemetry.span("http request"));

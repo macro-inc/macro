@@ -983,6 +983,7 @@ impl DurableObject for DocumentSyncSession {
             }
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
+        let message = websocket::deserialize_message(&binary_message)?;
 
         otel::configure(&self.env);
         let traceparent = ws
@@ -991,19 +992,7 @@ impl DurableObject for DocumentSyncSession {
             .flatten()
             .and_then(|s| otel::TraceParent::parse(&s));
         let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
-        let span = tracing::info_span!(
-            "ws.message",
-            document.id = tracing::field::Empty,
-            ws.id = tracing::field::Empty,
-            message.type = tracing::field::Empty,
-            peer.id = tracing::field::Empty,
-            op.id = tracing::field::Empty,
-            broadcast.targets = tracing::field::Empty,
-            update.bytes = tracing::field::Empty,
-            response.bytes = tracing::field::Empty,
-            trace.remote_id = %remote_id,
-            trace.remote_parent = %remote_parent,
-        );
+        let span = websocket::inbound_message_span(&message, &remote_id, &remote_parent);
 
         let res: Result<()> = async {
             let document_id = self.document_id().await?;
@@ -1018,7 +1007,7 @@ impl DurableObject for DocumentSyncSession {
                 &*self.document_state().await?,
                 &*self.session_storage().await?,
                 &self.awareness,
-                binary_message,
+                message,
                 self.msg_buffer.clone(),
                 self,
             )

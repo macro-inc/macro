@@ -23,6 +23,53 @@ fn serialize<'a, T: bebop::Record<'a>>(
     Ok(msg_buf)
 }
 
+/// Decodes an inbound WebSocket payload once, before its trace span is created.
+pub fn deserialize_message(message: &[u8]) -> Result<FromPeer<'_>> {
+    if message.len() > MAX_MESSAGE_SIZE {
+        tracing::warn!("received message might be too large {}", message.len());
+    }
+    FromPeer::deserialize(message).context(format!(
+        "failed to deserialize message, message length {}",
+        message.len()
+    ))
+}
+
+/// Creates a bounded, protocol-specific span for an inbound WebSocket message.
+pub fn inbound_message_span(
+    message: &FromPeer<'_>,
+    remote_id: &str,
+    remote_parent: &str,
+) -> tracing::Span {
+    macro_rules! span {
+        ($name:literal, $message_type:literal) => {
+            tracing::info_span!(
+                $name,
+                document.id = tracing::field::Empty,
+                ws.id = tracing::field::Empty,
+                message.type = $message_type,
+                peer.id = tracing::field::Empty,
+                op.id = tracing::field::Empty,
+                broadcast.targets = tracing::field::Empty,
+                update.bytes = tracing::field::Empty,
+                response.bytes = tracing::field::Empty,
+                trace.remote_id = %remote_id,
+                trace.remote_parent = %remote_parent,
+            )
+        };
+    }
+
+    match message {
+        FromPeer::PeerRegisterId { .. } => span!("ws.message.register-id", "register_id"),
+        FromPeer::PeerUpdate { .. } => span!("ws.message.update", "update"),
+        FromPeer::PeerAwareness { .. } => span!("ws.message.awareness", "awareness"),
+        FromPeer::PeerRequestSince { .. } => span!("ws.message.request-since", "request_since"),
+        FromPeer::PeerRequestSnapshot { .. } => {
+            span!("ws.message.request-snapshot", "request_snapshot")
+        }
+        FromPeer::Unknown => span!("ws.message.unknown", "unknown"),
+    }
+}
+
 /// Sends the initial sync message to the client over the websocket
 /// The initial sync message contains the snapshot of the current state of the document
 pub fn send_initial_sync(
@@ -79,32 +126,14 @@ pub async fn process_message(
     document_state: &DocumentState,
     session_storage: &SessionStorage,
     awareness: &EphemeralStore,
-    message: Vec<u8>,
+    message: FromPeer<'_>,
     buf: Arc<Mutex<Vec<u8>>>,
     dss: &DocumentSyncSession,
 ) -> Result<()> {
-    if message.len() > MAX_MESSAGE_SIZE {
-        tracing::warn!("received message might be too large {}", message.len());
-    }
-
-    let message: FromPeer = FromPeer::deserialize(message.as_slice()).context(format!(
-        "failed to deserialize message, message length {}",
-        message.len()
-    ))?;
-
     trace!(
         message = tracing::field::display(&message),
         "process websocket message"
     );
-    let msg_type = match &message {
-        FromPeer::PeerRegisterId { .. } => "register_id",
-        FromPeer::PeerUpdate { .. } => "update",
-        FromPeer::PeerAwareness { .. } => "awareness",
-        FromPeer::PeerRequestSince { .. } => "request_since",
-        FromPeer::PeerRequestSnapshot { .. } => "request_snapshot",
-        FromPeer::Unknown => "unknown",
-    };
-    tracing::Span::current().record("message.type", msg_type);
     match message {
         // Handle peer id registration
         // This registers a peer id to the owner of the current websocket
