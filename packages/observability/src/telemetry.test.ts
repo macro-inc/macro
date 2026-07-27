@@ -38,7 +38,11 @@ describe("Telemetry", () => {
 	});
 
 	test("awaits the async enablement decision", async () => {
-		let decide: (enabled: boolean) => void = () => {};
+		let decide!: (enabled: boolean) => void;
+		let markDecisionRequested!: () => void;
+		const decisionRequested = new Promise<void>((resolve) => {
+			markDecisionRequested = resolve;
+		});
 		let initialized = false;
 		const initialization = Telemetry.init({
 			serviceName: "web-app",
@@ -46,12 +50,13 @@ describe("Telemetry", () => {
 			enabled: () =>
 				new Promise<boolean>((resolve) => {
 					decide = resolve;
+					markDecisionRequested();
 				}),
 		}).then(() => {
 			initialized = true;
 		});
 
-		await Promise.resolve();
+		await decisionRequested;
 		expect(initialized).toBe(false);
 
 		decide(false);

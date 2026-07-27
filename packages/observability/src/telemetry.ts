@@ -12,7 +12,6 @@ import { Tracing } from "./tracing";
 
 type SpanOperation<T> = (span: Span) => Promise<T>;
 
-/** The application's complete frontend observability surface. */
 export class Telemetry {
 	static readonly #tracing = new Tracing();
 	static readonly #logging = new Logging();

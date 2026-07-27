@@ -97,6 +97,7 @@ export async function loadCachedState<S extends GenericRootSchema>(
   }
 
   const pending = await walStore.getAll();
+  let pendingCount = 0;
   for (const entry of pending) {
     const importResult = loroManager.importUpdate(entry.update);
     if (importResult.isErr()) {
@@ -106,12 +107,7 @@ export async function loadCachedState<S extends GenericRootSchema>(
       if (pendingOnly) {
         // Loro holds the entry until its causal gap fills, so keep replaying:
         // a later WAL entry may fill the gap, and held ops apply on their own.
-        logSyncService({
-          documentId: 'unknown',
-          level: 'warn',
-          context: { misc: { entryId: entry.id } },
-          message: 'snapshot-store: WAL entry pending during cold load',
-        });
+        pendingCount += 1;
         continue;
       }
       // Stop replaying. Skipped entries are safe: delivered ones are on the
@@ -125,6 +121,14 @@ export async function loadCachedState<S extends GenericRootSchema>(
       });
       break;
     }
+  }
+  if (pendingCount > 0) {
+    logSyncService({
+      documentId: 'unknown',
+      level: 'warn',
+      context: { misc: { pendingCount } },
+      message: 'snapshot-store: WAL entries pending during cold load',
+    });
   }
   return true;
 }

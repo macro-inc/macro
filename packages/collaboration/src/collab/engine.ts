@@ -319,7 +319,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           if (pendingOnly) {
             // Loro retains causally-ahead updates. Pull the missing operations
             // rather than resetting the document.
-            this.log('info', 'engine: remote update pending on missing ops');
+            this.log('debug', 'engine: remote update pending on missing ops');
             span.setAttr('outcome', 'pending');
             void this.convergeFromServer();
             return 'pending';
