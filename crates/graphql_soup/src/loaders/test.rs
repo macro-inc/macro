@@ -173,11 +173,16 @@ fn user(value: &str) -> MacroUserIdStr<'static> {
 
 /// Build a document Soup item for loader result mapping.
 fn document(id: Uuid) -> SoupItem<()> {
+    document_named(id, format!("Document {id}"))
+}
+
+/// Build a document Soup item with an explicit name.
+fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
         owner_id: user("macro|owner@example.com"),
-        name: format!("Document {id}"),
+        name: name.into(),
         file_type: None,
         sha: None,
         project_id: None,
@@ -309,6 +314,40 @@ async fn resolves_inboxes_once_for_a_users_email_entities() {
         soup_calls.lock().expect("Soup calls lock")[0].link_ids,
         vec![inbox_id]
     );
+}
+
+#[tokio::test]
+async fn context_loader_does_not_cache_across_realtime_updates() {
+    let user_id = user("macro|fresh@example.com");
+    let document_id = Uuid::from_u128(20);
+    let entity = EntityType::Document.with_entity_string(document_id.to_string());
+    let service = RecordingSoupService::default()
+        .with_response(user_id.clone(), vec![document_named(document_id, "First")]);
+    let calls = Arc::clone(&service.calls);
+    let responses = Arc::clone(&service.responses);
+    let loader = SoupItemDataLoader::new(SoupItemLoader::new(
+        service,
+        RecordingInboxReader::default(),
+    ));
+
+    let first = loader
+        .load_one((user_id.clone(), entity.clone()))
+        .await
+        .expect("first load succeeds")
+        .expect("first item exists");
+    responses
+        .lock()
+        .expect("responses lock")
+        .insert(user_id.clone(), vec![document_named(document_id, "Second")]);
+    let second = loader
+        .load_one((user_id, entity))
+        .await
+        .expect("second load succeeds")
+        .expect("second item exists");
+
+    assert!(matches!(first, SoupItem::Document(document) if document.name == "First"));
+    assert!(matches!(second, SoupItem::Document(document) if document.name == "Second"));
+    assert_eq!(calls.lock().expect("calls lock").len(), 2);
 }
 
 #[test]

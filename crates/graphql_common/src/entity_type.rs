@@ -150,11 +150,11 @@ impl<'a> GraphqlEntity<'a> {
     }
 }
 
-/// defines either a update or delete operation
+/// Operation carried by a realtime entity patch.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
 pub enum GraphqlPatchOperation {
-    /// updated
+    /// The entity was created or updated.
     Updated,
-    /// deleted
+    /// The entity was deleted.
     Deleted,
 }

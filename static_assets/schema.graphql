@@ -1285,15 +1285,15 @@ type GraphqlNumberPropertyValue {
 }
 
 """
-defines either a update or delete operation
+Operation carried by a realtime entity patch.
 """
 enum GraphqlPatchOperation {
 	"""
-	updated
+	The entity was created or updated.
 	"""
 	UPDATED
 	"""
-	deleted
+	The entity was deleted.
 	"""
 	DELETED
 }
