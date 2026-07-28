@@ -9,7 +9,7 @@ use super::{
     documents::{
         get_document, get_document_key, get_document_permissions, get_document_text,
         get_full_pdf_modification_data, initialize_starter_docs, list_documents_with_access,
-        location, put_document_update,
+        location,
     },
     user::populate_items,
 };
@@ -23,7 +23,7 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_middleware::cloud_storage::{
     document::ensure_document_exists, thread::ensure_thread_exists,
 };
@@ -123,10 +123,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             get(get_document_key::get_document_key_handler),
         )
         .route(
-            "/documents/{document_id}/update",
-            put(put_document_update::handler),
-        )
-        .route(
             "/documents/{document_id}/snapshot",
             put(
                 documents_hex::inbound::axum_router::put_snapshot::put_snapshot_handler::<
@@ -199,7 +195,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
 }
 
 async fn health_handler(
-    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
 ) -> &'static str {
     "healthy"
 }

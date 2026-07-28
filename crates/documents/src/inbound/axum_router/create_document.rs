@@ -5,7 +5,9 @@ use std::str::FromStr;
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
+};
 use model::document::response::CreateDocumentRequest;
 use model::document::{FileType, FileTypeExt};
 use models_permissions::share_permission::access_level::EditAccessLevel;
@@ -34,20 +36,22 @@ use crate::domain::response::CreateDocumentResponse;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, project), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn create_document_handler<
     T: DocumentService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateDocumentRequest, Svc, Auth>,
 ) -> Result<Json<CreateDocumentResponse>, DocumentError> {
     let req = project.into_inner();
 
     // Email linking is internal only
-    if req.email_attachment_id.is_some() && !user.is_internal_access {
+    if req.email_attachment_id.is_some()
+        && user.authorization.caller != UserOrInternalCaller::Internal
+    {
         return Err(DocumentError::Unauthorized);
     }
 
@@ -88,7 +92,7 @@ pub async fn create_document_handler<
         id: req.id,
         sha: req.sha,
         document_name,
-        user_id: user.macro_user_id.clone(),
+        user_id: user.authorization.user.macro_user_id.clone(),
         file_type,
         project_id: req.project_id,
         team_id,
@@ -102,7 +106,11 @@ pub async fn create_document_handler<
 
     let response_data = state
         .service
-        .create_document(user.macro_user_id, args, req.job_id)
+        .create_document(
+            user.authorization.user.macro_user_id.clone(),
+            args,
+            req.job_id,
+        )
         .await?;
 
     Ok(Json(CreateDocumentResponse {

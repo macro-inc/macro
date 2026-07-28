@@ -72,7 +72,7 @@ export const BashCodeExecutionResponse = z.object({
 });
 
 export const BulkSetEntityPropertyOptions = z.object({
-  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
   entities: z.array(
     z.object({
       entity_id: z.string(),
@@ -89,9 +89,7 @@ export const BulkSetEntityPropertyOptions = z.object({
     })
   ),
   property_definition_id: z.string().uuid(),
-  remove_option_ids: z
-    .union([z.array(z.string().uuid()), z.null()])
-    .default(null),
+  remove_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
 });
 
 export const BulkSetEntityPropertyOptionsResponse = z.object({
@@ -118,8 +116,8 @@ export const ContentSearch = z.object({
         'call_records',
       ])
     )
-    .default([]),
-  inbox: z.union([z.string(), z.null()]).default(null),
+    .optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   matchType: z
     .intersection(
       z.any().superRefine((x, ctx) => {
@@ -149,28 +147,30 @@ export const ContentSearch = z.object({
       z.array(
         z.object({
           label: z.string(),
-          scope: z.union([
-            z.any().superRefine((x, ctx) => {
-              const schemas = [z.literal('personal'), z.literal('team')];
-              const errors = schemas.reduce<z.ZodError[]>(
-                (errors, schema) =>
-                  ((result) =>
-                    result.error ? [...errors, result.error] : errors)(
-                    schema.safeParse(x)
-                  ),
-                []
-              );
-              if (schemas.length - errors.length !== 1) {
-                ctx.addIssue({
-                  path: ctx.path,
-                  code: 'invalid_union',
-                  unionErrors: errors,
-                  message: 'Invalid input: Should pass single schema',
-                });
-              }
-            }),
-            z.null(),
-          ]),
+          scope: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
         })
       ),
       z.null(),
@@ -646,7 +646,7 @@ export const CreateDocument = z.object({
   documentName: z.string(),
   fileContent: z.string(),
   fileExtension: z.string(),
-  isTask: z.boolean().default(false),
+  isTask: z.boolean().optional(),
 });
 
 export const CreateDocumentResponse = z.object({
@@ -654,7 +654,7 @@ export const CreateDocumentResponse = z.object({
 });
 
 export const CreateImportEntity = z.object({
-  entityId: z.union([z.string(), z.null()]).default(null),
+  entityId: z.union([z.string(), z.null()]).optional(),
   foreignId: z.string(),
   metadata: z.any(),
   source: z.any().superRefine((x, ctx) => {
@@ -910,7 +910,7 @@ export const EditTag = z.object({
     ])
     .optional(),
   id: z.string().uuid(),
-  label: z.union([z.string(), z.null()]).default(null),
+  label: z.union([z.string(), z.null()]).optional(),
   property_definition_id: z.string().uuid(),
 });
 
@@ -1028,7 +1028,7 @@ export const GetEntityPropertiesResponse = z.object({
 });
 
 export const GetThread = z.object({
-  limit: z.union([z.number().int(), z.null()]).default(null),
+  limit: z.union([z.number().int(), z.null()]).optional(),
   threadId: z.string().uuid(),
 });
 
@@ -1069,41 +1069,72 @@ export const GetThreadResponse = z.object({
   threadId: z.string().uuid(),
 });
 
-export const ListCallRecords = z.object({
-  attended: z.union([z.boolean(), z.null()]).optional(),
-  channelId: z.union([z.string().uuid(), z.null()]).optional(),
-  status: z
-    .union([z.enum(['ATTENDED', 'MISSED', 'UNATTENDED']), z.null()])
-    .optional(),
-});
+export const ImportNotionPage = z.object({ pageUrl: z.string() });
 
-export const ListCallRecordsResponse = z.object({
-  records: z.array(
-    z.object({
-      callId: z.string().uuid(),
-      channelId: z.string().uuid(),
-      channelName: z.union([z.string(), z.null()]).optional(),
-      createdBy: z.string(),
-      durationMs: z.union([z.number().int(), z.null()]).optional(),
-      endedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
-      isActive: z.boolean(),
-      participants: z.array(z.string()),
-      startedAt: z.string().datetime({ offset: true }),
-      status: z
-        .union([z.enum(['ATTENDED', 'MISSED', 'UNATTENDED']), z.null()])
-        .optional(),
-    })
-  ),
+export const ImportNotionPageResponse = z.object({
+  entity: z.object({
+    entityId: z.union([z.string(), z.null()]).optional(),
+    entityType: z.union([z.string(), z.null()]).optional(),
+    foreignId: z.string(),
+    id: z.string().uuid(),
+    importedByTeammate: z.boolean(),
+    label: z.string(),
+    source: z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.literal('linear'),
+        z.literal('notion'),
+        z.literal('slack'),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    status: z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.literal('staged'),
+        z.literal('importing'),
+        z.literal('imported'),
+        z.literal('discarded'),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+  }),
+  message: z.string(),
+  outcome: z.string(),
 });
 
 export const ListCompanies = z.object({
-  include_hidden: z.union([z.boolean(), z.null()]).default(null),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
-  owner_user_id: z.union([z.string(), z.null()]).default(null),
-  search: z.union([z.string(), z.null()]).default(null),
-  stage: z.union([z.string(), z.null()]).default(null),
+  include_hidden: z.union([z.boolean(), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  owner_user_id: z.union([z.string(), z.null()]).optional(),
+  search: z.union([z.string(), z.null()]).optional(),
+  stage: z.union([z.string(), z.null()]).optional(),
 });
 
 export const ListCompaniesResponse = z.object({
@@ -1128,16 +1159,16 @@ export const ListCompaniesResponse = z.object({
 });
 
 export const ListEntities = z.object({
-  callf: z.any().default(null),
-  cf: z.any().default(null),
-  chanf: z.any().default(null),
-  cthf: z.any().default(null),
-  df: z.any().default(null),
-  ef: z.any().default(null),
+  callf: z.any().optional(),
+  cf: z.any().optional(),
+  chanf: z.any().optional(),
+  cthf: z.any().optional(),
+  df: z.any().optional(),
+  ef: z.any().optional(),
   emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
-  emailView: z.union([z.string(), z.null()]).default(null),
-  fef: z.any().default(null),
-  inbox: z.union([z.string(), z.null()]).default(null),
+  emailView: z.union([z.string(), z.null()]).optional(),
+  fef: z.any().optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   includeTypes: z
     .union([
       z.array(
@@ -1172,9 +1203,9 @@ export const ListEntities = z.object({
       z.null(),
     ])
     .optional(),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
-  pf: z.any().default(null),
-  propf: z.any().default(null),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  pf: z.any().optional(),
+  propf: z.any().optional(),
   sortBy: z
     .any()
     .superRefine((x, ctx) => {
@@ -1205,28 +1236,30 @@ export const ListEntities = z.object({
       z.array(
         z.object({
           label: z.string(),
-          scope: z.union([
-            z.any().superRefine((x, ctx) => {
-              const schemas = [z.literal('personal'), z.literal('team')];
-              const errors = schemas.reduce<z.ZodError[]>(
-                (errors, schema) =>
-                  ((result) =>
-                    result.error ? [...errors, result.error] : errors)(
-                    schema.safeParse(x)
-                  ),
-                []
-              );
-              if (schemas.length - errors.length !== 1) {
-                ctx.addIssue({
-                  path: ctx.path,
-                  code: 'invalid_union',
-                  unionErrors: errors,
-                  message: 'Invalid input: Should pass single schema',
-                });
-              }
-            }),
-            z.null(),
-          ]),
+          scope: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
         })
       ),
       z.null(),
@@ -1487,7 +1520,7 @@ export const ListImportEntities = z.object({
       }),
       z.null(),
     ])
-    .default(null),
+    .optional(),
   status: z
     .union([
       z.any().superRefine((x, ctx) => {
@@ -1515,7 +1548,7 @@ export const ListImportEntities = z.object({
       }),
       z.null(),
     ])
-    .default(null),
+    .optional(),
 });
 
 export const ListImportEntitiesResponse = z.object({
@@ -1590,8 +1623,8 @@ export const ListInboxesResponse = z.object({
 });
 
 export const ListLabels = z.object({
-  inbox: z.union([z.string(), z.null()]).default(null),
-  thread_id: z.union([z.string().uuid(), z.null()]).default(null),
+  inbox: z.union([z.string(), z.null()]).optional(),
+  thread_id: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const ListLabelsResponse = z.object({
@@ -1602,7 +1635,7 @@ export const ListLabelsResponse = z.object({
 });
 
 export const ListNotifications = z.object({
-  done: z.union([z.boolean(), z.null()]).default(null),
+  done: z.union([z.boolean(), z.null()]).optional(),
   entities: z
     .union([
       z.array(
@@ -1623,7 +1656,7 @@ export const ListNotifications = z.object({
       ),
       z.null(),
     ])
-    .default(null),
+    .optional(),
   includeTypes: z
     .union([
       z.array(
@@ -1641,9 +1674,9 @@ export const ListNotifications = z.object({
       ),
       z.null(),
     ])
-    .default(null),
-  limit: z.union([z.number().int().gte(0), z.null()]).default(null),
-  seen: z.union([z.boolean(), z.null()]).default(null),
+    .optional(),
+  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
+  seen: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const ListNotificationsResponse = z.object({
@@ -1739,8 +1772,8 @@ export const NameSearch = z.object({
         'call_records',
       ])
     )
-    .default([]),
-  inbox: z.union([z.string(), z.null()]).default(null),
+    .optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   matchType: z
     .intersection(
       z.any().superRefine((x, ctx) => {
@@ -1770,28 +1803,30 @@ export const NameSearch = z.object({
       z.array(
         z.object({
           label: z.string(),
-          scope: z.union([
-            z.any().superRefine((x, ctx) => {
-              const schemas = [z.literal('personal'), z.literal('team')];
-              const errors = schemas.reduce<z.ZodError[]>(
-                (errors, schema) =>
-                  ((result) =>
-                    result.error ? [...errors, result.error] : errors)(
-                    schema.safeParse(x)
-                  ),
-                []
-              );
-              if (schemas.length - errors.length !== 1) {
-                ctx.addIssue({
-                  path: ctx.path,
-                  code: 'invalid_union',
-                  unionErrors: errors,
-                  message: 'Invalid input: Should pass single schema',
-                });
-              }
-            }),
-            z.null(),
-          ]),
+          scope: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
         })
       ),
       z.null(),
@@ -1841,21 +1876,19 @@ export const ReadCallRecordResponse = z.object({
 export const ReadChannelMessageContext = z.object({
   channelAfter: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
-    .default(null),
+    .optional(),
   channelBefore: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
-    .default(null),
+    .optional(),
   channelId: z.string().uuid(),
-  maxCharsPerMessage: z
-    .union([z.number().int().gte(0), z.null()])
-    .default(null),
+  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
   messageId: z.string().uuid(),
   threadAfter: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
-    .default(null),
+    .optional(),
   threadBefore: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
-    .default(null),
+    .optional(),
 });
 
 export const ReadChannelMessageContextResponse = z.object({
@@ -2271,19 +2304,15 @@ export const ReadChannelMessageContextResponse = z.object({
 
 export const ReadChannelMessages = z.object({
   channelId: z.string().uuid(),
-  cursor: z.union([z.string(), z.null()]).default(null),
-  direction: z.union([z.enum(['older', 'newer']), z.null()]).default(null),
-  from: z
-    .union([z.string().datetime({ offset: true }), z.null()])
-    .default(null),
-  includeThreadPreviews: z.union([z.boolean(), z.null()]).default(null),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
-  maxCharsPerMessage: z
-    .union([z.number().int().gte(0), z.null()])
-    .default(null),
-  messageId: z.union([z.string().uuid(), z.null()]).default(null),
-  messageIds: z.array(z.string().uuid()).default([]),
-  to: z.union([z.string().datetime({ offset: true }), z.null()]).default(null),
+  cursor: z.union([z.string(), z.null()]).optional(),
+  direction: z.union([z.enum(['older', 'newer']), z.null()]).optional(),
+  from: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+  includeThreadPreviews: z.union([z.boolean(), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
+  messageId: z.union([z.string().uuid(), z.null()]).optional(),
+  messageIds: z.array(z.string().uuid()).optional(),
+  to: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
   windowType: z.enum([
     'latest',
     'timeRange',
@@ -2415,19 +2444,17 @@ export const ReadChannelMessagesResponse = z.object({
 });
 
 export const ReadChannelThread = z.object({
-  after: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
-  before: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  after: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  before: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
   channelId: z.string().uuid(),
-  includeChannelContext: z.union([z.boolean(), z.null()]).default(null),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
-  maxCharsPerMessage: z
-    .union([z.number().int().gte(0), z.null()])
-    .default(null),
+  includeChannelContext: z.union([z.boolean(), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
   messageId: z.string().uuid(),
-  replyId: z.union([z.string().uuid(), z.null()]).default(null),
+  replyId: z.union([z.string().uuid(), z.null()]).optional(),
   windowType: z
     .union([z.enum(['allIfSmall', 'latest', 'aroundReply']), z.null()])
-    .default(null),
+    .optional(),
 });
 
 export const ReadChannelThreadResponse = z.object({
@@ -2922,7 +2949,7 @@ export const SendEmail = z.object({
     .array(
       z.object({
         email: z.string(),
-        name: z.union([z.string(), z.null()]).default(null),
+        name: z.union([z.string(), z.null()]).optional(),
       })
     )
     .optional(),
@@ -2931,17 +2958,17 @@ export const SendEmail = z.object({
     .array(
       z.object({
         email: z.string(),
-        name: z.union([z.string(), z.null()]).default(null),
+        name: z.union([z.string(), z.null()]).optional(),
       })
     )
     .optional(),
-  includeSignature: z.union([z.boolean(), z.null()]).default(null),
-  replyingToId: z.union([z.string().uuid(), z.null()]).default(null),
+  includeSignature: z.union([z.boolean(), z.null()]).optional(),
+  replyingToId: z.union([z.string().uuid(), z.null()]).optional(),
   subject: z.string(),
   to: z.array(
     z.object({
       email: z.string(),
-      name: z.union([z.string(), z.null()]).default(null),
+      name: z.union([z.string(), z.null()]).optional(),
     })
   ),
 });
@@ -3006,11 +3033,11 @@ export const UserToolResponse = z.any().superRefine((x, ctx) => {
 });
 
 export const SetEntityProperty = z.object({
-  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
-  boolean_value: z.union([z.boolean(), z.null()]).default(null),
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  boolean_value: z.union([z.boolean(), z.null()]).optional(),
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
-    .default(null),
+    .optional(),
   entity_id: z.string(),
   entity_ref: z
     .union([
@@ -3062,16 +3089,14 @@ export const SetEntityProperty = z.object({
     'user',
     'company',
   ]),
-  link_url: z.union([z.string(), z.null()]).default(null),
-  link_urls: z.union([z.array(z.string()), z.null()]).default(null),
-  number_value: z.union([z.number(), z.null()]).default(null),
-  option_id: z.union([z.string().uuid(), z.null()]).default(null),
-  option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
+  link_url: z.union([z.string(), z.null()]).optional(),
+  link_urls: z.union([z.array(z.string()), z.null()]).optional(),
+  number_value: z.union([z.number(), z.null()]).optional(),
+  option_id: z.union([z.string().uuid(), z.null()]).optional(),
+  option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
   property_definition_id: z.string().uuid(),
-  remove_option_ids: z
-    .union([z.array(z.string().uuid()), z.null()])
-    .default(null),
-  string_value: z.union([z.string(), z.null()]).default(null),
+  remove_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  string_value: z.union([z.string(), z.null()]).optional(),
 });
 
 export const SetEntityPropertyResponse = z.object({
@@ -3336,7 +3361,7 @@ export const ReadThread = z.object({
   ids: z.array(z.string()),
   messagesSince: z
     .union([z.string().datetime({ offset: true }), z.null()])
-    .default(null),
+    .optional(),
 });
 
 export const ReadResponse = z.object({

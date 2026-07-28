@@ -11,7 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures::StreamExt;
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::{
     convert::ConvertQueueMessage,
     document::{BomPart, BomPartWithContent, DocumentMetadata},
@@ -43,7 +43,7 @@ use crate::api::context::{ApiContext, AuthorizationService};
 #[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Query(pagination): extract::Query<PaginationQueryParams>,
 ) -> Result<Response, Response> {
     let pagination = Pagination::from_query_params(pagination);

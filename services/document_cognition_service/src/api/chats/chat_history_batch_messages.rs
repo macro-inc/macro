@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::{
     chat::get_chat_ids_for_messages, chat_history::get_chat_history_for_messages,
     share_permission::access_level::chat::get_highest_access_level_for_chats,
@@ -26,13 +26,13 @@ use sqlx::PgPool;
         (status = 500, body = String, description = "Internal server error")
     )
 )]
-#[tracing::instrument(skip(db, user, request), fields(user_id = %user.macro_user_id, message_count = request.message_ids.len()))]
+#[tracing::instrument(skip(db, user, request), fields(user_id = %user.authorization.user.macro_user_id, message_count = request.message_ids.len()))]
 pub async fn get_chat_history_batch_messages_handler(
     State(db): State<PgPool>,
-    user: MacroAuthorizationExtractor<DcsAuthorizationService>,
+    user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Json(request): Json<ChatHistoryBatchMessagesRequest>,
 ) -> Result<Json<ChatHistory>, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = user.authorization.user.macro_user_id.as_ref();
 
     // Get all unique chat IDs and check access to each
     let chat_ids = get_chat_ids_for_messages(&db, &request.message_ids)

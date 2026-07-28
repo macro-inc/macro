@@ -13,8 +13,8 @@ use crate::domain::{
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::{FromRef, Path, State},
-    http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
+    extract::{FromRef, FromRequestParts, Path, State},
+    http::{HeaderMap, StatusCode, header::CONTENT_TYPE, request::Parts},
     response::IntoResponse,
     routing::post,
 };
@@ -29,10 +29,13 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use std::{future::Future, sync::Arc};
+use std::{future::Future, marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
 /// Header used to authenticate channel bot webhook requests.
@@ -126,6 +129,40 @@ impl<BotSvc, ChannelPoster, AccessSvc, Auth>
         state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
     ) -> Self {
         state.authorization_state.clone()
+    }
+}
+
+struct ChannelWebhookAuthorizationExtractor<Auth> {
+    authentication: Option<BotAuthentication>,
+    _service: PhantomData<fn() -> Auth>,
+}
+
+impl<S, Auth> FromRequestParts<S> for ChannelWebhookAuthorizationExtractor<Auth>
+where
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = MacroAuthorizationRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if parts.headers.contains_key(BOT_TOKEN_HEADER)
+            && parts.headers.contains_key(CHANNEL_BOT_TOKEN_HEADER)
+        {
+            return Err(MacroAuthorizationRejection {
+                status: StatusCode::BAD_REQUEST,
+                message: "ambiguous credentials".into(),
+            });
+        }
+
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, BotOnly>::from_request_parts(parts, state)
+                .await?
+                .authorization;
+        Ok(Self {
+            authentication: authorization,
+            _service: PhantomData,
+        })
     }
 }
 
@@ -230,21 +267,40 @@ where
     path = "/channels/{channel_id}/webhook",
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
-        ("x-macro-channel-bot-token" = String, Header, description = "Bot authentication token")
+        ("x-macro-bot-token" = Option<String>, Header, description = "Preferred bot authentication token"),
+        ("x-macro-channel-bot-token" = Option<String>, Header, deprecated, description = "Legacy channel-scoped bot authentication token")
     ),
     request_body = ChannelWebhookRequest,
     responses(
         (status = 200, body = ChannelWebhookResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all, fields(channel_id = tracing::field::Empty))]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        channel_id = tracing::field::Empty,
+        bot_id = tracing::field::Empty,
+        token_id = tracing::field::Empty,
+        acting_user_id = tracing::field::Empty,
+    )
+)]
+#[allow(
+    private_interfaces,
+    reason = "the public handler is referenced by DSS OpenAPI while its route-specific extractor stays private"
+)]
 pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
     Path(path): Path<ChannelPath>,
+    ChannelWebhookAuthorizationExtractor {
+        authentication: preferred_authentication,
+        ..
+    }: ChannelWebhookAuthorizationExtractor<Auth>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<(StatusCode, Json<ChannelWebhookResponse>), ChannelBotWebhookHandlerErr>
@@ -257,16 +313,31 @@ where
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
     let content = parse_webhook_content(&headers, body)?;
-    let bot_auth_token = channel_bot_token(&headers)?;
-    let authenticated = state
-        .bot_service
-        .authenticate_channel_token(path.channel_id, bot_auth_token)
-        .await?;
+    let bot_id = match preferred_authentication {
+        Some(authentication) => {
+            record_preferred_bot(&authentication);
+            state
+                .bot_service
+                .ensure_bot_in_channel(authentication.bot_id, path.channel_id)
+                .await?;
+            authentication.bot_id
+        }
+        None => {
+            let bot_auth_token = channel_bot_token(&headers)?;
+            let authenticated = state
+                .bot_service
+                .authenticate_channel_token(path.channel_id, bot_auth_token)
+                .await?;
+            tracing::Span::current()
+                .record("bot_id", tracing::field::display(authenticated.bot_id));
+            authenticated.bot_id
+        }
+    };
 
     let response = state
         .channel_poster
         .post_message(
-            Sender::new_from_bot(authenticated.bot_id),
+            Sender::new_from_bot(bot_id),
             path.channel_id,
             PostMessageRequest {
                 content,
@@ -287,6 +358,18 @@ where
             message_id: response.id,
         }),
     ))
+}
+
+fn record_preferred_bot(bot: &BotAuthentication) {
+    let span = tracing::Span::current();
+    span.record("bot_id", tracing::field::display(bot.bot_id));
+    span.record("token_id", tracing::field::display(bot.token_id));
+    if let Some(acting_user) = &bot.acting_user {
+        span.record(
+            "acting_user_id",
+            tracing::field::display(&acting_user.macro_user_id),
+        );
+    }
 }
 
 fn channel_bot_token(headers: &HeaderMap) -> Result<&str, ChannelBotWebhookHandlerErr> {
@@ -364,11 +447,11 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
             Self::Bot(BotError::Unauthorized)
             | Self::Channel(ChannelMutationErr::Unauthorized(_)) => StatusCode::UNAUTHORIZED,
+            Self::Channel(ChannelMutationErr::Forbidden(_)) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) | Self::Channel(ChannelMutationErr::NotFound(_)) => {
                 StatusCode::NOT_FOUND
             }
             Self::Channel(ChannelMutationErr::BadRequest(_)) => StatusCode::BAD_REQUEST,
-            Self::Channel(ChannelMutationErr::Forbidden(_)) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::Repo(_))
             | Self::Channel(ChannelMutationErr::Repo(_))
             | Self::Channel(ChannelMutationErr::Gateway(_))

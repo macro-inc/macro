@@ -52,6 +52,11 @@ fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) 
             .is_none_or(|expires_at| expires_at > now)
 }
 
+struct ValidatedBotToken {
+    bot: AuthenticatedBot,
+    token_id: Uuid,
+}
+
 impl<R, B> BotServiceImpl<R, B>
 where
     R: BotRepo,
@@ -71,7 +76,7 @@ where
         if let Some(team_id) = team_id {
             if !self
                 .repo
-                .user_has_team(caller.clone(), team_id)
+                .user_can_administer_team(caller.clone(), team_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?
             {
@@ -123,7 +128,7 @@ where
     async fn authenticate_candidate(
         &self,
         candidate: Option<BotTokenCandidate>,
-    ) -> Result<AuthenticatedBot, BotError> {
+    ) -> Result<ValidatedBotToken, BotError> {
         let Some(candidate) = candidate else {
             return Err(BotError::Unauthorized);
         };
@@ -133,13 +138,15 @@ where
             return Err(BotError::Unauthorized);
         }
 
-        let token_id = candidate.token.id;
-        let bot = candidate.bot;
+        let authenticated = ValidatedBotToken {
+            bot: candidate.bot,
+            token_id: candidate.token.id,
+        };
         self.repo
-            .mark_token_used(token_id)
+            .mark_token_used(authenticated.token_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        Ok(bot)
+        Ok(authenticated)
     }
 }
 
@@ -393,13 +400,26 @@ where
         }
     }
 
+    async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        if self
+            .repo
+            .bot_active_in_channel(channel_id, bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            Ok(())
+        } else {
+            Err(BotError::Unauthorized)
+        }
+    }
+
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
         let candidate = self
             .repo
             .token_candidate(token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidate(candidate).await
+        Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 
     async fn authenticate_channel_token(
@@ -412,6 +432,6 @@ where
             .channel_token_candidate(channel_id, token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidate(candidate).await
+        Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 }

@@ -23,6 +23,7 @@ mod link;
 mod message;
 mod preview;
 mod preview_views;
+mod project;
 mod thread;
 
 #[cfg(test)]
@@ -330,6 +331,10 @@ impl EmailRepo for EmailPgRepo {
 
     async fn get_thread_project_id(&self, thread_id: Uuid) -> Result<Option<String>, Self::Err> {
         thread::get_thread_project_id(&self.pool, thread_id).await
+    }
+
+    async fn touch_project_updated_at(&self, project_id: &str) -> Result<(), Self::Err> {
+        project::touch_project_updated_at(&self.pool, project_id).await
     }
 
     async fn upsert_email_filter(

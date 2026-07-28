@@ -23,7 +23,7 @@ export function useTagsQuery() {
     queryFn: async () =>
       await throwOnErr(async () => await propertiesServiceClient.listTags()),
     staleTime: 1000 * 60 * 5,
-    enabled: isAuthenticated(),
+    enabled: isAuthenticated() === true,
     placeholderData: EMPTY_TAG_SETS,
   }));
 }

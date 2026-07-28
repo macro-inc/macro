@@ -1,6 +1,7 @@
 use crate::SQS;
 use email::domain::ports::EmailMessageEnqueuer;
 use models_email::email::service::backfill::BackfillPubsubMessage;
+use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
 pub use models_email::email::service::pubsub::LinkManagerMessage;
 #[cfg(feature = "sfs_uploader")]
 use models_email::service::pubsub::SFSUploaderMessage;
@@ -20,6 +21,11 @@ impl SQS {
 
     pub fn email_backfill_queue(mut self, email_backfill_queue: &str) -> Self {
         self.email_backfill_queue = Some(email_backfill_queue.to_string());
+        self
+    }
+
+    pub fn email_crm_cleanup_queue(mut self, email_crm_cleanup_queue: &str) -> Self {
+        self.email_crm_cleanup_queue = Some(email_crm_cleanup_queue.to_string());
         self
     }
 
@@ -60,7 +66,20 @@ impl SQS {
         Err(anyhow::anyhow!("email_backfill_queue is not configured"))
     }
 
-    /// Sends a message to the email backfill queue
+    /// Sends a message to the email crm cleanup queue
+    #[tracing::instrument(skip(self), err)]
+    pub async fn enqueue_email_crm_cleanup_message(
+        &self,
+        message: CrmCleanupPubsubMessage,
+    ) -> anyhow::Result<()> {
+        if let Some(email_crm_cleanup_queue) = &self.email_crm_cleanup_queue {
+            return enqueue_crm_cleanup_message(&self.inner, email_crm_cleanup_queue, message)
+                .await;
+        }
+        anyhow::bail!("email_crm_cleanup_queue is not configured")
+    }
+
+    /// Sends a message to the email scheduled queue
     #[tracing::instrument(skip(self))]
     pub async fn enqueue_email_scheduled_message(
         &self,
@@ -185,6 +204,24 @@ pub async fn enqueue_backfill_message(
     let message_str = serde_json::to_string(&message)?;
 
     // Send the message with the serialized body
+    sqs_client
+        .send_message()
+        .queue_url(queue_url)
+        .message_body(message_str)
+        .send()
+        .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(sqs_client))]
+pub async fn enqueue_crm_cleanup_message(
+    sqs_client: &aws_sdk_sqs::Client,
+    queue_url: &str,
+    message: CrmCleanupPubsubMessage,
+) -> anyhow::Result<()> {
+    let message_str = serde_json::to_string(&message)?;
+
     sqs_client
         .send_message()
         .queue_url(queue_url)

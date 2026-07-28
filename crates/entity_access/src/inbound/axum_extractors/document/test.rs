@@ -1,5 +1,17 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use super::*;
+use crate::{
+    domain::models::{
+        BotAccessScope, BotReceiptScope, EditAccessLevel, EntityAccessAuth, ViewAccessLevel,
+    },
+    inbound::axum_extractors::test_support::{
+        BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BOT_TEAM_ID, BotAccessCall,
+        FakeEntityAccessService, MALFORMED_SYSTEM_BOT_TOKEN, VALID_BOT_TOKEN,
+        malformed_system_bot_authentication, user_scoped_bot_authentication,
+        valid_bot_authentication,
+    },
+};
 use axum::{
     body::{Body, to_bytes},
     extract::{FromRef, FromRequestParts},
@@ -7,6 +19,7 @@ use axum::{
     response::IntoResponse,
 };
 use macro_authorization::{
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
@@ -14,20 +27,10 @@ use macro_authorization::{
 use macro_authorization::{
     LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
 };
-use macro_user_id::{
-    lowercased::Lowercase,
-    user_id::{MacroUserId, MacroUserIdStr},
-};
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
 use model_user::UserContext;
 use rootcause::Report;
-use uuid::Uuid;
-
-use super::*;
-use crate::domain::models::{
-    AccessError, BotId, CallChannelInfo, EditAccessLevel, EntityAccessAuth, UserTeamInfo,
-    ViewAccessLevel,
-};
 
 const DOCUMENT_ID: &str = "document-1";
 const OWNER_ID: &str = "macro|owner@example.com";
@@ -36,137 +39,7 @@ const STANDARD_ACT_AS_ID: &str = "macro|standard-internal@example.com";
 const LEGACY_ACT_AS_ID: &str = "macro|legacy-internal@example.com";
 const DEFAULT_INTERNAL_ID: &str = "macro|default-internal@example.com";
 const INTERNAL_KEY: &str = "valid-internal-key";
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct AccessCall {
-    user_id: Option<String>,
-    entity_id: String,
-    entity_type: EntityType,
-}
-
-#[derive(Clone, Debug)]
-struct FakeEntityAccessService {
-    access_level: Option<AccessLevel>,
-    calls: Arc<Mutex<Vec<AccessCall>>>,
-}
-
-impl FakeEntityAccessService {
-    fn new(access_level: Option<AccessLevel>) -> Self {
-        Self {
-            access_level,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn calls(&self) -> Vec<AccessCall> {
-        self.calls.lock().expect("calls lock poisoned").clone()
-    }
-}
-
-impl EntityAccessService for FakeEntityAccessService {
-    async fn generate_entity_access_receipt<T: RequiredPermission>(
-        &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
-        _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_entity_access_receipt call")
-    }
-
-    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
-        &self,
-        _bot_id: BotId,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
-    }
-
-    async fn get_access_level(
-        &self,
-        user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> Result<Option<AccessLevel>, AccessError> {
-        self.calls
-            .lock()
-            .expect("calls lock poisoned")
-            .push(AccessCall {
-                user_id: user_id.map(|id| id.as_ref().to_string()),
-                entity_id: entity_id.to_string(),
-                entity_type,
-            });
-        Ok(self.access_level)
-    }
-
-    async fn check_access(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
-        panic!("unexpected check_access call")
-    }
-
-    async fn check_public_access(
-        &self,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
-        panic!("unexpected check_public_access call")
-    }
-
-    async fn get_entity_permission(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _user_org_id: Option<i64>,
-    ) -> Result<EntityPermission, AccessError> {
-        panic!("unexpected get_entity_permission call")
-    }
-
-    async fn get_crm_entity_permission_with_team(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
-        panic!("unexpected get_crm_entity_permission_with_team call")
-    }
-
-    async fn get_users_by_entity(
-        &self,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        panic!("unexpected get_users_by_entity call")
-    }
-
-    async fn get_call_channel(
-        &self,
-        _call_id: &Uuid,
-    ) -> Result<Option<CallChannelInfo>, AccessError> {
-        panic!("unexpected get_call_channel call")
-    }
-
-    async fn get_call_channel_by_channel_id(
-        &self,
-        _channel_id: &Uuid,
-    ) -> Result<Option<CallChannelInfo>, AccessError> {
-        panic!("unexpected get_call_channel_by_channel_id call")
-    }
-
-    async fn get_user_team(
-        &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
-    ) -> Result<Option<UserTeamInfo>, AccessError> {
-        panic!("unexpected get_user_team call")
-    }
-}
+const OWNER_ACTING_BOT_TOKEN: &str = "owner-acting-bot-token";
 
 #[derive(Clone, Debug, Default)]
 struct FakeAuthorizationService {
@@ -187,6 +60,20 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             "owner" => Ok(user_context(OWNER_ID)),
             "valid" => Ok(user_context(USER_ID)),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        }
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        bot_scope: BotScope,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        match token {
+            VALID_BOT_TOKEN => Ok(valid_bot_authentication(bot_scope)),
+            MALFORMED_SYSTEM_BOT_TOKEN => Ok(malformed_system_bot_authentication(bot_scope)),
+            OWNER_ACTING_BOT_TOKEN => Ok(owner_scoped_bot_authentication()),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
     }
@@ -221,8 +108,22 @@ impl TestState {
         access_level: Option<AccessLevel>,
         authorization: FakeAuthorizationService,
     ) -> Self {
+        Self::with_service_and_authorization(
+            FakeEntityAccessService::new(access_level),
+            authorization,
+        )
+    }
+
+    fn with_service(entity_access: FakeEntityAccessService) -> Self {
+        Self::with_service_and_authorization(entity_access, FakeAuthorizationService::default())
+    }
+
+    fn with_service_and_authorization(
+        entity_access: FakeEntityAccessService,
+        authorization: FakeAuthorizationService,
+    ) -> Self {
         Self {
-            entity_access: Arc::new(FakeEntityAccessService::new(access_level)),
+            entity_access: Arc::new(entity_access),
             authorization: MacroAuthorizationState::new(Arc::new(authorization)),
         }
     }
@@ -247,6 +148,18 @@ fn user_context(user_id: &str) -> UserContext {
         organization_id: None,
         permissions: None,
     }
+}
+
+fn owner_scoped_bot_authentication() -> BotAuthentication {
+    let mut authentication = user_scoped_bot_authentication();
+    let acting_user = authentication
+        .acting_user
+        .as_mut()
+        .expect("user-scoped bot should have an acting user");
+    acting_user.macro_user_id =
+        MacroUserIdStr::parse_from_str(OWNER_ID).expect("owner id should be valid");
+    acting_user.user_context = user_context(OWNER_ID);
+    authentication
 }
 
 fn document(deleted: bool) -> DocumentBasic {
@@ -283,6 +196,22 @@ fn request(token: Option<&str>, document: DocumentBasic) -> Request<Body> {
                 .expect("header should be valid"),
         );
     }
+    request
+}
+
+fn bot_request(bot_scope: BotScope, token: &str, document: DocumentBasic) -> Request<Body> {
+    let mut request = request(None, document);
+    request.headers_mut().insert(
+        BOT_TOKEN_HEADER,
+        token.parse().expect("bot token should be valid"),
+    );
+    request.headers_mut().insert(
+        BOT_SCOPE_HEADER,
+        bot_scope
+            .as_str()
+            .parse()
+            .expect("bot scope should be valid"),
+    );
     request
 }
 
@@ -483,6 +412,200 @@ async fn invalid_internal_credentials_are_rejected_without_acl_lookup() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn user_scoped_bot_uses_acting_user_scope() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+    ));
+
+    let extracted = extract::<ViewAccessLevel>(
+        bot_request(BotScope::User, VALID_BOT_TOKEN, document(false)),
+        &state,
+    )
+    .await
+    .expect("user-scoped bot should use its delegated access");
+
+    assert_eq!(
+        extracted
+            .entity_access_receipt
+            .get_authenticated_bot()
+            .expect("receipt should authenticate a bot")
+            .bot_id(),
+        BOT_ID
+    );
+    assert_eq!(
+        extracted
+            .entity_access_receipt
+            .get_authenticated_bot_auth()
+            .expect("receipt should retain bot scope")
+            .scope(),
+        &BotReceiptScope::User {
+            acting_user: MacroUserIdStr::parse_from_str(BOT_ACTING_USER_ID)
+                .expect("acting user id should be valid"),
+        }
+    );
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::User {
+                user_id: MacroUserIdStr::parse_from_str(BOT_ACTING_USER_ID)
+                    .expect("acting user id should be valid"),
+                user_org_id: Some(i64::from(BOT_ACTING_USER_ORGANIZATION_ID)),
+            },
+            entity_id: DOCUMENT_ID.to_string(),
+            entity_type: EntityType::Document,
+        }]
+    );
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_scoped_bot_uses_owning_team_scope() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    ));
+
+    let extracted = extract::<EditAccessLevel>(
+        bot_request(BotScope::Team, VALID_BOT_TOKEN, document(false)),
+        &state,
+    )
+    .await
+    .expect("team-scoped bot should use its team access");
+
+    assert_eq!(
+        extracted
+            .entity_access_receipt
+            .get_authenticated_bot_auth()
+            .expect("receipt should retain bot scope")
+            .scope(),
+        &BotReceiptScope::Team {
+            team_id: BOT_TEAM_ID,
+        }
+    );
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        [BotAccessCall {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::Team {
+                team_id: BOT_TEAM_ID,
+            },
+            entity_id: DOCUMENT_ID.to_string(),
+            entity_type: EntityType::Document,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_without_acting_user_is_rejected_before_acl_lookup() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    ));
+
+    let error = extract::<ViewAccessLevel>(
+        bot_request(BotScope::User, MALFORMED_SYSTEM_BOT_TOKEN, document(false)),
+        &state,
+    )
+    .await
+    .expect_err("user scope should require an acting user");
+
+    assert!(matches!(
+        error,
+        ExtractorError::UnauthorizedWithMessage("bot user scope requires an acting user")
+    ));
+    assert!(state.entity_access.bot_calls().is_empty());
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_receipt_must_satisfy_the_required_access_level() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+    ));
+
+    let result = extract::<EditAccessLevel>(
+        bot_request(BotScope::Team, VALID_BOT_TOKEN, document(false)),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(result, Err(ExtractorError::Unauthorized)));
+    assert_eq!(state.entity_access.bot_calls().len(), 1);
+}
+
+#[tokio::test]
+async fn bot_acting_as_document_owner_still_uses_scoped_service() {
+    let state = TestState::with_service(FakeEntityAccessService::new(None).with_bot_permission(
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    ));
+
+    let extracted = extract::<EditAccessLevel>(
+        bot_request(BotScope::User, OWNER_ACTING_BOT_TOKEN, document(false)),
+        &state,
+    )
+    .await
+    .expect("the scoped service should delegate owner access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.auth(),
+        EntityAccessAuth::Bot(_)
+    ));
+    assert_eq!(state.entity_access.bot_calls().len(), 1);
+    assert!(state.entity_access.calls().is_empty());
+    assert_eq!(
+        state.entity_access.bot_calls()[0].scope,
+        BotAccessScope::User {
+            user_id: MacroUserIdStr::parse_from_str(OWNER_ID).expect("owner id should be valid"),
+            user_org_id: None,
+        }
+    );
+}
+
+#[tokio::test]
+async fn deleted_document_requires_owner_permission_from_scoped_service() {
+    let owner_state = TestState::with_service(
+        FakeEntityAccessService::new(None).with_bot_permission(EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        }),
+    );
+    extract::<EditAccessLevel>(
+        bot_request(BotScope::Team, VALID_BOT_TOKEN, document(true)),
+        &owner_state,
+    )
+    .await
+    .expect("owner permission should allow deleted document access");
+    assert_eq!(owner_state.entity_access.bot_calls().len(), 1);
+
+    let edit_state = TestState::with_service(
+        FakeEntityAccessService::new(None).with_bot_permission(EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        }),
+    );
+    let result = extract::<ViewAccessLevel>(
+        bot_request(BotScope::Team, VALID_BOT_TOKEN, document(true)),
+        &edit_state,
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(ExtractorError::UnauthorizedWithMessage(
+            "only owner can access deleted resource"
+        ))
+    ));
+    assert_eq!(edit_state.entity_access.bot_calls().len(), 1);
 }
 
 #[tokio::test]

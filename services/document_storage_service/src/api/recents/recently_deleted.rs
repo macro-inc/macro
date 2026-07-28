@@ -1,7 +1,7 @@
 use crate::api::context::AuthorizationService;
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::item::Item;
 use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
 use sqlx::PgPool;
@@ -28,16 +28,16 @@ pub type RecentlyDeletedResponse = TypedSuccessResponse<RecentlyDeletedResponseD
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn handler(
     State(db): State<PgPool>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> impl IntoResponse {
     tracing::info!("recently_deleted");
 
     let items = match macro_db_client::recents::deleted::get_recently_deleted(
         &db,
-        user.macro_user_id.as_ref(),
+        user.authorization.user.macro_user_id.as_ref(),
     )
     .await
     {

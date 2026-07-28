@@ -107,6 +107,10 @@ const IGNORABLE_ERRORS = [
   'ResizeObserver loop completed with undelivered notifications',
 ];
 
+// Privacy filter lists block the upstream filename; the proxy maps this opaque alias back.
+const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
+const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -115,6 +119,16 @@ const initializePosthog = (instance: PostHog) => {
     api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    prepare_external_dependency_script: (script) => {
+      const url = new URL(script.src);
+
+      if (url.pathname.endsWith(`/static/${POSTHOG_RECORDER_SCRIPT_NAME}`)) {
+        url.pathname = `/i/ph/static/${POSTHOG_RECORDER_PROXY_SCRIPT_NAME}`;
+        script.src = url.toString();
+      }
+
+      return script;
+    },
     before_send: (cr) => {
       if (cr) {
         cr.properties.env = DEV_MODE_ENV

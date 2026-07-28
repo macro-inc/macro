@@ -21,7 +21,10 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::{events::WebhookMacroEvent, ingestion::WebhookEventIngestionService};
+use crate::domain::{
+    events::WebhookMacroEvent,
+    ingestion::{WebhookEventIngestionError, WebhookEventIngestionService},
+};
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
@@ -33,6 +36,7 @@ use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use std::future::Future;
 use std::time::Duration;
+use tokio_retry::{RetryIf, strategy::ExponentialBackoff};
 
 /// Consumer group for webhook event ingestion. Offsets are committed under
 /// this group, so restarts resume where the previous run left off.
@@ -61,6 +65,12 @@ const MAX_INGEST_ATTEMPTS: u32 = 5;
 /// default `max.poll.interval.ms` (300s), so retrying never evicts this
 /// consumer from its group.
 const INGEST_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
+
+fn ingest_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take((MAX_INGEST_ATTEMPTS - 1) as usize)
+}
 
 /// Commit `message`'s offset, logging the outcome.
 fn commit_logged(consumer: &WebhookKafkaConsumer, message: &BorrowedMessage<'_>) {
@@ -91,58 +101,67 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
     partition: i32,
     offset: i64,
 ) -> anyhow::Result<()> {
-    let mut delay = INGEST_RETRY_BASE_DELAY;
-    let mut attempt = 1u32;
-    loop {
-        tracing::trace!(partition, offset, attempt, "ingesting broker event");
-        let result = match event {
-            DeclaredMacroEvent::DocumentMacroEvent(event) => {
-                service.ingest_document_event(event.event().clone()).await
+    let mut attempt = 0u32;
+    let result = RetryIf::start(
+        ingest_retry_strategy(),
+        || {
+            attempt += 1;
+            async move {
+                tracing::trace!(partition, offset, attempt, "ingesting broker event");
+                let result = match event {
+                    DeclaredMacroEvent::DocumentMacroEvent(event) => {
+                        service.ingest_document_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::ChannelMacroEvent(event) => {
+                        service.ingest_channel_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::WebhookMacroEvent(event) => {
+                        service.ingest_webhook_event(event.event().clone()).await
+                    }
+                };
+
+                match &result {
+                    Ok(()) => {
+                        tracing::trace!(partition, offset, attempt, "broker event ingested")
+                    }
+                    Err(error) if error.is_transient() && attempt < MAX_INGEST_ATTEMPTS => {
+                        let delay = INGEST_RETRY_BASE_DELAY * 2u32.pow(attempt - 1);
+                        tracing::warn!(
+                            error = ?error,
+                            partition,
+                            offset,
+                            attempt,
+                            delay_secs = delay.as_secs_f32(),
+                            "transient ingestion failure, retrying"
+                        );
+                    }
+                    Err(_) => {}
+                }
+                result
             }
-            DeclaredMacroEvent::ChannelMacroEvent(event) => {
-                service.ingest_channel_event(event.event().clone()).await
-            }
-            DeclaredMacroEvent::WebhookMacroEvent(event) => {
-                service.ingest_webhook_event(event.event().clone()).await
-            }
-        };
-        match result {
-            Ok(()) => {
-                tracing::trace!(partition, offset, attempt, "broker event ingested");
-                return Ok(());
-            }
-            Err(e) if !e.is_transient() => {
-                tracing::error!(
-                    error = ?e,
-                    partition,
-                    offset,
-                    "dropping broker event after non-retryable ingestion failure"
-                );
-                return Ok(());
-            }
-            Err(e) if attempt < MAX_INGEST_ATTEMPTS => {
-                tracing::warn!(
-                    error = ?e,
-                    partition,
-                    offset,
-                    attempt,
-                    delay_secs = delay.as_secs_f32(),
-                    "transient ingestion failure, retrying"
-                );
-                tokio::time::sleep(delay).await;
-                delay *= 2;
-                attempt += 1;
-            }
-            Err(e) => {
-                return Err(e).with_context(|| {
-                    format!(
-                        "transient ingestion failure persisted after \
-                         {MAX_INGEST_ATTEMPTS} attempts \
-                         (partition {partition} offset {offset})"
-                    )
-                });
-            }
+        },
+        |error: &WebhookEventIngestionError| error.is_transient(),
+    )
+    .await;
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if !error.is_transient() => {
+            tracing::error!(
+                error = ?error,
+                partition,
+                offset,
+                "dropping broker event after non-retryable ingestion failure"
+            );
+            Ok(())
         }
+        Err(error) => Err(error).with_context(|| {
+            format!(
+                "transient ingestion failure persisted after \
+                 {MAX_INGEST_ATTEMPTS} attempts \
+                 (partition {partition} offset {offset})"
+            )
+        }),
     }
 }
 

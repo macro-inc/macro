@@ -71,10 +71,12 @@ impl SoupItemReader for FakeReader {
 
 struct FakeRealtimeConsumer {
     messages: Mutex<VecDeque<Result<SoupRealtimeMessage, Report>>>,
+    calls: Arc<AtomicUsize>,
 }
 
 impl SoupRealtimeConsumer for FakeRealtimeConsumer {
     async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.messages
             .lock()
             .expect("consumer messages lock")
@@ -189,12 +191,14 @@ fn item_response(
     )
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn consumer_service_distributes_items_only_to_their_users() {
     let one = user("one");
     let two = user("two");
+    let receive_calls = Arc::new(AtomicUsize::new(0));
     let consumer = FakeRealtimeConsumer {
         messages: Mutex::new(VecDeque::from([
+            Err(rootcause::report!("transient receive failure")),
             Ok(SoupRealtimeMessage::new(
                 one.clone(),
                 document_item(DOCUMENT_ID, "For one", None),
@@ -204,6 +208,7 @@ async fn consumer_service_distributes_items_only_to_their_users() {
                 document_item(OTHER_DOCUMENT_ID, "For two", None),
             )),
         ])),
+        calls: Arc::clone(&receive_calls),
     };
     let service = Arc::new(SoupRealtimeConsumerService::new(consumer));
     let mut one_first = service.subscribe(one.clone());
@@ -218,6 +223,11 @@ async fn consumer_service_distributes_items_only_to_their_users() {
     .expect("consumer task joins")
     .expect_err("fake consumer eventually stops");
     assert!(run_error.to_string().contains("failed to receive"));
+    assert_eq!(
+        receive_calls.load(Ordering::SeqCst),
+        3 + MAX_RECEIVE_ATTEMPTS,
+        "a successful message resets the receive retry strategy"
+    );
 
     let one_first_item = tokio::time::timeout(Duration::from_secs(1), one_first.recv())
         .await

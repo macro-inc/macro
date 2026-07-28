@@ -14,6 +14,7 @@ inbound = [
   "entity_access/ports",
   "dep:macro_authorization",
   "dep:model-error-response",
+  "macro_authorization/axum",
   "dep:serde_json",
   "dep:utoipa",
   "ports",
@@ -29,7 +30,7 @@ channels = { path = "../channels", optional = true, default-features = false, fe
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 hex = { workspace = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }

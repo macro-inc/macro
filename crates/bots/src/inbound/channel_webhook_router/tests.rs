@@ -9,16 +9,21 @@ use axum::{
     http::{Request, StatusCode, header},
 };
 use channels::domain::models::PostMessageResponse;
+use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EntityPermission, EntityType,
-        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityPermission,
+        EntityType, ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, ValidatedIdentity,
+    BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
+    BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER,
+    BotActingUserClaims as AuthorizationBotActingUserClaims, BotAuthentication, BotAuthorizer,
+    BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, MacroUserAuthentication,
+    ValidatedIdentity,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
@@ -37,11 +42,20 @@ enum TestCreateMode {
 }
 
 #[derive(Clone)]
-enum TestAuthMode {
+enum TestLegacyAuthMode {
     Ok {
         expected_channel_id: Uuid,
         expected_token: String,
         bot_id: BotId,
+    },
+    Unauthorized,
+}
+
+#[derive(Clone)]
+enum TestMembershipMode {
+    Ok {
+        expected_channel_id: Uuid,
+        expected_bot_id: BotId,
     },
     Unauthorized,
 }
@@ -58,51 +72,80 @@ struct AuthCall {
     token: String,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct MembershipCall {
+    channel_id: Uuid,
+    bot_id: BotId,
+}
+
 #[derive(Clone)]
 struct TestBotService {
     create_mode: TestCreateMode,
-    auth_mode: TestAuthMode,
+    legacy_auth_mode: TestLegacyAuthMode,
+    membership_mode: TestMembershipMode,
     create_calls: Arc<AtomicUsize>,
     auth_calls: Arc<AtomicUsize>,
+    membership_calls: Arc<AtomicUsize>,
     last_create: Arc<Mutex<Option<CreateCall>>>,
     last_auth: Arc<Mutex<Option<AuthCall>>>,
+    last_membership: Arc<Mutex<Option<MembershipCall>>>,
 }
 
 impl TestBotService {
     fn for_create(response: CreateChannelScopedBotResponse) -> Self {
-        Self {
-            create_mode: TestCreateMode::Ok(response),
-            auth_mode: TestAuthMode::Unauthorized,
-            create_calls: Arc::new(AtomicUsize::new(0)),
-            auth_calls: Arc::new(AtomicUsize::new(0)),
-            last_create: Arc::new(Mutex::new(None)),
-            last_auth: Arc::new(Mutex::new(None)),
-        }
+        Self::new(
+            TestCreateMode::Ok(response),
+            TestLegacyAuthMode::Unauthorized,
+            TestMembershipMode::Unauthorized,
+        )
     }
 
     fn for_webhook(channel_id: Uuid, token: &str, bot_id: BotId) -> Self {
-        Self {
-            create_mode: TestCreateMode::Unauthorized,
-            auth_mode: TestAuthMode::Ok {
+        Self::new(
+            TestCreateMode::Unauthorized,
+            TestLegacyAuthMode::Ok {
                 expected_channel_id: channel_id,
                 expected_token: token.to_string(),
                 bot_id,
             },
-            create_calls: Arc::new(AtomicUsize::new(0)),
-            auth_calls: Arc::new(AtomicUsize::new(0)),
-            last_create: Arc::new(Mutex::new(None)),
-            last_auth: Arc::new(Mutex::new(None)),
-        }
+            TestMembershipMode::Unauthorized,
+        )
+    }
+
+    fn for_preferred_webhook(channel_id: Uuid, bot_id: BotId) -> Self {
+        Self::new(
+            TestCreateMode::Unauthorized,
+            TestLegacyAuthMode::Unauthorized,
+            TestMembershipMode::Ok {
+                expected_channel_id: channel_id,
+                expected_bot_id: bot_id,
+            },
+        )
     }
 
     fn unauthorized_webhook() -> Self {
+        Self::new(
+            TestCreateMode::Unauthorized,
+            TestLegacyAuthMode::Unauthorized,
+            TestMembershipMode::Unauthorized,
+        )
+    }
+
+    fn new(
+        create_mode: TestCreateMode,
+        legacy_auth_mode: TestLegacyAuthMode,
+        membership_mode: TestMembershipMode,
+    ) -> Self {
         Self {
-            create_mode: TestCreateMode::Unauthorized,
-            auth_mode: TestAuthMode::Unauthorized,
+            create_mode,
+            legacy_auth_mode,
+            membership_mode,
             create_calls: Arc::new(AtomicUsize::new(0)),
             auth_calls: Arc::new(AtomicUsize::new(0)),
+            membership_calls: Arc::new(AtomicUsize::new(0)),
             last_create: Arc::new(Mutex::new(None)),
             last_auth: Arc::new(Mutex::new(None)),
+            last_membership: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -217,6 +260,24 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        self.membership_calls.fetch_add(1, Ordering::SeqCst);
+        *self
+            .last_membership
+            .lock()
+            .expect("membership call mutex poisoned") = Some(MembershipCall { channel_id, bot_id });
+
+        match self.membership_mode {
+            TestMembershipMode::Ok {
+                expected_channel_id,
+                expected_bot_id,
+            } if channel_id == expected_channel_id && bot_id == expected_bot_id => Ok(()),
+            TestMembershipMode::Ok { .. } | TestMembershipMode::Unauthorized => {
+                Err(BotError::Unauthorized)
+            }
+        }
+    }
+
     async fn authenticate_token(&self, _token: &str) -> Result<AuthenticatedBot, BotError> {
         unimplemented!()
     }
@@ -232,8 +293,8 @@ impl BotService for TestBotService {
             token: token.to_string(),
         });
 
-        match &self.auth_mode {
-            TestAuthMode::Ok {
+        match &self.legacy_auth_mode {
+            TestLegacyAuthMode::Ok {
                 expected_channel_id,
                 expected_token,
                 bot_id,
@@ -273,6 +334,7 @@ impl EntityAccessService for TestAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -322,7 +384,7 @@ impl EntityAccessService for TestAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
+    ) -> Result<(EntityPermission, uuid::Uuid, TeamRole), AccessError> {
         unimplemented!("channel webhook router tests do not support CRM entity access")
     }
 
@@ -412,6 +474,94 @@ impl ChannelMessagePoster for TestChannelPoster {
     }
 }
 
+#[derive(Clone)]
+enum TestBotAuthorizationMode {
+    Ok {
+        expected_token: String,
+        expected_claims: Option<AuthorizationBotActingUserClaims>,
+        authentication: Box<BotAuthentication>,
+    },
+    Reject(MacroAuthorizationError),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct BotAuthorizationCall {
+    token: String,
+    bot_scope: BotScope,
+    claims: Option<AuthorizationBotActingUserClaims>,
+}
+
+#[derive(Clone)]
+struct TestBotAuthorizer {
+    mode: TestBotAuthorizationMode,
+    calls: Arc<Mutex<Vec<BotAuthorizationCall>>>,
+}
+
+impl TestBotAuthorizer {
+    fn authorized(
+        token: &str,
+        claims: Option<AuthorizationBotActingUserClaims>,
+        authentication: BotAuthentication,
+    ) -> Self {
+        Self {
+            mode: TestBotAuthorizationMode::Ok {
+                expected_token: token.to_string(),
+                expected_claims: claims,
+                authentication: Box::new(authentication),
+            },
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn rejecting(error: MacroAuthorizationError) -> Self {
+        Self {
+            mode: TestBotAuthorizationMode::Reject(error),
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn call_count(&self) -> usize {
+        self.calls
+            .lock()
+            .expect("bot authorization calls mutex poisoned")
+            .len()
+    }
+}
+
+impl BotAuthorizer for TestBotAuthorizer {
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: BotScope,
+        acting_user: Option<AuthorizationBotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        self.calls
+            .lock()
+            .expect("bot authorization calls mutex poisoned")
+            .push(BotAuthorizationCall {
+                token: bot_token.to_string(),
+                bot_scope,
+                claims: acting_user.clone(),
+            });
+
+        match &self.mode {
+            TestBotAuthorizationMode::Ok {
+                expected_token,
+                expected_claims,
+                authentication,
+            } if bot_token == expected_token && acting_user == *expected_claims => {
+                let mut authentication = authentication.as_ref().clone();
+                authentication.bot_scope = bot_scope;
+                Ok(authentication)
+            }
+            TestBotAuthorizationMode::Ok { .. } => {
+                Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+            }
+            TestBotAuthorizationMode::Reject(error) => Err(Report::new(*error)),
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 struct FakeJwtValidator;
 
@@ -428,13 +578,16 @@ impl JwtValidator for FakeJwtValidator {
 
 type TestAuthorizationService = MacroAuthorizationServiceImpl<FakeJwtValidator>;
 
-fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
+fn authorization_state(
+    bot_authorizer: TestBotAuthorizer,
+) -> MacroAuthorizationState<TestAuthorizationService> {
     let service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
         InternalAuthConfig {
             api_key: "test-internal-key".to_string(),
             default_user_id: None,
         },
+        bot_authorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -456,18 +609,62 @@ fn router(
         service,
         poster,
         TestAccessService::new(role),
-        authorization_state(),
+        authorization_state(TestBotAuthorizer::rejecting(
+            MacroAuthorizationError::InvalidCredentials,
+        )),
     ))
     .layer(axum::middleware::map_request(attach_default_bearer))
 }
 
 fn webhook_router(service: TestBotService, poster: TestChannelPoster) -> Router {
+    webhook_router_with_authorizer(service, poster, rejecting_bot_authorizer())
+}
+
+fn webhook_router_with_authorizer(
+    service: TestBotService,
+    poster: TestChannelPoster,
+    bot_authorizer: TestBotAuthorizer,
+) -> Router {
     channel_bot_webhook_router(ChannelBotWebhookRouterState::new(
         service,
         poster,
         TestAccessService::new(EntityParticipantRole::Member),
-        authorization_state(),
+        authorization_state(bot_authorizer),
     ))
+}
+
+fn rejecting_bot_authorizer() -> TestBotAuthorizer {
+    TestBotAuthorizer::rejecting(MacroAuthorizationError::InvalidCredentials)
+}
+
+fn bot_authentication(bot_id: BotId) -> BotAuthentication {
+    BotAuthentication {
+        bot_id,
+        token_id: Uuid::new_v4(),
+        bot_scope: BotScope::User,
+        team_id: None,
+        acting_user: None,
+    }
+}
+
+fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
+    BotAuthentication {
+        bot_id,
+        token_id: Uuid::new_v4(),
+        bot_scope: BotScope::User,
+        team_id: None,
+        acting_user: Some(MacroUserAuthentication {
+            macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
+            user_context: Default::default(),
+        }),
+    }
+}
+
+fn webhook_request(channel_id: Uuid) -> axum::http::request::Builder {
+    Request::builder()
+        .method("POST")
+        .uri(format!("/channels/{channel_id}/webhook"))
+        .header("content-type", "application/json")
 }
 
 fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
@@ -573,7 +770,335 @@ async fn channel_webhook_router_admin_can_create_scoped_bot() {
 }
 
 #[tokio::test]
-async fn channel_webhook_router_valid_json_posts_as_bot() {
+async fn channel_webhook_router_preferred_token_posts_as_bot() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_preferred";
+    let service = TestBotService::for_preferred_webhook(channel_id, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            serde_json::json!({ "content": "hello preferred" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(authorizer.call_count(), 1);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *service
+            .last_membership
+            .lock()
+            .expect("membership call mutex poisoned"),
+        Some(MembershipCall { channel_id, bot_id })
+    );
+
+    let calls = poster.calls.lock().expect("posted message mutex poisoned");
+    assert_eq!(calls.len(), 1);
+    let call = &calls[0];
+    assert_eq!(call.actor, Sender::new_from_bot(bot_id));
+    assert_eq!(call.channel_id, channel_id);
+    assert_eq!(call.req.content, "hello preferred");
+    assert!(call.req.triggered_by.is_none());
+}
+
+#[tokio::test]
+async fn channel_webhook_router_verified_acting_user_is_not_used_for_attribution() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_acting_user";
+    let claims = AuthorizationBotActingUserClaims {
+        user_id: Some("macro|acting-bot@example.com".to_string()),
+        fusion_user_id: Some("fusion-acting-bot".to_string()),
+        organization_id: Some(42),
+    };
+    let service = TestBotService::for_preferred_webhook(channel_id, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(
+        token,
+        Some(claims.clone()),
+        bot_authentication_with_acting_user(bot_id),
+    );
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .header(
+            BOT_FOR_MACRO_USER_ID_HEADER,
+            claims.user_id.as_deref().unwrap(),
+        )
+        .header(
+            BOT_FOR_FUSIONAUTH_USER_ID_HEADER,
+            claims.fusion_user_id.as_deref().unwrap(),
+        )
+        .header(
+            BOT_FOR_ORGANIZATION_ID_HEADER,
+            claims.organization_id.unwrap(),
+        )
+        .body(Body::from(
+            serde_json::json!({ "content": "verified user" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        authorizer
+            .calls
+            .lock()
+            .expect("bot authorization calls mutex poisoned")
+            .as_slice(),
+        &[BotAuthorizationCall {
+            token: token.to_string(),
+            bot_scope: BotScope::User,
+            claims: Some(claims),
+        }]
+    );
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 1);
+    let calls = poster.calls.lock().expect("posted message mutex poisoned");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].actor, Sender::new_from_bot(bot_id));
+    assert!(calls[0].req.triggered_by.is_none());
+}
+
+#[tokio::test]
+async fn channel_webhook_router_cookie_only_user_is_forbidden_without_posting() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
+        .header("cookie", "macro-access-token=macro|cookie-user@example.com")
+        .body(Body::from(
+            serde_json::json!({ "content": "user request" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "forbidden");
+    assert_eq!(authorizer.call_count(), 0);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_bot_token_and_user_are_ambiguous_without_posting() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, "mbot_test_preferred")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .header(
+            header::AUTHORIZATION,
+            "Bearer macro|explicit-user@example.com",
+        )
+        .body(Body::from(
+            serde_json::json!({ "content": "ambiguous" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "ambiguous credentials");
+    assert_eq!(authorizer.call_count(), 0);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_both_bot_headers_are_ambiguous_before_validation() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let legacy_token = "mbot_test_legacy";
+    let service = TestBotService::for_webhook(channel_id, legacy_token, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, "mbot_test_invalid_preferred")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .header(CHANNEL_BOT_TOKEN_HEADER, legacy_token)
+        .body(Body::from(
+            serde_json::json!({ "content": "ambiguous" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "ambiguous credentials");
+    assert_eq!(authorizer.call_count(), 0);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_invalid_preferred_token_does_not_fall_back_to_legacy() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, "mbot_test_invalid_preferred")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            serde_json::json!({ "content": "invalid preferred" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(authorizer.call_count(), 1);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_preferred_bot_outside_channel_is_unauthorized() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_outside_channel";
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            serde_json::json!({ "content": "outside channel" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(authorizer.call_count(), 1);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 1);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_rejected_acting_user_is_forbidden_without_posting() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::rejecting(MacroAuthorizationError::ActingUserNotAuthorized);
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, "mbot_test_forbidden_claims")
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .header(BOT_FOR_MACRO_USER_ID_HEADER, "macro|forbidden@example.com")
+        .body(Body::from(
+            serde_json::json!({ "content": "forbidden" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(authorizer.call_count(), 1);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_legacy_valid_json_posts_as_bot() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let token = "mbot_test_valid";
@@ -616,6 +1141,7 @@ async fn channel_webhook_router_valid_json_posts_as_bot() {
     assert!(call.req.attachments.is_empty());
     assert!(call.req.thread_id.is_none());
     assert!(call.req.nonce.is_none());
+    assert!(call.req.triggered_by.is_none());
 }
 
 #[tokio::test]
@@ -687,21 +1213,21 @@ async fn channel_webhook_router_missing_token_header_returns_unauthorized_withou
     let channel_id = Uuid::new_v4();
     let service = TestBotService::unauthorized_webhook();
     let poster = TestChannelPoster::new();
-    let request = Request::builder()
-        .method("POST")
-        .uri(format!("/channels/{channel_id}/webhook"))
-        .header("content-type", "application/json")
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
         .body(Body::from(
             serde_json::json!({ "content": "hello" }).to_string(),
         ))
         .unwrap();
 
-    let response = webhook_router(service.clone(), poster.clone())
-        .oneshot(request)
-        .await
-        .unwrap();
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(authorizer.call_count(), 0);
     assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
     assert!(
         poster

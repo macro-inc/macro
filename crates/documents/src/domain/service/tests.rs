@@ -98,9 +98,16 @@ fn bot_id() -> entity_access::domain::models::BotId {
     ))
 }
 
+fn bot_receipt_scope() -> entity_access::domain::models::BotReceiptScope {
+    entity_access::domain::models::BotReceiptScope::Team {
+        team_id: uuid::uuid!("00000000-0000-0000-0000-000000000456"),
+    }
+}
+
 fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::dangerously_assert_bot(
         bot_id().into_storage_id(),
+        bot_receipt_scope(),
         document_id,
         EntityType::Document,
     )
@@ -858,6 +865,7 @@ async fn bot_lifecycle_event_has_no_actor_user_id() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let receipt = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_bot(
         bot_id().into_storage_id(),
+        bot_receipt_scope(),
         "doc-1",
         EntityType::Document,
     );
@@ -1769,7 +1777,7 @@ async fn test_edit_document_project_change_moves_project_access() {
 }
 
 #[tokio::test]
-async fn test_copy_document_publishes_document_copied_event() {
+async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event() {
     let mut repo = make_mock_repo();
     let original_metadata = make_test_metadata();
     let original_for_lookup = original_metadata.clone();
@@ -1796,6 +1804,10 @@ async fn test_copy_document_publishes_document_copied_event() {
         .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
     repo.expect_set_document_content()
         .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_update_project_modified()
+        .withf(|project_id| project_id == "project-1")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Err(anyhow!("db is down")))));
     repo.expect_get_team_task_metadata()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
 
@@ -1830,4 +1842,68 @@ async fn test_copy_document_publishes_document_copied_event() {
     assert_eq!(event.payload["metadata"]["source_document_id"], "doc-1");
     assert_eq!(event.payload["metadata"]["document_name"], "copied doc");
     assert_eq!(event.payload["metadata"]["owner"], "macro|user@user.com");
+}
+
+#[tokio::test]
+async fn edited_interaction_bumps_document_before_publishing() {
+    let mut repo = make_mock_repo();
+    repo.expect_update_document_modified()
+        .withf(|document_id| document_id == "doc-1")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .record_interaction("doc-1", InteractionReason::Edited)
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.documents");
+    assert_eq!(published[0].key, "doc-1");
+    assert_eq!(published[0].payload["event_type"], "document.interaction");
+    assert_eq!(published[0].payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(published[0].payload["metadata"]["reason"], "edited");
+}
+
+#[tokio::test]
+async fn edited_interaction_does_not_publish_when_document_bump_fails() {
+    let mut repo = make_mock_repo();
+    repo.expect_update_document_modified()
+        .withf(|document_id| document_id == "doc-1")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Err(anyhow!("db is down")))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    let result = service
+        .record_interaction("doc-1", InteractionReason::Edited)
+        .await;
+
+    assert_eq!(result.unwrap_err().to_string(), "db is down");
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn join_and_leave_interactions_publish_without_bumping_document() {
+    for (reason, expected_reason) in [
+        (InteractionReason::FirstJoin, "first_join"),
+        (InteractionReason::LastLeave, "last_leave"),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_update_document_modified().times(0);
+
+        let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+        service.record_interaction("doc-1", reason).await.unwrap();
+
+        let published = event_broker.published();
+        let published = published.lock().unwrap();
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0].payload["event_type"], "document.interaction");
+        assert_eq!(published[0].payload["metadata"]["reason"], expected_reason);
+    }
 }

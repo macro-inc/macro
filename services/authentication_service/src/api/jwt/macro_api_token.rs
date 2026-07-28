@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -44,10 +44,10 @@ pub struct MacroApiTokenQuery {
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
-    let user_context = &authorization.user_context;
+    let user_context = &authorization.authorization.user.user_context;
     let email = if let Some(email) = query.email.clone() {
         // TODO: figure out if email is url_encoded by default
         let email = urlencoding::decode(email.as_ref()).map_err(|e| {

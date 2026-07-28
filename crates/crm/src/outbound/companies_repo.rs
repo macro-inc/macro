@@ -1146,6 +1146,42 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn set_company_custom_name(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        name: &str,
+        include_hidden: bool,
+    ) -> Result<(), CrmError> {
+        // Scoping on id AND team_id rejects cross-team callers as
+        // NotFound; the hidden guard keeps member (include_hidden =
+        // false) callers off hidden companies, matching the read paths.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_companies
+            SET custom_name = $3
+            WHERE id = $1
+              AND team_id = $2
+              AND (NOT hidden OR $4)
+            RETURNING id
+            "#,
+            company_id,
+            team_id,
+            name,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            return Err(CrmError::CompanyNotFoundForTeam);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn set_contact_hidden(
         &self,
         team_id: &uuid::Uuid,
@@ -1166,6 +1202,45 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             contact_id,
             team_id,
             hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            return Err(CrmError::ContactNotFoundForTeam);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_contact_name(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        name: &str,
+        include_hidden: bool,
+    ) -> Result<(), CrmError> {
+        // Scope via the contact's company; cross-team = NotFound. The
+        // hidden guard mirrors get_contact_for_team: member
+        // (include_hidden = false) callers can't reach a hidden
+        // contact or a contact under a hidden company.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_contacts ct
+            SET name = $3
+            FROM crm_companies co
+            WHERE ct.id = $1
+              AND ct.company_id = co.id
+              AND co.team_id = $2
+              AND ($4 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+            RETURNING ct.id
+            "#,
+            contact_id,
+            team_id,
+            name,
+            include_hidden,
         )
         .fetch_optional(&self.pool)
         .await

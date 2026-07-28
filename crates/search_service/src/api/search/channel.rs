@@ -13,7 +13,7 @@ use axum::{
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
@@ -301,13 +301,17 @@ pub fn router() -> Router<SearchHandlerState> {
 /// Internal viewer-aware channel name search used by AI NameSearch.
 pub async fn name_handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, InternalOnly>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelNameSearchRequest>,
 ) -> Result<Json<ChannelNameSearchResponse>, SearchError> {
-    if !authorization.is_internal_access {
-        return Err(SearchError::InternalAccessRequired);
-    }
+    let user_context = authorization
+        .authorization
+        .acting_user
+        .as_ref()
+        .ok_or(SearchError::NoUserId)?
+        .user_context
+        .clone();
 
     let query = req.query.trim();
     if query.len() < 3 {
@@ -318,14 +322,14 @@ pub async fn name_handler(
         return Err(SearchError::InvalidPageSize);
     }
 
-    let user_id = MacroUserId::parse_from_str(&authorization.user_context.user_id)
-        .map_err(|_| SearchError::InvalidUserId(authorization.user_context.user_id.clone()))?
+    let user_id = MacroUserId::parse_from_str(&user_context.user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_context.user_id.clone()))?
         .lowercase();
     let filters = item_filters::ChannelFilters::default();
     let channels = simple_channel::filter_channels(
         &ctx,
         user_id.as_ref(),
-        authorization.user_context.organization_id,
+        user_context.organization_id,
         &filters,
     )
     .await?;
@@ -375,11 +379,16 @@ pub async fn name_handler(
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
 ) -> Result<Json<ChannelSearchResponse>, SearchError> {
-    let user_id = authorization.user_context.user_id.clone();
+    let user_id = authorization
+        .authorization
+        .user
+        .user_context
+        .user_id
+        .clone();
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
@@ -428,7 +437,11 @@ pub async fn handler(
     let channel_ids = simple_channel::filter_channels(
         &ctx,
         user_id.as_ref(),
-        authorization.user_context.organization_id,
+        authorization
+            .authorization
+            .user
+            .user_context
+            .organization_id,
         &filters,
     )
     .await?

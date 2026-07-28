@@ -307,6 +307,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return (await request({ kind: 'invalidate', keys })) as string[];
     },
 
+    async deleteRecords(keys: string[]): Promise<string[]> {
+      await ready;
+      return (await request({ kind: 'delete-records', keys })) as string[];
+    },
+
     async teardown(opKey: number): Promise<void> {
       await ready;
       await request({ kind: 'teardown', opId: opId(opKey) });

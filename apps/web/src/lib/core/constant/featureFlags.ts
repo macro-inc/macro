@@ -422,6 +422,14 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
+// Persist soup filters, predicates and tabs across reloads. PostHog controls
+// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+export const ENABLE_SOUP_FILTER_PERSISTENCE_FLAG =
+  'enable-soup-filter-persistence';
+export const ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_SOUP_FILTER_PERSISTENCE'
+);
+
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
@@ -536,10 +544,10 @@ export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
 
-// New split-screen onboarding (/setup): connect tools on the left, pick
-// what to import on the right. Dev-mode default; override with
-// VITE_ENABLE_NEW_ONBOARDING_V3.
-export const ENABLE_NEW_ONBOARDING_V3 = resolveFeatureFlag(
-  'ENABLE_NEW_ONBOARDING_V3',
+// Onboarding v4: the full-screen stepper new users land in after signup
+// (unified with /login), driving the import machinery with auto-import.
+// Dev-mode default; override with VITE_ENABLE_ONBOARDING_V4.
+export const ENABLE_ONBOARDING_V4 = resolveFeatureFlag(
+  'ENABLE_ONBOARDING_V4',
   DEV_MODE_ENV
 );

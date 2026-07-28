@@ -304,6 +304,16 @@ impl<S: Storage> Engine<S> {
         Ok(self.identity.clone())
     }
 
+    /// Returns the opaque identity currently bound to this cache, hydrating
+    /// it from persistent storage when necessary.
+    pub async fn current_identity(&mut self) -> Result<Option<String>, EngineError<S::Error>> {
+        match self.bound_identity().await? {
+            IdentityState::NotHydrated => unreachable!("bound_identity hydrates"),
+            IdentityState::Missing => Ok(None),
+            IdentityState::Bound(identity) => Ok(Some(identity)),
+        }
+    }
+
     async fn bind_identity(&mut self, user_id: &str) -> Result<(), EngineError<S::Error>> {
         let mut record = Record::default();
         record.fields.insert(
@@ -1160,6 +1170,28 @@ impl<S: Storage> Engine<S> {
             affected.extend(self.deps.ops_for_keys([key]));
         }
         affected
+    }
+
+    /// Deletes locally stale records from both durable and hot tiers and
+    /// returns active operations that traversed those records.
+    ///
+    /// Use this after a server-side mutation that returns entity references
+    /// but not replacement entity records. Cross-engine notifications for
+    /// records already written to shared storage should use
+    /// [`Self::invalidate_keys`] instead.
+    pub async fn delete_keys(
+        &mut self,
+        keys: &[EntityKey],
+    ) -> Result<BTreeSet<OpId>, EngineError<S::Error>> {
+        let affected = self.deps.ops_for_keys(keys.iter());
+        self.storage
+            .delete_batch(keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        for key in keys {
+            self.hot.pop(key);
+        }
+        Ok(affected)
     }
 
     /// Drops all cached state (logout, schema-hash mismatch), including any

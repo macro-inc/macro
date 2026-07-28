@@ -49,6 +49,8 @@ topics! {
     MacroExampleTopic => "macro.example",
     /// Bot lifecycle events (created / updated / deleted).
     MacroBotsTopic => "macro.bots",
+    /// Call lifecycle and recording events.
+    MacroCallsTopic => "macro.calls",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
     /// User-scoped full Soup items produced from entity updates.
@@ -63,4 +65,8 @@ topics! {
     MacroEmailTopic => "macro.email",
     /// Webhook configuration lifecycle events (created / updated / deleted / validated).
     MacroWebhooksTopic => "macro.webhooks",
+    /// Entity mention events (created / deleted) across channels and docs.
+    MacroMentionsTopic => "macro.mentions",
+    /// AI chat lifecycle events (created / updated / deleted / restored / copied).
+    MacroChatsTopic => "macro.chats",
 }

@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
@@ -33,7 +33,7 @@ pub struct LinkJobPair {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(req_body): Json<BackfillParams>,
 ) -> Result<Response, Response> {
     let mut link_job_pairs: Vec<LinkJobPair> = Vec::new();

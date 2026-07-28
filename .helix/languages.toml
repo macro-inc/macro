@@ -1,0 +1,8 @@
+# Keep rust-analyzer from loading or checking the Cloudflare Worker crate,
+# which must be compiled for WebAssembly rather than the host target.
+
+[language-server.rust-analyzer.config.files]
+exclude = ["services/sync-service"]
+
+[language-server.rust-analyzer.config.check]
+extraArgs = ["--exclude", "sync_service"]

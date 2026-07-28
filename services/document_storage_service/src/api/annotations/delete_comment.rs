@@ -12,7 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::annotations::delete_comment::delete_document_comment;
 use model::{
     annotations::{
@@ -49,11 +49,11 @@ pub struct Params {
 pub async fn delete_comment_handler(
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<DeleteCommentRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.as_ref();
+    let user_id = user.authorization.user.macro_user_id.as_ref();
     match delete_document_comment(&db, comment_id, user_id, req).await {
         Ok(res) => {
             let response: DeleteCommentResponse = res;

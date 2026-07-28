@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::link::Link;
 use models_email::email::service::pubsub::LinkManagerMessage;
@@ -46,13 +46,13 @@ impl IntoResponse for DisableSyncError {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id), err)]
 pub async fn disable_handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     link: Extension<Link>,
 ) -> Result<Response, DisableSyncError> {
-    tracing::info!(user_id = %authorization.user_context.user_id, "Disable called");
+    tracing::info!(user_id = %authorization.authorization.user.user_context.user_id, "Disable called");
 
     // Enqueue the delete operation to handle cleanup asynchronously
     let message = LinkManagerMessage::DeleteLink {

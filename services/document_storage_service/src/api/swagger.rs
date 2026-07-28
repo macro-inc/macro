@@ -321,7 +321,9 @@ use utoipa::OpenApi;
         // /crm
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
+        crm::inbound::axum_router::set_company_name::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
+        crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
         crm::inbound::axum_router::get_company::handler,
@@ -605,7 +607,9 @@ use utoipa::OpenApi;
             // CRM
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
+            crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
+            crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
             crm::inbound::axum_router::get_company::CrmCompanyResponse,
             crm::inbound::axum_router::get_company::CrmDomainResponse,

@@ -21,7 +21,7 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    OptionalMacroAuthorizationExtractor,
+    OptionalMacroAuthorizationExtractor, UserOrInternal, UserOrInternalService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::PropertyTargetEntityType;
@@ -177,13 +177,18 @@ where
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id: user,
-            ..
-        } = parts
-            .extract_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
+        let authorization = parts
+            .extract_with_state::<
+                OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>,
+                _,
+            >(state)
             .await
             .map_err(ReceiptRejection::from)?;
+        let user = authorization
+            .authorization
+            .as_ref()
+            .and_then(|authorization| authorization.acting_user())
+            .map(|user| user.macro_user_id.clone());
 
         let receipt = mint_view_receipt(
             state.entity_access_service.as_ref(),
@@ -216,14 +221,12 @@ where
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let MacroAuthorizationExtractor {
-            macro_user_id: user,
-            ..
-        } = parts
-            .extract_with_state::<MacroAuthorizationExtractor<Auth>, _>(state)
+        let authorization = parts
+            .extract_with_state::<MacroAuthorizationExtractor<Auth, UserOrInternal>, _>(state)
             .await
             .map_err(ReceiptRejection::from)?;
 
+        let user = authorization.authorization.user.macro_user_id;
         let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
             state.entity_access_service.as_ref(),
             &user,

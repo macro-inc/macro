@@ -11,7 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::annotations::edit_comment::edit_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -51,11 +51,11 @@ pub async fn edit_comment_handler(
     State(db): State<PgPool>,
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user.macro_user_id.to_string();
+    let user_id = user.authorization.user.macro_user_id.to_string();
     // TODO: check if the user has comment access to the document
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {

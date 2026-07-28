@@ -55,7 +55,7 @@ CRM companies (entity_type='company', entity_id=the company UUID) always have th
 - Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
 - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
-Editing company properties requires the caller to be a team admin or owner.
+Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
 
 For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options."
 )]

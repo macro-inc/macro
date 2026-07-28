@@ -1981,7 +1981,9 @@ export const createChannelScopedBotBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Team owner. Omit for a user-owned bot.'),
+      .describe(
+        'Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.'
+      ),
     token_expires_at: zod.iso
       .datetime({})
       .nullish()
@@ -2883,9 +2885,14 @@ export const postChannelBotWebhookParams = zod.object({
 });
 
 export const postChannelBotWebhookHeader = zod.object({
+  'x-macro-bot-token': zod
+    .string()
+    .nullish()
+    .describe('Preferred bot authentication token'),
   'x-macro-channel-bot-token': zod
     .string()
-    .describe('Bot authentication token'),
+    .nullish()
+    .describe('Legacy channel-scoped bot authentication token'),
 });
 
 export const postChannelBotWebhookBody = zod
@@ -3555,6 +3562,27 @@ export const setCompanyHiddenBody = zod
   .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
 
 /**
+ * @summary Rename a CRM company. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
+that owns the company (hidden companies are reachable for
+admin/owner only). The name is a team-scoped override
+(`custom_name`) and never touches the global domain directory.
+ */
+export const setCrmCompanyNameParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to rename'),
+});
+
+export const setCrmCompanyNameBody = zod
+  .object({
+    name: zod
+      .string()
+      .describe(
+        'New display name for the company. Stored on the team-scoped\n`crm_companies.custom_name` override, which read paths COALESCE\nover the global directory name — the shared directory is never\nmodified. Must be non-blank (400 otherwise).'
+      ),
+  })
+  .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
+
+/**
  * @summary Fetch a single CRM contact by id. Access is enforced by
 [`CrmContactAccessLevelExtractor`]: the user must be on the team that
 owns the contact's parent company, and hidden contacts are invisible
@@ -3617,6 +3645,27 @@ export const setContactHiddenBody = zod
   .describe('Request body for `PUT \/contacts\/{contact_id}\/hidden`.');
 
 /**
+ * @summary Rename a CRM contact. Access is enforced by
+[`CrmContactAccessLevelExtractor`]: the caller must be on the team
+that owns the contact's company (hidden contacts are reachable for
+admin/owner only). The name overwrites the team-scoped
+`crm_contacts.name` column.
+ */
+export const setCrmContactNameParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact to rename'),
+});
+
+export const setCrmContactNameBody = zod
+  .object({
+    name: zod
+      .string()
+      .describe(
+        'New display name for the contact. Stored on `crm_contacts.name`,\nwhich is already team-scoped — unlike company renames no global\ndirectory is involved. Must be non-blank (400 otherwise).'
+      ),
+  })
+  .describe('Request body for `PUT \/contacts\/{contact_id}\/name`.');
+
+/**
  * @summary Read the caller's team CRM configuration. Any team member may read;
 teams without a settings row get the defaults.
  */
@@ -3637,17 +3686,17 @@ export const getCrmTeamSettingsResponse = zod
     delete_records_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     edit_stages_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     team_views: zod
       .unknown()
@@ -3687,7 +3736,7 @@ export const putCrmTeamSettingsBody = zod
         zod
           .enum(['admin', 'owner'])
           .describe(
-            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+            'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
           ),
       ])
       .optional(),
@@ -3697,7 +3746,7 @@ export const putCrmTeamSettingsBody = zod
         zod
           .enum(['admin', 'owner'])
           .describe(
-            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+            'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
           ),
       ])
       .optional(),
@@ -3707,7 +3756,7 @@ export const putCrmTeamSettingsBody = zod
         zod
           .enum(['admin', 'owner'])
           .describe(
-            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+            'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
           ),
       ])
       .optional(),
@@ -3737,17 +3786,17 @@ export const putCrmTeamSettingsResponse = zod
     delete_records_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     edit_stages_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
-        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+        'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
     team_views: zod
       .unknown()

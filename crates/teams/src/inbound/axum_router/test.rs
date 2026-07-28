@@ -11,8 +11,9 @@ use axum::{
 };
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, AdminTeamRole, BotId, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, MemberTeamRole, RequiredPermission, TeamRole, UserTeamInfo,
+        AccessError, AccessLevel, AdminTeamRole, BotAccessScope, BotId, CallChannelInfo,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole, RequiredPermission,
+        TeamRole, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -431,6 +432,7 @@ impl EntityAccessService for FakeEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -480,7 +482,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
+    ) -> Result<(EntityPermission, uuid::Uuid, TeamRole), AccessError> {
         panic!("unexpected get_crm_entity_permission_with_team call")
     }
 

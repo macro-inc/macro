@@ -46,7 +46,7 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
+import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -285,9 +285,9 @@ function CollapsedSidebarIncomingCallWidget(props: {
 }
 
 /**
- * Sends first-time desktop users into the split-screen onboarding at
- * /setup. Fires from anywhere in the app (marketing SSO lands on /app, not
- * /login), but never off auth/full-screen routes — /setup itself included.
+ * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Fires from anywhere in the app (marketing SSO lands on /app, not /login),
+ * but never off auth/full-screen routes — /onboarding itself included.
  */
 function NewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
@@ -295,7 +295,7 @@ function NewOnboardingRedirect() {
   const location = useLocation();
 
   createEffect(() => {
-    if (!ENABLE_NEW_ONBOARDING_V3 || isMobile() || isNativeMobilePlatform()) {
+    if (!ENABLE_ONBOARDING_V4 || isMobile() || isNativeMobilePlatform()) {
       return;
     }
     const data = userInfoQuery.data;
@@ -311,7 +311,7 @@ function NewOnboardingRedirect() {
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
     const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
     navigate(
-      isGenericEntry ? '/setup' : `/setup?next=${encodeURIComponent(target)}`,
+      isGenericEntry ? '/onboarding' : `/onboarding?next=${encodeURIComponent(target)}`,
       { replace: true }
     );
   });

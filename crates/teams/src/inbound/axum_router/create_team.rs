@@ -1,6 +1,6 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 
 use crate::domain::{
     model::{CreateTeamError, Team},
@@ -31,9 +31,10 @@ pub struct CreateTeamRequest {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<TeamRouterState<T, Eas, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<CreateTeamRequest>,
 ) -> Result<Json<Team>, CreateTeamError> {
+    let user = &user.authorization.user;
     // Teams are free up to FREE_TEAM_MAX_MEMBERS members - a subscription is
     // linked when the owner has one, but is no longer required to create.
     let subscription_id = state

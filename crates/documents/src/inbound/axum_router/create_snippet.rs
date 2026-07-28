@@ -3,7 +3,7 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
@@ -27,14 +27,14 @@ use crate::domain::ports::create::DocumentCreationService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(state, user, project), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn create_snippet_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateSnippetRequest, Svc, Auth>,
 ) -> Result<Json<CreateSnippetResponse>, DocumentError> {
     let req = project.into_inner();
@@ -47,7 +47,7 @@ pub async fn create_snippet_handler<
     let created = state
         .creator
         .create_markdown_text(
-            user.macro_user_id,
+            user.authorization.user.macro_user_id.clone(),
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown: req.markdown.unwrap_or_default(),

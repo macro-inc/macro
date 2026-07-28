@@ -15,32 +15,28 @@ query Soup($input: SoupInput!) {
     id
     soup(input: $input) {
     items {
+      __typename
       id
       entityType
       frecencyScore
-      entity {
-        __typename
-        ... on GraphqlSoupDocument {
-          id
-          documentName: name
-          ownerId
-          updatedAt
-          properties {
-            ...SoupPropertyFields
-          }
+      ... on GraphqlSoupDocument {
+        documentName: name
+        ownerId
+        updatedAt
+        properties {
+          ...SoupPropertyFields
         }
-        ... on GraphqlSoupChannel {
-          id
-          channelName: name
-          channelType
-          latestMessage {
-            ...SoupChannelMessageFields
-          }
-          participants {
-            channelId
-            userId
-            role
-          }
+      }
+      ... on GraphqlSoupChannel {
+        channelName: name
+        channelType
+        latestMessage {
+          ...SoupChannelMessageFields
+        }
+        participants {
+          channelId
+          userId
+          role
         }
       }
     }
@@ -66,8 +62,8 @@ fragment SoupPropertyFields on GraphqlProperty {
   }
 }
 
-fragment SoupChannelMessageFields on GraphqlSoupChannelMessage {
-  id
+fragment SoupChannelMessageFields on GraphqlSoupChannelMessagePreview {
+  messageId
   threadId
   senderId
   content
@@ -91,12 +87,10 @@ fn response_data() -> Json {
             "soup": {
             "items": [
                 {
+                    "__typename": "GraphqlSoupDocument",
                     "id": "doc-1",
                     "entityType": "DOCUMENT",
                     "frecencyScore": 0.5,
-                    "entity": {
-                        "__typename": "GraphqlSoupDocument",
-                        "id": "doc-1",
                         "documentName": "Design doc",
                         "ownerId": "user-1",
                         "updatedAt": "2026-07-01T00:00:00Z",
@@ -115,19 +109,16 @@ fn response_data() -> Json {
                                 }
                             }
                         ]
-                    }
                 },
                 {
+                    "__typename": "GraphqlSoupChannel",
                     "id": "ch-1",
                     "entityType": "CHANNEL",
                     "frecencyScore": 0.25,
-                    "entity": {
-                        "__typename": "GraphqlSoupChannel",
-                        "id": "ch-1",
                         "channelName": "general",
                         "channelType": "PUBLIC",
                         "latestMessage": {
-                            "id": "msg-1",
+                            "messageId": "msg-1",
                             "threadId": null,
                             "senderId": "user-2",
                             "content": "hello",
@@ -136,7 +127,6 @@ fn response_data() -> Json {
                         "participants": [
                             { "channelId": "ch-1", "userId": "user-1", "role": "member" }
                         ]
-                    }
                 }
             ],
                 "nextCursor": "cursor-2",
@@ -166,10 +156,7 @@ fn normalizes_expected_records() {
         vec![
             "GraphqlProperty:entity-prop-1",
             "GraphqlSoupChannel:ch-1",
-            "GraphqlSoupChannelMessage:msg-1",
             "GraphqlSoupDocument:doc-1",
-            "GraphqlSoupItem:ch-1",
-            "GraphqlSoupItem:doc-1",
             "GraphqlUser:user-1",
             "ROOT_QUERY",
         ]
@@ -189,10 +176,12 @@ fn normalizes_expected_records() {
         Some(CacheValue::List(items))
             if matches!(&items[0], CacheValue::Ref(k) if k.0 == "GraphqlProperty:entity-prop-1")
     ));
+    // Message previews are embedded: they carry `messageId`, not a global
+    // `id`, so the channel record owns its own copy.
     let channel = &records[&EntityKey("GraphqlSoupChannel:ch-1".into())];
     assert!(matches!(
         channel.fields.get("latestMessage"),
-        Some(CacheValue::Ref(k)) if k.0 == "GraphqlSoupChannelMessage:msg-1"
+        Some(CacheValue::Object(_))
     ));
 
     // The root links to the viewer; the args-keyed soup page lives on it.
@@ -230,10 +219,7 @@ fn round_trip_reproduces_response() {
         vec![
             "GraphqlProperty:entity-prop-1",
             "GraphqlSoupChannel:ch-1",
-            "GraphqlSoupChannelMessage:msg-1",
             "GraphqlSoupDocument:doc-1",
-            "GraphqlSoupItem:ch-1",
-            "GraphqlSoupItem:doc-1",
             "GraphqlUser:user-1",
             "ROOT_QUERY",
         ]
@@ -252,7 +238,7 @@ fn entity_update_visible_through_other_query() {
              user {
                id
                soup(input: $input) {
-                 items { id entity { __typename ... on GraphqlSoupDocument { id documentName: name } } }
+                 items { __typename id ... on GraphqlSoupDocument { documentName: name } }
                  nextCursor
                  hasMore
                }
@@ -265,12 +251,9 @@ fn entity_update_visible_through_other_query() {
             "id": "user-1",
             "soup": {
             "items": [{
+                "__typename": "GraphqlSoupDocument",
                 "id": "doc-1",
-                "entity": {
-                    "__typename": "GraphqlSoupDocument",
-                    "id": "doc-1",
-                    "documentName": "Renamed"
-                }
+                "documentName": "Renamed"
             }],
             "nextCursor": null,
             "hasMore": false
@@ -297,7 +280,7 @@ fn entity_update_visible_through_other_query() {
         panic!("expected complete read");
     };
     assert_eq!(
-        data["user"]["soup"]["items"][0]["entity"]["documentName"],
+        data["user"]["soup"]["items"][0]["documentName"],
         json!("Renamed")
     );
 }

@@ -20,7 +20,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Utilities
 pub(crate) mod context;
 mod saved_views;
-mod util;
+pub(crate) mod util;
 
 // Middleware
 mod middleware;
@@ -29,7 +29,6 @@ mod middleware;
 mod activity;
 mod annotations;
 mod documents;
-#[cfg(feature = "graphql")]
 mod graphql_soup;
 mod health;
 mod history;
@@ -77,15 +76,14 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         &state.config.port
     );
     axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
 }
 
 fn items_router(state: ApiContext) -> Router<ApiContext> {
-    let router = soup::inbound::axum_router::soup_router(state.soup_router_state.clone());
-    #[cfg(feature = "graphql")]
-    let router = router.merge(graphql_soup::router());
-    router
+    soup::inbound::axum_router::soup_router(state.soup_router_state.clone())
+        .merge(graphql_soup::router())
 }
 
 fn api_router(state: ApiContext) -> Router {

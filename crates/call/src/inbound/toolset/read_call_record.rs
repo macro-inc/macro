@@ -1,6 +1,6 @@
 //! ReadCallRecord tool for fetching a single call's transcript.
 
-use crate::domain::ports::{CallRecordQueryService, CallService};
+use crate::domain::ports::CallService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -68,7 +68,7 @@ pub struct ReadCallRecordResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadCallRecord",
-    description = "Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/\"you\"."
+    description = "Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: [\"call\"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/\"you\"."
 )]
 pub struct ReadCallRecord {
     #[schemars(description = "The id of the call whose transcript you want to retrieve.")]
@@ -76,10 +76,9 @@ pub struct ReadCallRecord {
 }
 
 #[async_trait]
-impl<CSvc, QSvc, ESvc> AsyncTool<CallToolContext<CSvc, QSvc, ESvc>> for ReadCallRecord
+impl<CSvc, ESvc> AsyncTool<CallToolContext<CSvc, ESvc>> for ReadCallRecord
 where
     CSvc: CallService,
-    QSvc: CallRecordQueryService,
     ESvc: EntityAccessService,
 {
     type Output = ReadCallRecordResponse;
@@ -87,7 +86,7 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, call_id=?self.call_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CallToolContext<CSvc, QSvc, ESvc>>,
+        service_context: ServiceContext<CallToolContext<CSvc, ESvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read call record");

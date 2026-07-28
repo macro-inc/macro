@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -33,15 +33,15 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, authorization, ip_context), fields(client_ip=%ip_context, fusion_user_id=%authorization.user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, ip_context), fields(client_ip=%ip_context, fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     extract::Path(Params { code }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("verify_merge_request");
-    let user_context = &authorization.user_context;
+    let user_context = &authorization.authorization.user.user_context;
 
     let (account_merge_request_id, to_merge_macro_user_id) =
         macro_db_client::account_merge_request::get_merge_request_info(

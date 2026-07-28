@@ -5,7 +5,7 @@ use entity_access::{
     domain::{models::EditAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model::{
     project::{BasicProject, request::PatchProjectRequestV2},
     response::{GenericSuccessResponse, SuccessResponse},
@@ -28,10 +28,14 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, access, project, body), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, access, project, body),
+    fields(user_id = ?user.authorization.user.macro_user_id),
+    err
+)]
 pub async fn edit_project_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     access: ProjectAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
     project: Extension<BasicProject>,
     body: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, PatchProjectRequestV2, Svc, Auth>,

@@ -5,7 +5,9 @@ use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
+};
 use model::{
     folder::{UploadFolderRequest, UploadFolderResponseData},
     response::TypedSuccessResponse,
@@ -35,10 +37,14 @@ pub type UploadExtractFolderResponse = TypedSuccessResponse<UploadExtractFolderR
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, request), fields(user_id=%user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, request),
+    fields(user_id = %user.authorization.user.macro_user_id),
+    err
+)]
 pub async fn upload_folder_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<UploadFolderRequest>,
 ) -> Result<Json<UploadFolderResponse>, ProjectError>
 where
@@ -49,7 +55,11 @@ where
     ensure_parent_edit_access(&state, &user, request.parent_id.as_deref()).await?;
     let data = state
         .service
-        .upload_folder(user.macro_user_id, user.is_internal_access, request)
+        .upload_folder(
+            user.authorization.user.macro_user_id.clone(),
+            user.authorization.caller == UserOrInternalCaller::Internal,
+            request,
+        )
         .await?;
 
     Ok(Json(UploadFolderResponse { error: false, data }))
@@ -67,10 +77,14 @@ where
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, request), fields(user_id=%user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, request),
+    fields(user_id = %user.authorization.user.macro_user_id),
+    err
+)]
 pub async fn upload_extract_folder_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<UploadExtractFolderRequest>,
 ) -> Result<Json<UploadExtractFolderResponse>, ProjectError>
 where
@@ -81,7 +95,7 @@ where
     ensure_parent_edit_access(&state, &user, request.parent_id.as_deref()).await?;
     let data = state
         .service
-        .create_upload_extract_request(user.macro_user_id, request)
+        .create_upload_extract_request(user.authorization.user.macro_user_id.clone(), request)
         .await?;
 
     Ok(Json(UploadExtractFolderResponse { error: false, data }))
@@ -89,16 +103,20 @@ where
 
 async fn ensure_parent_edit_access<T, Svc, Auth>(
     state: &ProjectRouterState<T, Svc, Auth>,
-    user: &MacroAuthorizationExtractor<Auth>,
+    user: &MacroAuthorizationExtractor<Auth, UserOrInternal>,
     parent_id: Option<&str>,
 ) -> Result<(), ProjectError>
 where
     Svc: EntityAccessService,
 {
-    let Some(parent_id) = parent_id.filter(|_| !user.is_internal_access) else {
+    if user.authorization.caller == UserOrInternalCaller::Internal {
+        return Ok(());
+    }
+    let Some(parent_id) = parent_id else {
         return Ok(());
     };
 
+    let user = &user.authorization.user;
     let _receipt = state
         .access_service
         .generate_entity_access_receipt::<EditAccessLevel>(
@@ -113,10 +131,14 @@ where
 }
 
 /// Mark a project tree as uploaded. This handler is mounted only on the internal router.
-#[tracing::instrument(skip(state, user, request), fields(user_id=%user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, request),
+    fields(user_id = %user.authorization.user.macro_user_id),
+    err
+)]
 pub async fn mark_uploaded_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(request): Json<MarkProjectUploadedRequest>,
 ) -> Result<Json<MarkProjectUploadedResponse>, ProjectError>
 where

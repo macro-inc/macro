@@ -11,6 +11,7 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
+    UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -84,15 +85,17 @@ where
         parts: &mut Parts,
         state: &TeamRouterState<T, Eas, Auth>,
     ) -> Result<Self, Self::Rejection> {
-        let user = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state).await?;
-
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+                .await?;
+        let user = &authorization.authorization.user;
         let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
         else {
             return Err(PremiumUserRejection::NotPremium);
         };
 
         Ok(Self {
-            macro_user_id: user.macro_user_id,
+            macro_user_id: user.macro_user_id.clone(),
             subscription_id,
             _authorization: PhantomData,
         })

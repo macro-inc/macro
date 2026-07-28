@@ -91,7 +91,7 @@ describe('createChatController: provider-failure toast', () => {
     // Mirror exactly how Chat.tsx wires onSwitchModel: the chat's model signal
     // is the single source of truth, swapped via alternateProviderModel against
     // the user's accessible (paid) models.
-    const [model, setModel] = createSignal<TModel>(Model.opus48);
+    const [model, setModel] = createSignal<TModel>(Model.opus5);
     const onSwitchModel = () => {
       const alt = alternateProviderModel(model(), {
         candidates: [...modelsForPlan(true)],

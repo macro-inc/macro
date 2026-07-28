@@ -4,6 +4,7 @@ import {
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import { defineQueryFilters } from '@app/features/next-soup/filters/filter-store';
+import { soupItemMatchesProjectMembership } from '@app/features/next-soup/filters/query-filters';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -146,6 +147,11 @@ const ProjectEntityList = (props: {
       <SoupViewContextProvider
         soup={props.soup}
         initialEnabled
+        itemMembershipFilter={
+          getIsSpecialProject(props.projectId)
+            ? undefined
+            : (item) => soupItemMatchesProjectMembership(item, props.projectId)
+        }
         initialQuery={defineQueryFilters({
           include: {
             // Filter documents by project

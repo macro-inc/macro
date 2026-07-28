@@ -1,4 +1,8 @@
-import { ThrownResultError, throwOnErr } from '@core/util/result';
+import {
+  ThrownResultError,
+  thrownResultErrorHasCode,
+  throwOnErr,
+} from '@core/util/result';
 import {
   type ApiChannelMessage,
   type ApiResolvedChannelMessage,
@@ -126,6 +130,12 @@ export function channelMessagesQueryOptions(
     staleTime: Infinity,
     retry: (failureCount: number, error: Error) => {
       if (loadAroundMessageId && isMissingChannelMessageError(error)) {
+        return false;
+      }
+      if (
+        thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+        thrownResultErrorHasCode(error, 'FORBIDDEN')
+      ) {
         return false;
       }
       return failureCount < 1;

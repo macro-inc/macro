@@ -7,7 +7,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{InternalMacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService};
 
 use super::{DocumentRouterState, Params};
 use crate::domain::ports::DocumentService;
@@ -20,7 +20,7 @@ pub async fn put_snapshot_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    _internal_authorization: InternalMacroAuthorizationExtractor<Auth>,
+    _internal_authorization: MacroAuthorizationExtractor<Auth, InternalOnly>,
     Path(Params { document_id }): Path<Params>,
     body: Bytes,
 ) -> impl IntoResponse {

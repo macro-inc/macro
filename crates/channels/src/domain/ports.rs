@@ -422,11 +422,11 @@ pub trait ChannelRepo: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<EntityMention>, Self::Err>> + Send;
 
-    /// Delete an entity mention by id. Returns whether a row was removed.
+    /// Delete an entity mention by id. Returns the deleted row, if one existed.
     fn delete_entity_mention_by_id(
         &self,
         id: Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<EntityMention>, Self::Err>> + Send;
 
     /// Patch message attachment state.
     fn patch_message_attachments(

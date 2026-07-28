@@ -3071,7 +3071,8 @@ impl ChannelRepo for PgChannelsRepo {
                 auto_join_team = CASE
                     WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN FALSE
                     ELSE COALESCE($5, auto_join_team)
-                END
+                END,
+                updated_at = NOW()
             WHERE id = $1
             "#,
             channel_id,
@@ -3400,18 +3401,23 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(mention)
     }
 
-    async fn delete_entity_mention_by_id(&self, id: Uuid) -> Result<bool, Self::Err> {
-        let result = sqlx::query!(
+    async fn delete_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<EntityMention>, Self::Err> {
+        let mention = sqlx::query_as!(
+            EntityMention,
             r#"
             DELETE FROM comms_entity_mentions
             WHERE id = $1
+            RETURNING id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at
             "#,
             id,
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .context("failed to delete entity mention")?;
-        Ok(result.rows_affected() > 0)
+        Ok(mention)
     }
 
     async fn patch_message_attachments(

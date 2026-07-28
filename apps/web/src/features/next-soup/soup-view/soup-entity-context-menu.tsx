@@ -31,6 +31,7 @@ function tagEntityType(entity: EntityData): EntityType | undefined {
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .otherwise(() => undefined);
 }
 

@@ -6,7 +6,7 @@ use axum::{
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState, UserOrInternal};
 use model::response::ErrorResponse;
 use sqlx::PgPool;
 
@@ -14,7 +14,7 @@ use crate::api::context::AuthorizationService;
 
 /// An authorized user and their current database-backed permissions.
 pub(crate) struct DbPermissionsExtractor {
-    pub(crate) authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    pub(crate) authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     pub(crate) permissions: HashSet<String>,
 }
 
@@ -28,19 +28,21 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let authorization =
-            MacroAuthorizationExtractor::<AuthorizationService>::from_request_parts(parts, state)
+            MacroAuthorizationExtractor::<AuthorizationService, UserOrInternal>::from_request_parts(
+                parts, state,
+            )
                 .await
                 .map_err(IntoResponse::into_response)?;
         let db = PgPool::from_ref(state);
         let permissions = macro_db_client::user::get_permissions::get_user_permissions(
             &db,
-            &authorization.user_context.user_id,
+            &authorization.authorization.user.user_context.user_id,
         )
         .await
         .map_err(|error| {
             tracing::error!(
                 error = ?error,
-                user_id = %authorization.user_context.user_id,
+                user_id = %authorization.authorization.user.user_context.user_id,
                 "unable to get user permissions"
             );
             (

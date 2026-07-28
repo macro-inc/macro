@@ -338,6 +338,45 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let before = sqlx::query!(
+        "SELECT name, updated_at FROM comms_channels WHERE id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    repo.patch_channel(
+        CH1,
+        USER_A.to_string(),
+        None,
+        PatchChannelRequest {
+            channel_name: Some("renamed-channel".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let after = sqlx::query!(
+        "SELECT name, updated_at FROM comms_channels WHERE id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(after.name.as_deref(), Some("renamed-channel"));
+    assert!(after.updated_at > before.updated_at);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_id = macro_user_id(TEAM_OWNER_A);
@@ -2439,18 +2478,26 @@ async fn delete_entity_mention_by_id_removes_only_targeted_row(
         .create_entity_mention(mention_opts("doc-3", "user", "user-w", None))
         .await?;
 
-    assert!(repo.delete_entity_mention_by_id(target.id).await?);
+    let deleted = repo
+        .delete_entity_mention_by_id(target.id)
+        .await?
+        .expect("deleted row should be returned");
+    assert_eq!(deleted.id, target.id);
     assert!(repo.get_entity_mention_by_id(target.id).await?.is_none());
     assert!(repo.get_entity_mention_by_id(other.id).await?.is_some());
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn delete_entity_mention_by_id_returns_false_when_missing(
+async fn delete_entity_mention_by_id_returns_none_when_missing(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
-    assert!(!repo.delete_entity_mention_by_id(Uuid::new_v4()).await?);
+    assert!(
+        repo.delete_entity_mention_by_id(Uuid::new_v4())
+            .await?
+            .is_none()
+    );
     Ok(())
 }
 

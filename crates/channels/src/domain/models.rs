@@ -892,6 +892,8 @@ pub enum PostMessageNotificationPolicy {
     /// Apply the normal channel notification rules.
     #[default]
     Default,
+    /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
+    MentionsOnly,
     /// Do not send notifications for this post. Realtime/search side effects still run.
     Silent,
 }
@@ -1336,6 +1338,36 @@ pub struct ChannelWithLatest {
     pub interacted_at: Option<DateTime<Utc>>,
     /// Aggregate frecency score.
     pub frecency_score: Option<frecency::domain::models::AggregateFrecency>,
+}
+
+#[cfg(feature = "list")]
+impl Identify for ChannelWithLatest {
+    type Id = Uuid;
+
+    fn id(&self) -> Self::Id {
+        self.channel.channel.id
+    }
+}
+
+#[cfg(feature = "list")]
+impl SortOn<SimpleSortMethod> for ChannelWithLatest {
+    fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
+        move |channel| {
+            let last_val = match sort {
+                SimpleSortMethod::ViewedAt => channel.viewed_at.unwrap_or_default(),
+                SimpleSortMethod::UpdatedAt => channel.channel.channel.updated_at,
+                SimpleSortMethod::CreatedAt => channel.channel.channel.created_at,
+                SimpleSortMethod::ViewedUpdated => channel
+                    .viewed_at
+                    .unwrap_or(channel.channel.channel.updated_at),
+            };
+
+            CursorVal {
+                sort_type: sort,
+                last_val,
+            }
+        }
+    }
 }
 
 /// Raw preview row returned from the repository.

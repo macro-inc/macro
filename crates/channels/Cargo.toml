@@ -63,6 +63,14 @@ outbound = [
   "macro_user_id/sqlx",
   "ports",
 ]
+entity_mutation = [
+  "dep:entity_access",
+  "dep:entity_mutation",
+  "dep:model-entity",
+  "dep:rootcause",
+  "entity_access/ports",
+  "ports",
+]
 ports = ["dep:tokio"]
 
 [dependencies]
@@ -71,6 +79,7 @@ attachment = { path = "../attachment", optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
+entity_mutation = { path = "../entity_mutation", optional = true }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 contacts = { path = "../contacts", default-features = false, features = [

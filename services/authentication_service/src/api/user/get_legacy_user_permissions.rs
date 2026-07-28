@@ -92,14 +92,21 @@ impl IntoResponse for GetLegacyUserPermissionsError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, db_permissions), err, fields(user_id=%db_permissions.authorization.user_context.user_id))]
+#[tracing::instrument(skip(ctx, db_permissions), err, fields(user_id=%db_permissions.authorization.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     db_permissions: DbPermissionsExtractor,
 ) -> Result<GetLegacyUserPermissionsResponse, GetLegacyUserPermissionsError> {
-    let user_id = MacroUserId::parse_from_str(&db_permissions.authorization.user_context.user_id)
-        .map_err(|_| GetLegacyUserPermissionsError::InvalidMacroUserId)?
-        .lowercase();
+    let user_id = MacroUserId::parse_from_str(
+        &db_permissions
+            .authorization
+            .authorization
+            .user
+            .user_context
+            .user_id,
+    )
+    .map_err(|_| GetLegacyUserPermissionsError::InvalidMacroUserId)?
+    .lowercase();
 
     let email = user_id.email_part().lowercase();
 

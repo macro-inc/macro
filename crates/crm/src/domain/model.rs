@@ -246,8 +246,9 @@ pub struct CrmAddressStatus {
     pub email_sync: bool,
 }
 
-/// Minimum team role required for a CRM capability. Members are
-/// view-only at the platform level, so the configurable range is
+/// Minimum team role required for a CRM governance capability. Members
+/// can edit visible CRM records (e.g. company properties), but the
+/// governance capabilities these settings gate stay restricted to
 /// admin (default) vs owner. Maps to the `team_role` Postgres enum;
 /// `member` is deliberately not representable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

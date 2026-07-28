@@ -1,3 +1,4 @@
+use entity_access::domain::models::TeamRole;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -10,8 +11,8 @@ use axum::{
 };
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -277,6 +278,7 @@ impl EntityAccessService for FakeEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -326,7 +328,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         panic!("unexpected CRM permission lookup")
     }
 

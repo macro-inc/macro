@@ -77,6 +77,10 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
+/// Bun's global package cache. Mounted explicitly because Bun is supplied by
+/// the Nix dev shell and is not available to Namespace's cache planner yet.
+pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
+
 /// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
 /// on the preview cache volume for the zero-copy fast path; the workflow also
 /// backs each content-addressed snapshot up to Namespace artifact storage so a

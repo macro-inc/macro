@@ -8,8 +8,9 @@ use email::domain::models::{
     UpsertEmailFilterInput,
 };
 use entity_access::domain::models::{
-    AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
-    EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
+    EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+    ViewAccessLevel,
 };
 use graphql_common::GraphqlRequestParts;
 use macro_authorization::{
@@ -339,6 +340,7 @@ impl EntityAccessService for CountingEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -388,7 +390,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         Err(AccessError::Internal)
     }
 
@@ -500,9 +502,12 @@ struct TestHarness {
         FakeAuthorizationService,
         TestState,
         NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
         NoOpSoupEmailContentEdgeReader,
+        graphql_favorite::NoOpEntityFavoriteEdgeReader,
+        graphql_permission::NoOpEntityPermissionEdgeReader,
     >,
     state: TestState,
     authorization_calls: Arc<AtomicUsize>,
@@ -603,12 +608,15 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         SchemaOnlyAuthorizationService,
         SchemaOnlyState,
         NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
         NoOpSoupEmailContentEdgeReader,
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
     > = build_schema_with_services(NoOpSoupService, realtime);
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { id entityType entity { __typename ... on GraphqlSoupDocument { id name } } } }",
+        "subscription { soupUpdates { id entityType ... on GraphqlSoupDocument { name } } }",
     )
     .data(user_id.clone());
     let responses = schema.execute_stream(request);
@@ -626,7 +634,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     assert_eq!(data["soupUpdates"]["id"], document_id.to_string());
     assert_eq!(data["soupUpdates"]["entityType"], "DOCUMENT");
     assert_eq!(
-        data["soupUpdates"]["entity"]["name"],
+        data["soupUpdates"]["name"],
         format!("Document {document_id}")
     );
     assert_eq!(

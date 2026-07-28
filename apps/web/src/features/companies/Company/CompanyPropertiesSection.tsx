@@ -1,22 +1,22 @@
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties/EntityPropertiesSection';
 import { useDealStages } from '@companies/crm/deal-stages';
+import { useCrmPermissions } from '@companies/crm/team-crm-config';
 import { buildCompanyDefaultProperties } from '@entity/extractors-property';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useIsTeamAdmin } from '@queries/team/teams';
 
 /**
  * CRM properties for a company (Stage / Owner / Revenue + custom),
  * mirroring the task side panel's properties section. The builtin
  * defaults render as editable placeholders even before the company has
- * any values saved. Editing follows CRM access: team admins/owners can
- * edit, members see read-only values.
+ * any values saved. Editing follows CRM access: any team member can
+ * edit.
  *
  * Stage goes through the team's active deal-stage set: when the team has
  * customized stages, the panel edits the team Stage definition and the
  * fetched system Stage row is hidden.
  */
 export function CompanyPropertiesSection(props: { companyId: string }) {
-  const isTeamAdmin = useIsTeamAdmin();
+  const { canEditCrm } = useCrmPermissions();
   const dealStages = useDealStages();
 
   // Builtin CRM defaults, with the Stage stub swapped for the active
@@ -39,7 +39,7 @@ export function CompanyPropertiesSection(props: { companyId: string }) {
     <EntityPropertiesSection
       entityId={props.companyId}
       entityType="COMPANY"
-      canEdit={isTeamAdmin()}
+      canEdit={canEditCrm()}
       defaultProperties={defaultProperties}
       pinnedPropertyDefinitionOrder={pinnedOrder()}
       hidePropertyDefinitionIds={

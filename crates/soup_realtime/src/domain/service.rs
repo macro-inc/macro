@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, num::NonZeroUsize, sync::Arc};
+use std::{collections::HashSet, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
 use futures::{StreamExt as _, stream};
@@ -11,6 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_soup::item::SoupItem;
 use rootcause::prelude::{Report, ResultExt as _};
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use super::{
     models::SoupRealtimeMessage,
@@ -24,6 +25,15 @@ use super::{
 const BROADCAST_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(64).unwrap();
 /// Number of messages buffered for each individual subscriber.
 const SUBSCRIBER_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
+/// Total receive attempts before the consumer returns for supervision.
+const MAX_RECEIVE_ATTEMPTS: usize = 5;
+
+/// Retries after one, two, four, and eight seconds.
+fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take(MAX_RECEIVE_ATTEMPTS - 1)
+}
 
 /// Service for distributing recipient-targeted realtime Soup messages.
 pub struct SoupRealtimeConsumerService<C>
@@ -66,11 +76,14 @@ where
     #[tracing::instrument(skip(self), err)]
     pub async fn run(&self) -> Result<(), Report> {
         loop {
-            let SoupRealtimeMessage { user_id, item } = self
-                .consumer
-                .recv()
-                .await
-                .context("failed to receive realtime Soup message")?;
+            let SoupRealtimeMessage { user_id, item } = Retry::start(
+                receive_retry_strategy(),
+                || self.consumer.recv(),
+            )
+            .await
+            .context(format!(
+                "failed to receive realtime Soup message after {MAX_RECEIVE_ATTEMPTS} attempts"
+            ))?;
 
             match self.broadcasts.publish(&user_id, Arc::new(item)) {
                 Ok(subscriber_count) => {

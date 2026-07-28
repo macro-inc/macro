@@ -1,3 +1,4 @@
+use crate::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -8,6 +9,7 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
@@ -21,9 +23,14 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{
-    AccessError, AccessLevel, AdminParticipantRole, BotId, CallChannelInfo, MemberParticipantRole,
-    OwnerParticipantRole, UserTeamInfo, ViewOnly,
+use crate::{
+    domain::models::{
+        AccessError, AccessLevel, AdminParticipantRole, BotAccessScope, BotId, CallChannelInfo,
+        MemberParticipantRole, OwnerParticipantRole, UserTeamInfo, ViewOnly,
+    },
+    inbound::axum_extractors::test_support::{
+        BOT_ID, BOT_TEAM_ID, BotAccessCall, VALID_BOT_TOKEN, valid_bot_authentication,
+    },
 };
 
 const CHANNEL_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
@@ -44,19 +51,35 @@ struct PermissionCall {
 #[derive(Clone)]
 struct FakeEntityAccessService {
     permission: EntityPermission,
+    bot_permission: Option<EntityPermission>,
     calls: Arc<Mutex<Vec<PermissionCall>>>,
+    bot_calls: Arc<Mutex<Vec<BotAccessCall>>>,
 }
 
 impl FakeEntityAccessService {
     fn new(permission: EntityPermission) -> Self {
         Self {
             permission,
+            bot_permission: None,
             calls: Arc::new(Mutex::new(Vec::new())),
+            bot_calls: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn with_bot_permission(mut self, permission: EntityPermission) -> Self {
+        self.bot_permission = Some(permission);
+        self
     }
 
     fn calls(&self) -> Vec<PermissionCall> {
         self.calls.lock().expect("calls lock poisoned").clone()
+    }
+
+    fn bot_calls(&self) -> Vec<BotAccessCall> {
+        self.bot_calls
+            .lock()
+            .expect("bot calls lock poisoned")
+            .clone()
     }
 }
 
@@ -73,11 +96,31 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        self.bot_calls
+            .lock()
+            .expect("bot calls lock poisoned")
+            .push(BotAccessCall {
+                bot_id,
+                scope: scope.clone(),
+                entity_id: entity_id.to_string(),
+                entity_type,
+            });
+
+        let permission = self.bot_permission.ok_or(AccessError::Unauthorized)?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            permission,
+        )
     }
 
     async fn get_access_level(
@@ -132,7 +175,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         panic!("unexpected get_crm_entity_permission_with_team call")
     }
 
@@ -188,6 +231,19 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        bot_scope: BotScope,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(valid_bot_authentication(bot_scope))
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -213,6 +269,17 @@ struct TestState {
 impl TestState {
     fn new(permission: EntityPermission) -> Self {
         Self::with_authorization(permission, FakeAuthorizationService::default())
+    }
+
+    fn with_bot_permission(permission: EntityPermission) -> Self {
+        Self {
+            entity_access: Arc::new(
+                FakeEntityAccessService::new(permission).with_bot_permission(permission),
+            ),
+            authorization: MacroAuthorizationState::new(Arc::new(
+                FakeAuthorizationService::default(),
+            )),
+        }
     }
 
     fn with_authorization(
@@ -281,6 +348,19 @@ fn request(token: Option<&str>) -> Request<Body> {
     request
 }
 
+fn bot_request(scope: BotScope) -> Request<Body> {
+    let mut request = request(None);
+    request.headers_mut().insert(
+        BOT_TOKEN_HEADER,
+        VALID_BOT_TOKEN.parse().expect("bot token should be valid"),
+    );
+    request.headers_mut().insert(
+        BOT_SCOPE_HEADER,
+        scope.as_str().parse().expect("bot scope should be valid"),
+    );
+    request
+}
+
 fn internal_request(user_id: Option<&str>) -> Request<Body> {
     let mut request = request(None);
     request.headers_mut().insert(
@@ -320,6 +400,29 @@ async fn member_handler(extractor: MemberExtractor) -> StatusCode {
     StatusCode::OK
 }
 
+async fn bot_member_handler(extractor: MemberExtractor) -> StatusCode {
+    let receipt = extractor.entity_access_receipt;
+    assert_member_receipt(&receipt);
+    assert!(matches!(
+        receipt.auth(),
+        EntityAccessAuth::Bot(authentication) if authentication.bot_id() == BOT_ID
+    ));
+    StatusCode::OK
+}
+
+async fn bot_view_only_handler(extractor: ViewOnlyExtractor) -> StatusCode {
+    let receipt = extractor.entity_access_receipt;
+    assert!(matches!(
+        receipt.auth(),
+        EntityAccessAuth::Bot(authentication) if authentication.bot_id() == BOT_ID
+    ));
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelViewOnly
+    ));
+    StatusCode::OK
+}
+
 async fn authenticated_member_handler(extractor: MemberExtractor) -> StatusCode {
     let receipt = extractor.entity_access_receipt;
     assert_member_receipt(&receipt);
@@ -346,6 +449,17 @@ async fn owner_handler(extractor: OwnerExtractor) -> StatusCode {
         }
     ));
     StatusCode::OK
+}
+
+fn expected_team_bot_call() -> BotAccessCall {
+    BotAccessCall {
+        bot_id: BOT_ID,
+        scope: BotAccessScope::Team {
+            team_id: BOT_TEAM_ID,
+        },
+        entity_id: CHANNEL_ID.to_string(),
+        entity_type: EntityType::Channel,
+    }
 }
 
 fn app<H, T>(state: TestState, handler: H) -> Router
@@ -444,6 +558,112 @@ async fn missing_credentials_are_rejected_without_acl_call() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert!(state.entity_access.calls().is_empty());
+}
+
+async fn assert_explicit_team_bot_participation_is_allowed() {
+    let state = TestState::with_bot_permission(EntityPermission::ChannelRole {
+        role: ParticipantRole::Member,
+    });
+    let response = app(state.clone(), bot_member_handler)
+        .oneshot(bot_request(BotScope::Team))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(state.entity_access.calls().is_empty());
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        vec![expected_team_bot_call()]
+    );
+}
+
+#[tokio::test]
+async fn explicitly_participating_bot_can_access_private_channel() {
+    assert_explicit_team_bot_participation_is_allowed().await;
+}
+
+#[tokio::test]
+async fn explicitly_participating_bot_can_access_public_channel() {
+    assert_explicit_team_bot_participation_is_allowed().await;
+}
+
+#[tokio::test]
+async fn owning_team_channel_grants_team_scoped_bot_view_only_access() {
+    let state = TestState::with_bot_permission(EntityPermission::ChannelViewOnly);
+    let response = app(state.clone(), bot_view_only_handler)
+        .oneshot(bot_request(BotScope::Team))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        vec![expected_team_bot_call()]
+    );
+}
+
+async fn assert_team_scoped_bot_without_channel_access_is_denied() {
+    let state = TestState::new(EntityPermission::ChannelRole {
+        role: ParticipantRole::Owner,
+    });
+    let response = app(state.clone(), view_only_handler)
+        .oneshot(bot_request(BotScope::Team))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(state.entity_access.calls().is_empty());
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        vec![expected_team_bot_call()]
+    );
+}
+
+#[tokio::test]
+async fn another_teams_channel_does_not_grant_team_scoped_bot_access() {
+    assert_team_scoped_bot_without_channel_access_is_denied().await;
+}
+
+#[tokio::test]
+async fn public_channel_does_not_grant_non_participating_bot_access() {
+    assert_team_scoped_bot_without_channel_access_is_denied().await;
+}
+
+#[tokio::test]
+async fn departed_bot_participant_is_denied_channel_access() {
+    assert_team_scoped_bot_without_channel_access_is_denied().await;
+}
+
+#[tokio::test]
+async fn team_channel_view_only_access_does_not_satisfy_member_requirement() {
+    let state = TestState::with_bot_permission(EntityPermission::ChannelViewOnly);
+    let response = app(state.clone(), member_handler)
+        .oneshot(bot_request(BotScope::Team))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        vec![expected_team_bot_call()]
+    );
+}
+
+#[tokio::test]
+async fn bot_member_role_does_not_satisfy_admin_requirement() {
+    let state = TestState::with_bot_permission(EntityPermission::ChannelRole {
+        role: ParticipantRole::Member,
+    });
+    let response = app(state.clone(), admin_handler)
+        .oneshot(bot_request(BotScope::Team))
+        .await
+        .expect("request should complete");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        state.entity_access.bot_calls(),
+        vec![expected_team_bot_call()]
+    );
 }
 
 #[tokio::test]

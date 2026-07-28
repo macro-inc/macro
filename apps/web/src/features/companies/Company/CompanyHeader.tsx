@@ -1,5 +1,7 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import type { CrmCompanyEntity } from '@entity';
+import { useSetCompanyNameMutation } from '@queries/crm/companies';
 import { createEffect, createSignal, Show } from 'solid-js';
 
 function Description(props: { text: string }) {
@@ -39,6 +41,22 @@ function Description(props: { text: string }) {
   );
 }
 
+// Renames write the team-scoped `custom_name` override, never the global
+// directory.
+function TitleEditor(props: { company: CrmCompanyEntity }) {
+  const renameMutation = useSetCompanyNameMutation();
+  return (
+    <InlineTitleEditor
+      value={props.company.name}
+      placeholder="Company"
+      ariaLabel="Company name"
+      onRename={(name) =>
+        renameMutation.mutate({ companyId: props.company.id, name })
+      }
+    />
+  );
+}
+
 export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
   return (
     <div class="flex items-start gap-3">
@@ -46,8 +64,10 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
         <EntityIcon targetType="crm_company" size="fill" />
       </div>
       <div class="flex min-w-0 flex-col gap-1">
-        <h1 class="min-w-0 truncate text-xl font-semibold">
-          {props.company ? props.company.name || 'Company' : 'Loading company…'}
+        <h1 class="min-w-0 text-xl font-semibold">
+          <Show when={props.company} fallback={'Loading company…'}>
+            {(company) => <TitleEditor company={company()} />}
+          </Show>
         </h1>
         <Show when={props.company?.description}>
           {(description) => <Description text={description()} />}

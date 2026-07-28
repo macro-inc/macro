@@ -88,10 +88,20 @@ pub fn setup_nix() -> Step<Use> {
 }
 
 /// Enter the repo's Nix dev shell (toolchain, mold, just, the sccache binary,
-/// and `RUSTC_WRAPPER=sccache`). We pass no S3 bucket; jobs that compile Rust
-/// follow this with [`configure_namespace_sccache`] to use Namespace's official
-/// remote cache. Requires [`setup_nix`] first.
+/// and `RUSTC_WRAPPER=sccache`) without selecting an sccache provider or
+/// configuring an external Nix binary cache. Jobs that compile Rust can follow
+/// this with [`configure_namespace_sccache`] to use Namespace's official remote
+/// cache. Requires [`setup_nix`] first.
 pub fn setup_dev_shell() -> Step<Use> {
+    uses_local(
+        "Setup Nix dev shell",
+        xtask_paths::repo_dir!(".github/actions/setup-nix-dev-shell"),
+    )
+}
+
+/// Configure Cachix and enter the repo's Nix dev shell. This is retained for
+/// workflow families that have not yet migrated to Namespace's Nix cache.
+pub fn setup_cachix_dev_shell() -> Step<Use> {
     uses_local(
         "Setup Nix dev shell",
         xtask_paths::repo_dir!(".github/actions/setup-cachix"),
@@ -132,11 +142,11 @@ pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
             "nscloud-cache-action",
             "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
         )
-        .add_with(("cache", "rust"))
+        .add_with(("cache", "nix"))
         .add_with((
             "path",
             format!(
-                "/nix\n${{{{ github.workspace }}}}/target\n{}",
+                "${{{{ github.workspace }}}}/target\n{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git",
                 vars::PREVIEW_SNAPSHOT_VOLUME_DIR,
             ),
         ))
@@ -192,11 +202,12 @@ fi"#
     ))
 }
 
-/// Mount the web-app cache volume: bun's install cache plus the Nix store
-/// (dev shell closure). `with_rust` additionally persists the cargo registry
-/// and git state used by the `gen-api` OpenAPI-binary build; its compiled
-/// objects live in Namespace's official remote sccache. `continue-on-error`
-/// for the same reason as [`mount_cache_volume`].
+/// Mount the web-app cache volume using Namespace's native Nix integration.
+/// Bun's install cache is mounted as an explicit path because Bun comes from
+/// the Nix dev shell and is not available when this step runs. `with_rust`
+/// additionally persists cargo registry/git data for the `gen-api`
+/// OpenAPI-binary build; compiled objects live in Namespace's remote sccache.
+/// `continue-on-error` for the same reason as [`mount_cache_volume`].
 pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
     Step::new("Mount Namespace cache volume")
         .uses(
@@ -204,20 +215,31 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
             "nscloud-cache-action",
             "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
         )
-        .add_with(("cache", if with_rust { "bun,rust" } else { "bun" }))
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+        .add_with(("cache", "nix"))
+        .map(|step| {
+            if with_rust {
+                step.add_with((
+                    "path",
+                    format!(
+                        "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git",
+                        vars::BUN_CACHE_VOLUME_DIR,
+                    ),
+                ))
+            } else {
+                step.add_with(("path", vars::BUN_CACHE_VOLUME_DIR))
+            }
+        })
         .continue_on_error(true)
 }
 
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
-/// We pass no S3 bucket; jobs that run `gen-api` follow this with
-/// [`configure_namespace_sccache`]. Requires [`setup_nix`] first.
+/// Jobs that run `gen-api` follow this with [`configure_namespace_sccache`].
+/// Requires [`setup_nix`] first.
 pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     uses_local(
         name,
         xtask_paths::repo_dir!(".github/actions/setup-reqs-web"),
     )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
     .when(playwright, |step| step.add_with(("playwright", "true")))
 }
 
@@ -352,7 +374,7 @@ pub fn mount_nix_cache_volume() -> Step<Use> {
             "nscloud-cache-action",
             "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
         )
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+        .add_with(("cache", "nix"))
         .continue_on_error(true)
 }
 

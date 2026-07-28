@@ -3,6 +3,11 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
+#[cfg(test)]
+mod test;
 
 use crate::domain::models::{DispatchEvent, InProgressExecution};
 use crate::domain::ports::{
@@ -36,6 +41,33 @@ const BATCH_MIN_DURATION: Duration = Duration::from_secs(30);
 pub struct PgPollingDispatcher<Rpo: ScheduledActionRepo, Exe: ScheduledActionExecutor> {
     repo: Arc<Rpo>,
     executor: Exe,
+    lifecycle: PgPollingDispatcherLifecycle,
+}
+
+/// Cooperative shutdown configuration for [`PgPollingDispatcher`].
+///
+/// Retain clones of the token and tracker to cancel the dispatcher and wait
+/// for both of its background tasks to finish.
+#[derive(Clone)]
+pub struct PgPollingDispatcherLifecycle {
+    cancellation_token: CancellationToken,
+    task_tracker: TaskTracker,
+}
+
+impl PgPollingDispatcherLifecycle {
+    /// Creates lifecycle configuration from caller-owned shutdown handles.
+    pub fn new(cancellation_token: CancellationToken, task_tracker: TaskTracker) -> Self {
+        Self {
+            cancellation_token,
+            task_tracker,
+        }
+    }
+}
+
+impl Default for PgPollingDispatcherLifecycle {
+    fn default() -> Self {
+        Self::new(CancellationToken::new(), TaskTracker::new())
+    }
 }
 
 impl<Rpo, Exe> PgPollingDispatcher<Rpo, Exe>
@@ -44,7 +76,19 @@ where
     Exe: ScheduledActionExecutor,
 {
     pub fn new(repo: Arc<Rpo>, executor: Exe) -> Self {
-        Self { repo, executor }
+        Self {
+            repo,
+            executor,
+            lifecycle: PgPollingDispatcherLifecycle::default(),
+        }
+    }
+
+    /// Configures handles for cooperatively stopping and joining dispatcher
+    /// tasks. Without this opt-in, the dispatcher retains its previous
+    /// process-lifetime behavior.
+    pub fn with_lifecycle(mut self, lifecycle: PgPollingDispatcherLifecycle) -> Self {
+        self.lifecycle = lifecycle;
+        self
     }
 }
 
@@ -57,17 +101,46 @@ where
         let (tx, mut rx) = tokio::sync::mpsc::channel::<DispatchEvent>(BUFFER_SIZE);
         let (extx, exrx) = tokio::sync::mpsc::channel::<InProgressExecution>(BUFFER_SIZE);
 
+        let PgPollingDispatcher {
+            repo,
+            executor,
+            lifecycle,
+        } = self;
+        let cancellation_token = lifecycle.cancellation_token;
+
         // Drain dispatch events — the polling loop pulls fresh state from the
         // DB each tick, so create/update/delete notifications are not needed.
         // We still must drain so service-side sends don't block on a full
         // channel.
-        tokio::spawn(async move { while rx.recv().await.is_some() {} });
-
-        tokio::spawn(async move {
+        let drain_cancellation_token = cancellation_token.clone();
+        lifecycle.task_tracker.spawn(async move {
             loop {
-                let batch_start = Instant::now();
+                tokio::select! {
+                    biased;
+                    _ = drain_cancellation_token.cancelled() => break,
+                    event = rx.recv() => {
+                        if event.is_none() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
 
-                match self.repo.get_next_unclaimed_actions(BATCH_SIZE).await {
+        lifecycle.task_tracker.spawn(async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    return;
+                }
+
+                let batch_start = Instant::now();
+                let poll_result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => return,
+                    result = repo.get_next_unclaimed_actions(BATCH_SIZE) => result,
+                };
+
+                match poll_result {
                     Ok(candidates) => {
                         let now = Utc::now();
                         for action in candidates {
@@ -83,7 +156,10 @@ where
                             // running. If a peer instance claimed it between
                             // our pull and this call, the claim fails and we
                             // skip — that's the multi-instance contract.
-                            match self.executor.execute_action(action).await {
+                            if cancellation_token.is_cancelled() {
+                                return;
+                            }
+                            match executor.execute_action(action).await {
                                 Ok(execution) => {
                                     let _ = extx.send(execution).await;
                                 }
@@ -107,7 +183,11 @@ where
 
                 let elapsed = batch_start.elapsed();
                 if elapsed < BATCH_MIN_DURATION {
-                    tokio::time::sleep(BATCH_MIN_DURATION - elapsed).await;
+                    tokio::select! {
+                        biased;
+                        _ = cancellation_token.cancelled() => return,
+                        _ = tokio::time::sleep(BATCH_MIN_DURATION - elapsed) => {}
+                    }
                 }
             }
         });

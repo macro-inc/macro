@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -39,10 +39,10 @@ pub struct UserLinkResponse {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id = authorization.user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id = authorization.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     extract::Query(params): extract::Query<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("get_user_link_exists");
@@ -76,10 +76,10 @@ pub async fn handler(
 
     let links = ctx
             .auth_client
-            .get_links(&authorization.user_context.fusion_user_id, Some(idp_id.clone()))
+            .get_links(&authorization.authorization.user.user_context.fusion_user_id, Some(idp_id.clone()))
             .await
             .map_err(|e| {
-                tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", authorization.user_context.fusion_user_id, idp_id.as_str());
+                tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", authorization.authorization.user.user_context.fusion_user_id, idp_id.as_str());
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {

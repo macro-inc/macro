@@ -10,22 +10,27 @@ use axum::{
     routing::{get, post},
 };
 use chat::domain::service::ChatServiceImpl;
-use chat::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
+use chat::inbound::http::router::{
+    ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
+};
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use tower::ServiceBuilder;
 
 /// Requires an authenticated acting user before the request proceeds.
 ///
-/// Chats are created with a public-view share permission by default, so
-/// without this gate the `/{chat_id}` routes would serve any chat to fully
-/// anonymous callers via the extractor's link-share path. It also keeps the
-/// pre-existing ordering where missing/invalid credentials get a 401 before
-/// `ensure_chat_exists` performs its lookup (and 404s).
+/// Applied to the owner/editor-only `/{chat_id}` routes (delete, patch,
+/// tool calls, etc.) so missing/invalid credentials get a 401 before
+/// `ensure_chat_exists` performs its lookup (and 404s), rather than falling
+/// through to the entity-access-level authorization check. It is
+/// deliberately **not** applied to the read-only `GET /{chat_id}` route
+/// (built via `chat_view_router`): chats can have public-view link sharing
+/// enabled, and that route's own `ChatAccessLevelExtractor` already grants
+/// anonymous callers `ViewAccessLevel` access in that case.
 async fn require_authenticated_user(
-    _user: MacroAuthorizationExtractor<DcsAuthorizationService>,
+    _user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     req: Request,
     next: Next,
 ) -> Response {
@@ -44,7 +49,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(state.db.clone()),
         ),
-    );
+    )
+    .with_event_broker(state.macro_event_broker.clone());
     let chat_state = ChatRouterState::new(
         chat_service,
         access_service,
@@ -65,7 +71,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // Note: free users are intentionally no longer capped by chat/document count,
         // so no quota-enforcement middleware is applied here.
         .merge(chat_create_router(chat_state.clone()))
-        // All /{chat_id} routes — require an authenticated user, then
+        // Read-only view route — ensure_chat_exists only. No auth gate:
+        // ChatAccessLevelExtractor<ViewAccessLevel, ..> permits anonymous
+        // callers when the chat has public-view link sharing enabled.
+        .merge(chat_view_router(chat_state.clone()).layer(ensure_chat_exists.clone()))
+        // Remaining /{chat_id} routes — require an authenticated user, then
         // ensure_chat_exists for ChatAccessLevelExtractor
         .merge(
             chat_id_router(chat_state).layer(

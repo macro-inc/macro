@@ -49,14 +49,28 @@ function fetchWithCredentials<
   );
 }
 
-let tokenPromise: Promise<
-  Result<void, ResultError<FetchWithTokenErrorCode>[]>
-> | null = null;
+type TokenResult = Result<void, ResultError<FetchWithTokenErrorCode>[]>;
 
-export async function fetchToken(): Promise<
-  Result<void, ResultError<FetchWithTokenErrorCode>[]>
-> {
+let tokenPromise: Promise<TokenResult> | null = null;
+
+// Once /jwt/refresh fails because the session is not authenticated (400/401),
+// cache that failure so subsequent 401s short-circuit instead of each firing
+// another doomed refresh. An anonymous visitor on a public link otherwise
+// triggers one refresh per authenticated app-chrome query. Cleared by
+// unsetTokenPromise, which the login flows call on a session change.
+let refreshUnavailable: TokenResult | null = null;
+
+// Bumped on every reset. A refresh started before a reset carries the older
+// generation, so once the session has moved on (e.g. a login) it can neither
+// re-latch refreshUnavailable nor clear a newer tokenPromise on completion.
+let refreshGeneration = 0;
+
+export async function fetchToken(): Promise<TokenResult> {
+  if (refreshUnavailable != null) {
+    return refreshUnavailable;
+  }
   if (tokenPromise == null) {
+    const generation = refreshGeneration;
     tokenPromise = (async () => {
       try {
         const result = await fetchWithCredentials(
@@ -72,12 +86,23 @@ export async function fetchToken(): Promise<
         );
 
         if (result.isErr()) {
-          return err(result.error);
+          const failure = err(result.error);
+          if (
+            generation === refreshGeneration &&
+            result.error.some(
+              (e) => e.code === 'HTTP_ERROR' || e.code === 'UNAUTHORIZED'
+            )
+          ) {
+            refreshUnavailable = failure;
+          }
+          return failure;
         }
 
         return ok(undefined);
       } finally {
-        tokenPromise = null;
+        if (generation === refreshGeneration) {
+          tokenPromise = null;
+        }
       }
     })();
   }
@@ -164,5 +189,7 @@ export async function fetchWithToken<
  * unsetTokenPromise();
  */
 export function unsetTokenPromise() {
+  refreshGeneration++;
   tokenPromise = null;
+  refreshUnavailable = null;
 }

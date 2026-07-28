@@ -118,7 +118,7 @@ async fn posts_the_welcome_script_with_the_guide_mentioned() {
     assert_eq!(welcome.request.nonce, None);
     assert_eq!(
         welcome.request.notification_policy,
-        PostMessageNotificationPolicy::Default
+        PostMessageNotificationPolicy::MentionsOnly
     );
     assert_eq!(welcome.request.triggered_by, None);
 

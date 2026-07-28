@@ -15,11 +15,12 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, Entity, EntityAccessReceipt, EntityPermission, EntityType,
-        MemberParticipantRole, ParticipantRole as EntityParticipantRole, RequiredPermission,
-        UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, BotReceiptScope, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -136,6 +137,7 @@ impl EntityAccessService for TestAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -218,7 +220,7 @@ impl EntityAccessService for TestAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
+    ) -> Result<(EntityPermission, uuid::Uuid, TeamRole), AccessError> {
         unimplemented!("channels test mock does not support CRM entity access")
     }
 
@@ -249,6 +251,9 @@ fn bot_actor_from_receipt_uses_canonical_principal() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let receipt = EntityAccessReceipt::<MemberParticipantRole>::try_new_bot(
         bot_id.into_storage_id(),
+        BotReceiptScope::Team {
+            team_id: Uuid::new_v4(),
+        },
         Entity {
             entity_id: Uuid::new_v4().to_string(),
             entity_type: EntityType::Channel,
@@ -912,6 +917,7 @@ fn authorization_state_with_default(
             api_key: VALID_INTERNAL_KEY.to_string(),
             default_user_id: default_user_id.map(str::to_string),
         },
+        macro_authorization::NoBotAuthorizer,
     );
     (MacroAuthorizationState::new(Arc::new(service)), validator)
 }

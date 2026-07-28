@@ -5,7 +5,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use models_pagination::{
@@ -82,22 +82,35 @@ where
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(links, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
+#[tracing::instrument(
+    skip(links, macro_user, service),
+    fields(
+        actor = %macro_user.acting_entity(),
+        fusionauth_user_id = tracing::field::Empty,
+    )
+)]
 async fn cursor_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(service): State<EmailRouterState<T>>,
-    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T, Auth>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,
 ) -> Result<Json<ApiPaginatedThreadCursor>, GetPreviewsCursorError> {
+    let user = &macro_user.authorization.user;
+    let span = tracing::Span::current();
+    span.record(
+        "fusionauth_user_id",
+        tracing::field::display(&user.user_context.fusion_user_id),
+    );
+
     Ok(Json(ApiPaginatedThreadCursor::new(
         service
             .inner
             .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
                 link_ids: links.iter().map(|link| link.id).collect(),
-                macro_id: macro_user.macro_user_id,
+                macro_id: user.macro_user_id.clone(),
                 limit: params.limit,
                 query: cursor
                     .into_query(

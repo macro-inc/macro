@@ -1,28 +1,73 @@
 #[cfg(test)]
 mod test;
 
+use std::{future::Future, pin::Pin, sync::Arc};
+
 use constant_time_eq::constant_time_eq;
 use model_user::UserContext;
 use rootcause::Report;
 
 use super::{
-    models::{InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError},
-    ports::{JwtValidator, MacroAuthorizationService},
+    models::{
+        BotActingUserClaims, BotAuthentication, BotScope, InternalAuthConfig,
+        InternalIdentityClaims, MacroAuthorizationError,
+    },
+    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService},
 };
+
+type BotAuthorizationFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<BotAuthentication, Report<MacroAuthorizationError>>> + Send + 'a,
+    >,
+>;
+
+trait DynBotAuthorizer: Send + Sync {
+    fn authorize_bot<'a>(
+        &'a self,
+        bot_token: &'a str,
+        bot_scope: BotScope,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> BotAuthorizationFuture<'a>;
+}
+
+impl<B> DynBotAuthorizer for B
+where
+    B: BotAuthorizer,
+{
+    fn authorize_bot<'a>(
+        &'a self,
+        bot_token: &'a str,
+        bot_scope: BotScope,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> BotAuthorizationFuture<'a> {
+        Box::pin(BotAuthorizer::authorize_bot(
+            self,
+            bot_token,
+            bot_scope,
+            acting_user,
+        ))
+    }
+}
 
 /// Default authorization service backed by a credential validator.
 #[derive(Clone)]
 pub struct MacroAuthorizationServiceImpl<V> {
     validator: V,
     internal_auth: InternalAuthConfig,
+    bot_authorizer: Arc<dyn DynBotAuthorizer>,
 }
 
 impl<V> MacroAuthorizationServiceImpl<V> {
-    /// Create an authorization service using the supplied validator and required internal authorization configuration.
-    pub fn new(validator: V, internal_auth: InternalAuthConfig) -> Self {
+    /// Create an authorization service with required user, internal, and bot authorization dependencies.
+    pub fn new(
+        validator: V,
+        internal_auth: InternalAuthConfig,
+        bot_authorizer: impl BotAuthorizer,
+    ) -> Self {
         Self {
             validator,
             internal_auth,
+            bot_authorizer: Arc::new(bot_authorizer),
         }
     }
 }
@@ -40,6 +85,45 @@ where
             permissions: identity.permissions,
             organization_id: identity.organization_id,
         })
+    }
+
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(
+            bot_id = tracing::field::Empty,
+            token_id = tracing::field::Empty,
+            bot_scope = tracing::field::Empty,
+            team_id = tracing::field::Empty,
+            acting_user_id = tracing::field::Empty,
+        )
+    )]
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: BotScope,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        let bot = self
+            .bot_authorizer
+            .authorize_bot(bot_token, bot_scope, acting_user)
+            .await?;
+
+        let span = tracing::Span::current();
+        span.record("bot_id", tracing::field::display(bot.bot_id));
+        span.record("token_id", tracing::field::display(bot.token_id));
+        span.record("bot_scope", tracing::field::display(bot.bot_scope));
+        if let Some(team_id) = bot.team_id {
+            span.record("team_id", tracing::field::display(team_id));
+        }
+        if let Some(acting_user) = &bot.acting_user {
+            span.record(
+                "acting_user_id",
+                tracing::field::display(&acting_user.macro_user_id),
+            );
+        }
+
+        Ok(bot)
     }
 
     async fn authorize_internal(

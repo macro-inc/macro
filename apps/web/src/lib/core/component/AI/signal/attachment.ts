@@ -4,7 +4,6 @@ import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
 import {
   getCachedItemPreview,
   isAccessiblePreviewItem,
@@ -46,8 +45,6 @@ export const useChatAttachableHistory = () => {
 };
 
 export const useGetChatAttachmentInfo = () => {
-  const { channels } = useChannelsContext();
-
   // fallback for callers that only have an id: the mentions menu and
   // attachment pickers render previews, so the item is usually cached
   const cachedDocumentFileType = (id: string): string | undefined => {
@@ -80,31 +77,14 @@ export const useGetChatAttachmentInfo = () => {
     };
   };
 
-  const getProjectAttachment = (id: string): Attachment | undefined => {
-    return {
-      entity_id: id,
-      entity_type: 'project',
-    };
-  };
-
   const getChannelAttachment = ({
     itemId: id,
   }: ItemMention): Attachment | undefined => {
     if (!ENABLE_CHAT_CHANNEL_ATTACHMENT) return;
 
-    const item = channels().find((item) => item.id === id);
-    if (!item) return;
-
     return {
-      entity_id: item.id,
+      entity_id: id,
       entity_type: 'channel',
-    };
-  };
-
-  const getEmailAttachment = (mention: ItemMention): Attachment | undefined => {
-    return {
-      entity_id: mention.itemId,
-      entity_type: 'email_thread',
     };
   };
 
@@ -113,12 +93,14 @@ export const useGetChatAttachmentInfo = () => {
   ): Attachment | undefined => {
     if (mention.itemType === 'document') {
       return getDocumentAttachment(mention.itemId, mention.fileType);
+    } else if (mention.itemType === 'call') {
+      return { entity_id: mention.itemId, entity_type: 'document' };
     } else if (mention.itemType === 'channel') {
       return getChannelAttachment(mention);
     } else if (mention.itemType === 'thread') {
-      return getEmailAttachment(mention);
+      return { entity_id: mention.itemId, entity_type: 'email_thread' };
     } else if (mention.itemType === 'project') {
-      return getProjectAttachment(mention.itemId);
+      return { entity_id: mention.itemId, entity_type: 'project' };
     }
   };
 

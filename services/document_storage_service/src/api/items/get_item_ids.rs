@@ -3,7 +3,7 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::document_storage_service_internal::GetItemIDsResponse;
 
 #[derive(serde::Deserialize)]
@@ -13,10 +13,10 @@ pub struct Params {
 }
 
 /// Gets the ids of the items the user has access to
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn get_item_ids_handler(
     State(ctx): State<ApiContext>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Query(Params {
         item_type,
         exclude_owned,
@@ -24,7 +24,7 @@ pub async fn get_item_ids_handler(
 ) -> Result<(StatusCode, Json<GetItemIDsResponse>), (StatusCode, String)> {
     tracing::info!("get_item_ids");
 
-    let user_id = user.user_context.user_id.clone();
+    let user_id = user.authorization.user.user_context.user_id.clone();
 
     if matches!(user_id.as_str(), "" | MACRO_INTERNAL_USER_ID) {
         return Err((

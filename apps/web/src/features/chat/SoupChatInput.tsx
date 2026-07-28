@@ -1,4 +1,3 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -24,18 +23,16 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createEffect, onMount } from 'solid-js';
 
 function SoupChatInputInner() {
-  const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
     block: 'chat',
     showOpenTabs: true,
   });

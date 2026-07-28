@@ -18,9 +18,11 @@ use rmcp::transport::streamable_http_server::{
 };
 use std::sync::Arc;
 use tokio::time::Duration;
+use tokio_util::task::TaskTracker;
 use tool_service::AuthenticatedToolService;
 
 const AUTH_PROXY_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -33,7 +35,8 @@ async fn main() -> anyhow::Result<()> {
     // responses.
     let item_base_url = config.app_base_url.as_ref().to_string();
 
-    let context = build_context(&config).await?;
+    let event_broker_tracker = TaskTracker::new();
+    let context = build_context(&config, event_broker_tracker.clone()).await?;
 
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
@@ -80,9 +83,23 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("MCP server listening on http://{addr}/mcp");
 
-    axum::serve(listener, app)
+    let server_result = axum::serve(listener, app)
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
-        .context("MCP server error")?;
+        .context("MCP server error");
 
-    Ok(())
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
 }

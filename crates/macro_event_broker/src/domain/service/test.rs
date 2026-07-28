@@ -1,17 +1,22 @@
 use std::future::pending;
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use std::time::Duration;
 
 use macro_event_topics::{MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
+use tokio::sync::Notify;
+use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{Event, EventBrokerError, MacroEvent, MessageWrapper, TopicEvent};
-use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, MessageParts};
+use crate::domain::ports::{
+    EventConsumer, EventPublisher, MacroEventBroker, MessageParts, Spawner,
+};
+use crate::outbound::spawner::GlobalSpawner;
 
 /// A captured publish call: topic, key, and raw payload bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +43,21 @@ impl EventPublisher for RecordingPublisher {
     }
 }
 
+struct RecordingSpawner {
+    spawn_count: Arc<AtomicUsize>,
+}
+
+impl Spawner for RecordingSpawner {
+    fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.spawn_count.fetch_add(1, Ordering::SeqCst);
+        tokio::spawn(future)
+    }
+}
+
 struct PendingPublisher {
     started: Arc<AtomicBool>,
 }
@@ -46,6 +66,19 @@ impl EventPublisher for PendingPublisher {
     async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         pending().await
+    }
+}
+
+struct GatedPublisher {
+    started: Arc<AtomicBool>,
+    release: Arc<Notify>,
+}
+
+impl EventPublisher for GatedPublisher {
+    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
+        self.started.store(true, Ordering::SeqCst);
+        self.release.notified().await;
+        Ok(())
     }
 }
 
@@ -101,9 +134,7 @@ pub enum ExampleTopicEvent {
 impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 pub struct ExampleMacroEvent {
@@ -223,9 +254,7 @@ impl Serialize for UnserializableTopicEvent {
 impl TopicEvent for UnserializableTopicEvent {
     type Topic = MacroExampleTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 struct UnserializableMacroEvent {
@@ -248,9 +277,15 @@ impl MacroEvent for UnserializableMacroEvent {
     }
 }
 
+fn unserializable_event() -> UnserializableMacroEvent {
+    UnserializableMacroEvent {
+        event: Event::with_event_id(Uuid::from_u128(2), UnserializableTopicEvent),
+    }
+}
+
 #[tokio::test]
 async fn dispatch_serializes_and_routes() {
-    let service = MacroEventBrokerService::new(RecordingPublisher::default());
+    let service = MacroEventBrokerService::new(RecordingPublisher::default(), GlobalSpawner);
     let event = example_event();
     let expected_payload = serde_json::to_vec(event.event()).unwrap();
 
@@ -272,9 +307,12 @@ async fn dispatch_serializes_and_routes() {
 #[tokio::test]
 async fn dispatch_returns_before_publish_completes() {
     let started = Arc::new(AtomicBool::new(false));
-    let service = MacroEventBrokerService::new(PendingPublisher {
-        started: Arc::clone(&started),
-    });
+    let service = MacroEventBrokerService::new(
+        PendingPublisher {
+            started: Arc::clone(&started),
+        },
+        GlobalSpawner,
+    );
 
     let handle = service
         .send_event(&example_event())
@@ -291,10 +329,13 @@ async fn dispatch_returns_before_publish_completes() {
 async fn dispatch_cancels_publish_at_six_second_timeout() {
     let started = Arc::new(AtomicBool::new(false));
     let dropped = Arc::new(AtomicBool::new(false));
-    let service = MacroEventBrokerService::new(HangingPublisher {
-        started: Arc::clone(&started),
-        dropped: Arc::clone(&dropped),
-    });
+    let service = MacroEventBrokerService::new(
+        HangingPublisher {
+            started: Arc::clone(&started),
+            dropped: Arc::clone(&dropped),
+        },
+        GlobalSpawner,
+    );
 
     let handle = service
         .send_event(&example_event())
@@ -321,9 +362,12 @@ async fn dispatch_cancels_publish_at_six_second_timeout() {
 #[tokio::test]
 async fn dispatch_returns_publisher_failure_from_task() {
     let attempted = Arc::new(AtomicBool::new(false));
-    let service = MacroEventBrokerService::new(FailingPublisher {
-        attempted: Arc::clone(&attempted),
-    });
+    let service = MacroEventBrokerService::new(
+        FailingPublisher {
+            attempted: Arc::clone(&attempted),
+        },
+        GlobalSpawner,
+    );
 
     let error = service
         .send_event(&example_event())
@@ -337,14 +381,122 @@ async fn dispatch_returns_publisher_failure_from_task() {
 }
 
 #[tokio::test]
-async fn dispatch_returns_serialization_failure_without_publishing() {
-    let service = MacroEventBrokerService::new(RecordingPublisher::default());
-    let event = UnserializableMacroEvent {
-        event: Event::with_event_id(Uuid::from_u128(2), UnserializableTopicEvent),
-    };
+async fn dispatch_uses_injected_spawner_once() {
+    let spawn_count = Arc::new(AtomicUsize::new(0));
+    let service = MacroEventBrokerService::new(
+        RecordingPublisher::default(),
+        RecordingSpawner {
+            spawn_count: Arc::clone(&spawn_count),
+        },
+    );
 
-    let error = service.send_event(&event).unwrap_err();
+    service
+        .send_event(&example_event())
+        .expect("dispatch should succeed")
+        .await
+        .expect("publish task should complete")
+        .expect("publish should succeed");
+
+    assert_eq!(spawn_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn task_tracker_waits_for_unfinished_publish() {
+    let started = Arc::new(AtomicBool::new(false));
+    let release = Arc::new(Notify::new());
+    let tracker = TaskTracker::new();
+    let service = MacroEventBrokerService::new(
+        GatedPublisher {
+            started: Arc::clone(&started),
+            release: Arc::clone(&release),
+        },
+        tracker.clone(),
+    );
+
+    let handle = service
+        .send_event(&example_event())
+        .expect("dispatch should succeed");
+    tokio::task::yield_now().await;
+    assert!(started.load(Ordering::SeqCst));
+
+    tracker.close();
+    let wait = tracker.wait();
+    tokio::pin!(wait);
+    tokio::select! {
+        () = &mut wait => panic!("tracker should wait for the unfinished publish"),
+        () = tokio::task::yield_now() => {}
+    }
+
+    release.notify_one();
+    handle
+        .await
+        .expect("publish task should complete")
+        .expect("publish should succeed");
+    wait.await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn task_tracker_drains_hanging_publish_after_timeout() {
+    let started = Arc::new(AtomicBool::new(false));
+    let dropped = Arc::new(AtomicBool::new(false));
+    let tracker = TaskTracker::new();
+    let service = MacroEventBrokerService::new(
+        HangingPublisher {
+            started: Arc::clone(&started),
+            dropped: Arc::clone(&dropped),
+        },
+        tracker.clone(),
+    );
+
+    let handle = service
+        .send_event(&example_event())
+        .expect("dispatch should succeed");
+    tokio::task::yield_now().await;
+    assert!(started.load(Ordering::SeqCst));
+
+    tracker.close();
+    tokio::time::advance(Duration::from_secs(5)).await;
+    tokio::task::yield_now().await;
+    assert!(!dropped.load(Ordering::SeqCst));
+
+    tokio::time::advance(Duration::from_secs(1)).await;
+    tracker.wait().await;
+    let error = handle
+        .await
+        .expect("publish task should complete")
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        EventBrokerError::PublishTimeout { timeout } if timeout == PUBLISH_TIMEOUT
+    ));
+    assert!(dropped.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn dispatch_returns_serialization_failure_without_publishing() {
+    let service = MacroEventBrokerService::new(RecordingPublisher::default(), GlobalSpawner);
+
+    let error = service.send_event(&unserializable_event()).unwrap_err();
+
     assert!(matches!(error, EventBrokerError::Serialization(_)));
     tokio::task::yield_now().await;
+    assert!(service.publisher.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn serialization_failure_does_not_invoke_spawner_or_publisher() {
+    let spawn_count = Arc::new(AtomicUsize::new(0));
+    let service = MacroEventBrokerService::new(
+        RecordingPublisher::default(),
+        RecordingSpawner {
+            spawn_count: Arc::clone(&spawn_count),
+        },
+    );
+
+    let error = service.send_event(&unserializable_event()).unwrap_err();
+
+    assert!(matches!(error, EventBrokerError::Serialization(_)));
+    assert_eq!(spawn_count.load(Ordering::SeqCst), 0);
     assert!(service.publisher.calls.lock().unwrap().is_empty());
 }

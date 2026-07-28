@@ -16,9 +16,9 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
-import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -67,10 +67,10 @@ import { webSearchHandler } from './WebSearch';
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
+  ImportNotionPage: importNotionPageHandler,
   GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
-  ListCallRecords: listCallRecordsHandler,
   ListImportEntities: listImportEntitiesHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,

@@ -13,7 +13,7 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
@@ -107,7 +107,29 @@ pub fn chat_create_router<
         .with_state(state)
 }
 
-/// Build the router for all `/{chat_id}` routes.
+/// Build the router for the read-only `GET /{chat_id}` view route.
+///
+/// Separated from [`chat_id_router`] so callers can apply
+/// `ensure_chat_exists` without also requiring a real authenticated user:
+/// the [`ChatAccessLevelExtractor`] already grants `ViewAccessLevel` to
+/// anonymous callers when the chat has public-link view sharing enabled,
+/// so gating this route on authentication would 401 legitimate public-link
+/// viewers before the extractor ever runs.
+pub fn chat_view_router<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    P: UserRolesAndPermissionsService,
+    T: Send + Sync + 'static,
+>(
+    state: ChatRouterState<S, Svc, Auth, P>,
+) -> Router<T> {
+    Router::new()
+        .route("/{chat_id}", get(get_chat_handler::<S, Svc, Auth, P>))
+        .with_state(state)
+}
+
+/// Build the router for the remaining, owner/editor-only `/{chat_id}` routes.
 ///
 /// These routes require `ensure_chat_exists` middleware to populate
 /// `ChatBasic` in extensions before the [`ChatAccessLevelExtractor`] runs.
@@ -123,8 +145,7 @@ pub fn chat_id_router<
     Router::new()
         .route(
             "/{chat_id}",
-            get(get_chat_handler::<S, Svc, Auth, P>)
-                .delete(delete_chat_handler::<S, Svc, Auth, P>)
+            delete(delete_chat_handler::<S, Svc, Auth, P>)
                 .patch(patch_chat_handler::<S, Svc, Auth, P>),
         )
         .route(
@@ -184,7 +205,11 @@ pub struct CreateChatRequest {
     )
 )]
 /// Create a new chat.
-#[tracing::instrument(skip(state, user, _access, req), fields(user_id = %user.macro_user_id), err(Debug))]
+#[tracing::instrument(
+    skip(state, user, _access, req),
+    fields(actor = %user.acting_entity()),
+    err(Debug)
+)]
 pub async fn create_chat_handler<
     S: ChatService,
     Svc: EntityAccessService,
@@ -192,15 +217,17 @@ pub async fn create_chat_handler<
     P: UserRolesAndPermissionsService,
 >(
     State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     // 402 on no perms
     _access: ChatModelAccess<Auth, P>,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>> {
+    let user = &user.authorization.user;
+
     let id = state
         .inner
         .create(
-            user.macro_user_id,
+            user.macro_user_id.clone(),
             CreateChatArgs {
                 name: req.name.unwrap_or_else(|| "New Chat".to_string()),
                 project_id: req.project_id,

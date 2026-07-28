@@ -96,19 +96,11 @@ import {
   type SearchLocation,
 } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
-import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
-import { useQueryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
-import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
-import {
-  invalidateSoupEntity,
-  refetchSoupEntity,
-} from '@queries/soup/normalized-cache';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
@@ -213,93 +205,8 @@ const MobileTabLoadingBar = () => (
   </div>
 );
 
-const useSoupNotificationInvalidators = () => {
-  const notificationSource = useGlobalNotificationSource();
-  const entityQueryClient = useQueryClient();
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'channel',
-    (notification) => {
-      const meta = notification.notification_metadata;
-
-      let threadId;
-
-      if (meta.tag === 'channel_mention') {
-        // A mention's thread row is keyed by its thread root: threadId is
-        // only present for mentions inside replies; a top-level mention's
-        // root is the message itself. Same totalization as
-        // channelThreadNotificationIds and the backend's secondary entity —
-        // without the fallback a live top-level mention never pulls its
-        // thread row into the loaded list, and only shows after a refresh.
-        threadId = (
-          meta.content.threadId ?? meta.content.messageId
-        )?.toString();
-      } else if (meta.tag === 'channel_message_reply') {
-        threadId = meta.content.threadId?.toString();
-      }
-
-      refetchSoupEntity(notification.entity_id, 'channel');
-      invalidateSoupEntity(notification.entity_id);
-      invalidateEntityNotifications(notification.entity_id);
-
-      // For new inbox, we want to display channel threads so we should refetch the thread
-      // item if this notification was for a thread
-      if (threadId) {
-        refetchSoupEntity(threadId, 'channelThread');
-        invalidateSoupEntity(threadId);
-        invalidateEntityNotifications(threadId);
-      }
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'chat',
-    (notification) => {
-      refetchSoupEntity(notification.entity_id, 'chat');
-      invalidateSoupEntity(notification.entity_id);
-      invalidateEntityNotifications(notification.entity_id);
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'email_thread',
-    (notification) => {
-      refetchSoupEntity(notification.entity_id, 'emailThread');
-      invalidateSoupEntity(notification.entity_id);
-      // invalidate thread cache so thread gets fetched (with new message) on next load
-      entityQueryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
-      });
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'document',
-    (notification) => {
-      if (notification.notification_event_type === 'task_assigned') {
-        refetchSoupEntity(notification.entity_id, 'document');
-        invalidateSoupEntity(notification.entity_id);
-        invalidateEntityNotifications(notification.entity_id);
-      }
-    }
-  );
-
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'foreign_entity',
-    (notification) => {
-      refetchSoupEntity(notification.entity_id, 'foreignEntity');
-      invalidateSoupEntity(notification.entity_id);
-      invalidateEntityNotifications(notification.entity_id);
-    }
-  );
-};
-
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
+const INBOX_PREVIEW_OPEN_PREFERENCE_KEY = 'macro:pref:soup:inbox:preview-open';
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -343,6 +250,8 @@ export const SoupView = (props: SoupViewProps) => {
   const hasPreviewItems = useSoupPreviewAvailability({
     rows: soupView.rows,
     isLoading: soupView.source.isLoading,
+    isFetching: soupView.source.isFetching,
+    isPlaceholderData: soupView.source.isPlaceholderData,
     splitHandle: panel.handle,
   });
   const openFocusedEntityInPreview = () => {
@@ -385,6 +294,10 @@ export const SoupView = (props: SoupViewProps) => {
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
   );
+  const [inboxPreviewOpenPreference, setInboxPreviewOpenPreference] =
+    usePreference<boolean>(INBOX_PREVIEW_OPEN_PREFERENCE_KEY, {
+      default: true,
+    });
 
   // Shared CRM view opened via a `?crmView=` link — only honored on the
   // Customers view; its pieces win over persisted/preset values in init.
@@ -424,6 +337,7 @@ export const SoupView = (props: SoupViewProps) => {
         initialSearchText: initialCrmView
           ? (initialCrmView.searchText ?? '')
           : (persistedSearchText ?? props.initialSearchText),
+        preferInitialFilters: initialCrmView !== undefined,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
@@ -439,7 +353,13 @@ export const SoupView = (props: SoupViewProps) => {
         initialSortIds = ['updated_at'];
       }
 
-      let initialActiveTab = initialCrmView?.activeTab ?? persistedActiveTab;
+      const persistedViewActiveTab = isListViewID(contentId)
+        ? soupView.getPersistedActiveTab(contentId)
+        : undefined;
+      let initialActiveTab =
+        initialCrmView?.activeTab ??
+        persistedActiveTab ??
+        persistedViewActiveTab;
 
       if (initialActiveTab === undefined && isListViewID(contentId)) {
         initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
@@ -481,7 +401,7 @@ export const SoupView = (props: SoupViewProps) => {
   createEffect(() => {
     if (initialInboxPreviewResolved || soupView.source.isLoading()) return;
     initialInboxPreviewResolved = true;
-    if (contentId !== 'inbox') return;
+    if (contentId !== 'inbox' || !inboxPreviewOpenPreference()) return;
     if (panel.handle.lastNavigationCause() !== 'fresh') return;
     if (panel.handle.isViewerSplit()) return;
     if (!hasPreviewItems()) return;
@@ -530,8 +450,6 @@ export const SoupView = (props: SoupViewProps) => {
       { defer: true }
     )
   );
-
-  useSoupNotificationInvalidators();
 
   const component = createMemo(() => {
     const content = panel.handle.content();
@@ -723,6 +641,9 @@ export const SoupView = (props: SoupViewProps) => {
         variant={props.filterBarVariant}
         hasPreviewItems={hasPreviewItems()}
         onPreviewEngage={openFocusedEntityInPreview}
+        onPreviewOpenChange={(open) => {
+          if (contentId === 'inbox') setInboxPreviewOpenPreference(open);
+        }}
       />
       <Show when={applyDefaultCrmView}>
         <CrmDefaultViewLoader />

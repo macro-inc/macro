@@ -3883,12 +3883,22 @@
             }
           },
           {
+            "name": "x-macro-bot-token",
+            "in": "header",
+            "description": "Preferred bot authentication token",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
             "name": "x-macro-channel-bot-token",
             "in": "header",
-            "description": "Bot authentication token",
-            "required": true,
+            "description": "Legacy channel-scoped bot authentication token",
+            "required": false,
+            "deprecated": true,
             "schema": {
-              "type": "string"
+              "type": ["string", "null"]
             }
           }
         ],
@@ -3924,6 +3934,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -4678,6 +4698,80 @@
         }
       }
     },
+    "/crm/companies/{company_id}/name": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_company_name"],
+        "summary": "Rename a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only). The name is a team-scoped override\n(`custom_name`) and never touches the global domain directory.",
+        "operationId": "set_crm_company_name",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to rename",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCompanyNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
@@ -4769,6 +4863,80 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/name": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_name"],
+        "summary": "Rename a CRM contact. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the caller must be on the team\nthat owns the contact's company (hidden contacts are reachable for\nadmin/owner only). The name overwrites the team-scoped\n`crm_contacts.name` column.",
+        "operationId": "set_crm_contact_name",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact to rename",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -12642,7 +12810,7 @@
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Team owner. Omit for a user-owned bot."
+            "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
           },
           "token_expires_at": {
             "type": ["string", "null"],
@@ -13556,7 +13724,7 @@
       },
       "CrmPermissionRole": {
         "type": "string",
-        "description": "Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
+        "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
       },
       "CrmTeamSettingsResponse": {
@@ -18480,6 +18648,17 @@
           }
         }
       },
+      "SetCompanyNameRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /companies/{company_id}/name`.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name for the company. Stored on the team-scoped\n`crm_companies.custom_name` override, which read paths COALESCE\nover the global directory name — the shared directory is never\nmodified. Must be non-blank (400 otherwise)."
+          }
+        }
+      },
       "SetContactHiddenRequest": {
         "type": "object",
         "description": "Request body for `PUT /contacts/{contact_id}/hidden`.",
@@ -18488,6 +18667,17 @@
           "hidden": {
             "type": "boolean",
             "description": "New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate/depopulate."
+          }
+        }
+      },
+      "SetContactNameRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /contacts/{contact_id}/name`.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name for the contact. Stored on `crm_contacts.name`,\nwhich is already team-scoped — unlike company renames no global\ndirectory is involved. Must be non-blank (400 otherwise)."
           }
         }
       },

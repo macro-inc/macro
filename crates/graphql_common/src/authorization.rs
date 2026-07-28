@@ -6,6 +6,7 @@ use axum::extract::FromRef;
 use axum_extra::extract::Cached;
 use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -25,10 +26,16 @@ where
         return Ok(user_id.clone());
     }
 
-    let Cached(authorization) =
-        extract_part::<Cached<OptionalMacroAuthorizationExtractor<Auth>>, St>(ctx).await?;
+    let Cached(authorization) = extract_part::<
+        Cached<OptionalMacroAuthorizationExtractor<Auth, UserOrInternalService>>,
+        St,
+    >(ctx)
+    .await?;
 
     authorization
-        .macro_user_id
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
+        .map(|user| user.macro_user_id.clone())
         .ok_or_else(|| async_graphql::Error::new("authentication required"))
 }

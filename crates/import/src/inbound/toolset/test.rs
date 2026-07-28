@@ -20,7 +20,8 @@ fn row(source: ImportSource, status: ImportStatus) -> ImportEntity {
         initiator: Initiator::Onboarding,
         metadata: serde_json::json!({"title": "T"}),
         entity_id: matches!(status, ImportStatus::Imported).then(|| "doc-1".to_string()),
-        entity_type: matches!(status, ImportStatus::Imported).then(|| "task".to_string()),
+        entity_type: matches!(status, ImportStatus::Imported)
+            .then(|| source.entity_type().to_string()),
         last_error: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
@@ -31,6 +32,7 @@ fn row(source: ImportSource, status: ImportStatus) -> ImportEntity {
 #[derive(Default)]
 struct MockStager {
     staged_calls: Mutex<Vec<(Initiator, ImportSource, String)>>,
+    notion_import_calls: Mutex<Vec<String>>,
     stage_outcome: Option<StageOutcome>,
 }
 
@@ -80,6 +82,24 @@ impl ImportStager for MockStager {
         _status: Option<ImportStatus>,
     ) -> Result<Vec<ImportEntity>> {
         Ok(vec![row(ImportSource::Linear, ImportStatus::Imported)])
+    }
+}
+
+impl NotionPageImporter for MockStager {
+    async fn import_notion_page(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        page_url_or_id: &str,
+    ) -> Result<ImportNotionPageOutcome> {
+        self.notion_import_calls
+            .lock()
+            .unwrap()
+            .push(page_url_or_id.to_string());
+        Ok(ImportNotionPageOutcome::Imported {
+            entity: row(ImportSource::Notion, ImportStatus::Imported),
+            already_existed: false,
+            by_teammate: false,
+        })
     }
 }
 
@@ -198,6 +218,42 @@ async fn teammate_dedup_response_tells_the_agent_not_to_duplicate() {
     assert_eq!(response.outcome, "already_imported_by_teammate");
     assert!(response.message.contains("Do NOT create a duplicate"));
     assert!(response.entity.imported_by_teammate);
+}
+
+#[tokio::test]
+async fn import_notion_page_runs_the_workflow_and_returns_the_document() {
+    let (service_context, request_context, stager) = contexts(ToolPolicy::chat());
+    let page_url = "https://app.notion.com/p/4d005e63b2fd4d079df4e376e35b7519";
+
+    let response = ImportNotionPage {
+        page_url: format!("  {page_url}  "),
+    }
+    .call(service_context, request_context)
+    .await
+    .expect("Notion import succeeds");
+
+    assert_eq!(response.outcome, "imported");
+    assert_eq!(response.entity.entity_id.as_deref(), Some("doc-1"));
+    assert_eq!(response.entity.entity_type.as_deref(), Some("md"));
+    assert_eq!(
+        stager.notion_import_calls.lock().unwrap().as_slice(),
+        &[page_url.to_string()]
+    );
+}
+
+#[tokio::test]
+async fn import_notion_page_requires_a_page_url() {
+    let (service_context, request_context, stager) = contexts(ToolPolicy::chat());
+
+    let error = ImportNotionPage {
+        page_url: "  ".to_string(),
+    }
+    .call(service_context, request_context)
+    .await
+    .expect_err("empty page URL must fail");
+
+    assert!(error.description.contains("required"), "{error:?}");
+    assert!(stager.notion_import_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

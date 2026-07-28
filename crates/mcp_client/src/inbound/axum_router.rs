@@ -10,12 +10,15 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
+
+#[cfg(test)]
+mod test;
 
 /// Hook invoked after an OAuth flow completes and the credentials are saved.
 /// Hosts use this to react to a connection the moment it exists (e.g. start
@@ -165,13 +168,22 @@ pub struct StartAuthResponse {
 }
 
 /// Query parameters received on the OAuth callback redirect.
+///
+/// Providers redirect here on both success (`code` + `state`) and failure
+/// (`error` [+ `error_description`], per RFC 6749 §4.1.2.1). All fields are
+/// optional so a rejected authorization can still be parsed and logged
+/// instead of failing Axum's query extraction before the handler runs.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct AuthCallbackParams {
-    /// Authorization code from the OAuth provider.
-    code: String,
+    /// Authorization code from the OAuth provider. Present on success.
+    code: Option<String>,
     /// CSRF state parameter.
-    state: String,
+    state: Option<String>,
+    /// OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+    error: Option<String>,
+    /// Human-readable error description from the provider.
+    error_description: Option<String>,
 }
 
 /// An MCP server record as returned by the API.
@@ -206,6 +218,12 @@ pub enum McpHandlerErr {
     /// The requested server was not found.
     #[error("server not found")]
     NotFound,
+    /// The OAuth provider rejected the authorization request.
+    #[error("authorization rejected by provider: {0}")]
+    OAuthRejected(String),
+    /// The callback was missing both a code and an error parameter.
+    #[error("malformed OAuth callback: missing code and error parameters")]
+    MalformedCallback,
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -215,6 +233,9 @@ impl IntoResponse for McpHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             McpHandlerErr::NotFound => StatusCode::NOT_FOUND,
+            McpHandlerErr::OAuthRejected(_) | McpHandlerErr::MalformedCallback => {
+                StatusCode::BAD_REQUEST
+            }
             McpHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -244,7 +265,7 @@ impl IntoResponse for McpHandlerErr {
 #[tracing::instrument(skip_all, err)]
 pub async fn list_servers<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ServerResponse>>, McpHandlerErr>
 where
     S: McpServerStore,
@@ -252,9 +273,10 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let records = state
         .store
-        .list(&macro_user_id)
+        .list(&user.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -279,7 +301,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<AddServerRequest>,
 ) -> Result<(StatusCode, Json<ServerResponse>), McpHandlerErr>
 where
@@ -288,8 +310,9 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let record = McpServerRecord {
-        user_id: macro_user_id,
+        user_id: user.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
         credentials: None,
@@ -325,7 +348,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn update_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<UpdateServerRequest>,
 ) -> Result<Json<ServerResponse>, McpHandlerErr>
 where
@@ -334,9 +357,10 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let mut record = state
         .store
-        .load(&macro_user_id, &body.url)
+        .load(&user.macro_user_id, &body.url)
         .await
         .map_err(anyhow::Error::from)?
         .ok_or(McpHandlerErr::NotFound)?;
@@ -373,7 +397,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn delete_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(params): Query<DeleteServerParams>,
 ) -> Result<StatusCode, McpHandlerErr>
 where
@@ -382,9 +406,10 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     state
         .store
-        .delete(&macro_user_id, &params.url)
+        .delete(&user.macro_user_id, &params.url)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -407,7 +432,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<StartAuthRequest>,
 ) -> Result<Json<StartAuthResponse>, McpHandlerErr>
 where
@@ -415,12 +440,34 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
+    let user = &authorization.authorization.user;
     let authorization_url = state
         .oauth
-        .start_authorization(&macro_user_id, &body.server_url, &body.server_name)
+        .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
         .await?;
 
     Ok(Json(StartAuthResponse { authorization_url }))
+}
+
+/// Classify a callback as a successful `(code, state)` pair or a handler
+/// error, logging provider rejections and malformed callbacks along the way.
+fn parse_callback_params(params: AuthCallbackParams) -> Result<(String, String), McpHandlerErr> {
+    if let Some(error) = params.error {
+        let reason = match params.error_description {
+            Some(description) => format!("{error}: {description}"),
+            None => error,
+        };
+        tracing::warn!(reason, "MCP OAuth provider rejected authorization");
+        return Err(McpHandlerErr::OAuthRejected(reason));
+    }
+
+    match (params.code, params.state) {
+        (Some(code), Some(state)) => Ok((code, state)),
+        _ => {
+            tracing::warn!("MCP OAuth callback missing both code and error parameters");
+            Err(McpHandlerErr::MalformedCallback)
+        }
+    }
 }
 
 #[utoipa::path(
@@ -431,11 +478,13 @@ where
     params(AuthCallbackParams),
     responses(
         (status = 200, description = "OAuth flow completed successfully"),
+        (status = 400, body = ErrorResponse, description = "Provider rejected authorization, or the callback was malformed"),
         (status = 500, body = ErrorResponse),
     )
 )]
-/// OAuth callback endpoint — receives code and state from the authorization server.
-#[tracing::instrument(skip_all, err)]
+/// OAuth callback endpoint — receives code and state, or an error, from the
+/// authorization server.
+#[tracing::instrument(skip_all, err, fields(state = ?params.state))]
 pub async fn auth_callback<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
     Query(params): Query<AuthCallbackParams>,
@@ -445,9 +494,11 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
+    let (code, csrf_state) = parse_callback_params(params)?;
+
     let record = state
         .oauth
-        .exchange_authorization_code(&params.code, &params.state)
+        .exchange_authorization_code(&code, &csrf_state)
         .await?;
 
     // Let the host react to the brand-new connection (e.g. kick off import

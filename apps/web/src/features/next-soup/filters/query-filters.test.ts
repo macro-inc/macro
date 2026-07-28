@@ -1,7 +1,10 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import type { Query } from './filter-store/types';
-import { soupItemMatchesQuery } from './query-filters';
+import {
+  soupItemMatchesProjectMembership,
+  soupItemMatchesQuery,
+} from './query-filters';
 
 const documentItem = (id: string, overrides: object = {}): SoupApiItem =>
   ({ tag: 'document', data: { id, ...overrides } }) as unknown as SoupApiItem;
@@ -20,8 +23,11 @@ const taskItem = (id: string): SoupApiItem =>
 const emailItem = (id: string): SoupApiItem =>
   ({ tag: 'emailThread', data: { id } }) as unknown as SoupApiItem;
 
-const chatItem = (id: string): SoupApiItem =>
-  ({ tag: 'chat', data: { id } }) as unknown as SoupApiItem;
+const chatItem = (id: string, overrides: object = {}): SoupApiItem =>
+  ({ tag: 'chat', data: { id, ...overrides } }) as unknown as SoupApiItem;
+
+const projectItem = (id: string, overrides: object = {}): SoupApiItem =>
+  ({ tag: 'project', data: { id, ...overrides } }) as unknown as SoupApiItem;
 
 describe('soupItemMatchesQuery', () => {
   it('rejects entity types the query never references (nil-fill gating)', () => {
@@ -128,5 +134,78 @@ describe('soupItemMatchesQuery', () => {
     expect(
       soupItemMatchesQuery(taggedTaskItem('doc-one', ['opt-1']), query)
     ).toBe(false);
+  });
+});
+
+describe('soupItemMatchesProjectMembership', () => {
+  const PROJECT = 'proj-1';
+
+  it('gates documents by their projectId', () => {
+    expect(
+      soupItemMatchesProjectMembership(
+        documentItem('doc-in', { projectId: PROJECT }),
+        PROJECT
+      )
+    ).toBe(true);
+    // A task created/opened outside the folder must not leak in.
+    expect(
+      soupItemMatchesProjectMembership(
+        documentItem('doc-other', { projectId: 'proj-2' }),
+        PROJECT
+      )
+    ).toBe(false);
+    // Root-level documents carry no project.
+    expect(
+      soupItemMatchesProjectMembership(
+        documentItem('doc-root', { projectId: null }),
+        PROJECT
+      )
+    ).toBe(false);
+    expect(
+      soupItemMatchesProjectMembership(documentItem('doc-none'), PROJECT)
+    ).toBe(false);
+  });
+
+  it('gates chats by their projectId', () => {
+    expect(
+      soupItemMatchesProjectMembership(
+        chatItem('chat-in', { projectId: PROJECT }),
+        PROJECT
+      )
+    ).toBe(true);
+    expect(
+      soupItemMatchesProjectMembership(
+        chatItem('chat-other', { projectId: 'proj-2' }),
+        PROJECT
+      )
+    ).toBe(false);
+  });
+
+  it('gates child projects by their parentId', () => {
+    expect(
+      soupItemMatchesProjectMembership(
+        projectItem('sub-in', { parentId: PROJECT }),
+        PROJECT
+      )
+    ).toBe(true);
+    expect(
+      soupItemMatchesProjectMembership(
+        projectItem('sub-other', { parentId: 'proj-2' }),
+        PROJECT
+      )
+    ).toBe(false);
+    // The folder itself is not one of its own children.
+    expect(
+      soupItemMatchesProjectMembership(
+        projectItem(PROJECT, { parentId: null }),
+        PROJECT
+      )
+    ).toBe(false);
+  });
+
+  it('stays permissive for types with no project on the item', () => {
+    expect(
+      soupItemMatchesProjectMembership(emailItem('thread-1'), PROJECT)
+    ).toBe(true);
   });
 });

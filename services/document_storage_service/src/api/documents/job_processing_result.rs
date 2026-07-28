@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_authorization::OptionalMacroAuthorizationExtractor;
+use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
 use macro_db_client::document::get_document_process_content_from_job_id;
 use model::response::GenericErrorResponse;
 use model::response::GenericResponse;
@@ -33,15 +33,19 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(actor = tracing::field::Empty))]
 pub async fn job_processing_result_handler(
     State(db): State<PgPool>,
-    user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     Path(Params {
         document_id,
         job_id,
     }): Path<Params>,
 ) -> impl IntoResponse {
+    if let Some(actor) = user.acting_entity() {
+        tracing::Span::current().record("actor", tracing::field::display(actor));
+    }
+
     let processing_result =
         match get_document_process_content_from_job_id(&db, job_id.as_str(), document_id.as_str())
             .await

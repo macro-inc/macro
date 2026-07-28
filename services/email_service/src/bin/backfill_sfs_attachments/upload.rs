@@ -2,6 +2,7 @@ use anyhow::Context;
 use models_email::service::attachment::{AttachmentSfs, AttachmentUploadMetadata};
 use sqlx::PgPool;
 use static_file_service_client::put_file::PutFileResponse;
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -57,40 +58,37 @@ impl AttachmentProcessor {
         bytes: bytes::Bytes,
         mime_type: String,
     ) -> anyhow::Result<PutFileResponse> {
-        let mut last_err: Option<anyhow::Error> = None;
+        const MAX_ATTEMPTS: usize = 5;
 
-        for attempt in 1usize..=5 {
-            let res = self
-                .sfs_client
-                .put_file_with_bytes("a", bytes.clone(), mime_type.clone())
-                .await;
+        let retry_strategy = ExponentialBackoff::from_millis(2)
+            .factor(100)
+            .take(MAX_ATTEMPTS - 1);
+        let mut attempt = 0usize;
 
-            match res {
-                Ok(ok) => return Ok(ok),
-                Err(e) => {
-                    println!(
-                        "SFS upload failed (attempt {}/5). Will{} retry. Error: {:?}",
-                        attempt,
-                        if attempt < 5 { "" } else { " not" },
-                        e
-                    );
-
-                    let err = anyhow::anyhow!("{e:?}").context(format!(
-                        "Failed to upload attachment to SFS (attempt {attempt}/5)"
-                    ));
-                    last_err = Some(err);
-
-                    if attempt < 5 {
-                        // exponential backoff: 200ms, 400ms, 800ms, 1600ms
-                        let backoff_ms =
-                            200u64.saturating_mul(2u64.saturating_pow((attempt - 1) as u32));
-                        tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+        Retry::start(retry_strategy, || {
+            attempt += 1;
+            let bytes = bytes.clone();
+            let mime_type = mime_type.clone();
+            async move {
+                match self
+                    .sfs_client
+                    .put_file_with_bytes("a", bytes, mime_type)
+                    .await
+                {
+                    Ok(response) => Ok(response),
+                    Err(error) => {
+                        println!(
+                            "SFS upload failed (attempt {attempt}/{MAX_ATTEMPTS}). Will{} retry. Error: {error:?}",
+                            if attempt < MAX_ATTEMPTS { "" } else { " not" },
+                        );
+                        Err(anyhow::anyhow!("{error:?}").context(format!(
+                            "Failed to upload attachment to SFS (attempt {attempt}/{MAX_ATTEMPTS})"
+                        )))
                     }
                 }
             }
-        }
-
-        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to upload attachment to SFS")))
+        })
+        .await
     }
 
     async fn persist_sfs_metadata(

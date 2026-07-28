@@ -3,7 +3,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_db_client::notification::get_basic_cloud_storage_documents_metadata;
 use model::document_storage_service_internal::{
     DocumentMetadata, GetDocumentsMetadataRequest, GetDocumentsMetadataResponse,
@@ -13,7 +13,7 @@ use model::response::GenericResponse;
 #[tracing::instrument(skip(ctx, _auth), fields(document_count = ?request.document_ids.len()))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(request): Json<GetDocumentsMetadataRequest>,
 ) -> impl IntoResponse {
     // Validate input

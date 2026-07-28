@@ -22,11 +22,13 @@ use axum::extract::{Extension, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
+use chat::domain::events::{ChatCreatedMetadata, ChatMacroEvent};
 use chat::domain::ports::MessageService;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::dcs::create_chat;
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
 use memory::domain::MemoryService;
@@ -135,18 +137,18 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user, bearer, request), fields(chat_id=?request.chat_id, user_id = %user.macro_user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user, bearer, request), fields(chat_id=?request.chat_id, user_id = %user.authorization.user.macro_user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     model_access: DcsChatModelAccess,
-    user: MacroAuthorizationExtractor<DcsAuthorizationService>,
+    user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Extension(bearer): Extension<BearerToken>,
     Json(request): Json<HttpSendChatMessageRequest>,
 ) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
     Box::pin(send_chat_message_inner(
         state,
         model_access,
-        user.macro_user_id,
+        user.authorization.user.macro_user_id.clone(),
         bearer,
         request,
     ))
@@ -385,6 +387,22 @@ async fn create_new_chat(
             status: None,
         }
     })?;
+
+    // Fire-and-forget publish of the chat-created event; never fail or delay
+    // the stream on publish errors.
+    let event = ChatMacroEvent::created(ChatCreatedMetadata {
+        chat_id: new_chat_id.clone(),
+        owner: (**user_id).clone(),
+        name: DEFAULT_CHAT_NAME.to_string(),
+        project_id: None,
+    });
+    drop(
+        ctx.macro_event_broker
+            .send_event(&event)
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "failed to schedule chat event");
+            }),
+    );
 
     // Get the newly created chat
     let chat = get_chat(ctx, &new_chat_id, user_id.0.as_ref())

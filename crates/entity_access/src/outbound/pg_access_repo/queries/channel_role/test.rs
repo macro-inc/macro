@@ -4,6 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
 const TEAM_ALPHA: Uuid = Uuid::from_u128(0x000000000000000000000000000ea001);
+const TEAM_BETA: Uuid = Uuid::from_u128(0x000000000000000000000000000ea002);
 
 async fn insert_channel(
     pool: &PgPool,
@@ -58,27 +59,15 @@ async fn insert_user_participant(
     Ok(())
 }
 
-async fn insert_public_channel(pool: &PgPool, channel_id: Uuid) {
+async fn insert_team_bot(pool: &PgPool, bot_principal: &BotIdStr<'_>, team_id: Uuid) {
     sqlx::query!(
         r#"
-        INSERT INTO comms_channels (id, name, channel_type, owner_id)
-        VALUES ($1, 'Bot Channel', 'public', 'owner')
-        "#,
-        channel_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-async fn insert_bot(pool: &PgPool, bot_principal: &BotIdStr<'_>) {
-    sqlx::query!(
-        r#"
-        INSERT INTO bots (id, kind, name, handle)
-        VALUES ($1, 'system', 'Test Bot', $2)
+        INSERT INTO bots (id, kind, team_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Team Bot', $3)
         "#,
         bot_principal.as_uuid(),
-        format!("test-bot-{}", bot_principal.as_uuid()),
+        team_id,
+        format!("team-bot-{}", bot_principal.as_uuid()),
     )
     .execute(pool)
     .await
@@ -196,59 +185,112 @@ async fn non_team_channels_do_not_grant_team_members_view_only(pool: PgPool) -> 
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bot_channel_role_active_participant_receives_stored_role(
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_explicit_participation_wins_in_any_channel(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
-    insert_public_channel(&pool, channel_id).await;
-    insert_bot(&pool, &principal).await;
+    insert_channel(&pool, channel_id, "private", None).await?;
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
     insert_bot_participant(&pool, channel_id, &principal, false).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
+    let role = get_team_channel_role(&pool, &channel_id, &TEAM_ALPHA, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::Role(ParticipantRole::Admin));
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bot_channel_role_public_channel_non_participant_has_no_access(
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_matching_team_channel_is_view_only(pool: PgPool) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
+    insert_channel(&pool, channel_id, "team", Some(TEAM_ALPHA)).await?;
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
+
+    let role = get_team_channel_role(&pool, &channel_id, &TEAM_ALPHA, &principal).await?;
+
+    assert_eq!(role, ChannelRoleResult::ViewOnly);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_other_team_channel_has_no_implicit_access(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
-    insert_public_channel(&pool, channel_id).await;
-    insert_bot(&pool, &principal).await;
+    insert_channel(&pool, channel_id, "team", Some(TEAM_BETA)).await?;
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
+    let role = get_team_channel_role(&pool, &channel_id, &TEAM_ALPHA, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::NoAccess);
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bot_channel_role_departed_participant_has_no_access(pool: PgPool) -> anyhow::Result<()> {
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_non_team_channels_have_no_implicit_access(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
+
+    for channel_type in ["public", "private", "direct_message"] {
+        let channel_id = Uuid::new_v4();
+        insert_channel(&pool, channel_id, channel_type, None).await?;
+
+        let role = get_team_channel_role(&pool, &channel_id, &TEAM_ALPHA, &principal).await?;
+
+        assert_eq!(
+            role,
+            ChannelRoleResult::NoAccess,
+            "{channel_type} channels must not grant implicit access"
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_departed_participation_does_not_grant_a_role(
+    pool: PgPool,
+) -> anyhow::Result<()> {
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
-    insert_public_channel(&pool, channel_id).await;
-    insert_bot(&pool, &principal).await;
+    insert_channel(&pool, channel_id, "team", Some(TEAM_ALPHA)).await?;
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
     insert_bot_participant(&pool, channel_id, &principal, true).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
+    let role = get_team_channel_role(&pool, &channel_id, &TEAM_ALPHA, &principal).await?;
 
-    assert_eq!(role, ChannelRoleResult::NoAccess);
+    assert_eq!(role, ChannelRoleResult::ViewOnly);
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bot_channel_role_soft_deleted_participant_has_no_access(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_soft_deleted_bot_has_no_access(pool: PgPool) -> anyhow::Result<()> {
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
-    insert_public_channel(&pool, channel_id).await;
-    insert_bot(&pool, &principal).await;
+    insert_channel(&pool, channel_id, "team", Some(TEAM_ALPHA)).await?;
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
     insert_bot_participant(&pool, channel_id, &principal, false).await;
     sqlx::query!(
         "UPDATE bots SET deleted_at = now() WHERE id = $1",
@@ -257,19 +299,37 @@ async fn bot_channel_role_soft_deleted_participant_has_no_access(
     .execute(&pool)
     .await?;
 
-    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
+    let role = get_team_channel_role(&pool, &channel_id, &TEAM_ALPHA, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::NoAccess);
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bot_channel_role_unknown_channel_is_not_found(pool: PgPool) -> anyhow::Result<()> {
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_mismatched_bot_team_has_no_access(pool: PgPool) -> anyhow::Result<()> {
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
-    insert_bot(&pool, &principal).await;
+    insert_channel(&pool, channel_id, "team", Some(TEAM_BETA)).await?;
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
+    let role = get_team_channel_role(&pool, &channel_id, &TEAM_BETA, &principal).await?;
+
+    assert_eq!(role, ChannelRoleResult::NoAccess);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn team_channel_role_unknown_channel_is_not_found(pool: PgPool) -> anyhow::Result<()> {
+    let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
+    insert_team_bot(&pool, &principal, TEAM_ALPHA).await;
+
+    let role = get_team_channel_role(&pool, &Uuid::new_v4(), &TEAM_ALPHA, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::NotFound);
     Ok(())

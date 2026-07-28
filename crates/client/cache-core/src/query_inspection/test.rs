@@ -6,7 +6,7 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
         "__typename".to_string(),
         CacheValue::String("GraphqlSoupChannel".to_string()),
     )]);
-    // These are selections beneath the GraphqlSoupEntity union. The cached
+    // These are selections beneath the GraphqlSoupEntity interface. The cached
     // channel does not match the document-only fragment containing properties.
     let selections = vec![Selection::Fragment {
         type_condition: Some("GraphqlSoupDocument".to_string()),

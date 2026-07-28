@@ -318,6 +318,13 @@ impl KafkaEventConsumer<Ungrouped> {
         metadata_timeout: Duration,
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => {
+            // OAUTHBEARER requires polling once to install the initial token
+            // before a synchronous metadata request can connect to a broker.
+            let mut recv = std::pin::pin!(consumer.recv());
+            let waker = std::task::Waker::noop();
+            let mut context = std::task::Context::from_waker(waker);
+            let _ = std::future::Future::poll(recv.as_mut(), &mut context);
+
             let assignment = build_assignment(
                 consumer,
                 topics,

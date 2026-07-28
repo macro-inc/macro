@@ -463,6 +463,13 @@ where
         channel_id: Uuid,
         mut req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
+        if req.channel_name.is_none()
+            && req.convert_to_team_channel.is_none()
+            && req.auto_join_team.is_none()
+        {
+            return Ok(());
+        }
+
         let actor = require_user_actor(&actor)?;
         let info = self
             .repo
@@ -850,6 +857,13 @@ where
             tracing::error!(error=?err, "unable to upsert activity for attachment patch");
         }
 
+        if attachments_changed || content.is_some() {
+            self.repo
+                .touch_channel_updated_at(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        }
+
         Ok(())
     }
 
@@ -1002,9 +1016,18 @@ where
             ));
         }
 
+        let mut membership_changed = false;
         for participant in &req.participants {
-            self.repo
+            let participant_changed = self
+                .repo
                 .add_participant(channel_id, participant.copied(), ParticipantRole::Member)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            membership_changed |= participant_changed;
+        }
+        if membership_changed {
+            self.repo
+                .touch_channel_updated_at(channel_id)
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
@@ -1169,6 +1192,11 @@ where
         if !changed {
             return Ok(());
         }
+
+        self.repo
+            .touch_channel_updated_at(info.id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
         active_participant_user_ids.push(actor_user.clone());
         self.events.dispatch(ChannelEvent::ParticipantJoined {
@@ -1930,11 +1958,16 @@ where
         &self,
         options: CreateEntityMentionOptions,
     ) -> Result<EntityMention, ChannelMutationErr> {
-        self.repo
+        let mention = self
+            .repo
             .create_entity_mention(options)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMutationErr::Repo)
+            .map_err(ChannelMutationErr::Repo)?;
+        self.events.dispatch(ChannelEvent::EntityMentionCreated {
+            mention: mention.clone(),
+        });
+        Ok(mention)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1951,10 +1984,17 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_entity_mention(&self, id: Uuid) -> Result<bool, ChannelMutationErr> {
-        self.repo
+        let mention = self
+            .repo
             .delete_entity_mention_by_id(id)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMutationErr::Repo)
+            .map_err(ChannelMutationErr::Repo)?;
+        let deleted = mention.is_some();
+        if let Some(mention) = mention {
+            self.events
+                .dispatch(ChannelEvent::EntityMentionDeleted { mention });
+        }
+        Ok(deleted)
     }
 }

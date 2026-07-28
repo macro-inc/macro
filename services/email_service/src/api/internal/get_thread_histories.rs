@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use models_email::service::message::{ThreadHistoryRequest, ThreadHistoryResponse};
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -42,7 +42,7 @@ impl IntoResponse for GetThreadHistoriesError {
 #[tracing::instrument(skip_all)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(req_body): Json<ThreadHistoryRequest>,
 ) -> Result<Response, GetThreadHistoriesError> {
     let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, &req_body.user_id)

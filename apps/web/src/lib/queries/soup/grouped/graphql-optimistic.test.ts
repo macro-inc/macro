@@ -101,6 +101,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ includeUnrelated: true }),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress'],
       newGroupKeys: ['completed'],
@@ -108,8 +109,8 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
 
     expect(result.updates).toHaveLength(2);
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'remove', entityKey: 'GraphqlSoupItem:task-1' },
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupItem:task-1' },
+      { kind: 'remove', entityKey: 'GraphqlSoupDocument:task-1' },
+      { kind: 'prependUnique', entityKey: 'GraphqlSoupDocument:task-1' },
     ]);
     expect(result.updates.map((update) => update.path)).toEqual([
       [
@@ -134,6 +135,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ destination: false }),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress'],
       newGroupKeys: ['completed'],
@@ -148,6 +150,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ continuation: true, initialContainsItem: false }),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress'],
       newGroupKeys: ['completed'],
@@ -169,6 +172,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host(),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress', 'shared'],
       newGroupKeys: ['shared', 'completed'],
@@ -184,13 +188,14 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ sourceKey: 'shared' }),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['shared'],
       newGroupKeys: ['shared', 'completed'],
     });
 
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupItem:task-1' },
+      { kind: 'prependUnique', entityKey: 'GraphqlSoupDocument:task-1' },
     ]);
   });
 
@@ -198,6 +203,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ miss: true }),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress'],
       newGroupKeys: ['completed'],
@@ -213,6 +219,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ onInspect }),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress', 'in-progress'],
       newGroupKeys: ['in-progress'],
@@ -226,6 +233,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host(),
       entityId: 'task-1',
+      entityType: 'DOCUMENT',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: [],
       newGroupKeys: [],

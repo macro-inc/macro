@@ -124,17 +124,14 @@ async fn revert_db_changes(
             email_db_client::messages::update::update_message_read_status_batch(
                 &mut *tx,
                 failed_ids.clone(),
-                &link.fusionauth_user_id,
+                link.id,
                 is_adding,
             )
             .await
             .context("Failed to revert message read status")?;
         } else if *provider_label_id == service::label::system_labels::STARRED {
             email_db_client::messages::update::update_message_starred_status_batch(
-                &mut *tx,
-                failed_ids,
-                &link.fusionauth_user_id,
-                !is_adding,
+                &mut *tx, failed_ids, link.id, !is_adding,
             )
             .await
             .context("Failed to revert message starred status")?;

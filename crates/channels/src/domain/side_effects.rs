@@ -8,6 +8,7 @@ use crate::domain::{
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
+    mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
         MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
@@ -439,11 +440,14 @@ where
     async fn handle(&self, event: ChannelEvent) {
         let contact_sync_users = contact_sync_users_for_event(&event);
         let broker_events = broker_events_for_event(&event);
+        let mention_broker_events = mention_broker_events_for_event(&event);
 
         match event {
             ChannelEvent::ChannelCreated { .. } => {}
             ChannelEvent::ChannelUpdated { .. } => {}
             ChannelEvent::ParticipantsRemoved { .. } => {}
+            ChannelEvent::EntityMentionCreated { .. } => {}
+            ChannelEvent::EntityMentionDeleted { .. } => {}
             ChannelEvent::ChannelDeleted { channel_id, .. } => {
                 self.search.remove_message(channel_id, None).await;
             }
@@ -517,6 +521,7 @@ where
                         mentions: notification.mentions,
                         has_attachments: notification.has_attachments,
                         bot_profile,
+                        notification_policy: PostMessageNotificationPolicy::Default,
                     })
                     .await;
                 }
@@ -616,6 +621,14 @@ where
                     tracing::error!(error=?e, "failed to publish channel event");
                 });
         }
+        for mention_event in mention_broker_events {
+            let _ = self
+                .macro_event_broker
+                .send_event(&mention_event)
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish mention event");
+                });
+        }
     }
 }
 
@@ -662,7 +675,7 @@ where
 
         self.search.index_message(channel_id, message.id).await;
         self.dispatch_bot_triggers(channel_id, &message, &mentions);
-        if notification_policy == PostMessageNotificationPolicy::Default {
+        if notification_policy != PostMessageNotificationPolicy::Silent {
             self.send_message_posted_notifications(PostedMessageNotificationInputs {
                 channel_id,
                 metadata,
@@ -671,6 +684,7 @@ where
                 mentions,
                 has_attachments,
                 bot_profile,
+                notification_policy,
             })
             .await;
         }
@@ -711,6 +725,7 @@ where
             mentions,
             has_attachments,
             bot_profile,
+            notification_policy,
         } = inputs;
         let resolved_sender = if let Some(user_id) = message.sender_id.as_user() {
             let user_id = user_id.clone();
@@ -758,6 +773,10 @@ where
         self.send_document_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
 
+        if notification_policy == PostMessageNotificationPolicy::MentionsOnly {
+            return;
+        }
+
         if let Some(thread_id) = message.thread_id {
             self.send_reply_notification(
                 thread_id,
@@ -798,19 +817,6 @@ where
             .await
             .map_err(Into::into)?;
         let is_first_top_level_message = message_count <= 1 && message.thread_id.is_none();
-        let existing_user_ids = if is_first_top_level_message && sender.as_user().is_some() {
-            let participant_ids: Vec<_> = participants
-                .iter()
-                .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
-                .map(|id| id.into_owned())
-                .collect();
-            self.context
-                .get_existing_user_ids(participant_ids)
-                .await
-                .map_err(Into::into)?
-        } else {
-            HashSet::new()
-        };
 
         let (user_mentions, document_mention_ids) = mentions.into_iter().fold(
             (Vec::new(), Vec::new()),
@@ -860,7 +866,6 @@ where
             excluded_user_ids,
             recipients_without_sender,
             recipients_without_sender_and_mentions,
-            existing_user_ids,
             is_first_top_level_message,
         })
     }
@@ -1007,14 +1012,27 @@ where
         let Some(invited_by_user_id) = context.sender.as_user().cloned() else {
             return;
         };
+        let recipient_user_ids: Vec<_> = context
+            .recipients_without_sender_and_mentions
+            .into_iter()
+            .collect();
+        let existing_user_ids = match self
+            .context
+            .get_existing_user_ids(recipient_user_ids.clone())
+            .await
+        {
+            Ok(existing_user_ids) => existing_user_ids,
+            Err(err) => {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to get existing users for first-message invite");
+                return;
+            }
+        };
         self.send_invite_notification(InviteNotificationRequest {
             channel_id,
             invited_by_user_id,
-            recipient_user_ids: context
-                .recipients_without_sender_and_mentions
-                .into_iter()
-                .collect(),
-            existing_user_ids: context.existing_user_ids,
+            recipient_user_ids,
+            existing_user_ids,
             sender_profile_picture_url: context.sender_profile_picture_url,
             message_content: Some(message.content.clone()),
             metadata: context.metadata,
@@ -1116,6 +1134,7 @@ struct PostedMessageNotificationInputs {
     mentions: Vec<SimpleMention>,
     has_attachments: bool,
     bot_profile: Option<BotSenderProfile>,
+    notification_policy: PostMessageNotificationPolicy,
 }
 
 /// Sender identity and avatar resolved for notification delivery.
@@ -1134,7 +1153,6 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
-    existing_user_ids: HashSet<String>,
     is_first_top_level_message: bool,
 }
 
@@ -1378,6 +1396,44 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             },
         )],
         ChannelEvent::ReactionChanged { .. } | ChannelEvent::TypingChanged { .. } => Vec::new(),
+        ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
+            Vec::new()
+        }
+    }
+}
+
+/// Map an internal channel event to the wire events published to the
+/// `macro.mentions` topic.
+///
+/// Channel messages publish on-send only (`message.sent`, no on-delete for
+/// message mentions); generic entity mentions (e.g. docs) publish on-create
+/// and on-delete (`mention.created`/`mention.deleted`).
+fn mention_broker_events_for_event(event: &ChannelEvent) -> Vec<MentionMacroEvent> {
+    match event {
+        ChannelEvent::MessagePosted {
+            message, mentions, ..
+        } => mentions
+            .iter()
+            .map(|mention| {
+                MentionMacroEvent::message_sent(MentionMetadata {
+                    source: EntityRef {
+                        id: message.id.to_string(),
+                        kind: "message".to_string(),
+                    },
+                    mentioned: EntityRef {
+                        id: mention.entity_id.clone(),
+                        kind: mention.entity_type.clone(),
+                    },
+                })
+            })
+            .collect(),
+        ChannelEvent::EntityMentionCreated { mention } => {
+            vec![MentionMacroEvent::created(mention.into())]
+        }
+        ChannelEvent::EntityMentionDeleted { mention } => {
+            vec![MentionMacroEvent::deleted(mention.into())]
+        }
+        _ => Vec::new(),
     }
 }
 

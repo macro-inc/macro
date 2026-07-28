@@ -116,7 +116,7 @@ You can even @mention our chat assistant, {macro_mention}. Say hi to {new_user_m
                 thread_id: None,
                 attachments: Vec::new(),
                 nonce: None,
-                notification_policy: PostMessageNotificationPolicy::Default,
+                notification_policy: PostMessageNotificationPolicy::MentionsOnly,
                 triggered_by: None,
             },
         )

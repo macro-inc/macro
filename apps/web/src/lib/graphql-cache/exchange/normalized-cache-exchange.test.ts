@@ -41,6 +41,42 @@ const MUTATION = gql`
   }
 `;
 
+const RENAME_MUTATION = gql`
+  mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+    renameEntities(inputs: $inputs) {
+      results {
+        __typename
+        ... on GraphqlMutationSuccess {
+          affectedEntities {
+            entityType
+            id
+          }
+        }
+        ... on GraphqlMutationError {
+          errorCode
+          message
+        }
+      }
+    }
+  }
+`;
+
+const ALIASED_RENAME_MUTATION = gql`
+  mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+    renamed: renameEntities(inputs: $inputs) {
+      results {
+        __typename
+        ... on GraphqlMutationSuccess {
+          touched: affectedEntities {
+            kind: entityType
+            key: id
+          }
+        }
+      }
+    }
+  }
+`;
+
 type FakeHost = CacheHost & {
   reads: Array<{ opKey?: number; query: string; variables?: object }>;
   writes: Array<{ opKey?: number; data: unknown; identity?: string }>;
@@ -53,6 +89,7 @@ type FakeHost = CacheHost & {
   rollbacks: string[];
   defers: Array<{ transactionId: string; error: string }>;
   claims: string[];
+  invalidations: string[][];
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
   seedQueued: (args: Parameters<CacheHost['beginOptimisticWrite']>[0]) => void;
@@ -78,6 +115,7 @@ function makeFakeHost(): FakeHost {
     rollbacks: [],
     defers: [],
     claims: [],
+    invalidations: [],
     teardowns: [],
     scriptRead: (r) => {
       readResult = r;
@@ -185,6 +223,10 @@ function makeFakeHost(): FakeHost {
     async invalidate() {
       return [];
     },
+    async deleteRecords(keys) {
+      host.invalidations.push(keys);
+      return [];
+    },
     async teardown(opKey) {
       host.teardowns.push(opKey);
     },
@@ -238,6 +280,29 @@ function makeMutationOp(key: number, optimisticResponse?: unknown): Operation {
       ...(optimisticResponse === undefined
         ? {}
         : { normalizedCacheOptimistic: { optimisticResponse } }),
+    } as never
+  );
+}
+
+function makeRenameMutationOp(key: number, aliased = false): Operation {
+  return makeOperation(
+    'mutation',
+    {
+      key,
+      query: aliased ? ALIASED_RENAME_MUTATION : RENAME_MUTATION,
+      variables: {
+        inputs: [
+          {
+            entity: { type: 'DOCUMENT', id: 'document-1' },
+            displayName: 'Renamed',
+          },
+        ],
+      },
+    },
+    {
+      requestPolicy: 'cache-first',
+      url: 'http://test',
+      suspense: false,
     } as never
   );
 }
@@ -836,6 +901,110 @@ describe('normalizedCacheExchange', () => {
       expect(host.writes).toHaveLength(1);
       expect(host.writes[0]?.data).toEqual({ from: 'network' });
       expect(results).toHaveLength(1);
+    });
+
+    it('deletes deduplicated entity records identified by mutation refs', async () => {
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              affectedEntities: [
+                { entityType: 'PROJECT', id: 'project-1' },
+                { entityType: 'DOCUMENT', id: 'document-1' },
+                { entityType: 'DOCUMENT', id: 'document-1' },
+              ],
+            },
+          ],
+        },
+      };
+      const { ops } = harness(host, () => ({ data }));
+
+      ops.next(makeRenameMutationOp(9));
+      await tick();
+
+      expect(host.invalidations).toHaveLength(1);
+      expect(new Set(host.invalidations[0])).toEqual(
+        new Set([
+          'GraphqlSoupDocument:document-1',
+          'GraphqlSoupProject:project-1',
+        ])
+      );
+    });
+
+    it('deletes requested records even when the response omits entity refs', async () => {
+      const { ops } = harness(host, () => ({
+        data: {
+          renameEntities: {
+            results: [
+              {
+                __typename: 'GraphqlMutationSuccess',
+                affectedEntities: [],
+              },
+            ],
+          },
+        },
+      }));
+
+      ops.next(makeRenameMutationOp(9));
+      await tick();
+
+      expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-1']]);
+    });
+
+    it('reads affected entity refs through GraphQL aliases', async () => {
+      const data = {
+        renamed: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              touched: [
+                { kind: 'DOCUMENT', key: 'document-1' },
+                { kind: 'PROJECT', key: 'project-1' },
+              ],
+            },
+          ],
+        },
+      };
+      const { ops } = harness(host, () => ({ data }));
+
+      ops.next(makeRenameMutationOp(9, true));
+      await tick();
+
+      expect(new Set(host.invalidations[0])).toEqual(
+        new Set([
+          'GraphqlSoupDocument:document-1',
+          'GraphqlSoupProject:project-1',
+        ])
+      );
+    });
+
+    it('reports record deletion errors without dropping the mutation result', async () => {
+      const failure = new Error('cache deletion failed');
+      host.deleteRecords = async () => {
+        throw failure;
+      };
+      const onCacheError = vi.fn();
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              affectedEntities: [],
+            },
+          ],
+        },
+      };
+      const { ops, results } = harness(host, () => ({ data }), {
+        onCacheError,
+      });
+      const op = makeRenameMutationOp(9);
+
+      ops.next(op);
+      await tick();
+
+      expect(onCacheError).toHaveBeenCalledWith(failure, op);
+      expect(results[0]?.data).toBe(data);
     });
 
     it('degrades to a plain network mutation when the optimistic setup fails', async () => {

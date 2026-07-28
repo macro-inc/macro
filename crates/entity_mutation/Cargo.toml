@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "entity_mutation"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+] }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_permissions = { path = "../models_permissions" }
+rootcause = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -176,6 +176,55 @@ export function useCreateContactMutation() {
 }
 
 /**
+ * Renames a company via `PUT /crm/companies/{id}/name`. The name is a
+ * team-scoped override (`crm_companies.custom_name`) that read paths resolve
+ * over the global directory name — the shared directory is never touched.
+ * Optimistically updates the company detail cache (with rollback on error) so
+ * the title flips immediately, then invalidates it plus soup so the Customers
+ * listings pick up the new name.
+ */
+export function useSetCompanyNameMutation() {
+  return useMutation(() => ({
+    mutationFn: ({ companyId, name }: { companyId: string; name: string }) =>
+      throwOnErr(() =>
+        storageServiceClient.setCompanyName({ companyId, name })
+      ),
+    onMutate: async ({ companyId, name }) => {
+      const queryKey = crmKeys.company(companyId).queryKey;
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<CrmCompanyResponse>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<CrmCompanyResponse>(queryKey, {
+          ...previous,
+          name,
+        });
+      }
+      return { previous, optimisticName: name };
+    },
+    // Roll back only if the cache still holds this mutation's optimistic
+    // name — a stale failure must not clobber a newer rename's update.
+    onError: (_err, { companyId }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData<CrmCompanyResponse>(
+          crmKeys.company(companyId).queryKey,
+          (current) =>
+            current?.name === context.optimisticName
+              ? context.previous
+              : current
+        );
+      }
+    },
+    onSettled: (_data, _err, { companyId }) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: crmKeys.company(companyId).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+      ]),
+  }));
+}
+
+/**
  * Toggles `crm_companies.hidden` via `PUT /crm/companies/{id}/hidden`. Hiding
  * also disables `email_sync` and soft-hides the company's contacts; un-hide
  * restores contact visibility (contact rows and sources survive the cycle).

@@ -1,3 +1,4 @@
+use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -8,8 +9,8 @@ use axum::{
 };
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessAuth,
+        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -17,7 +18,7 @@ use entity_access::domain::{
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, InternalAuthConfig, JwtValidator, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, ValidatedIdentity,
+    MacroAuthorizationState, UserOrInternal, ValidatedIdentity,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -111,6 +112,7 @@ impl EntityAccessService for FakeEntityAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -165,7 +167,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         panic!("unexpected CRM permission request")
     }
 
@@ -235,6 +237,7 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
             api_key: INTERNAL_API_KEY.to_string(),
             default_user_id: Some(DEFAULT_INTERNAL_USER_ID.to_string()),
         },
+        macro_authorization::NoBotAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -255,9 +258,9 @@ fn test_router(entity_access_service: FakeEntityAccessService) -> Router {
 }
 
 async fn required_auth_handler(
-    authorization: MacroAuthorizationExtractor<TestAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<TestAuthorizationService, UserOrInternal>,
 ) -> String {
-    authorization.macro_user_id.to_string()
+    authorization.authorization.user.macro_user_id.to_string()
 }
 
 async fn team_handler(

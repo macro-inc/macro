@@ -1,7 +1,7 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use std::sync::Arc;
 
 use crate::api::context::AuthorizationService;
@@ -26,11 +26,14 @@ pub struct Params {
         (status = 500, body=String)
     )
 )]
-#[tracing::instrument(skip(metadata_client, storage_client, user), fields(user_id = ?user.macro_user_id))]
+#[tracing::instrument(
+    skip(metadata_client, storage_client, user),
+    fields(actor = %user.acting_entity())
+)]
 pub async fn handle_get_presigned_url(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
     // First get metadata to ensure file exists and is uploaded

@@ -8,7 +8,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use futures::StreamExt;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use mcp_client::domain::ports::McpServerStore;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -62,17 +62,17 @@ impl IntoResponse for StructuredCompletionError {
         (status = 500, description = "Internal error", body = StructuredCompletionError),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.macro_user_id), err)]
+#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.authorization.user.macro_user_id), err)]
 pub async fn structured_completion(
     State(state): State<ApiContext>,
     model_access: DcsChatModelAccess,
-    user: MacroAuthorizationExtractor<DcsAuthorizationService>,
+    user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);
     let model = model_access.best_model();
 
-    let user_id = user.macro_user_id;
+    let user_id = user.authorization.user.macro_user_id.clone();
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,

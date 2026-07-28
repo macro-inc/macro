@@ -21,6 +21,8 @@ use notification::domain::service::NotificationIngress;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailLinkMessage;
 use sqs_worker::cleanup_message;
+use std::time::Duration;
+use tokio_retry::RetryIf;
 
 #[tracing::instrument(skip(ctx, message), err)]
 pub async fn process_message(
@@ -139,30 +141,45 @@ async fn get_link_or_skip(
 /// so don't retry it — the watch then lingers until Gmail expires it or the next connect
 /// stops it.
 async fn fetch_teardown_token(ctx: &LinkManagerContext, link: &Link) -> Option<String> {
-    const MAX_ATTEMPTS: u32 = 3;
+    const MAX_ATTEMPTS: usize = 3;
 
-    for attempt in 1..=MAX_ATTEMPTS {
-        match fetch_gmail_access_token_from_link(link, &ctx.redis_client, &ctx.auth_service_client)
-            .await
-        {
-            Ok(token) => return Some(token),
-            Err(e) if is_forbidden_error(&e) => {
-                tracing::warn!(error=?e, link_id=%link.id, "Gmail access revoked; cannot stop watch (it will expire on its own)");
-                return None;
+    let retry_strategy = [Duration::from_millis(200), Duration::from_millis(400)];
+    let mut attempt = 0usize;
+    let result = RetryIf::start(
+        retry_strategy,
+        || {
+            attempt += 1;
+            async move {
+                let result = fetch_gmail_access_token_from_link(
+                    link,
+                    &ctx.redis_client,
+                    &ctx.auth_service_client,
+                )
+                .await;
+                if let Err(error) = &result
+                    && !is_forbidden_error(error)
+                    && attempt < MAX_ATTEMPTS
+                {
+                    tracing::warn!(error=?error, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
+                }
+                result
             }
-            Err(e) if attempt < MAX_ATTEMPTS => {
-                tracing::warn!(error=?e, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
-                tokio::time::sleep(std::time::Duration::from_millis(200 * u64::from(attempt)))
-                    .await;
-            }
-            Err(e) => {
-                tracing::warn!(error=?e, link_id=%link.id, "Could not fetch token to stop Gmail watch after retries; watch will linger until it expires or the next connect stops it");
-                return None;
-            }
+        },
+        |error: &anyhow::Error| !is_forbidden_error(error),
+    )
+    .await;
+
+    match result {
+        Ok(token) => Some(token),
+        Err(error) if is_forbidden_error(&error) => {
+            tracing::warn!(error=?error, link_id=%link.id, "Gmail access revoked; cannot stop watch (it will expire on its own)");
+            None
+        }
+        Err(error) => {
+            tracing::warn!(error=?error, link_id=%link.id, "Could not fetch token to stop Gmail watch after retries; watch will linger until it expires or the next connect stops it");
+            None
         }
     }
-
-    None
 }
 
 /// Handles the Refresh operation: renews Gmail watch subscription and syncs contacts.

@@ -23,6 +23,7 @@ export function useApplyCrmView() {
 
   return (config: CrmViewConfig) => {
     batch(() => {
+      if (config.activeTab !== undefined) setActiveTab(config.activeTab);
       queryFilters.replace((config.filters as Query | undefined) ?? null);
       soup.predicates.set(config.clientFilters ?? {});
       setSearchText(config.searchText ?? '');
@@ -45,7 +46,6 @@ export function useApplyCrmView() {
         soup.predicates.toggle({ and: ['company-owner'] });
       }
       setViewMode(config.viewMode ?? 'board');
-      if (config.activeTab !== undefined) setActiveTab(config.activeTab);
     });
   };
 }

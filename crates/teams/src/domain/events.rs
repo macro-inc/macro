@@ -204,9 +204,7 @@ pub enum TeamTopicEvent {
 impl TopicEvent for TeamTopicEvent {
     type Topic = MacroTeamsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroTeamsTopic`], keyed by the team's bare UUID.

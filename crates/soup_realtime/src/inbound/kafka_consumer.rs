@@ -18,8 +18,12 @@ use model_entity::{Entity, EntityType};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
-use crate::domain::ports::SoupRealtimeService;
+use crate::domain::{
+    ports::{SoupItemReader, SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
+    service::SoupRealtimeServiceImpl,
+};
 
 /// Consumer group used for document update fan-out offsets.
 struct SoupRealtimeConsumerGroup;
@@ -38,6 +42,12 @@ macro_event_broker::declare_topics!(DeclaredMacroEvent: DocumentMacroEvent);
 const MAX_SERVICE_ATTEMPTS: u32 = 5;
 /// Delay before the first retry; each subsequent delay doubles.
 const SERVICE_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
+
+fn service_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take((MAX_SERVICE_ATTEMPTS - 1) as usize)
+}
 
 fn entity_from_document_event(event: &DocumentMacroEvent) -> Option<Entity<'static>> {
     match &event.event().event {
@@ -106,37 +116,38 @@ async fn notify_with_retry<S: SoupRealtimeService>(
     partition: i32,
     offset: i64,
 ) -> Result<(), Report> {
-    let mut delay = SERVICE_RETRY_BASE_DELAY;
-    let mut attempt = 1u32;
-
-    loop {
-        tracing::trace!(attempt, "notifying realtime Soup recipients");
-        match service.notify_users(entity.clone()).await {
-            Ok(()) => {
-                tracing::trace!(attempt, "realtime Soup recipients notified");
-                return Ok(());
+    let mut attempt = 0u32;
+    Retry::start(service_retry_strategy(), || {
+        attempt += 1;
+        let entity = entity.clone();
+        async move {
+            tracing::trace!(attempt, "notifying realtime Soup recipients");
+            let result = service.notify_users(entity).await;
+            match &result {
+                Ok(()) => tracing::trace!(attempt, "realtime Soup recipients notified"),
+                Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {
+                    let delay = SERVICE_RETRY_BASE_DELAY * 2u32.pow(attempt - 1);
+                    tracing::warn!(
+                        error = ?error,
+                        attempt,
+                        delay_secs = delay.as_secs_f32(),
+                        "realtime Soup fan-out failed, retrying"
+                    );
+                }
+                Err(_) => {}
             }
-            Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {
-                tracing::warn!(
-                    error = ?error,
-                    attempt,
-                    delay_secs = delay.as_secs_f32(),
-                    "realtime Soup fan-out failed, retrying"
-                );
-                tokio::time::sleep(delay).await;
-                delay *= 2;
-                attempt += 1;
-            }
-            Err(error) => {
-                return Err(error
-                    .context(format!(
-                        "realtime Soup fan-out failed after {MAX_SERVICE_ATTEMPTS} attempts \
-                         (partition {partition} offset {offset})"
-                    ))
-                    .into_dynamic());
-            }
+            result
         }
-    }
+    })
+    .await
+    .map_err(|error| {
+        error
+            .context(format!(
+                "realtime Soup fan-out failed after {MAX_SERVICE_ATTEMPTS} attempts \
+                 (partition {partition} offset {offset})"
+            ))
+            .into_dynamic()
+    })
 }
 
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
@@ -155,96 +166,100 @@ fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage
     }
 }
 
-/// Runs the document update consumer until `shutdown` resolves.
-///
-/// The consumer subscribes only to `macro.documents` under the
-/// `soup-realtime` group. It commits malformed and recognized-but-ignored
-/// events, and commits `document.updated` only after [`SoupRealtimeService`]
-/// succeeds. Exhausted service retries return without committing so a future
-/// supervisor restart can redeliver the record.
-#[tracing::instrument(skip(service, shutdown), fields(brokers), err)]
-pub async fn run_document_update_consumer<S>(
-    brokers: &str,
-    service: S,
-    shutdown: impl Future<Output = ()> + Send,
-) -> Result<(), Report>
+impl<A, R, P> SoupRealtimeServiceImpl<A, R, P>
 where
-    S: SoupRealtimeService,
+    A: UserAccessExpander,
+    R: SoupItemReader,
+    P: SoupRealtimePublisher,
 {
-    let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
-    let consumer = KafkaConsumerAdapter::<SoupRealtimeConsumerGroup, ()>::new(consumer)
-        .subscribe::<DeclaredMacroEvent>()
-        .context("failed to subscribe to document update topic")?;
-    let consumer = SoupRealtimeKafkaConsumer::new(consumer);
-    tracing::info!(
-        topics = ?DeclaredMacroEvent::topics(),
-        group = SoupRealtimeConsumerGroup::GROUP_NAME,
-        "realtime Soup document consumer listening"
-    );
+    /// Runs the document update consumer until `shutdown` resolves.
+    ///
+    /// The consumer subscribes only to `macro.documents` under the
+    /// `soup-realtime` group. It commits malformed and recognized-but-ignored
+    /// events, and commits `document.updated` only after [`SoupRealtimeService`]
+    /// succeeds. Exhausted service retries return without committing so a future
+    /// supervisor restart can redeliver the record.
+    #[tracing::instrument(skip(self, shutdown), fields(brokers), err)]
+    pub async fn run_document_update_consumer(
+        &self,
+        brokers: &str,
+        shutdown: impl Future<Output = ()> + Send,
+    ) -> Result<(), Report> {
+        let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
+        let consumer = KafkaConsumerAdapter::<SoupRealtimeConsumerGroup, ()>::new(consumer)
+            .subscribe::<DeclaredMacroEvent>()
+            .context("failed to subscribe to document update topic")?;
+        let consumer = SoupRealtimeKafkaConsumer::new(consumer);
+        tracing::info!(
+            topics = ?DeclaredMacroEvent::topics(),
+            group = SoupRealtimeConsumerGroup::GROUP_NAME,
+            "realtime Soup document consumer listening"
+        );
 
-    let mut shutdown = std::pin::pin!(shutdown);
-    loop {
-        tokio::select! {
-            _ = &mut shutdown => {
-                tracing::info!("realtime Soup document consumer shutting down");
-                break;
-            }
-            result = consumer.recv() => {
-                let message = match result {
-                    Ok(message) => message,
-                    Err(error) => {
-                        tracing::error!(error = ?error, "Kafka receive error");
-                        continue;
-                    }
-                };
-                let kafka_message = message.inner();
-                let event = match message.decode_payload() {
-                    Ok(DeclaredMacroEvent::DocumentMacroEvent(event)) => event,
-                    Err(error) => {
-                        tracing::error!(
-                            error = ?error,
-                            topic = kafka_message.topic(),
-                            partition = kafka_message.partition(),
-                            offset = kafka_message.offset(),
-                            "dropping malformed document event"
-                        );
-                        commit_logged(&consumer, kafka_message);
-                        continue;
-                    }
-                };
-
-                match process_document_event(
-                    &service,
-                    &event,
-                    kafka_message.partition(),
-                    kafka_message.offset(),
-                )
-                .await
-                {
-                    Ok(DocumentEventOutcome::Notified | DocumentEventOutcome::Ignored) => {}
-                    Err(error) => {
-                        tracing::error!(
-                            error = ?error,
-                            topic = kafka_message.topic(),
-                            partition = kafka_message.partition(),
-                            offset = kafka_message.offset(),
-                            "realtime Soup fan-out retries exhausted; pausing partition for redelivery"
-                        );
-                        // Kafka commits are cumulative within a partition, so
-                        // pause it before any later record can advance the
-                        // committed offset past this failure.
-                        consumer
-                            .inner()
-                            .pause_message_partition(kafka_message)
-                            .context("failed to pause Kafka partition after fan-out failure")?;
-                        continue;
-                    }
+        let mut shutdown = std::pin::pin!(shutdown);
+        loop {
+            tokio::select! {
+                _ = &mut shutdown => {
+                    tracing::info!("realtime Soup document consumer shutting down");
+                    break;
                 }
+                result = consumer.recv() => {
+                    let message = match result {
+                        Ok(message) => message,
+                        Err(error) => {
+                            tracing::error!(error = ?error, "Kafka receive error");
+                            continue;
+                        }
+                    };
+                    let kafka_message = message.inner();
+                    let event = match message.decode_payload() {
+                        Ok(DeclaredMacroEvent::DocumentMacroEvent(event)) => event,
+                        Err(error) => {
+                            tracing::error!(
+                                error = ?error,
+                                topic = kafka_message.topic(),
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "dropping malformed document event"
+                            );
+                            commit_logged(&consumer, kafka_message);
+                            continue;
+                        }
+                    };
 
-                commit_logged(&consumer, kafka_message);
+                    match process_document_event(
+                        self,
+                        &event,
+                        kafka_message.partition(),
+                        kafka_message.offset(),
+                    )
+                    .await
+                    {
+                        Ok(DocumentEventOutcome::Notified | DocumentEventOutcome::Ignored) => {}
+                        Err(error) => {
+                            tracing::error!(
+                                error = ?error,
+                                topic = kafka_message.topic(),
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "realtime Soup fan-out retries exhausted; pausing partition for redelivery"
+                            );
+                            // Kafka commits are cumulative within a partition, so
+                            // pause it before any later record can advance the
+                            // committed offset past this failure.
+                            consumer
+                                .inner()
+                                .pause_message_partition(kafka_message)
+                                .context("failed to pause Kafka partition after fan-out failure")?;
+                            continue;
+                        }
+                    }
+
+                    commit_logged(&consumer, kafka_message);
+                }
             }
         }
-    }
 
-    Ok(())
+        Ok(())
+    }
 }

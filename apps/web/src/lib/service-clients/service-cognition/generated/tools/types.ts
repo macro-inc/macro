@@ -55,11 +55,6 @@ export type ToolPropertyTargetEntityType =
  */
 export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
 /**
- * Schema-only mirror of [`CallStatus`] without variant docs, keeping AI tool
- * schemas as a simple enum instead of `oneOf`.
- */
-export type ToolCallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
-/**
  * Type of channel timeline window to read.
  */
 export type ChannelMessagesWindowType =
@@ -738,52 +733,6 @@ export interface SearchHighlight {
    * The highlight match on the user (owner) of the entity
    */
   user_id?: string | null;
-}
-/**
- * A call-record summary. Intentionally omits the transcript — use
- * [`super::read_call_record::ReadCallRecord`] to fetch it.
- */
-export interface CallRecordSummary {
-  /**
-   * The call's unique identifier.
-   */
-  callId: string;
-  /**
-   * The channel the call belongs to.
-   */
-  channelId: string;
-  /**
-   * The channel's display name, if resolvable.
-   */
-  channelName?: string | null;
-  /**
-   * The user who created the call.
-   */
-  createdBy: string;
-  /**
-   * Call duration in milliseconds. Absent if the call is still active.
-   */
-  durationMs?: number | null;
-  /**
-   * When the call ended. Absent if the call is still active.
-   */
-  endedAt?: string | null;
-  /**
-   * True if the call is currently active.
-   */
-  isActive: boolean;
-  /**
-   * IDs of users who participated in the call.
-   */
-  participants: string[];
-  /**
-   * When the call started.
-   */
-  startedAt: string;
-  /**
-   * The caller's viewer-relative status for this call.
-   */
-  status?: ToolCallStatus | null;
 }
 /**
  * A single channel-message content hit in the unified search response.
@@ -2001,30 +1950,29 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * List recent call records the user can access, ordered by start time descending. Status is relative to the caller. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
+ * Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, fetches through the user's connected Notion MCP, normalizes the page, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases and database-first pages are intentionally not imported.
  */
-export interface ListCallRecords {
+export interface ImportNotionPage {
   /**
-   * Deprecated compatibility filter. true = only calls the user attended; false = only calls the user did not attend; omit to include both. Ignored when status is provided.
+   * The exact Notion page URL or stable 32-character Notion page id to import.
    */
-  attended?: boolean | null;
-  /**
-   * Optional channel id. When provided, only calls from that channel are returned.
-   */
-  channelId?: string | null;
-  /**
-   * Optional viewer-relative status filter. ATTENDED = calls the user joined; MISSED = calls the user did not join while they are in the channel; UNATTENDED = calls the user did not join while they are not in the channel. Prefer this over the deprecated attended filter.
-   */
-  status?: ToolCallStatus | null;
+  pageUrl: string;
 }
 /**
- * Response for [`ListCallRecords`].
+ * Response from importing one Notion page.
  */
-export interface ListCallRecordsResponse {
+export interface ImportNotionPageResponse {
+  entity: ImportEntityView;
   /**
-   * Call records ordered by start time descending.
+   * Human-readable result and next action.
    */
-  records: CallRecordSummary[];
+  message: string;
+  /**
+   * What happened: `imported`, `already_imported`,
+   * `already_imported_by_teammate`, `previously_declined`, or
+   * `import_in_progress`.
+   */
+  outcome: string;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
@@ -2607,7 +2555,7 @@ export interface ProjectSearchResult {
   score?: number | null;
 }
 /**
- * Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
+ * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
  */
 export interface ReadCallRecord {
   /**
@@ -3476,7 +3424,7 @@ export interface SendEmail {
  * - Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
  * - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
  * - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
- * Editing company properties requires the caller to be a team admin or owner.
+ * Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
  *
  * For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options.
  */

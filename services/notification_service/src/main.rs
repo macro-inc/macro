@@ -136,6 +136,7 @@ pub async fn main() -> anyhow::Result<()> {
             api_key: config.internal_api_key.as_ref().to_string(),
             default_user_id: None,
         },
+        macro_authorization::NoBotAuthorizer,
     )));
 
     let notification_repository =

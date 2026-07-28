@@ -8,6 +8,7 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
     InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
     MacroAuthorizationState,
@@ -23,12 +24,20 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::EntityPermissionExtractor;
-use crate::domain::{
-    models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
+use crate::{
+    domain::{
+        models::{
+            AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
+            EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, ParticipantRole,
+            RequiredPermission, TeamRole, UserTeamInfo,
+        },
+        ports::EntityAccessService,
     },
-    ports::EntityAccessService,
+    inbound::axum_extractors::test_support::{
+        BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BOT_TEAM_ID,
+        MALFORMED_SYSTEM_BOT_TOKEN, VALID_BOT_TOKEN, malformed_system_bot_authentication,
+        valid_bot_authentication,
+    },
 };
 
 const USER_ID: &str = "macro|user@example.com";
@@ -49,14 +58,28 @@ enum EntityAccessCall {
         entity_type: EntityType,
         required_level: AccessLevel,
     },
+    GenerateBotReceipt {
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: String,
+        entity_type: EntityType,
+    },
 }
 
 #[derive(Clone, Default)]
 struct FakeEntityAccessService {
+    bot_permission: Option<EntityPermission>,
     calls: Arc<Mutex<Vec<EntityAccessCall>>>,
 }
 
 impl FakeEntityAccessService {
+    fn with_bot_permission(permission: EntityPermission) -> Self {
+        Self {
+            bot_permission: Some(permission),
+            calls: Arc::default(),
+        }
+    }
+
     fn calls(&self) -> Vec<EntityAccessCall> {
         self.calls.lock().expect("calls lock poisoned").clone()
     }
@@ -75,11 +98,30 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        self.calls.lock().expect("calls lock poisoned").push(
+            EntityAccessCall::GenerateBotReceipt {
+                bot_id,
+                scope: scope.clone(),
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+        );
+
+        let permission = self.bot_permission.ok_or(AccessError::Unauthorized)?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            permission,
+        )
     }
 
     async fn get_access_level(
@@ -145,7 +187,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
         panic!("unexpected get_crm_entity_permission_with_team call")
     }
 
@@ -182,6 +224,7 @@ impl EntityAccessService for FakeEntityAccessService {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthorizationCall {
     Bearer(String),
+    Bot(String),
     Internal {
         provided_key: String,
         claims: InternalIdentityClaims,
@@ -210,6 +253,24 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             "valid" => Ok(user_context(USER_ID, None)),
             "organization" => Ok(user_context(USER_ID, Some(42))),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        }
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        bot_scope: BotScope,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        self.calls
+            .lock()
+            .expect("calls lock poisoned")
+            .push(AuthorizationCall::Bot(token.to_string()));
+
+        match token {
+            VALID_BOT_TOKEN => Ok(valid_bot_authentication(bot_scope)),
+            MALFORMED_SYSTEM_BOT_TOKEN => Ok(malformed_system_bot_authentication(bot_scope)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
     }
@@ -271,7 +332,7 @@ async fn handler(
     let receipt = extractor.entity_access_receipt;
     let auth = match receipt.auth {
         EntityAccessAuth::Authenticated(user_id) => json!({ "authenticated": user_id.to_string() }),
-        EntityAccessAuth::Bot(bot_id) => json!({ "bot": bot_id.to_string() }),
+        EntityAccessAuth::Bot(bot_auth) => json!({ "bot": bot_auth }),
         EntityAccessAuth::Unauthenticated => json!("unauthenticated"),
         EntityAccessAuth::Internal => json!("internal"),
     };
@@ -285,7 +346,18 @@ async fn handler(
 }
 
 fn test_router() -> (Router, FakeEntityAccessService, FakeAuthorizationService) {
-    let entity_access = FakeEntityAccessService::default();
+    test_router_with_service(FakeEntityAccessService::default())
+}
+
+fn bot_test_router(
+    permission: EntityPermission,
+) -> (Router, FakeEntityAccessService, FakeAuthorizationService) {
+    test_router_with_service(FakeEntityAccessService::with_bot_permission(permission))
+}
+
+fn test_router_with_service(
+    entity_access: FakeEntityAccessService,
+) -> (Router, FakeEntityAccessService, FakeAuthorizationService) {
     let authorization = FakeAuthorizationService::default();
     let state = TestState {
         entity_access: Arc::new(entity_access.clone()),
@@ -404,6 +476,184 @@ async fn invalid_and_expired_tokens_preserve_authorization_rejections() {
         assert_eq!(body, json!({ "message": expected_message }));
         assert!(entity_access.calls().is_empty());
     }
+}
+
+#[tokio::test]
+async fn user_scoped_bot_uses_acting_user_organization_context() {
+    let (router, entity_access, authorization) = bot_test_router(EntityPermission::AccessLevel {
+        access_level: AccessLevel::Edit,
+    });
+    let request = empty_body(
+        request(&format!("/entity/document/{ENTITY_ID}"))
+            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .header(BOT_SCOPE_HEADER, BotScope::User.as_str()),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["auth"],
+        json!({
+            "bot": {
+                "bot_id": BOT_ID.into_storage_id().to_string(),
+                "scope": "user",
+                "acting_user": BOT_ACTING_USER_ID,
+            }
+        })
+    );
+    assert_eq!(body["permission"]["access_level"], "edit");
+    assert_eq!(
+        entity_access.calls(),
+        [EntityAccessCall::GenerateBotReceipt {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::User {
+                user_id: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string()).unwrap(),
+                user_org_id: Some(i64::from(BOT_ACTING_USER_ORGANIZATION_ID)),
+            },
+            entity_id: ENTITY_ID.to_string(),
+            entity_type: EntityType::Document,
+        }]
+    );
+    assert_eq!(
+        authorization.calls(),
+        [AuthorizationCall::Bot(VALID_BOT_TOKEN.to_string())]
+    );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_without_acting_user_is_unauthorized() {
+    let (router, entity_access, authorization) = test_router();
+    let request = empty_body(
+        request(&format!("/entity/document/{ENTITY_ID}"))
+            .header(BOT_TOKEN_HEADER, MALFORMED_SYSTEM_BOT_TOKEN)
+            .header(BOT_SCOPE_HEADER, BotScope::User.as_str()),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        body,
+        json!({ "message": "bot user scope requires an acting user" })
+    );
+    assert!(entity_access.calls().is_empty());
+    assert_eq!(
+        authorization.calls(),
+        [AuthorizationCall::Bot(
+            MALFORMED_SYSTEM_BOT_TOKEN.to_string()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn team_scoped_bot_supports_channel_permissions() {
+    for (permission, expected_permission) in [
+        (
+            EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+            json!({ "type": "channel_role", "role": "member" }),
+        ),
+        (
+            EntityPermission::ChannelViewOnly,
+            json!({ "type": "channel_view_only" }),
+        ),
+    ] {
+        let (router, entity_access, _authorization) = bot_test_router(permission);
+        let request = empty_body(
+            request(&format!("/entity/channel/{ENTITY_ID}"))
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .header(BOT_SCOPE_HEADER, BotScope::Team.as_str()),
+        );
+
+        let (status, body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["permission"], expected_permission);
+        assert_eq!(
+            entity_access.calls(),
+            [EntityAccessCall::GenerateBotReceipt {
+                bot_id: BOT_ID,
+                scope: BotAccessScope::Team {
+                    team_id: BOT_TEAM_ID,
+                },
+                entity_id: ENTITY_ID.to_string(),
+                entity_type: EntityType::Channel,
+            }]
+        );
+    }
+}
+
+#[tokio::test]
+async fn team_scoped_bot_receives_team_role_receipt() {
+    let (router, entity_access, _authorization) = bot_test_router(EntityPermission::TeamRole {
+        role: TeamRole::Member,
+    });
+    let team_id = BOT_TEAM_ID.to_string();
+    let request = empty_body(
+        request(&format!("/entity/team/{team_id}"))
+            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .header(BOT_SCOPE_HEADER, BotScope::Team.as_str()),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["auth"],
+        json!({
+            "bot": {
+                "bot_id": BOT_ID.into_storage_id().to_string(),
+                "scope": "team",
+                "team_id": BOT_TEAM_ID,
+            }
+        })
+    );
+    assert_eq!(
+        body["permission"],
+        json!({ "type": "team_role", "role": "member" })
+    );
+    assert_eq!(
+        entity_access.calls(),
+        [EntityAccessCall::GenerateBotReceipt {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::Team {
+                team_id: BOT_TEAM_ID,
+            },
+            entity_id: team_id,
+            entity_type: EntityType::Team,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn bot_with_insufficient_access_is_unauthorized() {
+    let (router, entity_access, _authorization) = test_router();
+    let request = empty_body(
+        request(&format!("/entity/document/{ENTITY_ID}"))
+            .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+            .header(BOT_SCOPE_HEADER, BotScope::Team.as_str()),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        body,
+        json!({ "message": "User does not have access to the requested resource" })
+    );
+    assert_eq!(
+        entity_access.calls(),
+        [EntityAccessCall::GenerateBotReceipt {
+            bot_id: BOT_ID,
+            scope: BotAccessScope::Team {
+                team_id: BOT_TEAM_ID,
+            },
+            entity_id: ENTITY_ID.to_string(),
+            entity_type: EntityType::Document,
+        }]
+    );
 }
 
 #[tokio::test]

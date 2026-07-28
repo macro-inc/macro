@@ -46,9 +46,10 @@ use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 use sync_service_client::SyncServiceClient;
+use tokio_util::task::TaskTracker;
 
 mod api;
 mod config;
@@ -152,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
                 api_key: internal_api_key.clone(),
                 default_user_id: None,
             },
+            macro_authorization::NoBotAuthorizer,
         )));
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
@@ -255,7 +257,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -294,9 +296,15 @@ async fn main() -> anyhow::Result<()> {
     // The import pipeline sets the same task system properties on imported
     // Linear issues (status, priority, due date, assignee).
     let task_properties_for_import = task_properties_service.clone();
+    let document_properties_for_import =
+        import::outbound::document_properties::DocumentPropertiesApplicator::new(
+            properties_service.clone(),
+        );
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
     let document_service = DocumentServiceImpl::new(
         document_repo,
@@ -348,10 +356,13 @@ async fn main() -> anyhow::Result<()> {
             static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         )),
     };
-    let message_service = Arc::new(chat::domain::service::MessageServiceImpl::new(
-        chat::outbound::postgres::PgChatRepo::new(db.clone()),
-        attachment_provider,
-    ));
+    let message_service = Arc::new(
+        chat::domain::service::MessageServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            attachment_provider,
+        )
+        .with_event_broker(macro_event_broker.clone()),
+    );
 
     tracing::info!("initialized attachment provider");
 
@@ -397,12 +408,7 @@ async fn main() -> anyhow::Result<()> {
         None::<S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone()));
-    let call_tool_context = CallToolContext::new(
-        call_service,
-        call_query_service,
-        (*entity_access_service).clone(),
-    );
+    let call_tool_context = CallToolContext::new(call_service, (*entity_access_service).clone());
 
     tracing::info!("initialized call tool context");
 
@@ -420,8 +426,23 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized chat tool context");
 
-    let channel_tool_context =
-        ai_tools::build_channel_tool_context(db.clone(), lexical_client.clone());
+    // Channel messages sent by AI tools (chat, agents) dispatch the same side
+    // effects as the document-storage channel API, so mentions and replies
+    // notify recipients and stream to connected clients.
+    let channels_connection_gateway =
+        Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+            internal_api_key.clone(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        ));
+    let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
+        db.clone(),
+        lexical_client.clone(),
+        ai_tools::ChannelSideEffectClients {
+            connection_gateway: channels_connection_gateway.clone(),
+            sqs: aws_sdk_sqs::Client::new(&aws_config),
+            macro_event_broker: macro_event_broker.clone(),
+        },
+    );
     let recorder = ai_usage::pg_recorder(db.clone());
 
     // The import pipeline: staged/imported external items, gather jobs over
@@ -437,18 +458,15 @@ async fn main() -> anyhow::Result<()> {
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
     // poll (see import::outbound::gateway_notifier).
-    let import_notify = import::outbound::gateway_notifier::gateway_import_notify(Arc::new(
-        connection_gateway_client::ConnectionGatewayClient::new(
-            internal_api_key.clone(),
-            ConnectionGatewayUrl::new()?.to_string(),
-        ),
-    ));
+    let import_notify =
+        import::outbound::gateway_notifier::gateway_import_notify(channels_connection_gateway);
 
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),
         task_properties: task_properties_for_import,
+        document_properties: document_properties_for_import,
         team_repository: ai_tools::build_team_repository(db.clone()),
     };
     let import_service = Arc::new(
@@ -549,7 +567,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         ai_projections_service_impl.clone(),
     );
-    tokio::spawn(async move {
+    let ai_projection_worker_task = tokio::spawn(async move {
         ai_projection_worker.poll().await;
     });
 
@@ -612,7 +630,7 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
-    api::setup_and_serve(ApiContext {
+    let api_result = api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external,
         sqs_client: Arc::new(sqs_client),
@@ -646,8 +664,39 @@ async fn main() -> anyhow::Result<()> {
         mcp_state,
         import_service,
         onboarding_service,
+        macro_event_broker: macro_event_broker.clone(),
     })
     .await
-    .context("failed to setup and serve api")?;
-    Ok(())
+    .context("failed to setup and serve api");
+
+    ai_projection_worker_task.abort();
+    match ai_projection_worker_task.await {
+        Err(error) if error.is_cancelled() => {
+            tracing::info!("ai projection worker stopped");
+        }
+        Err(error) => {
+            tracing::error!(error = ?error, "ai projection worker exited unexpectedly");
+        }
+        Ok(()) => {
+            tracing::error!(
+                error = "worker exited naturally",
+                "ai projection worker exited unexpectedly"
+            );
+        }
+    }
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => tracing::warn!(
+            error=?error,
+            timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for event broker publishes to drain"
+        ),
+    }
+
+    api_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);

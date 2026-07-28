@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use github::domain::ports::GithubSyncService;
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, GenericErrorResponse};
 
 #[derive(serde::Deserialize)]
@@ -33,7 +33,7 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, _auth), err(Debug))]
 pub async fn associate_github_installations_handler(
     State(ctx): State<ApiContext>,
-    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _auth: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(Params { github_user_id }): Path<Params>,
 ) -> Result<Response, Response> {
     ctx.github_sync_service

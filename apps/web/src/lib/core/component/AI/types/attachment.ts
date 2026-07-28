@@ -32,6 +32,7 @@ export type UploadResult =
   | {
       type: 'ok';
       attachment: Attachment;
+      preview: AttachmentPreview;
     }
   | {
       type: 'error';

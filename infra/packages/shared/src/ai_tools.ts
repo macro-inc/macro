@@ -33,6 +33,18 @@ export function getAiToolsInfra(): AiToolsInfra {
     'ai-tools-email-service-stack',
     { name: `macro-inc/email-service/${stack}` }
   );
+  const notificationServiceStack = new pulumi.StackReference(
+    'ai-tools-notification-service-stack',
+    { name: `macro-inc/notification-service/${stack}` }
+  );
+  const searchEventQueueStack = new pulumi.StackReference(
+    'ai-tools-search-event-queue-stack',
+    { name: `macro-inc/search-event-queue/${stack}` }
+  );
+  const contactsServiceStack = new pulumi.StackReference(
+    'ai-tools-contacts-service-stack',
+    { name: `macro-inc/contacts-service/${stack}` }
+  );
 
   const documentStorageBucketArn: pulumi.Output<string> = cloudStorageStack
     .getOutput('documentStorageBucketArn')
@@ -50,6 +62,19 @@ export function getAiToolsInfra(): AiToolsInfra {
 
   const gmailOpsQueueArn: pulumi.Output<string> = emailServiceStack
     .getOutput('gmailOpsQueueArn')
+    .apply((v) => v as string);
+
+  const notificationIngressQueueArn: pulumi.Output<string> =
+    notificationServiceStack
+      .getOutput('notificationIngressQueueArn')
+      .apply((v) => v as string);
+
+  const searchEventQueueArn: pulumi.Output<string> = searchEventQueueStack
+    .getOutput('searchEventQueueArn')
+    .apply((v) => v as string);
+
+  const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+    .getOutput('contactsQueueArn')
     .apply((v) => v as string);
 
   const CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME = `linksharing-private-key-${stack}`;
@@ -74,7 +99,13 @@ export function getAiToolsInfra(): AiToolsInfra {
       cloudfrontPrivateKeySecretArn,
       mcpCredentialsKeyArn,
     ],
-    queueArns: [emailScheduledQueueArn, gmailOpsQueueArn],
+    queueArns: [
+      emailScheduledQueueArn,
+      gmailOpsQueueArn,
+      notificationIngressQueueArn,
+      searchEventQueueArn,
+      contactsQueueArn,
+    ],
     bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
   };
 }

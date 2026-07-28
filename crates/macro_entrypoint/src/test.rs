@@ -4,7 +4,7 @@ use opentelemetry::trace::TraceContextExt as _;
 use opentelemetry::trace::{SpanId, TraceId};
 use opentelemetry_sdk::trace::InMemorySpanExporter;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Once};
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use tracing_subscriber::fmt::MakeWriter;
 
@@ -45,13 +45,45 @@ fn test_tracer_provider() -> (InMemorySpanExporter, SdkTracerProvider) {
 }
 
 #[test]
+fn rootcause_tracing_subscriber_captures_span_chain() {
+    static INSTALL_ROOTCAUSE_HOOKS: Once = Once::new();
+    INSTALL_ROOTCAUSE_HOOKS.call_once(install_rootcause_hooks);
+
+    let subscriber = Registry::default().with(RootcauseLayer.with_filter(EnvFilter::new("info")));
+    let output = tracing::subscriber::with_default(subscriber, || {
+        let request = tracing::info_span!("handle_request", request_id = "req-123");
+        let _request_guard = request.enter();
+        let document = tracing::info_span!("load_document", document_id = 42);
+        let _document_guard = document.enter();
+
+        rootcause::report!("document load failed").to_string()
+    });
+
+    assert!(output.contains("document load failed"));
+    assert!(output.contains("Tracing spans"));
+
+    let document_span = "load_document{document_id=42}";
+    let request_span = "handle_request{request_id=\"req-123\"}";
+    assert!(output.contains(document_span), "{output}");
+    assert!(output.contains(request_span), "{output}");
+    assert!(
+        output.find(document_span) < output.find(request_span),
+        "span chain should be ordered from the innermost span outward: {output}"
+    );
+    assert!(!output.contains("Span values missing"), "{output}");
+}
+
+#[test]
 fn rust_log_warn_does_not_drop_info_spans() {
     let (exporter, provider) = test_tracer_provider();
     let tracer = provider.tracer("test");
 
+    let rust_log_filter = EnvFilter::new("warn");
+    let otel_filter = otel_trace_filter(None);
+    let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
     let otel_layer = tracing_opentelemetry::layer()
         .with_tracer(tracer)
-        .with_filter(otel_trace_filter(None));
+        .with_filter(otel_filter);
 
     let json_format = tracing_subscriber::fmt::format::Format::default()
         .json()
@@ -65,9 +97,12 @@ fn rust_log_warn_does_not_drop_info_spans() {
         .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
         .event_format(datadog_fmt::DatadogFormat { inner: json_format })
         .with_writer(logs.clone())
-        .with_filter(EnvFilter::new("warn"));
+        .with_filter(rust_log_filter);
 
-    let subscriber = Registry::default().with(fmt_layer).with(otel_layer);
+    let subscriber = Registry::default()
+        .with(RootcauseLayer.with_filter(rootcause_filter))
+        .with(fmt_layer)
+        .with(otel_layer);
 
     // The span context DatadogFormat reads via Span::current() is only observable here
     // outside event dispatch: under a scoped test dispatcher, tracing's re-entrancy guard
@@ -75,6 +110,10 @@ fn rust_log_warn_does_not_drop_info_spans() {
     // dispatcher, which get_default resolves without the guard.
     let mut current_ids: Option<(TraceId, SpanId)> = None;
     tracing::subscriber::with_default(subscriber, || {
+        assert!(tracing::enabled!(tracing::Level::INFO));
+        assert!(!tracing::enabled!(tracing::Level::DEBUG));
+
+        tracing::debug_span!("filtered_debug_op").in_scope(|| {});
         tracing::info_span!("instrumented_op").in_scope(|| {
             let cx = tracing::Span::current().context();
             let span_cx = cx.span().span_context().clone();

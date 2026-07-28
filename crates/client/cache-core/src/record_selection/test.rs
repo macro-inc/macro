@@ -4,21 +4,17 @@ use super::*;
 fn accepts_fragment_only_object_document() {
     let selection = RecordSelection::parse(
         r#"
-        fragment SoupItemFields on GraphqlSoupItem {
-          itemId: id
+        fragment SoupItemFields on GraphqlSoupDocument {
+          documentId: id
           entityType
-          entity {
-            __typename
-            ... on GraphqlSoupDocument { id name }
-            ... on GraphqlSoupChat { id name }
-          }
+          displayName
         }
         "#,
         "SoupItemFields",
     )
     .unwrap();
 
-    assert_eq!(selection.type_names(), &["GraphqlSoupItem"]);
+    assert_eq!(selection.type_names(), &["GraphqlSoupDocument"]);
 }
 
 #[test]
@@ -72,7 +68,7 @@ fn rejects_embedded_root_and_unbound_variables() {
 #[test]
 fn rejects_unknown_fragment_and_type() {
     assert!(matches!(
-        RecordSelection::parse("fragment Item on GraphqlSoupItem { id }", "Missing"),
+        RecordSelection::parse("fragment Item on GraphqlSoupDocument { id }", "Missing"),
         Err(RecordSelectionError::Document(
             DocumentError::UnknownFragment(_)
         ))
@@ -83,7 +79,7 @@ fn rejects_unknown_fragment_and_type() {
     ));
     assert!(matches!(
         RecordSelection::parse(
-            "fragment Item on GraphqlSoupItem { id } fragment Unused on MissingType { id }",
+            "fragment Item on GraphqlSoupDocument { id } fragment Unused on MissingType { id }",
             "Item",
         ),
         Err(RecordSelectionError::UnknownType(_))
@@ -105,7 +101,7 @@ fn validates_page_limits() {
 
 #[test]
 fn cursor_has_opaque_roundtrip() {
-    let cursor = RecordCursor::new(EntityKey("GraphqlSoupItem:item-1".to_string()));
+    let cursor = RecordCursor::new(EntityKey("GraphqlSoupDocument:item-1".to_string()));
     let encoded = serde_json::to_value(&cursor).unwrap();
     assert_eq!(
         serde_json::from_value::<RecordCursor>(encoded).unwrap(),

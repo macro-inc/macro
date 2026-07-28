@@ -13,7 +13,7 @@
 
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
-import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmTeamSettingsResponse } from '@service-storage/generated/schemas/crmTeamSettingsResponse';
@@ -170,13 +170,12 @@ function roleSatisfies(
 
 /**
  * Effective CRM capabilities for the current user, combining the team's
- * configured permission thresholds with the platform-level rule that only
- * admins/owners can edit CRM data at all.
+ * configured permission thresholds with the platform-level rule that any
+ * team member can edit CRM data (governance actions stay admin/owner).
  */
 export function useCrmPermissions() {
   const userId = useUserId();
   const teamQuery = useCurrentTeamQuery();
-  const isTeamAdmin = useIsTeamAdmin();
   const { config, isLoading } = useTeamCrmConfig();
 
   const role = createMemo((): TeamRole | undefined => {
@@ -197,8 +196,8 @@ export function useCrmPermissions() {
     role,
     permissions,
     isLoading,
-    /** Can edit CRM data at all (platform rule: admin/owner). */
-    canEditCrm: isTeamAdmin,
+    /** Can edit CRM data at all (platform rule: any team member). */
+    canEditCrm: () => role() !== undefined,
     canEditStages: createMemo(() =>
       roleSatisfies(role(), permissions().editStages)
     ),

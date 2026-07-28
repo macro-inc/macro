@@ -18,8 +18,8 @@ use crate::domain::models::{
 };
 
 use super::models::{
-    AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
+    AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError, CallParticipant,
+    CallRecord, CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
     CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
     LeaveCallResponse, RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken,
@@ -135,8 +135,11 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
-    /// Returns the new `call_records` id.
-    fn archive_call(&self, call_id: &Uuid) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+    /// Returns facts committed by the archive transaction.
+    fn archive_call(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<ArchivedCall, Self::Err>> + Send;
 
     /// Set the recording key on an archived call record.
     fn set_recording_key(
@@ -146,10 +149,12 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Find a call record by its egress ID (for webhook handling).
+    ///
+    /// Returns the archived call record's `(call_id, channel_id)` context.
     fn get_call_record_by_egress_id(
         &self,
         egress_id: &str,
-    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<(Uuid, Uuid)>, Self::Err>> + Send;
 
     /// Set the recording key on an active call (by egress ID).
     ///
@@ -316,22 +321,22 @@ pub trait CallRepository: Send + Sync + 'static {
     ///
     /// Tolerates unknown `call_id` (no row matches): the summarization flow
     /// can race with the record being deleted, so this is an idempotent no-op
-    /// when the target row is gone.
+    /// when the target row is gone. Returns whether a row was updated.
     fn insert_call_summary(
         &self,
         call_id: &Uuid,
         summary: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Set `call_records.custom_name = $name` only when the existing value is
     /// `NULL`. Used by the AI auto-naming flow so a user-set custom name is
-    /// never overwritten. No-op if no row matches or the column is already
-    /// populated.
+    /// never overwritten. Returns whether the conditional update persisted
+    /// the name; returns `false` if no row matches or the column is populated.
     fn set_custom_name_if_null(
         &self,
         call_id: &Uuid,
         name: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Storage port for generating signed recording GET URLs and deleting objects.

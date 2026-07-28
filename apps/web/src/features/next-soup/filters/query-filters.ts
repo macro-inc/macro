@@ -233,3 +233,26 @@ export function soupItemMatchesQuery(item: SoupApiItem, query: Query): boolean {
     )
   );
 }
+
+/**
+ * Whether a soup item belongs to a given project, mirroring the parent/project
+ * scoping the folder-contents soup query sends to the server: `projectId` on
+ * documents and chats, `parentId` on child projects. Used to gate optimistic
+ * and websocket cache inserts into a folder view so an entity created or opened
+ * outside the folder never flashes into its contents before the server refetch
+ * corrects it.
+ *
+ * Types whose soup item carries no project (emails, channels, calls, …) stay
+ * permissive — membership can't be decided from the item, and an insert that
+ * does belong should still appear optimistically.
+ */
+export function soupItemMatchesProjectMembership(
+  item: SoupApiItem,
+  projectId: string
+): boolean {
+  return match(item)
+    .with({ tag: 'document' }, ({ data }) => data.projectId === projectId)
+    .with({ tag: 'chat' }, ({ data }) => data.projectId === projectId)
+    .with({ tag: 'project' }, ({ data }) => data.parentId === projectId)
+    .otherwise(() => true);
+}

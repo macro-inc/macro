@@ -17,11 +17,16 @@ members = [
   "crates/cowlike",
   "crates/crm",
   "crates/embedding",
+  "crates/entity_mutation",
   "crates/favorites",
   "crates/foreign_entity",
+  "crates/generic_email_domains",
   "crates/graphql_common",
   "crates/graphql_email",
+  "crates/graphql_entity_mutation",
+  "crates/graphql_favorite",
   "crates/graphql_notification",
+  "crates/graphql_permission",
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/import",
@@ -202,6 +207,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 rmcp = "1.6.0"
 rootcause = { version = "0.12" }
+rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1.0.214", features = ["derive"] }
@@ -223,6 +229,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio-retry = { version = "0.3.2", default-features = false }
 tokio-stream = { version = "0.1.17" }
 tokio-tungstenite = { version = "0.28", default-features = false, features = [
   "connect",

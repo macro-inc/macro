@@ -13,7 +13,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
@@ -101,8 +101,16 @@ where
 }
 
 /// Returns `Some(403)` unless the caller is a Macro admin.
-fn admin_rejection<Auth>(user: &MacroAuthorizationExtractor<Auth>) -> Option<Response> {
-    if user.macro_user_id.email_str().ends_with(ADMIN_EMAIL_SUFFIX) {
+fn admin_rejection<Auth>(
+    user: &MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Option<Response> {
+    if user
+        .authorization
+        .user
+        .macro_user_id
+        .email_str()
+        .ends_with(ADMIN_EMAIL_SUFFIX)
+    {
         None
     } else {
         Some(
@@ -140,10 +148,13 @@ fn internal_error(context: &str) -> Response {
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(
+    skip(service, user),
+    fields(actor = %user.acting_entity())
+)]
 pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<UsageRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {
@@ -196,10 +207,13 @@ pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(
+    skip(service, user),
+    fields(actor = %user.acting_entity())
+)]
 pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {

@@ -27,7 +27,7 @@ jobs:
             - 'infra/**'
             - 'flake.nix'
             - 'flake.lock'
-            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-nix-dev-shell/**'
             - '.github/workflows/code_check_infra.yml'
   biome-check:
     needs:
@@ -43,15 +43,12 @@ jobs:
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        path: /nix
+        cache: nix
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: infra
@@ -66,16 +63,13 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun
-        path: /nix
+        cache: nix
+        path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: install
       run: bun install --frozen-lockfile
       working-directory: infra

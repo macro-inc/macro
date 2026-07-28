@@ -4,9 +4,9 @@ use std::{collections::HashMap, marker::PhantomData, str::FromStr};
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
-        Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        RequiredPermission, UserTeamInfo, ViewAccessLevel,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
+        CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+        EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -132,6 +132,109 @@ where
             .ok_or(AccessError::NotFound("Call not found"))?;
         Ok(info.channel_id)
     }
+
+    async fn get_user_scope_permission(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityPermission, AccessError> {
+        if entity_type != EntityType::Team {
+            return self
+                .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
+                .await;
+        }
+
+        let requested_team_id = Uuid::parse_str(entity_id)
+            .map_err(|_| AccessError::BadRequest("Invalid team ID format"))?;
+        let user_team = self
+            .repo
+            .get_user_team(user_id)
+            .await?
+            .filter(|team| team.team_id == requested_team_id)
+            .ok_or(AccessError::Unauthorized)?;
+
+        Ok(EntityPermission::TeamRole {
+            role: user_team.role,
+        })
+    }
+
+    async fn get_team_scope_permission(
+        &self,
+        bot_id: BotId,
+        team_id: Uuid,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityPermission, AccessError> {
+        match entity_type {
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread
+            | EntityType::Call => {
+                let access_level = self
+                    .repo
+                    .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?;
+                Ok(EntityPermission::AccessLevel { access_level })
+            }
+            EntityType::Channel => {
+                let channel_id = Uuid::parse_str(entity_id)
+                    .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
+                let role = self
+                    .repo
+                    .get_team_channel_role(&channel_id, team_id, bot_id)
+                    .await?;
+                channel_role_result_to_permission(role)
+            }
+            EntityType::ForeignEntity => {
+                let has_access = self
+                    .repo
+                    .has_team_foreign_entity_access(entity_id, team_id, bot_id)
+                    .await?;
+                if has_access {
+                    Ok(EntityPermission::AccessLevel {
+                        access_level: AccessLevel::View,
+                    })
+                } else {
+                    Err(AccessError::Unauthorized)
+                }
+            }
+            EntityType::CrmCompany => {
+                self.repo
+                    .get_team_crm_company_access(entity_id, team_id)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?;
+                Ok(EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                })
+            }
+            EntityType::CrmContact => {
+                self.repo
+                    .get_team_crm_contact_access(entity_id, team_id)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?;
+                Ok(EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                })
+            }
+            EntityType::Team => {
+                let requested_team_id = Uuid::parse_str(entity_id)
+                    .map_err(|_| AccessError::BadRequest("Invalid team ID format"))?;
+                if requested_team_id != team_id {
+                    return Err(AccessError::Unauthorized);
+                }
+                Ok(EntityPermission::TeamRole {
+                    role: TeamRole::Member,
+                })
+            }
+            EntityType::User | EntityType::ChannelMessage | EntityType::StaticFile => {
+                Err(AccessError::BadRequest("Unsupported bot entity type"))
+            }
+        }
+    }
 }
 
 impl<R> EntityAccessService for EntityAccessServiceImpl<R>
@@ -250,33 +353,27 @@ where
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         bot_id: BotId,
+        scope: BotAccessScope,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        let entity_permission = match entity_type {
-            EntityType::Document
-            | EntityType::Chat
-            | EntityType::Project
-            | EntityType::EmailThread
-            | EntityType::Call => {
-                let access_level = self
-                    .repo
-                    .get_bot_entity_access(bot_id, entity_id, entity_type)
+        let entity_permission = match &scope {
+            BotAccessScope::User {
+                user_id,
+                user_org_id,
+            } => {
+                self.get_user_scope_permission(user_id, *user_org_id, entity_id, entity_type)
                     .await?
-                    .ok_or(AccessError::Unauthorized)?;
-                EntityPermission::AccessLevel { access_level }
             }
-            EntityType::Channel => {
-                let channel_id = Uuid::from_str(entity_id)
-                    .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
-                let result = self.repo.get_bot_channel_role(&channel_id, bot_id).await?;
-                channel_role_result_to_permission(result)?
+            BotAccessScope::Team { team_id } => {
+                self.get_team_scope_permission(bot_id, *team_id, entity_id, entity_type)
+                    .await?
             }
-            _ => return Err(AccessError::BadRequest("Unsupported bot entity type")),
         };
 
         EntityAccessReceipt::try_new_bot(
             bot_id.into_storage_id(),
+            (&scope).into(),
             Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,
@@ -423,10 +520,10 @@ where
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<(EntityPermission, Uuid), AccessError> {
-        // Resolve permission and owning team from one ownership lookup, so the
-        // team is the entity's owner (and the user is a member of it) rather
-        // than the user's default team.
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+        // Resolve permission, owning team, and team role from one ownership
+        // lookup, so the team is the entity's owner (and the user is a member
+        // of it) rather than the user's default team.
         let access = match entity_type {
             EntityType::CrmCompany => self.get_crm_company_access(entity_id, user_id).await?,
             EntityType::CrmContact => self.get_crm_contact_access(entity_id, user_id).await?,
@@ -442,6 +539,7 @@ where
                 access_level: access.access_level,
             },
             access.team_id,
+            access.team_role,
         ))
     }
 
