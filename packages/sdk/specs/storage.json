@@ -6004,6 +6004,35 @@
         }
       }
     },
+    "/documents/starter_docs": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Resolves the current user's starter documents.",
+        "operationId": "handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarterDocumentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
@@ -21474,6 +21503,17 @@
             "type": "string",
             "format": "date-time",
             "description": "Update timestamp."
+          }
+        }
+      },
+      "StarterDocumentsResponse": {
+        "type": "object",
+        "description": "The deterministic starter document ids for the current user.",
+        "required": ["how_to_guide_id"],
+        "properties": {
+          "how_to_guide_id": {
+            "type": "string",
+            "description": "Id of the user's \"Macro how to guide\"."
           }
         }
       },

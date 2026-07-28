@@ -6805,6 +6805,16 @@ export type SoupThreadReply = {
     updated_at: string;
 };
 
+/**
+ * The deterministic starter document ids for the current user.
+ */
+export type StarterDocumentsResponse = {
+    /**
+     * Id of the user's "Macro how to guide".
+     */
+    how_to_guide_id: string;
+};
+
 export type String = string;
 
 export type SuccessResponse = {
@@ -9647,6 +9657,25 @@ export type GetDocumentByTeamSlugResponses = {
 };
 
 export type GetDocumentByTeamSlugResponse = GetDocumentByTeamSlugResponses[keyof GetDocumentByTeamSlugResponses];
+
+export type HandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/documents/starter_docs';
+};
+
+export type HandlerErrors = {
+    401: GenericErrorResponse;
+};
+
+export type HandlerError = HandlerErrors[keyof HandlerErrors];
+
+export type HandlerResponses = {
+    200: StarterDocumentsResponse;
+};
+
+export type HandlerResponse = HandlerResponses[keyof HandlerResponses];
 
 export type DeleteDocumentData = {
     body?: never;

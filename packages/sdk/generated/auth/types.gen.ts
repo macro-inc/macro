@@ -233,6 +233,11 @@ export type GetLegacyUserPermissionsResponse = {
      */
     aiDataConsent: boolean;
     /**
+     * When the account was created. Absent for accounts that predate
+     * creation-time tracking.
+     */
+    createdAt?: string | null;
+    /**
      * The user's email
      */
     email: string;
