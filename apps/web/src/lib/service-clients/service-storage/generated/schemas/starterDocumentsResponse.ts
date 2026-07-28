@@ -13,9 +13,4 @@ instead of guessing which document is which by name.
 export interface StarterDocumentsResponse {
   /** Id of the user's "Macro how to guide", when it still exists. */
   how_to_guide_id?: StarterDocumentsResponseHowToGuideId;
-  /** Whether the user has opened the guide since it was seeded. Computed
-from the history row's timestamps (`updatedAt > createdAt`): seeding
-writes the row with the two equal, so membership alone would read as
-opened — and the row must stay, it feeds the command menu's recents. */
-  how_to_guide_opened: boolean;
 }

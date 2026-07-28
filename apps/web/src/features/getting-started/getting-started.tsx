@@ -1,6 +1,5 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { HomeBackfillProgress } from '@app/features/home/home-backfill-progress';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -181,35 +180,6 @@ function GettingStartedContent() {
               return;
             }
             openInPreview({ type: 'md', id: documentId });
-          },
-          // Completes on the guide actually being opened — from here, the
-          // Favorites row, search, or a past session — not merely on clicking
-          // this row. History *membership* can't be the signal: seeding
-          // writes a history row at creation (deliberately — it feeds the
-          // command menu's recents), so the server reports "opened" as the
-          // row's updatedAt moving past its createdAt. Latched via
-          // markComplete so it survives the guide later being deleted.
-          observe: (markComplete) => {
-            // Retroactive: an open from a past session or another device.
-            createEffect(() => {
-              if (starterDocs.isSuccess && starterDocs.data?.howToGuideOpened) {
-                markComplete();
-              }
-            });
-            // Live: the guide visible in any split right now (this
-            // checklist's Viewer, a Favorites or search open) — the server
-            // flag is only as fresh as the starter-docs query.
-            createEffect(() => {
-              const documentId = howToGuideId();
-              if (!documentId) return;
-              const manager = globalSplitManager();
-              if (!manager) return;
-              const open = manager.splits().some((split) => {
-                const content = manager.getSplit(split.id)?.content();
-                return content?.type === 'md' && content.id === documentId;
-              });
-              if (open) markComplete();
-            });
           },
         },
         {

@@ -18,11 +18,6 @@ use utoipa::ToSchema;
 pub struct StarterDocumentsResponse {
     /// Id of the user's "Macro how to guide", when it still exists.
     pub how_to_guide_id: Option<String>,
-    /// Whether the user has opened the guide since it was seeded. Computed
-    /// from the history row's timestamps (`updatedAt > createdAt`): seeding
-    /// writes the row with the two equal, so membership alone would read as
-    /// opened — and the row must stay, it feeds the command menu's recents.
-    pub how_to_guide_opened: bool,
 }
 
 /// Resolves the current user's starter documents.
@@ -67,30 +62,9 @@ pub async fn handler(
         .next()
         .map(|document| document.document_id);
 
-    // Best-effort: the id is this endpoint's contract; the opened flag is a
-    // hint the checklist latches, so a failed lookup degrades to false
-    // rather than failing the request.
-    let how_to_guide_opened = match &how_to_guide_id {
-        Some(id) => macro_db_client::history::user_history_item_opened(
-            &db,
-            user.authorization.user.macro_user_id.as_ref(),
-            id,
-            "document",
-        )
-        .await
-        .inspect_err(|e| tracing::warn!(error=?e, "failed to look up guide history"))
-        .ok()
-        .flatten()
-        .unwrap_or(false),
-        None => false,
-    };
-
     (
         StatusCode::OK,
-        Json(StarterDocumentsResponse {
-            how_to_guide_id,
-            how_to_guide_opened,
-        }),
+        Json(StarterDocumentsResponse { how_to_guide_id }),
     )
         .into_response()
 }

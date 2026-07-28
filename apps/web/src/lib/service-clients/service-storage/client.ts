@@ -1091,19 +1091,14 @@ export const storageServiceClient = {
     }));
   },
 
-  /**
-   * Ids of the starter documents seeded at signup, so the client can open
-   * them directly, plus whether the how-to guide has been opened.
-   */
+  /** Ids of the starter documents seeded at signup. */
   async getStarterDocs() {
     return (
       await dssFetch<{
         how_to_guide_id: string | null;
-        how_to_guide_opened: boolean;
       }>('/documents/starter_docs')
     ).map((result) => ({
       howToGuideId: result.how_to_guide_id ?? undefined,
-      howToGuideOpened: result.how_to_guide_opened,
     }));
   },
 

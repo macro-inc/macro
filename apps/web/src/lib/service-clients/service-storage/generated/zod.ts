@@ -4928,11 +4928,6 @@ export const handlerResponse = zod
       .describe(
         'Id of the user\'s \"Macro how to guide\", when it still exists.'
       ),
-    how_to_guide_opened: zod
-      .boolean()
-      .describe(
-        "Whether the user has opened the guide since it was seeded. Computed\nfrom the history row's timestamps (`updatedAt > createdAt`): seeding\nwrites the row with the two equal, so membership alone would read as\nopened — and the row must stay, it feeds the command menu's recents."
-      ),
   })
   .describe(
     'The starter documents seeded at signup, so clients can open them by id\ninstead of guessing which document is which by name.'
