@@ -414,16 +414,16 @@ describe('normalizedCacheExchange', () => {
     host = makeFakeHost();
   });
 
-  it('normalizes SoupUpdated subscription patches and preserves the result', async () => {
-    const patch = {
+  it('normalizes ordinary buffered subscription data without inspecting event types', async () => {
+    const patches = ['document-1', 'document-2'].map((id) => ({
       __typename: 'SoupUpdated',
       item: {
         __typename: 'GraphqlSoupDocument',
-        id: 'document-1',
-        displayName: 'Updated document',
+        id,
+        displayName: `Updated ${id}`,
       },
-    };
-    const data = { soupUpdates: [patch] };
+    }));
+    const data = { soupUpdates: patches };
     const { ops, results } = harness(host, (op) =>
       op.kind === 'subscription' ? { data } : {}
     );
@@ -432,7 +432,7 @@ describe('normalizedCacheExchange', () => {
     await tick();
 
     expect(host.writes).toHaveLength(1);
-    expect(host.writes[0]?.data).toEqual({ soupUpdates: [patch] });
+    expect(host.writes[0]?.data).toBe(data);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
   });

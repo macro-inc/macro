@@ -280,33 +280,60 @@ function mutationCacheKeys(data: unknown, op: Operation): string[] {
   return [...keys];
 }
 
-type SoupUpdatedPatch = {
-  __typename: 'SoupUpdated';
-  item: unknown;
-};
+type SubscriptionCacheEffect =
+  | { kind: 'write'; data: unknown }
+  | { kind: 'delete'; key: string };
 
-type GraphqlCacheDeletionPatch = {
-  __typename: 'GraphqlCacheDeletion';
-  graphqlTypeName: string;
-  entityId: string;
-};
+/** Returns the normalized key carried by the cache-deletion GraphQL type. */
+function graphqlCacheDeletionKey(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  if (
+    record.__typename !== 'GraphqlCacheDeletion' ||
+    typeof record.graphqlTypeName !== 'string' ||
+    typeof record.entityId !== 'string'
+  ) {
+    return;
+  }
+  return `${record.graphqlTypeName}:${record.entityId}`;
+}
 
-type SoupPatch = SoupUpdatedPatch | GraphqlCacheDeletionPatch;
+/**
+ * Converts a subscription payload into ordered cache effects. Ordinary
+ * subscription data is normalized without knowing its schema shape. The only
+ * special case is `GraphqlCacheDeletion`; when it occurs in a buffered root
+ * list, surrounding values are written as singleton list results so event
+ * order remains observable by the cache.
+ */
+function subscriptionCacheEffects(data: unknown): SubscriptionCacheEffect[] {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return [{ kind: 'write', data }];
+  }
 
-function soupPatches(data: unknown): SoupPatch[] | undefined {
-  if (data === null || typeof data !== 'object') return;
-  const updates = (data as Record<string, unknown>).soupUpdates;
-  if (!Array.isArray(updates)) return;
-  return updates.filter((patch): patch is SoupPatch => {
-    if (patch === null || typeof patch !== 'object') return false;
-    const record = patch as Record<string, unknown>;
-    return (
-      (record.__typename === 'SoupUpdated' && 'item' in record) ||
-      (record.__typename === 'GraphqlCacheDeletion' &&
-        typeof record.graphqlTypeName === 'string' &&
-        typeof record.entityId === 'string')
+  // GraphQL subscriptions have exactly one root field (which may be aliased).
+  const rootFields = Object.entries(data);
+  if (rootFields.length !== 1) return [{ kind: 'write', data }];
+
+  const [responseKey, payload] = rootFields[0] as [string, unknown];
+  if (Array.isArray(payload)) {
+    const hasDeletion = payload.some(
+      (value) => graphqlCacheDeletionKey(value) !== undefined
     );
-  });
+    if (!hasDeletion) return [{ kind: 'write', data }];
+
+    return payload.map((value) => {
+      const key = graphqlCacheDeletionKey(value);
+      return key
+        ? { kind: 'delete' as const, key }
+        : {
+            kind: 'write' as const,
+            data: { [responseKey]: [value] },
+          };
+    });
+  }
+
+  const key = graphqlCacheDeletionKey(payload);
+  return key ? [{ kind: 'delete', key }] : [{ kind: 'write', data }];
 }
 
 function queuedMutationResult(
@@ -621,34 +648,28 @@ export function normalizedCacheExchange(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
-        if (op.kind === 'subscription') {
-          const patches = soupPatches(result.data);
-          if (patches) {
-            // The server buffers patches in event order. Apply each cache
-            // effect serially so delete→update and update→delete retain their
-            // distinct semantics, while subscribers still receive the
-            // original buffered result below.
-            for (const patch of patches) {
-              try {
-                if (patch.__typename === 'SoupUpdated') {
-                  await host.writeQuery({
-                    query: queryText(op),
-                    operationName: operationName(op),
-                    variables: op.variables as
-                      | Record<string, unknown>
-                      | undefined,
-                    data: { soupUpdates: [patch] },
-                  });
-                } else {
-                  await host.deleteRecords([
-                    `${patch.graphqlTypeName}:${patch.entityId}`,
-                  ]);
-                }
-              } catch (error) {
-                // One failed cache effect must neither skip later patches nor
-                // terminate the subscription result stream.
-                options.onCacheError?.(error, op);
+        if (op.kind === 'subscription' && result.data != null) {
+          // Apply effects serially so buffered delete→write and write→delete
+          // events retain their distinct semantics. Subscribers still receive
+          // the original result below.
+          for (const effect of subscriptionCacheEffects(result.data)) {
+            try {
+              if (effect.kind === 'write') {
+                await host.writeQuery({
+                  query: queryText(op),
+                  operationName: operationName(op),
+                  variables: op.variables as
+                    | Record<string, unknown>
+                    | undefined,
+                  data: effect.data,
+                });
+              } else {
+                await host.deleteRecords([effect.key]);
               }
+            } catch (error) {
+              // One failed cache effect must neither skip later effects nor
+              // terminate the subscription result stream.
+              options.onCacheError?.(error, op);
             }
           }
         } else if (op.kind === 'query' && result.data != null) {
