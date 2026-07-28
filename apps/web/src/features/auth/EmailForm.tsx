@@ -67,11 +67,19 @@ export const sendEmailCode = action(async (formData: FormData) => {
   // If the passwordless call returns 202,
   // the email needs to login through a dedicated identity provider.
   if (response.status === 202) {
-    const body = await response.json();
-    const idp_id = body.idp_id;
+    const body: unknown = await response.json().catch(() => undefined);
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      !('idp_id' in body) ||
+      typeof body.idp_id !== 'string' ||
+      !body.idp_id
+    ) {
+      throw new Error('Unable to start SSO login for this email.');
+    }
     const ssoUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
-    ssoUrl.searchParams.set('idp_id', idp_id);
-    ssoUrl.searchParams.set('login_hint', (email ?? '').toString());
+    ssoUrl.searchParams.set('idp_id', body.idp_id);
+    ssoUrl.searchParams.set('login_hint', email);
     if (referral_code) ssoUrl.searchParams.set('referral_code', referral_code);
     window.location.href = ssoUrl.toString();
     return false; // passwordless login flow is not reached

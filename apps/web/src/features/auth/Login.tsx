@@ -28,20 +28,21 @@ import {
   useSearchParams,
   useSubmission,
 } from '@solidjs/router';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
 import { detect } from 'detect-browser';
 import {
   createEffect,
   createMemo,
   createSignal,
-  type JSX,
   on,
   onCleanup,
   onMount,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   autoLoginCode,
   sendEmailCode,
@@ -89,11 +90,15 @@ function PostAuthGate() {
     onboardingV4().loading && isFirstTimeDesktopUser();
 
   return (
-    <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
-      <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
-        <OnboardingFlow />
+    <Suspense fallback={<LoadingBlock />}>
+      <Show when={userInfoQuery.data} fallback={<LoadingBlock />}>
+        <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
+          <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+            <OnboardingFlow />
+          </Show>
+        </Show>
       </Show>
-    </Show>
+    </Suspense>
   );
 }
 
@@ -149,23 +154,20 @@ function FormInput(props: {
   placeholder?: string;
   required?: boolean;
   value?: string;
-  inputMode?: 'text' | 'numeric';
-  pattern?: string;
-  maxLength?: number;
   autoFocus?: boolean;
-  monospace?: boolean;
-  centered?: boolean;
-  class?: string;
-  onInput?: JSX.ChangeEventHandlerUnion<HTMLInputElement, Event>;
 }) {
   let inputEl: HTMLInputElement | undefined;
   onMount(() => {
     if (props.autoFocus === false) return;
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
     // The Stepper's outin Transition resolves this step's JSX (firing onMount)
     // before attaching it to the document, so the input is still detached
     // here. Poll until it's connected, then focus.
     const focusWhenConnected = () => {
-      if (!inputEl) return;
+      if (cancelled || !inputEl) return;
       if (inputEl.isConnected) inputEl.focus({ preventScroll: true });
       else requestAnimationFrame(focusWhenConnected);
     };
@@ -177,21 +179,11 @@ function FormInput(props: {
       id={props.id}
       name={props.id}
       type={props.type ?? 'text'}
-      inputMode={props.inputMode}
-      pattern={props.pattern}
       placeholder={props.placeholder}
       value={props.value ?? ''}
       required={props.required ?? true}
-      maxLength={props.maxLength}
       autocomplete={props.id}
-      onInput={props.onInput}
-      class={cn(
-        'ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors',
-        'user-invalid:border-failure',
-        props.monospace && 'font-mono tracking-[0.4em] text-base',
-        props.centered && 'text-center',
-        props.class
-      )}
+      class="ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors user-invalid:border-failure"
     />
   );
 }
@@ -315,20 +307,25 @@ function VerifyFormNew(props: {
   const resend = useAction(sendEmailCode);
   const submit = useAction(verifyCode);
 
-  const email = () => emailSubmission.input?.[0].get('email') as string;
+  const email = () => {
+    const value = emailSubmission.input?.[0].get('email');
+    return typeof value === 'string' ? value : undefined;
+  };
 
   // Local backends return the code with the email step; submit it
   // automatically so seeded persona logins are one click.
   createEffect(() => {
     const code = autoLoginCode(emailSubmission.result);
+    const submittedEmail = email();
     if (
       code &&
+      submittedEmail &&
       !submission.pending &&
       !submission.result &&
       !submission.error
     ) {
       const formData = new FormData();
-      formData.append('email', email());
+      formData.append('email', submittedEmail);
       formData.append('one-time-code', code);
       submit(formData);
     }
@@ -352,12 +349,17 @@ function VerifyFormNew(props: {
   });
 
   const handleResendCode = async () => {
+    const submittedEmail = email();
+    if (!submittedEmail) {
+      setResendError('Email address is unavailable. Go back and try again.');
+      return;
+    }
     submission.clear();
     setResendError();
     setResendTimer(RESEND_TIMER);
     setShowResendCode(false);
     const formData = new FormData();
-    formData.append('email', email());
+    formData.append('email', submittedEmail);
     try {
       await resend(formData);
     } catch (e) {
@@ -402,8 +404,10 @@ function VerifyFormNew(props: {
         disabled={submission.pending}
         onInput={setCode}
         onComplete={(value) => {
+          const submittedEmail = email();
+          if (!submittedEmail) return;
           const formData = new FormData(formEl);
-          formData.set('email', email());
+          formData.set('email', submittedEmail);
           formData.set('one-time-code', value);
           submit(formData);
         }}
@@ -414,7 +418,10 @@ function VerifyFormNew(props: {
           type="button"
           onClick={handleResendCode}
           disabled={
-            emailSubmission.pending || submission.pending || !showResendCode()
+            emailSubmission.pending ||
+            submission.pending ||
+            !showResendCode() ||
+            !email()
           }
           class="font-medium text-ink transition-colors hover:text-ink-muted disabled:text-ink-extra-muted"
         >
@@ -430,7 +437,7 @@ function VerifyFormNew(props: {
       <Button
         variant="cta"
         type="submit"
-        disabled={submission.pending || code().length !== 6}
+        disabled={submission.pending || code().length !== 6 || !email()}
       >
         Verify
         <ArrowRight class="size-4" />
@@ -537,7 +544,12 @@ export function Login(props: { signupMode?: boolean }) {
   };
 
   const stepIndex = () =>
-    stage() === Stage.None ? 0 : stage() === Stage.Email ? 1 : 2;
+    match(stage())
+      .with(Stage.None, () => 0)
+      .with(Stage.Email, () => 1)
+      .with(Stage.Verify, () => 2)
+      .with(Stage.Done, () => 2)
+      .exhaustive();
 
   const emailSubmission = useSubmission(sendEmailCode);
   const verifySubmission = useSubmission(verifyCode);
