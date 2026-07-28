@@ -343,7 +343,10 @@ impl<S: Storage> Engine<S> {
         let op = doc.operation(operation_name)?;
         if op.kind != OperationKind::Query {
             return Err(EngineError::Document(
-                DocumentError::UnsupportedOperationType("mutation (reads are query-only)".into()),
+                DocumentError::UnsupportedOperationType(format!(
+                    "{:?} (cache reads are query-only)",
+                    op.kind
+                )),
             ));
         }
 

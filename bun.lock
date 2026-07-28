@@ -85,6 +85,7 @@
         "email-validator": "^2.0.4",
         "emojibase-data": "^17.0.0",
         "emojilib": "^4.0.2",
+        "graphql-ws": "^6.1.0",
         "katex": "^0.16.22",
         "lexical": "0.45.0",
         "libheif-js": "^1.19.8",

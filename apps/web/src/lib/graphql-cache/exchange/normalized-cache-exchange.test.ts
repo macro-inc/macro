@@ -32,6 +32,25 @@ const QUERY = gql`
   }
 `;
 
+const SUBSCRIPTION = gql`
+  subscription SoupUpdates {
+    soupUpdates {
+      __typename
+      ... on SoupUpdated {
+        item {
+          __typename
+          id
+          displayName
+        }
+      }
+      ... on GraphqlCacheDeletion {
+        graphqlTypeName
+        entityId
+      }
+    }
+  }
+`;
+
 const MUTATION = gql`
   mutation SetEntityProperty($input: SetEntityPropertyInput!) {
     setEntityProperty(input: $input) {
@@ -89,6 +108,7 @@ type FakeHost = CacheHost & {
   defers: Array<{ transactionId: string; error: string }>;
   claims: string[];
   invalidations: string[][];
+  cacheActions: Array<{ kind: 'write' | 'delete'; value: unknown }>;
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
   seedQueued: (args: Parameters<CacheHost['beginOptimisticWrite']>[0]) => void;
@@ -115,6 +135,7 @@ function makeFakeHost(): FakeHost {
     defers: [],
     claims: [],
     invalidations: [],
+    cacheActions: [],
     teardowns: [],
     scriptRead: (r) => {
       readResult = r;
@@ -147,6 +168,7 @@ function makeFakeHost(): FakeHost {
         data: args.data,
         identity: args.identity,
       });
+      host.cacheActions.push({ kind: 'write', value: args.data });
       return { changed: [], affectedOps: [], reset: false };
     },
     async beginOptimisticWrite(args): Promise<OptimisticWriteResult> {
@@ -224,6 +246,7 @@ function makeFakeHost(): FakeHost {
     },
     async deleteRecords(keys) {
       host.invalidations.push(keys);
+      host.cacheActions.push({ kind: 'delete', value: keys });
       return [];
     },
     async teardown(opKey) {
@@ -257,6 +280,18 @@ function makeOp(
     'query',
     { key, query: QUERY, variables: { input: { limit: 2 } } },
     { requestPolicy, url: 'http://test', suspense: false } as never
+  );
+}
+
+function makeSubscriptionOp(key: number): Operation {
+  return makeOperation(
+    'subscription',
+    { key, query: SUBSCRIPTION, variables: {} },
+    {
+      requestPolicy: 'cache-first',
+      url: 'http://test',
+      suspense: false,
+    } as never
   );
 }
 
@@ -377,6 +412,134 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it('normalizes SoupUpdated subscription patches and preserves the result', async () => {
+    const patch = {
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: 'GraphqlSoupDocument',
+        id: 'document-1',
+        displayName: 'Updated document',
+      },
+    };
+    const data = { soupUpdates: [patch] };
+    const { ops, results } = harness(host, (op) =>
+      op.kind === 'subscription' ? { data } : {}
+    );
+
+    ops.next(makeSubscriptionOp(21));
+    await tick();
+
+    expect(host.writes).toHaveLength(1);
+    expect(host.writes[0]?.data).toEqual({ soupUpdates: [patch] });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data).toBe(data);
+  });
+
+  it('deletes the exact normalized key from subscription patches', async () => {
+    const data = {
+      soupUpdates: [
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'document-1',
+        },
+      ],
+    };
+    const { ops, results } = harness(host, (op) =>
+      op.kind === 'subscription' ? { data } : {}
+    );
+
+    ops.next(makeSubscriptionOp(22));
+    await tick();
+
+    expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-1']]);
+    expect(host.writes).toHaveLength(0);
+    expect(results[0]?.data).toBe(data);
+  });
+
+  it('applies buffered mixed patches in order', async () => {
+    const deleteDocument = (id: string) => ({
+      __typename: 'GraphqlCacheDeletion',
+      graphqlTypeName: 'GraphqlSoupDocument',
+      entityId: id,
+    });
+    const updateDocument = (id: string) => ({
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: 'GraphqlSoupDocument',
+        id,
+        displayName: `Document ${id}`,
+      },
+    });
+    const patches = [
+      deleteDocument('delete-then-update'),
+      updateDocument('delete-then-update'),
+      updateDocument('update-then-delete'),
+      deleteDocument('update-then-delete'),
+    ];
+    const { ops } = harness(host, (op) =>
+      op.kind === 'subscription' ? { data: { soupUpdates: patches } } : {}
+    );
+
+    ops.next(makeSubscriptionOp(23));
+    await tick();
+
+    expect(host.cacheActions).toEqual([
+      {
+        kind: 'delete',
+        value: ['GraphqlSoupDocument:delete-then-update'],
+      },
+      {
+        kind: 'write',
+        value: { soupUpdates: [patches[1]] },
+      },
+      {
+        kind: 'write',
+        value: { soupUpdates: [patches[2]] },
+      },
+      {
+        kind: 'delete',
+        value: ['GraphqlSoupDocument:update-then-delete'],
+      },
+    ]);
+  });
+
+  it('reports cache failures without dropping subscription results or later patches', async () => {
+    const error = new Error('subscription cache write failed');
+    vi.spyOn(host, 'writeQuery').mockRejectedValueOnce(error);
+    const onCacheError = vi.fn();
+    const patches = [
+      {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Updated document',
+        },
+      },
+      {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-2',
+      },
+    ];
+    const data = { soupUpdates: patches };
+    const { ops, results } = harness(
+      host,
+      (op) => (op.kind === 'subscription' ? { data } : {}),
+      { onCacheError }
+    );
+
+    const operation = makeSubscriptionOp(24);
+    ops.next(operation);
+    await tick();
+
+    expect(onCacheError).toHaveBeenCalledWith(error, operation);
+    expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-2']]);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data).toBe(data);
   });
 
   it('cache-first miss forwards to network and writes through', async () => {

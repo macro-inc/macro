@@ -280,6 +280,35 @@ function mutationCacheKeys(data: unknown, op: Operation): string[] {
   return [...keys];
 }
 
+type SoupUpdatedPatch = {
+  __typename: 'SoupUpdated';
+  item: unknown;
+};
+
+type GraphqlCacheDeletionPatch = {
+  __typename: 'GraphqlCacheDeletion';
+  graphqlTypeName: string;
+  entityId: string;
+};
+
+type SoupPatch = SoupUpdatedPatch | GraphqlCacheDeletionPatch;
+
+function soupPatches(data: unknown): SoupPatch[] | undefined {
+  if (data === null || typeof data !== 'object') return;
+  const updates = (data as Record<string, unknown>).soupUpdates;
+  if (!Array.isArray(updates)) return;
+  return updates.filter((patch): patch is SoupPatch => {
+    if (patch === null || typeof patch !== 'object') return false;
+    const record = patch as Record<string, unknown>;
+    return (
+      (record.__typename === 'SoupUpdated' && 'item' in record) ||
+      (record.__typename === 'GraphqlCacheDeletion' &&
+        typeof record.graphqlTypeName === 'string' &&
+        typeof record.entityId === 'string')
+    );
+  });
+}
+
 function queuedMutationResult(
   op: Operation,
   transactionId: string
@@ -592,7 +621,37 @@ export function normalizedCacheExchange(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
-        if (op.kind === 'query' && result.data != null) {
+        if (op.kind === 'subscription') {
+          const patches = soupPatches(result.data);
+          if (patches) {
+            // The server buffers patches in event order. Apply each cache
+            // effect serially so delete→update and update→delete retain their
+            // distinct semantics, while subscribers still receive the
+            // original buffered result below.
+            for (const patch of patches) {
+              try {
+                if (patch.__typename === 'SoupUpdated') {
+                  await host.writeQuery({
+                    query: queryText(op),
+                    operationName: operationName(op),
+                    variables: op.variables as
+                      | Record<string, unknown>
+                      | undefined,
+                    data: { soupUpdates: [patch] },
+                  });
+                } else {
+                  await host.deleteRecords([
+                    `${patch.graphqlTypeName}:${patch.entityId}`,
+                  ]);
+                }
+              } catch (error) {
+                // One failed cache effect must neither skip later patches nor
+                // terminate the subscription result stream.
+                options.onCacheError?.(error, op);
+              }
+            }
+          }
+        } else if (op.kind === 'query' && result.data != null) {
           try {
             await host.writeQuery({
               opKey: op.key,

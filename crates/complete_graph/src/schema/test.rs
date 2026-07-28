@@ -596,7 +596,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 
     let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
     let subscribed_user = Arc::new(Mutex::new(None));
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    let (sender, receiver) = tokio::sync::mpsc::channel(2);
     let realtime = TestRealtimeSubscriptionService {
         receiver: Arc::new(Mutex::new(Some(receiver))),
         subscribed_user: Arc::clone(&subscribed_user),
@@ -630,31 +630,24 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         ))
         .await
         .expect("subscription remains open");
-    let response = responses.next().await.expect("one subscription response");
-
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().expect("response data is JSON");
-    assert_eq!(data["soupUpdates"]["__typename"], "SoupUpdated");
-
     sender
         .send(Patch::Deleted(
             ModelEntityType::Document.with_entity_string(document_id.to_string()),
         ))
         .await
         .expect("subscription remains open");
-    let response = responses
-        .next()
-        .await
-        .expect("deletion subscription response");
+    let response = responses.next().await.expect("one subscription response");
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().expect("response data is JSON");
-    assert_eq!(data["soupUpdates"]["__typename"], "GraphqlCacheDeletion");
-    assert_eq!(
-        data["soupUpdates"]["graphqlTypeName"],
-        "GraphqlSoupDocument"
-    );
-    assert_eq!(data["soupUpdates"]["entityId"], document_id.to_string());
+    let updates = data["soupUpdates"]
+        .as_array()
+        .expect("soupUpdates is a buffered list");
+    assert_eq!(updates.len(), 2);
+    assert_eq!(updates[0]["__typename"], "SoupUpdated");
+    assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
+    assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
+    assert_eq!(updates[1]["entityId"], document_id.to_string());
     assert_eq!(
         subscribed_user
             .lock()

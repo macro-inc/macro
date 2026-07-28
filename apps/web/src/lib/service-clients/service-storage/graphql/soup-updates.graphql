@@ -1,0 +1,14 @@
+subscription SoupUpdates {
+	soupUpdates {
+		__typename
+		... on SoupUpdated {
+			item {
+				...SoupItemFields
+			}
+		}
+		... on GraphqlCacheDeletion {
+			graphqlTypeName
+			entityId
+		}
+	}
+}

@@ -42,7 +42,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "item: GraphqlSoupEntity!",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type SoupSubscriptionRoot {",
-        "soupUpdates: SoupPatch!",
+        "soupUpdates: [SoupPatch!]!",
     ] {
         assert_sdl_line(&sdl, expected);
     }

@@ -111,6 +111,15 @@ mod tests {
     }
 
     #[test]
+    fn subscription_root_is_present() {
+        let name = SUBSCRIPTION_ROOT_TYPE.expect("schema has a subscription root");
+        let root = type_meta(name).expect("subscription root type");
+        assert_eq!(root.kind, TypeKind::Object);
+        assert!(root.key_fields.is_none());
+        assert!(root.fields.iter().any(|field| field.name == "soupUpdates"));
+    }
+
+    #[test]
     fn interface_possible_types() {
         let entity = type_meta("GraphqlSoupEntity").expect("entity interface");
         assert_eq!(entity.kind, TypeKind::Interface);
