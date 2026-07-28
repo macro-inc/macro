@@ -31,7 +31,12 @@ pub use domain::service::{
 };
 #[cfg(feature = "outbound")]
 pub use outbound::{
-    kafka_event_consumer::KafkaConsumerAdapter, kafka_event_publisher::KafkaEventPublisher,
+    kafka_event_consumer::KafkaConsumerAdapter,
+    kafka_event_publisher::KafkaEventPublisher,
+    parallel_event_consumer::{
+        DROP_LOG_MESSAGE, DeliveryDecision, DeliveryError, DeliveryPolicy, Handler,
+        ParallelEventConsumerError, UniformBoundedRetry, run_parallel_event_consumer,
+    },
     spawner::GlobalSpawner,
 };
 

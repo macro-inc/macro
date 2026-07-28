@@ -103,6 +103,10 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
     pub fn rebalance_tracker(&self) -> Option<RebalanceTracker> {
         self.inner.rebalance_tracker()
     }
+
+    pub(crate) fn into_inner(self) -> KafkaEventConsumer<T> {
+        self.inner
+    }
 }
 
 impl<T, M: MacroEventCollection> KafkaConsumerAdapter<T, M> {
