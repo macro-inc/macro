@@ -41,7 +41,7 @@ const deletedItemPoller = new DeleteItemPoller('deleted-item-poller', {
   envVars: {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
     ENVIRONMENT: stack,
-    RUST_LOG: 'deleted_item_poller=info',
+    RUST_LOG: 'deleted_item_poller=info,macro_http_request=info',
   },
   tags,
 });

@@ -51,7 +51,7 @@ const organizationRetentionHandler = new OrganizationRetentionHandler(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'organization_retention_handler=trace',
+      RUST_LOG: 'organization_retention_handler=trace,macro_http_request=info',
     },
     deleteDocumentQueueArn,
     deleteChatQueueArn,
@@ -75,7 +75,8 @@ const organizationRetentionTrigger = new OrganizationRetentionTrigger(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'organization_retention_trigger=trace,sqs_client=trace',
+      RUST_LOG:
+        'organization_retention_trigger=trace,sqs_client=trace,macro_http_request=info',
     },
     organizationRetentionQueueArn,
     vpc: coparse_api_vpc,

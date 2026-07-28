@@ -54,7 +54,7 @@ const shaCleanupWorker = new ShaWorker('sha-cleanup-worker', {
     },
     {
       name: 'RUST_LOG',
-      value: 'sha_cleanup_worker=info',
+      value: 'sha_cleanup_worker=info,macro_http_request=info',
     },
     {
       name: 'DOCUMENT_STORAGE_BUCKET',

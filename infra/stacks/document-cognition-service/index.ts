@@ -123,7 +123,8 @@ const aiProjectionsRefreshTrigger = new AiProjectionsRefreshTrigger(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${PROXY_DATABASE_URL}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'ai_projections_refresh_handler=trace,sqs_client=trace',
+      RUST_LOG:
+        'ai_projections_refresh_handler=trace,sqs_client=trace,macro_http_request=info',
     },
     aiProjectionQueueArn: aiProjectionQueue.queue.arn,
     vpc: coparse_api_vpc,

@@ -270,7 +270,7 @@ const previewLambdaEnvVars: CallRecordingPreviewLambdaEnvVars = {
   FFMPEG_PATH: '/opt/bin/ffmpeg',
   FFPROBE_PATH: '/opt/bin/ffprobe',
   ENVIRONMENT: stack,
-  RUST_LOG: 'call_recording_preview_handler=trace',
+  RUST_LOG: 'call_recording_preview_handler=trace,macro_http_request=info',
 };
 
 const callRecordingPreviewLambda = new CallRecordingPreviewLambda(

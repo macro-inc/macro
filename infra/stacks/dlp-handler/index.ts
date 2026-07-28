@@ -15,7 +15,7 @@ if (stack === 'prod') {
   const dlpHandler = new DlpHandler(`dlp-handler-${stack}`, {
     envVars: {
       SNS_TOPIC_ARN: snsTopicArn,
-      RUST_LOG: 'dataloss_prevention_handler=info',
+      RUST_LOG: 'dataloss_prevention_handler=info,macro_http_request=info',
       ENVIRONMENT: stack,
     },
     snsTopicArn,
