@@ -43,7 +43,4 @@ function reconcile(user, registration, jwt, id_token, tokens) {
   if (!user.fullName) {
     user.fullName = claim('name');
   }
-  if (!user.imageUrl) {
-    user.imageUrl = claim('picture');
-  }
 }
