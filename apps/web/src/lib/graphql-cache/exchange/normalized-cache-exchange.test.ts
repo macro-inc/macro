@@ -28,7 +28,6 @@ const QUERY = gql`
   query Soup($input: SoupInput!) {
     soup(input: $input) {
       nextCursor
-      hasMore
     }
   }
 `;

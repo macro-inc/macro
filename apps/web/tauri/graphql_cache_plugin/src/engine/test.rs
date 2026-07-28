@@ -2,7 +2,7 @@ use super::*;
 use pollster::block_on;
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { nextCursor hasMore items { __typename id } } }
+    user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;
 
 fn variables() -> Variables {
@@ -12,13 +12,12 @@ fn variables() -> Variables {
     vars
 }
 
-fn soup_data(has_more: bool) -> serde_json::Value {
+fn soup_data(has_next_page: bool) -> serde_json::Value {
     serde_json::json!({
         "user": {
             "id": "user-1",
             "soup": {
-                "nextCursor": null,
-                "hasMore": has_more,
+                "nextCursor": has_next_page.then_some("cursor-1"),
                 "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}]
             }
         }
@@ -94,7 +93,6 @@ fn record_selection_returns_native_cache_entities() {
                     }
                 }
                 nextCursor
-                hasMore
             }
         }
     }"#;
@@ -113,8 +111,7 @@ fn record_selection_returns_native_cache_entities() {
                     "deletedAt": null,
                     "subType": null
                 }],
-                "nextCursor": null,
-                "hasMore": false
+                "nextCursor": null
             }
         }
     });
@@ -135,7 +132,10 @@ fn record_selection_returns_native_cache_entities() {
         10,
     ))
     .unwrap();
-    assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1", "name": "A note"})]);
+    assert_eq!(
+        page.records,
+        vec![serde_json::json!({"id": "doc-1", "name": "A note"})]
+    );
     assert!(page.next_cursor.is_none());
 }
 
@@ -153,8 +153,8 @@ fn query_inspection_serializes_generated_variables_and_value() {
     assert_eq!(instances.len(), 1);
     assert_eq!(instances[0].variables, variables());
     assert_eq!(
-        instances[0].value.as_ref().unwrap()["hasMore"],
-        serde_json::json!(false)
+        instances[0].value.as_ref().unwrap()["nextCursor"],
+        serde_json::Value::Null
     );
     assert_eq!(
         serde_json::to_value(&instances).unwrap(),
@@ -162,7 +162,6 @@ fn query_inspection_serializes_generated_variables_and_value() {
             "variables": {"input": {"limit": 1}},
             "value": {
                 "nextCursor": null,
-                "hasMore": false,
                 "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}]
             }
         }])
