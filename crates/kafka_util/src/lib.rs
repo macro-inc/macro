@@ -8,16 +8,24 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use either::Either;
 use macro_env::Environment;
-use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, StreamConsumer};
+use rdkafka::client::ClientContext;
+use rdkafka::consumer::{
+    BaseConsumer, CommitMode, Consumer, ConsumerContext, Rebalance, StreamConsumer,
+};
 use rdkafka::error::{KafkaError, KafkaResult};
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::types::RDKafkaErrorCode;
 use rdkafka::{ClientConfig, Offset, TopicPartitionList};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use uuid::Uuid;
 
 pub use msk_iam::{MskIamClientContext, configure_sasl_iam};
@@ -26,6 +34,8 @@ mod msk_iam;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
 const MESSAGE_TIMEOUT_MS: &str = "5000";
+const COOPERATIVE_ASSIGNMENT_STRATEGY: &str = "cooperative-sticky";
+const MAX_LIBRDKAFKA_POLL_INTERVAL_MS: u128 = 86_400_000;
 const SEND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Failure to construct an environment-specific Kafka consumer.
@@ -37,6 +47,12 @@ pub enum KafkaConsumerError {
     /// Failed to create the TLS and MSK-IAM authenticated consumer.
     #[error("failed to create MSK IAM Kafka consumer")]
     MskIam(#[source] KafkaError),
+    /// The max poll interval cannot be represented by librdkafka.
+    #[error(
+        "max poll interval {0:?} must round up to between 1 and \
+         {MAX_LIBRDKAFKA_POLL_INTERVAL_MS} milliseconds"
+    )]
+    InvalidMaxPollInterval(Duration),
 }
 
 /// Failure to construct an environment-specific Kafka producer.
@@ -51,11 +67,256 @@ pub enum KafkaProducerError {
 }
 
 /// Underlying Kafka consumer transport selected from the runtime environment.
-struct ConsumerTransport(Either<StreamConsumer, StreamConsumer<MskIamClientContext>>);
+struct ConsumerTransport(
+    Either<StreamConsumer<PlaintextConsumerContext>, StreamConsumer<MskIamClientContext>>,
+);
 
 /// Underlying Kafka producer transport selected from the runtime environment.
 #[derive(Clone)]
 struct ProducerTransport(Either<FutureProducer, FutureProducer<MskIamClientContext>>);
+
+/// A Kafka topic and partition affected by a rebalance.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TopicPartition {
+    /// Kafka topic name.
+    pub topic: String,
+    /// Kafka partition number.
+    pub partition: i32,
+}
+
+/// Monotonically increasing ownership generation for one topic-partition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct AssignmentEpoch(u64);
+
+impl AssignmentEpoch {
+    /// Returns the integer generation value.
+    pub fn value(self) -> u64 {
+        self.0
+    }
+}
+
+/// A topic-partition and its ownership generation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PartitionAssignment {
+    /// Topic and partition whose ownership changed.
+    pub topic_partition: TopicPartition,
+    /// Generation created by this ownership transition.
+    pub epoch: AssignmentEpoch,
+}
+
+/// A synchronous group-rebalance state change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RebalanceEvent {
+    /// Partitions assigned after librdkafka applied an incremental assignment.
+    Assigned(Vec<PartitionAssignment>),
+    /// Partitions fenced before librdkafka applies an incremental revocation.
+    Revoked(Vec<PartitionAssignment>),
+    /// Rebalance callback failure reported by librdkafka.
+    Error(String),
+}
+
+#[derive(Default)]
+struct RebalanceState {
+    epochs: HashMap<TopicPartition, AssignmentEpoch>,
+    assignments: HashMap<TopicPartition, AssignmentEpoch>,
+}
+
+struct RebalanceTrackerInner {
+    state: Mutex<RebalanceState>,
+    event_sender: UnboundedSender<RebalanceEvent>,
+    event_receiver: Mutex<Option<UnboundedReceiver<RebalanceEvent>>>,
+}
+
+/// Tracks current partition ownership and publishes nonblocking rebalance events.
+///
+/// Revocations update the synchronous ownership snapshot before their event is
+/// sent. A coordinator can therefore reject stale work immediately, even if it
+/// has not yet received the asynchronous event.
+#[derive(Clone)]
+pub struct RebalanceTracker {
+    inner: Arc<RebalanceTrackerInner>,
+}
+
+impl Default for RebalanceTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RebalanceTracker {
+    /// Creates an empty tracker with one asynchronous event receiver.
+    pub fn new() -> Self {
+        let (event_sender, event_receiver) = mpsc::unbounded_channel();
+        Self {
+            inner: Arc::new(RebalanceTrackerInner {
+                state: Mutex::new(RebalanceState::default()),
+                event_sender,
+                event_receiver: Mutex::new(Some(event_receiver)),
+            }),
+        }
+    }
+
+    /// Takes the event receiver.
+    ///
+    /// Only one coordinator may consume a tracker's events. Later calls return
+    /// `None`; synchronous state queries remain available on every clone.
+    pub fn take_events(&self) -> Option<UnboundedReceiver<RebalanceEvent>> {
+        lock_unpoisoned(&self.inner.event_receiver).take()
+    }
+
+    /// Returns a stable snapshot of currently owned topic-partitions.
+    pub fn current_assignments(&self) -> Vec<PartitionAssignment> {
+        let state = lock_unpoisoned(&self.inner.state);
+        let mut assignments = state
+            .assignments
+            .iter()
+            .map(|(topic_partition, epoch)| PartitionAssignment {
+                topic_partition: topic_partition.clone(),
+                epoch: *epoch,
+            })
+            .collect::<Vec<_>>();
+        assignments.sort_by(|left, right| left.topic_partition.cmp(&right.topic_partition));
+        assignments
+    }
+
+    /// Returns whether `epoch` is the current ownership generation.
+    pub fn is_current_assignment(
+        &self,
+        topic: &str,
+        partition: i32,
+        epoch: AssignmentEpoch,
+    ) -> bool {
+        let state = lock_unpoisoned(&self.inner.state);
+        state
+            .assignments
+            .get(&TopicPartition {
+                topic: topic.to_string(),
+                partition,
+            })
+            .is_some_and(|current_epoch| *current_epoch == epoch)
+    }
+
+    fn observe_pre_rebalance(&self, rebalance: &Rebalance<'_>) {
+        match rebalance {
+            Rebalance::Revoke(partitions) => {
+                let revoked = self.transition_partitions(partitions, false);
+                let _ = self
+                    .inner
+                    .event_sender
+                    .send(RebalanceEvent::Revoked(revoked));
+            }
+            Rebalance::Error(error) => {
+                let _ = self
+                    .inner
+                    .event_sender
+                    .send(RebalanceEvent::Error(error.to_string()));
+            }
+            Rebalance::Assign(_) => {}
+        }
+    }
+
+    fn observe_post_rebalance(&self, rebalance: &Rebalance<'_>) {
+        if let Rebalance::Assign(partitions) = rebalance {
+            let assigned = self.transition_partitions(partitions, true);
+            let _ = self
+                .inner
+                .event_sender
+                .send(RebalanceEvent::Assigned(assigned));
+        }
+    }
+
+    fn transition_partitions(
+        &self,
+        partitions: &TopicPartitionList,
+        assigned: bool,
+    ) -> Vec<PartitionAssignment> {
+        let topic_partitions = unique_topic_partitions(partitions);
+        let mut state = lock_unpoisoned(&self.inner.state);
+
+        topic_partitions
+            .into_iter()
+            .map(|topic_partition| {
+                let next_epoch = state.epochs.get(&topic_partition).map_or(1, |epoch| {
+                    epoch
+                        .0
+                        .checked_add(1)
+                        .expect("Kafka assignment epoch exhausted")
+                });
+                let epoch = AssignmentEpoch(next_epoch);
+                state.epochs.insert(topic_partition.clone(), epoch);
+                if assigned {
+                    state.assignments.insert(topic_partition.clone(), epoch);
+                } else {
+                    state.assignments.remove(&topic_partition);
+                }
+
+                PartitionAssignment {
+                    topic_partition,
+                    epoch,
+                }
+            })
+            .collect()
+    }
+}
+
+fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn unique_topic_partitions(partitions: &TopicPartitionList) -> Vec<TopicPartition> {
+    let mut seen = HashSet::new();
+    partitions
+        .elements()
+        .into_iter()
+        .filter_map(|element| {
+            let topic_partition = TopicPartition {
+                topic: element.topic().to_string(),
+                partition: element.partition(),
+            };
+            seen.insert(topic_partition.clone())
+                .then_some(topic_partition)
+        })
+        .collect()
+}
+
+#[derive(Default)]
+struct PlaintextConsumerContext {
+    rebalance_tracker: Option<RebalanceTracker>,
+}
+
+impl PlaintextConsumerContext {
+    fn with_rebalance_tracker(rebalance_tracker: RebalanceTracker) -> Self {
+        Self {
+            rebalance_tracker: Some(rebalance_tracker),
+        }
+    }
+
+    fn observe_pre_rebalance(&self, rebalance: &Rebalance<'_>) {
+        if let Some(tracker) = &self.rebalance_tracker {
+            tracker.observe_pre_rebalance(rebalance);
+        }
+    }
+
+    fn observe_post_rebalance(&self, rebalance: &Rebalance<'_>) {
+        if let Some(tracker) = &self.rebalance_tracker {
+            tracker.observe_post_rebalance(rebalance);
+        }
+    }
+}
+
+impl ClientContext for PlaintextConsumerContext {}
+
+impl ConsumerContext for PlaintextConsumerContext {
+    fn pre_rebalance(&self, _consumer: &BaseConsumer<Self>, rebalance: &Rebalance<'_>) {
+        self.observe_pre_rebalance(rebalance);
+    }
+
+    fn post_rebalance(&self, _consumer: &BaseConsumer<Self>, rebalance: &Rebalance<'_>) {
+        self.observe_post_rebalance(rebalance);
+    }
+}
 
 /// Type-level name for a durable Kafka consumer group.
 ///
@@ -98,6 +359,7 @@ impl InitialOffset {
 /// requested topics and cannot subscribe or commit.
 pub struct KafkaEventConsumer<T> {
     consumer: ConsumerTransport,
+    rebalance_tracker: Option<RebalanceTracker>,
     marker: PhantomData<T>,
 }
 
@@ -133,6 +395,33 @@ fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
     config
 }
 
+fn grouped_config_with_max_poll_interval<T: GroupName>(
+    brokers: &str,
+    max_poll_interval: Duration,
+) -> Result<ClientConfig, KafkaConsumerError> {
+    let max_poll_interval_ms = librdkafka_millis(max_poll_interval)?;
+    let mut config = grouped_config::<T>(brokers);
+    config
+        .set("max.poll.interval.ms", max_poll_interval_ms.to_string())
+        .set(
+            "partition.assignment.strategy",
+            COOPERATIVE_ASSIGNMENT_STRATEGY,
+        );
+    Ok(config)
+}
+
+fn librdkafka_millis(duration: Duration) -> Result<u128, KafkaConsumerError> {
+    let whole_milliseconds = duration.as_millis();
+    let has_submillisecond_remainder = !duration.subsec_nanos().is_multiple_of(1_000_000);
+    let milliseconds = whole_milliseconds + u128::from(has_submillisecond_remainder);
+
+    if milliseconds == 0 || milliseconds > MAX_LIBRDKAFKA_POLL_INTERVAL_MS {
+        return Err(KafkaConsumerError::InvalidMaxPollInterval(duration));
+    }
+
+    Ok(milliseconds)
+}
+
 fn ungrouped_config(brokers: &str) -> ClientConfig {
     let mut config = consumer_config(brokers);
     let group_id = format!("{UNGROUPED_GROUP_PREFIX}-{}", Uuid::new_v4());
@@ -144,14 +433,30 @@ fn ungrouped_config(brokers: &str) -> ClientConfig {
 
 fn create_consumer_from_env<T>(
     config: ClientConfig,
+    rebalance_tracker: Option<RebalanceTracker>,
 ) -> Result<KafkaEventConsumer<T>, KafkaConsumerError> {
     let consumer = match Environment::new_or_prod() {
-        Environment::Local => Either::Left(config.create().map_err(KafkaConsumerError::Plaintext)?),
+        Environment::Local => {
+            let context = rebalance_tracker
+                .clone()
+                .map_or_else(PlaintextConsumerContext::default, |tracker| {
+                    PlaintextConsumerContext::with_rebalance_tracker(tracker)
+                });
+            Either::Left(
+                config
+                    .create_with_context(context)
+                    .map_err(KafkaConsumerError::Plaintext)?,
+            )
+        }
         Environment::Develop | Environment::Production => {
             let config = configure_sasl_iam(config);
+            let context = rebalance_tracker.clone().map_or_else(
+                MskIamClientContext::from_env,
+                MskIamClientContext::from_env_with_rebalance_tracker,
+            );
             Either::Right(
                 config
-                    .create_with_context(MskIamClientContext::from_env())
+                    .create_with_context(context)
                     .map_err(KafkaConsumerError::MskIam)?,
             )
         }
@@ -159,6 +464,7 @@ fn create_consumer_from_env<T>(
 
     Ok(KafkaEventConsumer {
         consumer: ConsumerTransport(consumer),
+        rebalance_tracker,
         marker: PhantomData,
     })
 }
@@ -236,6 +542,87 @@ where
     Ok(assignment)
 }
 
+fn invalid_offset_error() -> KafkaError {
+    KafkaError::SetPartitionOffset(RDKafkaErrorCode::InvalidArgument)
+}
+
+/// Converts a completed record offset to Kafka's next-offset commit value.
+///
+/// Kafka commits represent the next record to consume, not the record that was
+/// just completed. Negative completed offsets and `i64` overflow are rejected.
+pub fn next_offset(completed_record_offset: i64) -> KafkaResult<i64> {
+    if completed_record_offset < 0 {
+        return Err(invalid_offset_error());
+    }
+
+    completed_record_offset
+        .checked_add(1)
+        .ok_or_else(invalid_offset_error)
+}
+
+fn build_partition_offset_list(
+    topic: &str,
+    partition: i32,
+    next_offset: i64,
+) -> KafkaResult<TopicPartitionList> {
+    CString::new(topic).map_err(KafkaError::Nul)?;
+    if topic.is_empty() {
+        return Err(KafkaError::Subscription(
+            "topic must not be empty".to_string(),
+        ));
+    }
+    if partition < 0 {
+        return Err(KafkaError::Subscription(
+            "partition must not be negative".to_string(),
+        ));
+    }
+
+    let mut offsets = TopicPartitionList::with_capacity(1);
+    offsets.add_partition_offset(topic, partition, Offset::Offset(next_offset))?;
+    Ok(offsets)
+}
+
+fn assignment_partitions(assignment: &TopicPartitionList) -> KafkaResult<TopicPartitionList> {
+    let mut partitions = TopicPartitionList::with_capacity(assignment.count());
+    for element in assignment.elements() {
+        element.error()?;
+        partitions.add_partition(element.topic(), element.partition());
+    }
+    Ok(partitions)
+}
+
+trait AssignmentControl {
+    fn assignment(&self) -> KafkaResult<TopicPartitionList>;
+    fn pause(&self, partitions: &TopicPartitionList) -> KafkaResult<()>;
+    fn resume(&self, partitions: &TopicPartitionList) -> KafkaResult<()>;
+}
+
+impl<C: ConsumerContext> AssignmentControl for StreamConsumer<C> {
+    fn assignment(&self) -> KafkaResult<TopicPartitionList> {
+        Consumer::assignment(self)
+    }
+
+    fn pause(&self, partitions: &TopicPartitionList) -> KafkaResult<()> {
+        Consumer::pause(self, partitions)
+    }
+
+    fn resume(&self, partitions: &TopicPartitionList) -> KafkaResult<()> {
+        Consumer::resume(self, partitions)
+    }
+}
+
+fn pause_consumer_assignment(consumer: &impl AssignmentControl) -> KafkaResult<()> {
+    let assignment = consumer.assignment()?;
+    let partitions = assignment_partitions(&assignment)?;
+    consumer.pause(&partitions)
+}
+
+fn resume_consumer_assignment(consumer: &impl AssignmentControl) -> KafkaResult<()> {
+    let assignment = consumer.assignment()?;
+    let partitions = assignment_partitions(&assignment)?;
+    consumer.resume(&partitions)
+}
+
 impl KafkaEventProducer {
     /// Creates a producer, selecting plaintext or MSK IAM transport from the runtime environment.
     ///
@@ -271,7 +658,7 @@ impl<T> KafkaEventConsumer<T> {
     pub fn pause_message_partition(&self, message: &BorrowedMessage<'_>) -> KafkaResult<()> {
         let mut partitions = TopicPartitionList::new();
         partitions.add_partition(message.topic(), message.partition());
-        either::for_both!(&self.consumer.0, consumer => consumer.pause(&partitions))
+        either::for_both!(&self.consumer.0, consumer => Consumer::pause(consumer, &partitions))
     }
 }
 
@@ -279,7 +666,26 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     /// Creates a named-group consumer, selecting plaintext or MSK IAM transport
     /// from the runtime environment.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_consumer_from_env(grouped_config::<T>(brokers))
+        create_consumer_from_env(grouped_config::<T>(brokers), None)
+    }
+
+    /// Creates a cooperative named-group consumer with a custom max poll interval.
+    ///
+    /// This opt-in constructor installs a [`RebalanceTracker`] and pins
+    /// `partition.assignment.strategy=cooperative-sticky`. Existing constructors
+    /// retain librdkafka's default eager assignment strategy.
+    pub fn from_env_with_max_poll_interval(
+        brokers: &str,
+        max_poll_interval: Duration,
+    ) -> Result<Self, KafkaConsumerError> {
+        let config = grouped_config_with_max_poll_interval::<T>(brokers, max_poll_interval)?;
+        let rebalance_tracker = RebalanceTracker::new();
+        create_consumer_from_env(config, Some(rebalance_tracker))
+    }
+
+    /// Returns the opt-in rebalance tracker installed by the cooperative constructor.
+    pub fn rebalance_tracker(&self) -> Option<RebalanceTracker> {
+        self.rebalance_tracker.clone()
     }
 
     /// Subscribes the consumer to exactly the provided topics.
@@ -295,6 +701,31 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => consumer.commit_message(message, mode))
     }
+
+    /// Commits a caller-provided next offset for one topic-partition.
+    ///
+    /// `next_offset` is the next record Kafka should deliver. Use
+    /// [`next_offset`] when converting a completed record's offset.
+    pub fn commit_partition_offset(
+        &self,
+        topic: &str,
+        partition: i32,
+        next_offset: i64,
+        mode: CommitMode,
+    ) -> KafkaResult<()> {
+        let offsets = build_partition_offset_list(topic, partition, next_offset)?;
+        either::for_both!(&self.consumer.0, consumer => consumer.commit(&offsets, mode))
+    }
+
+    /// Pauses every partition in the consumer's current assignment.
+    pub fn pause_current_assignment(&self) -> KafkaResult<()> {
+        either::for_both!(&self.consumer.0, consumer => pause_consumer_assignment(consumer))
+    }
+
+    /// Resumes every partition in the consumer's current assignment.
+    pub fn resume_current_assignment(&self) -> KafkaResult<()> {
+        either::for_both!(&self.consumer.0, consumer => resume_consumer_assignment(consumer))
+    }
 }
 
 impl KafkaEventConsumer<Ungrouped> {
@@ -303,7 +734,7 @@ impl KafkaEventConsumer<Ungrouped> {
     ///
     /// Call [`Self::assign_topics`] before receiving messages.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_consumer_from_env(ungrouped_config(brokers))
+        create_consumer_from_env(ungrouped_config(brokers), None)
     }
 
     /// Manually assigns every current partition of `topics` at `initial_offset`.

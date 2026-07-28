@@ -3,7 +3,7 @@
 
 use std::{marker::PhantomData, time::Duration};
 
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, Ungrouped};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, RebalanceTracker, Ungrouped};
 use rdkafka::{
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
@@ -74,6 +74,34 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
         mode: CommitMode,
     ) -> Result<(), rootcause::Report> {
         Ok(self.inner.commit_message(message, mode)?)
+    }
+
+    /// Commits a caller-provided next offset for one topic-partition.
+    pub fn commit_partition_offset(
+        &self,
+        topic: &str,
+        partition: i32,
+        next_offset: i64,
+        mode: CommitMode,
+    ) -> Result<(), rootcause::Report> {
+        Ok(self
+            .inner
+            .commit_partition_offset(topic, partition, next_offset, mode)?)
+    }
+
+    /// Pauses every partition in the consumer's current assignment.
+    pub fn pause_current_assignment(&self) -> Result<(), rootcause::Report> {
+        Ok(self.inner.pause_current_assignment()?)
+    }
+
+    /// Resumes every partition in the consumer's current assignment.
+    pub fn resume_current_assignment(&self) -> Result<(), rootcause::Report> {
+        Ok(self.inner.resume_current_assignment()?)
+    }
+
+    /// Returns the cooperative consumer's rebalance tracker, when enabled.
+    pub fn rebalance_tracker(&self) -> Option<RebalanceTracker> {
+        self.inner.rebalance_tracker()
     }
 }
 
