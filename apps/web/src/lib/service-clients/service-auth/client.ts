@@ -82,8 +82,7 @@ const [accessTokenData, setAccessTokenData] = makePersisted(
 function getExpiresAt(token: string) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
-    // JWT `exp` values are Unix seconds, while Date.now() is milliseconds.
-    return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
+    return payload.exp;
   } catch {
     return 0;
   }
@@ -461,31 +460,6 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
-  async createCheckoutSession(args: {
-    successUrl: string;
-    cancelUrl: string;
-    discount?: string | null;
-    metadata?: {
-      gaClientId?: string | null;
-      fbp?: string | null;
-      fbc?: string | null;
-    };
-    tier?: string;
-  }) {
-    return (
-      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
-        method: 'POST',
-        body: JSON.stringify({
-          successUrl: args.successUrl,
-          cancelUrl: args.cancelUrl,
-          discount: args.discount ?? undefined,
-          metadata: args.metadata,
-          tier: args.tier ?? undefined,
-        }),
-      })
-    ).map((result) => result.url);
-  },
-
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;

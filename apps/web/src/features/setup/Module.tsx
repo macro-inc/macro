@@ -1,3 +1,4 @@
+import { useReactiveColorString } from '@theme/signals/themeReactive';
 import {
   createEffect,
   createUniqueId,
@@ -106,11 +107,42 @@ export function ModuleTile() {
   );
 }
 
+const LOGO_FACE_PERSPECTIVE = {
+  heightScale: 0.8101,
+  shearDegrees: 21.79,
+  rotationDegrees: 21.79,
+} as const;
+
+const LOGO_FACE_PLACEMENT = {
+  // The 24×24 logo's fixed scale and origin on the module face.
+  scale: 3,
+  translateX: 394.09,
+  translateY: 150.228,
+} as const;
+
+const toSvgMatrixNumber = (value: number) => Number(value.toFixed(3));
+
 /**
- * Places a flat 24×24 brand logo onto a module's face, matching the isometric perspective.
+ * Places a flat 24×24 brand logo onto a module's face, matching the isometric
+ * perspective. Illustrator applies vertical scale → shear → rotation; SVG's
+ * Y-down coordinate system requires the design angles to be negated here.
  */
-export const LOGO_FACE_TRANSFORM =
-  'matrix(2.784 -1.113 0 2.619 394.09 150.228)';
+export const LOGO_FACE_TRANSFORM = (() => {
+  const rotation = (-LOGO_FACE_PERSPECTIVE.rotationDegrees * Math.PI) / 180;
+  const shear = Math.tan((-LOGO_FACE_PERSPECTIVE.shearDegrees * Math.PI) / 180);
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  const { heightScale } = LOGO_FACE_PERSPECTIVE;
+  const { scale, translateX, translateY } = LOGO_FACE_PLACEMENT;
+
+  // scale → skewX → rotate, written as SVG's matrix(a b c d e f).
+  const xAxisX = scale * cosine;
+  const xAxisY = scale * sine;
+  const yAxisX = scale * heightScale * (cosine * shear - sine);
+  const yAxisY = scale * heightScale * (sine * shear + cosine);
+
+  return `matrix(${toSvgMatrixNumber(xAxisX)} ${toSvgMatrixNumber(xAxisY)} ${toSvgMatrixNumber(yAxisX)} ${toSvgMatrixNumber(yAxisY)} ${translateX} ${translateY})`;
+})();
 
 /**
  * A brand mark to sit on a module face: one or more path `d` strings, filled
@@ -285,25 +317,6 @@ const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Resolve `--color-accent` to a concrete color (WAAPI can't interpolate a
- * `var(--…)` keyframe). The probe must resolve the var in the module's own
- * context: `--color-accent` is themed, so a probe outside the app's theme
- * scope (e.g. on document.body) picks up a different fallback value. Appending
- * an SVG probe inside `context` keeps it in both the themed and SVG cascade.
- */
-const resolveAccent = (context: Element) => {
-  const probe = document.createElementNS(
-    'http://www.w3.org/2000/svg',
-    'g'
-  ) as SVGGElement;
-  probe.style.color = 'var(--color-accent)';
-  context.appendChild(probe);
-  const accent = getComputedStyle(probe).color;
-  probe.remove();
-  return accent;
-};
-
-/**
  * A single hovering module: the isometric tile with a brand logo on its face,
  * bobbing gently while its orbit rings breathe and their dashes travel.
  *
@@ -334,6 +347,8 @@ export function Module(props: {
   state?: ModuleState;
   class?: string;
 }) {
+  const accentColor = useReactiveColorString('a0');
+  const inkColor = useReactiveColorString('c0');
   let root: SVGGElement | undefined;
   let logoGroup: SVGGElement | undefined;
   let ventsGroup: SVGGElement | undefined;
@@ -393,7 +408,7 @@ export function Module(props: {
     if (!root || prefersReducedMotion()) return;
     for (const animation of clickAnimations) animation.cancel();
     clickAnimations = [];
-    const accent = resolveAccent(root);
+    const accent = accentColor();
     const dur = { duration: ACCELERATION.durationMs } as const;
     const add = {
       duration: ACCELERATION.durationMs,
@@ -419,9 +434,9 @@ export function Module(props: {
     for (const vent of root.querySelectorAll<SVGElement>(
       '.module-vents path'
     )) {
-      // Flash from the vent's current resting stroke (ink normally, but accent
-      // in the linked state) so a linked module's vents don't jump to ink.
-      const resting = getComputedStyle(vent).stroke;
+      // Flash from the state-specific resting stroke so linked-module vents
+      // don't jump from accent back to ink.
+      const resting = props.state === 'linked' ? accentColor() : inkColor();
       clickAnimations.push(
         vent.animate(
           [

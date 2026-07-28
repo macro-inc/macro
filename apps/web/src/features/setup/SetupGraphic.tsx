@@ -1,3 +1,4 @@
+import { useReactiveColorString } from '@theme/signals/themeReactive';
 import { createEffect, For, on, onCleanup, onMount, Show } from 'solid-js';
 import { Module, type ModuleLogo, type ModuleState } from './Module';
 import { MODULE_LOGOS } from './moduleLogos';
@@ -279,6 +280,8 @@ export function SetupGraphic(props: {
    *  module's `linked` state. */
   poweredUp?: boolean;
 }) {
+  const accentColor = useReactiveColorString('a0');
+  const inkColor = useReactiveColorString('c0');
   const modules = () => props.modules ?? DEFAULT_MODULES;
   // Connectors follow their modules: one per shown module whose connector
   // isn't disabled and isn't in the `linked` state (which hides it), carrying
@@ -318,20 +321,6 @@ export function SetupGraphic(props: {
   const reducedMotion = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Resolve `--color-accent` to a concrete color: WAAPI won't interpolate a
-  // `var(--…)` keyframe, and getComputedStyle on a custom property returns
-  // its unsubstituted value. A probe in the SVG's inheritance context lets
-  // the cascade resolve it (and keeps light/dark correct).
-  const resolveAccent = () => {
-    if (!svg?.parentElement) return '';
-    const probe = document.createElement('span');
-    probe.style.cssText = 'color: var(--color-accent); display: none';
-    svg.parentElement.appendChild(probe);
-    const accent = getComputedStyle(probe).color;
-    probe.remove();
-    return accent;
-  };
-
   const darkenLeds = () => {
     for (const animation of ledAnimations) animation.cancel();
     ledAnimations = [];
@@ -344,9 +333,8 @@ export function SetupGraphic(props: {
   // the onset.
   const illuminateLeds = () => {
     darkenLeds();
-    const accent = resolveAccent();
-    if (!accent) return;
-    const ink = svg ? getComputedStyle(svg).color : 'currentColor';
+    const accent = accentColor();
+    const ink = inkColor();
     const lit = `drop-shadow(0 0 1.5px ${accent})`;
     const bright = `drop-shadow(0 0 4px ${accent})`;
     const motion = !reducedMotion();

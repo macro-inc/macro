@@ -13,7 +13,8 @@ import { authServiceClient } from './client';
 function isExpired(token: string) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
-    return typeof payload.exp !== 'number' || Date.now() > payload.exp * 1000;
+    const exp = payload.exp * 1000;
+    return Date.now() / 1000 > exp;
   } catch {
     return true;
   }
