@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 http = { workspace = true }
-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry-http = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time"] }
 tower = { workspace = true }
@@ -16,6 +16,6 @@ tracing-opentelemetry = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-opentelemetry_sdk = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util", "time"] }
 tracing-subscriber = { workspace = true }

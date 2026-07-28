@@ -167,7 +167,7 @@ lol_html = "2.4.0"
 lru = "0.16"
 mockall = "0.13"
 nom = "8"
-opentelemetry = { version = "0.31.0", features = ["testing"] }
+opentelemetry = { version = "0.31.0", default-features = false }
 opentelemetry-http = { version = "0.31.0", default-features = false }
 opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
   "grpc-tonic",
@@ -176,7 +176,7 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
   "metrics",
   "trace",
 ] }
-opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio", "testing"] }
+opentelemetry_sdk = { version = "0.31.0", default-features = false }
 ordered-float = "5"
 paste = "1"
 pdfium-render = { version = "0.8.37", default-features = false, features = [

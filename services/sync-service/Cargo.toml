@@ -45,10 +45,10 @@ opentelemetry-proto = { version = "0.31.0", default-features = false, features =
   "with-serde",
   "trace",
 ] }
-opentelemetry = { version = "0.31.0", default-features = false, features = [
+opentelemetry = { workspace = true, default-features = false, features = [
   "trace",
 ] }
-opentelemetry_sdk = { version = "0.31.0", default-features = false, features = [
+opentelemetry_sdk = { workspace = true, default-features = false, features = [
   "trace",
 ] }
 getrandom = { version = "0.3", features = ["wasm_js"] }

@@ -192,7 +192,7 @@ fn dd_logs_url() -> Option<String> {
 }
 
 fn dd_env() -> String {
-    std::env::var("DD_ENV").unwrap_or_else(|_| "local".into())
+    macro_env_var::maybe_read_env("DD_ENV").unwrap_or_else(|| "local".into())
 }
 
 /// Whether something is listening on `port` on localhost.

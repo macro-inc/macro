@@ -286,5 +286,4 @@ describe('SyncServiceSource', () => {
       awareness: aw,
     });
   });
-
 });

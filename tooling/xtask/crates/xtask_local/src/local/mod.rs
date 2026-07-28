@@ -672,7 +672,7 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
     // every payload at the vendor intake (403), which looks like "traces are
     // broken" rather than "key is missing" — so fail loud up front.
     if let Some(var) = backend.required_env()
-        && std::env::var(var).map(|v| v.is_empty()).unwrap_or(true)
+        && macro_env_var::maybe_read_env(var).is_none_or(|v| v.is_empty())
     {
         anyhow::bail!(
             "--traces {} requires the {var} env var to be set (export it in \

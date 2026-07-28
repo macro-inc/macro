@@ -119,7 +119,7 @@ fn dev_env(instance: &Instance, traces_enabled: bool) -> Vec<(String, String)> {
         // filtered by that env — actually match the emitted spans/records.
         env.push((
             "VITE_OTEL_ENV".to_string(),
-            std::env::var("DD_ENV").unwrap_or_else(|_| "local".into()),
+            macro_env_var::maybe_read_env("DD_ENV").unwrap_or_else(|| "local".into()),
         ));
     }
     env.push((
