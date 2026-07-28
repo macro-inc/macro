@@ -79,7 +79,13 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   let messagesRef: HTMLDivElement | undefined;
 
-  const generatingMessage = () => {
+  /*
+   Memoized: asChatMessage reprocesses the whole stream from scratch, and
+   this accessor is read from four places below (lastPair,
+   allButLastMessagePair, isEmptyChat, and the streaming Show) — without a
+   memo each of those reruns it independently on every stream update.
+  */
+  const generatingMessage = createMemo(() => {
     const s = stream();
     if (!s) return;
     if (s.isDone()) return;
@@ -88,7 +94,7 @@ export function ChatMessages(props: ChatMessagesProps) {
     if (!message) return;
     if (messageContentIsEmpty(message)) return;
     return message;
-  };
+  });
 
   const isStream = () => {
     const s = stream();

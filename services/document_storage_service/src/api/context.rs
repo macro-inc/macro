@@ -87,8 +87,8 @@ use projects_hex::{
 };
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
+    inbound::axum_router::PropertiesRouterState,
 };
-use properties_service::PropertiesHandlerState;
 use readonly_pool::ReadOnlyPool;
 use search_service::SearchHandlerState;
 use soup::{
@@ -180,7 +180,12 @@ pub(crate) type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
+    DssEventBroker,
 >;
+
+/// Concrete properties router state wired into DSS.
+pub(crate) type PropertiesHandlerState =
+    PropertiesRouterState<PropertiesService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;

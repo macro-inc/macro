@@ -23,7 +23,10 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { BuildingStep } from './BuildingStep';
+import type { ModuleLogo, ModuleState } from '../Module';
+import { MODULE_LOGOS } from '../moduleLogos';
+import { BrandHandoff, type BrandHandoffSource } from './BrandHandoff';
+import { BuildingStep, type ConnectedTools } from './BuildingStep';
 import { ConnectorStep } from './ConnectorStep';
 import { createFlowFinish } from './createFlowFinish';
 import { EmailStep } from './EmailStep';
@@ -34,6 +37,7 @@ import {
   resolveOnboardingStepIndex,
 } from './onboardingConnectorConfig';
 import { PlanStep } from './PlanStep';
+import { connectorLogo, StepModule } from './StepModule';
 import { SummaryStep } from './SummaryStep';
 import {
   FLOW_NEXT_STORAGE_KEY,
@@ -50,6 +54,13 @@ import { TeamStep } from './TeamStep';
  * step marks onboarding complete.
  */
 
+/** The left-of-title hero module for a connection step (desktop only). Its
+ *  `linked` state is resolved from the flow's live queries by key: `email`
+ *  from the email links, `connector` from the named MCP server's auth. */
+type StepModuleDef =
+  | { kind: 'email'; logo: ModuleLogo }
+  | { kind: 'connector'; serverName: string; logo: ModuleLogo };
+
 interface StepDef {
   key: string;
   /** Header title; omitted for chromeless steps (the building screen). */
@@ -59,6 +70,13 @@ interface StepDef {
   wide?: boolean;
   /** Excluded from the progress dots (transitions, not stops). */
   noDot?: boolean;
+  /** Skip the Stepper's enter/exit fade+scale for this step. The building
+   *  step needs this: the brand-handoff overlay it mounts is measured
+   *  against its own logo's exact rect, and a fading exit would leave the
+   *  original visible (transitioning) at the same time as the overlay. */
+  noTransition?: boolean;
+  /** Hero module shown left of the title on connection steps. */
+  module?: StepModuleDef;
   render: (controls: StepControls) => JSX.Element;
 }
 
@@ -121,7 +139,9 @@ const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
 };
 
 function buildSteps(
-  connectorNames: readonly OnboardingConnectorServerName[]
+  connectorNames: readonly OnboardingConnectorServerName[],
+  connectedTools: () => ConnectedTools,
+  onBuildingDone: (source: BrandHandoffSource | null) => void
 ): StepDef[] {
   const connectorSteps: StepDef[] = connectorNames.flatMap((name) => {
     const server = FEATURED_MCP_SERVERS.find(
@@ -129,11 +149,15 @@ function buildSteps(
     );
     const copy = CONNECTOR_COPY[name];
     if (!server || !copy) return [];
+    const logo = connectorLogo(name);
     return [
       {
         key: `connect-${name.toLowerCase()}`,
         title: `Connect ${name}`,
         subtitle: copy.subtitle,
+        ...(logo && {
+          module: { kind: 'connector', serverName: name, logo },
+        }),
         render: (controls: StepControls) => (
           <ConnectorStep
             server={server}
@@ -153,6 +177,7 @@ function buildSteps(
       title: 'Connect your Google accounts',
       subtitle:
         'Macro builds one unified memory across everything you do. Connecting multiple email accounts brings your email, docs, and calendar together, so nothing lives in a silo.',
+      module: { kind: 'email', logo: MODULE_LOGOS.Google },
       render: (controls) => (
         <EmailStep onContinue={controls.next} onSkip={controls.skip} />
       ),
@@ -168,10 +193,17 @@ function buildSteps(
       ),
     },
     {
-      // Pure theater while gathers land; auto-advances into the summary.
+      // Pure theater while gathers land; auto-advances into the summary via
+      // the brand handoff (not a plain step advance).
       key: 'building',
       noDot: true,
-      render: (controls) => <BuildingStep onDone={controls.next} />,
+      // Room for the isometric scene.
+      wide: true,
+      // See StepDef.noTransition.
+      noTransition: true,
+      render: () => (
+        <BuildingStep connected={connectedTools()} onDone={onBuildingDone} />
+      ),
     },
     {
       key: 'summary',
@@ -240,11 +272,56 @@ function FlowContent() {
   const serversQuery = useMcpServersQuery({ neverSuspend: true });
   const analytics = useAnalytics();
 
+  // Live connection state, derived from the flow's queries (no standing
+  // bookkeeping): whether an MCP server authenticated, and which tools the
+  // user connected. Drives the hero-module states and the build phrases.
+  const serverAuthed = (name: string) =>
+    (serversQuery.data ?? []).some(
+      (server) => server.server_name === name && server.authenticated
+    );
+  const connectedTools = (): ConnectedTools => ({
+    google: (linksQuery.data?.links.length ?? 0) > 0,
+    linear: serverAuthed('Linear'),
+    notion: serverAuthed('Notion'),
+    slack: serverAuthed('Slack'),
+    github: serverAuthed('GitHub'),
+  });
+
+  // The building → summary brand handoff. BuildingStep provides the exact
+  // powered SVG plus its logo geometry; the overlay carries that scene into
+  // the summary header while dissolving it into the flat Macro logo.
+  const [handoff, setHandoff] = createSignal<BrandHandoffSource | null>(null);
+  // Summary reveal gates: the logo slot + rest of the content appear once the
+  // handoff lands. Default shown, for a summary reached without a handoff
+  // (e.g. a restored step).
+  const [logoShown, setLogoShown] = createSignal(true);
+  const [contentShown, setContentShown] = createSignal(true);
+  const summaryContentHidden = () =>
+    currentStep().key === 'summary' && !contentShown();
+  // Hiding must be instant, revealing eased. The header/body wrappers are
+  // shared across steps, so a symmetric transition would animate 1 → 0 as we
+  // enter the summary — the content visibly flashing in and fading out behind
+  // the travelling logo.
+  const contentFadeMs = () => (summaryContentHidden() ? 0 : 300);
+  const startBrandHandoff = (source: BrandHandoffSource | null) => {
+    if (!source) {
+      advance('completed');
+      return;
+    }
+    setHandoff(source);
+    // Hide the summary's own content so only the settling logo shows.
+    setLogoShown(false);
+    setContentShown(false);
+    advance('completed');
+  };
+
   const connectorConfig = useFeatureFlag(ONBOARDING_CONNECTORS_FEATURE_FLAG);
   const steps = createMemo(() => {
     const config = connectorConfig();
     return buildSteps(
-      resolveOnboardingConnectorNames(config.enabled, config.payload)
+      resolveOnboardingConnectorNames(config.enabled, config.payload),
+      connectedTools,
+      startBrandHandoff
     );
   });
 
@@ -258,6 +335,17 @@ function FlowContent() {
   const currentStep = createMemo(() => steps()[stepIndex()]);
   const currentStepKey = createMemo(() => currentStep().key);
   const userId = () => userInfoQuery.data?.userId;
+
+  // The current step's hero-module state: the email module lights once any
+  // inbox is linked, a connector's once its server authenticates.
+  const heroState = (): ModuleState => {
+    const mod = currentStep().module;
+    if (!mod) return 'idle';
+    if (mod.kind === 'email') {
+      return (linksQuery.data?.links.length ?? 0) > 0 ? 'linked' : 'idle';
+    }
+    return serverAuthed(mod.serverName) ? 'linked' : 'idle';
+  };
 
   // Resume where a full-page OAuth round-trip left off — only for the user
   // who saved the step: sessionStorage is per-tab, and a different account
@@ -408,53 +496,110 @@ function FlowContent() {
           <div class="flex flex-col gap-8">
             <Show when={currentStep().title}>
               <div class="flex flex-col gap-1.5">
-                <h1 class="text-2xl font-semibold tracking-tight text-ink">
-                  {currentStep().title}
-                </h1>
-                <Show when={currentStep().subtitle}>
-                  <p class="max-w-md text-sm leading-relaxed text-ink-muted">
-                    {currentStep().subtitle}
-                  </p>
-                </Show>
-              </div>
-            </Show>
-
-            <Stepper step={stepIndex()} transition={Stepper.transitions.scale}>
-              <For each={steps()}>
-                {(step) => (
-                  <Stepper.Step>
-                    {/* Per-step boundary: a first-load query suspending
-                        inside the Stepper's Transition would drop the
-                        entering node entirely. */}
-                    <Suspense fallback={<StepFallback />}>
-                      {step.render(controls)}
-                    </Suspense>
-                  </Stepper.Step>
-                )}
-              </For>
-            </Stepper>
-
-            <Show when={!currentStep().noDot}>
-              <div class="flex gap-1.5">
-                <Index each={steps().filter((step) => !step.noDot)}>
-                  {(step) => (
-                    <div
-                      class={cn(
-                        'size-1.5 rounded-full transition-colors',
-                        stepIndex() === steps().indexOf(step())
-                          ? 'bg-accent'
-                          : stepIndex() > steps().indexOf(step())
-                            ? 'bg-ink/40'
-                            : 'bg-ink/15'
-                      )}
+                {/* Hero module above the title — desktop only. Nudged left by
+                    the module's built-in viewBox padding (reserved for the
+                    click-burst trail) so its at-rest artwork left-aligns with
+                    the title text. */}
+                <Show when={currentStep().module}>
+                  {(mod) => (
+                    <StepModule
+                      logo={mod().logo}
+                      state={heroState()}
+                      class="mb-1 hidden size-32 -ml-8 sm:block"
                     />
                   )}
-                </Index>
+                </Show>
+                {/* Landing slot for the loading-graphic → logo handoff. Kept
+                    hidden while the overlay is mid-flight; the overlay lands
+                    exactly here, then this static logo takes over. */}
+                <Show when={currentStep().key === 'summary'}>
+                  <LogoIcon
+                    id="summary-brand-logo"
+                    class="mb-1 size-16 text-accent"
+                    style={{ opacity: logoShown() ? 1 : 0 }}
+                  />
+                </Show>
+                <div
+                  class="flex flex-col gap-1.5 transition-opacity"
+                  style={{
+                    opacity: summaryContentHidden() ? 0 : 1,
+                    'transition-duration': `${contentFadeMs()}ms`,
+                  }}
+                >
+                  <h1 class="text-2xl font-semibold tracking-tight text-ink">
+                    {currentStep().title}
+                  </h1>
+                  <Show when={currentStep().subtitle}>
+                    <p class="max-w-md text-sm leading-relaxed text-ink-muted">
+                      {currentStep().subtitle}
+                    </p>
+                  </Show>
+                </div>
               </div>
             </Show>
+
+            <div
+              class="flex flex-col gap-8 transition-opacity"
+              style={{
+                opacity: summaryContentHidden() ? 0 : 1,
+                'transition-duration': `${contentFadeMs()}ms`,
+              }}
+            >
+              <Stepper
+                step={stepIndex()}
+                transition={Stepper.transitions.scale}
+              >
+                <For each={steps()}>
+                  {(step) => (
+                    <Stepper.Step noTransition={step.noTransition}>
+                      <Suspense fallback={<StepFallback />}>
+                        {step.render(controls)}
+                      </Suspense>
+                    </Stepper.Step>
+                  )}
+                </For>
+              </Stepper>
+
+              <Show when={!currentStep().noDot}>
+                <div class="flex gap-1.5">
+                  <Index each={steps().filter((step) => !step.noDot)}>
+                    {(step) => (
+                      <div
+                        class={cn(
+                          'size-1.5 rounded-full transition-colors',
+                          stepIndex() === steps().indexOf(step())
+                            ? 'bg-accent'
+                            : stepIndex() > steps().indexOf(step())
+                              ? 'bg-ink/40'
+                              : 'bg-ink/15'
+                        )}
+                      />
+                    )}
+                  </Index>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Brand handoff overlay — rendered outside the animated card (a
+          transformed ancestor would break its fixed positioning). */}
+      <Show when={handoff()}>
+        {(active) => (
+          <BrandHandoff
+            scene={active().scene}
+            logo={active().logo}
+            snapshot={active().snapshot}
+            targetSelector="#summary-brand-logo"
+            onDone={() => {
+              setLogoShown(true);
+              setContentShown(true);
+              setHandoff(null);
+            }}
+          />
+        )}
+      </Show>
     </div>
   );
 }

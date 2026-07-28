@@ -1,0 +1,218 @@
+/*
+ * Styles for the /setup empty-state isometric scene (SetupGraphic.tsx).
+ */
+.setup-graphic {
+  --setup-silhouette: oklch(from var(--color-surface) calc(l + 0.035) c h);
+  /* Don't clip the scene's motion (module bob, click bursts, halos) or the
+     handoff shrink to the viewBox. */
+  overflow: visible;
+}
+
+.setup-graphic :is(.arc, .vent, .edge, .card-mid, .ring-small, .guide, .ring-large, .card-back, .card-front) {
+  stroke-linecap: round;
+}
+
+.setup-graphic
+  :is(.arc, .vent, .edge, .card-mid, .ring-small, .guide, .ring-large, .card-back, .card-front, .hairline, .panel, .knob) {
+  stroke: currentcolor;
+  stroke-width: 2px;
+}
+
+.setup-graphic :is(.arc, .vent, .edge, .ring-small, .guide, .ring-large, .hairline) {
+  fill: none;
+}
+
+.setup-graphic :is(.arc, .vent, .ring-small, .ring-large, .hairline, .panel, .knob) {
+  stroke-miterlimit: 10;
+}
+
+.setup-graphic :is(.vent, .ring-small, .guide, .dot) {
+  opacity: 0.4;
+}
+
+.setup-graphic :is(.edge, .card-mid, .guide, .card-back, .card-front) {
+  stroke-linejoin: round;
+}
+
+/* Card silhouettes. */
+.setup-graphic :is(.card-mid, .card-back, .card-front, .panel, .knob) {
+  fill: var(--setup-silhouette);
+  transition: fill 700ms ease;
+}
+
+.setup-graphic :is(.ring-small, .ring-large) {
+  stroke-dasharray: 6;
+}
+
+/* Left-face shading on all three blocks.
+   Always black (not currentColor) so the faces darken like shadow in both
+   themes; dark surfaces need a stronger shadow to register at all. */
+.setup-graphic .shade {
+  fill: #000;
+  opacity: 0.1;
+  transition: opacity 700ms ease;
+}
+
+html[data-theme-light='false'] .setup-graphic .shade {
+  opacity: 0.3;
+}
+
+/* The "powered up" finale — a composite-level final state (the `poweredUp`
+   prop toggles .powered on the root), independent of any module's `linked`
+   state. The hovering modules fade out and the three cards fill in: their
+   linework (currentColor, so a color change on .blocks carries the strokes and
+   currentColor fills) and silhouette fills turn accent, and the left-face
+   shading fades away — leaving a solid accent Macro mark. Plain transitions,
+   not keyframe animations, so a Suspense re-attach renders the end state
+   rather than replaying it. (The white LED sparks are hidden here too, but the
+   real guarantee is JS: SetupGraphic cancels the LED WAAPI animations when
+   powering up, since a running animation would otherwise beat this CSS.) */
+.setup-graphic .blocks {
+  transition: color 700ms ease;
+}
+.setup-graphic :is(.modules, .connectors) {
+  transition: opacity 700ms ease;
+}
+/* The modules fade out, and their tethers go with them. */
+.setup-graphic.powered :is(.modules, .connectors) {
+  opacity: 0;
+  pointer-events: none;
+}
+.setup-graphic.powered .blocks {
+  color: var(--color-accent);
+}
+/* Scoped to .blocks: `.panel`/`.knob` are also used by the module bodies, and
+   those should only fade out — never fill accent. */
+.setup-graphic.powered
+  .blocks
+  :is(.card-mid, .card-back, .card-front, .panel, .knob) {
+  fill: var(--color-accent);
+}
+.setup-graphic.powered .led-spark {
+  opacity: 0;
+}
+.setup-graphic.powered .shade,
+/* out-specificity the dark-theme .shade opacity rule above */
+html[data-theme-light='false'] .setup-graphic.powered .shade {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-graphic .blocks,
+  .setup-graphic .modules,
+  .setup-graphic :is(.card-mid, .card-back, .card-front, .panel, .knob),
+  .setup-graphic .shade {
+    transition: none;
+  }
+}
+
+/* Geometry-only reference for the brand handoff (see `.logo-ref` in
+   SetupGraphic.tsx): never painted, never hit-tested, but still laid out so
+   `getBoundingClientRect()` returns the logo's true position. `opacity: 0`
+   rather than `display: none`/`visibility: hidden` — those would zero out or
+   drop the measurable geometry. */
+.setup-graphic .logo-ref {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* LED halo: a soft filled accent disc behind each inset that breathes
+   (expands and contracts) once lit. Hidden (opacity 0) at rest; the
+   illuminate pass drives its scale + opacity via WAAPI. transform-box/-origin
+   make the scale grow about its own center. */
+.setup-graphic .led-halo {
+  fill: var(--color-accent);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* LED spark: a small fully-white specular dot in the inset's upper-left,
+   suggesting the bulb's light source. Faded in with the illuminate pass. */
+.setup-graphic .led-spark {
+  fill: #fff;
+  opacity: 0;
+}
+
+/* Dashed connector tethers from modules to block features. Authored in
+   viewBox space (unscaled), so a 1.3 stroke matches the scaled block linework;
+   kept subtle like the scene's other construction lines. */
+.setup-graphic .connector {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.3;
+  stroke-dasharray: 6;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+/* "Downloading" pulse: a clean accent segment travelling along a connector
+   (the dash + stroke-dashoffset are set by DownloadPulse), with just a hint of
+   glow so it stays crisp. */
+.setup-graphic .download-pulse {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px var(--color-accent));
+}
+
+/* "Downloading" logo pulse: the module's currentColor logo eases between ink
+   and accent. Unlike the module's other motion (WAAPI, to survive a Suspense
+   re-attach), this is CSS so it pulses to a *live* var(--color-accent): the
+   brand accent is applied after mount, and a WAAPI keyframe would bake the
+   pre-theme fallback color instead. A re-attach at worst restarts the pulse
+   from ink — a negligible blip for a slow color fade. Toggled by the
+   `logo-downloading` class (set in Module for the downloading state). */
+@keyframes setup-logo-download {
+  0%,
+  100% {
+    color: var(--color-ink);
+  }
+  50% {
+    color: var(--color-accent);
+  }
+}
+.setup-graphic .logo-downloading {
+  animation: setup-logo-download 1600ms ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-graphic .logo-downloading {
+    animation: none;
+  }
+}
+
+/* Ambient module motion — the bob and orbit rings' breathe are driven with
+   WAAPI (see SetupGraphic.tsx), while dash travel uses native SVG animation.
+   This avoids Safari's jitter when WAAPI animates a dashed SVG stroke. When a
+   query above it re-suspends, the page's Suspense boundary re-attaches this
+   subtree; that restarts CSS animations (a visible pop) but leaves the
+   WAAPI animations running. The wrapper owns scale while the nested path owns dash
+   travel: separating those properties avoids Safari re-rasterizing a dashed
+   path as its transform changes. */
+.setup-graphic .module .ring-motion {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Accent "acceleration" jet trail behind the module, revealed on click (driven by
+   WAAPI). Non-interactive; gradient goes opaque accent at the module to
+   transparent up-left along the −D axis. The inner group carries the animated
+   opacity and the width scale (scaleY about its own center). */
+.setup-graphic .module-jet-trail {
+  pointer-events: none;
+}
+.setup-graphic .module-jet-trail-scale {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.setup-graphic .module-jet-trail-hot {
+  stop-color: var(--color-accent);
+  stop-opacity: 0.85;
+}
+.setup-graphic .module-jet-trail-cold {
+  stop-color: var(--color-accent);
+  stop-opacity: 0;
+}

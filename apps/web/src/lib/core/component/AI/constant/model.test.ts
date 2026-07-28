@@ -28,7 +28,7 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.opus5);
-    expect(free).not.toContain(Model.gpt55);
+    expect(free).not.toContain(Model.gpt56);
   });
 });
 
@@ -41,7 +41,8 @@ describe('parseModel', () => {
 
   it('rejects unknown / empty values so callers can fall back to a default', () => {
     expect(parseModel('anthropic/claude-opus-4-7')).toBeUndefined(); // retired id
-    expect(parseModel('gpt-5.5')).toBeUndefined(); // unprefixed / legacy
+    expect(parseModel('anthropic/claude-sonnet-4-6')).toBeUndefined(); // retired id
+    expect(parseModel('gpt-5.6')).toBeUndefined(); // unprefixed / legacy
     expect(parseModel('not-a-model')).toBeUndefined();
     expect(parseModel('')).toBeUndefined();
     expect(parseModel(null)).toBeUndefined();
@@ -61,7 +62,7 @@ describe('alternateProviderModel', () => {
   it('only ever suggests a model the user has access to (stays within candidates)', () => {
     // Candidates model the user's accessible models. The suggestion must be
     // one of them, never a model outside the accessible set.
-    const candidates: TModel[] = [Model.haiku45, Model.gpt5Mini];
+    const candidates: TModel[] = [Model.haiku45, Model.gpt56Mini];
     const alt = alternateProviderModel(Model.opus5, { candidates });
     expect(candidates).toContain(alt);
     expect(PROVIDER_OF(alt!)).toBe('openai'); // the only different-provider candidate
@@ -71,12 +72,12 @@ describe('alternateProviderModel', () => {
     // User is on OpenAI but the only accessible model is also OpenAI — there is
     // no provider to fall back to.
     expect(
-      alternateProviderModel(Model.gpt55, { candidates: [Model.gpt5Mini] })
+      alternateProviderModel(Model.gpt56, { candidates: [Model.gpt56Mini] })
     ).toBeUndefined();
     // Likewise when every candidate shares the current (Anthropic) provider.
     expect(
       alternateProviderModel(Model.opus5, {
-        candidates: [Model.haiku45, Model.sonnet46],
+        candidates: [Model.haiku45, Model.sonnet5],
       })
     ).toBeUndefined();
   });

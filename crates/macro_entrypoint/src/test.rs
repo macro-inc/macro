@@ -143,6 +143,50 @@ fn rust_log_warn_does_not_drop_info_spans() {
 }
 
 #[test]
+fn rust_log_target_directive_includes_info_span_fields_in_warn_log() {
+    let json_format = tracing_subscriber::fmt::format::Format::default()
+        .json()
+        .with_current_span(true)
+        .with_span_list(false)
+        .flatten_event(true);
+
+    let logs = SharedWriter::default();
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
+        .event_format(datadog_fmt::DatadogFormat { inner: json_format })
+        .with_writer(logs.clone())
+        .with_filter(EnvFilter::new("warn,macro_http_request=info"));
+    let subscriber = Registry::default().with(fmt_layer);
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info_span!(
+            target: "macro_http_request",
+            "http.request",
+            "http.request.method" = "POST",
+            "url.path" = "/documents",
+            "request.id" = "req-123",
+        )
+        .in_scope(|| {
+            tracing::warn!("slow http request");
+            tracing::info!(target: "other_target", "filtered info event");
+        });
+    });
+
+    let output = logs.contents();
+    let line = output
+        .lines()
+        .find(|line| line.contains("slow http request"))
+        .expect("warn event should be logged");
+    let json = serde_json::from_str::<serde_json::Value>(line).unwrap();
+    assert_eq!(json["span"]["name"], "http.request", "{output}");
+    assert_eq!(json["span"]["http.request.method"], "POST");
+    assert_eq!(json["span"]["url.path"], "/documents");
+    assert_eq!(json["span"]["request.id"], "req-123");
+    assert!(!output.contains("filtered info event"));
+}
+
+#[test]
 fn global_warn_filter_drops_info_spans() {
     let (exporter, provider) = test_tracer_provider();
     let tracer = provider.tracer("test");

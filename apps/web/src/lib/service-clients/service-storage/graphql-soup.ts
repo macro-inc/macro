@@ -306,7 +306,10 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
   return notifications.map((notification) => ({
     id: notification.id,
     notification_event_type: notification.eventType,
-    notification_metadata: notification.metadata,
+    notification_metadata: {
+      tag: notification.eventType,
+      content: notification.metadata,
+    },
     entity_id: notification.entityId,
     entity_type: mapGraphqlNotificationEntityType(notification.entityType),
     sent: notification.sent,

@@ -12,7 +12,7 @@ use model::chat::{AttachmentType, NewChatMessage};
 use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 
-use crate::domain::events::{ChatMacroEvent, ChatMessageSentMetadata};
+use crate::domain::events::{ChatMacroEvent, ChatMessageDeletedMetadata, ChatMessageSentMetadata};
 use crate::domain::models::{ChatErr, ResolvedMessageContent, Result};
 use crate::domain::ports::{MessageRepo, MessageService};
 
@@ -176,7 +176,16 @@ impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
 
     #[tracing::instrument(err, skip(self))]
     async fn delete(&self, message_id: &str) -> Result<()> {
-        self.repo.delete(message_id).await
+        let chat_id = self.repo.delete(message_id).await?;
+
+        self.publish_chat_event(&ChatMacroEvent::message_deleted(
+            ChatMessageDeletedMetadata {
+                chat_id,
+                message_id: message_id.to_owned(),
+            },
+        ));
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
