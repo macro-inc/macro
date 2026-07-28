@@ -9,7 +9,7 @@ mod mutations;
 pub use mutations::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
     EntityRefInput, EntitySharePolicyInput, GraphqlEntityMutationError,
-    GraphqlEntityMutationErrorCode, GraphqlEntityMutationRef, GraphqlEntityMutationResult,
-    GraphqlMutationError, GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput,
-    RenameEntityInput, UpdateEntitySharePolicyInput,
+    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlMutationError,
+    GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput, RenameEntityInput,
+    UpdateEntitySharePolicyInput,
 };

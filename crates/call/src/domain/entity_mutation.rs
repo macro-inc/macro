@@ -4,7 +4,8 @@ use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, ViewAccessLevel,
 };
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationErrorCode, RenameEntity, UpdateEntitySharePolicy,
+    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
+    UpdateEntitySharePolicy,
 };
 use macro_event_broker::MacroEventBroker;
 use model_entity::Entity;
@@ -93,10 +94,10 @@ where
 
     async fn rename_entity(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         require_archived_call(self, &receipt, "rename").await?;
         self.edit_call_record(
             receipt,
@@ -107,7 +108,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -131,10 +132,10 @@ where
 
     async fn update_share_policy(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         require_archived_call(self, &receipt, "update sharing for").await?;
         self.edit_call_record(
             receipt,
@@ -145,7 +146,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -169,11 +170,11 @@ where
 
     async fn delete_entity_permanently(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         require_archived_call(self, &receipt, "permanently delete").await?;
         self.delete_call_record(receipt).await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::deleted(entity)])
     }
 }

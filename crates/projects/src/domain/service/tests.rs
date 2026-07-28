@@ -1407,6 +1407,8 @@ async fn revert_upserts_every_restored_project() {
             Box::pin(async move {
                 Ok(crate::domain::models::RevertDeleteResult {
                     project_ids: restored_ids,
+                    document_ids: Vec::new(),
+                    chat_ids: Vec::new(),
                 })
             })
         });

@@ -7,7 +7,7 @@ use crate::{
     api::util::count_occurrences,
     service::entity_mutation::{EntityLifecycleService, LifecycleError},
 };
-use entity_mutation::EntityMutationActor;
+use entity_mutation::{EntityMutationActor, EntityMutationEffect};
 use macro_sha_count_client::Redis;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
@@ -49,7 +49,7 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
         _actor: &EntityMutationActor,
         entity: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
+    ) -> Result<Vec<EntityMutationEffect>, LifecycleError> {
         // Threads get their share-permission row lazily; mirror the REST
         // middleware's get-or-create so a first-time share succeeds. The
         // caller has already proven Owner access, so the thread exists.
@@ -75,14 +75,14 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
             .commit()
             .await
             .map_err(|error| internal!(error))?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity.clone())])
     }
 
     async fn restore_document(
         &self,
         _actor: &EntityMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
+    ) -> Result<Vec<EntityMutationEffect>, LifecycleError> {
         let document = macro_db_client::document::get_basic_document(&self.db, &entity.entity_id)
             .await
             .map_err(row_error)?;
@@ -93,18 +93,24 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
         )
         .await
         .map_err(|error| internal!(error))?;
-        Ok(document
-            .project_id
-            .into_iter()
-            .map(|id| EntityType::Project.with_entity_string(id))
-            .collect())
+        Ok(
+            std::iter::once(EntityMutationEffect::updated(entity.clone()))
+                .chain(
+                    document
+                        .project_id
+                        .into_iter()
+                        .map(|id| EntityType::Project.with_entity_string(id))
+                        .map(EntityMutationEffect::updated),
+                )
+                .collect(),
+        )
     }
 
     async fn delete_document_permanently(
         &self,
         _actor: &EntityMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
+    ) -> Result<Vec<EntityMutationEffect>, LifecycleError> {
         let document = macro_db_client::document::get_basic_document(&self.db, &entity.entity_id)
             .await
             .map_err(row_error)?;
@@ -139,10 +145,16 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
             }))
             .await
             .map_err(|error| internal!(error))?;
-        Ok(document
-            .project_id
-            .into_iter()
-            .map(|id| EntityType::Project.with_entity_string(id))
-            .collect())
+        Ok(
+            std::iter::once(EntityMutationEffect::deleted(entity.clone()))
+                .chain(
+                    document
+                        .project_id
+                        .into_iter()
+                        .map(|id| EntityType::Project.with_entity_string(id))
+                        .map(EntityMutationEffect::updated),
+                )
+                .collect(),
+        )
     }
 }

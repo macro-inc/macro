@@ -138,12 +138,17 @@ fn graphql_query_context_data(
     );
     let favorite_reader = state.favorites_service.clone();
     let permission_reader = state.entity_access_service.clone();
+    let soup_item_loader = soup_item_loader(
+        state.soup_router_state.service(),
+        state.soup_router_state.email_service(),
+    );
     let req = req
         .data(entity_mutation::EntityMutationActor {
             user_id: macro_user_id.clone(),
             organization_id,
         })
-        .data(state.graphql_entity_mutation_service.clone());
+        .data(state.graphql_entity_mutation_service.clone())
+        .data(soup_item_loader);
 
     req.data(complete_graph::entity_properties_loader(
         macro_user_id.clone(),

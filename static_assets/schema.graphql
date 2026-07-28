@@ -1283,9 +1283,9 @@ Successful result for one requested entity mutation.
 """
 type GraphqlMutationSuccess {
 	"""
-	Canonical references to every entity changed by the mutation.
+	Ordered normalized-cache effects produced by the mutation.
 	"""
-	affectedEntities: [GraphqlEntity!]!
+	effects: [SoupPatch!]!
 }
 
 """

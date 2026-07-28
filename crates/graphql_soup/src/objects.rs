@@ -1750,25 +1750,32 @@ pub enum SoupPatch<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> SoupPatch<E> {
-    /// Construct a GraphQL patch for one recipient-targeted domain patch.
+    /// Construct an update patch that hydrates the current Soup item for the viewer.
+    pub fn updated(user_id: MacroUserIdStr<'static>, entity: Entity<'static>) -> Self {
+        Self::Updated(SoupUpdated {
+            entity,
+            user_id,
+            phantom: PhantomData,
+        })
+    }
+
+    /// Construct a deletion patch for one normalized Soup entity.
+    pub fn deleted(entity: Entity<'static>) -> Self {
+        let graphql_type_name = GraphqlSoupEntity::<E>::graphql_type_name_for(entity.entity_type);
+        Self::Deleted(GraphqlCacheDeletion::new(
+            graphql_type_name,
+            ID(entity.entity_id.into_owned()),
+        ))
+    }
+
+    /// Construct a GraphQL patch for one recipient-targeted realtime patch.
     pub fn new(
         user_id: MacroUserIdStr<'static>,
         patch: Patch<model_entity::Entity<'static>>,
     ) -> Self {
         match patch {
-            Patch::Updated(entity) => Self::Updated(SoupUpdated {
-                entity,
-                user_id,
-                phantom: PhantomData,
-            }),
-            Patch::Deleted(entity) => {
-                let graphql_type_name =
-                    GraphqlSoupEntity::<E>::graphql_type_name_for(entity.entity_type);
-                Self::Deleted(GraphqlCacheDeletion::new(
-                    graphql_type_name,
-                    ID(entity.entity_id.into_owned()),
-                ))
-            }
+            Patch::Updated(entity) => Self::updated(user_id, entity),
+            Patch::Deleted(entity) => Self::deleted(entity),
         }
     }
 }

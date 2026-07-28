@@ -41,6 +41,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type SoupUpdated {",
         "item: GraphqlSoupEntity",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
+        "type GraphqlMutationSuccess {",
+        "effects: [SoupPatch!]!",
         "type SoupSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
     ] {

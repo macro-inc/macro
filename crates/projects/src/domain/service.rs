@@ -31,7 +31,8 @@ use super::events::{
     ProjectUploadedMetadata,
 };
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, ProjectError, PurgedProjectTree, RevertDeleteResult,
+    SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
@@ -541,12 +542,13 @@ where
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project: BasicProject,
-    ) -> Result<(), ProjectError> {
+    ) -> Result<PurgedProjectTree, ProjectError> {
         let purged = self
             .repo
             .purge_deleted_project_tree(&receipt.entity().entity_id)
             .await
             .map_err(|error| internal_error(error, "unable to permanently delete project"))?;
+        let result = purged.clone();
 
         if !purged.bom_shas.is_empty() {
             self.sha_counter
@@ -606,20 +608,21 @@ where
             },
         ));
 
-        Ok(())
+        Ok(result)
     }
 
     async fn revert_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project: BasicProject,
-    ) -> Result<(), ProjectError> {
+    ) -> Result<RevertDeleteResult, ProjectError> {
         let parent_project_id = project.parent_id.clone();
         let restored = self
             .repo
             .revert_delete_project(&receipt.entity().entity_id, parent_project_id.clone())
             .await
             .map_err(|error| internal_error(error, "unable to revert project"))?;
+        let result = restored.clone();
 
         if !restored.project_ids.is_empty() {
             let _ = self
@@ -643,7 +646,7 @@ where
             },
         ));
 
-        Ok(())
+        Ok(result)
     }
 
     async fn upload_folder(

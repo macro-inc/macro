@@ -305,14 +305,14 @@ pub trait ProjectService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project: BasicProject,
-    ) -> impl Future<Output = Result<(), ProjectError>> + Send;
+    ) -> impl Future<Output = Result<PurgedProjectTree, ProjectError>> + Send;
 
     /// Restore a soft-deleted project subtree.
     fn revert_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project: BasicProject,
-    ) -> impl Future<Output = Result<(), ProjectError>> + Send;
+    ) -> impl Future<Output = Result<RevertDeleteResult, ProjectError>> + Send;
 
     /// Create a pending project tree and its upload destinations.
     fn upload_folder(
