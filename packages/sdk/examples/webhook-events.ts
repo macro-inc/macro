@@ -2,9 +2,7 @@ import type { Env } from '../src/config';
 import type { EventName } from '../src/events/types';
 import { Macro } from '../src/macro';
 
-const args = process.argv.slice(2);
-const url = args.find((a) => a.startsWith('http'));
-const actAs = args.find((a) => !a.startsWith('http'));
+const [url, actAs] = process.argv.slice(2);
 const botToken = process.env.MACRO_BOT_TOKEN;
 if (!url || !actAs || !botToken) {
   console.error(
