@@ -236,16 +236,19 @@ type ServiceBuilderAlias = ServiceBuilder<
     Stack<
         PropagateRequestIdLayer,
         Stack<
-            TraceLayer<
-                SharedClassifier<ServerErrorsAsFailures>,
-                MakeHttpRequestSpan,
-                (),
-                CustomOnResponse,
-                tower_http::trace::DefaultOnBodyChunk,
-                tower_http::trace::DefaultOnEos,
-                CustomOnFailure,
+            RequestMetadataLayer,
+            Stack<
+                TraceLayer<
+                    SharedClassifier<ServerErrorsAsFailures>,
+                    MakeHttpRequestSpan,
+                    (),
+                    CustomOnResponse,
+                    tower_http::trace::DefaultOnBodyChunk,
+                    tower_http::trace::DefaultOnEos,
+                    CustomOnFailure,
+                >,
+                Stack<SetRequestIdLayer<RequestIdBuilder>, Identity>,
             >,
-            Stack<RequestMetadataLayer, Stack<SetRequestIdLayer<RequestIdBuilder>, Identity>>,
         >,
     >,
 >;
@@ -293,7 +296,6 @@ impl MacroRequestIdAndTracingLayer {
 
         let svc_builder = ServiceBuilder::new()
             .set_x_request_id(RequestIdBuilder::default())
-            .layer(RequestMetadataLayer)
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(MakeHttpRequestSpan)
@@ -301,6 +303,7 @@ impl MacroRequestIdAndTracingLayer {
                     .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
                     .on_failure(CustomOnFailure),
             )
+            .layer(RequestMetadataLayer)
             .propagate_x_request_id();
 
         MacroRequestIdAndTracingLayer { inner: svc_builder }
