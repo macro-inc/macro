@@ -8,6 +8,8 @@
 #[cfg(test)]
 mod test;
 
+pub mod parallel;
+
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::marker::PhantomData;
@@ -177,6 +179,31 @@ impl RebalanceTracker {
             .collect::<Vec<_>>();
         assignments.sort_by(|left, right| left.topic_partition.cmp(&right.topic_partition));
         assignments
+    }
+
+    pub(crate) fn assignment_epoch(&self, topic: &str, partition: i32) -> Option<AssignmentEpoch> {
+        let state = lock_unpoisoned(&self.inner.state);
+        state
+            .assignments
+            .get(&TopicPartition {
+                topic: topic.to_string(),
+                partition,
+            })
+            .copied()
+    }
+
+    pub(crate) fn with_current_assignment<Output>(
+        &self,
+        topic_partition: &TopicPartition,
+        epoch: AssignmentEpoch,
+        operation: impl FnOnce() -> Output,
+    ) -> Option<Output> {
+        let state = lock_unpoisoned(&self.inner.state);
+        state
+            .assignments
+            .get(topic_partition)
+            .is_some_and(|current_epoch| *current_epoch == epoch)
+            .then(operation)
     }
 
     /// Returns whether `epoch` is the current ownership generation.
