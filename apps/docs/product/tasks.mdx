@@ -6,18 +6,65 @@ description: "Track work with priorities, statuses, and linked context."
 
 <iframe src="https://www.youtube.com/embed/gxJquVXRX5A" title="YouTube video player" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
-We built tasks to be quick to create and easy to close out.
-
-Because tasks are integrated into the rest of your workspace, there's no need for extra labels and categories. It's just status, priority, assignee.
+Macro Tasks start private and lightweight but scale seamlessly onto a team, where tasks you create are auto-shared with members. They're @mentionable anywhere in Macro as live, up-to-date pills, sync bidirectionally with GitHub PRs to move status automatically, and are fully accessible to AI clients like Claude Code and Cursor via Macro's MCP server.
 
 > To create a new task use shortcut <kbd>c</kbd> \+ <kbd>t</kbd>
 
-You can reference a task in your channels, in your documents, or with an agent by @mentioning it. Quickly create a task directly from a channel or an email by hovering and selecting the task button.
-
 <Frame>
-  ![Task From Message](/images/task_from_message.png)
+  ![Creating a task](/images/task_create2.png)
 </Frame>
+
+### Task Statuses
+
+Because tasks are integrated into the rest of your workspace, there's no need for extra labels and categories. It's just status, priority, assignee.
+
+<div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><svg width="14" height="14" viewBox="0 0 12 12" fill="#9ca3af" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" clipRule="evenodd" d="M6 0C9.31 0 12 2.69 12 6C12 9.31 9.31 12 6 12C2.69 12 0 9.31 0 6C0 2.69 2.69 0 6 0ZM6 1.8C8.32 1.8 10.2 3.68 10.2 6C10.2 8.32 8.32 10.2 6 10.2C3.68 10.2 1.8 8.32 1.8 6C1.8 3.68 3.68 1.8 6 1.8Z" /></svg> <span><strong>Not Started</strong> — the task hasn't been picked up yet</span></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><svg width="14" height="14" viewBox="0 0 12 12" fill="#fbbf24" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" clipRule="evenodd" d="M6 0C9.31 0 12 2.69 12 6C12 9.31 9.31 12 6 12C2.69 12 0 9.31 0 6C0 2.69 2.69 0 6 0ZM6 1.8C8.32 1.8 10.2 3.68 10.2 6C10.2 8.32 8.32 10.2 6 10.2C3.68 10.2 1.8 8.32 1.8 6C1.8 3.68 3.68 1.8 6 1.8Z" /><path d="M6 0C2.69 0 0 2.69 0 6C0 9.31 2.69 12 6 12V0Z" /></svg> <span><strong>In Progress</strong> — someone is actively working on it</span></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><svg width="14" height="14" viewBox="0 0 12 12" fill="#a78bfa" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" clipRule="evenodd" d="M6 0C9.31 0 12 2.69 12 6C12 9.31 9.31 12 6 12C2.69 12 0 9.31 0 6C0 2.69 2.69 0 6 0ZM6 1.8C8.32 1.8 10.2 3.68 10.2 6C10.2 8.32 8.32 10.2 6 10.2C3.68 10.2 1.8 8.32 1.8 6C1.8 3.68 3.68 1.8 6 1.8Z" /><path d="M6 0C2.69 0 0 2.69 0 6C0 9.31 2.69 12 6 12C9.31 12 12 9.31 12 6H6V0Z" /></svg> <span><strong>In Review</strong> — the work is done and awaiting review</span></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><svg width="14" height="14" viewBox="0 0 12 12" fill="#4ade80" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" clipRule="evenodd" d="M6 0C9.31 0 12 2.69 12 6C12 9.31 9.31 12 6 12C2.69 12 0 9.31 0 6C0 2.69 2.69 0 6 0ZM9.34 3.86C9.5 4.03 9.6 4.26 9.6 4.5C9.6 4.74 9.5 4.97 9.34 5.14L5.74 8.74C5.57 8.9 5.34 9 5.1 9C4.86 9 4.63 8.9 4.46 8.74L2.66 6.94C2.32 6.59 2.32 6.01 2.66 5.66C3.01 5.32 3.59 5.32 3.94 5.66L5.1 6.83L8.06 3.86C8.41 3.52 8.99 3.52 9.34 3.86Z" /></svg> <span><strong>Completed</strong> — the task is finished</span></div>
+</div>
+
+You can reference a task in your channels, in your documents, or with an agent by @mentioning it. Quickly create a task directly from a channel or an email by hovering and selecting the task button.
 
 You can manually review all of your team's tasks in the task component or ask your agent to give you updates on them.
 
+### Team level sharing
+
+When you're on a team, every task you create is automatically shared with its members. There's no need to post it in a channel or share it individually. Teammates can view and comment on the task, while you (and the assignee) keep full control over its status and properties. Assigning a task to someone sends them an inbox notification as well as @mentioning a teammate in the task's comments.
+
+**Sharing follows team membership**
+
+- Join a team and you'll see all of its tasks, those assigned to you and to others.
+- If you're removed from the team, you lose access to them.
+- If you're not on a team, your tasks stay private to you.
+
+<Frame>
+  ![A task shared with team members](/images/tasks_shared.png)
+</Frame>
+
+### GitHub integration
+
 Macro tasks integrate with GitHub: as you create, review, and merge branches, the task automatically moves to "In Progress," "In Review," or "Done," and the task records which pull request is associated with it. See [GitHub integration](/integrations/github) for setup and details.
+
+<Note>
+  Connect GitHub to Macro to keep your tasks in sync with the code. Link your GitHub account in **Settings → Connections**, then hit connect. Once connected, tasks follow your pull requests automatically.
+</Note>
+
+### MCP setup
+
+Macro's MCP server lets AI clients like Claude Code, Codex, and Cursor work with your tasks directly. Connect once by going to **Settings → MCP server** (authorize with your Macro account — MCP access is included on every plan, Free included). You can use the MCP server to spin up a task, triage your list, or move something to "In Review" without leaving your editor. Any changes made will show up live in Macro.
+
+**MCP for tasks uses**
+
+- **Create a task** — `CreateDocument` with `isTask: true`.
+- **Find your tasks** — `ListEntities` returns tasks as documents with subtype `task`; you can filter by status, assignee, or priority. Asking your client for "my tasks," "tasks assigned to me," or "what I completed yesterday" runs against Macro rather than an external tracker.
+- **Read a task** — `ReadContent` / `ReadMetadata` for the body and details.
+- **Update a task** — `SetEntityProperty` sets status, priority, assignees, due date, parent/subtasks, and story points; `GetEntityProperties` shows the current values.
+
+### @mentioning
+
+Tasks are markdown entities, so you can @mention one anywhere else in Macro — in a doc, an email, a chat, a channel, or another task. The mention renders as a live pill that stays in sync with the task's status and title, so wherever you reference it, you're always looking at the current state. Click it to jump straight to the task.

@@ -1,8 +1,8 @@
 use super::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
-        WebhookEndpointSchemePolicy, WebhookFilter, WebhookFilters, WebhookScope, WebhookStatus,
-        WebhookValidationResult,
+        CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,
+        Webhook, WebhookEndpointSchemePolicy, WebhookFilter, WebhookFilters, WebhookScope,
+        WebhookStatus, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
     service::WebhookServiceImpl,
@@ -99,6 +99,23 @@ impl WebhookRepo for FakeRepo {
             .webhook
             .clone()
             .filter(|webhook| webhook.id == webhook_id))
+    }
+
+    async fn list_webhooks_for_workspaces(
+        &self,
+        workspace_ids: Vec<String>,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        Ok(self
+            .state
+            .lock()
+            .await
+            .webhook
+            .clone()
+            .filter(|webhook| {
+                webhook.deleted_at.is_none() && workspace_ids.contains(&webhook.workspace_id)
+            })
+            .into_iter()
+            .collect())
     }
 
     async fn list_active_webhooks_matching_event(
@@ -399,6 +416,14 @@ fn existing_webhook() -> Webhook {
 
 fn assert_bad_request<T>(result: Result<T, WebhookError>) {
     assert!(matches!(result, Err(WebhookError::BadRequest(_))));
+}
+
+fn webhook_id_list(response: &ListWebhooksResponse) -> Vec<&str> {
+    response
+        .webhooks
+        .iter()
+        .map(|webhook| webhook.id.as_str())
+        .collect()
 }
 
 #[tokio::test]
@@ -793,6 +818,86 @@ async fn patch_succeeds_when_event_scheduling_fails() {
         .expect("event scheduling must not fail webhook patching");
 
     assert_eq!(patched.name, "Updated");
+}
+
+#[tokio::test]
+async fn get_returns_authorized_webhook() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
+
+    let webhook = service
+        .get_webhook(caller(), "wh_test".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(webhook.id, "wh_test");
+}
+
+#[tokio::test]
+async fn get_fails_not_found_for_missing_id() {
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        NoopMacroEventBroker,
+    );
+
+    let result = service
+        .get_webhook(caller(), "wh_missing".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn get_fails_unauthorized_when_caller_does_not_own_workspace() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "other_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, None).await;
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
+
+    let result = service.get_webhook(caller(), "wh_test".to_string()).await;
+
+    assert!(matches!(result, Err(WebhookError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn list_includes_personal_workspace_webhooks() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
+
+    let response = service.list_webhooks(caller()).await.unwrap();
+
+    assert_eq!(webhook_id_list(&response), vec!["wh_test"]);
+}
+
+#[tokio::test]
+async fn list_includes_team_workspace_webhooks() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "team_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, Some("team_workspace".to_string())).await;
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
+
+    let response = service.list_webhooks(caller()).await.unwrap();
+
+    assert_eq!(webhook_id_list(&response), vec!["wh_test"]);
+}
+
+#[tokio::test]
+async fn list_excludes_webhooks_in_unowned_workspaces() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "someone_elses_workspace".to_string();
+    // No team membership, so the caller only owns their personal workspace.
+    let repo = FakeRepo::with_webhook(webhook, None).await;
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
+
+    let response = service.list_webhooks(caller()).await.unwrap();
+
+    assert!(response.webhooks.is_empty());
 }
 
 #[tokio::test]

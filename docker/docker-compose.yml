@@ -250,6 +250,7 @@ services:
       - "8089:8080"
     environment:
       LAST_ONLINE_REDIS_URI: ${LAST_ONLINE_REDIS_URI:-${REDIS_URI:-redis://redis:6379}}
+      OVERRIDE_CONNECTION_GATEWAY_URL: http://connection-gateway:8080
     depends_on:
       - redis
       - document_cognition_service

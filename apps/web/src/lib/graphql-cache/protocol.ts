@@ -217,6 +217,8 @@ export type CacheRequest = { id: number } & (
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
   | { kind: 'invalidate'; keys: string[] }
+  /** Delete stale durable records after a server mutation returns only refs. */
+  | { kind: 'delete-records'; keys: string[] }
   | { kind: 'clear' }
 );
 

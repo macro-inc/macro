@@ -352,12 +352,38 @@ async fn get_or_create_tag_definition_is_idempotent(pool: Pool<Postgres>) -> any
     let owner = PropertyDefinitionOwner::Team(team_1());
 
     let first = repo.get_or_create_tag_definition(owner).await?;
-    assert_eq!(first.data_type, DataType::Tag);
-    assert!(first.is_multi_select);
+    assert!(first.created);
+    assert_eq!(first.definition.data_type, DataType::Tag);
+    assert!(first.definition.is_multi_select);
 
     // A second call returns the same definition rather than creating a duplicate.
     let second = repo.get_or_create_tag_definition(owner).await?;
-    assert_eq!(first.id, second.id);
+    assert!(!second.created);
+    assert_eq!(first.definition.id, second.definition.id);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_or_create_tag_definition_race_reuses_winner(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let first_repo = PropertiesPgRepo::new(pool.clone());
+    let second_repo = PropertiesPgRepo::new(pool);
+    let owner = PropertyDefinitionOwner::Team(team_1());
+
+    let (first, second) = tokio::join!(
+        first_repo.get_or_create_tag_definition(owner),
+        second_repo.get_or_create_tag_definition(owner),
+    );
+    let first = first?;
+    let second = second?;
+
+    assert_ne!(first.created, second.created);
+    assert_eq!(first.definition.id, second.definition.id);
 
     Ok(())
 }
@@ -374,9 +400,13 @@ async fn get_tag_definition_none_then_some(pool: Pool<Postgres>) -> anyhow::Resu
     assert!(before.is_none());
 
     let created = repo.get_or_create_tag_definition(owner).await?;
+    assert!(created.created);
 
     let after = repo.get_tag_definition(owner).await?;
-    assert_eq!(after.map(|d| d.id), Some(created.id));
+    assert_eq!(
+        after.map(|definition| definition.id),
+        Some(created.definition.id)
+    );
 
     Ok(())
 }
@@ -397,11 +427,13 @@ async fn get_or_create_tag_definition_coexists_with_same_named_property(
 
     // Provisioning the tag set still succeeds: tag definitions are exempt from the
     // display-name uniqueness that applies to user-created properties.
-    let tag_def = repo.get_or_create_tag_definition(owner).await?;
-    assert_eq!(tag_def.data_type, DataType::Tag);
+    let tag_definition = repo.get_or_create_tag_definition(owner).await?;
+    assert!(tag_definition.created);
+    assert_eq!(tag_definition.definition.data_type, DataType::Tag);
 
     let again = repo.get_or_create_tag_definition(owner).await?;
-    assert_eq!(tag_def.id, again.id);
+    assert!(!again.created);
+    assert_eq!(tag_definition.definition.id, again.definition.id);
 
     Ok(())
 }

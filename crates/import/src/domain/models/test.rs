@@ -152,4 +152,8 @@ fn metadata_label_reads_title_or_name() {
         metadata_label(ImportSource::Notion, &serde_json::json!({})),
         "(unnamed)"
     );
+    assert_eq!(
+        metadata_label(ImportSource::Notion, &serde_json::json!({"title": "  "})),
+        "(unnamed)"
+    );
 }

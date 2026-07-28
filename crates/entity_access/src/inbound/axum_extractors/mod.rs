@@ -8,6 +8,7 @@ mod test;
 #[cfg(test)]
 mod test_support;
 
+mod bot;
 mod call;
 mod channel;
 mod chat;

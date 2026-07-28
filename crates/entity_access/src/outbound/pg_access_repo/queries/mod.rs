@@ -77,7 +77,7 @@ pub async fn get_user_source_ids(
     }
 }
 
-/// Grabs a bot's active channel, owning team, and principal source ids.
+/// Grabs the source ids available to a bot operating in its owning team's scope.
 #[tracing::instrument(skip(pool), err)]
 #[cfg_attr(
     not(test),
@@ -85,39 +85,49 @@ pub async fn get_user_source_ids(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{bot_id.to_string()}"#,
+        convert = r#"{format!("{}:{}", bot_id, team_id)}"#,
     )
 )]
-pub async fn get_bot_source_ids(
+pub async fn get_team_scope_source_ids(
     pool: &Pool<Postgres>,
     bot_id: &BotIdStr<'_>,
+    team_id: &uuid::Uuid,
 ) -> anyhow::Result<SourceIds> {
     let source_ids = sqlx::query_scalar!(
         r#"
         WITH active_bot AS (
-            SELECT team_id
+            SELECT id
             FROM bots
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $2
+              AND team_id = $3
+              AND deleted_at IS NULL
         )
+        SELECT $1::text AS "source_id!"
+        FROM active_bot
+        UNION
+        SELECT $3::text
+        FROM active_bot
+        UNION
+        SELECT c.id::text
+        FROM active_bot
+        JOIN comms_channels c
+          ON c.channel_type = 'team'
+         AND c.team_id = $3
+        UNION
         SELECT cp.channel_id::text
         FROM active_bot
         JOIN comms_channel_participants cp
-            ON cp.user_id = $1 AND cp.left_at IS NULL
-        UNION ALL
-        SELECT team_id::text
-        FROM active_bot
-        WHERE team_id IS NOT NULL
-        UNION ALL
-        SELECT $1
-        FROM active_bot
+          ON cp.user_id = $1
+         AND cp.left_at IS NULL
         "#,
         bot_id.as_ref(),
         bot_id.as_uuid(),
+        team_id,
     )
     .fetch_all(pool)
     .await?;
 
-    Ok(SourceIds(source_ids.into_iter().flatten().collect()))
+    Ok(SourceIds(source_ids))
 }
 
 /// Grabs all user IDs with access to an entity via the entity_access table.

@@ -528,15 +528,17 @@ async fn insert_pg_bot_channel(
     pool: &PgPool,
     channel_id: Uuid,
     channel_type: &str,
+    team_id: Option<Uuid>,
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        INSERT INTO comms_channels (id, name, channel_type, owner_id)
-        VALUES ($1, 'PG Bot Channel', $2::text::comms_channel_type, $3)
+        INSERT INTO comms_channels (id, name, channel_type, owner_id, team_id)
+        VALUES ($1, 'PG Bot Channel', $2::text::comms_channel_type, $3, $4)
         "#,
         channel_id,
         channel_type,
         PG_BOT_OWNER,
+        team_id,
     )
     .execute(pool)
     .await?;
@@ -601,73 +603,126 @@ async fn insert_pg_bot_entity_access(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_document_grant_through_active_channel(pool: PgPool) -> anyhow::Result<()> {
-    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let channel_id = Uuid::new_v4();
-    let document_id = Uuid::new_v4();
-    insert_pg_bot(&pool, bot_id, Some(PG_BOT_OWNER), None).await?;
-    insert_pg_bot_channel(&pool, channel_id, "private").await?;
-    insert_pg_bot_participant(&pool, channel_id, bot_id, "member").await?;
-    insert_pg_bot_entity_access(
-        &pool,
-        document_id,
-        "document",
-        &channel_id.to_string(),
-        "channel",
-        AccessLevel::Edit,
-    )
-    .await?;
-
-    let access = PgAccessRepository::new(pool)
-        .get_bot_entity_access(bot_id, &document_id.to_string(), EntityType::Document)
-        .await?;
-
-    assert_eq!(access, Some(AccessLevel::Edit));
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_team_grant_is_available_only_to_team_scoped_bot(
+async fn team_item_access_includes_team_channels_and_bot_grants(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::new_v4();
-    let team_bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let user_bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let document_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
+    let private_channel_id = Uuid::new_v4();
+    let team_channel_id = Uuid::new_v4();
     insert_pg_bot_team(&pool, team_id).await?;
-    insert_pg_bot(&pool, team_bot_id, None, Some(team_id)).await?;
-    insert_pg_bot(&pool, user_bot_id, Some(PG_BOT_OWNER), None).await?;
-    insert_pg_bot_entity_access(
-        &pool,
-        document_id,
-        "document",
-        &team_id.to_string(),
-        "team",
-        AccessLevel::Comment,
-    )
-    .await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_bot_channel(&pool, private_channel_id, "private", None).await?;
+    insert_pg_bot_channel(&pool, team_channel_id, "team", Some(team_id)).await?;
+    insert_pg_bot_participant(&pool, private_channel_id, bot_id, "member").await?;
+
+    let grants = [
+        (team_id.to_string(), "team", AccessLevel::View),
+        (team_channel_id.to_string(), "channel", AccessLevel::Comment),
+        (private_channel_id.to_string(), "channel", AccessLevel::Edit),
+        (bot_principal.to_string(), "user", AccessLevel::Owner),
+    ];
     let repo = PgAccessRepository::new(pool);
 
-    let team_access = repo
-        .get_bot_entity_access(team_bot_id, &document_id.to_string(), EntityType::Document)
-        .await?;
-    let user_access = repo
-        .get_bot_entity_access(user_bot_id, &document_id.to_string(), EntityType::Document)
+    for (source_id, source_type, expected) in grants {
+        let document_id = Uuid::new_v4();
+        insert_pg_bot_entity_access(
+            &repo.pool,
+            document_id,
+            "document",
+            &source_id,
+            source_type,
+            expected,
+        )
         .await?;
 
-    assert_eq!(team_access, Some(AccessLevel::Comment));
-    assert_eq!(user_access, None);
+        let access = repo
+            .get_team_entity_access(
+                bot_id,
+                team_id,
+                &document_id.to_string(),
+                EntityType::Document,
+            )
+            .await?;
+        assert_eq!(access, Some(expected), "source {source_id}");
+    }
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_ungranted_document_returns_none(pool: PgPool) -> anyhow::Result<()> {
+async fn team_item_access_preserves_public_grants(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let document_id = Uuid::new_v4();
-    insert_pg_bot(&pool, bot_id, Some(PG_BOT_OWNER), None).await?;
+    let permission_id = Uuid::new_v4().to_string();
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Public Document', $2)"#,
+        document_id.to_string(),
+        PG_BOT_OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel")
+        VALUES ($1, true, 'comment')
+        "#,
+        permission_id.as_str(),
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId")
+        VALUES ($1, $2)
+        "#,
+        document_id.to_string(),
+        permission_id.as_str(),
+    )
+    .execute(&pool)
+    .await?;
 
     let access = PgAccessRepository::new(pool)
-        .get_bot_entity_access(bot_id, &document_id.to_string(), EntityType::Document)
+        .get_team_entity_access(
+            bot_id,
+            team_id,
+            &document_id.to_string(),
+            EntityType::Document,
+        )
+        .await?;
+
+    assert_eq!(access, Some(AccessLevel::Comment));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_item_access_rejects_another_team(pool: PgPool) -> anyhow::Result<()> {
+    let owning_team_id = Uuid::new_v4();
+    let other_team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let document_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, owning_team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(owning_team_id)).await?;
+    insert_pg_bot_entity_access(
+        &pool,
+        document_id,
+        "document",
+        &owning_team_id.to_string(),
+        "team",
+        AccessLevel::Owner,
+    )
+    .await?;
+
+    let access = PgAccessRepository::new(pool)
+        .get_team_entity_access(
+            bot_id,
+            other_team_id,
+            &document_id.to_string(),
+            EntityType::Document,
+        )
         .await?;
 
     assert_eq!(access, None);
@@ -675,25 +730,13 @@ async fn pg_bot_ungranted_document_returns_none(pool: PgPool) -> anyhow::Result<
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_email_thread_receives_view_from_containing_project(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn team_thread_access_does_not_inherit_inbox_ownership(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let channel_id = Uuid::new_v4();
-    let project_id = Uuid::new_v4();
     let link_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();
-    insert_pg_bot_user(&pool).await?;
-    insert_pg_bot(&pool, bot_id, Some(PG_BOT_OWNER), None).await?;
-    insert_pg_bot_channel(&pool, channel_id, "private").await?;
-    insert_pg_bot_participant(&pool, channel_id, bot_id, "member").await?;
-    sqlx::query!(
-        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'PG Bot Project', $2)"#,
-        project_id.to_string(),
-        PG_BOT_OWNER,
-    )
-    .execute(&pool)
-    .await?;
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
     sqlx::query!(
         r#"
         INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
@@ -705,83 +748,181 @@ async fn pg_bot_email_thread_receives_view_from_containing_project(
     .execute(&pool)
     .await?;
     sqlx::query!(
-        "INSERT INTO email_threads (id, link_id, project_id) VALUES ($1, $2, $3)",
+        "INSERT INTO email_threads (id, link_id) VALUES ($1, $2)",
         thread_id,
         link_id,
-        project_id.to_string(),
     )
     .execute(&pool)
     .await?;
-    insert_pg_bot_entity_access(
-        &pool,
-        project_id,
-        "project",
-        &channel_id.to_string(),
-        "channel",
-        AccessLevel::Owner,
+
+    let access = PgAccessRepository::new(pool)
+        .get_team_entity_access(
+            bot_id,
+            team_id,
+            &thread_id.to_string(),
+            EntityType::EmailThread,
+        )
+        .await?;
+
+    assert_eq!(access, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_channel_role_uses_scoped_channel_rules(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let team_channel_id = Uuid::new_v4();
+    let public_channel_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_bot_channel(&pool, team_channel_id, "team", Some(team_id)).await?;
+    insert_pg_bot_channel(&pool, public_channel_id, "public", None).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    assert_eq!(
+        repo.get_team_channel_role(&team_channel_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::ViewOnly,
+    );
+    assert_eq!(
+        repo.get_team_channel_role(&public_channel_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::NoAccess,
+    );
+
+    insert_pg_bot_participant(&repo.pool, public_channel_id, bot_id, "admin").await?;
+    assert_eq!(
+        repo.get_team_channel_role(&public_channel_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::Role(ParticipantRole::Admin),
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_foreign_entity_access_uses_only_team_and_bot_pairs(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let team_entity_id = Uuid::new_v4();
+    insert_foreign_entity(&repo.pool, team_entity_id, &team_id.to_string(), "team").await?;
+    let bot_entity_id = Uuid::new_v4();
+    insert_foreign_entity(&repo.pool, bot_entity_id, bot_principal.as_ref(), "user").await?;
+    let wrong_namespace_id = Uuid::new_v4();
+    insert_foreign_entity(
+        &repo.pool,
+        wrong_namespace_id,
+        bot_principal.as_ref(),
+        "team",
     )
     .await?;
 
-    let access = PgAccessRepository::new(pool)
-        .get_bot_entity_access(bot_id, &thread_id.to_string(), EntityType::EmailThread)
-        .await?;
-
-    assert_eq!(access, Some(AccessLevel::View));
+    for entity_id in [team_entity_id, bot_entity_id] {
+        assert!(
+            repo.has_team_foreign_entity_access(&entity_id.to_string(), team_id, bot_id)
+                .await?
+        );
+    }
+    assert!(
+        !repo
+            .has_team_foreign_entity_access(&wrong_namespace_id.to_string(), team_id, bot_id)
+            .await?
+    );
+    assert!(
+        !repo
+            .has_team_foreign_entity_access(&team_entity_id.to_string(), Uuid::new_v4(), bot_id,)
+            .await?
+    );
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_channel_role_requires_explicit_canonical_participation(
-    pool: PgPool,
-) -> anyhow::Result<()> {
-    let participating_bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let other_bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let channel_id = Uuid::new_v4();
-    insert_pg_bot(&pool, participating_bot_id, Some(PG_BOT_OWNER), None).await?;
-    insert_pg_bot(&pool, other_bot_id, Some(PG_BOT_OWNER), None).await?;
-    insert_pg_bot_channel(&pool, channel_id, "public").await?;
-    insert_pg_bot_participant(&pool, channel_id, participating_bot_id, "admin").await?;
+async fn team_crm_access_is_view_only_for_visible_owned_rows(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, team_id).await?;
+    let visible_company = insert_crm_company(&pool, &team_id.to_string(), false).await?;
+    let hidden_company = insert_crm_company(&pool, &team_id.to_string(), true).await?;
+    let visible_contact = insert_crm_contact(&pool, visible_company, false).await?;
+    let hidden_contact = insert_crm_contact(&pool, visible_company, true).await?;
     let repo = PgAccessRepository::new(pool);
-
-    let participating_role = repo
-        .get_bot_channel_role(&channel_id, participating_bot_id)
-        .await?;
-    let non_participating_role = repo.get_bot_channel_role(&channel_id, other_bot_id).await?;
+    let expected = CrmEntityAccess {
+        access_level: AccessLevel::View,
+        team_id,
+        team_role: TeamRole::Member,
+    };
 
     assert_eq!(
-        participating_role,
-        ChannelRoleResult::Role(ParticipantRole::Admin)
+        repo.get_team_crm_company_access(&visible_company.to_string(), team_id)
+            .await?,
+        Some(expected),
     );
-    assert_eq!(non_participating_role, ChannelRoleResult::NoAccess);
+    assert_eq!(
+        repo.get_team_crm_company_access(&hidden_company.to_string(), team_id)
+            .await?,
+        None,
+    );
+    assert_eq!(
+        repo.get_team_crm_contact_access(&visible_contact.to_string(), team_id)
+            .await?,
+        Some(expected),
+    );
+    assert_eq!(
+        repo.get_team_crm_contact_access(&hidden_contact.to_string(), team_id)
+            .await?,
+        None,
+    );
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_entity_access_rejects_malformed_uuid(pool: PgPool) -> anyhow::Result<()> {
+async fn team_scoped_repository_methods_reject_malformed_ids(pool: PgPool) -> anyhow::Result<()> {
+    let repo = PgAccessRepository::new(pool);
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let error = PgAccessRepository::new(pool)
-        .get_bot_entity_access(bot_id, "not-a-uuid", EntityType::Document)
-        .await
-        .expect_err("malformed entity ID should be rejected");
+    let team_id = Uuid::new_v4();
 
     assert!(matches!(
-        error,
-        AccessError::BadRequest("Invalid entity ID format")
+        repo.get_team_entity_access(bot_id, team_id, "bad", EntityType::Document)
+            .await,
+        Err(AccessError::BadRequest("Invalid entity ID format"))
+    ));
+    assert!(matches!(
+        repo.has_team_foreign_entity_access("bad", team_id, bot_id)
+            .await,
+        Err(AccessError::BadRequest("Invalid foreign entity ID format"))
+    ));
+    assert!(matches!(
+        repo.get_team_crm_company_access("bad", team_id).await,
+        Err(AccessError::BadRequest("Invalid CRM company ID format"))
+    ));
+    assert!(matches!(
+        repo.get_team_crm_contact_access("bad", team_id).await,
+        Err(AccessError::BadRequest("Invalid CRM contact ID format"))
     ));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pg_bot_entity_access_rejects_unsupported_entity_type(pool: PgPool) -> anyhow::Result<()> {
-    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+async fn team_item_access_rejects_unsupported_entity_type(pool: PgPool) -> anyhow::Result<()> {
     let error = PgAccessRepository::new(pool)
-        .get_bot_entity_access(bot_id, &Uuid::new_v4().to_string(), EntityType::CrmCompany)
+        .get_team_entity_access(
+            BotId::new_from_uuid(Uuid::new_v4()),
+            Uuid::new_v4(),
+            &Uuid::new_v4().to_string(),
+            EntityType::CrmCompany,
+        )
         .await
-        .expect_err("unsupported bot entity type should be rejected");
+        .expect_err("unsupported team item type should be rejected");
 
     assert!(matches!(
         error,
-        AccessError::BadRequest("Unsupported entity type for bot access")
+        AccessError::BadRequest("Unsupported entity type for team item access")
     ));
     Ok(())
 }

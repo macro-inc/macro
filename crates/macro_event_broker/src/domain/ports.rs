@@ -34,6 +34,15 @@ pub trait EventPublisher: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;
 }
 
+/// Outbound port for spawning the background task that performs an event publish.
+pub trait Spawner: Send + Sync + 'static {
+    /// Spawns `future` onto the async runtime and returns a handle to the task.
+    fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static;
+}
+
 /// A collection of [`MacroEvent`] types that can decode a broker message.
 pub trait MacroEventCollection: Sized {
     /// Decodes an event from the supplied broker message.

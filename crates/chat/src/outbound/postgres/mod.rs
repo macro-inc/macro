@@ -46,6 +46,24 @@ impl PgChatRepo {
         queries::get_messages::get_messages(&self.pool, chat_id).await
     }
 
+    async fn persist_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        content: &ChatMessageContent,
+        bump_chat_recency: bool,
+    ) -> Result<()> {
+        queries::update_message_content::update_message_content(
+            &self.pool,
+            chat_id,
+            message_id,
+            content,
+            bump_chat_recency,
+        )
+        .await
+        .map_err(to_chat_err)
+    }
+
     /// Store a resolved message without going through the trait.
     pub async fn store_resolved_message_static(
         &self,
@@ -306,14 +324,8 @@ impl ChatRepo for PgChatRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn patch_message(&self, chat_id: &str, args: PatchChatMessageArgs) -> Result<()> {
-        queries::update_message_content::update_message_content(
-            &self.pool,
-            chat_id,
-            &args.message_id,
-            &args.content,
-        )
-        .await
-        .map_err(to_chat_err)
+        self.persist_message_content(chat_id, &args.message_id, &args.content, true)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -334,11 +346,19 @@ impl ChatRepo for PgChatRepo {
         message_id: &str,
         content: &ChatMessageContent,
     ) -> Result<()> {
-        queries::update_message_content::update_message_content(
-            &self.pool, chat_id, message_id, content,
-        )
-        .await
-        .map_err(to_chat_err)
+        self.persist_message_content(chat_id, message_id, content, true)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, content))]
+    async fn update_interim_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        content: &ChatMessageContent,
+    ) -> Result<()> {
+        self.persist_message_content(chat_id, message_id, content, false)
+            .await
     }
 
     #[tracing::instrument(err, skip(self, parts))]
@@ -365,7 +385,7 @@ impl MessageRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, message_id: &str) -> Result<()> {
+    async fn delete(&self, message_id: &str) -> Result<String> {
         queries::delete_message::delete_message(&self.pool, message_id)
             .await
             .map_err(to_chat_err)
@@ -396,23 +416,14 @@ impl MessageRepo for PgChatRepo {
         message_id: &str,
         content: &ChatMessageContent,
     ) -> Result<()> {
-        queries::update_message_content::update_message_content(
-            &self.pool, chat_id, message_id, content,
-        )
-        .await
-        .map_err(to_chat_err)
+        self.persist_message_content(chat_id, message_id, content, true)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn patch_message(&self, chat_id: &str, args: PatchChatMessageArgs) -> Result<()> {
-        queries::update_message_content::update_message_content(
-            &self.pool,
-            chat_id,
-            &args.message_id,
-            &args.content,
-        )
-        .await
-        .map_err(to_chat_err)
+        self.persist_message_content(chat_id, &args.message_id, &args.content, true)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]

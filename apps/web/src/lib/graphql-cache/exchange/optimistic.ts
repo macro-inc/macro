@@ -210,10 +210,9 @@ export function prependUnique(entityKey: string): LinkDiff {
   return { kind: 'prependUnique', entityKey };
 }
 
-/** Compiles a generated graph selection and list diff into a durable update. */
-export function update<TItem extends object>(
+function compileUpdate<TItem extends object>(
   selection: ListSelection<TItem>,
-  operation: LinkDiff
+  operation: OptimisticLinkPatchWire['operation']
 ): OptimisticUpdate {
   return {
     query: stringifyDocument(selection.document),
@@ -222,6 +221,14 @@ export function update<TItem extends object>(
     path: [...selection.path],
     operation,
   } as OptimisticUpdate;
+}
+
+/** Compiles a generated graph selection and list diff into a durable update. */
+export function update<TItem extends object>(
+  selection: ListSelection<TItem>,
+  operation: LinkDiff
+): OptimisticUpdate {
+  return compileUpdate(selection, operation);
 }
 
 /**

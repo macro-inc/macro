@@ -33,6 +33,7 @@ import {
   isPreviewControllerContent,
   previewControllerWidthForContent,
 } from './previewController';
+import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
 
@@ -652,7 +653,7 @@ export function createSplitLayout(
   const isExcluded = (split: SplitState) => exclusionFilter?.(split) ?? false;
 
   const canAppendSplit = createMemo(
-    () => resizeContext()?.canFit({ minSize: 400 }) ?? true
+    () => resizeContext()?.canFit({ minSize: DEFAULT_SPLIT_MIN_WIDTH }) ?? true
   );
 
   const [splitNamesById, setSplitNamesById] = createStore<{
@@ -869,6 +870,7 @@ export function createSplitLayout(
       if (!prev) return;
 
       reattach(split, prev, undefined, 'history-back');
+      resetPreviewMode(id);
     });
   }
 
@@ -886,6 +888,7 @@ export function createSplitLayout(
       if (!next) return;
 
       reattach(split, next, undefined, 'history-forward');
+      resetPreviewMode(id);
     });
   }
 

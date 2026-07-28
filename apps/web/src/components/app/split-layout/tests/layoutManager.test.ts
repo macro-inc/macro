@@ -575,6 +575,51 @@ describe('layoutManager', () => {
       });
     });
 
+    it('resets the viewer when the controller navigates backward or forward', () => {
+      createRoot((dispose) => {
+        const { manager, controllerId } = setup();
+        const controller = manager.getSplit(controllerId)!;
+        controller.replace({
+          next: { type: 'component', id: 'channels' },
+        });
+        manager.engagePreviewMode(controllerId);
+        const viewerId = manager.viewerOf(controllerId)!;
+
+        manager.openWithSplit(
+          { type: 'md', id: 'doc-1' },
+          { referredFrom: null, handle: controller }
+        );
+        controller.goBack();
+
+        expect(controller.content()).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+        expect(manager.getSplit(viewerId)?.content()).toMatchObject({
+          type: 'component',
+          id: 'preview-empty',
+        });
+
+        manager.openWithSplit(
+          { type: 'md', id: 'doc-2' },
+          { referredFrom: null, handle: controller }
+        );
+        controller.goForward();
+
+        expect(controller.content()).toMatchObject({
+          type: 'component',
+          id: 'channels',
+        });
+        expect(manager.getSplit(viewerId)?.content()).toMatchObject({
+          type: 'component',
+          id: 'preview-empty',
+        });
+        expect(manager.viewerOf(controllerId)).toBe(viewerId);
+
+        dispose();
+      });
+    });
+
     it('reset is a no-op without a viewer or when already on the placeholder', () => {
       createRoot((dispose) => {
         const { manager, controllerId } = setup();
@@ -605,7 +650,7 @@ describe('layoutManager', () => {
 
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.previewControllerWidth(controllerId)).toBe(1050);
+        expect(manager.previewControllerWidth(controllerId)).toBe(800);
 
         dispose();
       });

@@ -127,17 +127,18 @@ pub enum GraphqlPropertyTargetEntityType {
     User,
 }
 
-impl From<GraphqlPropertyTargetEntityType> for model_entity::EntityType {
-    fn from(value: GraphqlPropertyTargetEntityType) -> Self {
-        match value {
-            GraphqlPropertyTargetEntityType::CallRecord => Self::Call,
-            GraphqlPropertyTargetEntityType::Channel => Self::Channel,
-            GraphqlPropertyTargetEntityType::Chat => Self::Chat,
-            GraphqlPropertyTargetEntityType::Company => Self::CrmCompany,
-            GraphqlPropertyTargetEntityType::Document => Self::Document,
-            GraphqlPropertyTargetEntityType::Project => Self::Project,
-            GraphqlPropertyTargetEntityType::Thread => Self::EmailThread,
-            GraphqlPropertyTargetEntityType::User => Self::User,
+impl GraphqlPropertyTargetEntityType {
+    /// Convert this GraphQL target type into the canonical entity model.
+    pub fn into_model(self) -> model_entity::EntityType {
+        match self {
+            Self::CallRecord => model_entity::EntityType::Call,
+            Self::Channel => model_entity::EntityType::Channel,
+            Self::Chat => model_entity::EntityType::Chat,
+            Self::Company => model_entity::EntityType::CrmCompany,
+            Self::Document => model_entity::EntityType::Document,
+            Self::Project => model_entity::EntityType::Project,
+            Self::Thread => model_entity::EntityType::EmailThread,
+            Self::User => model_entity::EntityType::User,
         }
     }
 }
@@ -170,7 +171,7 @@ impl GraphqlEntityReferenceInput {
     /// Convert the GraphQL reference into its properties-domain model.
     fn try_into_model(self) -> async_graphql::Result<EntityReference> {
         Ok(EntityReference {
-            entity_type: self.entity_type.into(),
+            entity_type: self.entity_type.into_model(),
             entity_id: self.entity_id,
             specific_message_id: self
                 .specific_message_id
@@ -267,7 +268,7 @@ where
 
         let property = writer
             .set_entity_property(
-                input.entity_type.into(),
+                input.entity_type.into_model(),
                 input.entity_id,
                 property_definition_id,
                 value,
@@ -275,7 +276,7 @@ where
             .await
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
-        Ok(property.into())
+        Ok(GraphqlProperty::new(property))
     }
 }
 

@@ -281,6 +281,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return await request<string[]>('graphql_cache_invalidate', { keys });
     },
 
+    async deleteRecords(keys: string[]): Promise<string[]> {
+      await ready;
+      return await request<string[]>('graphql_cache_delete_records', { keys });
+    },
+
     async teardown(opKey: number): Promise<void> {
       await ready;
       await request('graphql_cache_teardown', { opId: opId(opKey) });

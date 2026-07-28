@@ -40,6 +40,7 @@ import {
   loadRestorablePreviewLayout,
   PREVIEW_QUERY_PARAM,
 } from './previewPersistence';
+import { splitMinWidthForContent } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
 
 type SplitLayoutContainerProps = {
@@ -134,7 +135,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                       <Suspense>
                         <Resize.Panel
                           id={id}
-                          minSize={400}
+                          minSize={splitMinWidthForContent(handle().content())}
                           // Automatic redistribution targets an engaged
                           // Controller at its configured preferred width.
                           // This is not a hard max: the gutter can still be

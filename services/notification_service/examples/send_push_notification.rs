@@ -27,43 +27,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn message_attributes(collapse_key: &str) -> Option<HashMap<String, MessageAttributeValue>> {
-    Some(HashMap::from([
-        (
-            "AWS.SNS.MOBILE.APNS.TOPIC".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value("com.macro.app.prod") // SAFETY: this is not a secret
-                .build()
-                .unwrap(),
-        ),
-        (
-            "AWS.SNS.MOBILE.APNS.PUSH_TYPE".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value("alert")
-                .build()
-                .unwrap(),
-        ),
-        (
-            "AWS.SNS.MOBILE.APNS.PRIORITY".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value("5") // 5 is normal, 10 is high
-                .build()
-                .unwrap(),
-        ),
-        (
-            "AWS.SNS.MOBILE.APNS.COLLAPSE_ID".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value(collapse_key)
-                .build()
-                .unwrap(),
-        ),
-    ]))
-}
-
 async fn send_first(
     sns_client: &sns_client::SNS,
     endpoint_arn: &str,

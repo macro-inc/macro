@@ -1,0 +1,89 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
+name: SDK Check
+'on':
+  pull_request:
+    branches:
+    - main
+    paths:
+    - packages/sdk/**
+    - crates/**/*.rs
+    - Cargo.toml
+    - Cargo.lock
+    - apps/web/scripts/generate-api-schema.ts
+    - apps/web/scripts/services.ts
+    - '.github/workflows/sdk-check.yml'
+jobs:
+  check-sdk:
+    name: SDK Generated Code Check
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Prereqs
+      uses: './.github/actions/setup-reqs-web'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Regenerate SDK code
+      run: just update-generated
+      working-directory: packages/sdk
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Verify generated code is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- packages/sdk)" ]; then
+          echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
+          git status --porcelain -- packages/sdk
+          git diff -- packages/sdk | head -200
+          exit 1
+        fi
+    - name: Typecheck SDK
+      run: bun run check
+      working-directory: packages/sdk
+    - name: Check endpoint coverage
+      run: bun run coverage
+      working-directory: packages/sdk
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-check
+  cancel-in-progress: true

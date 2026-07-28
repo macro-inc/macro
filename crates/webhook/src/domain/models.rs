@@ -468,6 +468,14 @@ impl From<Webhook> for CreateWebhookResponse {
     }
 }
 
+/// Webhooks visible to the caller across their personal and team workspaces.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ListWebhooksResponse {
+    /// The caller's webhooks, newest first. Signing secrets are omitted.
+    pub webhooks: Vec<Webhook>,
+}
+
 /// Sanitized result of validating a webhook endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -480,6 +488,19 @@ pub struct ValidateWebhookResponse {
     pub response_status: Option<u16>,
     /// Sanitized message explaining validation failure.
     pub message: Option<String>,
+}
+
+/// Body of the `webhook.validation.test` delivery sent when validating an
+/// endpoint. Not part of the `WebhookEvent` entity-event union.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct WebhookValidationTestEvent {
+    /// Event id, with an `evt_` prefix.
+    pub id: String,
+    /// Event name; always `webhook.validation.test`.
+    pub event: String,
+    /// Webhook being validated.
+    pub webhook_id: WebhookId,
 }
 
 /// Sanitized result returned by the validation client port.

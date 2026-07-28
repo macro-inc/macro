@@ -21,6 +21,7 @@ import type {
 } from '../protocol';
 
 export interface CacheEngine {
+  boundIdentity(): Promise<string | null>;
   readQuery(
     opId: string | undefined,
     query: string,
@@ -83,6 +84,7 @@ export interface CacheEngine {
     leaseGeneration: string
   ): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
+  deleteKeys(keys: string[]): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
   /** Close the IndexedDB connection; call before destroyCache. */

@@ -117,7 +117,8 @@ where
         )
         .route(
             "/definitions/{definition_id}",
-            delete(definitions::delete_property_definition::<S, A, Auth>),
+            get(definitions::get_property_definition::<S, A, Auth>)
+                .delete(definitions::delete_property_definition::<S, A, Auth>),
         )
         // Property Options Management - requires authentication
         .route(

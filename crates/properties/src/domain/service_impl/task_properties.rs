@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use entity_access::domain::models::EntityAccessAuth;
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
@@ -16,11 +17,12 @@ use crate::domain::model::{EditReceipt, PropertyAccessReceiptExt, TaskAssignedNo
 use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 use crate::domain::service_impl::PropertiesServiceImpl;
 
-impl<R, P, N> PropertiesServiceImpl<R, P, N>
+impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
+    B: MacroEventBroker,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
     /// Require edit access to every referenced task before linking: linking

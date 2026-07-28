@@ -12,7 +12,7 @@ use axum::{
     http::request::Parts,
 };
 
-use super::ExtractorError;
+use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -21,8 +21,8 @@ use crate::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 #[derive(Debug, serde::Deserialize)]
 struct ChannelAccessParams {
@@ -56,26 +56,43 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
         let authorization =
-            OptionalMacroAuthorizationExtractor::<Auth, UserOrInternalService>::from_request_parts(
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
                 parts, state,
             )
             .await
             .map_err(ExtractorError::from)?;
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(UserOrInternalServiceAuthorization::is_internal);
-        let (macro_user_id, user_context) = authorization
-            .authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
-            .unwrap_or_default();
 
         let Path(ChannelAccessParams { channel_id }) = parts
             .extract::<Path<ChannelAccessParams>>()
             .await
             .map_err(|_| ExtractorError::BadRequest("missing channel_id path parameter"))?;
+
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.authorization.as_ref()
+        {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &channel_id,
+                EntityType::Channel,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let (macro_user_id, user_context) = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
+            .unwrap_or_default();
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {

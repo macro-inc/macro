@@ -203,7 +203,7 @@ const deleteChatHandler = new DeleteChatHandler(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'delete_chat_handler=info',
+      RUST_LOG: 'delete_chat_handler=info,macro_http_request=info',
     },
     vpc: coparse_api_vpc,
     tags,
@@ -322,7 +322,7 @@ const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
   REDIS_URI: pulumi.interpolate`redis://${MACRO_CACHE}`,
   ENVIRONMENT: stack,
-  RUST_LOG: 'docx_unzip_handler=info',
+  RUST_LOG: 'docx_unzip_handler=info,macro_http_request=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
   DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.interpolate`${docxUploadBucketName}`,
   WEB_SOCKET_RESPONSE_LAMBDA: pulumi.interpolate`${jobUpdateHandlerLambdaName}`,
@@ -351,7 +351,8 @@ const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
   SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKeyValue}`,
   LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
   SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
-  RUST_LOG: 'document_upload_finalizer_handler=info,documents=info',
+  RUST_LOG:
+    'document_upload_finalizer_handler=info,documents=info,macro_http_request=info',
 };
 
 const documentUploadFinalizer = new DocumentUploadFinalizerLambda(

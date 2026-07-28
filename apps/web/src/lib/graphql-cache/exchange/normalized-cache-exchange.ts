@@ -42,6 +42,7 @@ import {
   Kind,
   type OperationDefinitionNode,
   parse,
+  visit,
 } from 'graphql';
 import {
   empty,
@@ -168,6 +169,115 @@ function cacheResult(
     stale,
     hasNext: false,
   };
+}
+
+const entityCacheTypeByApiType: Readonly<Record<string, string>> = {
+  DOCUMENT: 'GraphqlSoupDocument',
+  CHAT: 'GraphqlSoupChat',
+  PROJECT: 'GraphqlSoupProject',
+  EMAIL_THREAD: 'GraphqlSoupEmailThread',
+  CHANNEL: 'GraphqlSoupChannel',
+  CHANNEL_MESSAGE: 'GraphqlSoupChannelMessage',
+  CALL: 'GraphqlSoupCall',
+  CRM_COMPANY: 'GraphqlSoupCrmCompany',
+  FOREIGN_ENTITY: 'GraphqlSoupForeignEntity',
+};
+
+type MutationResponseKeys = {
+  affectedEntities: Set<string>;
+  entityType: Set<string>;
+  id: Set<string>;
+};
+
+function mutationResponseKeys(op: Operation): MutationResponseKeys {
+  const keys: MutationResponseKeys = {
+    affectedEntities: new Set(),
+    entityType: new Set(),
+    id: new Set(),
+  };
+  visit(op.query, {
+    Field(node) {
+      const name = node.name.value as keyof MutationResponseKeys;
+      if (name in keys) keys[name].add(node.alias?.value ?? node.name.value);
+    },
+  });
+  return keys;
+}
+
+function cacheKey(apiType: unknown, entityId: unknown): string | undefined {
+  if (typeof entityId !== 'string' || typeof apiType !== 'string') return;
+  const cacheType = entityCacheTypeByApiType[apiType];
+  return cacheType ? `${cacheType}:${entityId}` : undefined;
+}
+
+/** Collect requested refs from mutation variables, independent of selections. */
+function mutationInputCacheKeys(variables: unknown): Set<string> {
+  const keys = new Set<string>();
+  const seen = new Set<object>();
+  const pending: unknown[] = [variables];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (value === null || typeof value !== 'object' || seen.has(value))
+      continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      pending.push(...value);
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    const key = cacheKey(record.type, record.id);
+    if (key) keys.add(key);
+    if (typeof record.projectId === 'string') {
+      keys.add(`GraphqlSoupProject:${record.projectId}`);
+    }
+    pending.push(...Object.values(record));
+  }
+  return keys;
+}
+
+/** Collect normalized keys from mutation inputs and selected affected refs. */
+function mutationCacheKeys(data: unknown, op: Operation): string[] {
+  const responseKeys = mutationResponseKeys(op);
+  const keys = mutationInputCacheKeys(op.variables);
+  const seen = new Set<object>();
+  const pending: unknown[] = [data];
+
+  const addRefs = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) addRefs(item);
+      return;
+    }
+    if (value === null || typeof value !== 'object') return;
+    const ref = value as Record<string, unknown>;
+    const entityId = [...responseKeys.id]
+      .map((key) => ref[key])
+      .find((candidate) => typeof candidate === 'string');
+    const apiType = [...responseKeys.entityType]
+      .map((key) => ref[key])
+      .find((candidate) => typeof candidate === 'string');
+    const key = cacheKey(apiType, entityId);
+    if (key) keys.add(key);
+  };
+
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (value === null || typeof value !== 'object' || seen.has(value))
+      continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      pending.push(...value);
+      continue;
+    }
+    for (const [field, child] of Object.entries(value)) {
+      if (responseKeys.affectedEntities.has(field)) {
+        addRefs(child);
+      } else {
+        pending.push(child);
+      }
+    }
+  }
+
+  return [...keys];
 }
 
 function queuedMutationResult(
@@ -545,6 +655,8 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
+                const keys = mutationCacheKeys(result.data, op);
+                if (keys.length > 0) await host.deleteRecords(keys);
                 revalidateAfterCommit(committed.revalidations ?? [], op);
                 disposition = 'committed';
               }
@@ -580,6 +692,8 @@ export function normalizedCacheExchange(
                 variables: op.variables as Record<string, unknown> | undefined,
                 data: result.data,
               });
+              const keys = mutationCacheKeys(result.data, op);
+              if (keys.length > 0) await host.deleteRecords(keys);
             } catch (error) {
               options.onCacheError?.(error, op);
             }

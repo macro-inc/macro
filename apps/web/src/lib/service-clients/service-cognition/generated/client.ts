@@ -1650,11 +1650,17 @@ export const deleteMcpServer = async (
 };
 
 /**
- * @summary OAuth callback endpoint — receives code and state from the authorization server.
+ * @summary OAuth callback endpoint — receives code and state, or an error, from the
+authorization server.
  */
 export type mcpAuthCallbackResponse200 = {
   data: void;
   status: 200;
+};
+
+export type mcpAuthCallbackResponse400 = {
+  data: ErrorResponse;
+  status: 400;
 };
 
 export type mcpAuthCallbackResponse500 = {
@@ -1665,7 +1671,10 @@ export type mcpAuthCallbackResponse500 = {
 export type mcpAuthCallbackResponseSuccess = mcpAuthCallbackResponse200 & {
   headers: Headers;
 };
-export type mcpAuthCallbackResponseError = mcpAuthCallbackResponse500 & {
+export type mcpAuthCallbackResponseError = (
+  | mcpAuthCallbackResponse400
+  | mcpAuthCallbackResponse500
+) & {
   headers: Headers;
 };
 
@@ -1673,7 +1682,7 @@ export type mcpAuthCallbackResponse =
   | mcpAuthCallbackResponseSuccess
   | mcpAuthCallbackResponseError;
 
-export const getMcpAuthCallbackUrl = (params: McpAuthCallbackParams) => {
+export const getMcpAuthCallbackUrl = (params?: McpAuthCallbackParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1690,7 +1699,7 @@ export const getMcpAuthCallbackUrl = (params: McpAuthCallbackParams) => {
 };
 
 export const mcpAuthCallback = async (
-  params: McpAuthCallbackParams,
+  params?: McpAuthCallbackParams,
   options?: RequestInit
 ): Promise<mcpAuthCallbackResponse> => {
   const res = await fetch(getMcpAuthCallbackUrl(params), {

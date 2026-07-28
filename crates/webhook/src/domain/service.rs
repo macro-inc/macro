@@ -6,8 +6,8 @@ use super::{
         WebhookValidatedMetadata,
     },
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
-        WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
+        CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,
+        Webhook, WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
         WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
@@ -298,6 +298,23 @@ where
         Ok(team_workspace_id.as_deref() == Some(workspace_id))
     }
 
+    /// The workspaces the caller owns: their personal workspace, plus their team's if any.
+    async fn caller_workspace_ids(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<String>, WebhookError> {
+        let mut workspace_ids = vec![caller.as_ref().to_string()];
+        if let Some(team_workspace_id) = self
+            .repo
+            .get_user_team_workspace_id(caller)
+            .await
+            .map_err(|err| WebhookError::Repo(err.into()))?
+        {
+            workspace_ids.push(team_workspace_id);
+        }
+        Ok(workspace_ids)
+    }
+
     async fn load_authorized_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -371,6 +388,28 @@ where
         ));
 
         Ok(webhook)
+    }
+
+    async fn get_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> Result<Webhook, WebhookError> {
+        self.load_authorized_webhook(caller, webhook_id).await
+    }
+
+    /// All webhooks they can access.
+    async fn list_webhooks(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<ListWebhooksResponse, WebhookError> {
+        let workspace_ids = self.caller_workspace_ids(caller).await?;
+        let webhooks = self
+            .repo
+            .list_webhooks_for_workspaces(workspace_ids)
+            .await
+            .map_err(|err| WebhookError::Repo(err.into()))?;
+        Ok(ListWebhooksResponse { webhooks })
     }
 
     async fn patch_webhook(

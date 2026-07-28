@@ -8,6 +8,7 @@ import {
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
 import {
+  DEV_MODE_ENV,
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
@@ -428,7 +429,10 @@ export function Account() {
         </SettingsSection>
       </Show>
 
-      <Show when={isNativeMobilePlatform()}>
+      {/* Account deletion ships on native mobile (App Store requirement) and
+          in dev builds, where deleting test users keeps flows like onboarding
+          re-runnable. */}
+      <Show when={isNativeMobilePlatform() || DEV_MODE_ENV}>
         <SettingsSection title="Danger zone">
           <SettingsCard>
             <SettingsRow

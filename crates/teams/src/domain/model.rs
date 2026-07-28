@@ -298,82 +298,11 @@ pub struct TeamCheckoutSessionRequest {
     pub team_plan: TeamPlan,
 }
 
-/// Email domains of generic (free / consumer) email providers.
-///
-/// Teams may not enable automatic domain joining for these domains — a
-/// match on e.g. `gmail.com` would auto-join complete strangers to the
-/// team. Entries must be lowercase and sorted (verified by test) so
-/// [`is_generic_email_domain`] can binary search.
-pub const GENERIC_EMAIL_DOMAINS: &[&str] = &[
-    "126.com",
-    "163.com",
-    "aol.com",
-    "att.net",
-    "bellsouth.net",
-    "btinternet.com",
-    "charter.net",
-    "comcast.net",
-    "cox.net",
-    "daum.net",
-    "duck.com",
-    "earthlink.net",
-    "fastmail.com",
-    "free.fr",
-    "gmail.com",
-    "gmx.com",
-    "gmx.de",
-    "gmx.net",
-    "googlemail.com",
-    "hey.com",
-    "hotmail.co.uk",
-    "hotmail.com",
-    "hotmail.fr",
-    "icloud.com",
-    "laposte.net",
-    "live.com",
-    "mac.com",
-    "mail.com",
-    "mail.ru",
-    "me.com",
-    "msn.com",
-    "naver.com",
-    "orange.fr",
-    "outlook.com",
-    "pm.me",
-    "proton.me",
-    "protonmail.com",
-    "qq.com",
-    "rediffmail.com",
-    "rocketmail.com",
-    "sbcglobal.net",
-    "seznam.cz",
-    "sina.com",
-    "sky.com",
-    "t-online.de",
-    "tuta.com",
-    "tutanota.com",
-    "verizon.net",
-    "wanadoo.fr",
-    "web.de",
-    "yahoo.co.in",
-    "yahoo.co.uk",
-    "yahoo.com",
-    "yahoo.fr",
-    "yandex.com",
-    "yandex.ru",
-    "ymail.com",
-    "zoho.com",
-];
-
-/// Returns true when the email domain belongs to a generic (free /
-/// consumer) email provider that may not be used for automatic team
-/// joining. Matching is case-insensitive.
-pub fn is_generic_email_domain(domain: &str) -> bool {
-    let domain = domain.to_ascii_lowercase();
-    GENERIC_EMAIL_DOMAINS
-        .binary_search(&domain.as_str())
-        .is_ok()
-}
+// Teams may not enable automatic domain joining for generic domains — a
+// match on e.g. `gmail.com` would auto-join complete strangers to the
+// team. The list lives in its own crate so lightweight consumers (the
+// onboarding flow's team suggestion) share the same judgment.
+pub use generic_email_domains::{GENERIC_EMAIL_DOMAINS, is_generic_email_domain};
 
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]

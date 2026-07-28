@@ -53,6 +53,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async invalidate(): Promise<string[]> {
       return [];
     },
+    async deleteRecords(): Promise<string[]> {
+      return [];
+    },
     async teardown(): Promise<void> {},
     async clear(): Promise<void> {},
     onOpsAffected() {

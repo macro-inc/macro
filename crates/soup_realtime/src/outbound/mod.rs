@@ -9,6 +9,3 @@ pub mod kafka_publisher;
 /// Independent Kafka consumer for recipient-targeted Soup messages.
 #[cfg(feature = "consumer")]
 pub mod soup_consumer;
-/// User-scoped Soup item reader adapter.
-#[cfg(feature = "outbound")]
-pub mod soup_item_reader;

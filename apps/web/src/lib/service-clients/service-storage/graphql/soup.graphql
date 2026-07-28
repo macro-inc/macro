@@ -6,19 +6,15 @@ query Soup($input: SoupInput!) {
 				...SoupItemFields
 			}
 			nextCursor
-			hasMore
 		}
 	}
 }
 
-fragment SoupItemFields on GraphqlSoupItem {
-				id
-				entityType
-				frecencyScore
-				entity {
-					__typename
+fragment SoupItemFields on GraphqlSoupEntity {
+	__typename
+	...SoupEntityCoreFields
+	frecencyScore
 					... on GraphqlSoupDocument {
-						id
 						documentName: name
 						ownerId
 						fileType
@@ -28,18 +24,16 @@ fragment SoupItemFields on GraphqlSoupItem {
 						viewedAt
 						deletedAt
 						subType {
-							kind
-							isCompleted
+							__typename
+							... on GraphqlTaskSubType {
+								isCompleted
+							}
 						}
 						properties {
 							...SoupPropertyFields
 						}
-						notifications {
-							...SoupNotificationFields
-						}
 					}
 					... on GraphqlSoupChat {
-						id
 						chatName: name
 						ownerId
 						projectId
@@ -51,12 +45,8 @@ fragment SoupItemFields on GraphqlSoupItem {
 						properties {
 							...SoupPropertyFields
 						}
-						notifications {
-							...SoupNotificationFields
-						}
 					}
 					... on GraphqlSoupProject {
-						id
 						projectName: name
 						ownerId
 						parentId
@@ -67,12 +57,8 @@ fragment SoupItemFields on GraphqlSoupItem {
 						properties {
 							...SoupPropertyFields
 						}
-						notifications {
-							...SoupNotificationFields
-						}
 					}
 					... on GraphqlSoupEmailThread {
-						id
 						providerId
 						ownerId
 						inboxVisible
@@ -119,9 +105,6 @@ fragment SoupItemFields on GraphqlSoupItem {
 						}
 						properties {
 							...SoupPropertyFields
-						}
-						notifications {
-							...SoupNotificationFields
 						}
 						latestContentMessage {
 							__typename
@@ -170,7 +153,6 @@ fragment SoupItemFields on GraphqlSoupItem {
 						}
 					}
 					... on GraphqlSoupChannel {
-						id
 						channelName: name
 						channelType
 						ownerId
@@ -194,12 +176,8 @@ fragment SoupItemFields on GraphqlSoupItem {
 						latestNonThreadMessage {
 							...SoupChannelMessageFields
 						}
-						notifications {
-							...SoupNotificationFields
-						}
 					}
-					... on GraphqlSoupChannelThread {
-						id
+					... on GraphqlSoupChannelMessage {
 						channelId
 						senderId
 						content
@@ -207,12 +185,8 @@ fragment SoupItemFields on GraphqlSoupItem {
 						updatedAt
 						effectiveUpdatedAt
 						replyCount
-						notifications {
-							...SoupNotificationFields
-						}
 					}
 					... on GraphqlSoupCall {
-						id
 						channelId
 						channelName
 						createdBy
@@ -232,12 +206,8 @@ fragment SoupItemFields on GraphqlSoupItem {
 						properties {
 							...SoupPropertyFields
 						}
-						notifications {
-							...SoupNotificationFields
-						}
 					}
 					... on GraphqlSoupCrmCompany {
-						id
 						crmTeamId: teamId
 						crmCompanyName: name
 						description
@@ -250,24 +220,26 @@ fragment SoupItemFields on GraphqlSoupItem {
 						properties {
 							...SoupPropertyFields
 						}
-						notifications {
-							...SoupNotificationFields
-						}
 					}
 					... on GraphqlSoupForeignEntity {
-						id
 						foreignEntityId
 						foreignEntitySource
 						storedForId
 						storedForAuthEntity
-						metadata
+						sourceMetadata
 						createdAt
 						updatedAt
-						notifications {
-							...SoupNotificationFields
-						}
 					}
-				}
+}
+
+fragment SoupEntityCoreFields on GraphqlSoupEntity {
+	id
+	entityType
+	displayName
+	isFavorited
+	notifications {
+		...SoupNotificationFields
+	}
 }
 
 fragment SoupPropertyFields on GraphqlProperty {
@@ -309,8 +281,9 @@ fragment SoupPropertyFields on GraphqlProperty {
 	}
 }
 
-fragment SoupChannelMessageFields on GraphqlSoupChannelMessage {
-	id
+fragment SoupChannelMessageFields on GraphqlSoupChannelMessagePreview {
+	messageId
+	channelId
 	threadId
 	senderId
 	content

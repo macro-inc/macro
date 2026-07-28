@@ -11,7 +11,9 @@ use tracing::Instrument as _;
 
 use crate::MessageWrapper;
 use crate::domain::models::{EventBrokerError, MacroEvent, TopicEvent};
-use crate::domain::ports::{EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection};
+use crate::domain::ports::{
+    EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection, Spawner,
+};
 
 const PUBLISH_TIMEOUT: Duration = Duration::from_secs(6);
 
@@ -58,28 +60,35 @@ where
 }
 
 /// Orchestrates serializing events and handing them to an [`EventPublisher`].
-pub struct MacroEventBrokerService<P: EventPublisher> {
+pub struct MacroEventBrokerService<P: EventPublisher, S: Spawner> {
     publisher: Arc<P>,
+    spawner: S,
 }
 
-impl<P: EventPublisher> Clone for MacroEventBrokerService<P> {
+impl<P, S> Clone for MacroEventBrokerService<P, S>
+where
+    P: EventPublisher,
+    S: Spawner + Clone,
+{
     fn clone(&self) -> Self {
         Self {
             publisher: Arc::clone(&self.publisher),
+            spawner: self.spawner.clone(),
         }
     }
 }
 
-impl<P: EventPublisher> MacroEventBrokerService<P> {
-    /// Create a new service backed by the given outbound publisher.
-    pub fn new(publisher: P) -> Self {
+impl<P: EventPublisher, S: Spawner> MacroEventBrokerService<P, S> {
+    /// Creates a new service backed by the given outbound publisher and task spawner.
+    pub fn new(publisher: P, spawner: S) -> Self {
         Self {
             publisher: Arc::new(publisher),
+            spawner,
         }
     }
 }
 
-impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
+impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService<P, S> {
     #[tracing::instrument(err, skip(self, event), fields(topic = event.topic(), key = %event.key()))]
     fn send_event<E: MacroEvent + ?Sized>(
         &self,
@@ -91,7 +100,7 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
         let publisher = Arc::clone(&self.publisher);
         let span = tracing::Span::current();
 
-        let handle = tokio::spawn(
+        let handle = self.spawner.spawn(
             async move {
                 tokio::time::timeout(
                     PUBLISH_TIMEOUT,

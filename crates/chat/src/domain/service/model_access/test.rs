@@ -2,7 +2,7 @@ use super::*;
 
 const HAIKU: &str = "anthropic/claude-haiku-4-5";
 const SONNET_5: &str = "anthropic/claude-sonnet-5";
-const OPUS: &str = "anthropic/claude-opus-4-8";
+const OPUS: &str = "anthropic/claude-opus-5";
 const OPUS_4_7: &str = "anthropic/claude-opus-4-7";
 const SONNET_4_6: &str = "anthropic/claude-sonnet-4-6";
 const GPT_5_5: &str = "openai/gpt-5.5";

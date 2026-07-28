@@ -22,6 +22,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
+graphql_permission = { path = "../graphql_permission" }
 item_filters = { path = "../item_filters" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
@@ -30,9 +31,15 @@ model_file_type = { path = "../model_file_type" }
 models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
+rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
+tokio = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+either = { workspace = true }
+models_properties = { path = "../models_properties" }

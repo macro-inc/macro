@@ -20,18 +20,15 @@ query GroupSoup($input: GroupedSoupInput!) {
         totalCount
         nextCursor
         items {
-          id
-          entity {
-            __typename
-            ... on GraphqlSoupDocument {
+          __typename
+          ... on GraphqlSoupDocument {
+            id
+            properties {
               id
-              properties {
-                id
-                propertyDefinitionId
-                value {
-                  __typename
-                  ... on GraphqlSelectOptionPropertyValue { optionIds }
-                }
+              propertyDefinitionId
+              value {
+                __typename
+                ... on GraphqlSelectOptionPropertyValue { optionIds }
               }
             }
           }
@@ -104,12 +101,9 @@ fn group_page() -> Json {
                         "totalCount": 1,
                         "nextCursor": "source-cursor",
                         "items": [{
+                            "__typename": "GraphqlSoupDocument",
                             "id": "task-1",
-                            "entity": {
-                                "__typename": "GraphqlSoupDocument",
-                                "id": "task-1",
-                                "properties": [property("in-progress")]
-                            }
+                            "properties": [property("in-progress")]
                         }]
                     },
                     {
@@ -209,13 +203,13 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
             patch(
                 "in-progress",
                 LinkOperation::Remove {
-                    entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
                 },
             ),
             patch(
                 "completed",
                 LinkOperation::PrependUnique {
-                    entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
                 },
             ),
         ];
@@ -286,13 +280,13 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
             patch(
                 "in-progress",
                 LinkOperation::Remove {
-                    entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
                 },
             ),
             patch(
                 "completed",
                 LinkOperation::PrependUnique {
-                    entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
                 },
             ),
         ];
@@ -317,12 +311,9 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
         // earlier optimistic field snapshot over it.
         let mut concurrent = group_page();
         concurrent["user"]["groupSoup"]["bins"][1]["items"] = json!([{
+            "__typename": "GraphqlSoupDocument",
             "id": "task-2",
-            "entity": {
-                "__typename": "GraphqlSoupDocument",
-                "id": "task-2",
-                "properties": []
-            }
+            "properties": []
         }]);
         engine
             .write_query(
@@ -369,13 +360,13 @@ fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
             patch(
                 "in-progress",
                 LinkOperation::Remove {
-                    entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
                 },
             ),
             patch(
                 "missing",
                 LinkOperation::PrependUnique {
-                    entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
                 },
             ),
         ];

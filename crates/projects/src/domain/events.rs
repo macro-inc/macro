@@ -135,9 +135,7 @@ pub enum ProjectTopicEvent {
 impl TopicEvent for ProjectTopicEvent {
     type Topic = MacroProjectsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroProjectsTopic`], keyed by the root project id.

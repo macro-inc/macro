@@ -26,6 +26,7 @@ mod code_check_infra;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cloud_storage_on_push;
+mod deploy_fusionauth_instance;
 mod deploy_preview;
 mod deploy_web_app;
 mod deploy_web_app_dev_push;
@@ -35,6 +36,7 @@ mod pulumi_preview_pr;
 mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
+mod sdk_check;
 mod steps;
 mod vars;
 mod web_app_check_main;
@@ -187,6 +189,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
+        slug: "deploy_fusionauth_instance",
+        file_name: "deploy_fusionauth_instance.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_fusionauth_instance::deploy_fusionauth_instance,
+                deploy_fusionauth_instance::patch,
+            )
+        },
+    },
+    WorkflowFile {
         slug: "deploy_preview",
         file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
@@ -260,6 +272,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "web_app_check_main",
         file_name: "web-app-check-main.yml",
         render_yaml: || render_gh_workflow(web_app_check_main::web_app_check_main)(),
+    },
+    WorkflowFile {
+        slug: "sdk_check",
+        file_name: "sdk-check.yml",
+        render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
     },
 ];
 

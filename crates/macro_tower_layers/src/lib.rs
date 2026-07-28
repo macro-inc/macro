@@ -56,9 +56,12 @@ impl CustomOnResponse {
     }
 }
 
+const HTTP_REQUEST_SPAN_TARGET: &str = "macro_http_request";
+
 /// Creates INFO-level HTTP server spans with safe OpenTelemetry attributes.
 ///
-/// Request and response headers are intentionally excluded.
+/// Request and response headers are intentionally excluded. Add
+/// `macro_http_request=info` to `RUST_LOG` when log events should include these span fields.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MakeHttpRequestSpan;
 
@@ -71,6 +74,7 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             .unwrap_or_default();
 
         tracing::info_span!(
+            target: HTTP_REQUEST_SPAN_TARGET,
             "http.request",
             otel.kind = "server",
             "http.request.method" = %request.method(),

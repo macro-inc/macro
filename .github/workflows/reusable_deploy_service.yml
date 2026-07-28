@@ -178,6 +178,7 @@ jobs:
         persist-credentials: 'false'
     - id: project-name
       name: Get project name
+      if: ${{ inputs.pulumi-stack-name == '' }}
       uses: ./.github/actions/get-project-name
       with:
         service-name: ${{ inputs.service-name }}

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cp.role::text AS \"role?\",\n            (\n                b.id IS NOT NULL\n                AND c.channel_type = 'team'\n                AND c.team_id = $3\n            ) AS \"is_matching_team_channel!\"\n        FROM comms_channels c\n        LEFT JOIN bots b\n          ON b.id = $4\n         AND b.team_id = $3\n         AND b.deleted_at IS NULL\n        LEFT JOIN comms_channel_participants cp\n          ON cp.channel_id = c.id\n         AND cp.user_id = $2\n         AND cp.left_at IS NULL\n         AND b.id IS NOT NULL\n        WHERE c.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_matching_team_channel!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "1f8d22042058b693766e401728e0fa42dabe7b791cbb2fcf1ee2f52e522f7d3c"
+}

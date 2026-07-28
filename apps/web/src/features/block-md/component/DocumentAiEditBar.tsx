@@ -1,4 +1,3 @@
-import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
@@ -43,11 +42,6 @@ export function DocumentAiEditBar(props: { documentId: string }) {
     requestAiEdit({
       documentId: props.documentId,
       prompt: value,
-      onOps: (ops) => {
-        const target = md.editor;
-        const mapping = md.mapping;
-        if (target && mapping) applyAiOps(target, mapping, ops);
-      },
     })
       .then((result) => {
         if (result === 'failed') toast.failure('AI edit failed');
@@ -120,13 +114,12 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             if (next && event.currentTarget.contains(next)) return;
             setFocused(false);
           }}
-          use:clickOutside={collapse}
           active={focused()}
           class="w-96 max-w-full rounded-xl"
           depth={2}
           solid
         >
-          <div class="flex flex-col gap-2 p-3">
+          <div class="flex flex-col gap-2 p-3" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
               <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center text-accent">
                 <AnimatedStarIcon triggerAnimation={focused()} />

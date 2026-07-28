@@ -3,9 +3,12 @@
 //! This is used to provide consistent behaviour with e.g. tracing configurations
 
 mod datadog_fmt;
+mod shutdown;
 
 #[cfg(test)]
 mod test;
+
+pub use shutdown::shutdown_signal;
 
 use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};

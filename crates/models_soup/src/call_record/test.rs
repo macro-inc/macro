@@ -1,7 +1,9 @@
 use super::*;
+use crate::item::SoupItem;
 use call::domain::models::{CallRecord, CallRecordParticipant};
-use chrono::Utc;
+use chrono::{DateTime, Duration, Utc};
 use item_filters::CallStatus;
+use models_pagination::{SimpleSortMethod, SortOn};
 use uuid::Uuid;
 
 fn record_with_participants(user_ids: &[&str]) -> CallRecord {
@@ -43,6 +45,45 @@ fn record_with_status(status: CallStatus, user_ids: &[&str]) -> CallRecord {
     let mut record = record_with_participants(user_ids);
     record.status = Some(status);
     record
+}
+
+fn assert_call_recency(item: &SoupItem, expected: DateTime<Utc>) {
+    assert_eq!(item.updated_at(), expected);
+
+    for sort_method in [
+        SimpleSortMethod::ViewedAt,
+        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::ViewedUpdated,
+    ] {
+        let mut sort_on = <SoupItem as SortOn<SimpleSortMethod>>::sort_on(sort_method);
+        assert_eq!(sort_on(item).last_val, expected, "sort: {sort_method:?}");
+    }
+}
+
+#[test]
+fn active_call_recency_uses_started_at() {
+    let record = record_with_participants(&["macro|a@test.com"]);
+    let started_at = record.started_at;
+    let item = SoupItem::Call(SoupCallRecord::from_record_for_user(
+        record,
+        "macro|a@test.com",
+    ));
+
+    assert_call_recency(&item, started_at);
+}
+
+#[test]
+fn finished_call_recency_uses_ended_at() {
+    let mut record = record_with_participants(&["macro|a@test.com"]);
+    let ended_at = record.started_at + Duration::minutes(30);
+    record.ended_at = Some(ended_at);
+    record.is_active = false;
+    let item = SoupItem::Call(SoupCallRecord::from_record_for_user(
+        record,
+        "macro|a@test.com",
+    ));
+
+    assert_call_recency(&item, ended_at);
 }
 
 #[test]

@@ -7,8 +7,8 @@ use std::sync::{
 use email::domain::models::EmailErr;
 use entity_access::domain::{
     models::{
-        AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission, EntityType,
-        RequiredPermission, UserTeamInfo, ViewAccessLevel,
+        AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
+        EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -63,6 +63,7 @@ impl EntityAccessService for TestAccessService {
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         _bot_id: BotId,
+        _scope: BotAccessScope,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

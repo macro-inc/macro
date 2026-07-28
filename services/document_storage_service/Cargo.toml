@@ -55,7 +55,12 @@ cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
 channels = { path = "../../crates/channels", features = [
+  "entity_mutation",
   "inbound",
+  "list",
+  "outbound",
+] }
+chat = { path = "../../crates/chat", default-features = false, features = [
   "outbound",
 ] }
 chrono = { workspace = true }
@@ -81,6 +86,7 @@ entity_access = { path = "../../crates/entity_access", features = [
   "schema",
 ] }
 entity_access_management = { path = "../../crates/entity_access_management" }
+entity_mutation = { path = "../../crates/entity_mutation" }
 favorites = { path = "../../crates/favorites", features = [
   "inbound",
   "postgres",
@@ -96,6 +102,7 @@ github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "sync",
 ] }
+graphql_soup = { path = "../../crates/graphql_soup" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
@@ -157,6 +164,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true }
+rootcause = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
 saved_views = { path = "../../crates/saved_views" }
 schemars = { workspace = true }
@@ -186,7 +194,8 @@ sync_service_hex = { path = "../../crates/sync_service", package = "sync_service
 system_properties = { path = "../../crates/system_properties" }
 task_dedup = { path = "../../crates/task_dedup" }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }

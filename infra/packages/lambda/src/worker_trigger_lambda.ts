@@ -34,7 +34,7 @@ export class WorkerTrigger extends pulumi.ComponentResource {
       CLUSTER: pulumi.interpolate`${clusterArn}`,
       SUBNETS: coparse_api_vpc.privateSubnetIds.join(','),
       ENVIRONMENT: stack,
-      RUST_LOG: 'worker_trigger=info',
+      RUST_LOG: 'worker_trigger=info,macro_http_request=info',
     };
 
     const ecsAccessPolicy = new aws.iam.Policy(

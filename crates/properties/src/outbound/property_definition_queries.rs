@@ -10,7 +10,7 @@ use models_properties::{DataType, EntityType, db};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::PropertyDefinitionOwner;
+use crate::domain::model::{GetOrCreateTagDefinitionResult, PropertyDefinitionOwner};
 
 /// Gets a single property definition by ID (includes system properties).
 pub async fn get_property_definition(
@@ -483,9 +483,12 @@ pub async fn get_tag_definition(
 pub async fn get_or_create_tag_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
-) -> anyhow::Result<PropertyDefinition> {
-    if let Some(existing) = get_tag_definition(pool, owner).await? {
-        return Ok(existing);
+) -> anyhow::Result<GetOrCreateTagDefinitionResult> {
+    if let Some(definition) = get_tag_definition(pool, owner).await? {
+        return Ok(GetOrCreateTagDefinitionResult {
+            definition,
+            created: false,
+        });
     }
 
     match create_property_definition(
@@ -499,10 +502,16 @@ pub async fn get_or_create_tag_definition(
     )
     .await
     {
-        Ok(def) => Ok(def),
-        Err(create_err) => match get_tag_definition(pool, owner).await? {
-            Some(existing) => Ok(existing),
-            None => Err(create_err),
+        Ok(definition) => Ok(GetOrCreateTagDefinitionResult {
+            definition,
+            created: true,
+        }),
+        Err(create_error) => match get_tag_definition(pool, owner).await? {
+            Some(definition) => Ok(GetOrCreateTagDefinitionResult {
+                definition,
+                created: false,
+            }),
+            None => Err(create_error),
         },
     }
 }

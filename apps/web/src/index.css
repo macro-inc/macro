@@ -273,8 +273,20 @@
 
 @layer base {
   html {
-    font: -apple-system-body;
     overflow: hidden;
+  }
+
+  /* `-apple-system-body` opts the root font-size into iOS/iPadOS Dynamic Type
+     so rem-based sizing respects the user's accessibility text-size setting.
+     On desktop Safari the same keyword resolves to the macOS system body size
+     (~13px) instead of the browser default 16px, shrinking every rem-based
+     dimension and making the app look zoomed out next to Chrome. Limit it to
+     coarse-pointer (touch) devices — matching the app's own isTouchDevice()
+     definition — so desktop Safari keeps the standard 16px root. */
+  @media (pointer: coarse) {
+    html {
+      font: -apple-system-body;
+    }
   }
 
   body {
