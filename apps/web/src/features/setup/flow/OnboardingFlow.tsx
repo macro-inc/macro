@@ -462,7 +462,7 @@ function FlowContent() {
   });
 
   return (
-    <div class="relative size-full overflow-y-auto bg-surface font-sans text-ink">
+    <div class="relative size-full overflow-hidden bg-surface font-sans text-ink">
       <style>{
         /*css*/ `
         @keyframes obf-card-in {
@@ -486,98 +486,104 @@ function FlowContent() {
 
       <NoiseBackground />
 
-      <div class="relative z-10 flex min-h-full items-center justify-center px-6 py-12">
-        <div
-          class={cn(
-            'w-full obf-card transition-[max-width] duration-300',
-            currentStep().wide ? 'sm:max-w-xl' : 'sm:max-w-lg'
-          )}
-        >
-          <div class="flex flex-col gap-8">
-            <Show when={currentStep().title}>
-              <div class="flex flex-col gap-1.5">
-                {/* Hero module above the title — desktop only. Nudged left by
-                    the module's built-in viewBox padding (reserved for the
-                    click-burst trail) so its at-rest artwork left-aligns with
-                    the title text. */}
-                <Show when={currentStep().module}>
-                  {(mod) => (
-                    <StepModule
-                      logo={mod().logo}
-                      state={heroState()}
-                      class="mb-1 hidden size-32 -ml-8 sm:block"
-                    />
-                  )}
-                </Show>
-                {/* Landing slot for the loading-graphic → logo handoff. Kept
-                    hidden while the overlay is mid-flight; the overlay lands
-                    exactly here, then this static logo takes over. */}
-                <Show when={currentStep().key === 'summary'}>
-                  <LogoIcon
-                    id="summary-brand-logo"
-                    class="mb-1 size-16 text-accent"
-                    style={{ opacity: logoShown() ? 1 : 0 }}
-                  />
-                </Show>
-                <div
-                  class="flex flex-col gap-1.5 transition-opacity"
-                  style={{
-                    opacity: summaryContentHidden() ? 0 : 1,
-                    'transition-duration': `${contentFadeMs()}ms`,
-                  }}
-                >
-                  <h1 class="text-2xl font-semibold tracking-tight text-ink">
-                    {currentStep().title}
-                  </h1>
-                  <Show when={currentStep().subtitle}>
-                    <p class="max-w-md text-sm leading-relaxed text-ink-muted">
-                      {currentStep().subtitle}
-                    </p>
-                  </Show>
-                </div>
-              </div>
-            </Show>
-
-            <div
-              class="flex flex-col gap-8 transition-opacity"
-              style={{
-                opacity: summaryContentHidden() ? 0 : 1,
-                'transition-duration': `${contentFadeMs()}ms`,
-              }}
-            >
-              <Stepper
-                step={stepIndex()}
-                transition={Stepper.transitions.scale}
-              >
-                <For each={steps()}>
-                  {(step) => (
-                    <Stepper.Step noTransition={step.noTransition}>
-                      <Suspense fallback={<StepFallback />}>
-                        {step.render(controls)}
-                      </Suspense>
-                    </Stepper.Step>
-                  )}
-                </For>
-              </Stepper>
-
-              <Show when={!currentStep().noDot}>
-                <div class="flex gap-1.5">
-                  <Index each={steps().filter((step) => !step.noDot)}>
-                    {(step) => (
-                      <div
-                        class={cn(
-                          'size-1.5 rounded-full transition-colors',
-                          stepIndex() === steps().indexOf(step())
-                            ? 'bg-accent'
-                            : stepIndex() > steps().indexOf(step())
-                              ? 'bg-ink/40'
-                              : 'bg-ink/15'
-                        )}
+      {/* The backdrop layers are viewport-sized absolutes, so scrolling has
+          to happen inside them — a tall step (the summary's pill cloud)
+          would otherwise scroll the wash and grain away with the content,
+          and the grain's 100vw width would add a horizontal scrollbar. */}
+      <div class="relative z-10 size-full overflow-y-auto overscroll-contain">
+        <div class="flex min-h-full items-center justify-center px-6 py-12">
+          <div
+            class={cn(
+              'w-full obf-card transition-[max-width] duration-300',
+              currentStep().wide ? 'sm:max-w-xl' : 'sm:max-w-lg'
+            )}
+          >
+            <div class="flex flex-col gap-8">
+              <Show when={currentStep().title}>
+                <div class="flex flex-col gap-1.5">
+                  {/* Hero module above the title — desktop only. Nudged left by
+                      the module's built-in viewBox padding (reserved for the
+                      click-burst trail) so its at-rest artwork left-aligns with
+                      the title text. */}
+                  <Show when={currentStep().module}>
+                    {(mod) => (
+                      <StepModule
+                        logo={mod().logo}
+                        state={heroState()}
+                        class="mb-1 hidden size-32 -ml-8 sm:block"
                       />
                     )}
-                  </Index>
+                  </Show>
+                  {/* Landing slot for the loading-graphic → logo handoff. Kept
+                      hidden while the overlay is mid-flight; the overlay lands
+                      exactly here, then this static logo takes over. */}
+                  <Show when={currentStep().key === 'summary'}>
+                    <LogoIcon
+                      id="summary-brand-logo"
+                      class="mb-1 size-16 text-accent"
+                      style={{ opacity: logoShown() ? 1 : 0 }}
+                    />
+                  </Show>
+                  <div
+                    class="flex flex-col gap-1.5 transition-opacity"
+                    style={{
+                      opacity: summaryContentHidden() ? 0 : 1,
+                      'transition-duration': `${contentFadeMs()}ms`,
+                    }}
+                  >
+                    <h1 class="text-2xl font-semibold tracking-tight text-ink">
+                      {currentStep().title}
+                    </h1>
+                    <Show when={currentStep().subtitle}>
+                      <p class="max-w-md text-sm leading-relaxed text-ink-muted">
+                        {currentStep().subtitle}
+                      </p>
+                    </Show>
+                  </div>
                 </div>
               </Show>
+
+              <div
+                class="flex flex-col gap-8 transition-opacity"
+                style={{
+                  opacity: summaryContentHidden() ? 0 : 1,
+                  'transition-duration': `${contentFadeMs()}ms`,
+                }}
+              >
+                <Stepper
+                  step={stepIndex()}
+                  transition={Stepper.transitions.scale}
+                >
+                  <For each={steps()}>
+                    {(step) => (
+                      <Stepper.Step noTransition={step.noTransition}>
+                        <Suspense fallback={<StepFallback />}>
+                          {step.render(controls)}
+                        </Suspense>
+                      </Stepper.Step>
+                    )}
+                  </For>
+                </Stepper>
+
+                <Show when={!currentStep().noDot}>
+                  <div class="flex gap-1.5">
+                    <Index each={steps().filter((step) => !step.noDot)}>
+                      {(step) => (
+                        <div
+                          class={cn(
+                            'size-1.5 rounded-full transition-colors',
+                            stepIndex() === steps().indexOf(step())
+                              ? 'bg-accent'
+                              : stepIndex() > steps().indexOf(step())
+                                ? 'bg-ink/40'
+                                : 'bg-ink/15'
+                          )}
+                        />
+                      )}
+                    </Index>
+                  </div>
+                </Show>
+              </div>
             </div>
           </div>
         </div>

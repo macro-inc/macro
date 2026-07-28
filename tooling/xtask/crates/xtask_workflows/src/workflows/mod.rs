@@ -36,6 +36,7 @@ mod pulumi_preview_pr;
 mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
+mod sdk_check;
 mod steps;
 mod vars;
 mod web_app_check_main;
@@ -271,6 +272,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "web_app_check_main",
         file_name: "web-app-check-main.yml",
         render_yaml: || render_gh_workflow(web_app_check_main::web_app_check_main)(),
+    },
+    WorkflowFile {
+        slug: "sdk_check",
+        file_name: "sdk-check.yml",
+        render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
     },
 ];
 

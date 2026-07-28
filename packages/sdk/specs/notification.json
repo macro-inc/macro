@@ -1,0 +1,2519 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "notification_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health check",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe": {
+      "get": {
+        "tags": ["unsubscribe::get_unsubscribes"],
+        "summary": "Gets the users unsubscribe items.",
+        "operationId": "get_unsubscribes",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserUnsubscribe"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe/email": {
+      "post": {
+        "tags": ["unsubscribe::unsubscribe_email"],
+        "summary": "Unsubscribes a user from receiving emails",
+        "operationId": "unsubscribe_email",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe/item/{item_type}/{item_id}": {
+      "post": {
+        "tags": ["unsubscribe::unsubscribe_item"],
+        "summary": "Unsubscribes a user from a given item for notifications.",
+        "operationId": "unsubscribe_item",
+        "parameters": [
+          {
+            "name": "item_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::remove_unsubscribe_item"],
+        "summary": "Removes a unsubscribe item for a user.",
+        "operationId": "remove_unsubscribe_item",
+        "parameters": [
+          {
+            "name": "item_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe/mute": {
+      "post": {
+        "tags": ["unsubscribe::unsubscribe_all"],
+        "summary": "Unsubscribes user from all notifications.",
+        "operationId": "unsubscribe_all",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::remove_unsubscribe_all"],
+        "summary": "Unmutes all notifications.\nExisting notifications that were muted manually will remain muted.",
+        "operationId": "remove_unsubscribe_all",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications": {
+      "get": {
+        "tags": ["user_notification"],
+        "summary": "Wrapper handler that calls the inner generic list handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
+        "description": "Rows that fail to deserialize are dropped with a warning log.",
+        "operationId": "list_typed_notifications",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/item/bulk": {
+      "post": {
+        "tags": ["user_notification"],
+        "summary": "Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
+        "description": "Rows that fail to deserialize are dropped with a warning log.",
+        "operationId": "bulk_get_typed_notifications_by_event_item_ids",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page. Default 20, max 500.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkGetByEventItemIdsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/item/{event_item_id}": {
+      "get": {
+        "tags": ["user_notification"],
+        "summary": "Typed wrapper for getting notifications by a single event item ID.",
+        "operationId": "get_typed_notifications_by_event_item_id",
+        "parameters": [
+          {
+            "name": "event_item_id",
+            "in": "path",
+            "description": "The event item ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/preferences": {
+      "get": {
+        "tags": ["notification_crate::inbound::http::preferences"],
+        "summary": "Get the notification types that the user has disabled.",
+        "operationId": "get_notification_type_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetNotificationTypePreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/preferences/{notification_event_type}/disable": {
+      "put": {
+        "tags": ["notification_crate::inbound::http::preferences"],
+        "summary": "Disable a notification type for the authenticated user.",
+        "operationId": "disable_notification_type",
+        "parameters": [
+          {
+            "name": "notification_event_type",
+            "in": "path",
+            "description": "The notification event type to disable",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/preferences/{notification_event_type}/enable": {
+      "put": {
+        "tags": ["notification_crate::inbound::http::preferences"],
+        "summary": "Re-enable a notification type for the authenticated user.",
+        "operationId": "enable_notification_type",
+        "parameters": [
+          {
+            "name": "notification_event_type",
+            "in": "path",
+            "description": "The notification event type to enable",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/{notification_id}": {
+      "get": {
+        "tags": ["user_notification"],
+        "summary": "Typed wrapper for getting a single notification by ID.",
+        "operationId": "get_typed_notification_by_id",
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "description": "ID of the notification",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiUserNotification"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk": {
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete multiple user notifications.",
+        "operationId": "bulk_delete_user_notifications_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk/done": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as done.",
+        "operationId": "bulk_mark_notifications_done",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk/seen": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as seen.",
+        "operationId": "bulk_mark_notifications_seen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk/undone": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as not done.",
+        "operationId": "bulk_mark_notifications_undone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/{notification_id}": {
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete a single user notification.",
+        "operationId": "delete_user_notification_v2",
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "description": "ID of the notification",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AiResponseMetadata": {
+        "type": "object",
+        "required": ["summary", "messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "ApiUserNotification": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The entity the notification is about."
+          },
+          {
+            "type": "object",
+            "required": [
+              "owner_id",
+              "id",
+              "notification_event_type",
+              "sent",
+              "done",
+              "created_at",
+              "updated_at",
+              "notification_metadata"
+            ],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was created."
+              },
+              "deleted_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was deleted."
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether the notification is marked as done."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification ID."
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
+              },
+              "notification_metadata": {
+                "$ref": "#/components/schemas/NotifEvent",
+                "description": "Deserialized notification metadata."
+              },
+              "owner_id": {
+                "type": "string",
+                "description": "The user who owns this notification."
+              },
+              "sender_id": {
+                "type": ["string", "null"],
+                "description": "The user who triggered the notification."
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "Whether the notification has been sent."
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was last updated."
+              },
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was viewed/seen."
+              }
+            }
+          }
+        ]
+      },
+      "BulkGetByEventItemIdsRequest": {
+        "type": "object",
+        "description": "Request body for bulk-fetching notifications by event item IDs.",
+        "required": ["eventItemIds"],
+        "properties": {
+          "eventItemIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The event item IDs to filter notifications by."
+          }
+        }
+      },
+      "CallStartedMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.",
+        "properties": {
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "The name of the channel the call started in, when available."
+          },
+          "sender_profile_picture_url": {
+            "type": ["string", "null"],
+            "description": "Profile picture URL of the user who started the call, when available."
+          }
+        }
+      },
+      "ChannelInviteMetadata": {
+        "type": "object",
+        "description": "Metadata for when a user is invited to a channel.",
+        "required": ["invitedBy"],
+        "properties": {
+          "channelName": {
+            "type": "string",
+            "description": "The name of the channel"
+          },
+          "invitedBy": {
+            "type": "string",
+            "description": "The user who sent the invitation"
+          },
+          "messageContent": {
+            "type": ["string", "null"],
+            "description": "Message content to show in the invite email, when the invite was triggered by a message."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, if available."
+          }
+        }
+      },
+      "ChannelMentionMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["messageId", "messageContent"],
+            "properties": {
+              "messageContent": {
+                "type": "string",
+                "description": "The message content"
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The message you were mentioned in"
+              },
+              "senderDisplayName": {
+                "type": ["string", "null"],
+                "description": "Display name for non-user senders such as bots"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "description": "the id of the thread"
+              }
+            }
+          }
+        ]
+      },
+      "ChannelMessageSendMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["messageId"],
+            "properties": {
+              "messageContent": {
+                "type": "string",
+                "description": "The content of the message"
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The message id"
+              },
+              "sender": {
+                "type": ["string", "null"],
+                "description": "The user who sent the message, when sent by a user"
+              },
+              "senderDisplayName": {
+                "type": ["string", "null"],
+                "description": "Display name for non-user senders such as bots"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        ]
+      },
+      "ChannelReplyMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["threadId", "messageId", "messageContent"],
+            "properties": {
+              "messageContent": {
+                "type": "string",
+                "description": "The message content"
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The id of the new message"
+              },
+              "senderDisplayName": {
+                "type": ["string", "null"],
+                "description": "Display name for non-user senders such as bots"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
+              },
+              "threadId": {
+                "type": "string",
+                "description": "The id of the thread that has the reply"
+              },
+              "threadParentSenderId": {
+                "type": ["string", "null"],
+                "description": "The user who sent the root message of the thread"
+              },
+              "userId": {
+                "type": ["string", "null"],
+                "description": "The sender id of the reply, when sent by a user"
+              }
+            }
+          }
+        ]
+      },
+      "ChannelType": {
+        "type": "string",
+        "enum": ["public", "private", "directMessage", "team"]
+      },
+      "CommentedOnDocumentMetadata": {
+        "type": "object",
+        "description": "Notification sent when someone comments on a document the user owns.",
+        "required": ["documentName", "owner", "commentId", "threadId", "text"],
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the comment id"
+          },
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "the text of the comment"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the thread id"
+          }
+        }
+      },
+      "CommonChannelMetadata": {
+        "type": "object",
+        "description": "Common metadata for notifications on channels",
+        "required": ["channelType"],
+        "properties": {
+          "channelName": {
+            "type": "string"
+          },
+          "channelType": {
+            "$ref": "#/components/schemas/ChannelType"
+          }
+        }
+      },
+      "ConnGatewayInnerNotif_Value": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The entity the notification is about."
+          },
+          {
+            "type": "object",
+            "required": [
+              "notification_id",
+              "notification_event_type",
+              "sent",
+              "done",
+              "created_at",
+              "updated_at",
+              "notification_metadata"
+            ],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was created."
+              },
+              "deleted_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was deleted."
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether the notification is marked as done."
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
+              },
+              "notification_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification ID."
+              },
+              "notification_metadata": {
+                "$ref": "#/components/schemas/TaggedContent_Value",
+                "description": "Deserialized notification metadata."
+              },
+              "sender_id": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MacroUserIdStr",
+                    "description": "The user who triggered the notification."
+                  }
+                ]
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "Whether the notification has been sent."
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was last updated."
+              },
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was viewed/seen."
+              }
+            }
+          }
+        ],
+        "description": "the value of the inner payload inside [ConnGatewayNotification]"
+      },
+      "ConnGatewayNotificationPayload": {
+        "$ref": "#/components/schemas/ConnGatewayInnerNotif_Value",
+        "description": "Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.\n\nUsed for OpenAPI schema generation — serializes identically to\n`ConnGatewayInnerNotif<serde_json::Value>`."
+      },
+      "CreateNotification": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The [Entity] the notification event was created for"
+          },
+          {
+            "type": "object",
+            "required": ["notification_event_type", "service_sender"],
+            "properties": {
+              "metadata": {
+                "description": "Custom metadata that may be needed for the notification"
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The type of notification"
+              },
+              "service_sender": {
+                "type": "string",
+                "description": "The service that created the notification"
+              }
+            }
+          }
+        ]
+      },
+      "DeviceRequest": {
+        "type": "object",
+        "description": "Request to register or unregister a device for push notifications.",
+        "required": ["deviceType", "token"],
+        "properties": {
+          "deviceType": {
+            "$ref": "#/components/schemas/DeviceType",
+            "description": "The device platform type (iOS or Android)."
+          },
+          "token": {
+            "type": "string",
+            "description": "The device push notification token."
+          }
+        }
+      },
+      "DeviceType": {
+        "type": "string",
+        "enum": ["ios", "android", "iosvoip"]
+      },
+      "DocumentMentionMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChannelMentionMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["documentName", "owner"],
+            "properties": {
+              "documentName": {
+                "type": "string",
+                "description": "The name of the document"
+              },
+              "fileType": {
+                "type": ["string", "null"],
+                "description": "The file type of the document"
+              },
+              "owner": {
+                "type": "string",
+                "description": "The owner of the document"
+              },
+              "subType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NotificationDocumentSubType",
+                    "description": "The sub type of the document (e.g. task)"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Someone mentioned a document in a channel"
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "Entity": {
+        "type": "object",
+        "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "The id of that entity"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of entity we are describing"
+          }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "channel_message",
+          "document",
+          "project",
+          "email_thread",
+          "team",
+          "call",
+          "foreign_entity",
+          "static_file",
+          "crm_company",
+          "crm_contact"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "GetAllUserNotificationsResponse": {
+        "type": "object",
+        "description": "The strongly typed response for listing user notifications.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiUserNotification"
+            },
+            "description": "The list of items returned."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "The next page cursor if it exists."
+          }
+        }
+      },
+      "GetNotificationTypePreferencesResponse": {
+        "type": "object",
+        "description": "Response for listing disabled notification types.",
+        "required": ["disabled_types"],
+        "properties": {
+          "disabled_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The notification types that the user has disabled."
+          }
+        }
+      },
+      "GithubPrCheckRun": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkRunGithubId",
+              "checkName",
+              "checkStatus",
+              "conclusion",
+              "state",
+              "checkUrl",
+              "completedAt"
+            ],
+            "properties": {
+              "checkName": {
+                "type": "string",
+                "description": "The display name GitHub reported for the check run."
+              },
+              "checkRunGithubId": {
+                "type": "integer",
+                "format": "int64",
+                "description": "The GitHub numeric id of the check run.",
+                "minimum": 0
+              },
+              "checkStatus": {
+                "type": "string",
+                "description": "The raw GitHub check run status."
+              },
+              "checkUrl": {
+                "type": "string",
+                "description": "The public GitHub URL for the check run."
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When GitHub marked the check run as complete."
+              },
+              "conclusion": {
+                "type": "string",
+                "description": "The raw GitHub check run conclusion."
+              },
+              "state": {
+                "$ref": "#/components/schemas/GithubPrCheckRunState",
+                "description": "The normalized notification state for this check run."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a GitHub pull request check run completed."
+      },
+      "GithubPrCheckRunState": {
+        "type": "string",
+        "description": "The normalized result state for a GitHub pull request check-run notification.",
+        "enum": ["completed", "failed"]
+      },
+      "GithubPrComment": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["commentKind", "commentSnippet"],
+            "properties": {
+              "commentGithubId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The GitHub numeric id of the comment, when available.",
+                "minimum": 0
+              },
+              "commentKind": {
+                "$ref": "#/components/schemas/GithubPrCommentKind",
+                "description": "The kind of comment that was posted."
+              },
+              "commentSnippet": {
+                "type": "string",
+                "description": "A truncated excerpt of the comment body."
+              },
+              "commentUrl": {
+                "type": ["string", "null"],
+                "description": "The public GitHub URL for the comment, when available."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a GitHub pull request was commented on."
+      },
+      "GithubPrCommentKind": {
+        "type": "string",
+        "description": "The kind of GitHub comment that triggered a [`GithubPrComment`] notification.",
+        "enum": ["issue", "review_comment"]
+      },
+      "GithubPrEventAction": {
+        "type": "string",
+        "description": "The GitHub pull request webhook action that triggered the notification.",
+        "enum": ["opened", "reopened", "closed"]
+      },
+      "GithubPrEventStatus": {
+        "type": "string",
+        "description": "The normalized lifecycle status for a GitHub pull request notification.",
+        "enum": ["open", "closed", "merged"]
+      },
+      "GithubPrMention": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["location", "textSnippet"],
+            "properties": {
+              "commentGithubId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The GitHub numeric id of the comment or review containing the mention, when available.",
+                "minimum": 0
+              },
+              "commentUrl": {
+                "type": ["string", "null"],
+                "description": "The public GitHub URL for the text containing the mention, when available."
+              },
+              "location": {
+                "$ref": "#/components/schemas/GithubPrMentionLocation",
+                "description": "Where the mention appeared."
+              },
+              "textSnippet": {
+                "type": "string",
+                "description": "A truncated excerpt of the text containing the mention."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that the user was mentioned on a GitHub pull request."
+      },
+      "GithubPrMentionLocation": {
+        "type": "string",
+        "description": "Where in a GitHub pull request the user was mentioned.",
+        "enum": ["pr_body", "comment", "review", "review_comment"]
+      },
+      "GithubPrNotificationCommon": {
+        "type": "object",
+        "description": "Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.",
+        "required": [
+          "foreignEntityId",
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName",
+          "title"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "foreignEntityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The source-specific internal foreign entity row id for this pull request."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The external GitHub key, in `owner/repo/pull/number` format."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "senderGithubAvatarUrl": {
+            "type": ["string", "null"],
+            "description": "The GitHub avatar URL for the sender, when available."
+          },
+          "senderGithubLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the sender, when available."
+          },
+          "senderGithubUserId": {
+            "type": ["string", "null"],
+            "description": "The stable GitHub numeric user id for the sender, serialized as a string."
+          },
+          "title": {
+            "type": "string",
+            "description": "The GitHub pull request title. Falls back to `display_name` when GitHub has no title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPrReview": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["state"],
+            "properties": {
+              "reviewGithubId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The GitHub numeric id of the review, when available.",
+                "minimum": 0
+              },
+              "reviewSnippet": {
+                "type": ["string", "null"],
+                "description": "A truncated excerpt of the review body, when any was written."
+              },
+              "reviewUrl": {
+                "type": ["string", "null"],
+                "description": "The public GitHub URL for the review, when available."
+              },
+              "state": {
+                "$ref": "#/components/schemas/GithubPrReviewState",
+                "description": "The review decision state."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+      },
+      "GithubPrReviewState": {
+        "type": "string",
+        "description": "The state of a submitted GitHub pull request review.",
+        "enum": ["approved", "changes_requested", "commented"]
+      },
+      "GithubPrStatusChanged": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["status", "action"],
+            "properties": {
+              "action": {
+                "$ref": "#/components/schemas/GithubPrEventAction",
+                "description": "The webhook action that triggered this notification."
+              },
+              "baseBranch": {
+                "type": ["string", "null"],
+                "description": "The pull request base branch, when available."
+              },
+              "headBranch": {
+                "type": ["string", "null"],
+                "description": "The pull request head branch, when available."
+              },
+              "mergedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the pull request was merged, when available."
+              },
+              "previousStatus": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/GithubPrEventStatus",
+                    "description": "The prior normalized pull request status, when known."
+                  }
+                ]
+              },
+              "status": {
+                "$ref": "#/components/schemas/GithubPrEventStatus",
+                "description": "The current normalized pull request status."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a GitHub pull request lifecycle notification."
+      },
+      "GithubReviewRequested": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "requestedReviewerGithubLogin": {
+                "type": ["string", "null"],
+                "description": "The GitHub login of the requested reviewer, when available."
+              },
+              "requestedReviewerGithubUserId": {
+                "type": ["string", "null"],
+                "description": "The stable GitHub numeric user id of the requested reviewer, serialized as a string."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that the user's review was requested on a GitHub pull request."
+      },
+      "InboxReauthRequiredMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync.",
+        "required": ["emailAddress"],
+        "properties": {
+          "emailAddress": {
+            "type": "string",
+            "description": "The address of the inbox that needs to be reconnected."
+          }
+        }
+      },
+      "InviteToTeamMetadata": {
+        "type": "object",
+        "description": "Metadata for when a user is invited to a team.",
+        "required": ["teamName", "teamId", "teamInviteId", "invitedBy"],
+        "properties": {
+          "invitedBy": {
+            "type": "string",
+            "description": "The user who sent the invitation"
+          },
+          "role": {
+            "type": ["string", "null"],
+            "description": "Role/permission level in the team"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, if available."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The unique identifier of the team"
+          },
+          "teamInviteId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The unique identifier of the team invite"
+          },
+          "teamName": {
+            "type": "string",
+            "description": "The name of the team being invited to"
+          }
+        }
+      },
+      "ItemSharedMetadata": {
+        "type": "object",
+        "description": "Metadata for when a item is shared with a user",
+        "required": ["userIds", "itemType", "itemId", "sharedBy"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "The name/title of the shared item (optional)"
+          },
+          "itemName": {
+            "type": ["string", "null"],
+            "description": "The name/title of the shared item"
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of item being shared"
+          },
+          "permissionLevel": {
+            "type": ["string", "null"],
+            "description": "Permission level granted (read, write, admin, etc.)"
+          },
+          "sharedBy": {
+            "type": "string"
+          },
+          "userIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of user IDs that the item is shared with"
+          }
+        }
+      },
+      "MacroUserIdStr": {
+        "type": "string"
+      },
+      "MentionedInDocumentCommentMetadata": {
+        "type": "object",
+        "description": "Notification sent when a user is mentioned in a document comment.",
+        "required": [
+          "documentName",
+          "owner",
+          "mentionId",
+          "commentId",
+          "threadId",
+          "text"
+        ],
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the comment id"
+          },
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document."
+          },
+          "mentionId": {
+            "type": "string",
+            "description": "The mention ID."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "the text of the comment"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the thread id"
+          }
+        }
+      },
+      "NewEmailMetadata": {
+        "type": "object",
+        "required": ["toEmail", "threadId", "subject", "snippet"],
+        "properties": {
+          "sender": {
+            "type": ["string", "null"]
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "toEmail": {
+            "type": "string"
+          }
+        }
+      },
+      "NotifEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Someone mentioned you in a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelMentionMetadata",
+                "description": "Someone mentioned you in a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone mentioned a document in a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/DocumentMentionMetadata",
+                "description": "Someone mentioned a document in a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["document_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "User was mentioned in a comment in a document",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/MentionedInDocumentCommentMetadata",
+                "description": "User was mentioned in a comment in a document"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["mentioned_in_document_comment"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone replied to a document comment thread the user participated in.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/RepliedToDocumentCommentThreadMetadata",
+                "description": "Someone replied to a document comment thread the user participated in."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["replied_to_document_comment_thread"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone commented on a document the user owns.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CommentedOnDocumentMetadata",
+                "description": "Someone commented on a document the user owns."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["commented_on_document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was invited to a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelInviteMetadata",
+                "description": "The user was invited to a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_invite"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user sent a message in a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelMessageSendMetadata",
+                "description": "A user sent a message in a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_send"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone replied to a thread in a channel that the user is part of.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelReplyMetadata",
+                "description": "Someone replied to a thread in a channel that the user is part of."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_reply"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CallStartedMetadata",
+                "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["call_started"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new email has been sent to the user.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/NewEmailMetadata",
+                "description": "A new email has been sent to the user."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["new_email"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A linked inbox's grant died and must be reconnected.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/InboxReauthRequiredMetadata",
+                "description": "A linked inbox's grant died and must be reconnected."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["inbox_reauth_required"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user was invited to a team.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/InviteToTeamMetadata",
+                "description": "A user was invited to a team."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["invite_to_team"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user was assigned to a task.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/TaskAssignedMetadata",
+                "description": "A user was assigned to a task."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["task_assigned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An AI assistant responded to a chat.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AiResponseMetadata",
+                "description": "An AI assistant responded to a chat."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["ai_response"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrStatusChanged",
+                "description": "A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_status_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request check run completed.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrCheckRun",
+                "description": "A GitHub pull request check run completed."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_check_run"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user's review was requested on a GitHub pull request.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubReviewRequested",
+                "description": "The user's review was requested on a GitHub pull request."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_review_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request was commented on.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrComment",
+                "description": "A GitHub pull request was commented on."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_comment"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was mentioned on a GitHub pull request.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrMention",
+                "description": "The user was mentioned on a GitHub pull request."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A review was submitted on the user's GitHub pull request.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrReview",
+                "description": "A review was submitted on the user's GitHub pull request."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_review"]
+              }
+            }
+          }
+        ],
+        "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
+      },
+      "NotificationBulkRequest": {
+        "type": "object",
+        "description": "the notification ids that we are bulk updating",
+        "required": ["notificationIds"],
+        "properties": {
+          "notificationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The ids of the notifications to handle"
+          }
+        }
+      },
+      "NotificationDocumentSubType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["task"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
+              }
+            }
+          }
+        ],
+        "description": "The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern."
+      },
+      "NotificationServiceApiVersion": {
+        "type": "string",
+        "enum": ["v1"]
+      },
+      "NotificationTypeName": {
+        "type": "string",
+        "description": "newtype wrapper for the the typename of a Notification"
+      },
+      "PushNotificationData": {
+        "type": "object",
+        "required": ["notificationId"],
+        "properties": {
+          "notificationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the notification record (UserNotification.id)"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
+          }
+        }
+      },
+      "RepliedToDocumentCommentThreadMetadata": {
+        "type": "object",
+        "description": "Notification sent when someone replies to a document comment thread.",
+        "required": ["documentName", "owner", "commentId", "threadId", "text"],
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the comment id"
+          },
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "the text of the comment"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the thread id"
+          }
+        }
+      },
+      "TaggedContent_Value": {
+        "type": "object",
+        "description": "A notification metadata value tagged with the notification event type.",
+        "required": ["tag", "content"],
+        "properties": {
+          "content": {},
+          "tag": {
+            "$ref": "#/components/schemas/NotificationTypeName"
+          }
+        }
+      },
+      "TaskAssignedMetadata": {
+        "type": "object",
+        "description": "Metadata for when a user is assigned to a task",
+        "required": ["taskId", "assignedBy"],
+        "properties": {
+          "assignedBy": {
+            "type": "string",
+            "description": "The user who assigned the task"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the backing document (task)."
+              }
+            ]
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The unique identifier of the task"
+          },
+          "taskName": {
+            "type": ["string", "null"],
+            "description": "The name of the task (optional)"
+          }
+        }
+      },
+      "UnsubscribeItemPathParams": {
+        "type": "object",
+        "required": ["item_type", "item_id"],
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "item_type": {
+            "type": "string"
+          }
+        }
+      },
+      "UserUnsubscribe": {
+        "type": "object",
+        "required": ["item_id", "item_type"],
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "description": "The item id"
+          },
+          "item_type": {
+            "type": "string",
+            "description": "The item type"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "notification service",
+      "description": "Macro Notification Service"
+    }
+  ]
+}

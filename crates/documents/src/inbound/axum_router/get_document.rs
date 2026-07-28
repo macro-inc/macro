@@ -12,7 +12,9 @@ use models_permissions::share_permission::access_level::ViewAccessLevel;
 use super::{DocumentRouterState, Params};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
-use crate::domain::response::GetDocumentResponse;
+use model::response::TypedSuccessResponse;
+
+use crate::domain::response::{GetDocumentResponse, GetDocumentResponseData};
 
 /// Handler for `GET /documents/{document_id}`.
 ///
@@ -26,7 +28,7 @@ use crate::domain::response::GetDocumentResponse;
         ("document_id" = String, Path, description = "Document ID")
     ),
     responses(
-        (status = 200, body = GetDocumentResponse),
+        (status = 200, body = TypedSuccessResponse<GetDocumentResponseData>),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 404, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),

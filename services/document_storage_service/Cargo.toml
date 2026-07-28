@@ -57,6 +57,7 @@ channel_bots = { path = "../../crates/channel_bots" }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
+  "list",
   "outbound",
 ] }
 chat = { path = "../../crates/chat", default-features = false, features = [
@@ -101,6 +102,7 @@ github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "sync",
 ] }
+graphql_soup = { path = "../../crates/graphql_soup" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

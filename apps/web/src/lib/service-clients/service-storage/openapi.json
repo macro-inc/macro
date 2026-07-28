@@ -3976,6 +3976,87 @@
         }
       }
     },
+    "/comms/channels": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handle channel list requests for `GET /comms/channels`.",
+        "operationId": "get_channels",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor for the next page",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelListPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/comment/{comment_id}": {
       "delete": {
         "tags": ["crm::inbound::axum_router::comments"],
@@ -5975,7 +6056,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TypedSuccessResponse"
+                  "$ref": "#/components/schemas/TypedSuccessResponse_GetDocumentResponseData"
                 }
               }
             }
@@ -9951,6 +10032,43 @@
       }
     },
     "/webhook/webhooks": {
+      "get": {
+        "tags": ["webhook"],
+        "summary": "List the caller's webhooks.",
+        "operationId": "list_webhooks",
+        "responses": {
+          "200": {
+            "description": "Webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListWebhooksResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["webhook"],
         "summary": "Create a webhook.",
@@ -10010,6 +10128,64 @@
       }
     },
     "/webhook/webhooks/{webhook_id}": {
+      "get": {
+        "tags": ["webhook"],
+        "summary": "Get a webhook.",
+        "operationId": "get_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": ["webhook"],
         "summary": "Delete a webhook.",
@@ -10875,6 +11051,113 @@
           }
         }
       },
+      "ApiChannelListMessage": {
+        "type": "object",
+        "description": "Channel message in API responses.",
+        "required": [
+          "message_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "mentions"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Message content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Deletion timestamp, if deleted."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread id, if the message is a reply."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          }
+        }
+      },
+      "ApiChannelListPage": {
+        "type": "object",
+        "description": "A cursor-paginated channel list response.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelWithLatest"
+            },
+            "description": "Channels in this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor for the next page, if one exists."
+          }
+        }
+      },
+      "ApiChannelListParticipant": {
+        "type": "object",
+        "description": "Channel participant in API responses.",
+        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "id of the channel"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the user joined the channel"
+          },
+          "left_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "timestamp of when the user left the channel"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ApiParticipantListRole",
+            "description": "type of the participant"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "id of the user"
+          }
+        }
+      },
+      "ApiChannelListType": {
+        "type": "string",
+        "description": "Channel type in API responses.",
+        "enum": ["public", "private", "direct_message", "team"]
+      },
       "ApiChannelMessage": {
         "type": "object",
         "description": "A top-level channel message with thread info.",
@@ -11002,6 +11285,112 @@
           "user_id": {
             "type": "string",
             "description": "User id."
+          }
+        }
+      },
+      "ApiChannelWithLatest": {
+        "type": "object",
+        "description": "Channel list response item.",
+        "required": [
+          "id",
+          "channel_type",
+          "auto_join_team",
+          "created_at",
+          "updated_at",
+          "owner_id",
+          "participants",
+          "is_participant"
+        ],
+        "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether team members automatically join the channel."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ApiChannelListType",
+            "description": "Channel type."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Channel creation timestamp."
+          },
+          "frecency_score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Aggregate frecency score."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "interacted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last interaction timestamp for requesting user."
+          },
+          "is_participant": {
+            "type": "boolean",
+            "description": "Whether the requesting user is an active participant of the channel."
+          },
+          "latest_message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiChannelListMessage",
+                "description": "Latest message including thread replies."
+              }
+            ]
+          },
+          "latest_non_thread_message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiChannelListMessage",
+                "description": "Latest top-level non-thread message."
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Channel name."
+          },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Organization id.",
+            "minimum": 0
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "Channel owner user id."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelListParticipant"
+            },
+            "description": "Active participants."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team id."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Channel last-updated timestamp."
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last viewed timestamp for requesting user."
           }
         }
       },
@@ -11227,6 +11616,11 @@
         "type": "string",
         "description": "Public sender type.",
         "enum": ["user", "bot"]
+      },
+      "ApiParticipantListRole": {
+        "type": "string",
+        "description": "Participant role in API responses.",
+        "enum": ["owner", "admin", "member"]
       },
       "ApiParticipantRole": {
         "type": "string",
@@ -12150,6 +12544,83 @@
           }
         }
       },
+      "ChannelCreatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::Created`].",
+        "required": [
+          "channel_id",
+          "actor",
+          "channel_type",
+          "participant_user_ids"
+        ],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor that created the channel (channel owner)."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the created channel."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Stored channel name; `None` for direct message / unnamed channels."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Type of channel that was created."
+          },
+          "participant_user_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Active participants after creation (including the owner)."
+          }
+        }
+      },
+      "ChannelDeletedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::Deleted`].",
+        "required": ["channel_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor that deleted the channel."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the deleted channel."
+          }
+        }
+      },
+      "ChannelEventAttachment": {
+        "type": "object",
+        "description": "Attachment payload carried by channel wire events.",
+        "required": ["attachment_id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp of the attachment row."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Attached entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Attached entity type (e.g. `document`)."
+          }
+        }
+      },
       "ChannelFilters": {
         "type": "object",
         "description": "The channel message filters used to filter down what channel messages you search over.",
@@ -12278,6 +12749,93 @@
           }
         }
       },
+      "ChannelMessageAttachmentCreatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::MessageAttachmentCreated`].",
+        "required": ["channel_id", "message_id", "actor", "attachments"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor that added the attachments."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelEventAttachment"
+            },
+            "description": "Attachments created by this mutation."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message the attachments were added to."
+          }
+        }
+      },
+      "ChannelMessageAttachmentRemovedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::MessageAttachmentRemoved`].",
+        "required": ["channel_id", "message_id", "actor", "attachments"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor that removed the attachments."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelEventAttachment"
+            },
+            "description": "Attachments removed by this mutation."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message the attachments were removed from."
+          }
+        }
+      },
+      "ChannelMessageDeletedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::MessageDeleted`].",
+        "required": ["channel_id", "message_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor that deleted the message; not necessarily the author."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Deletion (tombstone) timestamp reported by the repository."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the deleted message."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread parent id when the message is a thread reply."
+          }
+        }
+      },
       "ChannelMessageFilters": {
         "type": "object",
         "description": "Filters for channel message queries.",
@@ -12316,6 +12874,118 @@
           }
         }
       },
+      "ChannelMessagePatchedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::MessagePatched`].",
+        "required": [
+          "channel_id",
+          "message_id",
+          "actor",
+          "content",
+          "updated_at"
+        ],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor that patched the message."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message body after the patch."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Edit timestamp, when the patch marked the message edited."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the patched message."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread parent id when the message is a thread reply."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp reported by the repository."
+          }
+        }
+      },
+      "ChannelMessagePostedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::MessagePosted`].",
+        "required": [
+          "channel_id",
+          "message_id",
+          "sender",
+          "channel_type",
+          "content",
+          "mentions",
+          "attachments",
+          "created_at"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelEventAttachment"
+            },
+            "description": "Attachments persisted with the message."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Type of channel containing the message."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp reported by the repository."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Mentions attached to the message."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the posted message."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Message author; may be a bot."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread parent id when the message is a thread reply."
+          },
+          "triggered_by": {
+            "type": ["string", "null"],
+            "description": "For an agent (bot) message, the id of the user who triggered it."
+          }
+        }
+      },
       "ChannelParticipant": {
         "type": "object",
         "description": "A user's membership in a channel.",
@@ -12343,6 +13013,70 @@
           "user_id": {
             "type": "string",
             "description": "Participant user id."
+          }
+        }
+      },
+      "ChannelParticipantAddedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::ParticipantAdded`].",
+        "required": [
+          "channel_id",
+          "channel_type",
+          "added_by",
+          "added_user_ids"
+        ],
+        "properties": {
+          "added_by": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Actor who added the participants; equals the sole added user for a\nself-service join."
+          },
+          "added_user_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Users added by this mutation."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel receiving new participants."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Type of channel that received participants."
+          }
+        }
+      },
+      "ChannelParticipantRemovedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::ParticipantRemoved`].",
+        "required": [
+          "channel_id",
+          "channel_type",
+          "removed_by",
+          "removed_user_ids"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the participants were removed from."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Type of channel the participants were removed from."
+          },
+          "removed_by": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Actor who removed the participants; equals the sole removed user for a\nself-service leave."
+          },
+          "removed_user_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Users removed by this mutation."
           }
         }
       },
@@ -12427,6 +13161,9 @@
           }
         }
       },
+      "ChannelSender": {
+        "type": "string"
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -12476,10 +13213,189 @@
           }
         }
       },
+      "ChannelTopicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelCreatedMetadata",
+                "description": "A channel was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel's metadata was updated (rename).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelUpdatedMetadata",
+                "description": "A channel's metadata was updated (rename)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelDeletedMetadata",
+                "description": "A channel was deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was posted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.message_posted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMessagePostedMetadata",
+                "description": "A message was posted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message's content was patched.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.message_patched"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMessagePatchedMetadata",
+                "description": "A message's content was patched."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was soft-deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.message_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMessageDeletedMetadata",
+                "description": "A message was soft-deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Attachments were added to a message.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.message_attachment_created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMessageAttachmentCreatedMetadata",
+                "description": "Attachments were added to a message."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Attachments were removed from a message.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.message_attachment_removed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMessageAttachmentRemovedMetadata",
+                "description": "Attachments were removed from a message."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Participants were added to a channel (admin invite or self-join).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.participant_added"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelParticipantAddedMetadata",
+                "description": "Participants were added to a channel (admin invite or self-join)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Participants were removed from a channel (admin removal or self-leave).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.participant_removed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelParticipantRemovedMetadata",
+                "description": "Participants were removed from a channel (admin removal or self-leave)."
+              }
+            }
+          }
+        ],
+        "description": "Events that can be published to [`MacroChannelsTopic`]."
+      },
       "ChannelType": {
         "type": "string",
         "description": "Type of channel.",
         "enum": ["public", "private", "direct_message", "team"]
+      },
+      "ChannelUpdatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::Updated`].",
+        "required": ["channel_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The user who updated the channel."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the updated channel."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "New channel name."
+          },
+          "previous_name": {
+            "type": ["string", "null"],
+            "description": "Stored channel name before the update."
+          }
+        }
       },
       "ChannelWebhookRequest": {
         "type": "object",
@@ -14130,6 +15046,141 @@
         "description": "API-visible content lifecycle state derived from current document metadata.",
         "enum": ["unknown", "pending", "ready"]
       },
+      "DocumentCopiedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Copied`].",
+        "required": [
+          "document_id",
+          "source_document_id",
+          "owner",
+          "document_name"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the newly created copy."
+          },
+          "document_name": {
+            "type": "string",
+            "description": "The name of the new document."
+          },
+          "file_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileType",
+                "description": "File type of the document, when known."
+              }
+            ]
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The owner of the new copy (the copier)."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "Project the copy belongs to, when any."
+          },
+          "source_document_id": {
+            "type": "string",
+            "description": "The id of the document that was copied."
+          },
+          "source_version_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The specific source version copied, when requested."
+          },
+          "sub_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "Sub type (task / snippet), when any."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentCreatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Created`].",
+        "required": ["document_id", "owner", "document_name"],
+        "properties": {
+          "created_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Creation timestamp reported by the repository."
+          },
+          "document_id": {
+            "type": "string",
+            "description": "The id of the created document."
+          },
+          "document_name": {
+            "type": "string",
+            "description": "The document name, with any file extension stripped."
+          },
+          "file_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileType",
+                "description": "File type of the document, when known."
+              }
+            ]
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The owner (creator) of the document."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "Project the document was created in, when any."
+          },
+          "sub_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "Sub type (task / snippet), when any."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentDeletedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Deleted`].",
+        "required": ["document_id"],
+        "properties": {
+          "actor_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who deleted the document; `None` for\nunauthenticated or internal callers."
+              }
+            ]
+          },
+          "document_id": {
+            "type": "string",
+            "description": "The id of the deleted document."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "Project the document belonged to, when any."
+          }
+        }
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -14184,6 +15235,21 @@
           "task_filters": {
             "$ref": "#/components/schemas/TaskFilters",
             "description": "Task-specific filters that only apply to task subtype documents."
+          }
+        }
+      },
+      "DocumentInteractionMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Interaction`].",
+        "required": ["document_id", "reason"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the document."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/InteractionReason",
+            "description": "What triggered this interaction."
           }
         }
       },
@@ -14635,6 +15701,139 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The owner's team the document is (or would be) shared with. `None` when\nthe owner does not belong to a team."
+          }
+        }
+      },
+      "DocumentTopicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A document was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentCreatedMetadata",
+                "description": "A document was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document's metadata / permissions were updated.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentUpdatedMetadata",
+                "description": "A document's metadata / permissions were updated."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document was soft-deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentDeletedMetadata",
+                "description": "A document was soft-deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document was copied.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.copied"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentCopiedMetadata",
+                "description": "A document was copied."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A peer joined, left, or a periodic save occurred.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.interaction"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentInteractionMetadata",
+                "description": "A peer joined, left, or a periodic save occurred."
+              }
+            }
+          }
+        ],
+        "description": "Events that can be published to [`MacroDocumentsTopic`]."
+      },
+      "DocumentUpdatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Updated`].",
+        "required": ["document_id", "owner", "share_permission_updated"],
+        "properties": {
+          "actor_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who performed the update; `None` for\nunauthenticated or internal callers."
+              }
+            ]
+          },
+          "document_id": {
+            "type": "string",
+            "description": "The id of the updated document."
+          },
+          "document_name": {
+            "type": ["string", "null"],
+            "description": "New (cleaned) document name; `None` when unchanged."
+          },
+          "file_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileTypeUpdate",
+                "description": "Requested file type change; `None` when unchanged."
+              }
+            ]
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The owner of the document."
+          },
+          "previous_project_id": {
+            "type": ["string", "null"],
+            "description": "Project id before the update."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "New project id; `None` when unchanged, `Some(\"\")` when removed from\nits project (mirrors the edit repo args semantics)."
+          },
+          "share_permission_updated": {
+            "type": "boolean",
+            "description": "Whether share permissions were updated."
           }
         }
       },
@@ -16887,6 +18086,11 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "InteractionReason": {
+        "type": "string",
+        "description": "Why a document interaction was reported.",
+        "enum": ["edited", "first_join", "last_leave"]
+      },
       "Item": {
         "oneOf": [
           {
@@ -16956,6 +18160,20 @@
           "callEnded": {
             "type": "boolean",
             "description": "Whether the entire call was ended (room deleted)."
+          }
+        }
+      },
+      "ListWebhooksResponse": {
+        "type": "object",
+        "description": "Webhooks visible to the caller across their personal and team workspaces.",
+        "required": ["webhooks"],
+        "properties": {
+          "webhooks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Webhook"
+            },
+            "description": "The caller's webhooks, newest first. Signing secrets are omitted."
           }
         }
       },
@@ -20477,6 +21695,40 @@
           }
         }
       },
+      "TypedSuccessResponse_GetDocumentResponseData": {
+        "type": "object",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "Get document response data with content lifecycle metadata.",
+                "required": ["documentMetadata", "userAccessLevel"],
+                "properties": {
+                  "documentMetadata": {
+                    "$ref": "#/components/schemas/DocumentMetadataWithContent",
+                    "description": "The metadata of the document."
+                  },
+                  "userAccessLevel": {
+                    "$ref": "#/components/schemas/AccessLevel",
+                    "description": "The user's level of access to the document."
+                  },
+                  "viewLocation": {
+                    "type": ["string", "null"],
+                    "description": "The user's view location if there is one."
+                  }
+                }
+              }
+            ],
+            "description": "Data to be returned"
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred"
+          }
+        }
+      },
       "TypingAction": {
         "type": "string",
         "description": "Typing indicator action.",
@@ -20946,6 +22198,19 @@
           }
         }
       },
+      "WebhookEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DocumentTopicEvent",
+            "description": "Document lifecycle events from the `macro.documents` topic."
+          },
+          {
+            "$ref": "#/components/schemas/ChannelTopicEvent",
+            "description": "Channel and message events from the `macro.channels` topic."
+          }
+        ],
+        "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `channel.message_posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."
+      },
       "WebhookFilter": {
         "type": "object",
         "description": "Event and optional entity-id constraints used to match webhook deliveries.",
@@ -20977,6 +22242,25 @@
         "type": "string",
         "description": "Webhook lifecycle status.",
         "enum": ["active", "paused", "disabled"]
+      },
+      "WebhookValidationTestEvent": {
+        "type": "object",
+        "description": "Body of the `webhook.validation.test` delivery sent when validating an\nendpoint. Not part of the `WebhookEvent` entity-event union.",
+        "required": ["id", "event", "webhook_id"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "Event name; always `webhook.validation.test`."
+          },
+          "id": {
+            "type": "string",
+            "description": "Event id, with an `evt_` prefix."
+          },
+          "webhook_id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook being validated."
+          }
+        }
       },
       "WithCallId": {
         "type": "object",

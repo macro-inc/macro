@@ -17,7 +17,8 @@ import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { type Client, createClient, fetchExchange } from '@urql/core';
 import { match } from 'ts-pattern';
-import type { SoupApiItem, SoupPage } from './generated/schemas';
+import type { SoupApiItem } from './generated/schemas/soupApiItem';
+import type { SoupPage } from './generated/schemas/soupPage';
 import {
   type GroupedSoupInput,
   type GroupSoupQuery,

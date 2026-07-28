@@ -149,3 +149,12 @@ impl<'a> GraphqlEntity<'a> {
         GraphqlEntityType::new(self.0.entity_type)
     }
 }
+
+/// Operation carried by a realtime entity patch.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlPatchOperation {
+    /// The entity was created or updated.
+    Updated,
+    /// The entity was deleted.
+    Deleted,
+}

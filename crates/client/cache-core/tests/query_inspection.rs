@@ -107,14 +107,14 @@ fn enumerates_variants_aliases_and_misses_in_canonical_order() {
 
         // A different schema field on the same normalized user is ignored.
         let soup_query =
-            "query Soup($input: SoupInput!) { user { id soup(input: $input) { hasMore } } }";
+            "query Soup($input: SoupInput!) { user { id soup(input: $input) { nextCursor } } }";
         engine
             .write_query(
                 None,
                 soup_query,
                 Some("Soup"),
                 &object(json!({"input": {"initial": {"limit": 20}}})),
-                &json!({"user": {"id": "user-1", "soup": {"hasMore": false}}}),
+                &json!({"user": {"id": "user-1", "soup": {"nextCursor": null}}}),
                 None,
             )
             .await

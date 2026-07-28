@@ -20,6 +20,7 @@ use utoipa::OpenApi;
     paths(
         // Property definitions
         properties::inbound::axum_router::definitions::list_properties,
+        properties::inbound::axum_router::definitions::get_property_definition,
         properties::inbound::axum_router::definitions::create_property_definition,
         properties::inbound::axum_router::definitions::delete_property_definition,
         // Property options

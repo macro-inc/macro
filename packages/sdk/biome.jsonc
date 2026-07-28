@@ -1,0 +1,35 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "files": {
+    "includes": [
+      "**/*.ts",
+      // orval output and copied specs are build artifacts, not style-checked.
+      "!generated",
+      "!specs",
+      "!node_modules"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true
+  }
+}

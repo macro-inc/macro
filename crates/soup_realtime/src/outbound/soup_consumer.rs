@@ -10,11 +10,16 @@ mod test;
 use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
+use macro_event_broker::{
+    Event, EventBrokerError, KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService,
+    MessageParts, Topic, TopicEvent,
+};
+use rdkafka::message::Message as _;
 use rootcause::prelude::{Report, ResultExt as _};
+use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    models::{SoupMacroEvent, SoupRealtimeMessage},
+    models::{SoupMacroEvent, SoupRealtimeMessage, SoupTopicEvent},
     ports::SoupRealtimeConsumer,
 };
 
@@ -25,6 +30,31 @@ type IndependentKafkaConsumer = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEve
 type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
 macro_event_broker::declare_topics!(DeclaredMacroEvent: SoupMacroEvent);
+
+#[derive(Deserialize, Serialize)]
+struct SchemaVersionPayload {}
+
+impl TopicEvent for SchemaVersionPayload {
+    type Topic = <SoupTopicEvent as TopicEvent>::Topic;
+
+    const SCHEMA_VERSION: u8 = SoupTopicEvent::SCHEMA_VERSION;
+}
+
+fn validate_soup_schema(message: &impl MessageParts) -> Result<(), EventBrokerError> {
+    let payload = message
+        .payload()
+        .ok_or(EventBrokerError::MissingMessagePayload)?;
+    let actual = Event::<SchemaVersionPayload>::decode(payload)?.schema_version;
+    let expected = SoupTopicEvent::SCHEMA_VERSION;
+    if actual != expected {
+        return Err(EventBrokerError::UnsupportedSchemaVersion {
+            topic: <<SoupTopicEvent as TopicEvent>::Topic as Topic>::TOPIC_STR,
+            expected,
+            actual,
+        });
+    }
+    Ok(())
+}
 
 /// Independent consumer of recipient-targeted Soup messages.
 ///
@@ -58,21 +88,47 @@ impl SoupTopicConsumer {
 
     /// Receives and decodes the next typed realtime Soup event.
     ///
-    /// This operation is cancel-safe. Missing keys and malformed or unsupported
-    /// payloads are returned as errors; because the consumer is ungrouped, a
-    /// subsequent call proceeds to the next locally assigned record.
+    /// This operation is cancel-safe. Unsupported schema versions are poison
+    /// records and are skipped. Other missing or malformed payload data is
+    /// returned as an error.
     pub async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
-        let message = self
-            .consumer
-            .recv()
-            .await
-            .context("failed to receive realtime Soup event")?;
-        let event = message
-            .decode_payload()
-            .context("failed to decode realtime Soup event")?;
+        loop {
+            let message = self
+                .consumer
+                .recv()
+                .await
+                .context("failed to receive realtime Soup event")?;
+            let kafka_message = message.inner();
+            match validate_soup_schema(kafka_message) {
+                Ok(()) => {}
+                Err(EventBrokerError::UnsupportedSchemaVersion {
+                    topic,
+                    expected,
+                    actual,
+                }) => {
+                    tracing::warn!(
+                        topic,
+                        expected,
+                        actual,
+                        partition = kafka_message.partition(),
+                        offset = kafka_message.offset(),
+                        "dropping realtime Soup event with unsupported schema version"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    return Err(Report::new(error)
+                        .context("failed to decode realtime Soup event envelope")
+                        .into_dynamic());
+                }
+            }
 
-        match event {
-            DeclaredMacroEvent::SoupMacroEvent(event) => Ok(event.into_message()),
+            let event = message
+                .decode_payload()
+                .context("failed to decode realtime Soup event")?;
+            return match event {
+                DeclaredMacroEvent::SoupMacroEvent(event) => Ok(event.into_message()),
+            };
         }
     }
 }

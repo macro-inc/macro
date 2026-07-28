@@ -27,7 +27,7 @@ query Soup($input: SoupInput!) {
           }
         }
       }
-      hasMore
+      nextCursor
     }
   }
 }
@@ -86,7 +86,7 @@ fn soup_page(display_name: &str, value: &str) -> Json {
                         }
                     }]
                 }],
-                "hasMore": false
+                "nextCursor": null
             }
         }
     })
@@ -453,7 +453,7 @@ fn clear_and_identity_reset_drop_durable_queue() {
                 &json!({
                     "user": {
                         "id": "user-2",
-                        "soup": { "items": [], "hasMore": false }
+                        "soup": { "items": [], "nextCursor": null }
                     }
                 }),
                 Some("user-2"),

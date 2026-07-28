@@ -1,9 +1,9 @@
 # soup_realtime
 
-Hexagonal components for expanding `document.updated` Kafka events into one full `SoupItem<()>` message per current accessor. The item is loaded once through the first accessor and its user-specific `viewed_at` field is set to `None` before fan-out.
+Hexagonal components for turning existing document, project, chat, email, and channel Kafka events into recipient-targeted Soup patches.
 
-This crate intentionally does not start a consumer or wire itself into a service binary. A later composition root can combine the domain service with the entity-access, Soup repository, Kafka publisher, and Kafka consumer adapters exposed here.
+The inbound consumer maps each source event to `Patch::Updated(Entity)` or `Patch::Deleted(Entity)`. The domain service expands current access and publishes one patch per recipient to `macro.soup`; it does not hydrate or serialize `SoupItem` values. Channel threads use their containing channel as the access source.
 
-Delivery is at least once. If publication partially succeeds and processing is retried, downstream consumers may receive duplicate messages.
+The Soup topic carries `Patch<(MacroUserIdStr<'static>, Entity<'static>)>` and is also keyed by recipient user ID. Delivery is at least once: offsets are committed only after successful fan-out, and exhausted retries stop the consumer so its supervisor can restart it for redelivery. Downstream consumers must tolerate duplicate patches.
 
-`SoupRealtimeConsumerService` can run a realtime consumer adapter and distribute received items through instance-local, user-keyed subscriptions. Subscription values are shared as `Arc<SoupItem<()>>` so multiple subscribers do not require cloning the underlying item.
+`SoupRealtimeConsumerService` consumes recipient-targeted patches and distributes `Patch<Entity<'static>>` values through instance-local, user-keyed subscriptions.

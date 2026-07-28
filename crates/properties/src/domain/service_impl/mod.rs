@@ -929,6 +929,35 @@ where
     }
 
     #[tracing::instrument(skip(self, team), err)]
+    async fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> Result<PropertyDefinition, PropertiesErr> {
+        let definition = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)?;
+
+        if !definition.is_system {
+            self.repository
+                .get_property_definition_with_owner(
+                    property_definition_id,
+                    user_id,
+                    team_id_from_receipt(team),
+                )
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or(PropertiesErr::NotFound)?;
+        }
+
+        Ok(definition)
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
     async fn list_property_definitions(
         &self,
         team: Option<&TeamReceipt>,

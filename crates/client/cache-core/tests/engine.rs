@@ -17,7 +17,6 @@ query Soup($input: SoupInput!) {
         ... on GraphqlSoupDocument { documentName: name ownerId }
       }
       nextCursor
-      hasMore
     }
   }
 }
@@ -45,8 +44,7 @@ fn page_for_user(user: &str, names: &[(&str, &str)]) -> Json {
                     "documentName": name,
                     "ownerId": user
                 })).collect::<Vec<_>>(),
-                "nextCursor": null,
-                "hasMore": false
+                "nextCursor": null
             }
         }
     })
@@ -326,7 +324,6 @@ fn capacity_constrained_rewrite_preserves_fields() {
                 ... on GraphqlSoupDocument { documentName: name }
               }
               nextCursor
-              hasMore
             }
           }
         }
@@ -340,8 +337,7 @@ fn capacity_constrained_rewrite_preserves_fields() {
                         { "__typename": "GraphqlSoupDocument", "id": "doc-2", "documentName": "B2" },
                         { "__typename": "GraphqlSoupDocument", "id": "doc-3", "documentName": "C2" }
                     ],
-                    "nextCursor": null,
-                    "hasMore": false
+                    "nextCursor": null
                 }
             }
         });
