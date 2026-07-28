@@ -88,10 +88,7 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
-import {
-  isRealNamePart,
-  useOwnUserName,
-} from '@queries/auth/user-name-self';
+import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useJoinTeamMutation,

@@ -131,7 +131,7 @@ triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
-uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v7"] }
+uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 
@@ -259,7 +259,7 @@ triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
-uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v7"] }
+uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 

@@ -311,7 +311,9 @@ function NewOnboardingRedirect() {
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
     const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
     navigate(
-      isGenericEntry ? '/onboarding' : `/onboarding?next=${encodeURIComponent(target)}`,
+      isGenericEntry
+        ? '/onboarding'
+        : `/onboarding?next=${encodeURIComponent(target)}`,
       { replace: true }
     );
   });
