@@ -314,10 +314,9 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::ParticipantAdded(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::ParticipantRemoved(metadata) => vec![SoupRealtimePatch::for_users(
-            Patch::Deleted(entity(EntityType::Channel, metadata.channel_id)),
-            metadata.removed_user_ids.clone(),
-        )],
+        ChannelTopicEvent::ParticipantRemoved(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
         ChannelTopicEvent::Created(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }

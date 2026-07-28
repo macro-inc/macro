@@ -3,10 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use channels::domain::{
     broker_events::{
-        ChannelMessageAttachmentCreatedMetadata, ChannelMessageDeletedMetadata,
-        ChannelParticipantRemovedMetadata, ChannelTopicEvent,
+        ChannelMessageAttachmentCreatedMetadata, ChannelMessageDeletedMetadata, ChannelTopicEvent,
     },
-    models::{ChannelSender, ChannelType},
+    models::ChannelSender,
 };
 use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use documents::domain::events::{
@@ -299,28 +298,6 @@ fn attachment_events_use_only_metadata_available_on_the_existing_event() {
     assert_eq!(patches.len(), 1);
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
-}
-
-#[test]
-fn removing_channel_participants_sends_deletes_directly_to_them() {
-    let channel_id = Uuid::now_v7();
-    let removed_user = user();
-    let event = ChannelTopicEvent::ParticipantRemoved(ChannelParticipantRemovedMetadata {
-        channel_id,
-        channel_type: ChannelType::Private,
-        removed_by: removed_user.clone(),
-        removed_user_ids: vec![removed_user.clone()],
-    });
-
-    let patches = patches_from_channel_event(&event);
-    assert_eq!(patches.len(), 1);
-    assert!(matches!(patches[0].patch, Patch::Deleted(_)));
-    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
-    assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
-    assert_eq!(
-        patches[0].direct_recipients.as_deref(),
-        Some(&[removed_user][..])
-    );
 }
 
 #[test]
