@@ -99,7 +99,12 @@ async fn subscription_handler(
 }
 
 fn graphql_subscription_context_data(state: ApiContext, user: MacroUserIdStr<'static>) -> Data {
+    let soup_item_loader = complete_graph::soup_item_loader(
+        state.soup_router_state.service(),
+        state.soup_router_state.email_service(),
+    );
     let mut data = Data::default();
+    data.insert(soup_item_loader);
     data.insert(state);
     data.insert(user);
     data

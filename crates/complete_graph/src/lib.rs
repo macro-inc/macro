@@ -42,6 +42,7 @@ pub use graphql_properties::{
     PropertiesEntityPropertyReader, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
     entity_properties_loader,
 };
+pub use graphql_soup::{SoupItemDataLoader, soup_item_loader};
 pub use schema::{
     SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot, SoupSchema,
     SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,

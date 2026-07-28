@@ -149,3 +149,12 @@ impl<'a> GraphqlEntity<'a> {
         GraphqlEntityType::new(self.0.entity_type)
     }
 }
+
+/// defines either a update or delete operation
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlPatchOperation {
+    /// updated
+    Updated,
+    /// deleted
+    Deleted,
+}

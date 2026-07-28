@@ -6174,10 +6174,12 @@ dependencies = [
  "models_grouping",
  "models_pagination",
  "models_soup",
+ "rootcause",
  "serde",
  "serde_json",
  "soup",
  "soup_realtime",
+ "tokio",
  "uuid",
  "workspace-hack",
 ]

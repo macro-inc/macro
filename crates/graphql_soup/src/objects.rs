@@ -1,8 +1,12 @@
+use std::marker::PhantomData;
+
 use async_graphql::{
-    Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
+    ComplexObject, Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject,
+    Union,
 };
-use graphql_common::{GraphqlEntity, GraphqlSoupEntityType};
+use graphql_common::{GraphqlEntity, GraphqlPatchOperation, GraphqlSoupEntityType};
 use graphql_permission::GraphqlEntityPermission;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
@@ -20,7 +24,10 @@ use models_soup::{
 };
 use serde_json::Value;
 use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
+use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
+
+use crate::loaders::SoupItemDataLoader;
 
 /// Extension fields attached to every top-level Soup entity.
 ///
@@ -84,24 +91,19 @@ pub struct SoupPage<E: SoupEntityEdges> {
     items: Vec<GraphqlSoupEntity<E>>,
     /// Opaque cursor for the next page, if one exists.
     next_cursor: Option<String>,
-    /// Whether more items are available after this page.
-    has_more: bool,
 }
 
 impl<E: SoupEntityEdges> SoupPage<E> {
     /// Construct a GraphQL page from plain Soup items.
     pub fn new(page: PaginatedOpaqueCursor<SoupItem<()>>) -> Self {
-        let has_more = page.next_cursor.is_some();
         Self {
             items: page.items.into_iter().map(GraphqlSoupEntity::new).collect(),
             next_cursor: page.next_cursor,
-            has_more,
         }
     }
 
     /// Construct a GraphQL page from frecency-enriched Soup items.
     pub fn new_from_enriched(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
-        let has_more = page.next_cursor.is_some();
         Self {
             items: page
                 .items
@@ -109,7 +111,6 @@ impl<E: SoupEntityEdges> SoupPage<E> {
                 .map(GraphqlSoupEntity::new_from_enriched)
                 .collect(),
             next_cursor: page.next_cursor,
-            has_more,
         }
     }
 }
@@ -1722,3 +1723,52 @@ impl_common_interface_edges!(
     GraphqlSoupCrmCompany,
     GraphqlSoupForeignEntity,
 );
+
+/// Lightweight realtime Soup patch with optional lazy item hydration.
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub struct SoupPatch<E: SoupEntityEdges> {
+    /// Operation represented by this patch.
+    operation: GraphqlPatchOperation,
+    /// Canonical identity of the affected entity.
+    entity: GraphqlEntity<'static>,
+    /// User whose visibility scope must be used to hydrate the item.
+    #[graphql(skip)]
+    user_id: MacroUserIdStr<'static>,
+    /// Associates the patch with its composed Soup edge object.
+    #[graphql(skip)]
+    phantom: PhantomData<E>,
+}
+
+impl<E: SoupEntityEdges> SoupPatch<E> {
+    /// Construct a GraphQL patch for one recipient-targeted domain patch.
+    pub fn new(
+        user_id: MacroUserIdStr<'static>,
+        patch: Patch<model_entity::Entity<'static>>,
+    ) -> Self {
+        let (operation, entity) = match patch {
+            Patch::Updated(entity) => (GraphqlPatchOperation::Updated, entity),
+            Patch::Deleted(entity) => (GraphqlPatchOperation::Deleted, entity),
+        };
+        Self {
+            operation,
+            entity: GraphqlEntity(entity),
+            user_id,
+            phantom: PhantomData,
+        }
+    }
+}
+
+#[ComplexObject]
+impl<E: SoupEntityEdges> SoupPatch<E> {
+    /// Hydrate the current Soup item only when selected by the client.
+    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
+        if self.operation == GraphqlPatchOperation::Deleted {
+            return Ok(None);
+        }
+
+        let loader = ctx.data::<SoupItemDataLoader>()?;
+        let key = (self.user_id.clone(), self.entity.0.clone());
+        Ok(loader.load_one(key).await?.map(GraphqlSoupEntity::new))
+    }
+}
