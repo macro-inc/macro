@@ -211,6 +211,9 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_soup_ast_handler,
         soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
+        // channel list (comms hex)
+        channels::inbound::list_router::get_channels_handler,
+
         // channels
         channels::inbound::axum_router::create_channel_handler,
         channels::inbound::axum_router::get_or_create_dm_handler,
@@ -262,6 +265,8 @@ use utoipa::OpenApi;
         call::inbound::axum_router::webhook_handler,
         webhook::inbound::axum_router::create_webhook,
         webhook::inbound::axum_router::delete_webhook,
+        webhook::inbound::axum_router::get_webhook,
+        webhook::inbound::axum_router::list_webhooks,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
         call::inbound::axum_router::ring_status_handler,
@@ -445,6 +450,14 @@ use utoipa::OpenApi;
             GroupedSoupGroupPage,
             GroupedSoupPage,
 
+            // Channel list (comms hex)
+            channels::inbound::list_router::ApiChannelListPage,
+            channels::inbound::list_router::ApiChannelWithLatest,
+            channels::inbound::list_router::ApiChannelListMessage,
+            channels::inbound::list_router::ApiChannelListParticipant,
+            channels::inbound::list_router::ApiChannelListType,
+            channels::inbound::list_router::ApiParticipantListRole,
+
             // Channels
             ApiChannelMessagesPage,
             ApiChannelMessage,
@@ -532,13 +545,16 @@ use utoipa::OpenApi;
             SoupCallRecordParticipant,
 
             // Webhooks
+            webhook::domain::events::WebhookEvent,
             webhook::domain::models::CreateWebhookRequest,
             webhook::domain::models::CreateWebhookResponse,
+            webhook::domain::models::ListWebhooksResponse,
             webhook::domain::models::PatchWebhookRequest,
             webhook::domain::models::ValidateWebhookResponse,
             webhook::domain::models::Webhook,
             webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
+            webhook::domain::models::WebhookValidationTestEvent,
 
             DocumentSubType,
 

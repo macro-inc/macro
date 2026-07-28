@@ -65,6 +65,12 @@ pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
         })
 }
 
+/// `oven-sh/setup-bun` — installs Bun on the runner. Version-tagged (not
+/// SHA-pinned) to match the JS deploy/publish workflows.
+pub fn setup_bun() -> Step<Use> {
+    Step::new("Setup Bun").uses("oven-sh", "setup-bun", "v2")
+}
+
 /// Install the Rust toolchain only (no sccache, no cache) — for the lightweight
 /// `path-check` and workflow-drift jobs.
 pub fn setup_rust_light() -> Step<Use> {

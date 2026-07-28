@@ -107,8 +107,8 @@ describe('ModelSelector: selection routing', () => {
       />
     ));
 
-    fireEvent.click(itemFor(container, Model.gpt55));
-    expect(onSelect).toHaveBeenCalledWith(Model.gpt55);
+    fireEvent.click(itemFor(container, Model.gpt56));
+    expect(onSelect).toHaveBeenCalledWith(Model.gpt56);
     expect(onLocked).not.toHaveBeenCalled();
   });
 
@@ -158,9 +158,9 @@ describe('ModelSelector: what is shown is what is sent', () => {
 
     // Select a different model -> both the trigger and the would-send value move
     // together to exactly that model.
-    fireEvent.click(itemFor(container, Model.sonnet46));
-    expect(getByTestId('would-send').textContent).toBe(Model.sonnet46);
-    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.sonnet46]);
+    fireEvent.click(itemFor(container, Model.sonnet5));
+    expect(getByTestId('would-send').textContent).toBe(Model.sonnet5);
+    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.sonnet5]);
   });
 
   it('a free user cannot select an inaccessible model into the would-send value', () => {

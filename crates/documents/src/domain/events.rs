@@ -16,6 +16,7 @@ use super::models::FileTypeUpdate;
 
 /// Metadata for [`DocumentTopicEvent::Created`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
@@ -35,6 +36,7 @@ pub struct DocumentCreatedMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Updated`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentUpdatedMetadata {
     /// The id of the updated document.
     pub document_id: String,
@@ -58,6 +60,7 @@ pub struct DocumentUpdatedMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Deleted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentDeletedMetadata {
     /// The id of the deleted document.
     pub document_id: String,
@@ -70,6 +73,7 @@ pub struct DocumentDeletedMetadata {
 
 /// Why a document interaction was reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum InteractionReason {
     /// A periodic save of pending content changes.
@@ -82,6 +86,7 @@ pub enum InteractionReason {
 
 /// Metadata for [`DocumentTopicEvent::Interaction`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentInteractionMetadata {
     /// The id of the document.
     pub document_id: String,
@@ -91,6 +96,7 @@ pub struct DocumentInteractionMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Copied`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentCopiedMetadata {
     /// The id of the newly created copy.
     pub document_id: String,
@@ -112,6 +118,7 @@ pub struct DocumentCopiedMetadata {
 
 /// Events that can be published to [`MacroDocumentsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum DocumentTopicEvent {
     /// A document was created.

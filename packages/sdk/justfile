@@ -1,0 +1,26 @@
+# Macro SDK tasks.
+
+# Fully refresh all generated code: rebuild the OpenAPI specs from the Rust
+# services (via apps/web's gen-api), copy them into ./specs, and regenerate
+# ./generated with orval.
+update-generated:
+    cd ../../apps/web && bun install && bun run gen-api
+    bun install
+    bun run sync-specs
+    bun run generate
+
+# Regenerate ./generated from the specs already in ./specs (no Rust build).
+generate:
+    bun install
+    bun run generate
+
+# Typecheck the SDK (hand-written + generated layers).
+check:
+    bun install
+    bun run check
+
+# Check endpoint coverage: every generated endpoint must either have a call
+# site under src/ or be hand-listed in src/coverage/skipped.ts.
+coverage:
+    bun install
+    bun run coverage

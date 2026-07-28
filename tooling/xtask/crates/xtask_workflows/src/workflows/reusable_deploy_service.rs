@@ -214,6 +214,7 @@ fn get_project_name() -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
     .id("project-name")
+    .if_condition(Expression::new("${{ inputs.pulumi-stack-name == '' }}"))
     .add_with(("service-name", "${{ inputs.service-name }}"))
 }
 

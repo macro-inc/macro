@@ -1,0 +1,45 @@
+{
+  "name": "@macro/sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Libary for interacting with Macro.com",
+  "main": "./dist/src/macro.js",
+  "module": "./dist/src/macro.js",
+  "types": "./dist/src/macro.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/src/macro.d.ts",
+      "import": "./dist/src/macro.js"
+    },
+    "./generated/*": {
+      "types": "./dist/generated/*/index.d.ts",
+      "import": "./dist/generated/*/index.js"
+    }
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "sync-specs": "bun scripts/sync-specs.ts",
+    "validate-webhook": "bun scripts/validate-webhook.ts",
+    "coverage": "bun src/coverage/check.ts",
+    "generate": "openapi-ts",
+    "build:js": "bun scripts/build.ts",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "bun run build:js && bun run build:types",
+    "prepublishOnly": "bun run build",
+    "check": "tsc --noEmit",
+    "lint": "biome check",
+    "format": "biome format --write"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/bun": "^1.3.5",
+    "esbuild": "^0.28.1",
+    "hono": "^4.12.27",
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "^5.9.2"
+  }
+}

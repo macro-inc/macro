@@ -1,7 +1,8 @@
 use super::axum_router::{WebhookRouterState, webhook_router};
 use crate::domain::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookId,
+        CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,
+        Webhook, WebhookId,
     },
     ports::{WebhookError, WebhookService},
 };
@@ -35,6 +36,8 @@ struct FakeService {
 #[derive(Debug)]
 enum ServiceCall {
     Create(MacroUserIdStr<'static>, CreateWebhookRequest),
+    Get(MacroUserIdStr<'static>, WebhookId),
+    List(MacroUserIdStr<'static>),
     Patch(MacroUserIdStr<'static>, WebhookId, PatchWebhookRequest),
     Validate(MacroUserIdStr<'static>, WebhookId),
     Delete(MacroUserIdStr<'static>, WebhookId),
@@ -42,6 +45,7 @@ enum ServiceCall {
 
 enum ServiceResponse {
     Webhook(Webhook),
+    List(ListWebhooksResponse),
     Validate(ValidateWebhookResponse),
 }
 
@@ -59,6 +63,8 @@ impl Clone for ServiceCall {
     fn clone(&self) -> Self {
         match self {
             Self::Create(user, request) => Self::Create(user.clone(), request.clone()),
+            Self::Get(user, id) => Self::Get(user.clone(), id.clone()),
+            Self::List(user) => Self::List(user.clone()),
             Self::Patch(user, id, request) => {
                 Self::Patch(user.clone(), id.clone(), request.clone())
             }
@@ -128,7 +134,43 @@ impl WebhookService for FakeService {
             .unwrap_or_else(|| Ok(ServiceResponse::Webhook(webhook())))?
         {
             ServiceResponse::Webhook(webhook) => Ok(webhook),
-            ServiceResponse::Validate(_) => panic!("unexpected validate response"),
+            _ => panic!("unexpected non-webhook response"),
+        }
+    }
+
+    async fn get_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> Result<Webhook, WebhookError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(ServiceCall::Get(caller, webhook_id));
+        match self
+            .response
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap_or_else(|| Ok(ServiceResponse::Webhook(webhook())))?
+        {
+            ServiceResponse::Webhook(webhook) => Ok(webhook),
+            _ => panic!("unexpected non-webhook response"),
+        }
+    }
+
+    async fn list_webhooks(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<ListWebhooksResponse, WebhookError> {
+        self.calls.lock().unwrap().push(ServiceCall::List(caller));
+        match self.response.lock().unwrap().take().unwrap_or_else(|| {
+            Ok(ServiceResponse::List(ListWebhooksResponse {
+                webhooks: vec![webhook()],
+            }))
+        })? {
+            ServiceResponse::List(response) => Ok(response),
+            _ => panic!("unexpected non-list response"),
         }
     }
 
@@ -150,7 +192,7 @@ impl WebhookService for FakeService {
             .unwrap_or_else(|| Ok(ServiceResponse::Webhook(webhook())))?
         {
             ServiceResponse::Webhook(webhook) => Ok(webhook),
-            ServiceResponse::Validate(_) => panic!("unexpected validate response"),
+            _ => panic!("unexpected non-webhook response"),
         }
     }
 
@@ -171,7 +213,7 @@ impl WebhookService for FakeService {
             .unwrap_or_else(|| Ok(ServiceResponse::Validate(validate_response(true))))?
         {
             ServiceResponse::Validate(response) => Ok(response),
-            ServiceResponse::Webhook(_) => panic!("unexpected webhook response"),
+            _ => panic!("unexpected non-validate response"),
         }
     }
 
@@ -288,6 +330,58 @@ async fn patch_passes_authenticated_user_path_and_body_to_service() {
             assert_eq!(webhook_id, "wh_123");
             assert_eq!(request.name.as_deref(), Some("Renamed"));
         }
+        other => panic!("unexpected call: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn get_passes_authenticated_user_and_path_to_service() {
+    let service = FakeService::default();
+    let response = send(
+        service.clone(),
+        FakeRateLimiter::default(),
+        "GET",
+        "/webhooks/wh_123",
+        json!({}),
+    )
+    .await;
+
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.get("id").is_some());
+    assert!(body.get("signing_secret").is_none());
+    match &service.calls()[0] {
+        ServiceCall::Get(user, webhook_id) => {
+            assert_eq!(user.as_ref(), user_id());
+            assert_eq!(webhook_id, "wh_123");
+        }
+        other => panic!("unexpected call: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn list_passes_authenticated_user_to_service_and_is_not_rate_limited() {
+    let service = FakeService::default();
+    let limiter = FakeRateLimiter::exceeded();
+    let response = send(
+        service.clone(),
+        limiter.clone(),
+        "GET",
+        "/webhooks",
+        json!({}),
+    )
+    .await;
+
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["webhooks"].is_array());
+    assert_eq!(limiter.checks(), 0);
+    match &service.calls()[0] {
+        ServiceCall::List(user) => assert_eq!(user.as_ref(), user_id()),
         other => panic!("unexpected call: {other:?}"),
     }
 }

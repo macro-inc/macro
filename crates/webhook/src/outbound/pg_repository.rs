@@ -201,6 +201,41 @@ impl WebhookRepo for PgRepository {
     }
 
     #[tracing::instrument(skip(self, workspace_ids), err)]
+    async fn list_webhooks_for_workspaces(
+        &self,
+        workspace_ids: Vec<String>,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        let rows = sqlx::query_as!(
+            WebhookRow,
+            r#"
+            SELECT
+                w.id,
+                w.workspace_id,
+                w.name,
+                w.endpoint_url,
+                w.signing_secret,
+                w.headers,
+                w.status,
+                w.is_valid,
+                w.created_by_user_id,
+                w.created_at,
+                w.updated_at,
+                w.deleted_at,
+                w.filters
+            FROM webhook w
+            WHERE w.workspace_id = ANY($1)
+              AND w.deleted_at IS NULL
+            ORDER BY w.created_at DESC, w.id DESC
+            "#,
+            &workspace_ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_webhook).collect()
+    }
+
+    #[tracing::instrument(skip(self, workspace_ids), err)]
     async fn list_active_webhooks_matching_event(
         &self,
         workspace_ids: Vec<String>,

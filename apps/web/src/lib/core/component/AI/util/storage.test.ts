@@ -11,19 +11,19 @@ beforeEach(() => {
 
 describe('chat input storage: model defaults', () => {
   it('remembers the last model a user picked for a chat', () => {
-    storeChatStateImmediate('chat-a', { model: Model.gpt55, input: 'draft' });
+    storeChatStateImmediate('chat-a', { model: Model.gpt56, input: 'draft' });
 
     const restored = getChatInputStoredState('chat-a');
-    expect(restored.model).toBe(Model.gpt55);
+    expect(restored.model).toBe(Model.gpt56);
     expect(restored.input).toBe('draft');
   });
 
   it('keeps each chat on its own remembered model', () => {
-    storeChatStateImmediate('chat-a', { model: Model.gpt55 });
-    storeChatStateImmediate('chat-b', { model: Model.sonnet46 });
+    storeChatStateImmediate('chat-a', { model: Model.gpt56 });
+    storeChatStateImmediate('chat-b', { model: Model.sonnet5 });
 
-    expect(getChatInputStoredState('chat-a').model).toBe(Model.gpt55);
-    expect(getChatInputStoredState('chat-b').model).toBe(Model.sonnet46);
+    expect(getChatInputStoredState('chat-a').model).toBe(Model.gpt56);
+    expect(getChatInputStoredState('chat-b').model).toBe(Model.sonnet5);
   });
 
   it('returns no stored model for a chat that has never been used', () => {

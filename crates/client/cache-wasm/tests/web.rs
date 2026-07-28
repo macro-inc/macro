@@ -15,7 +15,6 @@ const QUERY: &str = r#"query Soup($input: SoupInput!) {
         id
         soup(input: $input) {
             nextCursor
-            hasMore
             items {
                 __typename
                 id
@@ -41,7 +40,6 @@ async fn write_then_read_through_js_boundary() {
             "id": "user-1",
             "soup": {
                 "nextCursor": null,
-                "hasMore": false,
                 "items": [{ "__typename": "GraphqlSoupDocument", "id": "doc-1" }]
             }
         }
@@ -148,7 +146,7 @@ async fn write_then_read_through_js_boundary() {
 }
 
 const PROPERTY_QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { hasMore items {
+    user { id soup(input: $input) { nextCursor items {
         __typename
         id
         ... on GraphqlSoupDocument { properties { id displayName } }
@@ -168,7 +166,7 @@ async fn optimistic_write_round_trip() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let base = serde_json::json!({
-        "user": { "id": "user-1", "soup": { "hasMore": false, "items": [{
+        "user": { "id": "user-1", "soup": { "nextCursor": null, "items": [{
             "__typename": "GraphqlSoupDocument",
             "id": "doc-1",
             "properties": [{ "id": "prop-1", "displayName": "Status" }]

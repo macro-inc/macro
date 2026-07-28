@@ -31,6 +31,7 @@ inbound = [
   "entity_access/inbound",
   "models_pagination/axum",
   "ports",
+  "schema",
 ]
 list = [
   "dep:filter_ast",
@@ -72,6 +73,7 @@ entity_mutation = [
   "ports",
 ]
 ports = ["dep:tokio"]
+schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
 anyhow = { workspace = true }

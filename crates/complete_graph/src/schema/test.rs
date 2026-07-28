@@ -21,10 +21,12 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
+use model_entity::EntityType as ModelEntityType;
 use model_user::UserContext;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use models_soup::{document::SoupDocument, item::SoupItem};
 use rootcause::Report;
+use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
 use super::*;
@@ -35,8 +37,7 @@ const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone)]
 struct TestRealtimeSubscriptionService {
-    #[allow(clippy::type_complexity)]
-    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>>>>>,
+    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Patch<model_entity::Entity<'static>>>>>>,
     subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
 }
 
@@ -44,7 +45,7 @@ impl SoupRealtimeSubscriptionService for TestRealtimeSubscriptionService {
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+    ) -> tokio::sync::mpsc::Receiver<Patch<model_entity::Entity<'static>>> {
         *self.subscribed_user.lock().expect("subscribed user lock") = Some(user_id);
         self.receiver
             .lock()
@@ -616,7 +617,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoOpEntityPermissionEdgeReader,
     > = build_schema_with_services(NoOpSoupService, realtime);
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { id entityType ... on GraphqlSoupDocument { name } } }",
+        "subscription { soupUpdates { operation entity { id entityType } } }",
     )
     .data(user_id.clone());
     let responses = schema.execute_stream(request);
@@ -624,19 +625,18 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 
     let document_id = Uuid::from_u128(42);
     sender
-        .send(Arc::new(grouped_document(document_id).map_extra(|_| ())))
+        .send(Patch::Updated(
+            ModelEntityType::Document.with_entity_string(document_id.to_string()),
+        ))
         .await
         .expect("subscription remains open");
     let response = responses.next().await.expect("one subscription response");
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().expect("response data is JSON");
-    assert_eq!(data["soupUpdates"]["id"], document_id.to_string());
-    assert_eq!(data["soupUpdates"]["entityType"], "DOCUMENT");
-    assert_eq!(
-        data["soupUpdates"]["name"],
-        format!("Document {document_id}")
-    );
+    assert_eq!(data["soupUpdates"]["operation"], "UPDATED");
+    assert_eq!(data["soupUpdates"]["entity"]["id"], document_id.to_string());
+    assert_eq!(data["soupUpdates"]["entity"]["entityType"], "DOCUMENT");
     assert_eq!(
         subscribed_user
             .lock()
@@ -688,7 +688,7 @@ async fn soup_passes_team_receipt_to_raw_path() {
     let harness = harness();
 
     let _response = harness
-        .execute("{ user { soup(input: {initial: {}}) { hasMore } } }")
+        .execute("{ user { soup(input: {initial: {}}) { nextCursor } } }")
         .await;
 
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
@@ -708,7 +708,7 @@ async fn soup_input_rejects_initial_and_continuation_together() {
 
     let response = harness
         .execute(
-            r#"{ user { soup(input: {initial: {}, continuation: {cursor: "invalid"}}) { hasMore } } }"#,
+            r#"{ user { soup(input: {initial: {}, continuation: {cursor: "invalid"}}) { nextCursor } } }"#,
         )
         .await;
 
@@ -778,7 +778,7 @@ async fn crm_scoped_soup_resolves_team_membership_lazily() {
     // input still receives the always-resolved team receipt.
     let response = harness
         .execute(
-            r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { hasMore } } }"#,
+            r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { nextCursor } } }"#,
         )
         .await;
 

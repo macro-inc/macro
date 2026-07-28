@@ -336,6 +336,91 @@ export const createPropertyDefinitionBody = zod
   .describe('Request to create a new property definition.');
 
 /**
+ * @summary Get a property definition by ID
+ */
+export const getPropertyDefinitionParams = zod.object({
+  definition_id: zod.uuid().describe('Property definition ID'),
+});
+
+export const getPropertyDefinitionResponse = zod
+  .object({
+    created_at: zod.iso.datetime({}),
+    data_type: zod
+      .enum([
+        'BOOLEAN',
+        'DATE',
+        'NUMBER',
+        'STRING',
+        'SELECT_NUMBER',
+        'SELECT_STRING',
+        'TAG',
+        'ENTITY',
+        'LINK',
+      ])
+      .describe(
+        'Data type for property values, determining storage and validation.'
+      ),
+    display_name: zod.string(),
+    id: zod.uuid(),
+    is_metadata: zod
+      .boolean()
+      .describe(
+        'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+      ),
+    is_multi_select: zod.boolean(),
+    is_system: zod
+      .boolean()
+      .describe(
+        'Flag to indicate if this is a system property (stored in DB).'
+      ),
+    owner: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['user']),
+            user_id: zod.string(),
+          })
+          .describe('User-scoped property.'),
+        zod
+          .object({
+            scope: zod.enum(['team']),
+            team_id: zod.uuid(),
+          })
+          .describe('Team-scoped property.'),
+        zod
+          .object({
+            scope: zod.enum(['system']),
+          })
+          .describe('System-owned property (no user or team owner).'),
+      ])
+      .describe(
+        'Defines who owns a property - user-scoped, team-scoped, or system.'
+      ),
+    specific_entity_type: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'CALL_RECORD',
+            'CHANNEL',
+            'CHAT',
+            'COMPANY',
+            'DOCUMENT',
+            'PROJECT',
+            'TASK',
+            'THREAD',
+            'USER',
+          ])
+          .describe(
+            'Type of entity that can be referenced by entity properties.'
+          ),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}),
+  })
+  .describe('Property definition model (service representation).');
+
+/**
  * @summary Delete a property definition
  */
 export const deletePropertyDefinitionParams = zod.object({

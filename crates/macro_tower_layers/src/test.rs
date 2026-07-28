@@ -14,6 +14,7 @@ use tracing::{
 struct CapturedTracing {
     event_levels: Mutex<Vec<Level>>,
     span_level: Mutex<Option<Level>>,
+    span_target: Mutex<Option<String>>,
     declared_span_fields: Mutex<HashSet<String>>,
     initial_span_fields: Mutex<HashMap<String, String>>,
     recorded_span_fields: Mutex<HashMap<String, String>>,
@@ -61,6 +62,7 @@ impl tracing::Subscriber for TracingCapture {
 
     fn new_span(&self, attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
         *self.captured.span_level.lock().unwrap() = Some(*attrs.metadata().level());
+        *self.captured.span_target.lock().unwrap() = Some(attrs.metadata().target().to_owned());
         *self.captured.declared_span_fields.lock().unwrap() = attrs
             .metadata()
             .fields()
@@ -111,6 +113,10 @@ fn request_span_uses_info_and_safe_structured_fields() {
     });
 
     assert_eq!(*captured.span_level.lock().unwrap(), Some(Level::INFO));
+    assert_eq!(
+        captured.span_target.lock().unwrap().as_deref(),
+        Some(HTTP_REQUEST_SPAN_TARGET)
+    );
 
     let declared_fields = captured.declared_span_fields.lock().unwrap();
     assert!(declared_fields.contains("http.request.method"));

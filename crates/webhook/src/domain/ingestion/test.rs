@@ -253,6 +253,13 @@ impl WebhookRepo for MockRepository {
         unimplemented!("not used by webhook event ingestion")
     }
 
+    async fn list_webhooks_for_workspaces(
+        &self,
+        _workspace_ids: Vec<String>,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        unimplemented!("not used by webhook event ingestion")
+    }
+
     async fn list_active_webhooks_matching_event(
         &self,
         workspace_ids: Vec<String>,

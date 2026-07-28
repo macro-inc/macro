@@ -1285,6 +1285,20 @@ type GraphqlNumberPropertyValue {
 }
 
 """
+Operation carried by a realtime entity patch.
+"""
+enum GraphqlPatchOperation {
+	"""
+	The entity was created or updated.
+	"""
+	UPDATED
+	"""
+	The entity was deleted.
+	"""
+	DELETED
+}
+
+"""
 The two operands of a recursive `ProjectFilterExpr` binary expression.
 """
 input GraphqlProjectBinaryExpr {
@@ -3254,10 +3268,24 @@ type SoupPage {
 	Opaque cursor for the next page, if one exists.
 	"""
 	nextCursor: String
+}
+
+"""
+Lightweight realtime Soup patch with optional lazy item hydration.
+"""
+type SoupPatch {
 	"""
-	Whether more items are available after this page.
+	Operation represented by this patch.
 	"""
-	hasMore: Boolean!
+	operation: GraphqlPatchOperation!
+	"""
+	Canonical identity of the affected entity.
+	"""
+	entity: GraphqlEntity!
+	"""
+	Hydrate the current Soup item only when selected by the client.
+	"""
+	item: GraphqlSoupEntity
 }
 
 """
@@ -3277,7 +3305,7 @@ type SoupSubscriptionRoot {
 	"""
 	Subscribe to realtime Soup updates for the authenticated user.
 	"""
-	soupUpdates: GraphqlSoupEntity!
+	soupUpdates: SoupPatch!
 }
 
 """

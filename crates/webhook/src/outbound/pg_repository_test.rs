@@ -401,6 +401,75 @@ async fn list_matching_event_excludes_ineligible_webhooks(pool: PgPool) -> anyho
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_for_workspaces_returns_every_status_except_deleted(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let filter = vec![webhook_filter(&["document.created"], None)];
+    // Management view: paused and invalid webhooks are included, unlike the delivery view.
+    insert_webhook_for_matching(
+        &pool,
+        "wh_active",
+        USER_ID,
+        filter.clone(),
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_paused",
+        USER_ID,
+        filter.clone(),
+        WebhookStatus::Paused,
+        false,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_team",
+        TEAM_ID,
+        filter.clone(),
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    // Excluded: soft-deleted, and a workspace the caller does not own.
+    insert_webhook_for_matching(
+        &pool,
+        "wh_deleted",
+        USER_ID,
+        filter.clone(),
+        WebhookStatus::Active,
+        true,
+        true,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_other_workspace",
+        OTHER_WORKSPACE_ID,
+        filter,
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool);
+
+    let webhooks = repo
+        .list_webhooks_for_workspaces(vec![USER_ID.to_string(), TEAM_ID.to_string()])
+        .await?;
+
+    let mut ids = webhook_ids(&webhooks);
+    ids.sort_unstable();
+    assert_eq!(ids, vec!["wh_active", "wh_paused", "wh_team"]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn resolved_workspaces_match_personal_and_related_team_webhooks(
     pool: PgPool,
 ) -> anyhow::Result<()> {

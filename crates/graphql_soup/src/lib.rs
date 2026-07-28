@@ -8,6 +8,8 @@
 
 /// GraphQL inputs and conversion into Soup domain requests.
 mod inputs;
+/// DataLoader-backed hydration for realtime Soup patches.
+mod loaders;
 /// GraphQL objects representing Soup pages and entities.
 mod objects;
 /// Top-level Soup query resolver.
@@ -15,10 +17,15 @@ mod resolvers;
 
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
+pub use loaders::{
+    EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader, SoupItemLoader,
+    SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
+};
 pub use objects::{
     GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
     GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
     GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
     GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupEntityEdges, SoupPage,
+    SoupPatch,
 };
 pub use resolvers::{resolve_grouped_soup, resolve_soup, resolve_soup_updates};

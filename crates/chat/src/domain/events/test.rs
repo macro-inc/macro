@@ -160,6 +160,19 @@ fn topic_events() -> Vec<(ChatTopicEvent, Value)> {
                 }
             }),
         ),
+        (
+            ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                message_id: MESSAGE_ID.to_string(),
+            }),
+            json!({
+                "event_type": "chat.message_deleted",
+                "metadata": {
+                    "chat_id": CHAT_ID,
+                    "message_id": MESSAGE_ID
+                }
+            }),
+        ),
     ]
 }
 
@@ -176,6 +189,7 @@ fn macro_events() -> Vec<ChatMacroEvent> {
             ChatTopicEvent::Restored(metadata) => ChatMacroEvent::restored(metadata),
             ChatTopicEvent::Copied(metadata) => ChatMacroEvent::copied(metadata),
             ChatTopicEvent::MessageSent(metadata) => ChatMacroEvent::message_sent(metadata),
+            ChatTopicEvent::MessageDeleted(metadata) => ChatMacroEvent::message_deleted(metadata),
         })
         .collect()
 }

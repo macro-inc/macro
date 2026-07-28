@@ -17,7 +17,8 @@ import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { type Client, createClient, fetchExchange } from '@urql/core';
 import { match } from 'ts-pattern';
-import type { SoupApiItem, SoupPage } from './generated/schemas';
+import type { SoupApiItem } from './generated/schemas/soupApiItem';
+import type { SoupPage } from './generated/schemas/soupPage';
 import {
   type GroupedSoupInput,
   type GroupSoupQuery,
@@ -306,7 +307,10 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
   return notifications.map((notification) => ({
     id: notification.id,
     notification_event_type: notification.eventType,
-    notification_metadata: notification.metadata,
+    notification_metadata: {
+      tag: notification.eventType,
+      content: notification.metadata,
+    },
     entity_id: notification.entityId,
     entity_type: mapGraphqlNotificationEntityType(notification.entityType),
     sent: notification.sent,

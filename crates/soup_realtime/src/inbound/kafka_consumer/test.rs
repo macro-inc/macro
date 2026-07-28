@@ -1,12 +1,24 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use channels::domain::{
+    broker_events::{
+        ChannelMessageAttachmentCreatedMetadata, ChannelMessageDeletedMetadata, ChannelTopicEvent,
+    },
+    models::ChannelSender,
+};
+use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use documents::domain::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentInteractionMetadata, DocumentUpdatedMetadata, InteractionReason,
+    DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentInteractionMetadata,
+    DocumentUpdatedMetadata, InteractionReason,
+};
+use email::domain::events::{
+    EmailEventOrigin, EmailTopicEvent, ThreadReadMetadata, ThreadTrashedMetadata,
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
+use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
+use uuid::Uuid;
 
 use super::*;
 
@@ -51,49 +63,20 @@ fn updated_event() -> Event<DocumentTopicEvent> {
     }))
 }
 
-fn ignored_events() -> Vec<DocumentTopicEvent> {
-    vec![
-        DocumentTopicEvent::Created(DocumentCreatedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            owner: user(),
-            document_name: "Created".to_string(),
-            file_type: None,
-            project_id: None,
-            sub_type: None,
-            created_at: None,
-        }),
-        DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            actor_user_id: None,
-            project_id: None,
-        }),
-        DocumentTopicEvent::Copied(DocumentCopiedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            source_document_id: "00000000-0000-0000-0000-000000000002".to_string(),
-            source_version_id: None,
-            owner: user(),
-            document_name: "Copied".to_string(),
-            file_type: None,
-            project_id: None,
-            sub_type: None,
-        }),
-        DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            reason: InteractionReason::Edited,
-        }),
-    ]
+fn patch_entity(patch: &SoupRealtimePatch) -> &Entity<'static> {
+    patch.patch.value()
 }
 
 #[derive(Clone)]
 struct FlakyService {
     attempts: Arc<AtomicU32>,
     failures: u32,
-    entities: Arc<Mutex<Vec<Entity<'static>>>>,
+    patches: Arc<Mutex<Vec<SoupRealtimePatch>>>,
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(&self, entity: Entity<'static>) -> Result<(), Report> {
-        self.entities.lock().expect("entities lock").push(entity);
+    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+        self.patches.lock().expect("patches lock").push(patch);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if attempt <= self.failures {
             Err(rootcause::report!("temporary fan-out failure"))
@@ -107,46 +90,255 @@ fn flaky_service(failures: u32) -> FlakyService {
     FlakyService {
         attempts: Arc::new(AtomicU32::new(0)),
         failures,
-        entities: Arc::new(Mutex::new(Vec::new())),
+        patches: Arc::new(Mutex::new(Vec::new())),
     }
 }
 
 #[test]
-fn subscribes_only_to_documents() {
-    assert_eq!(DeclaredMacroEvent::topics(), ["macro.documents"]);
+fn subscribes_to_all_existing_soup_source_topics() {
+    assert_eq!(
+        DeclaredMacroEvent::topics(),
+        [
+            "macro.documents",
+            "macro.projects",
+            "macro.chats",
+            "macro.email",
+            "macro.channels",
+        ]
+    );
+}
+
+#[test]
+fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
+    let created = DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user(),
+        document_name: "Created".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    });
+    let deleted = DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        actor_user_id: None,
+        project_id: None,
+    });
+
+    let created = patches_from_document_event(&created);
+    assert!(matches!(created[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&created[0]).entity_type, EntityType::Document);
+
+    let deleted = patches_from_document_event(&deleted);
+    assert!(matches!(deleted[0].patch, Patch::Deleted(_)));
+    assert_eq!(patch_entity(&deleted[0]).entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn moving_a_document_out_of_a_project_updates_the_previous_project() {
+    let previous_project_id = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user(),
+        actor_user_id: None,
+        document_name: None,
+        previous_project_id: Some(previous_project_id.clone()),
+        project_id: None,
+        file_type: None,
+        share_permission_updated: false,
+    });
+
+    let patches = patches_from_document_event(&event);
+    assert_eq!(patches.len(), 2);
+    assert!(matches!(patches[1].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Project);
+    assert_eq!(patch_entity(&patches[1]).entity_id, previous_project_id);
+}
+
+#[test]
+fn document_edit_interactions_map_to_updated_patches() {
+    let edited = DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        reason: InteractionReason::Edited,
+    });
+    let first_join = DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        reason: InteractionReason::FirstJoin,
+    });
+
+    assert!(matches!(
+        patches_from_document_event(&edited)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(patches_from_document_event(&first_join).is_empty());
+}
+
+#[test]
+fn project_deletion_maps_cascade_entities_to_deleted_patches() {
+    let project_id = Uuid::now_v7().to_string();
+    let child_id = Uuid::now_v7().to_string();
+    let document_id = Uuid::now_v7().to_string();
+    let chat_id = Uuid::now_v7().to_string();
+    let event = ProjectTopicEvent::Deleted(ProjectDeletedMetadata {
+        project_id: project_id.clone(),
+        owner: user(),
+        actor_user_id: None,
+        parent_project_id: None,
+        deleted_project_ids: vec![project_id.clone(), child_id.clone()],
+        deleted_document_ids: vec![document_id.clone()],
+        deleted_chat_ids: vec![chat_id.clone()],
+    });
+
+    let patches = patches_from_project_event(&event);
+    assert_eq!(patches.len(), 4);
+    assert!(
+        patches
+            .iter()
+            .all(|patch| matches!(patch.patch, Patch::Deleted(_)))
+    );
+    let entities = patches
+        .iter()
+        .map(patch_entity)
+        .map(|entity| (entity.entity_type, entity.entity_id.as_ref()))
+        .collect::<Vec<_>>();
+    assert!(entities.contains(&(EntityType::Project, project_id.as_str())));
+    assert!(entities.contains(&(EntityType::Project, child_id.as_str())));
+    assert!(entities.contains(&(EntityType::Document, document_id.as_str())));
+    assert!(entities.contains(&(EntityType::Chat, chat_id.as_str())));
+}
+
+#[test]
+fn chat_metadata_events_map_to_updated_patches() {
+    let event = ChatTopicEvent::Updated(ChatUpdatedMetadata {
+        chat_id: DOCUMENT_ID.to_string(),
+        actor_user_id: user(),
+        name: Some("Renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        share_permission_updated: false,
+    });
+
+    let patches = patches_from_chat_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Chat);
+}
+
+#[test]
+fn moving_a_chat_out_of_a_project_updates_the_previous_project() {
+    let previous_project_id = Uuid::now_v7().to_string();
+    let event = ChatTopicEvent::Updated(ChatUpdatedMetadata {
+        chat_id: DOCUMENT_ID.to_string(),
+        actor_user_id: user(),
+        name: None,
+        previous_project_id: Some(previous_project_id.clone()),
+        project_id: None,
+        share_permission_updated: false,
+    });
+
+    let patches = patches_from_chat_event(&event);
+    assert_eq!(patches.len(), 2);
+    assert!(matches!(patches[1].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Project);
+    assert_eq!(patch_entity(&patches[1]).entity_id, previous_project_id);
+}
+
+#[test]
+fn deleted_chat_messages_do_not_change_soup() {
+    let event = ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
+        chat_id: DOCUMENT_ID.to_string(),
+        message_id: Uuid::now_v7().to_string(),
+    });
+
+    assert!(patches_from_chat_event(&event).is_empty());
+}
+
+#[test]
+fn email_state_events_map_to_updated_or_deleted_patches() {
+    let thread_id = Uuid::now_v7();
+    let read = EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+        link_id: Uuid::now_v7(),
+        owner: user(),
+        actor: Some(user()),
+        thread_id,
+        is_read: true,
+        origin: EmailEventOrigin::UserAction,
+    });
+    let trashed = EmailTopicEvent::ThreadTrashed(ThreadTrashedMetadata {
+        link_id: Uuid::now_v7(),
+        owner: user(),
+        actor: Some(user()),
+        thread_id,
+        trashed: true,
+        origin: EmailEventOrigin::UserAction,
+    });
+
+    assert!(matches!(
+        patches_from_email_event(&read)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(matches!(
+        patches_from_email_event(&trashed)[0].patch,
+        Patch::Deleted(_)
+    ));
+}
+
+#[test]
+fn attachment_events_use_only_metadata_available_on_the_existing_event() {
+    let channel_id = Uuid::now_v7();
+    let event =
+        ChannelTopicEvent::MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata {
+            channel_id,
+            message_id: Uuid::now_v7(),
+            actor: ChannelSender::new_from_user(user()),
+            attachments: Vec::new(),
+        });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
+    assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
+}
+
+#[test]
+fn deleting_a_root_channel_message_deletes_its_thread_patch() {
+    let channel_id = Uuid::now_v7();
+    let message_id = Uuid::now_v7();
+    let event = ChannelTopicEvent::MessageDeleted(ChannelMessageDeletedMetadata {
+        channel_id,
+        message_id,
+        thread_id: None,
+        actor: ChannelSender::new_from_user(user()),
+        deleted_at: None,
+    });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 2);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert!(matches!(patches[1].patch, Patch::Deleted(_)));
+    assert_eq!(patch_entity(&patches[1]).entity_id, message_id.to_string());
+    assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
 }
 
 #[tokio::test]
-async fn updated_payload_maps_to_document_entity() {
-    let event = DocumentMacroEvent::with_event(DOCUMENT_ID, updated_event());
+async fn updated_payload_maps_to_document_patch() {
+    let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
+        DOCUMENT_ID,
+        updated_event(),
+    ));
     let service = flaky_service(0);
 
     assert!(matches!(
-        process_document_event(&service, &event, 0, 0)
+        process_event(&service, &event, 0, 0)
             .await
             .expect("processing succeeds"),
-        DocumentEventOutcome::Notified
+        EventOutcome::Notified
     ));
 
-    let entities = service.entities.lock().expect("entities lock");
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].entity_type, EntityType::Document);
-    assert_eq!(entities[0].entity_id, DOCUMENT_ID);
-}
-
-#[tokio::test]
-async fn non_update_events_are_ignored() {
-    let service = flaky_service(0);
-    for event in ignored_events() {
-        let event = DocumentMacroEvent::with_event(DOCUMENT_ID, Event::new(event));
-        assert!(matches!(
-            process_document_event(&service, &event, 0, 0)
-                .await
-                .expect("processing succeeds"),
-            DocumentEventOutcome::Ignored
-        ));
-    }
-    assert_eq!(service.attempts.load(Ordering::SeqCst), 0);
+    let patches = service.patches.lock().expect("patches lock");
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
 }
 
 #[test]
@@ -166,22 +358,26 @@ fn malformed_and_unknown_events_are_rejected_by_the_declared_collection() {
 #[tokio::test(start_paused = true)]
 async fn transient_service_failures_retry_then_succeed() {
     let service = flaky_service(2);
-    let entity = EntityType::Document.with_entity_string(DOCUMENT_ID.to_string());
+    let patch = SoupRealtimePatch::for_entity(Patch::Updated(
+        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
+    ));
 
-    notify_with_retry(&service, entity, 2, 17)
+    notify_with_retry(&service, patch, 2, 17)
         .await
         .expect("eventual success");
 
     assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
-    assert_eq!(service.entities.lock().expect("entities lock").len(), 3);
+    assert_eq!(service.patches.lock().expect("patches lock").len(), 3);
 }
 
 #[tokio::test(start_paused = true)]
 async fn exhausted_retries_return_for_redelivery() {
     let service = flaky_service(u32::MAX);
-    let entity = EntityType::Document.with_entity_string(DOCUMENT_ID.to_string());
+    let patch = SoupRealtimePatch::for_entity(Patch::Updated(
+        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
+    ));
 
-    notify_with_retry(&service, entity, 2, 17)
+    notify_with_retry(&service, patch, 2, 17)
         .await
         .expect_err("persistent failure returns without a commit");
 

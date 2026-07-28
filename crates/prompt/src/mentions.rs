@@ -1,11 +1,26 @@
-//! Rules for mentioning entities with XML mention tags.
+//! Rules for mentioning entities with XML mention tags, and the scope of
+//! Macro's shared Markdown rendering.
+//!
+//! These rules apply everywhere the model authors Markdown in Macro: its own
+//! conversational replies, `SendChannelMessage` content, `SendEmail` bodies,
+//! and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents.
+//! The one exclusion is non-Markdown documents created via `CreateDocument`
+//! (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are stored as raw file bytes and
+//! never parsed as Markdown, so they take no Markdown syntax or mention tags.
+//!
+//! See [`crate::document_content_links`] for the narrower restatement of the
+//! document-mention tag that keeps it working over MCP, where this section is
+//! deliberately excluded because MCP clients can't render the tag in a chat
+//! reply (see [`crate::mcp_item_links`]).
 
 use crate::types::StaticPrompt;
 
 static TITLE: &str =
     "Mentioning documents, channels, channel messages, chats, projects, and email threads";
 
-static INSTRUCTIONS: &str = r##"When referencing a document, channel, chat, project, or email thread, use XML mention tags with a JSON payload.
+static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies, `SendChannelMessage` content, `SendEmail` bodies, and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents. They do NOT apply to non-Markdown documents created via `CreateDocument` (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
+
+When referencing a document, channel, chat, project, or email thread, use XML mention tags with a JSON payload.
 The AI does not need to know the name — an empty string is fine and the frontend will resolve it.
 
 - Document mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>`
@@ -27,7 +42,9 @@ If no inline or node ids are present:
 
 static INTENT: &str = "Entities and channel messages are referenced with correctly formatted \
 <m-document-mention> XML tags using the right blockName and blockParams for each entity type, \
-including exactly \"email\" for email threads and channel_message_id for specific channel messages.";
+including exactly \"email\" for email threads and channel_message_id for specific channel messages, \
+across every Markdown surface (replies, channel messages, email bodies, and Markdown documents) — \
+never inside non-Markdown documents.";
 
 /// The entity-mention prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
