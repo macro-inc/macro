@@ -7,7 +7,7 @@ use channels::domain::{
     },
     models::ChannelSender,
 };
-use chat::domain::events::{ChatTopicEvent, ChatUpdatedMetadata};
+use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use documents::domain::events::{
     DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentInteractionMetadata,
     DocumentUpdatedMetadata, InteractionReason,
@@ -201,6 +201,16 @@ fn chat_metadata_events_map_to_updated_patches() {
     assert_eq!(patches.len(), 1);
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Chat);
+}
+
+#[test]
+fn deleted_chat_messages_do_not_change_soup() {
+    let event = ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
+        chat_id: DOCUMENT_ID.to_string(),
+        message_id: Uuid::now_v7().to_string(),
+    });
+
+    assert!(patches_from_chat_event(&event).is_empty());
 }
 
 #[test]

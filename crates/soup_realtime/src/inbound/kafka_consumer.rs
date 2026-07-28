@@ -226,7 +226,7 @@ fn patches_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimePatch> {
         ChatTopicEvent::Copied(metadata) => {
             push_unique_update(&mut updates, EntityType::Chat, &metadata.chat_id);
         }
-        ChatTopicEvent::MessageSent(_) => {}
+        ChatTopicEvent::MessageSent(_) | ChatTopicEvent::MessageDeleted(_) => {}
     }
     updates
 }
