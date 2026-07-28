@@ -4278,6 +4278,7 @@ dependencies = [
  "frecency",
  "futures",
  "github",
+ "graphql_soup",
  "hex",
  "http-body-util",
  "jsonwebtoken 10.3.0",
