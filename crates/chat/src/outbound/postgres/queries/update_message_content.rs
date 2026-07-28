@@ -3,17 +3,19 @@
 use agent::types::ChatMessageContent;
 use sqlx::PgPool;
 
-/// Update the content of a specific message, scoped to the chat.
+/// Update a message and optionally bump its chat when the message exists.
 #[tracing::instrument(err, skip(pool, content))]
 pub(crate) async fn update_message_content(
     pool: &PgPool,
     chat_id: &str,
     message_id: &str,
     content: &ChatMessageContent,
+    bump_chat_recency: bool,
 ) -> anyhow::Result<()> {
     let content_json = serde_json::to_value(content)?;
+    let mut tx = pool.begin().await?;
 
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         UPDATE "ChatMessage"
         SET "content" = $1, "updatedAt" = NOW()
@@ -23,8 +25,13 @@ pub(crate) async fn update_message_content(
         message_id,
         chat_id
     )
-    .execute(pool)
+    .execute(tx.as_mut())
     .await?;
 
+    if bump_chat_recency && result.rows_affected() > 0 {
+        super::patch_chat::patch_chat(&mut tx, chat_id, None, None).await?;
+    }
+
+    tx.commit().await?;
     Ok(())
 }

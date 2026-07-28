@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        DELETE FROM \"ChatMessage\"\n        WHERE id = $1\n        RETURNING id\n        ",
+  "query": "\n        DELETE FROM \"ChatMessage\"\n        WHERE id = $1\n        RETURNING \"chatId\" as \"chat_id!\"\n        ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "chat_id!",
         "type_info": "Text"
       }
     ],
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "663a12ade5ccf4613703c0ad368772673560741961c20f5c401b59b5c5f6027d"
+  "hash": "cc4408a6a2db538cff01be0565744c30cddd4911f0fe444d26b7ab7f0b21144a"
 }

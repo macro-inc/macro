@@ -6,6 +6,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
+import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import type { SoupState } from '../create-soup-state';
@@ -18,15 +19,35 @@ type MakeMarkNotDoneOptions = {
  * Reverses a mark-done: unarchives email threads and restores their
  * notifications. Only done emails qualify — other entity types' done state
  * lives on their notifications, and their rows never render as done in the
- * mark-done-capable views.
+ * mark-done-capable views. Threads whose done state can't be reversed (no
+ * inbound message) are dropped at execute time; see
+ * `threadCanBeMarkedNotDone`.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
   const canExecute = (entity: EntityData): boolean =>
     entity.type === 'email' && entity.done === true;
 
   const execute = async (entities: EntityData[]) => {
-    const targets = entities.filter(canExecute);
-    if (targets.length === 0) return;
+    const candidates = entities.filter(canExecute);
+    if (candidates.length === 0) return;
+
+    // `done` alone doesn't mean the state is reversible — a thread with only
+    // sent messages is permanently done. Soup rows can't tell, so resolve it
+    // from the thread itself (cached when the thread is open).
+    const eligibility = await Promise.all(
+      candidates.map((entity) => threadCanBeMarkedNotDone(entity.id))
+    );
+    const targets = candidates.filter((_, i) => eligibility[i]);
+
+    if (targets.length === 0) {
+      toast.alert(
+        candidates.length > 1
+          ? 'These threads have no received messages, so they stay done'
+          : 'This thread has no received messages, so it stays done',
+        { duration: 4_000 }
+      );
+      return;
+    }
 
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
       entities: targets,

@@ -110,7 +110,7 @@ export function SummaryStep(props: { onContinue: () => void }) {
       </For>
 
       <Show when={!anythingToShow()}>
-        <p class="py-4 text-center text-sm text-ink-extra-muted">
+        <p class="py-4 text-sm text-ink-extra-muted">
           Nothing queued — you can always ask Macro AI to bring things in later.
         </p>
       </Show>

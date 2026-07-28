@@ -10,9 +10,6 @@
   "languages": {
     "CSS": {
       "language_servers": ["tailwindcss-language-server", "!vscode-css-language-server"]
-    },
-    "TypeScript": {
-      "language_servers": ["vtsls", "!typescript-language-server"]
     }
   },
   "use_on_type_format": false

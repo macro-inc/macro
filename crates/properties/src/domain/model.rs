@@ -5,6 +5,7 @@ use entity_access::domain::models::{
     RequiredPermission, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
@@ -154,6 +155,15 @@ impl<'a> PropertyDefinitionOwner<'a> {
     }
 }
 
+/// Result of getting or creating an owner's tag definition.
+#[derive(Debug, Clone)]
+pub struct GetOrCreateTagDefinitionResult {
+    /// The owner's tag property definition.
+    pub definition: PropertyDefinition,
+    /// Whether this operation created the definition.
+    pub created: bool,
+}
+
 /// Which owner a tag set belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagScope {
@@ -191,6 +201,19 @@ pub struct EntityPropertyOptionUpdate {
     pub remove_option_ids: Vec<Uuid>,
 }
 
+/// The full persisted state of an entity property after a mutation.
+///
+/// This is an internal persistence receipt used for post-commit side effects;
+/// it is not part of the service or HTTP response contract.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct EntityPropertyMutationSnapshot {
+    /// The canonical persisted entity-property assignment.
+    pub property: EntityProperty,
+    /// The complete value after the mutation.
+    pub value: Option<PropertyValue>,
+}
+
 /// The reconciled final option ids for one property after a bulk update. The
 /// caller uses these to reconcile its cache with the value the server actually
 /// persisted (which may differ from the requested delta if a concurrent edit
@@ -201,6 +224,12 @@ pub struct EntityPropertyOptionSelection {
     pub property_definition_id: Uuid,
     /// The final option ids stored for the entity's property, in stored order.
     pub option_ids: Vec<Uuid>,
+    /// The post-mutation persistence receipt, or `None` when no row was changed.
+    #[allow(
+        dead_code,
+        reason = "internal persistence receipt is intentionally omitted from public responses"
+    )]
+    pub(crate) mutation: Option<EntityPropertyMutationSnapshot>,
 }
 
 /// The outcome of applying one shared option delta to a single entity in a

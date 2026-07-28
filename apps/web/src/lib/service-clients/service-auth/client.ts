@@ -460,31 +460,6 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
-  async createCheckoutSession(args: {
-    successUrl: string;
-    cancelUrl: string;
-    discount?: string | null;
-    metadata?: {
-      gaClientId?: string | null;
-      fbp?: string | null;
-      fbc?: string | null;
-    };
-    tier?: string;
-  }) {
-    return (
-      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
-        method: 'POST',
-        body: JSON.stringify({
-          successUrl: args.successUrl,
-          cancelUrl: args.cancelUrl,
-          discount: args.discount ?? undefined,
-          metadata: args.metadata,
-          tier: args.tier ?? undefined,
-        }),
-      })
-    ).map((result) => result.url);
-  },
-
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;

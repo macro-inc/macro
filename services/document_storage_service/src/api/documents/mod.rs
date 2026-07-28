@@ -28,7 +28,6 @@ pub(in crate::api) mod list_documents_with_access;
 pub(in crate::api) mod location;
 pub(in crate::api) mod permissions_token;
 pub(in crate::api) mod pre_save;
-pub(in crate::api) mod put_document_update;
 pub(in crate::api) mod revert_delete_document;
 pub(in crate::api) mod save_document;
 pub(in crate::api) mod simple_save;

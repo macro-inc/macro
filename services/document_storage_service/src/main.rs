@@ -375,6 +375,7 @@ async fn main() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
+        .with_event_broker(macro_event_broker.clone())
         .with_search_indexer(Arc::new(
             crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
                 sqs_client.clone(),
@@ -673,7 +674,8 @@ async fn main() -> anyhow::Result<()> {
     let call_service = Arc::new(
         call_service_builder
             .with_search_indexer(call_search_indexer)
-            .with_voice_repo(PgVoiceRepo::new(db.clone())),
+            .with_voice_repo(PgVoiceRepo::new(db.clone()))
+            .with_event_broker(macro_event_broker.clone()),
     );
 
     let call_state = CallRouterState::new(
@@ -1098,6 +1100,7 @@ async fn main() -> anyhow::Result<()> {
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
             editing_worker_client,
+            properties_service: api_context.properties_service.clone(),
         };
 
         tokio::spawn(async move {

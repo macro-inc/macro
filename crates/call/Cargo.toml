@@ -64,6 +64,8 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_aws_config = { path = "../macro_aws_config", optional = true, features = [
   "s3",
 ] }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }

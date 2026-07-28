@@ -296,6 +296,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
+    /// Advance a project's activity timestamp.
+    fn touch_project_updated_at(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Upsert an email filter (by address or domain) for a link.
     fn upsert_email_filter(
         &self,

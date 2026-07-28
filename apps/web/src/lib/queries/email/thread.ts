@@ -115,6 +115,28 @@ export async function fetchAndCacheThread(
   return ok({ thread: thread! });
 }
 
+/**
+ * Whether a thread's done state can actually be reversed.
+ *
+ * Doneness is derived, not stored: `inbox_visible` is recomputed server-side
+ * as "some message has INBOX and not SENT", and the inbox view additionally
+ * requires an inbound message. A thread with only sent messages satisfies
+ * neither, so it is permanently done — unarchiving it reverts on the next
+ * recompute and meanwhile labels its own sent messages INBOX, in Gmail too.
+ *
+ * Soup rows carry no inbound-message field, so this resolves the thread
+ * (served from cache when it is already loaded). A failed lookup resolves to
+ * `true`: the unarchive that follows would fail the same way, and blocking on
+ * a transient error would misreport ordinary threads as unreversible.
+ */
+export async function threadCanBeMarkedNotDone(
+  threadId: string
+): Promise<boolean> {
+  const result = await fetchAndCacheThread(threadId);
+  if (result.isErr()) return true;
+  return result.value.thread.latest_inbound_message_ts != null;
+}
+
 type ThreadQueryData = {
   thread: Thread;
   hasMore: boolean;

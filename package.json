@@ -60,12 +60,17 @@
 		"docker-classic",
 		"esbuild"
 	],
-	"workspaces": [
-		"apps/web",
-		"packages/collaboration",
-		"packages/loro-mirror",
-		"packages/lexical-core",
-		"services/ai-editing-worker",
-		"services/lexical-service"
-	]
+	"workspaces": {
+		"packages": [
+			"apps/web",
+			"packages/collaboration",
+			"packages/loro-mirror",
+			"packages/lexical-core",
+			"services/ai-editing-worker",
+			"services/lexical-service"
+		],
+		"catalog": {
+			"loro-crdt": "1.13.7"
+		}
+	}
 }

@@ -218,6 +218,43 @@ async fn test_soft_delete_document(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_update_document_modified(pool: Pool<Postgres>) {
+    let document_id = "d0000000-0000-0000-0000-000000000001";
+    sqlx::query!(
+        r#"
+        UPDATE "Document"
+        SET "updatedAt" = '2000-01-01 00:00:00'
+        WHERE id = $1
+        "#,
+        document_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let repo = PgDocumentRepo::new(pool);
+    let before = repo
+        .get_document_metadata(document_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+
+    repo.update_document_modified(document_id).await.unwrap();
+
+    let after = repo
+        .get_document_metadata(document_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert!(after > before);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool);
 

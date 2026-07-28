@@ -7,11 +7,19 @@
 
 export type McpAuthCallbackParams = {
   /**
-   * Authorization code from the OAuth provider.
+   * Authorization code from the OAuth provider. Present on success.
    */
-  code: string;
+  code?: string;
   /**
    * CSRF state parameter.
    */
-  state: string;
+  state?: string;
+  /**
+   * OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+   */
+  error?: string;
+  /**
+   * Human-readable error description from the provider.
+   */
+  error_description?: string;
 };

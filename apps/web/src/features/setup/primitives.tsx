@@ -4,9 +4,8 @@ import { For, type JSX, Show } from 'solid-js';
 import { StatusDot } from '../settings/integration-ui';
 
 /*
- * Building blocks for the /setup import panel: one bordered card per
+ * Building blocks for the onboarding summary: one bordered card per
  * connected source, whose body is a cloud of narrow, content-fit pills.
- * Selection happens per-card (a section-level toggle), never per-pill.
  */
 
 /**
@@ -25,7 +24,7 @@ export function ImportCard(props: {
   count?: number;
   /** Lead the status well with the green dot + "Connected —". */
   connected?: boolean;
-  /** Right-aligned header controls (the section import toggle). */
+  /** Optional right-aligned header controls. */
   actions?: JSX.Element;
   /**
    * Status blurb rendered in the well after the "Connected —" lead-in, so
@@ -85,9 +84,8 @@ export function PillGrid(props: { children: JSX.Element }) {
  * like an inline @ mention: entity icon, optional muted identifier, the name
  * with the mention underline, then trailing status. Width hugs the content
  * (name truncated past a cap) so a section reads as a compact cloud instead
- * of a full-width list. Pills are display-only — whether they import is
- * decided by the card's section toggle — except imported ones, which open
- * the entity they became.
+ * of a full-width list. Pills are display-only except imported ones, which
+ * open the entity they became.
  */
 export function ItemPill(props: {
   icon?: JSX.Element;
