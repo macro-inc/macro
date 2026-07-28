@@ -3,10 +3,7 @@ use std::marker::PhantomData;
 use async_graphql::{
     Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
 };
-use graphql_common::{
-    GraphqlCacheDeletion, GraphqlCacheOperation, GraphqlEntity, GraphqlSoupEntityType,
-    GraphqlUpdated,
-};
+use graphql_common::{GraphqlCacheDeletion, GraphqlEntity, GraphqlSoupEntityType};
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -287,6 +284,32 @@ impl<E> GraphqlSoupEntity<E>
 where
     E: SoupEntityEdges,
 {
+    /// Return the concrete GraphQL object name associated with a Soup entity type.
+    fn graphql_type_name_for(entity_type: model_entity::EntityType) -> String {
+        match entity_type {
+            model_entity::EntityType::Document => {
+                GraphqlSoupDocument::<E>::type_name().into_owned()
+            }
+            model_entity::EntityType::Chat => GraphqlSoupChat::<E>::type_name().into_owned(),
+            model_entity::EntityType::Project => GraphqlSoupProject::<E>::type_name().into_owned(),
+            model_entity::EntityType::EmailThread => {
+                GraphqlSoupEmailThread::<E>::type_name().into_owned()
+            }
+            model_entity::EntityType::Channel => GraphqlSoupChannel::<E>::type_name().into_owned(),
+            model_entity::EntityType::ChannelMessage => {
+                GraphqlSoupChannelMessage::<E>::type_name().into_owned()
+            }
+            model_entity::EntityType::Call => GraphqlSoupCall::<E>::type_name().into_owned(),
+            model_entity::EntityType::CrmCompany => {
+                GraphqlSoupCrmCompany::<E>::type_name().into_owned()
+            }
+            model_entity::EntityType::ForeignEntity => {
+                GraphqlSoupForeignEntity::<E>::type_name().into_owned()
+            }
+            unsupported => panic!("{unsupported} is not a Soup entity type"),
+        }
+    }
+
     /// Construct a GraphQL entity from a plain Soup item.
     pub fn new(item: SoupItem<()>) -> Self {
         match item {
@@ -1727,14 +1750,13 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
 );
 
-/// Lightweight realtime Soup patch with optional lazy item hydration.
-pub struct SoupPatch<E: SoupEntityEdges> {
-    /// Operation represented by this patch.
-    operation: Patch<Entity<'static>>,
-    /// User whose visibility scope must be used to hydrate the item.
-    user_id: MacroUserIdStr<'static>,
-    /// Associates the patch with its composed Soup edge object.
-    phantom: PhantomData<E>,
+/// Realtime Soup patch represented as exactly one update or cache deletion.
+#[derive(Union)]
+pub enum SoupPatch<E: SoupEntityEdges> {
+    /// An entity that was created or updated.
+    Updated(SoupUpdated<E>),
+    /// A normalized entity record that must be deleted.
+    Deleted(GraphqlCacheDeletion),
 }
 
 impl<E: SoupEntityEdges> SoupPatch<E> {
@@ -1743,34 +1765,41 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
         user_id: MacroUserIdStr<'static>,
         patch: Patch<model_entity::Entity<'static>>,
     ) -> Self {
-        Self {
-            operation: patch,
-            user_id,
-            phantom: PhantomData,
+        match patch {
+            Patch::Updated(entity) => Self::Updated(SoupUpdated {
+                entity,
+                user_id,
+                phantom: PhantomData,
+            }),
+            Patch::Deleted(entity) => {
+                let graphql_type_name =
+                    GraphqlSoupEntity::<E>::graphql_type_name_for(entity.entity_type);
+                Self::Deleted(GraphqlCacheDeletion::new(
+                    graphql_type_name,
+                    ID(entity.entity_id.into_owned()),
+                ))
+            }
         }
     }
 }
 
+/// Created or updated Soup entity whose current data is hydrated when selected.
+pub struct SoupUpdated<E: SoupEntityEdges> {
+    /// Canonical entity to hydrate.
+    entity: Entity<'static>,
+    /// User whose visibility scope must be used to hydrate the item.
+    user_id: MacroUserIdStr<'static>,
+    /// Associates the update with its composed Soup edge object.
+    phantom: PhantomData<E>,
+}
+
+/// GraphQL representation of a created or updated Soup entity.
 #[Object]
-impl<E: SoupEntityEdges> SoupPatch<E> {
-    /// Hydrate the current Soup item only when selected by the client.
-    async fn updated(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<GraphqlCacheOperation<GraphqlSoupEntity<E>>> {
-        match &self.operation {
-            Patch::Updated(e) => {
-                let loader = ctx.data::<SoupItemDataLoader>()?;
-                let key = (self.user_id.clone(), e.clone());
-                Ok(GraphqlCacheOperation::Updated(GraphqlUpdated {
-                    entity: GraphqlEntity(e.clone()),
-                    item: GraphqlSoupEntity::new(loader.load_one(key).await?),
-                }))
-            }
-            Patch::Deleted(e) => Ok(GraphqlCacheOperation::Deleted(GraphqlCacheDeletion {
-                entity_id: ID(e.entity_id.clone().into_owned()),
-                phantom: PhantomData,
-            })),
-        }
+impl<E: SoupEntityEdges> SoupUpdated<E> {
+    /// Hydrate the current Soup entity.
+    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<GraphqlSoupEntity<E>> {
+        let loader = ctx.data::<SoupItemDataLoader>()?;
+        let key = (self.user_id.clone(), self.entity.clone());
+        Ok(GraphqlSoupEntity::new(loader.load_one(key).await?))
     }
 }

@@ -26,6 +26,6 @@ pub use objects::{
     GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
     GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
     GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupEntityEdges, SoupPage,
-    SoupPatch,
+    SoupPatch, SoupUpdated,
 };
 pub use resolvers::{resolve_grouped_soup, resolve_soup, resolve_soup_updates};

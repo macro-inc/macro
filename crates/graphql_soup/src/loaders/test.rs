@@ -333,8 +333,7 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     let first = loader
         .load_one((user_id.clone(), entity.clone()))
         .await
-        .expect("first load succeeds")
-        .expect("first item exists");
+        .expect("first load succeeds");
     responses
         .lock()
         .expect("responses lock")
@@ -342,8 +341,7 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     let second = loader
         .load_one((user_id, entity))
         .await
-        .expect("second load succeeds")
-        .expect("second item exists");
+        .expect("second load succeeds");
 
     assert!(matches!(first, SoupItem::Document(document) if document.name == "First"));
     assert!(matches!(second, SoupItem::Document(document) if document.name == "Second"));

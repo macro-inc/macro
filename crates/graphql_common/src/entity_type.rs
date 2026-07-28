@@ -1,6 +1,4 @@
-use std::{borrow::Cow, marker::PhantomData};
-
-use async_graphql::{ComplexObject, Enum, ID, Object, OutputType, SimpleObject, Union};
+use async_graphql::{Enum, ID, Object, SimpleObject};
 use model_entity::{Entity, EntityType};
 
 /// GraphQL representation of Soup entity types.
@@ -152,39 +150,21 @@ impl<'a> GraphqlEntity<'a> {
     }
 }
 
-/// Struct which signals to the client that they should delete from cache
+/// Marker instructing a normalized GraphQL cache to delete one entity record.
 #[derive(SimpleObject)]
-#[graphql(complex)]
-pub struct GraphqlCacheDeletion<T: OutputType> {
-    /// the ID of the entity which was deleted
+pub struct GraphqlCacheDeletion {
+    /// Concrete GraphQL object type used in the normalized cache key.
+    pub graphql_type_name: String,
+    /// Identifier used in the normalized cache key.
     pub entity_id: ID,
-    /// marker for the T: OutputType which contains the graphql typename
-    #[graphql(skip)]
-    pub phantom: PhantomData<T>,
 }
 
-#[ComplexObject]
-impl<T: OutputType> GraphqlCacheDeletion<T> {
-    /// return the typename of the entity which should be deleted from cache
-    async fn graphql_type_name(&self) -> Cow<'static, str> {
-        T::type_name()
+impl GraphqlCacheDeletion {
+    /// Constructs a cache deletion marker from its concrete GraphQL type and identifier.
+    pub fn new(graphql_type_name: impl Into<String>, entity_id: impl Into<ID>) -> Self {
+        Self {
+            graphql_type_name: graphql_type_name.into(),
+            entity_id: entity_id.into(),
+        }
     }
-}
-
-/// union which describes either a cache update or a deleton
-#[derive(Union)]
-pub enum GraphqlCacheOperation<T: OutputType> {
-    /// the value was updated
-    Updated(GraphqlUpdated<T>),
-    /// the value was deleted
-    Deleted(GraphqlCacheDeletion<T>),
-}
-
-/// denotes that an entity was updated
-#[derive(SimpleObject)]
-pub struct GraphqlUpdated<T: OutputType> {
-    /// the inner item T
-    pub item: T,
-    /// the [GraphqlEntity]
-    pub entity: GraphqlEntity<'static>,
 }

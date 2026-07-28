@@ -617,7 +617,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoOpEntityPermissionEdgeReader,
     > = build_schema_with_services(NoOpSoupService, realtime);
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { operation entity { id entityType } } }",
+        "subscription { soupUpdates { __typename ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
     )
     .data(user_id.clone());
     let responses = schema.execute_stream(request);
@@ -634,9 +634,27 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().expect("response data is JSON");
-    assert_eq!(data["soupUpdates"]["operation"], "UPDATED");
-    assert_eq!(data["soupUpdates"]["entity"]["id"], document_id.to_string());
-    assert_eq!(data["soupUpdates"]["entity"]["entityType"], "DOCUMENT");
+    assert_eq!(data["soupUpdates"]["__typename"], "SoupUpdated");
+
+    sender
+        .send(Patch::Deleted(
+            ModelEntityType::Document.with_entity_string(document_id.to_string()),
+        ))
+        .await
+        .expect("subscription remains open");
+    let response = responses
+        .next()
+        .await
+        .expect("deletion subscription response");
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("response data is JSON");
+    assert_eq!(data["soupUpdates"]["__typename"], "GraphqlCacheDeletion");
+    assert_eq!(
+        data["soupUpdates"]["graphqlTypeName"],
+        "GraphqlSoupDocument"
+    );
+    assert_eq!(data["soupUpdates"]["entityId"], document_id.to_string());
     assert_eq!(
         subscribed_user
             .lock()
