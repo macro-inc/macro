@@ -78,19 +78,19 @@ pub trait EntityLifecycleService: Send + Sync + 'static {
         actor: &EntityMutationActor,
         entity: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, LifecycleError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
     /// Restore a document.
     fn restore_document(
         &self,
         actor: &EntityMutationActor,
         entity: &Entity<'static>,
-    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, LifecycleError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
     /// Permanently delete a document.
     fn delete_document_permanently(
         &self,
         actor: &EntityMutationActor,
         entity: &Entity<'static>,
-    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, LifecycleError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
 }
 
 /// Result of one mutation routed by this service.
@@ -555,10 +555,16 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
-        self.lifecycle
+        let affected = self
+            .lifecycle
             .update_thread_share_policy(actor, requested, policy)
             .await
-            .map_err(lifecycle_failure)
+            .map_err(lifecycle_failure)?;
+        Ok(
+            std::iter::once(EntityMutationEffect::updated(requested.clone()))
+                .chain(affected.into_iter().map(EntityMutationEffect::updated))
+                .collect(),
+        )
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %requested.entity_type, entity_id = %requested.entity_id))]
@@ -621,10 +627,16 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
-        self.lifecycle
+        let affected = self
+            .lifecycle
             .restore_document(actor, requested)
             .await
-            .map_err(lifecycle_failure)
+            .map_err(lifecycle_failure)?;
+        Ok(
+            std::iter::once(EntityMutationEffect::updated(requested.clone()))
+                .chain(affected.into_iter().map(EntityMutationEffect::updated))
+                .collect(),
+        )
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %requested.entity_type, entity_id = %requested.entity_id))]
@@ -661,10 +673,16 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
-        self.lifecycle
+        let affected = self
+            .lifecycle
             .delete_document_permanently(actor, requested)
             .await
-            .map_err(lifecycle_failure)
+            .map_err(lifecycle_failure)?;
+        Ok(
+            std::iter::once(EntityMutationEffect::deleted(requested.clone()))
+                .chain(affected.into_iter().map(EntityMutationEffect::updated))
+                .collect(),
+        )
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]
