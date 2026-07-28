@@ -310,14 +310,14 @@ fn notion_fetch_text_parses_the_fetch_document_shape() {
                 value: ImportedDocumentPropertyValue::Boolean { value: true },
             },
             ImportedDocumentProperty {
-                name: "Score".into(),
-                value: ImportedDocumentPropertyValue::Number { value: 4.5 },
-            },
-            ImportedDocumentProperty {
                 name: "Due".into(),
                 value: ImportedDocumentPropertyValue::Date {
                     value: "2026-08-01".into(),
                 },
+            },
+            ImportedDocumentProperty {
+                name: "Score".into(),
+                value: ImportedDocumentPropertyValue::Number { value: 4.5 },
             },
         ]
     );
