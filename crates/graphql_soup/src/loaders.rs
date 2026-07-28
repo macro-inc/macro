@@ -34,6 +34,7 @@ use models_soup::item::SoupItem;
 use rootcause::{
     Report,
     markers::{Cloneable, Dynamic},
+    report,
 };
 use soup::domain::{
     models::{SoupQuery, SoupRequest, SoupType},
@@ -247,9 +248,7 @@ where
 }
 
 /// Type-erased function that loads one Soup item through a concrete DataLoader.
-type LoadOne = dyn Fn(
-        OwnedSoupItemLoaderKey,
-    ) -> BoxFuture<'static, Result<Option<SoupItem<()>>, SoupItemLoaderError>>
+type LoadOne = dyn Fn(OwnedSoupItemLoaderKey) -> BoxFuture<'static, Result<SoupItem<()>, SoupItemLoaderError>>
     + Send
     + Sync;
 
@@ -257,12 +256,17 @@ type LoadOne = dyn Fn(
 async fn load_one_owned<S, I>(
     loader: Arc<DataLoader<SoupItemLoader<S, I>>>,
     key: OwnedSoupItemLoaderKey,
-) -> Result<Option<SoupItem<()>>, SoupItemLoaderError>
+) -> Result<SoupItem<()>, SoupItemLoaderError>
 where
     S: SoupService,
     I: SoupInboxReader,
 {
-    loader.load_one::<OwnedSoupItemLoaderKey>(key).await
+    loader
+        .load_one::<OwnedSoupItemLoaderKey>(key)
+        .await
+        .transpose()
+        .ok_or_else(|| report!("Soup item not found for user").into_cloneable())
+        .flatten()
 }
 
 /// Type-erased Soup DataLoader stored in GraphQL request or connection data.
@@ -295,7 +299,7 @@ impl SoupItemDataLoader {
     pub async fn load_one(
         &self,
         key: SoupItemLoaderKey,
-    ) -> Result<Option<SoupItem<()>>, SoupItemLoaderError> {
+    ) -> Result<SoupItem<()>, SoupItemLoaderError> {
         let (user_id, entity) = key;
         (self.load_one)(OwnedSoupItemLoaderKey { user_id, entity }).await
     }

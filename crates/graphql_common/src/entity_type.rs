@@ -1,4 +1,6 @@
-use async_graphql::{Enum, ID, Object};
+use std::{borrow::Cow, marker::PhantomData};
+
+use async_graphql::{ComplexObject, Enum, ID, Object, OutputType, SimpleObject, Union};
 use model_entity::{Entity, EntityType};
 
 /// GraphQL representation of Soup entity types.
@@ -150,11 +152,39 @@ impl<'a> GraphqlEntity<'a> {
     }
 }
 
-/// Operation carried by a realtime entity patch.
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
-pub enum GraphqlPatchOperation {
-    /// The entity was created or updated.
-    Updated,
-    /// The entity was deleted.
-    Deleted,
+/// Struct which signals to the client that they should delete from cache
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub struct GraphqlCacheDeletion<T: OutputType> {
+    /// the ID of the entity which was deleted
+    pub entity_id: ID,
+    /// marker for the T: OutputType which contains the graphql typename
+    #[graphql(skip)]
+    pub phantom: PhantomData<T>,
+}
+
+#[ComplexObject]
+impl<T: OutputType> GraphqlCacheDeletion<T> {
+    /// return the typename of the entity which should be deleted from cache
+    async fn graphql_type_name(&self) -> Cow<'static, str> {
+        T::type_name()
+    }
+}
+
+/// union which describes either a cache update or a deleton
+#[derive(Union)]
+pub enum GraphqlCacheOperation<T: OutputType> {
+    /// the value was updated
+    Updated(GraphqlUpdated<T>),
+    /// the value was deleted
+    Deleted(GraphqlCacheDeletion<T>),
+}
+
+/// denotes that an entity was updated
+#[derive(SimpleObject)]
+pub struct GraphqlUpdated<T: OutputType> {
+    /// the inner item T
+    pub item: T,
+    /// the [GraphqlEntity]
+    pub entity: GraphqlEntity<'static>,
 }

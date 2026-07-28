@@ -1,12 +1,15 @@
 use std::marker::PhantomData;
 
 use async_graphql::{
-    ComplexObject, Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject,
-    Union,
+    Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
 };
-use graphql_common::{GraphqlEntity, GraphqlPatchOperation, GraphqlSoupEntityType};
+use graphql_common::{
+    GraphqlCacheDeletion, GraphqlCacheOperation, GraphqlEntity, GraphqlSoupEntityType,
+    GraphqlUpdated,
+};
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
@@ -1725,18 +1728,12 @@ impl_common_interface_edges!(
 );
 
 /// Lightweight realtime Soup patch with optional lazy item hydration.
-#[derive(SimpleObject)]
-#[graphql(complex)]
 pub struct SoupPatch<E: SoupEntityEdges> {
     /// Operation represented by this patch.
-    operation: GraphqlPatchOperation,
-    /// Canonical identity of the affected entity.
-    entity: GraphqlEntity<'static>,
+    operation: Patch<Entity<'static>>,
     /// User whose visibility scope must be used to hydrate the item.
-    #[graphql(skip)]
     user_id: MacroUserIdStr<'static>,
     /// Associates the patch with its composed Soup edge object.
-    #[graphql(skip)]
     phantom: PhantomData<E>,
 }
 
@@ -1746,29 +1743,34 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
         user_id: MacroUserIdStr<'static>,
         patch: Patch<model_entity::Entity<'static>>,
     ) -> Self {
-        let (operation, entity) = match patch {
-            Patch::Updated(entity) => (GraphqlPatchOperation::Updated, entity),
-            Patch::Deleted(entity) => (GraphqlPatchOperation::Deleted, entity),
-        };
         Self {
-            operation,
-            entity: GraphqlEntity(entity),
+            operation: patch,
             user_id,
             phantom: PhantomData,
         }
     }
 }
 
-#[ComplexObject]
+#[Object]
 impl<E: SoupEntityEdges> SoupPatch<E> {
     /// Hydrate the current Soup item only when selected by the client.
-    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
-        if self.operation == GraphqlPatchOperation::Deleted {
-            return Ok(None);
+    async fn updated(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlCacheOperation<GraphqlSoupEntity<E>>> {
+        match &self.operation {
+            Patch::Updated(e) => {
+                let loader = ctx.data::<SoupItemDataLoader>()?;
+                let key = (self.user_id.clone(), e.clone());
+                Ok(GraphqlCacheOperation::Updated(GraphqlUpdated {
+                    entity: GraphqlEntity(e.clone()),
+                    item: GraphqlSoupEntity::new(loader.load_one(key).await?),
+                }))
+            }
+            Patch::Deleted(e) => Ok(GraphqlCacheOperation::Deleted(GraphqlCacheDeletion {
+                entity_id: ID(e.entity_id.clone().into_owned()),
+                phantom: PhantomData,
+            })),
         }
-
-        let loader = ctx.data::<SoupItemDataLoader>()?;
-        let key = (self.user_id.clone(), self.entity.0.clone());
-        Ok(loader.load_one(key).await?.map(GraphqlSoupEntity::new))
     }
 }
