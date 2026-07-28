@@ -33,17 +33,104 @@ export type AddStringOptionRequest = {
 };
 
 /**
+ * One entity's result in a cross-entity bulk option update.
+ */
+export type BulkEntityOptionUpdateResult = {
+    /**
+     * The entity's id this result is for.
+     */
+    entity_id: string;
+    /**
+     * The entity's type this result is for.
+     */
+    entity_type: PropertyTargetEntityType;
+    /**
+     * A human-readable reason, present only when `failed`.
+     */
+    error?: string | null;
+    /**
+     * The entity's reconciled final option ids, present only when `applied`.
+     */
+    option_ids?: Array<string> | null;
+    /**
+     * Whether the delta was applied, skipped, or failed for this entity.
+     */
+    status: BulkEntityOptionUpdateStatus;
+};
+
+/**
+ * Per-entity outcome of a cross-entity bulk option update.
+ */
+export type BulkEntityOptionUpdateStatus = 'applied' | 'skipped_no_permission' | 'failed';
+
+/**
  * Request for getting properties for multiple entities in bulk
  */
 export type BulkEntityPropertiesRequest = {
     /**
      * Array of entity references (entity_id and entity_type pairs)
      */
-    entities: Array<EntityReference>;
+    entities: Array<PropertyTargetReference>;
     /**
      * Optional: only return properties with these definition IDs. If empty, returns all.
      */
     property_ids?: Array<string>;
+};
+
+/**
+ * Request to apply one shared option delta across several entities in a single
+ * call. Mirrors the per-entity bulk endpoint's delta semantics, applied to
+ * every listed entity (e.g. tag N emails with one label in one request).
+ */
+export type BulkUpdateEntitiesPropertyOptionsRequest = {
+    /**
+     * Options to add to each entity's current value (deduped).
+     */
+    add_option_ids?: Array<string>;
+    /**
+     * The entities to update. Entities the caller cannot edit are skipped.
+     */
+    entities: Array<PropertyTargetReference>;
+    /**
+     * The multi-select property definition changed on every entity.
+     */
+    property_id: string;
+    /**
+     * Options to remove from each entity's current value (a no-op if absent).
+     */
+    remove_option_ids?: Array<string>;
+};
+
+/**
+ * Response for a cross-entity bulk option update: one result per requested
+ * entity, in request order.
+ */
+export type BulkUpdateEntitiesPropertyOptionsResponse = {
+    /**
+     * Per-entity results, aligned to the request's `entities` order.
+     */
+    results: Array<BulkEntityOptionUpdateResult>;
+};
+
+/**
+ * Request to apply option deltas across one or more of an entity's multi-select
+ * properties in a single transaction.
+ */
+export type BulkUpdateEntityPropertyOptionsRequest = {
+    /**
+     * The per-property option changes to apply.
+     */
+    properties: Array<EntityPropertyOptionUpdateRequest>;
+};
+
+/**
+ * Response for a bulk option update: each property's reconciled final ids.
+ */
+export type BulkUpdateEntityPropertyOptionsResponse = {
+    /**
+     * The final option ids per updated property.
+     */
+    properties: Array<EntityPropertyOptionSelectionResponse>;
 };
 
 /**
@@ -92,6 +179,40 @@ export type EntityProperty = {
     id: string;
     property_definition_id: string;
     updated_at: string;
+};
+
+/**
+ * The reconciled final option ids stored for one property after a bulk update.
+ */
+export type EntityPropertyOptionSelectionResponse = {
+    /**
+     * The final option ids the server persisted, in stored order.
+     */
+    option_ids: Array<string>;
+    /**
+     * The property definition the options belong to.
+     */
+    property_id: string;
+};
+
+/**
+ * One property's option changes in a bulk selection update. The change is a
+ * delta (options to add / remove) so it composes with concurrent edits rather
+ * than replacing the whole value.
+ */
+export type EntityPropertyOptionUpdateRequest = {
+    /**
+     * Options to add (deduped against the current value).
+     */
+    add_option_ids?: Array<string>;
+    /**
+     * The multi-select property definition being changed.
+     */
+    property_id: string;
+    /**
+     * Options to remove (a no-op if not present).
+     */
+    remove_option_ids?: Array<string>;
 };
 
 /**
@@ -152,7 +273,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * Query parameters for listing properties
@@ -320,6 +441,29 @@ export type PropertyOwner = {
  * Scope filter for property queries
  */
 export type PropertyScope = 'user' | 'team' | 'system' | 'all';
+
+/**
+ * Canonical type of an entity receiving properties.
+ *
+ * Tasks are documents at API boundaries. `Task` intentionally does not exist
+ * here; task classification is resolved by the properties domain from the
+ * document subtype.
+ */
+export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'THREAD' | 'USER';
+
+/**
+ * Canonical reference to an entity receiving properties.
+ */
+export type PropertyTargetReference = {
+    /**
+     * Entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Canonical entity type.
+     */
+    entity_type: PropertyTargetEntityType;
+};
 
 /**
  * Property value (service representation).
@@ -821,9 +965,9 @@ export type GetEntityPropertiesData = {
     body?: never;
     path: {
         /**
-         * Entity type (user, document, channel, project, thread)
+         * Canonical entity type; tasks use DOCUMENT
          */
-        entity_type: EntityType;
+        entity_type: PropertyTargetEntityType;
         /**
          * Entity ID
          */
@@ -866,13 +1010,53 @@ export type GetEntityPropertiesResponses = {
 
 export type GetEntityPropertiesResponse = GetEntityPropertiesResponses[keyof GetEntityPropertiesResponses];
 
+export type BulkUpdateEntityPropertyOptionsData = {
+    body: BulkUpdateEntityPropertyOptionsRequest;
+    path: {
+        /**
+         * Canonical entity type; tasks use DOCUMENT
+         */
+        entity_type: PropertyTargetEntityType;
+        /**
+         * Entity ID
+         */
+        entity_id: string;
+    };
+    query?: never;
+    url: '/properties/entities/{entity_type}/{entity_id}/options/bulk';
+};
+
+export type BulkUpdateEntityPropertyOptionsErrors = {
+    /**
+     * Invalid request, a property is not multi-select, or an option does not belong to its property
+     */
+    400: unknown;
+    /**
+     * No edit access to the entity
+     */
+    403: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type BulkUpdateEntityPropertyOptionsResponses = {
+    /**
+     * Options updated; returns final ids per property
+     */
+    200: BulkUpdateEntityPropertyOptionsResponse;
+};
+
+export type BulkUpdateEntityPropertyOptionsResponse2 = BulkUpdateEntityPropertyOptionsResponses[keyof BulkUpdateEntityPropertyOptionsResponses];
+
 export type SetEntityPropertyData = {
     body: SetEntityPropertyRequest;
     path: {
         /**
-         * Entity type (user, document, channel, project, thread)
+         * Canonical entity type; tasks use DOCUMENT
          */
-        entity_type: EntityType;
+        entity_type: PropertyTargetEntityType;
         /**
          * Entity ID
          */
@@ -918,9 +1102,9 @@ export type RemoveEntityPropertyOptionData = {
     body?: never;
     path: {
         /**
-         * Entity type (user, document, channel, project, thread)
+         * Canonical entity type; tasks use DOCUMENT
          */
-        entity_type: EntityType;
+        entity_type: PropertyTargetEntityType;
         /**
          * Entity ID
          */
@@ -962,9 +1146,9 @@ export type AddEntityPropertyOptionData = {
     body?: never;
     path: {
         /**
-         * Entity type (user, document, channel, project, thread)
+         * Canonical entity type; tasks use DOCUMENT
          */
-        entity_type: EntityType;
+        entity_type: PropertyTargetEntityType;
         /**
          * Entity ID
          */
@@ -1041,6 +1225,37 @@ export type DeleteEntityPropertyResponses = {
 };
 
 export type DeleteEntityPropertyResponse = DeleteEntityPropertyResponses[keyof DeleteEntityPropertyResponses];
+
+export type BulkUpdateEntitiesPropertyOptionsData = {
+    body: BulkUpdateEntitiesPropertyOptionsRequest;
+    path?: never;
+    query?: never;
+    url: '/properties/options/bulk';
+};
+
+export type BulkUpdateEntitiesPropertyOptionsErrors = {
+    /**
+     * Invalid request, the property is not multi-select, or an option does not belong to the property
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type BulkUpdateEntitiesPropertyOptionsResponses = {
+    /**
+     * Per-entity results: each entity applied, skipped, or failed
+     */
+    200: BulkUpdateEntitiesPropertyOptionsResponse;
+};
+
+export type BulkUpdateEntitiesPropertyOptionsResponse2 = BulkUpdateEntitiesPropertyOptionsResponses[keyof BulkUpdateEntitiesPropertyOptionsResponses];
 
 export type ListTagsData = {
     body?: never;

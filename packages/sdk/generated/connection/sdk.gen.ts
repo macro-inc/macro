@@ -59,6 +59,7 @@ export class Sdk extends HeyApiClient {
     
     public batchSendMessageHandler<ThrowOnError extends boolean = false>(options: Options<BatchSendMessageHandlerData, ThrowOnError>): RequestResult<BatchSendMessageHandlerResponses, BatchSendMessageHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<BatchSendMessageHandlerResponses, BatchSendMessageHandlerErrors, ThrowOnError>({
+            security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
             url: '/batch_send',
             ...options,
             headers: {
@@ -70,6 +71,7 @@ export class Sdk extends HeyApiClient {
     
     public sendMessageHandler<ThrowOnError extends boolean = false>(options: Options<SendMessageHandlerData, ThrowOnError>): RequestResult<SendMessageHandlerResponses, SendMessageHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<SendMessageHandlerResponses, SendMessageHandlerErrors, ThrowOnError>({
+            security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
             url: '/message/send/{entity_type}/{entity_id}',
             ...options,
             headers: {
@@ -80,6 +82,10 @@ export class Sdk extends HeyApiClient {
     }
     
     public getEntityHandler<ThrowOnError extends boolean = false>(options: Options<GetEntityHandlerData, ThrowOnError>): RequestResult<GetEntityHandlerResponses, GetEntityHandlerErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetEntityHandlerResponses, GetEntityHandlerErrors, ThrowOnError>({ url: '/track/{entity_type}/{entity_id}', ...options });
+        return (options.client ?? this.client).get<GetEntityHandlerResponses, GetEntityHandlerErrors, ThrowOnError>({
+            security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
+            url: '/track/{entity_type}/{entity_id}',
+            ...options
+        });
     }
 }

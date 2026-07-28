@@ -53,6 +53,10 @@ export type CallRecordSearchResponseItem = {
 
 export type CallRecordSearchResponseItemWithMetadata = CallRecordSearchResponseItem & {
     metadata?: null | CallRecordMetadata;
+    /**
+     * Entity properties (e.g. tags) on the call.
+     */
+    properties?: Array<SoupProperty> | null;
 };
 
 export type CallRecordSearchResult = {
@@ -88,6 +92,13 @@ export type ChannelFilters = {
      */
     importance?: boolean | null;
     /**
+     * Filter by whether the requesting user is an active participant of the channel.
+     * Presence of this filter also widens the candidate set to team channels of the
+     * user's teams that they have not joined, so `false` matches those channels.
+     * None to ignore (participant channels only, today's default).
+     */
+    is_participant?: boolean | null;
+    /**
      * Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions.
      */
     mentions?: Array<string>;
@@ -114,6 +125,63 @@ export type ChannelFilters = {
 };
 
 /**
+ * A single channel-message content hit in the unified search response.
+ * One item per matching message, timestamped by the message itself, so the
+ * unified sort interleaves channel messages with other entity types by
+ * their own recency.
+ */
+export type ChannelMessageSearchResponseItem = {
+    /**
+     * The id of the channel the message belongs to
+     */
+    channel_id: string;
+    /**
+     * The type of channel
+     */
+    channel_type: string;
+    /**
+     * When the channel message was created
+     */
+    created_at: string;
+    /**
+     * When the channel message was deleted, if it has been
+     */
+    deleted_at?: string | null;
+    /**
+     * The highlights for the channel message
+     */
+    highlight: SearchHighlight;
+    /**
+     * Standardized id field shared by all item types; the channel id.
+     */
+    id: string;
+    /**
+     * The channel message id
+     */
+    message_id: string;
+    /**
+     * we don't store this for channels atm but keeping it here for consistency
+     */
+    owner_id?: string | null;
+    /**
+     * The score of the result
+     */
+    score?: number | null;
+    /**
+     * The sender id
+     */
+    sender_id: string;
+    /**
+     * The channel message thread id
+     */
+    thread_id?: string | null;
+    /**
+     * When the channel message was last updated
+     */
+    updated_at: string;
+};
+
+/**
  * Metadata for a channel fetched from the database
  */
 export type ChannelMetadata = {
@@ -121,6 +189,37 @@ export type ChannelMetadata = {
     interacted_at?: string | null;
     updated_at: string;
     viewed_at?: string | null;
+};
+
+/**
+ * A channel-name search hit.
+ */
+export type ChannelNameSearchResponseItem = {
+    /**
+     * The channel id.
+     */
+    channel_id: string;
+    /**
+     * The type of channel.
+     */
+    channel_type: string;
+    /**
+     * The matched channel-name highlight.
+     */
+    highlight: SearchHighlight;
+    /**
+     * Standardized id field shared by all item types; the channel id.
+     */
+    id: string;
+    metadata?: null | ChannelMetadata;
+    /**
+     * The channel owner.
+     */
+    owner_id?: string | null;
+    /**
+     * The score of the result.
+     */
+    score?: number | null;
 };
 
 export type ChannelSearchRequest = (null | ChannelFilters) & {
@@ -988,7 +1087,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -1896,7 +1995,9 @@ export type UnifiedSearchResponseItem = (DocumentSearchResponseItemWithMetadata 
     type: 'chat';
 }) | (EmailSearchResponseItemWithMetadata & {
     type: 'email';
-}) | (ChannelSearchResponseItemWithMetadata & {
+}) | (ChannelMessageSearchResponseItem & {
+    type: 'channelMessage';
+}) | (ChannelNameSearchResponseItem & {
     type: 'channel';
 }) | (ProjectSearchResponseItemWithMetadata & {
     type: 'project';

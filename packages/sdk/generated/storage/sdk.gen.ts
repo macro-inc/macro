@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactData, GetContactErrors, GetContactResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetRecentActivityHandlerData, GetRecentActivityHandlerErrors, GetRecentActivityHandlerResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
+import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetRecentActivityHandlerData, GetRecentActivityHandlerErrors, GetRecentActivityHandlerResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -407,6 +407,13 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Handler for `POST /channels/join/{join_code}`.
+     */
+    public joinChannelByCode<ThrowOnError extends boolean = false>(options: Options<JoinChannelByCodeData, ThrowOnError>): RequestResult<JoinChannelByCodeResponses, JoinChannelByCodeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<JoinChannelByCodeResponses, JoinChannelByCodeErrors, ThrowOnError>({ url: '/channels/join/{join_code}', ...options });
+    }
+    
+    /**
      * Handler for `POST /channels/mentions`.
      */
     public createEntityMention<ThrowOnError extends boolean = false>(options: Options<CreateEntityMentionData, ThrowOnError>): RequestResult<CreateEntityMentionResponses, CreateEntityMentionErrors, ThrowOnError> {
@@ -495,6 +502,13 @@ export class Sdk extends HeyApiClient {
      */
     public joinChannel<ThrowOnError extends boolean = false>(options: Options<JoinChannelData, ThrowOnError>): RequestResult<JoinChannelResponses, JoinChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).post<JoinChannelResponses, JoinChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}/join', ...options });
+    }
+    
+    /**
+     * Handler for `GET /channels/{channel_id}/join-link`.
+     */
+    public getChannelJoinLink<ThrowOnError extends boolean = false>(options: Options<GetChannelJoinLinkData, ThrowOnError>): RequestResult<GetChannelJoinLinkResponses, GetChannelJoinLinkErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetChannelJoinLinkResponses, GetChannelJoinLinkErrors, ThrowOnError>({ url: '/channels/{channel_id}/join-link', ...options });
     }
     
     /**
@@ -718,6 +732,24 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Manually create a CRM company for the caller's team. Any team member
+     * may create one. The domain must not already be tracked by the team
+     * (409), and the team's CRM killswitch must be on (403). Returns the
+     * created company in the same shape as `GET /crm/companies/{id}` (its
+     * contact list is empty until emails populate it).
+     */
+    public createCrmCompany<ThrowOnError extends boolean = false>(options: Options<CreateCrmCompanyData, ThrowOnError>): RequestResult<CreateCrmCompanyResponses, CreateCrmCompanyErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateCrmCompanyResponses, CreateCrmCompanyErrors, ThrowOnError>({
+            url: '/crm/companies',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Fetch a single CRM company by id, hydrated with its domains, the
      * primary domain's directory display metadata (name + description),
      * and the company's contacts. Access is enforced by
@@ -739,6 +771,26 @@ export class Sdk extends HeyApiClient {
      */
     public listCompanyContacts<ThrowOnError extends boolean = false>(options: Options<ListCompanyContactsData, ThrowOnError>): RequestResult<ListCompanyContactsResponses, ListCompanyContactsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListCompanyContactsResponses, ListCompanyContactsErrors, ThrowOnError>({ url: '/crm/companies/{company_id}/contacts', ...options });
+    }
+    
+    /**
+     * Manually create a contact under a CRM company. Access is enforced by
+     * [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
+     * that owns the company (hidden companies are reachable for
+     * admin/owner only, and the new contact then inherits `hidden`). The
+     * email's domain must be one of the company's domains (400), the
+     * company must not already track the email (409), and the team's CRM
+     * killswitch must be on (403).
+     */
+    public createCrmContact<ThrowOnError extends boolean = false>(options: Options<CreateCrmContactData, ThrowOnError>): RequestResult<CreateCrmContactResponses, CreateCrmContactErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateCrmContactResponses, CreateCrmContactErrors, ThrowOnError>({
+            url: '/crm/companies/{company_id}/contacts',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -776,6 +828,24 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Rename a CRM company. Access is enforced by
+     * [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
+     * that owns the company (hidden companies are reachable for
+     * admin/owner only). The name is a team-scoped override
+     * (`custom_name`) and never touches the global domain directory.
+     */
+    public setCrmCompanyName<ThrowOnError extends boolean = false>(options: Options<SetCrmCompanyNameData, ThrowOnError>): RequestResult<SetCrmCompanyNameResponses, SetCrmCompanyNameErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetCrmCompanyNameResponses, SetCrmCompanyNameErrors, ThrowOnError>({
+            url: '/crm/companies/{company_id}/name',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Fetch a single CRM contact by id. Access is enforced by
      * [`CrmContactAccessLevelExtractor`]: the user must be on the team that
      * owns the contact's parent company, and hidden contacts are invisible
@@ -793,6 +863,51 @@ export class Sdk extends HeyApiClient {
     public setContactHidden<ThrowOnError extends boolean = false>(options: Options<SetContactHiddenData, ThrowOnError>): RequestResult<SetContactHiddenResponses, SetContactHiddenErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetContactHiddenResponses, SetContactHiddenErrors, ThrowOnError>({
             url: '/crm/contacts/{contact_id}/hidden',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Rename a CRM contact. Access is enforced by
+     * [`CrmContactAccessLevelExtractor`]: the caller must be on the team
+     * that owns the contact's company (hidden contacts are reachable for
+     * admin/owner only). The name overwrites the team-scoped
+     * `crm_contacts.name` column.
+     */
+    public setCrmContactName<ThrowOnError extends boolean = false>(options: Options<SetCrmContactNameData, ThrowOnError>): RequestResult<SetCrmContactNameResponses, SetCrmContactNameErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetCrmContactNameResponses, SetCrmContactNameErrors, ThrowOnError>({
+            url: '/crm/contacts/{contact_id}/name',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read the caller's team CRM configuration. Any team member may read;
+     * teams without a settings row get the defaults.
+     */
+    public getCrmTeamSettings<ThrowOnError extends boolean = false>(options?: Options<GetCrmTeamSettingsData, ThrowOnError>): RequestResult<GetCrmTeamSettingsResponses, GetCrmTeamSettingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetCrmTeamSettingsResponses, GetCrmTeamSettingsErrors, ThrowOnError>({ url: '/crm/settings', ...options });
+    }
+    
+    /**
+     * Partially update the caller's team CRM configuration. Any team
+     * member may update the views fields (`team_views`,
+     * `default_team_view_id`); the governance fields (permission
+     * thresholds, `closed_stage_ids`) require an admin/owner team role
+     * (403 otherwise). Omitted fields keep their current values;
+     * `team_views` is replaced whole. Returns the resulting settings.
+     */
+    public putCrmTeamSettings<ThrowOnError extends boolean = false>(options: Options<PutCrmTeamSettingsData, ThrowOnError>): RequestResult<PutCrmTeamSettingsResponses, PutCrmTeamSettingsErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutCrmTeamSettingsResponses, PutCrmTeamSettingsErrors, ThrowOnError>({
+            url: '/crm/settings',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -928,6 +1043,15 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+    
+    /**
+     * Handler for `GET /documents/slug/{slug}`.
+     *
+     * Returns document metadata, user access level, and view location.
+     */
+    public getDocumentByTeamSlug<ThrowOnError extends boolean = false>(options: Options<GetDocumentByTeamSlugData, ThrowOnError>): RequestResult<GetDocumentByTeamSlugResponses, GetDocumentByTeamSlugErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDocumentByTeamSlugResponses, GetDocumentByTeamSlugErrors, ThrowOnError>({ url: '/documents/slug/{slug}', ...options });
     }
     
     /**
@@ -1330,15 +1454,14 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Gets all the users projects. This includes projects shared with the user.
+     * List projects visible to the authenticated user.
      */
     public getProjectsHandler<ThrowOnError extends boolean = false>(options?: Options<GetProjectsHandlerData, ThrowOnError>): RequestResult<GetProjectsHandlerResponses, GetProjectsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetProjectsHandlerResponses, GetProjectsHandlerErrors, ThrowOnError>({ url: '/projects', ...options });
     }
     
     /**
-     * Creates a new project.
-     * The project can be created as a sub-project of another project or as a top-level project.
+     * Create a project, optionally beneath an existing project.
      */
     public createProjectHandler<ThrowOnError extends boolean = false>(options: Options<CreateProjectHandlerData, ThrowOnError>): RequestResult<CreateProjectHandlerResponses, CreateProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateProjectHandlerResponses, CreateProjectHandlerErrors, ThrowOnError>({
@@ -1352,12 +1475,15 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Gets all the users projects that are pending upload. This includes projects shared with the user.
+     * List pending root projects owned by the authenticated user.
      */
     public getPendingProjectsHandler<ThrowOnError extends boolean = false>(options?: Options<GetPendingProjectsHandlerData, ThrowOnError>): RequestResult<GetPendingProjectsHandlerResponses, GetPendingProjectsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetPendingProjectsHandlerResponses, GetPendingProjectsHandlerErrors, ThrowOnError>({ url: '/projects/pending', ...options });
     }
     
+    /**
+     * Get previews for a batch of project IDs.
+     */
     public getBatchProjectPreview<ThrowOnError extends boolean = false>(options: Options<GetBatchProjectPreviewData, ThrowOnError>): RequestResult<GetBatchProjectPreviewResponses, GetBatchProjectPreviewErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetBatchProjectPreviewResponses, GetBatchProjectPreviewErrors, ThrowOnError>({
             url: '/projects/preview',
@@ -1370,8 +1496,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Uploads a folder to the user's cloud storage. Mimicing the folder structure
-     * with projects and placing all documents in the correct location.
+     * Upload a folder tree and create its upload destinations.
      */
     public uploadFolderHandler<ThrowOnError extends boolean = false>(options: Options<UploadFolderHandlerData, ThrowOnError>): RequestResult<UploadFolderHandlerResponses, UploadFolderHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UploadFolderHandlerResponses, UploadFolderHandlerErrors, ThrowOnError>({
@@ -1385,9 +1510,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Creates a request id in the dynamodb table for tracking the upload
-     * Returns a presigned url for uploading a zip file to the staging bucket
-     * Returns a request id for tracking the upload
+     * Create a request for extracting an uploaded folder archive.
      */
     public uploadExtractFolderHandler<ThrowOnError extends boolean = false>(options: Options<UploadExtractFolderHandlerData, ThrowOnError>): RequestResult<UploadExtractFolderHandlerResponses, UploadExtractFolderHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UploadExtractFolderHandlerResponses, UploadExtractFolderHandlerErrors, ThrowOnError>({
@@ -1401,49 +1524,49 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Deletes a project.
-     * Soft deletes the project and all of its children.
+     * Soft-delete a project and all of its children.
      */
     public deleteProjectHandler<ThrowOnError extends boolean = false>(options: Options<DeleteProjectHandlerData, ThrowOnError>): RequestResult<DeleteProjectHandlerResponses, DeleteProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteProjectHandlerResponses, DeleteProjectHandlerErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
     
+    /**
+     * Get project metadata.
+     */
     public getProjectHandler<ThrowOnError extends boolean = false>(options: Options<GetProjectHandlerData, ThrowOnError>): RequestResult<GetProjectHandlerResponses, GetProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectHandlerResponses, GetProjectHandlerErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
     
     /**
-     * Gets the user's access level to the project
+     * Get the caller's project access level.
      */
     public getProjectUserAccessLevel<ThrowOnError extends boolean = false>(options: Options<GetProjectUserAccessLevelData, ThrowOnError>): RequestResult<GetProjectUserAccessLevelResponses, GetProjectUserAccessLevelErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectUserAccessLevelResponses, GetProjectUserAccessLevelErrors, ThrowOnError>({ url: '/projects/{id}/access_level', ...options });
     }
     
     /**
-     * Gets the content of a project.
-     * This includes the projects sub-projects as well as the items in the project.
+     * Get a project's immediate children.
      */
     public getProjectContentHandler<ThrowOnError extends boolean = false>(options: Options<GetProjectContentHandlerData, ThrowOnError>): RequestResult<GetProjectContentHandlerResponses, GetProjectContentHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectContentHandlerResponses, GetProjectContentHandlerErrors, ThrowOnError>({ url: '/projects/{id}/content', ...options });
     }
     
     /**
-     * Permanently deletes a project and all of it's children.
+     * Permanently delete a soft-deleted project and all of its children.
      */
     public permanentlyDeleteProject<ThrowOnError extends boolean = false>(options: Options<PermanentlyDeleteProjectData, ThrowOnError>): RequestResult<PermanentlyDeleteProjectResponses, PermanentlyDeleteProjectErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<PermanentlyDeleteProjectResponses, PermanentlyDeleteProjectErrors, ThrowOnError>({ url: '/projects/{id}/permanent', ...options });
     }
     
     /**
-     * Gets the current documents share permissions
-     * Gets the projects share permissions
+     * Get a project's share permissions.
      */
     public getProjectPermissionsV2<ThrowOnError extends boolean = false>(options: Options<GetProjectPermissionsV2Data, ThrowOnError>): RequestResult<GetProjectPermissionsV2Responses, GetProjectPermissionsV2Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectPermissionsV2Responses, GetProjectPermissionsV2Errors, ThrowOnError>({ url: '/projects/{id}/permissions', ...options });
     }
     
     /**
-     * Deletes a specific document
+     * Restore a soft-deleted project and its children.
      */
     public revertDeleteProject<ThrowOnError extends boolean = false>(options: Options<RevertDeleteProjectData, ThrowOnError>): RequestResult<RevertDeleteProjectResponses, RevertDeleteProjectErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RevertDeleteProjectResponses, RevertDeleteProjectErrors, ThrowOnError>({ url: '/projects/{id}/revert_delete', ...options });
@@ -1555,7 +1678,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Edits a project.
+     * Edit project metadata and sharing settings.
      */
     public editProjectV2<ThrowOnError extends boolean = false>(options: Options<EditProjectV2Data, ThrowOnError>): RequestResult<EditProjectV2Responses, EditProjectV2Errors, ThrowOnError> {
         return (options.client ?? this.client).patch<EditProjectV2Responses, EditProjectV2Errors, ThrowOnError>({

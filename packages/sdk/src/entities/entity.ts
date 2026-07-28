@@ -1,6 +1,6 @@
 import type {
   EntityPropertyWithDefinition,
-  EntityType as PropertyEntityType,
+  PropertyTargetEntityType as PropertyEntityType,
   SetPropertyValue,
 } from '../../generated/properties/types.gen';
 import type { FavoriteEntityRef } from '../../generated/storage/types.gen';

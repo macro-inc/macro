@@ -36,7 +36,7 @@ export class ChannelNamespace {
 
   /** All channels the authenticated user is a member of. */
   async list(): Promise<Channel[]> {
-    const items = unwrap(await this.client.storage.getChannels());
+    const { items } = unwrap(await this.client.storage.getChannels());
     return items.map((ch) => Channel.byId(this.client, ch.id.toString()));
   }
 
@@ -46,7 +46,7 @@ export class ChannelNamespace {
    */
   async *search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
     if (!opts?.searchOn || opts.searchOn === 'name') {
-      const items = unwrap(await this.client.storage.getChannels());
+      const { items } = unwrap(await this.client.storage.getChannels());
       const lower = query.toLowerCase();
       for (const ch of items) {
         if (ch.name?.toLowerCase().includes(lower)) {

@@ -20,6 +20,8 @@ import type { ApiChannelWithLatestViewedAt } from './apiChannelWithLatestViewedA
  * Channel list response item.
  */
 export interface ApiChannelWithLatest {
+  /** Whether team members automatically join the channel. */
+  auto_join_team: boolean;
   /** Channel type. */
   channel_type: ApiChannelListType;
   /** Channel creation timestamp. */
@@ -30,6 +32,8 @@ export interface ApiChannelWithLatest {
   id: string;
   /** Last interaction timestamp for requesting user. */
   interacted_at?: ApiChannelWithLatestInteractedAt;
+  /** Whether the requesting user is an active participant of the channel. */
+  is_participant: boolean;
   latest_message?: ApiChannelWithLatestLatestMessage;
   latest_non_thread_message?: ApiChannelWithLatestLatestNonThreadMessage;
   /** Channel name. */

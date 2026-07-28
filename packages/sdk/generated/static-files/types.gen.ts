@@ -179,6 +179,7 @@ export type HandleGetMetadataData = {
 };
 
 export type HandleGetMetadataErrors = {
+    401: string;
     404: string;
     500: string;
 };

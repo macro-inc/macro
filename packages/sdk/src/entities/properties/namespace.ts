@@ -4,7 +4,7 @@ import type {
   EntityPropertiesResponse,
   PropertyDataType,
   PropertyDefinition as PropertyDefinitionRecord,
-  EntityType as PropertyEntityType,
+  PropertyTargetEntityType as PropertyEntityType,
   PropertyScope,
   TagSetResponse,
 } from '../../../generated/properties/types.gen';

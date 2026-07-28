@@ -19,13 +19,6 @@ const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
  * and adds task-specific state.
  */
 export class Task extends Document {
-  /**
-   * Favorites address tasks as their underlying `document` (inherited
-   * {@link Document.entityType}), but the properties service gives them their
-   * own `TASK` type.
-   */
-  protected override readonly propertyEntityType = 'TASK';
-
   /** A handle to a task by document id. Details load on first access. */
   static byId(client: MacroClient, id: string): Task {
     return new Task(client, id);

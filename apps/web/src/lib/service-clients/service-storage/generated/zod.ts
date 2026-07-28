@@ -2910,115 +2910,157 @@ export const postChannelBotWebhookResponse = zod
 /**
  * @summary Handle channel list requests for `GET /comms/channels`.
  */
-export const getChannelsResponseOrgIdMin = 0;
+export const getChannelsQueryLimitMin = 0;
 
-export const getChannelsResponseItem = zod
+export const getChannelsQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getChannelsQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 100)'),
+  cursor: zod.string().optional().describe('Opaque cursor for the next page'),
+});
+
+export const getChannelsResponseItemsItemOrgIdMin = 0;
+
+export const getChannelsResponse = zod
   .object({
-    channel_type: zod
-      .enum(['public', 'private', 'direct_message', 'team'])
-      .describe('Channel type in API responses.'),
-    created_at: zod.iso.datetime({}).describe('Channel creation timestamp.'),
-    frecency_score: zod
-      .number()
-      .nullish()
-      .describe('Aggregate frecency score.'),
-    id: zod.uuid().describe('Channel id.'),
-    interacted_at: zod.iso
-      .datetime({})
-      .nullish()
-      .describe('Last interaction timestamp for requesting user.'),
-    latest_message: zod
-      .union([
-        zod.null(),
-        zod
-          .object({
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('Deletion timestamp, if deleted.'),
-            mentions: zod
-              .array(zod.string())
-              .describe(
-                'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
-              ),
-            message_id: zod.uuid().describe('Message id.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread_id: zod
-              .uuid()
-              .nullish()
-              .describe('Thread id, if the message is a reply.'),
-            updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
-          })
-          .describe('Channel message in API responses.'),
-      ])
-      .optional(),
-    latest_non_thread_message: zod
-      .union([
-        zod.null(),
-        zod
-          .object({
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('Deletion timestamp, if deleted.'),
-            mentions: zod
-              .array(zod.string())
-              .describe(
-                'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
-              ),
-            message_id: zod.uuid().describe('Message id.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread_id: zod
-              .uuid()
-              .nullish()
-              .describe('Thread id, if the message is a reply.'),
-            updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
-          })
-          .describe('Channel message in API responses.'),
-      ])
-      .optional(),
-    name: zod.string().nullish().describe('Channel name.'),
-    org_id: zod
-      .number()
-      .min(getChannelsResponseOrgIdMin)
-      .nullish()
-      .describe('Organization id.'),
-    owner_id: zod.string().describe('Channel owner user id.'),
-    participants: zod
+    items: zod
       .array(
         zod
           .object({
-            channel_id: zod.uuid().describe('id of the channel'),
-            joined_at: zod.iso
+            auto_join_team: zod
+              .boolean()
+              .describe('Whether team members automatically join the channel.'),
+            channel_type: zod
+              .enum(['public', 'private', 'direct_message', 'team'])
+              .describe('Channel type in API responses.'),
+            created_at: zod.iso
               .datetime({})
-              .describe('timestamp of when the user joined the channel'),
-            left_at: zod.iso
+              .describe('Channel creation timestamp.'),
+            frecency_score: zod
+              .number()
+              .nullish()
+              .describe('Aggregate frecency score.'),
+            id: zod.uuid().describe('Channel id.'),
+            interacted_at: zod.iso
               .datetime({})
               .nullish()
-              .describe('timestamp of when the user left the channel'),
-            role: zod
-              .enum(['owner', 'admin', 'member'])
-              .describe('Participant role in API responses.'),
-            user_id: zod.string().describe('id of the user'),
+              .describe('Last interaction timestamp for requesting user.'),
+            is_participant: zod
+              .boolean()
+              .describe(
+                'Whether the requesting user is an active participant of the channel.'
+              ),
+            latest_message: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    content: zod.string().describe('Message content.'),
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('Creation timestamp.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Deletion timestamp, if deleted.'),
+                    mentions: zod
+                      .array(zod.string())
+                      .describe(
+                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                      ),
+                    message_id: zod.uuid().describe('Message id.'),
+                    sender_id: zod.string().describe('Sender user id.'),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe('Thread id, if the message is a reply.'),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Update timestamp.'),
+                  })
+                  .describe('Channel message in API responses.'),
+              ])
+              .optional(),
+            latest_non_thread_message: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    content: zod.string().describe('Message content.'),
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('Creation timestamp.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Deletion timestamp, if deleted.'),
+                    mentions: zod
+                      .array(zod.string())
+                      .describe(
+                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                      ),
+                    message_id: zod.uuid().describe('Message id.'),
+                    sender_id: zod.string().describe('Sender user id.'),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe('Thread id, if the message is a reply.'),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Update timestamp.'),
+                  })
+                  .describe('Channel message in API responses.'),
+              ])
+              .optional(),
+            name: zod.string().nullish().describe('Channel name.'),
+            org_id: zod
+              .number()
+              .min(getChannelsResponseItemsItemOrgIdMin)
+              .nullish()
+              .describe('Organization id.'),
+            owner_id: zod.string().describe('Channel owner user id.'),
+            participants: zod
+              .array(
+                zod
+                  .object({
+                    channel_id: zod.uuid().describe('id of the channel'),
+                    joined_at: zod.iso
+                      .datetime({})
+                      .describe(
+                        'timestamp of when the user joined the channel'
+                      ),
+                    left_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('timestamp of when the user left the channel'),
+                    role: zod
+                      .enum(['owner', 'admin', 'member'])
+                      .describe('Participant role in API responses.'),
+                    user_id: zod.string().describe('id of the user'),
+                  })
+                  .describe('Channel participant in API responses.')
+              )
+              .describe('Active participants.'),
+            team_id: zod.uuid().nullish().describe('Team id.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('Channel last-updated timestamp.'),
+            viewed_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last viewed timestamp for requesting user.'),
           })
-          .describe('Channel participant in API responses.')
+          .describe('Channel list response item.')
       )
-      .describe('Active participants.'),
-    team_id: zod.uuid().nullish().describe('Team id.'),
-    updated_at: zod.iso
-      .datetime({})
-      .describe('Channel last-updated timestamp.'),
-    viewed_at: zod.iso
-      .datetime({})
+      .describe('Channels in this page.'),
+    next_cursor: zod
+      .string()
       .nullish()
-      .describe('Last viewed timestamp for requesting user.'),
+      .describe('Opaque cursor for the next page, if one exists.'),
   })
-  .describe('Channel list response item.');
-export const getChannelsResponse = zod.array(getChannelsResponseItem);
+  .describe('A cursor-paginated channel list response.');
 
 /**
  * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it

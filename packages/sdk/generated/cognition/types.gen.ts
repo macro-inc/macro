@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import';
 
 /**
  * A structured part within an assistant message.
@@ -390,6 +390,16 @@ export type ChatStream = (StreamError & {
 };
 
 /**
+ * Body for completing onboarding.
+ */
+export type CompleteOnboardingRequest = {
+    /**
+     * Whether the user skipped rather than finished.
+     */
+    skipped?: boolean;
+};
+
+/**
  * A recorded completion: who, what feature, optional entity, and the cost.
  */
 export type CompletionUsage = {
@@ -410,6 +420,24 @@ export type CompletionUsage = {
      * for background work).
      */
     user: MacroUserIdStr;
+};
+
+/**
+ * One of the user's MCP server connections, as the setup page sees it.
+ */
+export type ConnectedServer = {
+    /**
+     * Whether the user has completed OAuth against it.
+     */
+    authenticated: boolean;
+    /**
+     * The server's display name.
+     */
+    name: string;
+    /**
+     * The server URL.
+     */
+    url: string;
 };
 
 export type ConversationRecord = {
@@ -623,8 +651,170 @@ export type HttpSendChatMessageRequest = {
     toolset?: ToolSet;
 };
 
+/**
+ * One row of the import ledger.
+ */
+export type ImportEntity = {
+    /**
+     * When the row was first staged.
+     */
+    created_at: string;
+    /**
+     * The Macro entity it became, once imported.
+     */
+    entity_id?: string | null;
+    /**
+     * The Macro entity type (`task` | `md` | `channel`), once imported.
+     */
+    entity_type?: string | null;
+    /**
+     * Stable id in the source system (see
+     * [`ImportSource::normalize_foreign_id`]).
+     */
+    foreign_id: string;
+    /**
+     * Ledger row id.
+     */
+    id: string;
+    /**
+     * Where it was first staged from.
+     */
+    initiator: Initiator;
+    /**
+     * Failure detail from the last import attempt, when one failed.
+     */
+    last_error?: string | null;
+    /**
+     * Per-source metadata (shape depends on `source`; see
+     * [`LinearIssueMeta`], [`NotionDocMeta`], [`SlackChannelMeta`]).
+     */
+    metadata: unknown;
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
+    /**
+     * Where the row is in its lifecycle.
+     */
+    status: ImportStatus;
+    /**
+     * The team the created entity was shared with, when it was.
+     */
+    team_id?: string | null;
+    /**
+     * When the row last changed.
+     */
+    updated_at: string;
+    /**
+     * The user who staged/imported it. Team-imported rows from teammates
+     * are visible with their owner's id, so clients can say "created by a
+     * teammate".
+     */
+    user_id: string;
+};
+
+/**
+ * Gather-run state for one user × source.
+ */
+export type ImportRun = {
+    /**
+     * Whether this run should import its onboarding-staged candidates as
+     * soon as gathering finishes.
+     */
+    auto_import: boolean;
+    /**
+     * Gather or automatic-import failure detail, when the run failed.
+     */
+    error?: string | null;
+    /**
+     * The source this run gathered from.
+     */
+    source: ImportSource;
+    /**
+     * Where the run is in its lifecycle.
+     */
+    status: RunStatus;
+    /**
+     * When the run state last changed.
+     */
+    updated_at: string;
+};
+
+/**
+ * External systems items can be imported from.
+ */
+export type ImportSource = 'linear' | 'notion' | 'slack';
+
+/**
+ * The full import aggregate for a user: gather runs plus visible ledger
+ * rows (their own, and teammates' team-imported rows).
+ */
+export type ImportState = {
+    /**
+     * Visible import entities, newest first.
+     */
+    entities: Array<ImportEntity>;
+    /**
+     * Gather runs, one per source that ever gathered.
+     */
+    runs: Array<ImportRun>;
+};
+
+/**
+ * Lifecycle of one import entity.
+ */
+export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
+
+/**
+ * Where an import entity was first staged from. Provenance only — never a
+ * visibility filter.
+ */
+export type Initiator = 'onboarding' | 'chat';
+
 export type JwtPayload = {
     token: string;
+};
+
+/**
+ * Metadata for one staged Linear issue.
+ */
+export type LinearIssueMeta = {
+    /**
+     * Assignee display name as Linear reports it.
+     */
+    assignee?: string | null;
+    /**
+     * Assignee email, when Linear exposes it.
+     */
+    assignee_email?: string | null;
+    /**
+     * Short markdown description.
+     */
+    description?: string | null;
+    /**
+     * Due date as an ISO date (`YYYY-MM-DD`), when set.
+     */
+    due_date?: string | null;
+    /**
+     * Linear's human identifier (e.g. `ENG-142`).
+     */
+    identifier?: string | null;
+    /**
+     * Priority label (e.g. `Urgent`).
+     */
+    priority?: string | null;
+    /**
+     * Workflow status name (e.g. `In Progress`).
+     */
+    status?: string | null;
+    /**
+     * Issue title.
+     */
+    title: string;
+    /**
+     * Deep link back to the issue in Linear.
+     */
+    url?: string | null;
 };
 
 export type MacroUserIdStr = string;
@@ -687,6 +877,75 @@ export type NewMessageAttachment = {
     attachmentType: AttachmentType;
     messageId: string;
 };
+
+/**
+ * Metadata for one staged Notion page. Deliberately has NO content field:
+ * page bodies are fetched at import time, for accepted pages only.
+ */
+export type NotionDocMeta = {
+    /**
+     * One-line summary of what the page contains.
+     */
+    summary?: string | null;
+    /**
+     * Page title.
+     */
+    title: string;
+    /**
+     * Deep link back to the page in Notion.
+     */
+    url?: string | null;
+};
+
+/**
+ * One user's onboarding row.
+ */
+export type OnboardingRow = {
+    /**
+     * When the flow completed, if it has.
+     */
+    completed_at?: string | null;
+    /**
+     * Whether the user skipped rather than finished.
+     */
+    skipped: boolean;
+    /**
+     * When the flow was first touched.
+     */
+    started_at: string;
+    /**
+     * Where the flow is in its lifecycle.
+     */
+    status: OnboardingStatus;
+};
+
+/**
+ * The onboarding aggregate served to the setup page. Import runs and
+ * staged entities are served separately by `GET /import/state`.
+ */
+export type OnboardingState = {
+    /**
+     * The user's MCP server connections.
+     */
+    connected_servers: Array<ConnectedServer>;
+    /**
+     * The user's onboarding row.
+     */
+    row: OnboardingRow;
+    /**
+     * The account email's domain when it can back a domain team — i.e. it
+     * is not a generic consumer provider — `None` otherwise. Judged with
+     * the same list the teams service uses for domain auto-join and
+     * claiming, so the client never suggests a domain team the server
+     * would refuse.
+     */
+    suggested_team_domain?: string | null;
+};
+
+/**
+ * Lifecycle of the onboarding flow itself.
+ */
+export type OnboardingStatus = 'active' | 'completed';
 
 /**
  * Request body for patching a chat.
@@ -780,6 +1039,39 @@ export type RejectToolCallRequest = {
  * The role of a message participant.
  */
 export type Role = 'user' | 'assistant' | 'system';
+
+/**
+ * Outcome of accepting/declining staged rows via `POST /import/run`.
+ */
+export type RunImportOutcome = {
+    /**
+     * How many rows were discarded.
+     */
+    discarded: number;
+    /**
+     * How many rows flipped to `importing` (jobs are now copying them in).
+     */
+    importing: number;
+};
+
+/**
+ * Body for accepting/declining staged imports.
+ */
+export type RunImportRequest = {
+    /**
+     * Staged rows to discard.
+     */
+    discard_ids?: Array<string>;
+    /**
+     * Staged rows to import.
+     */
+    import_ids?: Array<string>;
+};
+
+/**
+ * Lifecycle of a gather run (one per user × source).
+ */
+export type RunStatus = 'running' | 'ready' | 'importing' | 'completed' | 'failed' | 'dismissed';
 
 export type SendChatMessagePayload = JwtPayload & {
     /**
@@ -888,6 +1180,42 @@ export type SharePermissionV2 = {
      */
     owner: string;
     publicAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Metadata for one staged Slack channel.
+ */
+export type SlackChannelMeta = {
+    /**
+     * Slack's channel id (e.g. `C0123456789`), stable across renames.
+     */
+    channel_id?: string | null;
+    /**
+     * Channel name without the leading `#`.
+     */
+    name: string;
+    /**
+     * The channel's most relevant members, when discoverable.
+     */
+    participants?: Array<SlackParticipant>;
+    /**
+     * The channel's purpose/topic, when set.
+     */
+    purpose?: string | null;
+};
+
+/**
+ * A person active in a staged Slack channel.
+ */
+export type SlackParticipant = {
+    /**
+     * Email, when the workspace exposes it.
+     */
+    email?: string | null;
+    /**
+     * Display name or Slack handle.
+     */
+    name: string;
 };
 
 /**
@@ -1759,6 +2087,116 @@ export type HealthHandlerResponses = {
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
 
+export type RunImportHandlerData = {
+    body: RunImportRequest;
+    path?: never;
+    query?: never;
+    url: '/import/run';
+};
+
+export type RunImportHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type RunImportHandlerResponses = {
+    /**
+     * Import run outcome
+     */
+    200: RunImportOutcome;
+};
+
+export type RunImportHandlerResponse = RunImportHandlerResponses[keyof RunImportHandlerResponses];
+
+export type DismissRunHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Import source
+         */
+        source: string;
+    };
+    query?: never;
+    url: '/import/runs/{source}/dismiss';
+};
+
+export type DismissRunHandlerErrors = {
+    /**
+     * Unknown import source
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DismissRunHandlerResponses = {
+    /**
+     * Dismissed
+     */
+    204: void;
+};
+
+export type DismissRunHandlerResponse = DismissRunHandlerResponses[keyof DismissRunHandlerResponses];
+
+export type RetryGatherHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Import source
+         */
+        source: string;
+    };
+    query?: never;
+    url: '/import/runs/{source}/retry';
+};
+
+export type RetryGatherHandlerErrors = {
+    /**
+     * Unknown import source
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type RetryGatherHandlerResponses = {
+    /**
+     * Retry accepted (idempotent)
+     */
+    204: void;
+};
+
+export type RetryGatherHandlerResponse = RetryGatherHandlerResponses[keyof RetryGatherHandlerResponses];
+
+export type GetStateHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/import/state';
+};
+
+export type GetStateHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type GetStateHandlerResponses = {
+    /**
+     * Current import state
+     */
+    200: ImportState;
+};
+
+export type GetStateHandlerResponse = GetStateHandlerResponses[keyof GetStateHandlerResponses];
+
 export type DeleteMcpServerData = {
     body?: never;
     path?: never;
@@ -1848,20 +2286,32 @@ export type UpdateMcpServerResponse = UpdateMcpServerResponses[keyof UpdateMcpSe
 export type McpAuthCallbackData = {
     body?: never;
     path?: never;
-    query: {
+    query?: {
         /**
-         * Authorization code from the OAuth provider.
+         * Authorization code from the OAuth provider. Present on success.
          */
-        code: string;
+        code?: string;
         /**
          * CSRF state parameter.
          */
-        state: string;
+        state?: string;
+        /**
+         * OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+         */
+        error?: string;
+        /**
+         * Human-readable error description from the provider.
+         */
+        error_description?: string;
     };
     url: '/mcp/servers/auth/callback';
 };
 
 export type McpAuthCallbackErrors = {
+    /**
+     * Provider rejected authorization, or the callback was malformed
+     */
+    400: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -1922,6 +2372,52 @@ export type GetMemoryHandlerResponses = {
 };
 
 export type GetMemoryHandlerResponse = GetMemoryHandlerResponses[keyof GetMemoryHandlerResponses];
+
+export type GetStateHandler2Data = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/onboarding';
+};
+
+export type GetStateHandler2Errors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type GetStateHandler2Responses = {
+    /**
+     * Current onboarding state
+     */
+    200: OnboardingState;
+};
+
+export type GetStateHandler2Response = GetStateHandler2Responses[keyof GetStateHandler2Responses];
+
+export type CompleteHandlerData = {
+    body: CompleteOnboardingRequest;
+    path?: never;
+    query?: never;
+    url: '/onboarding/complete';
+};
+
+export type CompleteHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type CompleteHandlerResponses = {
+    /**
+     * Completed onboarding row
+     */
+    200: OnboardingRow;
+};
+
+export type CompleteHandlerResponse = CompleteHandlerResponses[keyof CompleteHandlerResponses];
 
 export type GetBatchPreviewData = {
     body: GetBatchPreviewRequest;

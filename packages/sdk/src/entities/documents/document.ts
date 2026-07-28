@@ -1,4 +1,4 @@
-import type { EntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
+import type { PropertyTargetEntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
 import type {
   Thread as CommentThreadRecord,
   DocumentTeamShareResponse,

@@ -394,6 +394,20 @@ export type ApiChannelListMessage = {
 };
 
 /**
+ * A cursor-paginated channel list response.
+ */
+export type ApiChannelListPage = {
+    /**
+     * Channels in this page.
+     */
+    items: Array<ApiChannelWithLatest>;
+    /**
+     * Opaque cursor for the next page, if one exists.
+     */
+    next_cursor?: string | null;
+};
+
+/**
  * Channel participant in API responses.
  */
 export type ApiChannelListParticipant = {
@@ -528,6 +542,10 @@ export type ApiChannelParticipant = {
  */
 export type ApiChannelWithLatest = {
     /**
+     * Whether team members automatically join the channel.
+     */
+    auto_join_team: boolean;
+    /**
      * Channel type.
      */
     channel_type: ApiChannelListType;
@@ -547,6 +565,10 @@ export type ApiChannelWithLatest = {
      * Last interaction timestamp for requesting user.
      */
     interacted_at?: string | null;
+    /**
+     * Whether the requesting user is an active participant of the channel.
+     */
+    is_participant: boolean;
     latest_message?: null | ApiChannelListMessage;
     latest_non_thread_message?: null | ApiChannelListMessage;
     /**
@@ -1254,6 +1276,7 @@ export type CallRecord = {
      * Transcript segments ordered by `sequence_num`.
      */
     transcript: Array<CallRecordTranscriptSegment>;
+    userAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -1507,6 +1530,13 @@ export type ChannelFilters = {
      */
     importance?: boolean | null;
     /**
+     * Filter by whether the requesting user is an active participant of the channel.
+     * Presence of this filter also widens the candidate set to team channels of the
+     * user's teams that they have not joined, so `false` matches those channels.
+     * None to ignore (participant channels only, today's default).
+     */
+    is_participant?: boolean | null;
+    /**
      * Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions.
      */
     mentions?: Array<string>;
@@ -1530,6 +1560,16 @@ export type ChannelFilters = {
      * Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads.
      */
     thread_ids?: Array<string>;
+};
+
+/**
+ * Response containing a channel's reusable join code.
+ */
+export type ChannelJoinCodeResponse = {
+    /**
+     * Reusable code for joining the channel.
+     */
+    join_code: string;
 };
 
 /**
@@ -2021,6 +2061,11 @@ export type ChannelWithParticipants = {
      */
     channel: Channel;
     /**
+     * Whether the requesting user is an active participant of the channel.
+     * False for team channels of the user's teams they have not joined.
+     */
+    is_participant?: boolean;
+    /**
      * Participants in the channel.
      */
     participants: Array<ChannelParticipant>;
@@ -2173,6 +2218,10 @@ export type CreateBulkDocumentResponseData = {
  */
 export type CreateChannelRequest = {
     /**
+     * Whether team members automatically join this channel. Defaults to false.
+     */
+    auto_join_team?: boolean;
+    /**
      * Channel type.
      */
     channel_type: ChannelType;
@@ -2221,7 +2270,7 @@ export type CreateChannelScopedBotRequest = {
      */
     name: string;
     /**
-     * Team owner. Omit for a user-owned bot.
+     * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
      */
     team_id?: string | null;
     /**
@@ -2288,6 +2337,38 @@ export type CreateCrmCommentRequest = {
      * without a value).
      */
     threadMetadata?: unknown;
+};
+
+/**
+ * Request body for `POST /crm/companies`.
+ */
+export type CreateCrmCompanyRequest = {
+    /**
+     * The company's email domain, e.g. "acme.com". Must be a bare
+     * domain (no scheme, path, or email) and not a generic email
+     * provider domain.
+     */
+    domain: string;
+    /**
+     * Display name for the company. Team-scoped: overrides the
+     * domain-directory name on every read path.
+     */
+    name: string;
+};
+
+/**
+ * Request body for `POST /crm/companies/{company_id}/contacts`.
+ */
+export type CreateCrmContactRequest = {
+    /**
+     * The contact's email address, e.g. "jane@acme.com". Its domain
+     * must be one of the company's domains (400 otherwise).
+     */
+    email: string;
+    /**
+     * Display name for the contact.
+     */
+    name: string;
 };
 
 export type CreateDocumentRequest = {
@@ -2887,6 +2968,48 @@ export type CrmDomainResponse = {
 };
 
 /**
+ * Minimum team role required for a CRM governance capability. Members
+ * can edit visible CRM records (e.g. company properties), but the
+ * governance capabilities these settings gate stay restricted to
+ * admin (default) vs owner. Maps to the `team_role` Postgres enum;
+ * `member` is deliberately not representable.
+ */
+export type CrmPermissionRole = 'admin' | 'owner';
+
+/**
+ * The team's CRM configuration (everything on `team_crm_settings`
+ * except the `crm_enabled` killswitch, which is managed via
+ * `PATCH /team/crm` on the auth service).
+ */
+export type CrmTeamSettingsResponse = {
+    /**
+     * Stage option ids counting as closed deals; absent = the client
+     * falls back to its label heuristic.
+     */
+    closed_stage_ids?: Array<string> | null;
+    /**
+     * Team view applied by default when a member opens the CRM view.
+     */
+    default_team_view_id?: string | null;
+    /**
+     * Who can delete (hide) CRM records.
+     */
+    delete_records_role: CrmPermissionRole;
+    /**
+     * Who can change the deal stage set in CRM settings.
+     */
+    edit_stages_role: CrmPermissionRole;
+    /**
+     * Who can move deals out of a closed stage.
+     */
+    move_closed_deals_role: CrmPermissionRole;
+    /**
+     * Team saved views — an opaque JSON array owned by the frontend.
+     */
+    team_views: unknown;
+};
+
+/**
  * A CRM comment thread: the parent record one or more comments hang off.
  */
 export type CrmThread = {
@@ -3179,6 +3302,20 @@ export type DocumentFilters = {
      * Task-specific filters that only apply to task subtype documents.
      */
     task_filters?: TaskFilters;
+};
+
+/**
+ * Metadata for [`DocumentTopicEvent::Interaction`].
+ */
+export type DocumentInteractionMetadata = {
+    /**
+     * The id of the document.
+     */
+    document_id: string;
+    /**
+     * What triggered this interaction.
+     */
+    reason: InteractionReason;
 };
 
 export type DocumentMetadata = {
@@ -3499,6 +3636,12 @@ export type DocumentTopicEvent = {
      * A document was copied.
      */
     metadata: DocumentCopiedMetadata;
+} | {
+    event_type: 'document.interaction';
+    /**
+     * A peer joined, left, or a periodic save occurred.
+     */
+    metadata: DocumentInteractionMetadata;
 };
 
 /**
@@ -3805,7 +3948,7 @@ export type EntityFilters = {
  * A user's permission for an entity, discriminated by entity kind.
  *
  * Items (documents, chats, projects, threads) use access levels.
- * Channels use participant roles.
+ * Channels use view-only permission or participant roles.
  */
 export type EntityPermission = {
     /**
@@ -3813,6 +3956,8 @@ export type EntityPermission = {
      */
     access_level: AccessLevel;
     type: 'access_level';
+} | {
+    type: 'channel_view_only';
 } | {
     /**
      * The role the user has in the channel.
@@ -3853,7 +3998,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -4688,6 +4833,11 @@ export type HashMap = {
 
 export type HighlightType = 1 | 2 | 3;
 
+/**
+ * Why a document interaction was reported.
+ */
+export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
+
 export type Item = ({
     type: 'document';
 } & BasicDocument) | ({
@@ -4854,9 +5004,20 @@ export type ParticipantRole = 'owner' | 'admin' | 'member';
  */
 export type PatchChannelRequest = {
     /**
+     * Whether team members should automatically join the channel.
+     */
+    auto_join_team?: boolean | null;
+    /**
      * New channel name.
      */
     channel_name?: string | null;
+    /**
+     * Sets whether the channel is a team channel.
+     *
+     * `true` converts a non-team channel to a team channel, while `false`
+     * converts a team channel to a private channel.
+     */
+    convert_to_team_channel?: boolean | null;
 };
 
 /**
@@ -5248,17 +5409,20 @@ export type Project = {
     userId: string;
 };
 
+/**
+ * Identifiers affected by a recursive project soft deletion.
+ */
 export type ProjectDeleteResponseData = {
     /**
-     * The ids of the chats that were marked as deleted
+     * Deleted chats.
      */
     chat_ids: Array<string>;
     /**
-     * The ids of the documents that were marked as deleted
+     * Deleted documents.
      */
     document_ids: Array<string>;
     /**
-     * The ids of the project that were marked as deleted
+     * Deleted projects, including the requested root.
      */
     project_ids: Array<string>;
 };
@@ -5588,6 +5752,19 @@ export type SetCompanyHiddenRequest = {
 };
 
 /**
+ * Request body for `PUT /companies/{company_id}/name`.
+ */
+export type SetCompanyNameRequest = {
+    /**
+     * New display name for the company. Stored on the team-scoped
+     * `crm_companies.custom_name` override, which read paths COALESCE
+     * over the global directory name — the shared directory is never
+     * modified. Must be non-blank (400 otherwise).
+     */
+    name: string;
+};
+
+/**
  * Request body for `PUT /contacts/{contact_id}/hidden`.
  */
 export type SetContactHiddenRequest = {
@@ -5597,6 +5774,18 @@ export type SetContactHiddenRequest = {
      * — does not affect populate/depopulate.
      */
     hidden: boolean;
+};
+
+/**
+ * Request body for `PUT /contacts/{contact_id}/name`.
+ */
+export type SetContactNameRequest = {
+    /**
+     * New display name for the contact. Stored on `crm_contacts.name`,
+     * which is already team-scoped — unlike company renames no global
+     * directory is involved. Must be non-blank (400 otherwise).
+     */
+    name: string;
 };
 
 /**
@@ -5763,10 +5952,33 @@ export type SoupAttachment = {
 };
 
 /**
+ * A participant in a call record, as displayed in Soup.
+ */
+export type SoupCallRecordParticipant = {
+    /**
+     * When the user joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the user left (None if still in an active call).
+     */
+    leftAt?: string | null;
+    /**
+     * The user id.
+     */
+    userId: string;
+};
+
+/**
  * A call record as displayed in Soup. Excludes room_name, egress_id,
  * and transcript — fields that are irrelevant for the soup feed.
  */
-export type SoupCallRecord = {
+export type SoupCallRecordSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
     /**
      * Whether the requesting user attended this call. Kept for compatibility
      * and derived from `status == ATTENDED`.
@@ -5822,24 +6034,6 @@ export type SoupCallRecord = {
      * return `None`.
      */
     summary?: string | null;
-};
-
-/**
- * A participant in a call record, as displayed in Soup.
- */
-export type SoupCallRecordParticipant = {
-    /**
-     * When the user joined the call.
-     */
-    joinedAt: string;
-    /**
-     * When the user left (None if still in an active call).
-     */
-    leftAt?: string | null;
-    /**
-     * The user id.
-     */
-    userId: string;
 };
 
 /**
@@ -5916,7 +6110,12 @@ export type SoupChannelThread = {
 /**
  * A chat as displayed in Soup.
  */
-export type SoupChat = {
+export type SoupChatSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
     /**
      * The time the chat was created
      */
@@ -5945,10 +6144,6 @@ export type SoupChat = {
      * The project id of the chat
      */
     projectId?: string | null;
-    /**
-     * Properties
-     */
-    properties: Array<SoupProperty>;
     /**
      * The time the chat was last updated
      */
@@ -6004,7 +6199,12 @@ export type SoupCountedReaction = {
  * fields plus display metadata resolved from `crm_domain_directory`
  * against the primary (earliest-created) domain.
  */
-export type SoupCrmCompany = {
+export type SoupCrmCompanySoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
     /**
      * When the company was created.
      */
@@ -6036,11 +6236,6 @@ export type SoupCrmCompany = {
      * `None` when unresolved.
      */
     name?: string | null;
-    /**
-     * Properties attached to this company (system CRM properties like
-     * Stage / Owner / Revenue plus any custom ones).
-     */
-    properties?: Array<SoupProperty>;
     /**
      * The id of the team that owns this company record.
      */
@@ -6080,9 +6275,29 @@ export type SoupCrmDomain = {
 };
 
 /**
+ * Sub type of a document with associated properties encoded in each variant.
+ * This ensures type-safety: task properties only exist when the document is a task.
+ */
+export type SoupDocumentSubType = {
+    /**
+     * Whether the task is completed.
+     * True if the Status property is set to "Completed".
+     */
+    is_completed: boolean;
+    type: 'task';
+} | {
+    type: 'snippet';
+};
+
+/**
  * A document as displayed in Soup.
  */
-export type SoupDocument = {
+export type SoupDocumentSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
     /**
      * The id of the document this document branched from
      */
@@ -6130,10 +6345,6 @@ export type SoupDocument = {
      */
     projectId?: string | null;
     /**
-     * Properties
-     */
-    properties: Array<SoupProperty>;
-    /**
      * If the document is a PDF, this is the SHA of the pdf
      * If the document is a DOCX, this will not be present
      */
@@ -6147,21 +6358,6 @@ export type SoupDocument = {
      * The time the document was last viewed
      */
     viewedAt?: string | null;
-};
-
-/**
- * Sub type of a document with associated properties encoded in each variant.
- * This ensures type-safety: task properties only exist when the document is a task.
- */
-export type SoupDocumentSubType = {
-    /**
-     * Whether the task is completed.
-     * True if the Status property is set to "Completed".
-     */
-    is_completed: boolean;
-    type: 'task';
-} | {
-    type: 'snippet';
 };
 
 /**
@@ -6241,7 +6437,12 @@ export type SoupEmailThreadPreview = {
 /**
  * Email thread preview enriched with related metadata for Soup.
  */
-export type SoupEnrichedEmailThreadPreview = SoupEmailThreadPreview & {
+export type SoupEnrichedEmailThreadPreviewSoupPropertiesField = SoupEmailThreadPreview & {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
     /**
      * Attachments on the thread.
      */
@@ -6254,10 +6455,6 @@ export type SoupEnrichedEmailThreadPreview = SoupEmailThreadPreview & {
      * Contacts participating in the thread.
      */
     participants: Array<SoupContact>;
-    /**
-     * Properties attached to the thread.
-     */
-    properties: Array<SoupProperty>;
 };
 
 /**
@@ -6307,25 +6504,25 @@ export type SoupItem = {
     /**
      * Document item.
      */
-    data: SoupDocument;
+    data: SoupDocumentSoupPropertiesField;
     tag: 'document';
 } | {
     /**
      * Chat item.
      */
-    data: SoupChat;
+    data: SoupChatSoupPropertiesField;
     tag: 'chat';
 } | {
     /**
      * Project item.
      */
-    data: SoupProject;
+    data: SoupProjectSoupPropertiesField;
     tag: 'project';
 } | {
     /**
      * Email thread item.
      */
-    data: SoupEnrichedEmailThreadPreview;
+    data: SoupEnrichedEmailThreadPreviewSoupPropertiesField;
     tag: 'emailThread';
 } | {
     /**
@@ -6343,13 +6540,13 @@ export type SoupItem = {
     /**
      * Call record item.
      */
-    data: SoupCallRecord;
+    data: SoupCallRecordSoupPropertiesField;
     tag: 'call';
 } | {
     /**
      * CRM company item.
      */
-    data: SoupCrmCompany;
+    data: SoupCrmCompanySoupPropertiesField;
     tag: 'crmCompany';
 } | {
     /**
@@ -6480,7 +6677,12 @@ export type SoupPage = {
 /**
  * A project as displayed in Soup.
  */
-export type SoupProject = {
+export type SoupProjectSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
     /**
      * The time the project was created
      */
@@ -6506,10 +6708,6 @@ export type SoupProject = {
      */
     parentId?: string | null;
     /**
-     * Properties
-     */
-    properties: Array<SoupProperty>;
-    /**
      * The time the project was updated
      */
     updatedAt: string;
@@ -6517,6 +6715,16 @@ export type SoupProject = {
      * The time the document was last viewed
      */
     viewedAt?: string | null;
+};
+
+/**
+ * Property fields that can be flattened into property-bearing Soup items.
+ */
+export type SoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
 };
 
 /**
@@ -6744,22 +6952,6 @@ export type TypedSuccessResponseGetDocumentResponseData = {
     error: boolean;
 };
 
-export type TypedSuccessResponseRecentlyDeletedResponseData = {
-    /**
-     * Data to be returned
-     */
-    data: {
-        /**
-         * The items returned from the call
-         */
-        items: Array<Item>;
-    };
-    /**
-     * Indicates if an error occurred
-     */
-    error: boolean;
-};
-
 /**
  * Typing indicator action.
  */
@@ -6781,6 +6973,30 @@ export type UpdateChannelSharePermission = {
      * You can add, remove or replace and existing permission
      */
     operation: UpdateOperation;
+};
+
+/**
+ * Request body for `PUT /crm/settings`. Every field is optional:
+ * omitted fields keep their current values.
+ */
+export type UpdateCrmTeamSettingsRequest = {
+    /**
+     * New closed-stage set. Omit to keep the current value; pass
+     * `null` to clear it (falling back to the client label heuristic).
+     */
+    closed_stage_ids?: Array<string> | null;
+    /**
+     * New default team view id. Omit to keep the current value; pass
+     * `null` to clear it.
+     */
+    default_team_view_id?: string | null;
+    delete_records_role?: null | CrmPermissionRole;
+    edit_stages_role?: null | CrmPermissionRole;
+    move_closed_deals_role?: null | CrmPermissionRole;
+    /**
+     * Replacement team-views array (whole-blob, last write wins).
+     */
+    team_views?: unknown;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -7842,6 +8058,32 @@ export type GetOrCreatePrivateResponses = {
 
 export type GetOrCreatePrivateResponse = GetOrCreatePrivateResponses[keyof GetOrCreatePrivateResponses];
 
+export type JoinChannelByCodeData = {
+    body?: never;
+    path: {
+        /**
+         * Channel join code
+         */
+        join_code: string;
+    };
+    query?: never;
+    url: '/channels/join/{join_code}';
+};
+
+export type JoinChannelByCodeErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type JoinChannelByCodeError = JoinChannelByCodeErrors[keyof JoinChannelByCodeErrors];
+
+export type JoinChannelByCodeResponses = {
+    200: unknown;
+};
+
 export type CreateEntityMentionData = {
     body: CreateEntityMentionRequest;
     path?: never;
@@ -8089,6 +8331,34 @@ export type JoinChannelError = JoinChannelErrors[keyof JoinChannelErrors];
 export type JoinChannelResponses = {
     200: unknown;
 };
+
+export type GetChannelJoinLinkData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/join-link';
+};
+
+export type GetChannelJoinLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelJoinLinkError = GetChannelJoinLinkErrors[keyof GetChannelJoinLinkErrors];
+
+export type GetChannelJoinLinkResponses = {
+    200: ChannelJoinCodeResponse;
+};
+
+export type GetChannelJoinLinkResponse = GetChannelJoinLinkResponses[keyof GetChannelJoinLinkResponses];
 
 export type LeaveChannelData = {
     body?: never;
@@ -8536,11 +8806,17 @@ export type PostTypingResponse = PostTypingResponses[keyof PostTypingResponses];
 
 export type PostChannelBotWebhookData = {
     body: ChannelWebhookRequest;
-    headers: {
+    headers?: {
         /**
-         * Bot authentication token
+         * Preferred bot authentication token
          */
-        'x-macro-channel-bot-token': string;
+        'x-macro-bot-token'?: string | null;
+        /**
+         * Legacy channel-scoped bot authentication token
+         *
+         * @deprecated
+         */
+        'x-macro-channel-bot-token'?: string | null;
     };
     path: {
         /**
@@ -8555,6 +8831,7 @@ export type PostChannelBotWebhookData = {
 export type PostChannelBotWebhookErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
@@ -8570,11 +8847,21 @@ export type PostChannelBotWebhookResponse = PostChannelBotWebhookResponses[keyof
 export type GetChannelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page size (1-100, default 100)
+         */
+        limit?: number;
+        /**
+         * Opaque cursor for the next page
+         */
+        cursor?: string;
+    };
     url: '/comms/channels';
 };
 
 export type GetChannelsErrors = {
+    400: string;
     401: string;
     404: string;
     500: string;
@@ -8583,7 +8870,7 @@ export type GetChannelsErrors = {
 export type GetChannelsError = GetChannelsErrors[keyof GetChannelsErrors];
 
 export type GetChannelsResponses = {
-    200: Array<ApiChannelWithLatest>;
+    200: ApiChannelListPage;
 };
 
 export type GetChannelsResponse = GetChannelsResponses[keyof GetChannelsResponses];
@@ -8700,6 +8987,29 @@ export type CreateCrmCommentResponses = {
 
 export type CreateCrmCommentResponse = CreateCrmCommentResponses[keyof CreateCrmCommentResponses];
 
+export type CreateCrmCompanyData = {
+    body: CreateCrmCompanyRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/companies';
+};
+
+export type CreateCrmCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCrmCompanyError = CreateCrmCompanyErrors[keyof CreateCrmCompanyErrors];
+
+export type CreateCrmCompanyResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
+
 export type GetCompanyData = {
     body?: never;
     path: {
@@ -8751,6 +9061,35 @@ export type ListCompanyContactsResponses = {
 };
 
 export type ListCompanyContactsResponse = ListCompanyContactsResponses[keyof ListCompanyContactsResponses];
+
+export type CreateCrmContactData = {
+    body: CreateCrmContactRequest;
+    path: {
+        /**
+         * The CRM company to add the contact to
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/contacts';
+};
+
+export type CreateCrmContactErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCrmContactError = CreateCrmContactErrors[keyof CreateCrmContactErrors];
+
+export type CreateCrmContactResponses = {
+    200: CrmContactResponse;
+};
+
+export type CreateCrmContactResponse = CreateCrmContactResponses[keyof CreateCrmContactResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;
@@ -8808,6 +9147,33 @@ export type SetCompanyHiddenResponses = {
 
 export type SetCompanyHiddenResponse = SetCompanyHiddenResponses[keyof SetCompanyHiddenResponses];
 
+export type SetCrmCompanyNameData = {
+    body: SetCompanyNameRequest;
+    path: {
+        /**
+         * The CRM company to rename
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/name';
+};
+
+export type SetCrmCompanyNameErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmCompanyNameError = SetCrmCompanyNameErrors[keyof SetCrmCompanyNameErrors];
+
+export type SetCrmCompanyNameResponses = {
+    204: void;
+};
+
+export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
+
 export type GetContactData = {
     body?: never;
     path: {
@@ -8859,6 +9225,75 @@ export type SetContactHiddenResponses = {
 };
 
 export type SetContactHiddenResponse = SetContactHiddenResponses[keyof SetContactHiddenResponses];
+
+export type SetCrmContactNameData = {
+    body: SetContactNameRequest;
+    path: {
+        /**
+         * The CRM contact to rename
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/name';
+};
+
+export type SetCrmContactNameErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactNameError = SetCrmContactNameErrors[keyof SetCrmContactNameErrors];
+
+export type SetCrmContactNameResponses = {
+    204: void;
+};
+
+export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
+
+export type GetCrmTeamSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/settings';
+};
+
+export type GetCrmTeamSettingsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCrmTeamSettingsError = GetCrmTeamSettingsErrors[keyof GetCrmTeamSettingsErrors];
+
+export type GetCrmTeamSettingsResponses = {
+    200: CrmTeamSettingsResponse;
+};
+
+export type GetCrmTeamSettingsResponse = GetCrmTeamSettingsResponses[keyof GetCrmTeamSettingsResponses];
+
+export type PutCrmTeamSettingsData = {
+    body: UpdateCrmTeamSettingsRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/settings';
+};
+
+export type PutCrmTeamSettingsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutCrmTeamSettingsError = PutCrmTeamSettingsErrors[keyof PutCrmTeamSettingsErrors];
+
+export type PutCrmTeamSettingsResponses = {
+    200: CrmTeamSettingsResponse;
+};
+
+export type PutCrmTeamSettingsResponse = PutCrmTeamSettingsResponses[keyof PutCrmTeamSettingsResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;
@@ -9185,6 +9620,33 @@ export type GetBatchPreviewHandlerResponses = {
 };
 
 export type GetBatchPreviewHandlerResponse = GetBatchPreviewHandlerResponses[keyof GetBatchPreviewHandlerResponses];
+
+export type GetDocumentByTeamSlugData = {
+    body?: never;
+    path: {
+        /**
+         * Team-task reference, such as ENG-42
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/documents/slug/{slug}';
+};
+
+export type GetDocumentByTeamSlugErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDocumentByTeamSlugError = GetDocumentByTeamSlugErrors[keyof GetDocumentByTeamSlugErrors];
+
+export type GetDocumentByTeamSlugResponses = {
+    200: TypedSuccessResponse;
+};
+
+export type GetDocumentByTeamSlugResponse = GetDocumentByTeamSlugResponses[keyof GetDocumentByTeamSlugResponses];
 
 export type DeleteDocumentData = {
     body?: never;
@@ -10450,19 +10912,19 @@ export type DeleteProjectHandlerError = DeleteProjectHandlerErrors[keyof DeleteP
 export type DeleteProjectHandlerResponses = {
     200: {
         /**
-         * Data to be returned
+         * Identifiers affected by a recursive project soft deletion.
          */
         data: {
             /**
-             * The ids of the chats that were marked as deleted
+             * Deleted chats.
              */
             chat_ids: Array<string>;
             /**
-             * The ids of the documents that were marked as deleted
+             * Deleted documents.
              */
             document_ids: Array<string>;
             /**
-             * The ids of the project that were marked as deleted
+             * Deleted projects, including the requested root.
              */
             project_ids: Array<string>;
         };
@@ -10644,7 +11106,7 @@ export type RecentlyDeletedErrors = {
 export type RecentlyDeletedError = RecentlyDeletedErrors[keyof RecentlyDeletedErrors];
 
 export type RecentlyDeletedResponses = {
-    200: TypedSuccessResponseRecentlyDeletedResponseData;
+    200: TypedSuccessResponse;
 };
 
 export type RecentlyDeletedResponse = RecentlyDeletedResponses[keyof RecentlyDeletedResponses];
@@ -10762,11 +11224,7 @@ export type BulkWakeupSyncServiceDocumentsData = {
 
 export type BulkWakeupSyncServiceDocumentsErrors = {
     /**
-     * Malformed request or missing internal auth header
-     */
-    400: unknown;
-    /**
-     * Invalid internal auth header
+     * Authentication required (JSON error response)
      */
     401: unknown;
 };

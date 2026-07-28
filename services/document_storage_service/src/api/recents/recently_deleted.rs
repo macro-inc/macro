@@ -22,7 +22,7 @@ pub type RecentlyDeletedResponse = TypedSuccessResponse<RecentlyDeletedResponseD
     get,
     path = "/recents/deleted",
     responses(
-        (status = 200, body=TypedSuccessResponse<RecentlyDeletedResponseData>),
+        (status = 200, body=RecentlyDeletedResponse),
         (status = 400, body=GenericErrorResponse),
         (status = 401, body=GenericErrorResponse),
         (status = 500, body=GenericErrorResponse),

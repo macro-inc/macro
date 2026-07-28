@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddEntityPropertyOptionData, AddEntityPropertyOptionErrors, AddEntityPropertyOptionResponses, AddPropertyOptionData, AddPropertyOptionErrors, AddPropertyOptionResponses, CreatePropertyDefinitionData, CreatePropertyDefinitionErrors, CreatePropertyDefinitionResponses, DeleteEntityPropertyData, DeleteEntityPropertyErrors, DeleteEntityPropertyResponses, DeletePropertyDefinitionData, DeletePropertyDefinitionErrors, DeletePropertyDefinitionResponses, DeletePropertyOptionData, DeletePropertyOptionErrors, DeletePropertyOptionResponses, EnsureTagSetData, EnsureTagSetErrors, EnsureTagSetResponses, GetBulkEntityPropertiesData, GetBulkEntityPropertiesErrors, GetBulkEntityPropertiesResponses, GetEntityPropertiesData, GetEntityPropertiesErrors, GetEntityPropertiesResponses, GetPropertyDefinitionData, GetPropertyDefinitionErrors, GetPropertyDefinitionResponses, GetPropertyOptionsData, GetPropertyOptionsErrors, GetPropertyOptionsResponses, ListPropertiesData, ListPropertiesErrors, ListPropertiesResponses, ListTagsData, ListTagsErrors, ListTagsResponses, RemoveEntityPropertyOptionData, RemoveEntityPropertyOptionErrors, RemoveEntityPropertyOptionResponses, SetEntityPropertyData, SetEntityPropertyErrors, SetEntityPropertyResponses, UpdatePropertyOptionData, UpdatePropertyOptionErrors, UpdatePropertyOptionResponses } from './types.gen';
+import type { AddEntityPropertyOptionData, AddEntityPropertyOptionErrors, AddEntityPropertyOptionResponses, AddPropertyOptionData, AddPropertyOptionErrors, AddPropertyOptionResponses, BulkUpdateEntitiesPropertyOptionsData, BulkUpdateEntitiesPropertyOptionsErrors, BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsData, BulkUpdateEntityPropertyOptionsErrors, BulkUpdateEntityPropertyOptionsResponses, CreatePropertyDefinitionData, CreatePropertyDefinitionErrors, CreatePropertyDefinitionResponses, DeleteEntityPropertyData, DeleteEntityPropertyErrors, DeleteEntityPropertyResponses, DeletePropertyDefinitionData, DeletePropertyDefinitionErrors, DeletePropertyDefinitionResponses, DeletePropertyOptionData, DeletePropertyOptionErrors, DeletePropertyOptionResponses, EnsureTagSetData, EnsureTagSetErrors, EnsureTagSetResponses, GetBulkEntityPropertiesData, GetBulkEntityPropertiesErrors, GetBulkEntityPropertiesResponses, GetEntityPropertiesData, GetEntityPropertiesErrors, GetEntityPropertiesResponses, GetPropertyDefinitionData, GetPropertyDefinitionErrors, GetPropertyDefinitionResponses, GetPropertyOptionsData, GetPropertyOptionsErrors, GetPropertyOptionsResponses, ListPropertiesData, ListPropertiesErrors, ListPropertiesResponses, ListTagsData, ListTagsErrors, ListTagsResponses, RemoveEntityPropertyOptionData, RemoveEntityPropertyOptionErrors, RemoveEntityPropertyOptionResponses, SetEntityPropertyData, SetEntityPropertyErrors, SetEntityPropertyResponses, UpdatePropertyOptionData, UpdatePropertyOptionErrors, UpdatePropertyOptionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -161,6 +161,27 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Apply a complete tag-picker selection across an entity's multi-select
+     * properties in one request.
+     *
+     * Each property change is expressed as an option delta and applied to the
+     * current stored value under a per-row lock inside a single transaction, so the
+     * selection persists atomically and composes with concurrent edits instead of
+     * clobbering them. Returns the reconciled final option ids per property for
+     * cache reconciliation.
+     */
+    public bulkUpdateEntityPropertyOptions<ThrowOnError extends boolean = false>(options: Options<BulkUpdateEntityPropertyOptionsData, ThrowOnError>): RequestResult<BulkUpdateEntityPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<BulkUpdateEntityPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsErrors, ThrowOnError>({
+            url: '/properties/entities/{entity_type}/{entity_id}/options/bulk',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Set or update a property value for an entity, or attach a property without a value
      */
     public setEntityProperty<ThrowOnError extends boolean = false>(options: Options<SetEntityPropertyData, ThrowOnError>): RequestResult<SetEntityPropertyResponses, SetEntityPropertyErrors, ThrowOnError> {
@@ -202,6 +223,29 @@ export class Sdk extends HeyApiClient {
      */
     public deleteEntityProperty<ThrowOnError extends boolean = false>(options: Options<DeleteEntityPropertyData, ThrowOnError>): RequestResult<DeleteEntityPropertyResponses, DeleteEntityPropertyErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteEntityPropertyResponses, DeleteEntityPropertyErrors, ThrowOnError>({ url: '/properties/entity_properties/{entity_property_id}', ...options });
+    }
+    
+    /**
+     * Apply one shared option delta (add / remove option ids on a single
+     * multi-select property) to many entities in one request — e.g. tag a set of
+     * emails with one label.
+     *
+     * Best-effort per entity: one edit receipt is minted per entity, entities the
+     * caller can't edit are reported as `skipped_no_permission` (mirroring the
+     * read path, which silently drops entities the caller can't view), and each
+     * permitted entity is updated in its own transaction so one entity failing
+     * does not roll back the others. Returns one result per requested entity in
+     * request order, with the reconciled final option ids for the successes.
+     */
+    public bulkUpdateEntitiesPropertyOptions<ThrowOnError extends boolean = false>(options: Options<BulkUpdateEntitiesPropertyOptionsData, ThrowOnError>): RequestResult<BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntitiesPropertyOptionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntitiesPropertyOptionsErrors, ThrowOnError>({
+            url: '/properties/options/bulk',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**

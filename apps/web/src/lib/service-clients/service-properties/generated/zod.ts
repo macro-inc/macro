@@ -401,6 +401,7 @@ export const getPropertyDefinitionResponse = zod
         zod.null(),
         zod
           .enum([
+            'CALL_RECORD',
             'CHANNEL',
             'CHAT',
             'COMPANY',

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, CallToolData, CallToolErrors, CallToolResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses } from './types.gen';
+import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, CallToolData, CallToolErrors, CallToolResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DismissRunHandlerData, DismissRunHandlerErrors, DismissRunHandlerResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RetryGatherHandlerData, RetryGatherHandlerErrors, RetryGatherHandlerResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -263,6 +263,42 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Accept staged imports (starts import jobs) and/or discard staged rows.
+     */
+    public runImportHandler<ThrowOnError extends boolean = false>(options: Options<RunImportHandlerData, ThrowOnError>): RequestResult<RunImportHandlerResponses, RunImportHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RunImportHandlerResponses, RunImportHandlerErrors, ThrowOnError>({
+            url: '/import/run',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Dismiss one source's import section.
+     */
+    public dismissRunHandler<ThrowOnError extends boolean = false>(options: Options<DismissRunHandlerData, ThrowOnError>): RequestResult<DismissRunHandlerResponses, DismissRunHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DismissRunHandlerResponses, DismissRunHandlerErrors, ThrowOnError>({ url: '/import/runs/{source}/dismiss', ...options });
+    }
+    
+    /**
+     * Restart a failed (or dismissed) gather run for one source.
+     */
+    public retryGatherHandler<ThrowOnError extends boolean = false>(options: Options<RetryGatherHandlerData, ThrowOnError>): RequestResult<RetryGatherHandlerResponses, RetryGatherHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RetryGatherHandlerResponses, RetryGatherHandlerErrors, ThrowOnError>({ url: '/import/runs/{source}/retry', ...options });
+    }
+    
+    /**
+     * Get the authenticated user's import state: gather runs plus visible
+     * ledger rows.
+     */
+    public getStateHandler<ThrowOnError extends boolean = false>(options?: Options<GetStateHandlerData, ThrowOnError>): RequestResult<GetStateHandlerResponses, GetStateHandlerErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetStateHandlerResponses, GetStateHandlerErrors, ThrowOnError>({ url: '/import/state', ...options });
+    }
+    
+    /**
      * Delete an MCP server by URL.
      */
     public deleteMcpServer<ThrowOnError extends boolean = false>(options: Options<DeleteMcpServerData, ThrowOnError>): RequestResult<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError> {
@@ -305,10 +341,11 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * OAuth callback endpoint — receives code and state from the authorization server.
+     * OAuth callback endpoint — receives code and state, or an error, from the
+     * authorization server.
      */
-    public mcpAuthCallback<ThrowOnError extends boolean = false>(options: Options<McpAuthCallbackData, ThrowOnError>): RequestResult<McpAuthCallbackResponses, McpAuthCallbackErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<McpAuthCallbackResponses, McpAuthCallbackErrors, ThrowOnError>({ url: '/mcp/servers/auth/callback', ...options });
+    public mcpAuthCallback<ThrowOnError extends boolean = false>(options?: Options<McpAuthCallbackData, ThrowOnError>): RequestResult<McpAuthCallbackResponses, McpAuthCallbackErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<McpAuthCallbackResponses, McpAuthCallbackErrors, ThrowOnError>({ url: '/mcp/servers/auth/callback', ...options });
     }
     
     /**
@@ -334,6 +371,30 @@ export class Sdk extends HeyApiClient {
      */
     public getMemoryHandler<ThrowOnError extends boolean = false>(options?: Options<GetMemoryHandlerData, ThrowOnError>): RequestResult<GetMemoryHandlerResponses, GetMemoryHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetMemoryHandlerResponses, GetMemoryHandlerErrors, ThrowOnError>({ url: '/memory', ...options });
+    }
+    
+    /**
+     * Get the authenticated user's onboarding state. While the flow is active
+     * this also starts any gather runs that are due, so polling this endpoint
+     * is what keeps onboarding moving.
+     */
+    public getStateHandler2<ThrowOnError extends boolean = false>(options?: Options<GetStateHandler2Data, ThrowOnError>): RequestResult<GetStateHandler2Responses, GetStateHandler2Errors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetStateHandler2Responses, GetStateHandler2Errors, ThrowOnError>({ url: '/onboarding', ...options });
+    }
+    
+    /**
+     * Complete (or skip) onboarding. Unreserved leftover onboarding-staged
+     * import candidates are deleted.
+     */
+    public completeHandler<ThrowOnError extends boolean = false>(options: Options<CompleteHandlerData, ThrowOnError>): RequestResult<CompleteHandlerResponses, CompleteHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CompleteHandlerResponses, CompleteHandlerErrors, ThrowOnError>({
+            url: '/onboarding/complete',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     public getBatchPreview<ThrowOnError extends boolean = false>(options: Options<GetBatchPreviewData, ThrowOnError>): RequestResult<GetBatchPreviewResponses, GetBatchPreviewErrors, ThrowOnError> {

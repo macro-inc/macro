@@ -116,11 +116,10 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, ActingUser>> =
-            parts
-                .extract_with_state(state)
-                .await
-                .map_err(IntoResponse::into_response)?;
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, ActingUser>> = parts
+            .extract_with_state(state)
+            .await
+            .map_err(IntoResponse::into_response)?;
         let Path(path): Path<WebhookPath> = parts
             .extract_with_state(state)
             .await

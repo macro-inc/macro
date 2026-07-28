@@ -3981,16 +3981,45 @@
         "tags": ["channels"],
         "summary": "Handle channel list requests for `GET /comms/channels`.",
         "operationId": "get_channels",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor for the next page",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ApiChannelWithLatest"
-                  }
+                  "$ref": "#/components/schemas/ApiChannelListPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -9346,7 +9375,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TypedSuccessResponse_RecentlyDeletedResponseData"
+                  "$ref": "#/components/schemas/TypedSuccessResponse"
                 }
               }
             }
@@ -11047,6 +11076,24 @@
           }
         }
       },
+      "ApiChannelListPage": {
+        "type": "object",
+        "description": "A cursor-paginated channel list response.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelWithLatest"
+            },
+            "description": "Channels in this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor for the next page, if one exists."
+          }
+        }
+      },
       "ApiChannelListParticipant": {
         "type": "object",
         "description": "Channel participant in API responses.",
@@ -11218,12 +11265,18 @@
         "required": [
           "id",
           "channel_type",
+          "auto_join_team",
           "created_at",
           "updated_at",
           "owner_id",
-          "participants"
+          "participants",
+          "is_participant"
         ],
         "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether team members automatically join the channel."
+          },
           "channel_type": {
             "$ref": "#/components/schemas/ApiChannelListType",
             "description": "Channel type."
@@ -11247,6 +11300,10 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "Last interaction timestamp for requesting user."
+          },
+          "is_participant": {
+            "type": "boolean",
+            "description": "Whether the requesting user is an active participant of the channel."
           },
           "latest_message": {
             "oneOf": [
@@ -15152,6 +15209,21 @@
           }
         }
       },
+      "DocumentInteractionMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Interaction`].",
+        "required": ["document_id", "reason"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the document."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/InteractionReason",
+            "description": "What triggered this interaction."
+          }
+        }
+      },
       "DocumentMetadata": {
         "type": "object",
         "required": [
@@ -15662,6 +15734,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/DocumentCopiedMetadata",
                 "description": "A document was copied."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A peer joined, left, or a periodic save occurred.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.interaction"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentInteractionMetadata",
+                "description": "A peer joined, left, or a periodic save occurred."
               }
             }
           }
@@ -17969,6 +18056,11 @@
       "HighlightType": {
         "type": "integer",
         "enum": [1, 2, 3]
+      },
+      "InteractionReason": {
+        "type": "string",
+        "description": "Why a document interaction was reported.",
+        "enum": ["edited", "first_join", "last_leave"]
       },
       "Item": {
         "oneOf": [
@@ -21585,34 +21677,6 @@
                   "viewLocation": {
                     "type": ["string", "null"],
                     "description": "The user's view location if there is one."
-                  }
-                }
-              }
-            ],
-            "description": "Data to be returned"
-          },
-          "error": {
-            "type": "boolean",
-            "description": "Indicates if an error occurred"
-          }
-        }
-      },
-      "TypedSuccessResponse_RecentlyDeletedResponseData": {
-        "type": "object",
-        "required": ["error", "data"],
-        "properties": {
-          "data": {
-            "oneOf": [
-              {
-                "type": "object",
-                "required": ["items"],
-                "properties": {
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Item"
-                    },
-                    "description": "The items returned from the call"
                   }
                 }
               }

@@ -491,10 +491,23 @@ export type PasswordlessRequest = {
     referral_code?: string | null;
 };
 
+export type PasswordlessStartedResponse = {
+    /**
+     * The one-time login code, returned only by local environments so dev
+     * tooling can complete the flow without reading the email.
+     */
+    code?: string | null;
+};
+
 /**
  * Request body for `PATCH /team/crm`.
  */
 export type PatchTeamCrmSettingsRequest = {
+    /**
+     * On a disabled → enabled transition, whether to backfill the CRM
+     * from members' existing email history. Ignored when disabling.
+     */
+    backfill?: boolean;
     /**
      * The desired CRM state for the team.
      */
@@ -680,6 +693,27 @@ export type StripeSessionResponse = {
  * The Team struct
  */
 export type Team = {
+    /**
+     * Whether non-admin members may invite users to the team. Defaults to
+     * true; admins can turn it off so only admins/owners may invite.
+     */
+    allow_non_admin_invites: boolean;
+    /**
+     * The email domain new users are automatically joined to this team
+     * with, when automatic domain joining is enabled (None otherwise).
+     */
+    auto_join_domain?: string | null;
+    /**
+     * Whether the CRM is enabled for this team (from `team_crm_settings`;
+     * `false` when no row exists).
+     */
+    crm_enabled: boolean;
+    /**
+     * Whether this team is on an enterprise license. Enterprise teams are
+     * billed out-of-band; membership changes skip all Stripe subscription
+     * bookkeeping (no seat counts, no subscription backfill, no paying check).
+     */
+    enterprise: boolean;
     id: string;
     name: string;
     owner_id: string;
@@ -770,6 +804,28 @@ export type TeamWithMembers = {
      * The team
      */
     team: Team;
+};
+
+/**
+ * Response for the toggle auto-join domain endpoint.
+ */
+export type ToggleAutoJoinDomainResponse = {
+    /**
+     * The team's auto-join domain after the toggle (null when it was
+     * unset by this call).
+     */
+    auto_join_domain?: string | null;
+};
+
+/**
+ * Response for the toggle non-admin invites endpoint.
+ */
+export type ToggleNonAdminInvitesResponse = {
+    /**
+     * Whether non-admin members may invite users to the team after the
+     * toggle.
+     */
+    allow_non_admin_invites: boolean;
 };
 
 export type UserLinkResponse = {
@@ -1214,7 +1270,7 @@ export type PasswordlessLoginErrors = {
 export type PasswordlessLoginError = PasswordlessLoginErrors[keyof PasswordlessLoginErrors];
 
 export type PasswordlessLoginResponses = {
-    200: EmptyResponse;
+    200: PasswordlessStartedResponse;
     202: SsoRequiredResponse;
 };
 
@@ -1627,6 +1683,29 @@ export type CreateTeamResponses = {
 
 export type CreateTeamResponse = CreateTeamResponses[keyof CreateTeamResponses];
 
+export type ToggleTeamAutoJoinDomainData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/auto-join-domain/toggle';
+};
+
+export type ToggleTeamAutoJoinDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ToggleTeamAutoJoinDomainError = ToggleTeamAutoJoinDomainErrors[keyof ToggleTeamAutoJoinDomainErrors];
+
+export type ToggleTeamAutoJoinDomainResponses = {
+    200: ToggleAutoJoinDomainResponse;
+};
+
+export type ToggleTeamAutoJoinDomainResponse = ToggleTeamAutoJoinDomainResponses[keyof ToggleTeamAutoJoinDomainResponses];
+
 export type PatchTeamCrmSettingsData = {
     body: PatchTeamCrmSettingsRequest;
     path?: never;
@@ -1763,6 +1842,28 @@ export type JoinTeamError = JoinTeamErrors[keyof JoinTeamErrors];
 export type JoinTeamResponses = {
     200: unknown;
 };
+
+export type ToggleTeamNonAdminInvitesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/non-admin-invites/toggle';
+};
+
+export type ToggleTeamNonAdminInvitesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ToggleTeamNonAdminInvitesError = ToggleTeamNonAdminInvitesErrors[keyof ToggleTeamNonAdminInvitesErrors];
+
+export type ToggleTeamNonAdminInvitesResponses = {
+    200: ToggleNonAdminInvitesResponse;
+};
+
+export type ToggleTeamNonAdminInvitesResponse = ToggleTeamNonAdminInvitesResponses[keyof ToggleTeamNonAdminInvitesResponses];
 
 export type RemoveUserFromTeamData = {
     body?: never;
