@@ -1,15 +1,3 @@
-/**
- * Register a webhook and print every event Macro delivers to it.
- *
- * 1. In another terminal: `ngrok http 8787`, copy the https URL.
- * 2. MACRO_BOT_TOKEN=mbot_... bun examples/webhook-events.ts <public-url> <acting-user-id>
- *
- * The bot registers the webhook on behalf of <acting-user-id> (its owner, or
- * a member of its owning team), e.g. 'macro|wolf@macro.com'. Args are
- * order-insensitive: the one starting with http(s) is the URL. Set MACRO_ENV
- * to 'dev' (default), 'prod', or 'local' to pick the backend, and PORT to
- * change the local port.
- */
 import type { Env } from '../src/config';
 import { Macro } from '../src/macro';
 
@@ -78,10 +66,12 @@ const webhook = await macro.webhooks.create({
   name: 'sdk webhook demo',
   filters: [{ events: ALL_EVENTS }],
 });
+
 const secret = webhook.signingSecret;
 if (!secret)
   throw new Error('webhook registered but no signing secret returned');
-console.log(`webhook ${webhook.id} registered for ${url} — waiting for events`);
+
+console.log(`webhook ${webhook.id} registered for ${url}, waiting for events`);
 
 receiver = new Macro({
   env,
