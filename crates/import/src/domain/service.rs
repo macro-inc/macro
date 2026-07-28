@@ -1978,6 +1978,11 @@ fn imported_notion_properties(
     }
 
     dedupe_strings(&mut imported.tags);
+    // `raw` iterates in whatever order `serde_json::Map` happens to use, which
+    // depends on the ambient `preserve_order` Cargo feature and can differ
+    // between build invocations. Sort explicitly so property order is
+    // deterministic regardless of that feature.
+    imported.values.sort_by(|a, b| a.name.cmp(&b.name));
     imported
 }
 
