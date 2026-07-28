@@ -4,13 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { StarterDocumentsResponseHowToGuideId } from './starterDocumentsResponseHowToGuideId';
 
 /**
- * The starter documents seeded at signup, so clients can open them by id
-instead of guessing which document is which by name.
+ * The deterministic starter document ids for the current user.
  */
 export interface StarterDocumentsResponse {
-  /** Id of the user's "Macro how to guide", when it still exists. */
-  how_to_guide_id?: StarterDocumentsResponseHowToGuideId;
+  /** Id of the user's "Macro how to guide". */
+  how_to_guide_id: string;
 }

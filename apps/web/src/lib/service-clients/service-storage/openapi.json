@@ -5948,16 +5948,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
           }
         }
       }
@@ -20300,11 +20290,12 @@
       },
       "StarterDocumentsResponse": {
         "type": "object",
-        "description": "The starter documents seeded at signup, so clients can open them by id\ninstead of guessing which document is which by name.",
+        "description": "The deterministic starter document ids for the current user.",
+        "required": ["how_to_guide_id"],
         "properties": {
           "how_to_guide_id": {
-            "type": ["string", "null"],
-            "description": "Id of the user's \"Macro how to guide\", when it still exists."
+            "type": "string",
+            "description": "Id of the user's \"Macro how to guide\"."
           }
         }
       },

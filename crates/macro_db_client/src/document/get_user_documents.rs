@@ -49,49 +49,6 @@ pub async fn get_user_document_ids(
     Ok(document_ids)
 }
 
-/// A document id/name pair from a name-based lookup.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DocumentIdName {
-    /// Document id.
-    pub document_id: String,
-    /// Document name.
-    pub document_name: String,
-}
-
-/// The user's non-deleted documents whose name matches any of `names`,
-/// oldest first (so the earliest match — e.g. a seeded starter document —
-/// wins name collisions). Exact indexed lookup, unbounded by document count.
-#[tracing::instrument(skip(db))]
-pub async fn get_user_documents_by_names(
-    db: &Pool<Postgres>,
-    user_id: &str,
-    names: &[String],
-) -> anyhow::Result<Vec<DocumentIdName>> {
-    let documents = sqlx::query!(
-        r#"
-        SELECT
-            d.id as document_id,
-            d.name as document_name
-        FROM
-            "Document" d
-        WHERE
-            d.owner = $1 AND d.name = ANY($2) AND d."deletedAt" IS NULL
-        ORDER BY
-            d."createdAt" ASC
-        "#,
-        user_id,
-        names,
-    )
-    .map(|row| DocumentIdName {
-        document_id: row.document_id,
-        document_name: row.document_name,
-    })
-    .fetch_all(db)
-    .await?;
-
-    Ok(documents)
-}
-
 #[tracing::instrument(skip(db))]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_user_documents(
@@ -328,41 +285,5 @@ mod tests {
                 ("document-four".to_string(), 4),
             ]
         );
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
-    async fn test_get_user_documents_by_names(pool: Pool<Postgres>) {
-        let documents = get_user_documents_by_names(
-            &pool,
-            "macro|user@user.com",
-            &[
-                "test_document_name".to_string(),
-                "document-seven".to_string(),
-            ],
-        )
-        .await
-        .unwrap();
-
-        // Six non-deleted documents share the first name, plus the
-        // differently named document-seven; oldest first, and the deleted
-        // namesake is excluded.
-        assert_eq!(documents.len(), 7);
-        assert_eq!(documents[0].document_id, "document-one");
-        assert_eq!(documents[0].document_name, "test_document_name");
-        assert_eq!(documents[6].document_id, "document-seven");
-        assert!(
-            documents
-                .iter()
-                .all(|document| document.document_id != "document-deleted")
-        );
-
-        let documents = get_user_documents_by_names(
-            &pool,
-            "macro|user@user.com",
-            &["no_such_name".to_string()],
-        )
-        .await
-        .unwrap();
-        assert!(documents.is_empty());
     }
 }

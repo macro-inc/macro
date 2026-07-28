@@ -1,5 +1,4 @@
 import { throwOnErr } from '@core/util/result';
-import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 
@@ -21,14 +20,4 @@ export function useStarterDocsQuery() {
       throwOnErr(async () => await storageServiceClient.getStarterDocs()),
     staleTime: STARTER_DOCS_STALE_TIME,
   }));
-}
-
-/**
- * Call when the backend signals seeding finished (the
- * `starter_docs_initialized` gateway push): on a brand-new account the first
- * fetch races the fire-and-forget seeding and caches ids that don't exist
- * yet.
- */
-export function invalidateStarterDocs() {
-  return queryClient.invalidateQueries({ queryKey: KEYS.all });
 }

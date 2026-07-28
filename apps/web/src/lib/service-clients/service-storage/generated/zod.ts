@@ -4924,14 +4924,9 @@ export const handlerResponse = zod
   .object({
     how_to_guide_id: zod
       .string()
-      .nullish()
-      .describe(
-        'Id of the user\'s \"Macro how to guide\", when it still exists.'
-      ),
+      .describe('Id of the user\'s \"Macro how to guide\".'),
   })
-  .describe(
-    'The starter documents seeded at signup, so clients can open them by id\ninstead of guessing which document is which by name.'
-  );
+  .describe('The deterministic starter document ids for the current user.');
 
 /**
  * Returns document metadata, user access level, and view location.

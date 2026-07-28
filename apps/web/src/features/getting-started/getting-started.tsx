@@ -135,13 +135,12 @@ function GettingStartedContent() {
   };
 
   /**
-   * The how-to guide seeded at signup, from the server
-   * (`GET /documents/starter_docs`). Undefined for an older account that
-   * predates the seeding, a deleted guide, or while the query is in flight —
-   * gated on isSuccess so a render-time read can't suspend the page.
+   * The deterministic id of the how-to guide seeded at signup. Undefined
+   * while the query is in flight; gated on isSuccess so a render-time read
+   * can't suspend the page.
    */
   const howToGuideId = () =>
-    starterDocs.isSuccess ? starterDocs.data?.howToGuideId : undefined;
+    starterDocs.isSuccess ? starterDocs.data.howToGuideId : undefined;
 
   const sections: GettingStartedSectionConfig[] = [
     {

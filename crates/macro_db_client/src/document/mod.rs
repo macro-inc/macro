@@ -22,9 +22,7 @@ pub use get_document_process_result::{
     get_document_process_content, get_document_process_content_from_job_id,
 };
 pub use get_document_views::{get_document_view_count, get_document_views};
-pub use get_user_documents::{
-    DocumentIdName, get_user_document_ids, get_user_documents, get_user_documents_by_names,
-};
+pub use get_user_documents::{get_user_document_ids, get_user_documents};
 pub use list_documents_with_access::list_documents_with_access;
 pub use save_document::{insert_bom_parts, save_document, try_insert_comment_data};
 pub mod build_pdf_modification_data;

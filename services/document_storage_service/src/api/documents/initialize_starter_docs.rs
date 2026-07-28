@@ -4,8 +4,9 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use channels::domain::{models::CreateEntityMentionOptions, ports::ChannelService};
-use documents_hex::domain::create::{
-    MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
+use documents_hex::domain::{
+    create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument},
+    models::DocumentError,
 };
 use entity_access::domain::{
     models::{EditAccessLevel, ViewAccessLevel},
@@ -23,7 +24,7 @@ use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest, S
 use models_properties::service::property_option::PropertyOptionValue;
 use properties::{PropertiesService as _, domain::model::TagScope};
 use reqwest::StatusCode;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use system_properties::{PriorityOption, SystemPropertyKey};
 
 /// Also the name `get_starter_docs` resolves the guide by, so the two stay in
@@ -36,7 +37,7 @@ const HOW_TO_GUIDE_TEMPLATE: &str = include_str!("./template/macro_how_to_guide.
 /// carry the placeholder strings instead: `id_placeholder` inside
 /// `documentId` fields and `name_placeholder` inside `documentName` fields
 /// of `<m-document-mention>`/`<m-document-card>` tags. Each user gets
-/// freshly minted ids substituted at creation time.
+/// deterministic ids substituted at creation time.
 struct StarterTask {
     name: &'static str,
     template: &'static str,
@@ -73,8 +74,9 @@ const STARTER_TASKS: [StarterTask; 3] = [
 
 /// Gateway push sent once the starter set — the guide favorite included — is
 /// fully seeded. Seeding is fire-and-forget from signup, so a fresh account's
-/// app is often already open with an empty favorites list cached; the web
-/// client invalidates its favorites and starter-docs queries on this message.
+/// app is often already open with empty Soup and favorites lists cached; the
+/// web client invalidates those lists and provisioned properties on this
+/// message.
 const STARTER_DOCS_INITIALIZED_MESSAGE_TYPE: &str = "starter_docs_initialized";
 
 /// Label of the personal tag applied to every starter doc.
@@ -92,22 +94,14 @@ const STARTER_DOC_ID_NAMESPACE: uuid::Uuid =
 /// user id and document name). Every retry — including a concurrent
 /// duplicate webhook delivery — computes the same id, so the primary key
 /// dedupes creation instead of a rerun seeding a document twice.
-fn starter_doc_id(user_id: &MacroUserIdStr<'_>, document_name: &str) -> uuid::Uuid {
+pub(in crate::api) fn starter_doc_id(
+    user_id: &MacroUserIdStr<'_>,
+    document_name: &str,
+) -> uuid::Uuid {
     uuid::Uuid::new_v5(
         &STARTER_DOC_ID_NAMESPACE,
         format!("{}:{document_name}", user_id.as_ref()).as_bytes(),
     )
-}
-
-/// Whether a starter document with this name now exists for the user — the
-/// create-error fallback that distinguishes "lost the race to a concurrent
-/// duplicate delivery" from a real failure.
-async fn starter_doc_exists(state: &ApiContext, user_id: &MacroUserIdStr<'_>, name: &str) -> bool {
-    let names = [name.to_string()];
-    macro_db_client::document::get_user_documents_by_names(&state.db, user_id.as_ref(), &names)
-        .await
-        .map(|documents| !documents.is_empty())
-        .unwrap_or(false)
 }
 
 /// Find-or-create the user's personal "docs" tag, returning its
@@ -166,10 +160,8 @@ fn internal_error(message: &str) -> Response {
 /// document plus the starter tasks it links to — records the mention
 /// backlinks between them, and pins the guide to the user's sidebar
 /// favorites. Called by the authentication service when a new user signs up.
-/// Safe to retry: each document is reconciled individually (an exact name
-/// lookup decides what already exists, and deterministic per-user ids dedupe
-/// concurrent duplicate deliveries), so a retry completes a partial seed
-/// instead of skipping or duplicating it.
+/// Safe to retry: deterministic per-user ids dedupe concurrent duplicate
+/// deliveries, and a create conflict means that document was already seeded.
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.authorization.user.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
@@ -179,48 +171,13 @@ pub async fn handler(
 
     let user_id = &user_context.authorization.user.macro_user_id;
 
-    // Which starter documents already exist (exact indexed name lookup,
-    // unbounded by how many documents the user has). Oldest match wins a
-    // name collision: that's the seeded document, not a user-created
-    // namesake.
-    let starter_names: Vec<String> = STARTER_TASKS
-        .iter()
-        .map(|task| task.name.to_string())
-        .chain(std::iter::once(HOW_TO_GUIDE_NAME.to_string()))
-        .collect();
-    let existing_documents = macro_db_client::document::get_user_documents_by_names(
-        &state.db,
-        user_id.as_ref(),
-        &starter_names,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "failed to check for existing starter docs");
-        internal_error("failed to check for existing starter docs")
-    })?;
-    let mut existing_by_name: HashMap<String, String> = HashMap::new();
-    for document in existing_documents {
-        existing_by_name
-            .entry(document.document_name)
-            .or_insert(document.document_id);
-    }
-
-    // Resolve every starter document's id up front — the existing document,
-    // or the deterministic id it will be created with — so the templates can
-    // cross-link regardless of which subset this call creates.
+    // Resolve every starter document's deterministic id up front so the
+    // templates can cross-link before any document has been created.
     let task_ids: Vec<String> = STARTER_TASKS
         .iter()
-        .map(|task| {
-            existing_by_name
-                .get(task.name)
-                .cloned()
-                .unwrap_or_else(|| starter_doc_id(user_id, task.name).to_string())
-        })
+        .map(|task| starter_doc_id(user_id, task.name).to_string())
         .collect();
-    let guide_id = existing_by_name
-        .get(HOW_TO_GUIDE_NAME)
-        .cloned()
-        .unwrap_or_else(|| starter_doc_id(user_id, HOW_TO_GUIDE_NAME).to_string());
+    let guide_id = starter_doc_id(user_id, HOW_TO_GUIDE_NAME).to_string();
 
     let fill = |template: &str| {
         let mut filled = template.to_string();
@@ -237,9 +194,6 @@ pub async fn handler(
     let mut created_now: HashSet<String> = HashSet::new();
 
     for (task, id) in STARTER_TASKS.iter().zip(&task_ids) {
-        if existing_by_name.contains_key(task.name) {
-            continue;
-        }
         let created = state
             .documents_state
             .creator
@@ -262,43 +216,36 @@ pub async fn handler(
             Ok(_) => {
                 created_now.insert(id.clone());
             }
+            Err(DocumentError::Conflict(_)) => {}
             Err(e) => {
-                // A concurrent duplicate delivery may have created the same
-                // deterministic id first; only fail when the document truly
-                // does not exist.
-                if !starter_doc_exists(&state, user_id, task.name).await {
-                    tracing::error!(error=?e, task_name=%task.name, "failed to create starter task");
-                    return Err(internal_error("failed to create starter task"));
-                }
+                tracing::error!(error=?e, task_name=%task.name, "failed to create starter task");
+                return Err(internal_error("failed to create starter task"));
             }
         }
     }
 
-    if !existing_by_name.contains_key(HOW_TO_GUIDE_NAME) {
-        let created = state
-            .documents_state
-            .creator
-            .create_markdown_text(
-                user_id.clone(),
-                NewMarkdownTextDocument {
-                    metadata: NewDocumentMetadata::builder(HOW_TO_GUIDE_NAME)
-                        .id(starter_doc_id(user_id, HOW_TO_GUIDE_NAME))
-                        .build(),
-                    markdown: fill(HOW_TO_GUIDE_TEMPLATE),
-                    subtype: MarkdownSubtype::Note,
-                },
-            )
-            .await;
-        match created {
-            Ok(_) => {
-                created_now.insert(guide_id.clone());
-            }
-            Err(e) => {
-                if !starter_doc_exists(&state, user_id, HOW_TO_GUIDE_NAME).await {
-                    tracing::error!(error=?e, "failed to create how to guide document");
-                    return Err(internal_error("failed to create how to guide document"));
-                }
-            }
+    let created = state
+        .documents_state
+        .creator
+        .create_markdown_text(
+            user_id.clone(),
+            NewMarkdownTextDocument {
+                metadata: NewDocumentMetadata::builder(HOW_TO_GUIDE_NAME)
+                    .id(starter_doc_id(user_id, HOW_TO_GUIDE_NAME))
+                    .build(),
+                markdown: fill(HOW_TO_GUIDE_TEMPLATE),
+                subtype: MarkdownSubtype::Note,
+            },
+        )
+        .await;
+    match created {
+        Ok(_) => {
+            created_now.insert(guide_id.clone());
+        }
+        Err(DocumentError::Conflict(_)) => {}
+        Err(e) => {
+            tracing::error!(error=?e, "failed to create how to guide document");
+            return Err(internal_error("failed to create how to guide document"));
         }
     }
 

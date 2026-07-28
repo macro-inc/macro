@@ -1095,10 +1095,10 @@ export const storageServiceClient = {
   async getStarterDocs() {
     return (
       await dssFetch<{
-        how_to_guide_id: string | null;
+        how_to_guide_id: string;
       }>('/documents/starter_docs')
     ).map((result) => ({
-      howToGuideId: result.how_to_guide_id ?? undefined,
+      howToGuideId: result.how_to_guide_id,
     }));
   },
 
