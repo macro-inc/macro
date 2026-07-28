@@ -27,8 +27,13 @@ const PREVIEW_CONTROLLER_CONTENT_CONFIG: readonly PreviewControllerContentConfig
     },
     {
       type: 'component',
+      id: LIST_VIEW_ID.channels,
+      redistributionWidth: { preferredPx: 360 },
+    },
+    {
+      type: 'component',
       id: LIST_VIEW_ID.mail,
-      redistributionWidth: { preferredPx: 1050, maxViewportFraction: 0.6 },
+      redistributionWidth: { preferredPx: 800, maxViewportFraction: 0.6 },
     },
     {
       type: 'component',
