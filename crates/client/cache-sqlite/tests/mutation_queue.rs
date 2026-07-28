@@ -19,7 +19,7 @@ query Soup($input: SoupInput!) {
           properties { id displayName }
         }
       }
-      hasMore
+      nextCursor
     }
   }
 }
@@ -138,7 +138,7 @@ fn restart_hydration_preserves_legacy_json_with_envelope_keys() {
                 "id": "doc-1",
                 "properties": [{"id": "prop-1", "displayName": "Status"}]
             }],
-            "hasMore": false
+            "nextCursor": null
         }}});
         let optimistic = json!({
             "version": 2,
