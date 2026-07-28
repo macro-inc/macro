@@ -7,6 +7,7 @@ export {
   ListEntity,
   ListLayoutProvider,
   MaybeEntityRow,
+  type NarrowLayoutVariant,
 } from './composed/ListEntity';
 export {
   ListEntityMetadataProvider,

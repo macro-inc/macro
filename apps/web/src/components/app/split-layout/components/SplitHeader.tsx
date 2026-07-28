@@ -470,7 +470,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     <SplitHeaderContextMenu>
       <div
         class={cn(
-          'isolate relative w-full h-full overflow-clip text-ink',
+          '@container/split-header isolate relative w-full h-full overflow-clip text-ink',
           // On mobile the header overlays the panel body as a transparent strip
           // of floating islands
           'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
@@ -508,8 +508,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
               <div class="relative flex items-center pl-2 h-full">
                 <SidebarExpandButton />
                 <SplitCloseButton />
-                <SplitBackButton />
-                <SplitForwardButton />
+                <div class="flex items-center @max-[380px]/split-header:hidden">
+                  <SplitBackButton />
+                  <SplitForwardButton />
+                </div>
               </div>
             }
           >

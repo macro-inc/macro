@@ -724,7 +724,7 @@ type BulkSaveEntityPropertiesParams = {
 
 type BulkSaveEntityPropertiesContext = {
   usesGraphqlSoup: boolean;
-  /** Index-aligned with `variables.properties`; empty on the GraphQL path. */
+  /** Index-aligned with `variables.properties`. */
   soupTxns: Array<SoupTransaction | undefined>;
 };
 
@@ -740,8 +740,11 @@ class BulkSaveEntityPropertiesError extends Error {
   }
 }
 
-type QueuedPropertySave = BulkSaveEntityPropertiesParams['properties'][number];
+type QueuedPropertySave = {
+  item: BulkSaveEntityPropertiesParams['properties'][number];
+};
 const queuedPropertySaves = new Map<string, QueuedPropertySave>();
+const activeGraphqlPropertySaveCounts = new Map<string, number>();
 let settlementHost:
   | NonNullable<ReturnType<typeof getGraphqlCacheHost>>
   | undefined;
@@ -754,42 +757,81 @@ function ensurePropertySettlementListener(): void {
   unsubscribeSettlements?.();
   settlementHost = host;
   unsubscribeSettlements = host.onMutationSettled((settlement) => {
-    const item = queuedPropertySaves.get(settlement.transactionId);
-    if (!item) return;
+    const queued = queuedPropertySaves.get(settlement.transactionId);
+    if (!queued) return;
     queuedPropertySaves.delete(settlement.transactionId);
 
+    const { item } = queued;
     if (settlement.status === 'committed') {
       trackTaskPropertySave(
         item.entityId,
         getPropertyDefinitionId(item.property),
         item.apiValues
       );
+      reconcilePropertySaveCaches(item);
       return;
     }
 
+    // A SoupTransaction restores a whole cache snapshot, so it is unsafe to
+    // roll one back after a durable write has spent time in the queue. Refetch
+    // once all queued projections for this entity have settled instead.
+    reconcilePropertySaveCaches(item);
     const error = new Error(settlement.error);
     console.error('Queued property save permanently failed', error);
     toast.failure('Failed to save properties');
   });
 }
 
-function handleAcceptedPropertySaves(
-  variables: BulkSaveEntityPropertiesParams,
-  result: BulkSaveEntityPropertiesResult
+function invalidatePropertySaveCaches(
+  item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
-  for (const [index, disposition] of result.dispositions.entries()) {
-    const item = variables.properties[index];
-    if (!item) continue;
-    if (disposition.kind === 'committed') {
-      trackTaskPropertySave(
-        item.entityId,
-        getPropertyDefinitionId(item.property),
-        item.apiValues
-      );
-    } else if (disposition.kind === 'queued') {
-      queuedPropertySaves.set(disposition.transactionId, item);
-      ensurePropertySettlementListener();
-    }
+  invalidatePropertiesForEntity(item.entityType, item.entityId);
+  invalidateSoupEntity(item.entityId);
+}
+
+function reconcilePropertySaveCaches(
+  item: BulkSaveEntityPropertiesParams['properties'][number]
+): void {
+  const hasQueuedSave = [...queuedPropertySaves.values()].some(
+    (queued) => queued.item.entityId === item.entityId
+  );
+  const hasActiveSave =
+    (activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0) > 0;
+  if (!hasQueuedSave && !hasActiveSave) invalidatePropertySaveCaches(item);
+}
+
+function trackActiveGraphqlPropertySaves(
+  variables: BulkSaveEntityPropertiesParams
+): void {
+  for (const item of variables.properties) {
+    const count = activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0;
+    activeGraphqlPropertySaveCounts.set(item.entityId, count + 1);
+  }
+}
+
+function untrackActiveGraphqlPropertySaves(
+  variables: BulkSaveEntityPropertiesParams
+): void {
+  for (const item of variables.properties) {
+    const count = activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0;
+    if (count <= 1) activeGraphqlPropertySaveCounts.delete(item.entityId);
+    else activeGraphqlPropertySaveCounts.set(item.entityId, count - 1);
+  }
+}
+
+function handleAcceptedPropertySave(
+  item: BulkSaveEntityPropertiesParams['properties'][number],
+  disposition: SetEntityPropertyDisposition
+): void {
+  if (disposition.kind === 'committed') {
+    trackTaskPropertySave(
+      item.entityId,
+      getPropertyDefinitionId(item.property),
+      item.apiValues
+    );
+  } else if (disposition.kind === 'queued') {
+    queuedPropertySaves.set(disposition.transactionId, { item });
+    ensurePropertySettlementListener();
   }
 }
 
@@ -862,7 +904,7 @@ export function useBulkSaveEntityPropertiesMutation(
           }
         }
 
-        return await setEntityProperty({
+        const disposition = await setEntityProperty({
           entityType: toPropertyTargetEntityType(item.entityType),
           entityId: item.entityId,
           propertyDefinitionId: getPropertyDefinitionId(item.property),
@@ -870,42 +912,31 @@ export function useBulkSaveEntityPropertiesMutation(
           optimisticProperty,
           optimisticCache,
         });
+        // Register durable writes before the sequential GraphQL loop awaits the
+        // next item; settlement events are one-shot and are not replayed.
+        handleAcceptedPropertySave(item, disposition);
+        return disposition;
       };
 
-      try {
-        let dispositions: SetEntityPropertyDisposition[];
-        if (usesGraphqlSoup) {
-          // Begin each durable layer sequentially so later relation recipes see
-          // the effective result of earlier property edits.
-          dispositions = [];
-          for (const item of vars.properties) {
-            dispositions.push(await save(item));
-          }
-        } else {
-          dispositions = await Promise.all(vars.properties.map(save));
+      let dispositions: SetEntityPropertyDisposition[];
+      if (usesGraphqlSoup) {
+        // Begin each durable layer sequentially so later relation recipes see
+        // the effective result of earlier property edits.
+        dispositions = [];
+        for (const item of vars.properties) {
+          dispositions.push(await save(item));
         }
+      } else {
+        dispositions = await Promise.all(vars.properties.map(save));
+      }
 
-        const result = { dispositions };
-        handleAcceptedPropertySaves(vars, result);
-        if (
-          dispositions.some(
-            (disposition) => disposition.kind === 'permanently-failed'
-          )
-        ) {
-          const error = new BulkSaveEntityPropertiesError(result);
-          if (usesGraphqlSoup) reportBulkPropertySaveFailure(error);
-          throw error;
-        }
-      } catch (error) {
-        if (
-          usesGraphqlSoup &&
-          !(error instanceof BulkSaveEntityPropertiesError)
-        ) {
-          reportBulkPropertySaveFailure(
-            error instanceof Error ? error : new Error(String(error))
-          );
-        }
-        throw error;
+      const result = { dispositions };
+      if (
+        dispositions.some(
+          (disposition) => disposition.kind === 'permanently-failed'
+        )
+      ) {
+        throw new BulkSaveEntityPropertiesError(result);
       }
     },
     ...withCallbacks<
@@ -919,36 +950,36 @@ export function useBulkSaveEntityPropertiesMutation(
           vars: BulkSaveEntityPropertiesParams
         ): BulkSaveEntityPropertiesContext => {
           const usesGraphqlSoup = ENABLE_GRAPHQL_SOUP();
-          return {
-            usesGraphqlSoup,
-            soupTxns: usesGraphqlSoup
-              ? []
-              : batch(() =>
-                  vars.properties.map((item) =>
-                    optimisticUpdateSoupEntityProperty(
-                      item.entityId,
-                      item.property,
-                      apiValuesToSoupPropertyValue(item.apiValues)
-                    )
-                  )
-                ),
-          };
+          // Keep any populated TanStack Soup projection in sync even when
+          // GraphQL owns transport and normalized-cache optimism.
+          const soupTxns = batch(() =>
+            vars.properties.map((item) =>
+              optimisticUpdateSoupEntityProperty(
+                item.entityId,
+                item.property,
+                apiValuesToSoupPropertyValue(item.apiValues)
+              )
+            )
+          );
+          if (usesGraphqlSoup) trackActiveGraphqlPropertySaves(vars);
+          return { usesGraphqlSoup, soupTxns };
         },
-        onError(
-          error: Error,
-          _variables: BulkSaveEntityPropertiesParams,
-          context: BulkSaveEntityPropertiesContext | undefined
-        ) {
-          if (context?.usesGraphqlSoup) return;
-          rollbackBulkSoupTransactions(context);
+        onError: (error, _variables, context) => {
+          // REST errors settle immediately, so preserve its existing rollback.
+          // GraphQL writes may settle much later; restoring their captured
+          // snapshots could erase newer Soup updates, so refetch instead.
+          if (!context?.usesGraphqlSoup) rollbackBulkSoupTransactions(context);
           reportBulkPropertySaveFailure(error);
         },
         onSettled: (_data, _error, variables, context) => {
-          if (context?.usesGraphqlSoup) return;
+          if (context?.usesGraphqlSoup)
+            untrackActiveGraphqlPropertySaves(variables);
           batch(() => {
-            for (const p of variables.properties) {
-              invalidatePropertiesForEntity(p.entityType, p.entityId);
-              invalidateSoupEntity(p.entityId);
+            const reconciledEntityIds = new Set<string>();
+            for (const item of variables.properties) {
+              if (reconciledEntityIds.has(item.entityId)) continue;
+              reconciledEntityIds.add(item.entityId);
+              reconcilePropertySaveCaches(item);
             }
           });
         },

@@ -92,6 +92,7 @@ import {
   isNonMemberChannelEntity,
   ListEntity,
   ListLayoutProvider,
+  type NarrowLayoutVariant,
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
@@ -206,7 +207,10 @@ const MobileTabLoadingBar = () => (
 );
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
-const INBOX_PREVIEW_OPEN_PREFERENCE_KEY = 'macro:pref:soup:inbox:preview-open';
+const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
+const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'channels',
+]);
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -294,8 +298,8 @@ export const SoupView = (props: SoupViewProps) => {
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
   );
-  const [inboxPreviewOpenPreference, setInboxPreviewOpenPreference] =
-    usePreference<boolean>(INBOX_PREVIEW_OPEN_PREFERENCE_KEY, {
+  const [previewOpenPreference, setPreviewOpenPreference] =
+    usePreference<boolean>(`macro:pref:soup:${contentId}:preview-open`, {
       default: true,
     });
 
@@ -394,19 +398,30 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // A fresh Inbox starts in preview mode once its initial result settles, but
-  // only when it has an entity to show. Resolve this once so manually exiting
-  // preview mode is not undone by later Soup updates.
-  let initialInboxPreviewResolved = false;
+  // Fresh preview-default views engage as soon as the layout can form a pair.
+  // useSoupPreviewAvailability owns disengagement and only closes the pair once
+  // the active query has settled with no previewable rows.
+  let initialPreviewResolved = false;
   createEffect(() => {
-    if (initialInboxPreviewResolved || soupView.source.isLoading()) return;
-    initialInboxPreviewResolved = true;
-    if (contentId !== 'inbox' || !inboxPreviewOpenPreference()) return;
-    if (panel.handle.lastNavigationCause() !== 'fresh') return;
-    if (panel.handle.isViewerSplit()) return;
-    if (!hasPreviewItems()) return;
+    if (initialPreviewResolved) return;
+    if (!DEFAULT_PREVIEW_VIEWS.has(contentId) || !previewOpenPreference()) {
+      initialPreviewResolved = true;
+      return;
+    }
+    if (
+      panel.handle.lastNavigationCause() !== 'fresh' ||
+      panel.handle.isViewerSplit()
+    ) {
+      initialPreviewResolved = true;
+      return;
+    }
+
+    // Split redistribution may still be reconciling after a hotkey-driven
+    // replacement. Keep the effect live until engagement actually succeeds.
+    if (!panel.handle.canEngagePreview()) return;
+    soup.focus.clear();
     panel.handle.engagePreview();
-    if (panel.handle.isControllerSplit()) openFocusedEntityInPreview();
+    if (panel.handle.isControllerSplit()) initialPreviewResolved = true;
   });
 
   onMount(() => {
@@ -506,7 +521,10 @@ export const SoupView = (props: SoupViewProps) => {
   });
 
   return (
-    <div class="size-full flex flex-col" data-list-view={activeListView()}>
+    <div
+      class="size-full flex flex-col @container"
+      data-list-view={activeListView()}
+    >
       <div class="flex flex-col w-full">
         <SplitHeaderLeft>
           <div
@@ -522,7 +540,7 @@ export const SoupView = (props: SoupViewProps) => {
                   {(url) => (
                     <Button
                       variant="ghost"
-                      class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted"
+                      class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                       label="View documentation"
                       onClick={() => openExternalUrl(url())}
                     >
@@ -642,7 +660,8 @@ export const SoupView = (props: SoupViewProps) => {
         hasPreviewItems={hasPreviewItems()}
         onPreviewEngage={openFocusedEntityInPreview}
         onPreviewOpenChange={(open) => {
-          if (contentId === 'inbox') setInboxPreviewOpenPreference(open);
+          if (DEFAULT_PREVIEW_VIEWS.has(contentId))
+            setPreviewOpenPreference(open);
         }}
       />
       <Show when={applyDefaultCrmView}>
@@ -731,6 +750,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
+  const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
+    const view = currentView();
+    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
+      ? 'condensed'
+      : 'standard';
+  });
+
   const focusFirstEntity = () => {
     const allRows = rows();
     const firstEntityIndex = allRows.findIndex(
@@ -761,7 +787,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       if (!focusEffectsEnabled() || !moveInitialFocus()) return;
       if (!initialLoad || source.isLoading()) return;
 
-      if (isNewInboxEnabled()) return;
+      if (panel.handle.isControllerSplit()) return;
 
       focusFirstEntity();
       initialLoad = false;
@@ -775,7 +801,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       () => {
         if (!focusEffectsEnabled()) return;
 
-        if (isNewInboxEnabled()) return;
+        if (panel.handle.isControllerSplit()) return;
 
         focusFirstEntity();
       },
@@ -1105,7 +1131,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
     const cached = readListEntryState();
     if (cached) {
-      soup.focus.set(cached.focus);
+      if (panel.handle.isControllerSplit()) soup.focus.clear();
+      else soup.focus.set(cached.focus);
       const handle = virtualizerHandle();
       if (!handle) return;
 
@@ -1118,9 +1145,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     if (force) return;
 
     restored = true;
-    // The new inbox opens with a Preview Pair Viewer, so don't auto-focus (and
-    // thus open) the first row on initial load.
-    registerFocusEffects(!isNewInboxEnabled());
+    // Preview Controllers start without a focused row or Viewer content.
+    registerFocusEffects(!panel.handle.isControllerSplit());
   };
 
   const registerVirtualizerHandler = (
@@ -1203,7 +1229,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                   </div>
                 </Match>
                 <Match when={rows().length}>
-                  <ListLayoutProvider ref={localEntityListRef}>
+                  <ListLayoutProvider
+                    ref={localEntityListRef}
+                    narrowLayout={narrowLayout()}
+                  >
                     <Show when={currentView() === 'tasks' && !isMobile()}>
                       <ResponsiveTaskListHeader class="shrink-0" />
                     </Show>

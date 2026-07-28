@@ -173,7 +173,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses only GraphQL optimism when writes are queued', async () => {
+  it('mirrors queued GraphQL optimism and defers reconciliation', async () => {
     setEntityPropertyMock
       .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-1' })
       .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-2' });
@@ -181,7 +181,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
     await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
 
-    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
+    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledTimes(2);
     expect(rollbackMock).not.toHaveBeenCalled();
     expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
     expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
@@ -189,30 +189,97 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(setEntityPropertyMock).toHaveBeenCalledWith(
       expect.objectContaining({ optimisticProperty: { id: 'assignment-1' } })
     );
+
+    for (const callback of settlementCallbacks) {
+      callback({ transactionId: 'txn-1', status: 'committed' });
+    }
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+
+    for (const callback of settlementCallbacks) {
+      callback({ transactionId: 'txn-2', status: 'committed' });
+    }
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
   });
 
-  it('reports a queued write that later permanently fails', async () => {
+  it('registers each queued write before awaiting the next save', async () => {
+    let resolveSecond!: (disposition: {
+      kind: 'queued';
+      transactionId: string;
+    }) => void;
+    setEntityPropertyMock
+      .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-race-1' })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          })
+      );
+
+    const pending = mutation.mutateAsync({
+      properties: [variables.properties[0]!, variables.properties[0]!],
+    });
+    await vi.waitFor(() =>
+      expect(setEntityPropertyMock).toHaveBeenCalledTimes(2)
+    );
+
+    for (const callback of settlementCallbacks) {
+      callback({ transactionId: 'txn-race-1', status: 'committed' });
+    }
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+
+    resolveSecond({ kind: 'queued', transactionId: 'txn-race-2' });
+    await pending;
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+
+    for (const callback of settlementCallbacks) {
+      callback({ transactionId: 'txn-race-2', status: 'committed' });
+    }
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+  });
+
+  it('invalidates a queued write that later fails', async () => {
     setEntityPropertyMock.mockResolvedValue({
       kind: 'queued',
-      transactionId: 'txn-1',
+      transactionId: 'txn-failed',
     });
     await mutation.mutateAsync(variables);
 
     for (const callback of settlementCallbacks) {
       callback({
-        transactionId: 'txn-1',
+        transactionId: 'txn-failed',
         status: 'permanently-failed',
         error: 'invalid property',
       });
     }
 
-    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
-    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
-    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
+    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
+    expect(rollbackMock).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to save properties');
   });
 
-  it('reports GraphQL permanent failures without touching TanStack caches', async () => {
+  it('invalidates a queued TanStack projection after commit', async () => {
+    setEntityPropertyMock.mockResolvedValue({
+      kind: 'queued',
+      transactionId: 'txn-committed',
+    });
+    await mutation.mutateAsync(variables);
+
+    for (const callback of settlementCallbacks) {
+      callback({
+        transactionId: 'txn-committed',
+        status: 'committed',
+      });
+    }
+
+    expect(rollbackMock).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
+    expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('invalidates GraphQL permanent failures without snapshot rollback', async () => {
     setEntityPropertyMock.mockResolvedValue({
       kind: 'permanently-failed',
       error: new Error('invalid property'),
@@ -222,11 +289,23 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       'One or more properties permanently failed to save'
     );
 
-    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
+    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
     expect(rollbackMock).not.toHaveBeenCalled();
-    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
-    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates the TanStack projection after an immediate GraphQL commit', async () => {
+    setEntityPropertyMock.mockResolvedValue({ kind: 'committed' });
+
+    await mutation.mutateAsync(variables);
+
+    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
+    expect(rollbackMock).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
+    expect(toastFailureMock).not.toHaveBeenCalled();
   });
 
   it('does not invalidate TanStack property queries for GraphQL attachments', async () => {
