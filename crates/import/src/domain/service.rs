@@ -44,6 +44,11 @@ mod test;
 /// A raw provider-prefixed id (not [`PredefinedModel`]) because the registry
 /// has no Cerebras tier — the model router resolves the `cerebras/` prefix.
 const GATHER_MODEL: &str = "cerebras/gpt-oss-120b";
+/// Fallback when the primary gather session fails: Cerebras enforces tight
+/// org-wide rate limits, so a burst of concurrent onboardings can 429 every
+/// gather at once. gpt-5.4-nano is slower per token but rides OpenAI's much
+/// higher limits, and a slower gather beats a failed section.
+const GATHER_FALLBACK_MODEL: &str = "openai/gpt-5.4-nano";
 /// Turn cap for gather sessions: a couple of searches plus one staging tool
 /// call per candidate (providers may batch several per turn).
 const GATHER_MAX_TURNS: usize = 24;
@@ -464,6 +469,31 @@ where
             }
         }
 
+        // Staging is idempotent (the ledger dedups already-staged rows), so
+        // rerunning the whole session on the fallback model is safe even
+        // when the primary died mid-way through staging.
+        match self
+            .gather_agent_session(user, source, GATHER_MODEL, mcp_tools.clone())
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
+                self.gather_agent_session(user, source, GATHER_FALLBACK_MODEL, mcp_tools)
+                    .await
+            }
+        }
+    }
+
+    /// One agent gather session on a specific model.
+    #[tracing::instrument(skip(self, user, mcp_tools), err)]
+    async fn gather_agent_session(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        model: &str,
+        mcp_tools: Arc<McpToolSet>,
+    ) -> anyhow::Result<()> {
         let native = gather_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
         let context = ImportToolContext {
@@ -473,7 +503,7 @@ where
 
         self.drive_session(
             user,
-            GATHER_MODEL,
+            model,
             GATHER_MAX_TURNS,
             toolset,
             context,

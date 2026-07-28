@@ -2,7 +2,7 @@ import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 /** The breather before the summary: brand animation + cycling phrases for
- * ~15s, then auto-advance. Pure theater — nothing waits on real work. */
+ * ~22s, then auto-advance. Pure theater — nothing waits on real work. */
 
 const BUILDING_PHRASES = [
   'Building your unified workspace…',
@@ -13,7 +13,7 @@ const BUILDING_PHRASES = [
   'Waking up your Macro…',
 ];
 
-const BUILDING_HOLD_MS = 15_000;
+const BUILDING_HOLD_MS = 22_000;
 const PHRASE_MS = BUILDING_HOLD_MS / BUILDING_PHRASES.length;
 
 export function BuildingStep(props: { onDone: () => void }) {
