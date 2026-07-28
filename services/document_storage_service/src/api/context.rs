@@ -180,7 +180,7 @@ pub(crate) type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    DssEventBroker,
 >;
 
 /// Concrete properties router state wired into DSS.
