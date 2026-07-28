@@ -3,6 +3,86 @@ import { Module, type ModuleLogo, type ModuleState } from './Module';
 import { MODULE_LOGOS } from './moduleLogos';
 import './SetupGraphic.css';
 
+type Point = { x: number; y: number };
+type ConnectorLayer = 'front' | 'mid' | 'back';
+type ConnectorAxis = 'frontFace' | 'sideFace';
+
+const point = (x: number, y: number): Point => ({ x, y });
+const toSvgNumber = (value: number) => Number(value.toFixed(1));
+
+const SCENE = {
+  viewBox: '-10 -28 930 700',
+  blocks: {
+    center: point(444, 457),
+    scale: 0.667,
+    inverseScale: 1.49925,
+  },
+  module: {
+    scale: 0.667,
+    // The point on the module body where each tether originates. Slots may
+    // opt into a different local point when their face needs a slight nudge.
+    defaultConnectorAnchor: point(397.5, 140),
+  },
+} as const;
+
+const MOTION = {
+  downloadPulse: {
+    segmentLength: 70,
+    millisecondsPerUnit: 3,
+  },
+  leds: {
+    staggerMs: 110,
+    onsetMs: 300,
+    haloFlashMs: 450,
+    breatheMs: 2600,
+    halo: {
+      startScale: 0.7,
+      peakScale: 2.4,
+      restingScale: 0.85,
+      peakOpacity: 0.6,
+      restingOpacity: 0.28,
+      breatheScale: 1.2,
+      breatheOpacity: 0.14,
+    },
+  },
+  cardSlide: {
+    delayMs: 800,
+    durationMs: 2600,
+    outOffset: 0.2,
+    holdOffset: 0.4,
+    distance: point(34.8, 33.1),
+  },
+  modulePhaseMs: 1100,
+} as const;
+
+const connectorAxisSlopes: Record<ConnectorAxis, number> = {
+  // The two non-vertical axes in the isometric artwork. Keeping these shared
+  // means a tether's lower arm stays aligned to its card face as its module
+  // moves; only the slot's placement needs updating.
+  frontFace: -0.4,
+  sideFace: 0.948,
+};
+
+const moduleTransform = (position: Point, moduleAnchor: Point) =>
+  `translate(${position.x} ${position.y}) scale(${SCENE.module.scale}) translate(${-moduleAnchor.x} ${-moduleAnchor.y})`;
+
+const transformModulePoint = (
+  position: Point,
+  moduleAnchor: Point,
+  localPoint: Point
+): Point => ({
+  x: position.x + SCENE.module.scale * (localPoint.x - moduleAnchor.x),
+  y: position.y + SCENE.module.scale * (localPoint.y - moduleAnchor.y),
+});
+
+const connectorPath = (start: Point, target: Point, axis: ConnectorAxis) => {
+  const elbow = point(
+    start.x,
+    target.y - connectorAxisSlopes[axis] * (target.x - start.x)
+  );
+  return `M${toSvgNumber(start.x)} ${toSvgNumber(start.y)} L${toSvgNumber(elbow.x)} ${toSvgNumber(elbow.y)} L${toSvgNumber(target.x)} ${toSvgNumber(target.y)}`;
+};
+
 /**
  * A "downloading" pulse: an accent glow segment that travels along a connector
  * from the module to the card, on repeat. Built from a short dash swept with
@@ -21,17 +101,17 @@ function DownloadPulse(props: { d: string }) {
   onMount(() => {
     if (!path) return;
     const total = path.getTotalLength();
-    const segment = 70; // length of the bright streak
+    const { segmentLength, millisecondsPerUnit } = MOTION.downloadPulse;
     // One bright dash, gap = full path (so only one is on the wire at a time);
     // sweeping the whole period runs it start→end and loops seamlessly.
-    path.setAttribute('stroke-dasharray', `${segment} ${total}`);
+    path.setAttribute('stroke-dasharray', `${segmentLength} ${total}`);
     animation = path.animate(
       [
         { strokeDashoffset: '0' },
-        { strokeDashoffset: `${-(segment + total)}` },
+        { strokeDashoffset: `${-(segmentLength + total)}` },
       ],
       {
-        duration: Math.round((segment + total) * 3),
+        duration: Math.round((segmentLength + total) * millisecondsPerUnit),
         iterations: Number.POSITIVE_INFINITY,
         easing: 'linear',
       }
@@ -42,43 +122,106 @@ function DownloadPulse(props: { d: string }) {
 
 /**
  * The fixed module positions around the blocks. Each slot is pure geometry —
- * where the module sits (`place`, about its face center) and the dashed tether
- * to a block feature (`connector`) — independent of which logo lands on it.
+ * where the module sits (`position`, mapped from its local `moduleAnchor`) and
+ * the dashed tether to a block feature (`connector`) — independent of which
+ * logo lands on it.
  *
  * A connector's `layer` sets its draw order: `front` over all cards; `back`
  * behind all cards; `mid` between the back and middle cards. Coordinates are
  * absolute viewBox units (modules/connectors are siblings of the scaled
  * blocks), so the `mid` group counters the blocks transform to stay so.
  */
+type Slot = {
+  // Move a module by changing only this position; its tether follows.
+  position: Point;
+  moduleAnchor: Point;
+  connector: {
+    target: Point;
+    axis: ConnectorAxis;
+    layer: ConnectorLayer;
+    source?: Point;
+  };
+};
+
+const createSlot = (slot: Slot) => {
+  const connectorAnchor =
+    slot.connector.source ?? SCENE.module.defaultConnectorAnchor;
+  const connectorStart = transformModulePoint(
+    slot.position,
+    slot.moduleAnchor,
+    connectorAnchor
+  );
+
+  return {
+    place: moduleTransform(slot.position, slot.moduleAnchor),
+    connector: {
+      d: connectorPath(
+        connectorStart,
+        slot.connector.target,
+        slot.connector.axis
+      ),
+      layer: slot.connector.layer,
+    },
+  };
+};
+
 const SLOTS = {
   // Tethers to the pill cutout on the front card.
-  frontPill: {
-    place: 'translate(90 275) scale(0.667) translate(-447.5 -48.3)',
-    connector: { d: 'M56.7 336.5 L56.7 564.1 L228.7 495.4', layer: 'front' },
-  },
+  frontPill: createSlot({
+    position: point(90, 275),
+    moduleAnchor: point(447.5, 48.3),
+    connector: {
+      target: point(228.7, 495.4),
+      axis: 'frontFace',
+      layer: 'front',
+    },
+  }),
   // Tethers to the back side of the middle card.
-  midBack: {
-    place: 'translate(270 190) scale(0.667) translate(-447.5 -168.3)',
-    connector: { d: 'M236.7 175.3 L236.7 311.6 L374.6 442.3', layer: 'back' },
-  },
+  midBack: createSlot({
+    position: point(270, 190),
+    moduleAnchor: point(447.5, 168.3),
+    connector: {
+      target: point(374.6, 442.3),
+      axis: 'sideFace',
+      layer: 'back',
+      source: point(397.5, 146.3),
+    },
+  }),
   // Tethers to the small circular port on the middle card.
-  midPort: {
-    place: 'translate(410 145) scale(0.667) translate(-447.5 98.3)',
-    connector: { d: 'M376.7 304.3 L376.7 577.9 L429.5 556.8', layer: 'front' },
-  },
+  midPort: createSlot({
+    position: point(410, 145),
+    moduleAnchor: point(447.5, -98.3),
+    connector: {
+      target: point(429.5, 556.8),
+      axis: 'frontFace',
+      layer: 'front',
+    },
+  }),
   // Tethers to the far side of the middle card.
-  midFar: {
-    place: 'translate(670 210) scale(0.667) translate(-507.5 -128.3)',
-    connector: { d: 'M596.7 214 L596.7 423 L489.8 465.7', layer: 'mid' },
-  },
+  midFar: createSlot({
+    position: point(670, 210),
+    moduleAnchor: point(507.5, 128.3),
+    connector: {
+      target: point(489.8, 465.7),
+      axis: 'frontFace',
+      layer: 'mid',
+      source: point(397.5, 134.3),
+    },
+  }),
   // Tethers to the far side of the back card.
-  backFar: {
-    place: 'translate(855 290) scale(0.667) translate(-507.5 -248.3)',
-    connector: { d: 'M781.6 217.5 L781.6 431.1 L694.8 465.7', layer: 'back' },
-  },
+  backFar: createSlot({
+    position: point(855, 290),
+    moduleAnchor: point(507.5, 248.3),
+    connector: {
+      target: point(694.8, 465.7),
+      axis: 'frontFace',
+      layer: 'back',
+      source: point(397.5, 139.6),
+    },
+  }),
 } satisfies Record<
   string,
-  { place: string; connector: { d: string; layer: 'front' | 'mid' | 'back' } }
+  { place: string; connector: { d: string; layer: ConnectorLayer } }
 >;
 
 type SlotName = keyof typeof SLOTS;
@@ -109,8 +252,9 @@ const DEFAULT_MODULES: ModuleConfig[] = [
  * children (to sit at a specific card in the draw order) still renders at its
  * absolute viewBox coordinates.
  */
-const INVERSE_BLOCKS_TRANSFORM =
-  'translate(444 457) scale(1.49925) translate(-444 -457)';
+const INVERSE_BLOCKS_TRANSFORM = `translate(${SCENE.blocks.center.x} ${SCENE.blocks.center.y}) scale(${SCENE.blocks.inverseScale}) translate(${-SCENE.blocks.center.x} ${-SCENE.blocks.center.y})`;
+
+const BLOCKS_TRANSFORM = `translate(${SCENE.blocks.center.x} ${SCENE.blocks.center.y}) scale(${SCENE.blocks.scale}) translate(${-SCENE.blocks.center.x} ${-SCENE.blocks.center.y})`;
 
 /**
  * The isometric empty-state scene for `/setup`: the Macro logo re-imagined as
@@ -139,7 +283,7 @@ export function SetupGraphic(props: {
   // Connectors follow their modules: one per shown module whose connector
   // isn't disabled and isn't in the `linked` state (which hides it), carrying
   // the slot's tether geometry + draw layer, plus whether its pulse is running.
-  const connectorsIn = (layer: 'front' | 'mid' | 'back') =>
+  const connectorsIn = (layer: ConnectorLayer) =>
     modules()
       .filter(
         (m) =>
@@ -208,20 +352,25 @@ export function SetupGraphic(props: {
     const motion = !reducedMotion();
 
     leds.forEach(({ inset, halo, spark }, index) => {
-      const delay = index * 110;
+      const delay = index * MOTION.leds.staggerMs;
       const onset = inset.animate(
         [
           { fill: ink, opacity: 0.4, filter: 'drop-shadow(0 0 0 transparent)' },
           { fill: accent, opacity: 1, filter: lit },
         ],
-        { duration: 300, delay, easing: 'ease-out', fill: 'both' }
+        {
+          duration: MOTION.leds.onsetMs,
+          delay,
+          easing: 'ease-out',
+          fill: 'both',
+        }
       );
       ledAnimations.push(onset);
       // Spark fades in over the same onset window and holds.
       if (spark) {
         ledAnimations.push(
           spark.animate([{ opacity: 0 }, { opacity: 0.9 }], {
-            duration: 300,
+            duration: MOTION.leds.onsetMs,
             delay,
             easing: 'ease-out',
             fill: 'both',
@@ -234,11 +383,23 @@ export function SetupGraphic(props: {
       if (halo && motion) {
         const flash = halo.animate(
           [
-            { transform: 'scale(0.7)', opacity: 0 },
-            { transform: 'scale(2.4)', opacity: 0.6, offset: 0.45 },
-            { transform: 'scale(0.85)', opacity: 0.28 },
+            { transform: `scale(${MOTION.leds.halo.startScale})`, opacity: 0 },
+            {
+              transform: `scale(${MOTION.leds.halo.peakScale})`,
+              opacity: MOTION.leds.halo.peakOpacity,
+              offset: 0.45,
+            },
+            {
+              transform: `scale(${MOTION.leds.halo.restingScale})`,
+              opacity: MOTION.leds.halo.restingOpacity,
+            },
           ],
-          { duration: 450, delay, easing: 'ease-out', fill: 'both' }
+          {
+            duration: MOTION.leds.haloFlashMs,
+            delay,
+            easing: 'ease-out',
+            fill: 'both',
+          }
         );
         ledAnimations.push(flash);
         flash.finished
@@ -246,12 +407,21 @@ export function SetupGraphic(props: {
             // Breathe: expand and contract, synced with the glow pulse.
             const breathe = halo.animate(
               [
-                { transform: 'scale(0.85)', opacity: 0.28 },
-                { transform: 'scale(1.2)', opacity: 0.14 },
-                { transform: 'scale(0.85)', opacity: 0.28 },
+                {
+                  transform: `scale(${MOTION.leds.halo.restingScale})`,
+                  opacity: MOTION.leds.halo.restingOpacity,
+                },
+                {
+                  transform: `scale(${MOTION.leds.halo.breatheScale})`,
+                  opacity: MOTION.leds.halo.breatheOpacity,
+                },
+                {
+                  transform: `scale(${MOTION.leds.halo.restingScale})`,
+                  opacity: MOTION.leds.halo.restingOpacity,
+                },
               ],
               {
-                duration: 2600,
+                duration: MOTION.leds.breatheMs,
                 iterations: Number.POSITIVE_INFINITY,
                 easing: 'ease-in-out',
               }
@@ -271,7 +441,10 @@ export function SetupGraphic(props: {
               { filter: bright, opacity: 0.9 },
               { filter: lit, opacity: 1 },
             ],
-            { duration: 2600, iterations: Number.POSITIVE_INFINITY }
+            {
+              duration: MOTION.leds.breatheMs,
+              iterations: Number.POSITIVE_INFINITY,
+            }
           );
           ledAnimations.push(pulse);
         })
@@ -300,18 +473,18 @@ export function SetupGraphic(props: {
           easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
         },
         {
-          transform: 'translate(34.8px, 33.1px)',
-          offset: 0.2,
+          transform: `translate(${MOTION.cardSlide.distance.x}px, ${MOTION.cardSlide.distance.y}px)`,
+          offset: MOTION.cardSlide.outOffset,
           easing: 'linear',
         },
         {
-          transform: 'translate(34.8px, 33.1px)',
-          offset: 0.4,
+          transform: `translate(${MOTION.cardSlide.distance.x}px, ${MOTION.cardSlide.distance.y}px)`,
+          offset: MOTION.cardSlide.holdOffset,
           easing: 'cubic-bezier(0.3, 0, 0.2, 1)',
         },
         { transform: 'translate(0, 0)' },
       ],
-      { duration: 2600 }
+      { duration: MOTION.cardSlide.durationMs }
     );
     slideAnimation.finished.then(illuminateLeds).catch(() => {
       // finished rejects if a fresh slide cancels this one; that slide
@@ -359,7 +532,7 @@ export function SetupGraphic(props: {
       illuminateLeds();
       return;
     }
-    slideDelay = setTimeout(playSlide, 800);
+    slideDelay = setTimeout(playSlide, MOTION.cardSlide.delayMs);
   });
 
   // Powering up/down after mount. On: cancel any pending slide and kill the
@@ -391,7 +564,7 @@ export function SetupGraphic(props: {
       // below the blocks. The padding absorbs the modules' bob/breathe. `meet`
       // then always shows the whole scene, and the tighter frame keeps the
       // modules near the top edge and the blocks near the bottom.
-      viewBox="-10 -28 930 700"
+      viewBox={SCENE.viewBox}
       fill="currentColor"
       class={`setup-graphic text-ink cursor-pointer ${props.poweredUp ? 'powered ' : ''}${props.class ?? ''}`}
       onClick={playSlide}
@@ -413,10 +586,7 @@ export function SetupGraphic(props: {
         </g>
         {/* The block assembly, shrunk to 2/3 about its center so the modules
             can orbit farther out around it. */}
-        <g
-          class="blocks"
-          transform="translate(444 457) scale(0.667) translate(-444 -457)"
-        >
+        <g class="blocks" transform={BLOCKS_TRANSFORM}>
           <g id="back_card">
             <g id="stable_card">
               <path
@@ -800,7 +970,7 @@ export function SetupGraphic(props: {
                 place={SLOTS[module.slot].place}
                 logo={module.logo}
                 state={module.state}
-                phaseMs={-index() * 1100}
+                phaseMs={-index() * MOTION.modulePhaseMs}
               />
             )}
           </For>

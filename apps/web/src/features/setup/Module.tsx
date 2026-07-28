@@ -11,17 +11,51 @@ import './SetupGraphic.css';
  * The dashed orbit rings — behind the body. They stay put during the click
  * burst while their dashes spin and they scale.
  */
-export function ModuleRings() {
+export function ModuleRings(props: { phaseMs?: number }) {
+  const phaseMs = props.phaseMs ?? 0;
+  // WebKit pixel-snaps moving dashed SVG strokes at this scale, making the
+  // otherwise smooth orbit look like it jumps. Keep the static construction
+  // marks in Safari rather than shipping visibly broken motion there.
+  const animateDashes =
+    typeof navigator === 'undefined' ||
+    !/Safari/.test(navigator.userAgent) ||
+    /Chrome|Chromium|Android/.test(navigator.userAgent);
   return (
     <>
-      <path
-        class="ring-small"
-        d="M367.2,58.7c0,19.4-16.8,41.9-37.5,50.2-20.7,8.3-37.5-.8-37.5-20.2s16.8-41.9,37.5-50.2c20.7-8.3,37.5.8,37.5,20.2Z"
-      />
-      <path
-        class="ring-large"
-        d="M409.5,71.5c0,30.9-26.7,66.6-59.6,79.8-32.9,13.2-59.6-1.2-59.6-32.2s26.7-66.6,59.6-79.8c32.9-13.2,59.6,1.2,59.6,32.2Z"
-      />
+      <g class="ring-motion ring-small-motion">
+        <path
+          class="ring-small"
+          d="M367.2,58.7c0,19.4-16.8,41.9-37.5,50.2-20.7,8.3-37.5-.8-37.5-20.2s16.8-41.9,37.5-50.2c20.7-8.3,37.5.8,37.5,20.2Z"
+        >
+          {animateDashes && (
+            <animate
+              attributeName="stroke-dashoffset"
+              begin={`${phaseMs}ms`}
+              dur={`${AMBIENT_MOTION.ringDash.durationMs}ms`}
+              from="0"
+              repeatCount="indefinite"
+              to={`-${AMBIENT_MOTION.ringDash.distance}`}
+            />
+          )}
+        </path>
+      </g>
+      <g class="ring-motion ring-large-motion">
+        <path
+          class="ring-large"
+          d="M409.5,71.5c0,30.9-26.7,66.6-59.6,79.8-32.9,13.2-59.6-1.2-59.6-32.2s26.7-66.6,59.6-79.8c32.9-13.2,59.6,1.2,59.6,32.2Z"
+        >
+          {animateDashes && (
+            <animate
+              attributeName="stroke-dashoffset"
+              begin={`${phaseMs}ms`}
+              dur={`${AMBIENT_MOTION.ringDash.durationMs}ms`}
+              from="0"
+              repeatCount="indefinite"
+              to={`-${AMBIENT_MOTION.ringDash.distance}`}
+            />
+          )}
+        </path>
+      </g>
     </>
   );
 }
@@ -94,22 +128,46 @@ export type ModuleLogo = { paths: string[]; transform?: string };
  */
 export type ModuleState = 'idle' | 'downloading' | 'linked';
 
+const AMBIENT_MOTION = {
+  bob: {
+    distancePx: 4,
+    durationMs: 4500,
+  },
+  ringBreathe: {
+    minScale: 0.97,
+    maxScale: 1.03,
+  },
+  ringDash: {
+    // One full dash period (dash 6 + gap 6), so travel loops seamlessly.
+    distance: 12,
+    durationMs: 3000,
+  },
+} as const;
+
 const BOB_KEYFRAMES: Keyframe[] = [
-  { transform: 'translateY(4px)', easing: 'ease-in-out' },
-  { transform: 'translateY(-4px)', offset: 0.5, easing: 'ease-in-out' },
-  { transform: 'translateY(4px)' },
+  {
+    transform: `translateY(${AMBIENT_MOTION.bob.distancePx}px)`,
+    easing: 'ease-in-out',
+  },
+  {
+    transform: `translateY(${-AMBIENT_MOTION.bob.distancePx}px)`,
+    offset: 0.5,
+    easing: 'ease-in-out',
+  },
+  { transform: `translateY(${AMBIENT_MOTION.bob.distancePx}px)` },
 ];
 const RING_BREATHE_KEYFRAMES: Keyframe[] = [
-  { transform: 'scale(0.97)', easing: 'ease-in-out' },
-  { transform: 'scale(1.03)', offset: 0.5, easing: 'ease-in-out' },
-  { transform: 'scale(0.97)' },
+  {
+    transform: `scale(${AMBIENT_MOTION.ringBreathe.minScale})`,
+    easing: 'ease-in-out',
+  },
+  {
+    transform: `scale(${AMBIENT_MOTION.ringBreathe.maxScale})`,
+    offset: 0.5,
+    easing: 'ease-in-out',
+  },
+  { transform: `scale(${AMBIENT_MOTION.ringBreathe.minScale})` },
 ];
-// One full dash period (dash 6 + gap 6), so the travel loops seamlessly.
-const RING_DASH_KEYFRAMES: Keyframe[] = [
-  { strokeDashoffset: '0' },
-  { strokeDashoffset: '-12' },
-];
-
 // The module's long axis in local coords: the "depth" axis. The face is at the
 // +D (down-right) end and the rings at the −D (up-left) end. On click the body
 // thrusts +D while the rings stay put; the jet trail streaks −D behind it.
@@ -120,22 +178,36 @@ const THRUST_Y = (POS_D.y * THRUST).toFixed(1);
 
 /**
  * Click burst timing. Asymmetric on purpose: a quick ramp to the peak, a brief
- * hold there, then a slow settle back. The keyframe offsets carve the ~1.6s
+ * hold there, then a slow settle back. The keyframe offsets carve the ~2.1s
  * duration into roughly ramp / hold / settle; RAMP and SETTLE ease each phase.
  */
-const ACCEL_MS = 2100;
-const PEAK_IN = 0.17; // ramped to peak by here (~360ms)
-const PEAK_OUT = 0.4; // held at peak until here (~480ms), then settles (~1.26s)
+const ACCELERATION = {
+  durationMs: 2100,
+  peakIn: 0.17, // ramped to peak by here (~360ms)
+  peakOut: 0.4, // held at peak until here (~480ms), then settles (~1.26s)
+  largeRingScale: 1.2,
+  smallRingScale: 0.8,
+  dashTravel: 144,
+  jetTrail: {
+    length: 230,
+    halfWidth: 15,
+    startScaleY: 2.4,
+    peakOpacity: 0.9,
+  },
+} as const;
 const RAMP = 'cubic-bezier(0.1, 0.75, 0.3, 1)'; // fast punch
 const SETTLE = 'cubic-bezier(0.35, 0, 0.3, 1)'; // slow ease back
 
 // The body thrusts forward (+D), holds, then eases back.
 const ACCEL_BODY: Keyframe[] = [
   { transform: 'translate(0,0)', easing: RAMP },
-  { transform: `translate(${THRUST_X}px,${THRUST_Y}px)`, offset: PEAK_IN },
   {
     transform: `translate(${THRUST_X}px,${THRUST_Y}px)`,
-    offset: PEAK_OUT,
+    offset: ACCELERATION.peakIn,
+  },
+  {
+    transform: `translate(${THRUST_X}px,${THRUST_Y}px)`,
+    offset: ACCELERATION.peakOut,
     easing: SETTLE,
   },
   { transform: 'translate(0,0)' },
@@ -145,14 +217,28 @@ const ACCEL_BODY: Keyframe[] = [
 // via ACCEL_*_DASH.) Composited onto the ambient breathe, so start/end neutral.
 const ACCEL_LARGE_RING: Keyframe[] = [
   { transform: 'scale(1)', easing: RAMP },
-  { transform: 'scale(1.2)', offset: PEAK_IN },
-  { transform: 'scale(1.2)', offset: PEAK_OUT, easing: SETTLE },
+  {
+    transform: `scale(${ACCELERATION.largeRingScale})`,
+    offset: ACCELERATION.peakIn,
+  },
+  {
+    transform: `scale(${ACCELERATION.largeRingScale})`,
+    offset: ACCELERATION.peakOut,
+    easing: SETTLE,
+  },
   { transform: 'scale(1)' },
 ];
 const ACCEL_SMALL_RING: Keyframe[] = [
   { transform: 'scale(1)', easing: RAMP },
-  { transform: 'scale(0.8)', offset: PEAK_IN },
-  { transform: 'scale(0.8)', offset: PEAK_OUT, easing: SETTLE },
+  {
+    transform: `scale(${ACCELERATION.smallRingScale})`,
+    offset: ACCELERATION.peakIn,
+  },
+  {
+    transform: `scale(${ACCELERATION.smallRingScale})`,
+    offset: ACCELERATION.peakOut,
+    easing: SETTLE,
+  },
   { transform: 'scale(1)' },
 ];
 // The dashes spin fast around each ring, opposite directions, throughout the
@@ -160,27 +246,38 @@ const ACCEL_SMALL_RING: Keyframe[] = [
 // neutral, so composited onto the ambient dash travel it leaves no seam.
 const ACCEL_LARGE_DASH: Keyframe[] = [
   { strokeDashoffset: '0' },
-  { strokeDashoffset: '-144' },
+  { strokeDashoffset: `-${ACCELERATION.dashTravel}` },
 ];
 const ACCEL_SMALL_DASH: Keyframe[] = [
   { strokeDashoffset: '0' },
-  { strokeDashoffset: '144' },
+  { strokeDashoffset: `${ACCELERATION.dashTravel}` },
 ];
 // The "jet trail": a rect laid along the −D axis via JET_TRAIL_TRANSFORM (local
 // +x → −D), so its length runs backward from the module and its local y is the
 // (perpendicular) width. Positioned so the opaque gradient end sits at the
 // module and fades to transparent up-left.
 const JET_TRAIL_TRANSFORM = 'translate(420 162) rotate(223.5)';
-const JET_TRAIL_LENGTH = 230;
-const JET_TRAIL_HALF = 15; // half-width of the thin (peak) jet trail
 
 // Jet trail: starts wide and faint, focuses to a thin, bright streak at the peak
 // (scaleY narrows it about its centerline), holds, then fades out. scaleY is
 // on an inner group whose transform-origin is its center.
 const ACCEL_JET_TRAIL: Keyframe[] = [
-  { transform: 'scaleY(2.4)', opacity: 0, easing: RAMP },
-  { transform: 'scaleY(1)', opacity: 0.9, offset: PEAK_IN },
-  { transform: 'scaleY(1)', opacity: 0.9, offset: PEAK_OUT, easing: SETTLE },
+  {
+    transform: `scaleY(${ACCELERATION.jetTrail.startScaleY})`,
+    opacity: 0,
+    easing: RAMP,
+  },
+  {
+    transform: 'scaleY(1)',
+    opacity: ACCELERATION.jetTrail.peakOpacity,
+    offset: ACCELERATION.peakIn,
+  },
+  {
+    transform: 'scaleY(1)',
+    opacity: ACCELERATION.jetTrail.peakOpacity,
+    offset: ACCELERATION.peakOut,
+    easing: SETTLE,
+  },
   { transform: 'scaleY(1)', opacity: 0 },
 ];
 
@@ -273,24 +370,16 @@ export function Module(props: {
     const delay = props.phaseMs ?? 0;
     animations.push(
       root.animate(BOB_KEYFRAMES, {
-        duration: 4500,
+        duration: AMBIENT_MOTION.bob.durationMs,
         iterations: Number.POSITIVE_INFINITY,
         delay,
       })
     );
-    for (const ring of root.querySelectorAll<SVGElement>(
-      '.ring-small, .ring-large'
-    )) {
+    for (const ring of root.querySelectorAll<SVGGElement>('.ring-motion')) {
       animations.push(
         ring.animate(RING_BREATHE_KEYFRAMES, {
-          duration: 4500,
+          duration: AMBIENT_MOTION.bob.durationMs,
           iterations: Number.POSITIVE_INFINITY,
-          delay,
-        }),
-        ring.animate(RING_DASH_KEYFRAMES, {
-          duration: 3000,
-          iterations: Number.POSITIVE_INFINITY,
-          easing: 'linear',
           delay,
         })
       );
@@ -305,14 +394,17 @@ export function Module(props: {
     for (const animation of clickAnimations) animation.cancel();
     clickAnimations = [];
     const accent = resolveAccent(root);
-    const dur = { duration: ACCEL_MS } as const;
-    const add = { duration: ACCEL_MS, composite: 'add' as const };
+    const dur = { duration: ACCELERATION.durationMs } as const;
+    const add = {
+      duration: ACCELERATION.durationMs,
+      composite: 'add' as const,
+    };
     // Dashes spin fast then wind down (ease-out) over the whole burst.
     const spin = { ...add, easing: 'ease-out' };
 
     const body = root.querySelector<SVGElement>('.module-body');
-    const large = root.querySelector<SVGElement>('.ring-large');
-    const small = root.querySelector<SVGElement>('.ring-small');
+    const large = root.querySelector<SVGGElement>('.ring-large-motion');
+    const small = root.querySelector<SVGGElement>('.ring-small-motion');
     const jetTrail = root.querySelector<SVGElement>('.module-jet-trail-scale');
     if (body) clickAnimations.push(body.animate(ACCEL_BODY, dur));
     if (large) {
@@ -334,8 +426,13 @@ export function Module(props: {
         vent.animate(
           [
             { stroke: resting, opacity: 0.4, easing: RAMP },
-            { stroke: accent, opacity: 1, offset: PEAK_IN },
-            { stroke: accent, opacity: 1, offset: PEAK_OUT, easing: SETTLE },
+            { stroke: accent, opacity: 1, offset: ACCELERATION.peakIn },
+            {
+              stroke: accent,
+              opacity: 1,
+              offset: ACCELERATION.peakOut,
+              easing: SETTLE,
+            },
             { stroke: resting, opacity: 0.4 },
           ],
           dur
@@ -361,7 +458,7 @@ export function Module(props: {
             gradientUnits="userSpaceOnUse"
             x1="0"
             y1="0"
-            x2={JET_TRAIL_LENGTH}
+            x2={ACCELERATION.jetTrail.length}
             y2="0"
           >
             <stop offset="0%" class="module-jet-trail-hot" />
@@ -374,16 +471,16 @@ export function Module(props: {
           <g class="module-jet-trail-scale">
             <rect
               x="0"
-              y={-JET_TRAIL_HALF}
-              width={JET_TRAIL_LENGTH}
-              height={JET_TRAIL_HALF * 2}
+              y={-ACCELERATION.jetTrail.halfWidth}
+              width={ACCELERATION.jetTrail.length}
+              height={ACCELERATION.jetTrail.halfWidth * 2}
               fill={`url(#${jetTrailGradientId})`}
             />
           </g>
         </g>
         {/* Rings stay put behind; the body mass — card, face, logo, and the
             vents on top of it — thrusts forward on click. */}
-        <ModuleRings />
+        <ModuleRings phaseMs={props.phaseMs} />
         <g class="module-body">
           <ModuleBody />
           <g

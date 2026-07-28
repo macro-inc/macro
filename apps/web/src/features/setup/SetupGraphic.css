@@ -183,13 +183,15 @@ html[data-theme-light='false'] .setup-graphic.powered .shade {
   }
 }
 
-/* Ambient module motion — the bob, the orbit rings' breathe, and their dash
-   travel — is driven imperatively with WAAPI (see SetupGraphic.tsx), not CSS:
-   the page's Suspense boundary re-attaches this subtree when a query above it
-   re-suspends, which restarts CSS animations (a visible pop) but leaves WAAPI
-   animations running. These properties are the origin for the rings' WAAPI
-   scale; transform-box/-origin apply regardless of how `transform` is set. */
-.setup-graphic .module :is(.ring-small, .ring-large) {
+/* Ambient module motion — the bob and orbit rings' breathe are driven with
+   WAAPI (see SetupGraphic.tsx), while dash travel uses native SVG animation.
+   This avoids Safari's jitter when WAAPI animates a dashed SVG stroke. When a
+   query above it re-suspends, the page's Suspense boundary re-attaches this
+   subtree; that restarts CSS animations (a visible pop) but leaves the
+   WAAPI animations running. The wrapper owns scale while the nested path owns dash
+   travel: separating those properties avoids Safari re-rasterizing a dashed
+   path as its transform changes. */
+.setup-graphic .module .ring-motion {
   transform-box: fill-box;
   transform-origin: center;
 }

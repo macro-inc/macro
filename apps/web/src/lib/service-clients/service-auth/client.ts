@@ -82,7 +82,8 @@ const [accessTokenData, setAccessTokenData] = makePersisted(
 function getExpiresAt(token: string) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp;
+    // JWT `exp` values are Unix seconds, while Date.now() is milliseconds.
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
   } catch {
     return 0;
   }
