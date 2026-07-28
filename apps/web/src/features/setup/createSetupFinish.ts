@@ -59,6 +59,7 @@ export function createSetupFinish(options: {
       typeof next === 'string' &&
       next.startsWith('/') &&
       !next.startsWith('//') &&
+      !next.includes('\\') &&
       !next.startsWith(DEFAULT_ROUTE);
     return isDeepLink ? next : AFTER_SETUP_ROUTE;
   };

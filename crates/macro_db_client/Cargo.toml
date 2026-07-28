@@ -34,6 +34,7 @@ models_permissions = { path = "../models_permissions" }
 models_team = { path = "../models_team", optional = true }
 non_empty = { path = "../non_empty" }
 rand = { workspace = true, optional = true }
+rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

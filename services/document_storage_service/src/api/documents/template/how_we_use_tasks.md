@@ -4,7 +4,7 @@ For us this process often starts in our Bug Reports channel. Someone reports a b
 
 ![](https://static-file-service.macro.com/file/33390b5d-076c-42bd-9cb4-43a1ee503b55)
 
-Now there is bidirectional link between the initial report and the task itself, so that no matter where conversation happens, the context never gets lost.
+Now there is a bidirectional link between the initial report and the task itself, so that no matter where conversation happens, the context never gets lost.
 
 Task creation might also happen in response to a customer support email. A task can be created directly from the email itself.
 
@@ -16,4 +16,4 @@ Sometimes we'll write up documents describing new features. We can then ask the 
 
 Managing task status happens automatically, using the GitHub integration. As you create, review, and merge branches, the task automatically moves to “In Progress,” “In Review,” or “Done,” and the task records which pull request is associated with it.
 
-The beauty of Macro is that all of the places a conversation about a task might happen—whether its in the initial report, in the task itself, or on the pull request—all get linked together, automatically, without doing any additional work.
+The beauty of Macro is that all of the places a conversation about a task might happen—whether it's in the initial report, in the task itself, or on the pull request—all get linked together, automatically, without doing any additional work.

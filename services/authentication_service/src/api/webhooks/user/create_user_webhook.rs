@@ -28,6 +28,7 @@ use macro_user_id::{
     user_id::MacroUserIdStr,
 };
 use model::authentication::webhooks::FusionAuthUserWebhook;
+use model::document_storage_service_internal::StarterDocHowToGuide;
 use model_entity::EntityType;
 use std::collections::HashSet;
 use teams::domain::team_repo::TeamService;
@@ -259,34 +260,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Seed the starter documents (the "Macro how to guide" and the starter
-    // tasks it links to) and pin the guide to the new user's sidebar
-    // favorites. Fire-and-forget with retries — signup must not fail if
-    // document storage is temporarily unavailable.
-    tokio::spawn({
-        let document_storage_service_client = ctx.document_storage_service_client.clone();
-        let user_id = user_id.clone();
-        async move {
-            const MAX_ATTEMPTS: u32 = 3;
-            const RETRY_DELAY_SECS: u64 = 2;
-            for attempt in 1..=MAX_ATTEMPTS {
-                match document_storage_service_client
-                    .initialize_starter_docs(&user_id)
-                    .await
-                {
-                    Ok(()) => return,
-                    Err(e) if attempt < MAX_ATTEMPTS => {
-                        tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
-                        tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
-                    }
-                    Err(e) => {
-                        tracing::error!(error=?e, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
-                    }
-                }
-            }
-        }
-    });
-
     // Automatically add the new user to a team whose auto-join domain
     // matches their email domain. Fire-and-forget: a failed auto-join must
     // never block user creation.
@@ -313,16 +286,25 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Create a private support channel connecting the new user with the
-    // Macro support team. Fire-and-forget: a failed channel creation must
-    // never block user creation.
+    // Seed the starter documents (the "Macro how to guide" and the starter
+    // tasks it links to, with the guide pinned to the new user's sidebar
+    // favorites), then create a private support channel connecting the new
+    // user with the Macro support team and post the welcome script — which
+    // mentions the guide, so seeding runs first. Fire-and-forget: neither a
+    // failed seeding (retried, then skipped) nor a failed channel creation
+    // may block user creation.
     tokio::spawn({
+        let document_storage_service_client = ctx.document_storage_service_client.clone();
         let channel_service = ctx.channel_service.clone();
         let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
         let email = email.clone();
         let support_channel_name = support_channel_name.clone();
         async move {
+            let how_to_guide =
+                initialize_starter_docs_with_retries(&document_storage_service_client, &user_id)
+                    .await;
+
             let owner_id = match MacroUserIdStr::try_from(user_id) {
                 Ok(owner_id) => owner_id,
                 Err(e) => {
@@ -376,6 +358,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 channel_service.as_ref(),
                 &channel.id,
                 owner_id,
+                how_to_guide.as_ref(),
             )
             .await
             .inspect_err(|e| {
@@ -394,6 +377,29 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
 
     Ok(())
+}
+
+/// Seed the starter documents with retries, returning the "Macro how to
+/// guide" reference when it could be resolved.
+async fn initialize_starter_docs_with_retries(
+    client: &document_storage_service_client::DocumentStorageServiceClient,
+    user_id: &str,
+) -> Option<StarterDocHowToGuide> {
+    const MAX_ATTEMPTS: u32 = 3;
+    const RETRY_DELAY_SECS: u64 = 2;
+    for attempt in 1..=MAX_ATTEMPTS {
+        match client.initialize_starter_docs(user_id).await {
+            Ok(how_to_guide) => return how_to_guide,
+            Err(e) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+            }
+            Err(e) => {
+                tracing::error!(error=?e, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
+            }
+        }
+    }
+    None
 }
 
 /// Initializes the experiments for a provided user

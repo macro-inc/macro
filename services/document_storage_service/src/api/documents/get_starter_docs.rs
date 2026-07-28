@@ -1,5 +1,5 @@
 use crate::api::context::AuthorizationService;
-use crate::api::documents::initialize_starter_docs::{HOW_TO_GUIDE_NAME, STARTER_DOC_SCAN_LIMIT};
+use crate::api::documents::initialize_starter_docs::HOW_TO_GUIDE_NAME;
 use axum::{
     Json,
     extract::State,
@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::MacroAuthorizationExtractor;
-use macro_db_client::document::get_user_documents;
+use macro_db_client::document::get_user_documents_by_names;
 use model::response::{GenericErrorResponse, GenericResponse};
 use sqlx::PgPool;
 use utoipa::ToSchema;
@@ -42,28 +42,24 @@ pub async fn handler(
     State(db): State<PgPool>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Response {
-    let documents = match get_user_documents(
-        &db,
-        user.macro_user_id.as_ref(),
-        STARTER_DOC_SCAN_LIMIT,
-        0,
-        None,
-    )
-    .await
-    {
-        Ok((documents, _total)) => documents,
-        Err(e) => {
-            tracing::error!(error=?e, "failed to look up starter documents");
-            return GenericResponse::builder()
-                .message("failed to look up starter documents")
-                .is_error(true)
-                .send(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let names = [HOW_TO_GUIDE_NAME.to_string()];
+    let documents =
+        match get_user_documents_by_names(&db, user.macro_user_id.as_ref(), &names).await {
+            Ok(documents) => documents,
+            Err(e) => {
+                tracing::error!(error=?e, "failed to look up starter documents");
+                return GenericResponse::builder()
+                    .message("failed to look up starter documents")
+                    .is_error(true)
+                    .send(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
 
+    // Exact indexed lookup, unbounded by document count; the oldest match
+    // wins a name collision — that's the seeded guide.
     let how_to_guide_id = documents
         .into_iter()
-        .find(|document| document.document_name == HOW_TO_GUIDE_NAME)
+        .next()
         .map(|document| document.document_id);
 
     // Best-effort: the id is this endpoint's contract; the opened flag is a

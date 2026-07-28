@@ -12,13 +12,13 @@ mod test;
 /// the history upsert, which bumps `updatedAt`. `Some(true)` therefore means
 /// the user opened the item at least once after the row was created. `None`
 /// when the user has no history row for the item at all.
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, user_id), err)]
 pub async fn user_history_item_opened(
     db: &Pool<Postgres>,
     user_id: &str,
     item_id: &str,
     item_type: &str,
-) -> anyhow::Result<Option<bool>> {
+) -> Result<Option<bool>, rootcause::Report> {
     let row = sqlx::query!(
         r#"
         SELECT "updatedAt" > "createdAt" AS "opened!"

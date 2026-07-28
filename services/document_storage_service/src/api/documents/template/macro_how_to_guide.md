@@ -16,7 +16,7 @@ In **Macro**, anywhere that you can type—whether it's a document, an email, a 
 
 For example, you can always type @ to open the **mentions** menu. Go ahead, try it.
 
-*Type @ *here**:* 
+**Type @ here:**
 
 Mentions allow you to create **bidirectional links** to any document, contact, channel, etc. Anything inside of Macro can be mentioned. 
 
@@ -63,7 +63,7 @@ There's a bunch of other fancy stuff documents can do:
 - Select text to comment; comments with @mentions always notify
 - Markdown auto-formatting: `#` for headings, `[]` for checklists, `>` for quotes.
 - Full version history with time-travel browsing
-- Type `/` to for a bunch of fun nodes. Math? $\int_{you=0}^{you=100}(Macro)dx$
+- Type `/` for a bunch of fun nodes. Math? $\int_{you=0}^{you=100}(Macro)dx$
 
 ---
 
