@@ -152,19 +152,6 @@ impl DocumentState {
                 continue;
             };
 
-            // Adding a comment wraps the selected text in a MarkNode/CommentNode
-            // (a node whose top-level `type` is "mark"/"comment", sibling of `$`).
-            // Wrapping text in a comment shouldn't reattribute authorship, so skip
-            // the wrapper node. Real edits (content, `format`/bold, `type`/heading)
-            // resolve to a non-mark node and still attribute normally.
-            if let Some(LoroValue::String(node_type)) =
-                map.get("type").and_then(|v| v.into_value().ok())
-            {
-                if matches!(node_type.as_str(), "mark" | "comment") {
-                    return None;
-                }
-            }
-
             return Some(id.to_string());
         }
         None

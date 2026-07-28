@@ -87,7 +87,10 @@ function registerBlameTooltipPlugin(
     props.setState({ hovering: false, nodeId: null });
   };
 
+  document.addEventListener('scroll', dismiss, true);
+
   return mergeRegister(
+    () => document.removeEventListener('scroll', dismiss, true),
     editor.registerRootListener((root, prevRoot) => {
       if (root) {
         root.addEventListener('pointermove', handlePointerMove);
