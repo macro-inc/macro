@@ -6,10 +6,11 @@
 //! agent's ACP traffic over the runtime connection.
 //!
 //! `agent_runtime_protocol` hosts exactly one agent execution per connection
-//! and carries no session identifier on the wire, so identifying which
-//! session a connection is for happens before the connection exists: this
-//! bin calls the proxy's HTTP API to provision a listener dedicated to one
-//! agent, then dials the URL it returns.
+//! and carries no session identifier on the wire, so this bin calls the
+//! proxy's HTTP API to confirm it's allowed to attach a runtime, then dials
+//! the shared runtime endpoint it returns with `?id=<agent_id>` appended -
+//! that query parameter is what tells the proxy which session this
+//! connection belongs to.
 //!
 //! Prerequisites:
 //!
@@ -211,13 +212,16 @@ async fn main() -> Result<()> {
         .collect();
 
     tracing::info!(%agent_id, http_url = %args.http_url, "provisioning runtime connection");
-    let url = provision_runtime_connection(
+    let base_url = provision_runtime_connection(
         &args.http_url,
         &args.internal_auth_key,
         &args.user_id,
         args.agent_id,
     )
     .await?;
+    // The shared runtime endpoint is the same for every session; the query
+    // parameter is what tells agent_proxy which one this connection is.
+    let url = format!("{base_url}?id={}", args.agent_id);
 
     tracing::info!(%url, "connecting to agent proxy");
     let (stream, _response) = tokio_tungstenite::connect_async(&url)
@@ -238,8 +242,8 @@ async fn main() -> Result<()> {
     let claude_code = AcpAgent::from_args(agent_command.iter().map(String::as_str))
         .context("failed to spawn agent process")?;
     runtime
-        .system_event(SystemEvent::Unknown("agent/started".to_string()))
-        .context("failed to emit agent/started")?;
+        .system_event(SystemEvent::AcpReady)
+        .context("failed to emit acp_ready")?;
 
     let agent = ConnectTo::<Client>::connect_to(claude_code, acp);
     tokio::pin!(agent);

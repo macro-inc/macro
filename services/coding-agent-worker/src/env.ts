@@ -33,4 +33,9 @@ export const env = envsafe({
     allowEmpty: true,
     desc: 'Forwarded into sandboxes so opencode can call Anthropic. Empty = agent falls back to free models.',
   }),
+  LOG_LEVEL: str({
+    default: 'info',
+    choices: ['debug', 'info', 'warn', 'error', 'silent'],
+    desc: 'Minimum log level. `debug` dumps every ACP frame crossing the upstream link and the agent stream.',
+  }),
 })

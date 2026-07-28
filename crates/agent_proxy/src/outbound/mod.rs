@@ -2,5 +2,5 @@
 //! notifier.
 
 pub mod gateway;
-pub mod runtime_connections;
 pub mod runtime_registry;
+pub mod shared_runtime_connections;

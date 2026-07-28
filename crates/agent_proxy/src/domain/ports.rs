@@ -100,3 +100,9 @@ pub trait RuntimeProvisioner: Send + Sync + 'static {
     /// domain service).
     fn provision(&self, session_id: Uuid) -> impl Future<Output = anyhow::Result<String>> + Send;
 }
+
+impl<T: RuntimeProvisioner> RuntimeProvisioner for std::sync::Arc<T> {
+    fn provision(&self, session_id: Uuid) -> impl Future<Output = anyhow::Result<String>> + Send {
+        T::provision(self, session_id)
+    }
+}

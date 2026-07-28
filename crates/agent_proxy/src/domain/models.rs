@@ -23,6 +23,10 @@ pub enum AgentProxyErr {
     /// The session has no live agent runtime connection to forward to.
     #[error("session is not connected to an agent runtime")]
     SessionNotConnected,
+    /// The session's runtime is connected, but the proxy hasn't finished (or
+    /// failed to) create its ACP-level session yet.
+    #[error("agent runtime's ACP session is not ready yet")]
+    AcpSessionNotReady,
     /// An unexpected error occurred.
     #[error(transparent)]
     Unknown(#[from] anyhow::Error),

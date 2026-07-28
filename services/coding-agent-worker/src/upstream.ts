@@ -1,4 +1,5 @@
 import type { ToRuntimeMessage, ToServerMessage } from './protocol/generated'
+import { log } from './log'
 
 const MAX_PENDING_ACP_MESSAGES = 1_024
 
@@ -7,18 +8,43 @@ const MAX_PENDING_ACP_MESSAGES = 1_024
  * `ToRuntimeMessage` value per frame. This worker plays the Agent Runtime
  * role, so it sends `ToServerMessage` and receives `ToRuntimeMessage`. */
 export class UpstreamLink {
-  onAcp: (frame: unknown) => void = () => {}
+  private _onAcp: (frame: unknown) => void = () => {}
+  private onAcpAttached = false
+
+  /** Handler for ACP frames relayed from the upstream. Frames that arrive
+   * before this is set - e.g. a proxy-initiated `session/new` sent the
+   * instant this link connects, well before the caller's own downstream
+   * connection to the agent process exists to wire a real handler up to -
+   * are queued and delivered the moment it is, mirroring `pendingAcp`'s
+   * buffering in the outgoing direction. Without this, anything sent that
+   * early is silently dropped: the default no-op swallows it and no error
+   * or retry ever surfaces the loss. */
+  set onAcp(handler: (frame: unknown) => void) {
+    this._onAcp = handler
+    this.onAcpAttached = true
+    if (this.pendingIncomingAcp.length > 0) {
+      log.debug(
+        `[upstream ${this.sessionId}] onAcp attached, flushing ${this.pendingIncomingAcp.length} queued frame(s)`,
+      )
+    }
+    for (const frame of this.pendingIncomingAcp.splice(0)) handler(frame)
+  }
+
+  get onAcp(): (frame: unknown) => void {
+    return this._onAcp
+  }
 
   private ws: WebSocket | null = null
   private open = false
   private closed = false
   private currentEvent: string | null = null
   private readonly pendingAcp: unknown[] = []
+  private readonly pendingIncomingAcp: unknown[] = []
   private readonly url: string
 
   constructor(
     url: string,
-    sessionId: string,
+    private readonly sessionId: string,
     private readonly socketFactory: (url: string) => WebSocket = (socketUrl) => new WebSocket(socketUrl),
     private readonly reconnectDelayMs = 1_000,
   ) {
@@ -30,11 +56,13 @@ export class UpstreamLink {
 
   /** Send an ACP frame to the upstream. */
   acp(frame: unknown) {
+    log.debug(`[upstream ${this.sessionId}] -> acp`, frame)
     this.send(acpMessage(frame))
   }
 
   /** Report a lifecycle event to the upstream (e.g. `booting`, `ready`, `shutting_down`). */
   status(event: string) {
+    log.info(`[upstream ${this.sessionId}] status -> ${event}`)
     this.currentEvent = event
     this.send({ type: 'event', event })
   }
@@ -48,12 +76,14 @@ export class UpstreamLink {
 
   private send(message: ToServerMessage) {
     if (!this.open) {
+      log.debug(`[upstream ${this.sessionId}] socket not open, queueing`, message)
       if (message.type === 'acp') this.queueAcp(acpPayload(message))
       return
     }
     try {
       this.ws?.send(JSON.stringify(message))
-    } catch {
+    } catch (error) {
+      log.warn(`[upstream ${this.sessionId}] send failed, queueing`, error)
       this.open = false
       if (message.type === 'acp') this.queueAcp(acpPayload(message))
     }
@@ -61,17 +91,30 @@ export class UpstreamLink {
 
   private queueAcp(frame: unknown) {
     if (this.pendingAcp.length >= MAX_PENDING_ACP_MESSAGES) {
-      throw new Error(`upstream ACP queue exceeded ${MAX_PENDING_ACP_MESSAGES} messages`)
+      throw new Error(`upstream outgoing ACP queue exceeded ${MAX_PENDING_ACP_MESSAGES} messages`)
     }
     this.pendingAcp.push(frame)
+    log.debug(`[upstream ${this.sessionId}] queued outgoing ACP frame (${this.pendingAcp.length} pending)`)
+  }
+
+  private queueIncomingAcp(frame: unknown) {
+    if (this.pendingIncomingAcp.length >= MAX_PENDING_ACP_MESSAGES) {
+      throw new Error(`upstream incoming ACP queue exceeded ${MAX_PENDING_ACP_MESSAGES} messages`)
+    }
+    this.pendingIncomingAcp.push(frame)
+    log.debug(
+      `[upstream ${this.sessionId}] queued incoming ACP frame, onAcp not attached yet (${this.pendingIncomingAcp.length} pending)`,
+    )
   }
 
   private dial() {
     if (this.closed) return
+    log.info(`[upstream ${this.sessionId}] dialing ${this.url}`)
     const ws = this.socketFactory(this.url)
     this.ws = ws
     ws.addEventListener('open', () => {
       if (this.ws !== ws || this.closed) return
+      log.info(`[upstream ${this.sessionId}] connected`)
       this.open = true
       if (this.currentEvent) this.send({ type: 'event', event: this.currentEvent })
       for (const frame of this.pendingAcp.splice(0)) this.send(acpMessage(frame))
@@ -84,16 +127,22 @@ export class UpstreamLink {
         if (!isRuntimeMessage(parsed)) throw new Error('invalid message')
         payload = parsed
       } catch {
-        return console.error('[link] ignoring invalid upstream message')
+        log.error(`[upstream ${this.sessionId}] ignoring invalid upstream message`, event.data)
+        return
       }
-      this.onAcp(acpPayload(payload))
+      const frame = acpPayload(payload)
+      log.debug(`[upstream ${this.sessionId}] <- acp`, frame)
+      if (this.onAcpAttached) this._onAcp(frame)
+      else this.queueIncomingAcp(frame)
     })
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (event) => {
       if (this.ws !== ws) return
+      log.warn(`[upstream ${this.sessionId}] socket closed`, { code: event.code, reason: event.reason })
       this.open = false
       if (!this.closed) setTimeout(() => this.dial(), this.reconnectDelayMs)
     })
-    ws.addEventListener('error', () => {
+    ws.addEventListener('error', (event) => {
+      log.error(`[upstream ${this.sessionId}] socket error`, event)
       try {
         ws.close()
       } catch {}

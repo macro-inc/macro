@@ -21,9 +21,13 @@ mod test;
 
 /// The kind of runtime or agent state transition reported to the Agent Service.
 ///
-/// The protocol does not define an event-name catalog yet. This enum is
-/// non-exhaustive and currently contains only [`SystemEvent::Unknown`]. Every
-/// wire string round-trips through it unchanged.
+/// The protocol does not define a full event-name catalog yet, so this enum
+/// is non-exhaustive: unrecognized wire strings still round-trip losslessly
+/// through [`SystemEvent::Unknown`]. [`SystemEvent::AcpReady`] is the one
+/// name the Agent Service actually acts on (see
+/// `agent_proxy::inbound::runtime::RuntimeConnectionDriver`, which waits for
+/// it before starting the ACP `initialize`/`session/new` handshake) rather
+/// than merely forwarding it for observability.
 ///
 /// This has a hand-written [`Serialize`]/[`Deserialize`] impl rather than a
 /// derive, so it cannot derive [`specta::Type`] either: nothing here
@@ -33,7 +37,12 @@ mod test;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SystemEvent {
-    /// An application-defined event name.
+    /// The Agent Runtime's hosted agent process is up and its ACP channel is
+    /// wired end-to-end: the Agent Service may now start the ACP
+    /// `initialize`/`session/new` handshake. Sent at most once per
+    /// connection, before any ACP traffic.
+    AcpReady,
+    /// An application-defined event name with no protocol-level meaning yet.
     Unknown(String),
 }
 
@@ -42,6 +51,7 @@ impl SystemEvent {
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
+            Self::AcpReady => "acp_ready",
             Self::Unknown(name) => name,
         }
     }
@@ -61,7 +71,10 @@ impl<'de> Deserialize<'de> for SystemEvent {
     where
         D: Deserializer<'de>,
     {
-        Ok(Self::Unknown(String::deserialize(deserializer)?))
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "acp_ready" => Self::AcpReady,
+            name => Self::Unknown(name.to_owned()),
+        })
     }
 }
 

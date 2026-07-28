@@ -3,16 +3,16 @@
 //! `agent_runtime_protocol` hosts exactly one agent execution per physical
 //! connection and carries no session identifier on the wire (see
 //! [`crate::domain::ports::RuntimeProvisioner`]). Correlating an accepted
-//! connection to a chat/session id is therefore established out of band,
-//! before the connection even exists: [`crate::domain::ports::RuntimeProvisioner`]
-//! binds one dedicated listener per session and, once it accepts a
-//! connection, hands `(session_id, channel)` to the composition root over a
-//! plain channel. [`RuntimeConnectionDriver::run`] drains that channel and
-//! drives each connection into the domain service.
+//! connection to a chat/session id is therefore established out of band, by
+//! the adapter that accepts the connection:
+//! [`crate::outbound::shared_runtime_connections::SharedRuntimeConnections`]
+//! matches an `?id=` query parameter on its one shared WebSocket endpoint and
+//! hands `(session_id, channel)` to the composition root over a plain
+//! channel. [`RuntimeConnectionDriver::run`] drains that channel and drives
+//! each connection into the domain service.
 
 use crate::domain::ports::SessionAttachments;
 use crate::domain::service::AgentProxyService;
-use crate::outbound::runtime_connections::ConnectionGuard;
 use agent_runtime_protocol::domain::connection::{
     ServerChannel, ServerConnection, SystemEventHandler,
 };
@@ -40,11 +40,11 @@ impl SystemEventHandler for ForwardSystemEvents {
 /// Drains accepted runtime connections and drives each one into the domain
 /// service until it closes.
 ///
-/// Each connection is already known to belong to exactly one session (its
-/// listener was bound for that session alone by
-/// [`crate::domain::ports::RuntimeProvisioner`]), so unlike the previous
-/// multi-agent-per-connection design, there is no routing table here: one
-/// accepted connection is one session, full stop.
+/// Each connection already arrives tagged with the session it belongs to
+/// (matched against the `?id=` query parameter by
+/// [`crate::outbound::shared_runtime_connections::SharedRuntimeConnections`]),
+/// so there is no routing table here beyond that tag: one accepted connection
+/// drives exactly one session.
 pub struct RuntimeConnectionDriver<S, A> {
     attachments: Arc<A>,
     service: Arc<S>,
@@ -61,26 +61,20 @@ impl<S: AgentProxyService, A: SessionAttachments> RuntimeConnectionDriver<S, A> 
         }
     }
 
-    /// Drain accepted `(session_id, channel, guard)` triples, spawning an
-    /// independent task to drive each one so a slow or long-lived session
-    /// never blocks another session's connection from being accepted and
-    /// driven. The guard is held for the connection's whole lifetime: its
-    /// listener must outlive the connection it accepted, not be torn down
-    /// the moment it's handed off (see [`ConnectionGuard`]).
-    pub async fn run(
-        self: Arc<Self>,
-        mut incoming: UnboundedReceiver<(Uuid, ServerChannel, ConnectionGuard)>,
-    ) {
-        while let Some((session_id, channel, guard)) = incoming.recv().await {
+    /// Drain accepted `(session_id, channel)` pairs, spawning an independent
+    /// task to drive each one so a slow or long-lived session never blocks
+    /// another session's connection from being accepted and driven.
+    pub async fn run(self: Arc<Self>, mut incoming: UnboundedReceiver<(Uuid, ServerChannel)>) {
+        while let Some((session_id, channel)) = incoming.recv().await {
             let driver = Arc::clone(&self);
-            tokio::spawn(async move { driver.drive(session_id, channel, guard).await });
+            tokio::spawn(async move { driver.drive(session_id, channel).await });
         }
         tracing::info!("runtime connection source closed; driver stopping");
     }
 
     /// Attach one accepted connection's ACP channel to `session_id`, pump its
     /// traffic into the domain service, and clean up when it closes.
-    async fn drive(&self, session_id: Uuid, channel: ServerChannel, _guard: ConnectionGuard) {
+    async fn drive(&self, session_id: Uuid, channel: ServerChannel) {
         let epoch = self.next_epoch.fetch_add(1, Ordering::Relaxed);
         tracing::info!(%session_id, epoch, "agent runtime connected");
 
@@ -126,7 +120,32 @@ impl<S: AgentProxyService, A: SessionAttachments> RuntimeConnectionDriver<S, A> 
             }
         });
 
+        // The runtime's hosted agent process may not exist yet when the
+        // connection is accepted (e.g. its sandbox is still booting): the
+        // handshake can't start until the runtime reports readiness over the
+        // system-event channel, so wait for `SystemEvent::AcpReady` rather
+        // than firing `initialize` blind. Bootstrap at most once per
+        // connection even if the event somehow arrives more than once.
+        let mut acp_bootstrap_started = false;
+
         while let Some(event) = event_rx.recv().await {
+            if !acp_bootstrap_started && event == SystemEvent::AcpReady {
+                acp_bootstrap_started = true;
+                // Spawned rather than awaited inline: it depends on
+                // `acp_task` above (already running) to observe the
+                // `session/new` response, and must not hold up this
+                // system-event loop.
+                let service = Arc::clone(&self.service);
+                tokio::spawn(async move {
+                    let _ = service
+                        .handle_agent_connected(session_id)
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, %session_id, "failed to start ACP session"),
+                        );
+                });
+            }
+
             let _ = self
                 .service
                 .handle_system_event(session_id, event)

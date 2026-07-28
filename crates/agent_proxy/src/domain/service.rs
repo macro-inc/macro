@@ -9,18 +9,24 @@ use crate::domain::models::{
 use crate::domain::ports::{ClientNotifier, RuntimeProvisioner, RuntimeSessions};
 use crate::domain::translate::{TurnAccumulator, content_blocks_text, translate_session_update};
 use agent::types::{ChatMessageContent, Role};
-use agent_client_protocol::JsonRpcMessage;
-use agent_client_protocol::schema::v1::{PromptRequest, SessionNotification};
+use agent_client_protocol::schema::ProtocolVersion;
+use agent_client_protocol::schema::v1::{
+    InitializeRequest, NewSessionRequest, NewSessionResponse, PromptRequest, RequestId,
+    Response as AcpResponse, SessionNotification,
+};
+use agent_client_protocol::{JsonRpcMessage, JsonRpcResponse};
 use agent_client_protocol::{RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use chat::domain::models::{ChatAgentKind, ChatStream, CreateChatArgs, PatchChatArgs};
 use chat::domain::ports::{ChatRepo, MessageRepo};
 use chrono::Utc;
+use futures::channel::oneshot;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7, string_to_uuid};
 use model::chat::NewChatMessage;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -32,6 +38,31 @@ pub const EXTERNAL_AGENT_MODEL: &str = "external";
 
 /// Gateway message type for agent runtime lifecycle events.
 pub const AGENT_SYSTEM_EVENT_MESSAGE_TYPE: &str = "agent_system_event";
+
+/// Working directory every ACP session is created in, matching the sandbox
+/// layout `coding-agent-worker` clones the repo into (see its
+/// `container/sidecar`, which defaults `ACP_WORKSPACE` to the same path).
+const ACP_WORKSPACE: &str = "/workspace";
+
+/// Reserved JSON-RPC request id for the proxy-initiated `initialize` call
+/// that opens a runtime connection's ACP handshake. Namespaced so it can
+/// never collide with a caller-supplied `post_acp` request id.
+const ACP_BOOTSTRAP_INITIALIZE_ID: &str = "agent_proxy:initialize";
+
+/// Reserved JSON-RPC request id for the proxy-initiated `session/new` call
+/// that creates the ACP session every subsequent message is addressed to.
+const ACP_BOOTSTRAP_NEW_SESSION_ID: &str = "agent_proxy:session/new";
+
+/// Build a raw JSON-RPC request from a typed ACP request and id.
+fn acp_request(
+    id: RequestId,
+    request: &(impl JsonRpcMessage + Serialize),
+) -> Result<RawJsonRpcMessage> {
+    let params =
+        serde_json::to_value(request).map_err(|e| AgentProxyErr::Unknown(anyhow::anyhow!(e)))?;
+    RawJsonRpcMessage::request(request.method().to_string(), params, id)
+        .map_err(|e| AgentProxyErr::Unknown(anyhow::anyhow!(e)))
+}
 
 /// Service trait for the agent proxy use cases.
 ///
@@ -82,6 +113,15 @@ pub trait AgentProxyService: Send + Sync + 'static {
         agent_id: Uuid,
     ) -> impl Future<Output = Result<String>> + Send;
 
+    /// Start a runtime's ACP session once it reports readiness: negotiates
+    /// `initialize` then creates a session via `session/new`, recording the
+    /// resulting ACP session id so `post_acp` can stamp it onto every message
+    /// sent to this runtime. Called at most once per accepted connection,
+    /// after its `SystemEvent::AcpReady` event arrives (not merely on
+    /// connect: the runtime's hosted agent process may not exist yet at that
+    /// point), and before any user traffic can be forwarded to it.
+    fn handle_agent_connected(&self, session_id: Uuid) -> impl Future<Output = Result<()>> + Send;
+
     /// Forward one user-posted ACP message to the runtime hosting the
     /// session, persisting prompts as user chat messages.
     fn post_acp(
@@ -119,7 +159,7 @@ struct SessionTurn {
     accumulator: TurnAccumulator,
     /// JSON-RPC request IDs of forwarded `session/prompt` requests that have
     /// not been answered yet. A response to one of these ends the turn.
-    pending_prompts: Vec<agent_client_protocol::schema::v1::RequestId>,
+    pending_prompts: Vec<RequestId>,
     /// Correlates every live-stream item pushed for this turn, and doubles as
     /// the persisted assistant message's id once the turn flushes (mirrors
     /// `document_cognition_service`'s stream_id == message_id convention).
@@ -151,6 +191,13 @@ pub struct AgentProxyServiceImpl<R, Sessions, Notifier, Provisioner> {
     /// no changes of its own.
     streams: Arc<dyn StreamRepo>,
     turns: Mutex<HashMap<Uuid, SessionTurn>>,
+    /// The ACP-level session id for each connected runtime, once its
+    /// `session/new` handshake completes. `post_acp` stamps this onto every
+    /// outgoing session-scoped message so callers never need to know it.
+    acp_sessions: Mutex<HashMap<Uuid, String>>,
+    /// ACP session bootstraps in flight, resolved by `handle_agent_message`
+    /// when the matching `session/new` response arrives.
+    acp_bootstrap: Mutex<HashMap<Uuid, oneshot::Sender<std::result::Result<String, String>>>>,
 }
 
 impl<R, Sessions, Notifier, Provisioner> AgentProxyServiceImpl<R, Sessions, Notifier, Provisioner> {
@@ -169,6 +216,8 @@ impl<R, Sessions, Notifier, Provisioner> AgentProxyServiceImpl<R, Sessions, Noti
             provisioner,
             streams,
             turns: Mutex::new(HashMap::new()),
+            acp_sessions: Mutex::new(HashMap::new()),
+            acp_bootstrap: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -237,7 +286,7 @@ where
     async fn store_prompt(
         &self,
         session_id: Uuid,
-        request_id: agent_client_protocol::schema::v1::RequestId,
+        request_id: RequestId,
         prompt: PromptRequest,
     ) -> Result<()> {
         let text = content_blocks_text(&prompt.prompt);
@@ -326,11 +375,7 @@ where
     }
 
     /// Whether `response_id` answers a pending prompt for the session.
-    fn take_pending_prompt(
-        &self,
-        session_id: Uuid,
-        response_id: &agent_client_protocol::schema::v1::RequestId,
-    ) -> bool {
+    fn take_pending_prompt(&self, session_id: Uuid, response_id: &RequestId) -> bool {
         let mut turns = self.turns.lock().expect("turns mutex poisoned");
         let Some(turn) = turns.get_mut(&session_id) else {
             return false;
@@ -344,6 +389,99 @@ where
             turns.remove(&session_id);
         }
         taken
+    }
+
+    /// Log then forward a raw ACP message to the runtime hosting the
+    /// session.
+    fn send_to_runtime(&self, session_id: Uuid, message: RawJsonRpcMessage) -> Result<()> {
+        tracing::debug!(
+            %session_id,
+            message = %serde_json::to_string(&message).unwrap_or_default(),
+            "sending ACP message to runtime"
+        );
+        self.sessions.send(session_id, message)
+    }
+
+    /// The session's live ACP session id, or [`AgentProxyErr::AcpSessionNotReady`]
+    /// if `handle_agent_connected` hasn't finished (or failed) creating one.
+    fn require_acp_session_id(&self, session_id: Uuid) -> Result<String> {
+        self.acp_sessions
+            .lock()
+            .expect("acp sessions mutex poisoned")
+            .get(&session_id)
+            .cloned()
+            .ok_or(AgentProxyErr::AcpSessionNotReady)
+    }
+
+    /// Stamp the runtime's live ACP session id onto a request or
+    /// notification's `sessionId` param, overwriting whatever the caller
+    /// supplied, so callers never need to know the ACP-level id themselves.
+    /// Only touches params that already have a `sessionId` key - every
+    /// session-scoped ACP method requires one, so a typed request the
+    /// caller built always has one (even if it's the wrong value); a
+    /// connection-level method like `initialize` never does, and passes
+    /// through untouched. Messages with no object params (or responses,
+    /// which answer a request rather than address one) also pass through.
+    fn attach_acp_session_id(
+        &self,
+        session_id: Uuid,
+        message: RawJsonRpcMessage,
+    ) -> Result<RawJsonRpcMessage> {
+        Ok(match message {
+            RawJsonRpcMessage::Request(mut request) => {
+                if let Some(RawJsonRpcParams::Object(params)) = &mut request.params
+                    && params.contains_key("sessionId")
+                {
+                    let acp_session_id = self.require_acp_session_id(session_id)?;
+                    params.insert(
+                        "sessionId".to_string(),
+                        serde_json::Value::String(acp_session_id),
+                    );
+                }
+                RawJsonRpcMessage::Request(request)
+            }
+            RawJsonRpcMessage::Notification(mut notification) => {
+                if let Some(RawJsonRpcParams::Object(params)) = &mut notification.params
+                    && params.contains_key("sessionId")
+                {
+                    let acp_session_id = self.require_acp_session_id(session_id)?;
+                    params.insert(
+                        "sessionId".to_string(),
+                        serde_json::Value::String(acp_session_id),
+                    );
+                }
+                RawJsonRpcMessage::Notification(notification)
+            }
+            response @ RawJsonRpcMessage::Response(_) => response,
+        })
+    }
+
+    /// Resolve an in-flight `session/new` bootstrap from its response,
+    /// delivering the created ACP session id (or a failure reason) to
+    /// whichever `handle_agent_connected` call is waiting on it. A no-op if
+    /// no bootstrap is pending (e.g. it already resolved, or the connection
+    /// was detached first).
+    fn resolve_new_session_bootstrap(&self, session_id: Uuid, message: &RawJsonRpcMessage) {
+        let Some(tx) = self
+            .acp_bootstrap
+            .lock()
+            .expect("acp bootstrap mutex poisoned")
+            .remove(&session_id)
+        else {
+            return;
+        };
+
+        let resolution = match message {
+            RawJsonRpcMessage::Response(AcpResponse::Result { result, .. }) => {
+                NewSessionResponse::from_value("session/new", result.clone())
+                    .map(|response| response.session_id.0.to_string())
+                    .map_err(|e| e.to_string())
+            }
+            RawJsonRpcMessage::Response(AcpResponse::Error { error, .. }) => Err(error.to_string()),
+            _ => Err("expected a response to session/new".to_string()),
+        };
+
+        let _ = tx.send(resolution);
     }
 }
 
@@ -464,6 +602,51 @@ where
             .map_err(AgentProxyErr::Unknown)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn handle_agent_connected(&self, session_id: Uuid) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.acp_bootstrap
+            .lock()
+            .expect("acp bootstrap mutex poisoned")
+            .insert(session_id, tx);
+
+        self.send_to_runtime(
+            session_id,
+            acp_request(
+                RequestId::Str(ACP_BOOTSTRAP_INITIALIZE_ID.to_string()),
+                &InitializeRequest::new(ProtocolVersion::V1),
+            )?,
+        )?;
+        self.send_to_runtime(
+            session_id,
+            acp_request(
+                RequestId::Str(ACP_BOOTSTRAP_NEW_SESSION_ID.to_string()),
+                &NewSessionRequest::new(ACP_WORKSPACE),
+            )?,
+        )?;
+
+        let acp_session_id = match rx.await {
+            Ok(Ok(id)) => id,
+            Ok(Err(message)) => {
+                return Err(AgentProxyErr::Unknown(anyhow::anyhow!(
+                    "session/new failed: {message}"
+                )));
+            }
+            Err(_) => {
+                return Err(AgentProxyErr::Unknown(anyhow::anyhow!(
+                    "runtime disconnected before its ACP session was created"
+                )));
+            }
+        };
+
+        self.acp_sessions
+            .lock()
+            .expect("acp sessions mutex poisoned")
+            .insert(session_id, acp_session_id.clone());
+        tracing::info!(%session_id, acp_session_id, "ACP session ready");
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self, message))]
     async fn post_acp(
         &self,
@@ -487,6 +670,10 @@ where
             return Err(AgentProxyErr::SessionNotConnected);
         }
 
+        // Stamp the runtime's live ACP session id onto the message so
+        // callers only ever need to know the Macro session id.
+        let message = self.attach_acp_session_id(session_id, message)?;
+
         let mut pending_prompt = None;
         if let RawJsonRpcMessage::Request(request) = &message
             && PromptRequest::matches_method(request.method.as_ref())
@@ -503,7 +690,7 @@ where
             pending_prompt = Some(request.id.clone());
         }
 
-        self.sessions.send(session_id, message).inspect_err(|_| {
+        self.send_to_runtime(session_id, message).inspect_err(|_| {
             // The runtime vanished between the check and the send: the
             // prompt never reached an agent, so no response will ever end
             // this turn — take the pending ID back.
@@ -519,6 +706,28 @@ where
         session_id: Uuid,
         message: RawJsonRpcMessage,
     ) -> Result<()> {
+        tracing::debug!(
+            %session_id,
+            message = %serde_json::to_string(&message).unwrap_or_default(),
+            "received ACP message from runtime"
+        );
+
+        // Bootstrap responses (initialize/session-new) are answered to the
+        // proxy itself, not to any post_acp caller: intercept them here
+        // rather than letting them fall into the pending-prompt matching
+        // below, which only ever tracks user-posted `session/prompt` ids.
+        if let Some(response_id) = message.response_id()
+            && let RequestId::Str(id) = response_id
+        {
+            if id == ACP_BOOTSTRAP_NEW_SESSION_ID {
+                self.resolve_new_session_bootstrap(session_id, &message);
+                return Ok(());
+            }
+            if id == ACP_BOOTSTRAP_INITIALIZE_ID {
+                return Ok(());
+            }
+        }
+
         match &message {
             RawJsonRpcMessage::Notification(notification)
                 if SessionNotification::matches_method(notification.method.as_ref()) =>
@@ -580,6 +789,21 @@ where
         if turns.remove(&session_id).is_some() {
             tracing::debug!(%session_id, "discarded in-flight turn state");
         }
+        drop(turns);
+
+        // The next connection gets its own `handle_agent_connected` call and
+        // therefore its own ACP session; stale state here would otherwise
+        // let messages address a session id that no longer exists (or,
+        // worse, unblock a `handle_agent_connected` call still waiting on a
+        // bootstrap that will never resolve since the connection is gone).
+        self.acp_sessions
+            .lock()
+            .expect("acp sessions mutex poisoned")
+            .remove(&session_id);
+        self.acp_bootstrap
+            .lock()
+            .expect("acp bootstrap mutex poisoned")
+            .remove(&session_id);
     }
 
     #[tracing::instrument(err, skip(self, event), fields(event_name = %event.as_str()))]

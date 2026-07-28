@@ -16,10 +16,15 @@ serve:
 client *args:
     bun scripts/client.tsx {{args}}
 
-# Kick off a session (webhook flow: returns the id immediately; watch `just upstream`).
-session repo prompt:
-    curl -s -X POST localhost:3000/session -H 'content-type: application/json' \
-      -d '{"repoUrl":"{{repo}}","prompt":"{{prompt}}"}'
+# Kick off a session (returns the id immediately; the worker streams progress
+# to UPSTREAM_WS_URL). Pass agent_id to tie this session to an agent_proxy
+# chat - that id becomes the `?id=` the shared runtime endpoint matches on.
+session repo prompt agent_id='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    body=$(jq -n --arg repoUrl '{{repo}}' --arg prompt '{{prompt}}' --arg agentId '{{agent_id}}' \
+      'if $agentId == "" then {repoUrl: $repoUrl, prompt: $prompt} else {repoUrl: $repoUrl, prompt: $prompt, agentId: $agentId} end')
+    curl -s -X POST localhost:4000/session -H 'content-type: application/json' -d "$body"
 
 destroy id:
-    curl -s -X DELETE localhost:3000/session/{{id}}
+    curl -s -X DELETE localhost:4000/session/{{id}}

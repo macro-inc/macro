@@ -1,12 +1,12 @@
 //! Composition root for the agent proxy service.
 //!
 //! Runs the user-facing HTTP API (agent CRUD, provisioning runtime
-//! connections, and posting ACP messages to sessions). Each external agent's
-//! runtime gets its own ephemeral WebSocket listener, bound on demand by
-//! [`agent_proxy::outbound::runtime_connections::EphemeralRuntimeConnections`]
-//! when a caller provisions one; accepted connections are drained and driven
-//! into the domain service by
-//! [`agent_proxy::inbound::runtime::RuntimeConnectionDriver`].
+//! connections, and posting ACP messages to sessions) alongside a single
+//! shared runtime WebSocket endpoint
+//! ([`agent_proxy::outbound::shared_runtime_connections::SharedRuntimeConnections`])
+//! that every external agent's runtime dials into, disambiguated by an
+//! `?id=` query parameter; accepted connections are drained and driven into
+//! the domain service by [`agent_proxy::inbound::runtime::RuntimeConnectionDriver`].
 
 #![recursion_limit = "256"]
 
@@ -18,8 +18,8 @@ use agent_proxy::domain::service::AgentProxyServiceImpl;
 use agent_proxy::inbound::http::{AgentProxyRouterState, agent_proxy_router, health};
 use agent_proxy::inbound::runtime::RuntimeConnectionDriver;
 use agent_proxy::outbound::gateway::GatewayNotifier;
-use agent_proxy::outbound::runtime_connections::EphemeralRuntimeConnections;
 use agent_proxy::outbound::runtime_registry::SessionRegistry;
+use agent_proxy::outbound::shared_runtime_connections::SharedRuntimeConnections;
 use agent_proxy::swagger::ApiDoc;
 use anyhow::{Context, Result};
 use axum::Router;
@@ -66,23 +66,22 @@ async fn main() -> Result<()> {
         redis::Client::open(config.redis_host.as_str()).context("failed to build redis client")?;
     let stream_repo = RedisPostgresStreamRepo::new(redis_client, db.clone()).obj();
 
-    // Runtimes dial a fresh, single-use listener per session (there is no
-    // wire-level session identifier to route many runtimes over one shared
-    // port), provisioned on demand via `provision_runtime_connection` and
-    // handed to the driver below over `incoming`.
+    // All runtimes dial the same shared WebSocket endpoint, disambiguated by
+    // an `?id=` query parameter; accepted connections are handed to the
+    // driver below over `incoming`.
     let (incoming_tx, incoming_rx) = tokio::sync::mpsc::unbounded_channel();
-    let provisioner = EphemeralRuntimeConnections::new(
+    let runtime_connections = Arc::new(SharedRuntimeConnections::new(
         config.runtime_advertise_host,
-        config.runtime_port_range_start..=config.runtime_port_range_end,
+        config.runtime_port,
         incoming_tx,
-    );
+    ));
 
     let registry = Arc::new(SessionRegistry::new());
     let service = Arc::new(AgentProxyServiceImpl::new(
         PgChatRepo::new(db.clone()),
         Arc::clone(&registry),
         GatewayNotifier::new(gateway_client),
-        provisioner,
+        Arc::clone(&runtime_connections),
         stream_repo,
     ));
 
@@ -91,6 +90,15 @@ async fn main() -> Result<()> {
         Arc::clone(&service),
     ));
     tokio::spawn(connection_driver.run(incoming_rx));
+
+    let runtime_addr = format!("0.0.0.0:{}", config.runtime_port);
+    let runtime_listener = tokio::net::TcpListener::bind(&runtime_addr)
+        .await
+        .context("failed to bind shared runtime listener")?;
+    tracing::info!("shared runtime endpoint listening on {runtime_addr}");
+    tokio::spawn(async move {
+        let _ = axum::serve(runtime_listener, runtime_connections.into_router()).await;
+    });
 
     // User-facing HTTP API.
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(

@@ -16,6 +16,11 @@ use stream::domain::{ItemId, ItemStream, StreamEvent};
 
 const USER: &str = "macro|test@example.com";
 
+/// The ACP session id `harness` pre-seeds for `session()`, standing in for
+/// what `handle_agent_connected` would normally have negotiated with a real
+/// runtime. Tests exercising the bootstrap itself clear/override this.
+const TEST_ACP_SESSION_ID: &str = "acp-test-session";
+
 fn session() -> Uuid {
     Uuid::from_u128(0x1111_2222_3333_4444)
 }
@@ -344,6 +349,13 @@ fn harness(kind: ChatAgentKind, access: AccessLevel) -> Harness {
         provisioner.clone(),
         Arc::new(streams.clone()),
     );
+    // Most tests exercise turn/prompt semantics, not the ACP bootstrap
+    // itself, so pretend `handle_agent_connected` already ran.
+    service
+        .acp_sessions
+        .lock()
+        .unwrap()
+        .insert(session(), TEST_ACP_SESSION_ID.to_string());
     Harness {
         service,
         repo,
@@ -703,6 +715,136 @@ async fn unsolicited_chunks_do_not_create_turn_state() {
         ChatMessageContent::AssistantMessageParts(vec![AssistantMessagePart::Text {
             text: "clean answer".to_string()
         }])
+    );
+}
+
+fn new_session_response(acp_session_id: &str) -> RawJsonRpcMessage {
+    RawJsonRpcMessage::response(
+        RequestId::Str(ACP_BOOTSTRAP_NEW_SESSION_ID.to_string()),
+        Ok(serde_json::json!({ "sessionId": acp_session_id })),
+    )
+}
+
+fn new_session_error_response() -> RawJsonRpcMessage {
+    RawJsonRpcMessage::response(
+        RequestId::Str(ACP_BOOTSTRAP_NEW_SESSION_ID.to_string()),
+        Err(agent_client_protocol::Error::internal_error()),
+    )
+}
+
+#[tokio::test]
+async fn handle_agent_connected_creates_acp_session() {
+    let h = harness(ChatAgentKind::External, AccessLevel::Owner);
+    h.service.acp_sessions.lock().unwrap().clear();
+
+    // `handle_agent_connected` awaits its own `session/new` response, so it
+    // must run concurrently with the message that resolves it, exactly as
+    // it would with a real connection (the response arrives on the ACP
+    // pump task while `handle_agent_connected` is still awaiting it).
+    let (connect_result, _) = tokio::join!(
+        h.service.handle_agent_connected(session()),
+        h.service
+            .handle_agent_message(session(), new_session_response("acp-session-xyz")),
+    );
+    connect_result.unwrap();
+
+    assert_eq!(
+        h.service
+            .acp_sessions
+            .lock()
+            .unwrap()
+            .get(&session())
+            .cloned(),
+        Some("acp-session-xyz".to_string())
+    );
+
+    let sent = h.sessions.sent.lock().unwrap();
+    assert_eq!(sent.len(), 2);
+    let RawJsonRpcMessage::Request(initialize) = &sent[0].1 else {
+        panic!("expected a request")
+    };
+    assert_eq!(initialize.method.as_ref(), "initialize");
+    let RawJsonRpcMessage::Request(new_session) = &sent[1].1 else {
+        panic!("expected a request")
+    };
+    assert_eq!(new_session.method.as_ref(), "session/new");
+}
+
+#[tokio::test]
+async fn handle_agent_connected_surfaces_session_new_errors() {
+    let h = harness(ChatAgentKind::External, AccessLevel::Owner);
+    h.service.acp_sessions.lock().unwrap().clear();
+
+    let (connect_result, _) = tokio::join!(
+        h.service.handle_agent_connected(session()),
+        h.service
+            .handle_agent_message(session(), new_session_error_response()),
+    );
+
+    assert!(connect_result.is_err());
+    assert!(
+        h.service
+            .acp_sessions
+            .lock()
+            .unwrap()
+            .get(&session())
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn post_acp_stamps_the_live_acp_session_id() {
+    let h = harness(ChatAgentKind::External, AccessLevel::Owner);
+
+    // `prompt_message` addresses the Macro session id, standing in for a
+    // caller that doesn't know (or supplies a stale) ACP session id.
+    h.service
+        .post_acp(user_id(), session(), prompt_message(1, "hi"))
+        .await
+        .unwrap();
+
+    let sent = h.sessions.sent.lock().unwrap();
+    let RawJsonRpcMessage::Request(request) = &sent[0].1 else {
+        panic!("expected a request")
+    };
+    let params = request.params.clone().unwrap().into_value();
+    assert_eq!(params["sessionId"], serde_json::json!(TEST_ACP_SESSION_ID));
+}
+
+#[tokio::test]
+async fn post_acp_requires_acp_session_ready() {
+    let h = harness(ChatAgentKind::External, AccessLevel::Owner);
+    h.service.acp_sessions.lock().unwrap().clear();
+
+    let err = h
+        .service
+        .post_acp(user_id(), session(), prompt_message(1, "hi"))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, AgentProxyErr::AcpSessionNotReady));
+    assert!(h.repo.stored().is_empty());
+    assert!(h.sessions.sent.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn handle_agent_detached_clears_the_acp_session() {
+    let h = harness(ChatAgentKind::External, AccessLevel::Owner);
+    assert!(
+        h.service
+            .acp_sessions
+            .lock()
+            .unwrap()
+            .contains_key(&session())
+    );
+
+    h.service.handle_agent_detached(session());
+
+    assert!(
+        !h.service
+            .acp_sessions
+            .lock()
+            .unwrap()
+            .contains_key(&session())
     );
 }
 

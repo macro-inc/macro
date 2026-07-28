@@ -150,6 +150,7 @@ pub async fn create_agent<S: AgentProxyService, Auth: MacroAuthorizationService>
         (status = 500, body = String),
     )
 )]
+
 /// Get an agent with its full chat data.
 #[tracing::instrument(skip(state, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn get_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
@@ -348,6 +349,10 @@ impl IntoResponse for AgentProxyApiError {
             AgentProxyErr::SessionNotConnected => {
                 (StatusCode::CONFLICT, "Session is not connected")
             }
+            AgentProxyErr::AcpSessionNotReady => (
+                StatusCode::CONFLICT,
+                "Agent runtime's ACP session is not ready yet",
+            ),
             AgentProxyErr::Unknown(_) => {
                 tracing::error!(error=?self.0, "agent proxy handler error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")

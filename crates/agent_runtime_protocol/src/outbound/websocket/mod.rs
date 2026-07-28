@@ -229,13 +229,27 @@ where
     Rx: DeserializeOwned + Send + Sync + 'static,
 {
     ws.on_upgrade(move |socket: WebSocket| async move {
-        let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
-        let (incoming_tx, incoming_rx) = mpsc::unbounded_channel();
-        let _ = transport
-            .incoming_tx
-            .send(wire_channel(outgoing_tx, incoming_rx));
-        run_pump(socket, outgoing_rx, incoming_tx).await;
+        let _ = transport.incoming_tx.send(connect_socket(socket));
     })
+}
+
+/// Bridge an already-upgraded WebSocket into its logical channel, spawning the
+/// frame pump as an independent task and returning the `Channel` immediately.
+///
+/// Unlike [`ServerTransport`], this doesn't own routing or session
+/// identification - it's the building block for a caller that needs to key
+/// connections by something in the upgrade request (e.g. a query parameter):
+/// build a plain axum route with a [`WebSocketUpgrade`] extractor, do
+/// whatever routing the request needs, and hand the resulting socket here.
+pub fn connect_socket<Tx, Rx>(socket: WebSocket) -> Channel<Tx, Rx>
+where
+    Tx: Serialize + Send + Sync + 'static,
+    Rx: DeserializeOwned + Send + Sync + 'static,
+{
+    let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming_tx, incoming_rx) = mpsc::unbounded_channel();
+    tokio::spawn(run_pump(socket, outgoing_rx, incoming_tx));
+    wire_channel(outgoing_tx, incoming_rx)
 }
 
 /// Build the runtime-side wire over an already-connected WebSocket stream.

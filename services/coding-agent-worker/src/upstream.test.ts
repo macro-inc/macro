@@ -63,6 +63,30 @@ test('uses the query session id and agent_runtime_protocol tagged messages', () 
   link.close()
 })
 
+test('ACP frames received before onAcp is set are queued and flushed once it is', () => {
+  const { link, sockets } = setup()
+  sockets[0]!.open()
+
+  // Arrives before any caller has wired up a real handler (e.g. the proxy's
+  // session/new bootstrap racing ahead of the runtime's own downstream
+  // connection) - must not be silently dropped.
+  sockets[0]!.receive({ type: 'acp', jsonrpc: '2.0', id: 'agent_proxy:session/new', result: {} })
+
+  const received: unknown[] = []
+  link.onAcp = (message) => {
+    received.push(message)
+  }
+  expect(received).toEqual([{ jsonrpc: '2.0', id: 'agent_proxy:session/new', result: {} }])
+
+  // Once attached, later frames deliver immediately - no re-queueing.
+  sockets[0]!.receive({ type: 'acp', jsonrpc: '2.0', id: 'live', result: {} })
+  expect(received).toEqual([
+    { jsonrpc: '2.0', id: 'agent_proxy:session/new', result: {} },
+    { jsonrpc: '2.0', id: 'live', result: {} },
+  ])
+  link.close()
+})
+
 test('reconnect sends current event and only ACP queued while offline', async () => {
   const { link, sockets } = setup()
   link.status('ready')
