@@ -44,9 +44,11 @@ export const stripeServiceClient = {
       discount?: string;
       /** Override the default success URL. Useful for flows that want the user returned to a specific page. */
       successUrl?: string;
+      /** Override the default cancel URL. Useful for flows that want cancellation to return to a specific page. */
+      cancelUrl?: string;
     } = {}
   ) => {
-    const { type = '', discount, successUrl } = args;
+    const { type = '', discount, successUrl, cancelUrl } = args;
     const gaClientId = await getGaClientId();
     const { fbp, fbc } = getMetaIds();
 
@@ -54,7 +56,8 @@ export const stripeServiceClient = {
       successUrl:
         successUrl ??
         `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
-      cancelUrl: `${window.location.origin}/app?subscriptionCancel=true`,
+      cancelUrl:
+        cancelUrl ?? `${window.location.origin}/app?subscriptionCancel=true`,
       discount: discount ?? null,
       metadata: {
         gaClientId: gaClientId ?? null,

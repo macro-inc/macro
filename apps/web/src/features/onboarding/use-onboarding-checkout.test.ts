@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 describe('createOnboardingCheckoutSession', () => {
-  it('uses the supported v2 checkout endpoint and onboarding return URL', async () => {
+  it('uses the supported v2 checkout endpoint and returns both legs to the flow', async () => {
     mocks.createCheckoutSessionV2.mockResolvedValue('https://checkout.test/1');
 
     await expect(createOnboardingCheckoutSession('premium')).resolves.toEqual({
@@ -29,7 +29,8 @@ describe('createOnboardingCheckoutSession', () => {
     });
     expect(mocks.createCheckoutSessionV2).toHaveBeenCalledOnce();
     expect(mocks.createCheckoutSessionV2).toHaveBeenCalledWith({
-      successUrl: `${window.location.origin}/app/welcome?subscriptionSuccess=true&type=premium`,
+      successUrl: `${window.location.origin}/app/onboarding?subscriptionSuccess=true&type=premium`,
+      cancelUrl: `${window.location.origin}/app/onboarding?subscriptionCancel=true`,
     });
   });
 

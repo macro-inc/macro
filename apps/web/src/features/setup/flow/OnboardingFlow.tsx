@@ -62,7 +62,10 @@ interface StepControls {
   skip: () => void;
   finishing: () => boolean;
   finishFree: (planSkipped: boolean) => void;
-  finishPremium: (tier: 'premium') => void;
+  /** Redirect to Stripe checkout without completing the flow. */
+  startPremiumCheckout: (tier: 'premium') => void;
+  /** Finish after checkout confirmed payment (or an existing license). */
+  finishPremium: () => void;
 }
 
 interface ConnectorStepCopy {
@@ -182,7 +185,8 @@ function buildSteps(): StepDef[] {
         <PlanStep
           finishing={controls.finishing()}
           onFree={controls.finishFree}
-          onPremium={controls.finishPremium}
+          onStartCheckout={controls.startPremiumCheckout}
+          onPremiumPaid={controls.finishPremium}
         />
       ),
     },
@@ -312,7 +316,8 @@ function FlowContent() {
     skip: () => advance('skipped'),
     finishing: finish.finishing,
     finishFree: (planSkipped) => void finish.finishFree(planSkipped),
-    finishPremium: (tier) => void finish.finishPremium(tier),
+    startPremiumCheckout: (tier) => void finish.startPremiumCheckout(tier),
+    finishPremium: () => void finish.finishPremium(),
   };
 
   // Heal a half-landed finish: NewOnboardingRedirect keys off

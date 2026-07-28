@@ -4,7 +4,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useUserInfoQuery } from '@queries/auth/user-info';
+import type { UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useCompleteOnboardingMutation } from '@queries/onboarding';
 import { useNavigate, useSearchParams } from '@solidjs/router';
@@ -26,7 +26,6 @@ export function createFlowFinish(options?: {
 }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const userInfoQuery = useUserInfoQuery();
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
   const analytics = useAnalytics();
@@ -81,7 +80,13 @@ export function createFlowFinish(options?: {
     await queryClient
       .refetchQueries({ queryKey: authKeys.userInfo.queryKey })
       .catch(() => {});
-    if (userInfoQuery.data?.tutorialComplete !== true) {
+    // Read the cache, not the query observer: observer stores flush on a
+    // scheduled task, so right after the await they still hold the
+    // pre-PATCH value and the guard would fail on a fresh success.
+    const userInfo = queryClient.getQueryData<UserInfoData>(
+      authKeys.userInfo.queryKey
+    );
+    if (userInfo?.tutorialComplete !== true) {
       toast.failure("Couldn't finish setup — please try again");
       return false;
     }
@@ -105,22 +110,33 @@ export function createFlowFinish(options?: {
   };
 
   /**
-   * Finish on a paid tier: complete the flow FIRST (the checkout round-trip
-   * must not bounce back into onboarding), then hand the page to Stripe.
+   * Hand the page to Stripe WITHOUT completing the flow: the onboarding
+   * redirect plus the persisted step bring both checkout legs (success and
+   * cancel) back to the plan step, which finishes only once payment is
+   * confirmed. On failure the user stays on the plan step and can retry or
+   * pick free.
    */
-  const finishPremium = async (tier: PaidPlanTier) => {
+  const startPremiumCheckout = async (tier: PaidPlanTier) => {
     if (finishing()) return;
     setFinishing(true);
     try {
-      if (!(await completeFlow())) return;
-      trackCompleted('premium', false);
-      try {
-        const { checkoutUrl } = await createOnboardingCheckoutSession(tier);
-        window.location.href = checkoutUrl;
-      } catch {
-        toast.failure(
-          "Couldn't start checkout — you can upgrade anytime from settings"
-        );
+      const { checkoutUrl } = await createOnboardingCheckoutSession(tier);
+      // Deliberately leave `finishing` set: the page is navigating away,
+      // and re-enabling the buttons mid-unload invites a double checkout.
+      window.location.href = checkoutUrl;
+    } catch {
+      toast.failure("Couldn't start checkout — please try again");
+      setFinishing(false);
+    }
+  };
+
+  /** Finish after checkout confirmed payment (or an existing license). */
+  const finishPremium = async () => {
+    if (finishing()) return;
+    setFinishing(true);
+    try {
+      if (await completeFlow()) {
+        trackCompleted('premium', false);
         navigate(afterTarget(), { replace: true });
       }
     } finally {
@@ -128,5 +144,11 @@ export function createFlowFinish(options?: {
     }
   };
 
-  return { finishing, finishFree, finishPremium, afterTarget };
+  return {
+    finishing,
+    finishFree,
+    startPremiumCheckout,
+    finishPremium,
+    afterTarget,
+  };
 }

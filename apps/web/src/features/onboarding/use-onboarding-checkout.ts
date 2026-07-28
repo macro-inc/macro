@@ -18,13 +18,19 @@ interface OnboardingCheckoutResult {
   checkoutUrl: string;
 }
 
-/** Creates a Stripe checkout session that returns to onboarding completion. */
+/**
+ * Creates a Stripe checkout session whose round-trip returns to the
+ * onboarding flow: the flow is still incomplete during checkout, so both
+ * legs land back on the plan step (restored from sessionStorage), which
+ * reads the query params to show the paid or cancelled state.
+ */
 export async function createOnboardingCheckoutSession(
   tier: PaidPlanTier
 ): Promise<OnboardingCheckoutResult> {
-  const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
+  const onboardingUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}onboarding`;
   const checkoutUrl = await stripeServiceClient.createCheckoutSessionV2({
-    successUrl,
+    successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
+    cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
   });
 
   if (!checkoutUrl) {
