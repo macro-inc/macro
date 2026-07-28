@@ -1,5 +1,5 @@
 //! Schema metadata: static tables generated at build time from
-//! `static_assets/schema.graphql` + `key_config.toml` (see `build.rs`).
+//! `static_assets/schema.graphql` (see `build.rs`).
 //!
 //! The cache never parses SDL at runtime — everything type-related is
 //! resolved through these tables.
@@ -47,7 +47,8 @@ pub struct TypeMeta {
     pub name: &'static str,
     pub kind: TypeKind,
     /// `Some(fields)` when the type is a normalized entity; `None` when it is
-    /// embedded inline in its parent record. Policy from `key_config.toml`.
+    /// embedded inline in its parent record. Derived from the schema's
+    /// `id: ID!` convention.
     pub key_fields: Option<&'static [&'static str]>,
     /// Field definitions (objects/interfaces only; empty for unions).
     pub fields: &'static [FieldMeta],

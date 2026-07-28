@@ -12,7 +12,7 @@ use thiserror::Error;
 
 /// Bump when the stored representation of [`Record`]/[`CacheValue`]
 /// (or anything else persisted) changes incompatibly.
-pub const CACHE_FORMAT_VERSION: u32 = 1;
+pub const CACHE_FORMAT_VERSION: u32 = 2;
 
 #[derive(Debug, Error)]
 pub enum CodecError {
@@ -129,6 +129,6 @@ mod tests {
     fn namespace_shape() {
         let ns = cache_namespace("user-1");
         assert!(ns.starts_with("graphql-cache:user-1:"));
-        assert!(ns.ends_with(":v1"));
+        assert!(ns.ends_with(":v2"));
     }
 }

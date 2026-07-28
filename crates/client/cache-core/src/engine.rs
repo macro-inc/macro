@@ -124,7 +124,7 @@ struct OptimisticLayer {
 /// `__meta:` prefix can never collide with entity keys (typenames can't
 /// contain `:`).
 const IDENTITY_META_KEY: &str = "__meta:identity";
-const IDENTITY_FIELD: &str = "userId";
+const IDENTITY_VALUE_FIELD: &str = "identity";
 
 /// Hydration/binding state of the session identity tag for this cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,13 +291,13 @@ impl<S: Storage> Engine<S> {
                 .await
                 .map_err(EngineError::Storage)?;
             let stored = fetched.into_iter().next().flatten().and_then(|record| {
-                match record.fields.get(IDENTITY_FIELD) {
+                match record.fields.get(IDENTITY_VALUE_FIELD) {
                     Some(crate::value::CacheValue::String(s)) => Some(s.clone()),
                     _ => None,
                 }
             });
             self.identity = match stored {
-                Some(user_id) => IdentityState::Bound(user_id),
+                Some(identity) => IdentityState::Bound(identity),
                 None => IdentityState::Missing,
             };
         }
@@ -314,17 +314,17 @@ impl<S: Storage> Engine<S> {
         }
     }
 
-    async fn bind_identity(&mut self, user_id: &str) -> Result<(), EngineError<S::Error>> {
+    async fn bind_identity(&mut self, identity: &str) -> Result<(), EngineError<S::Error>> {
         let mut record = Record::default();
         record.fields.insert(
-            IDENTITY_FIELD.to_string(),
-            crate::value::CacheValue::String(user_id.to_string()),
+            IDENTITY_VALUE_FIELD.to_string(),
+            crate::value::CacheValue::String(identity.to_string()),
         );
         self.storage
             .put_batch(vec![(EntityKey(IDENTITY_META_KEY.to_string()), record)])
             .await
             .map_err(EngineError::Storage)?;
-        self.identity = IdentityState::Bound(user_id.to_string());
+        self.identity = IdentityState::Bound(identity.to_string());
         Ok(())
     }
 
@@ -1178,9 +1178,9 @@ impl<S: Storage> Engine<S> {
     /// Deletes locally stale records from both durable and hot tiers and
     /// returns active operations that traversed those records.
     ///
-    /// Use this after a server-side mutation that returns entity references
-    /// but not replacement entity records. Cross-engine notifications for
-    /// records already written to shared storage should use
+    /// Use this for an explicit server-provided cache-deletion effect.
+    /// Cross-engine notifications for records already written to shared
+    /// storage should use
     /// [`Self::invalidate_keys`] instead.
     pub async fn delete_keys(
         &mut self,
