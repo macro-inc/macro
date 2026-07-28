@@ -1,12 +1,6 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { createMemo, type FlowComponent } from 'solid-js';
 import { QuickAccessContextProvider } from './context';
-import { createGraphqlQuickAccessValue } from './GraphqlQuickAccessSource';
-import { createLegacyQuickAccessValue } from './LegacyQuickAccessSource';
+import { createQuickAccessValue } from './QuickAccessSource';
 import type {
   Bucket,
   QuickAccessContextValue,
@@ -15,15 +9,7 @@ import type {
 } from './types';
 
 export const QuickAccessProvider: FlowComponent = (props) => {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
-
-  const source = createMemo(() =>
-    graphqlSoupFlag().enabled
-      ? createGraphqlQuickAccessValue()
-      : createLegacyQuickAccessValue()
-  );
+  const source = createQuickAccessValue();
 
   const useList = ((
     ...args: Bucket[] | [QuickAccessListOptions]
@@ -31,8 +17,8 @@ export const QuickAccessProvider: FlowComponent = (props) => {
     const sourceList = createMemo(() => {
       const first = args[0];
       return typeof first === 'object'
-        ? source().useList(first)
-        : source().useList(...(args as Bucket[]));
+        ? source.useList(first)
+        : source.useList(...(args as Bucket[]));
     });
     return {
       items: () => sourceList().items(),
@@ -48,10 +34,10 @@ export const QuickAccessProvider: FlowComponent = (props) => {
 
   const quickAccess: QuickAccessContextValue = {
     useList,
-    usesRecordSelection: () => source().usesRecordSelection(),
-    isLoading: () => source().isLoading(),
-    refresh: () => source().refresh(),
-    getById: (id) => source().getById(id),
+    usesRecordSelection: source.usesRecordSelection,
+    isLoading: source.isLoading,
+    refresh: source.refresh,
+    getById: source.getById,
   };
 
   return (

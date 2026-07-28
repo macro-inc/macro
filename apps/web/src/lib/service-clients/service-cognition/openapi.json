@@ -1347,14 +1347,14 @@
     "/mcp/servers/auth/callback": {
       "get": {
         "tags": ["mcp"],
-        "summary": "OAuth callback endpoint — receives code and state from the authorization server.",
+        "summary": "OAuth callback endpoint — receives code and state, or an error, from the\nauthorization server.",
         "operationId": "mcp_auth_callback",
         "parameters": [
           {
             "name": "code",
             "in": "query",
-            "description": "Authorization code from the OAuth provider.",
-            "required": true,
+            "description": "Authorization code from the OAuth provider. Present on success.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -1363,7 +1363,25 @@
             "name": "state",
             "in": "query",
             "description": "CSRF state parameter.",
-            "required": true,
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "description": "OAuth error code from the provider, e.g. `access_denied`. Present on failure.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error_description",
+            "in": "query",
+            "description": "Human-readable error description from the provider.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -1372,6 +1390,16 @@
         "responses": {
           "200": {
             "description": "OAuth flow completed successfully"
+          },
+          "400": {
+            "description": "Provider rejected authorization, or the callback was malformed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "",

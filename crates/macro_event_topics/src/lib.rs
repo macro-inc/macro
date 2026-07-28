@@ -49,6 +49,8 @@ topics! {
     MacroExampleTopic => "macro.example",
     /// Bot lifecycle events (created / updated / deleted).
     MacroBotsTopic => "macro.bots",
+    /// Call lifecycle and recording events.
+    MacroCallsTopic => "macro.calls",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
     /// User-scoped full Soup items produced from entity updates.

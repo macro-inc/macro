@@ -29,6 +29,27 @@ pub struct Call {
     pub egress_id: Option<String>,
 }
 
+/// Facts committed when an active call is archived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchivedCall {
+    /// The archived call record identifier.
+    pub call_id: Uuid,
+    /// The channel the call belongs to.
+    pub channel_id: Uuid,
+    /// User who created the call.
+    pub created_by: String,
+    /// When the call started.
+    pub started_at: DateTime<Utc>,
+    /// When the call ended.
+    pub ended_at: DateTime<Utc>,
+    /// Call duration in milliseconds.
+    pub duration_ms: i64,
+    /// Whether a recording egress was started before the call was archived.
+    pub has_recording: bool,
+    /// Number of distinct participants over the call's lifetime.
+    pub participant_count: usize,
+}
+
 /// A participant in an active call.
 #[derive(Debug, Clone)]
 pub struct CallParticipant {

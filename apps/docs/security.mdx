@@ -1,71 +1,67 @@
 ---
 title: "Security"
 icon: "shield-check"
-description: "How Macro protects your data: encryption, certifications, access control, agent data handling, and how to report a vulnerability."
+description: "Learn more about our data security practices and compliance measures."
 ---
 
-Macro holds a lot of your work in one place — email, messages, docs, tasks, calls, and CRM records — so we treat security as a product requirement rather than a checklist. Data is encrypted in transit and at rest, access is derived from the same sharing model you see in the app, and our controls are audited by a third party.
+## Overview
 
-Macro is also fully open source under the AGPLv3, so you don't have to take our word for how any of this works. The code that runs the hosted product is on [GitHub](https://github.com/macro-inc/macro).
+Macro is built with best-in-class security practices to keep your work safe and secure at every layer. This includes state-of-the-art encryption, safe and reliable infrastructure partners, and independently verified security controls.
+
+Macro is also open source under the AGPLv3. The code that runs the hosted product is on [GitHub](https://github.com/macro-inc/macro).
+
+To request a Data Processing Agreement (DPA) with specific details, contact us at [support@macro.com](mailto:support@macro.com).
 
 ## Shared responsibility
 
-Security is a split between what we run and what you configure.
+Under our shared responsibility model, Macro secures the components that we control, including the application layer, underlying platform, and cloud infrastructure. This includes protecting against threats targeting these components through security controls, monitoring, and incident response.
 
-| We handle | You handle |
-| --- | --- |
-| Application and infrastructure security, encryption, patching, monitoring | Who is on your team, and which role each member has |
-| Third-party audits and compliance programs | What gets shared into which channel |
-| Isolation between workspaces | Whether a public link is enabled on a doc |
-| Availability, backups, and durability | Which agents and MCP clients you connect |
-| Vetting and monitoring our subprocessors | Your Google account's own security settings, including 2FA |
+Customers are responsible for how they use Macro. This includes configuring team access and roles, determining what data they share into which channels, deciding which documents have public links enabled, managing the agents and MCP clients they connect, and maintaining the security settings on the Google account they sign in with.
 
 ## Certifications
 
-Macro maintains a **SOC 2 Type II** audit and an **ISO 27001** certification, covering the hosted product at `macro.com`.
+Macro is compliant with GDPR, SOC 2 Type II, ISO 27001, and HIPAA. Our certifications cover the hosted product at `macro.com`.
 
-A few things we set up per customer rather than by default. Email [support@macro.com](mailto:support@macro.com) for any of them:
+For HIPAA compliance, we offer a Business Associate Agreement (BAA) to customers handling protected health information. Please contact us at [support@macro.com](mailto:support@macro.com) for more information.
 
-- **GDPR** — a data processing agreement and the accompanying subprocessor list
-- **HIPAA** — a Business Associate Agreement, for teams handling protected health information
-- **EU hosting** — see [Data storage and regions](#data-storage-and-regions)
-
-For audit reports or a security questionnaire as part of a vendor review, email [security@macro.com](mailto:security@macro.com).
+To request other security and compliance documents for Macro — audit reports, our subprocessor list, or a completed security questionnaire — please email [security@macro.com](mailto:security@macro.com). If you have further questions about any of our certifications, please let us know at [support@macro.com](mailto:support@macro.com).
 
 <Note>
-  FedRAMP, or anything else that needs Macro running inside your own infrastructure, is a different conversation — contact [self-host@macro.com](mailto:self-host@macro.com). Self-hosting under the AGPLv3 is covered in the [FAQ](/faq).
+  FedRAMP, or anything else that requires Macro to run inside your own infrastructure, is a separate conversation — contact [self-host@macro.com](mailto:self-host@macro.com). Self-hosting under the AGPLv3 is covered in the [FAQ](/faq).
 </Note>
 
-## Data storage and regions
+## Data regions
 
-By default, the hosted version of Macro runs on **AWS in the United States**. **EU hosting is available on request** — email [support@macro.com](mailto:support@macro.com) and we'll set your workspace up in an EU region.
+You have the option to select the region where you want your data to be stored. The available options are:
 
-Whichever region your workspace lives in, your data is stored across a few systems inside it:
+* United States
+* European Union
 
-- **Postgres** for blocks and their relationships — docs, emails, tasks, channels, messages, calls, CRM records
-- **S3** for files, attachments, images, and call recordings
-- **OpenSearch** for the search index that powers [Search](/product/search)
+<Note>
+  The United States is the default. Selecting the European Union isn't self-serve — email [support@macro.com](mailto:support@macro.com) and we'll create your workspace in an EU region.
+</Note>
 
-## Encryption
+Most of the data associated with the workspace — including email, messages, documents, tasks, call recordings, and CRM records — will only be stored in the selected region, across three systems inside it:
 
-- **In transit:** all traffic between your client and Macro, and between Macro's own services, uses TLS.
-- **At rest:** databases, file storage, and backups are encrypted with AES-256 using AWS KMS-managed keys.
+* **Postgres** for blocks and the relationships between them
+* **S3** for files, attachments, images, and call recordings
+* **OpenSearch** for the index that powers [Search](/product/search)
 
 ## Access control
 
-Access in Macro comes from [channel-based sharing](/permissions) rather than per-file permission dialogs. That model is the security boundary, so it's worth understanding:
+Access in Macro is derived from [channel-based sharing](/permissions) rather than per-file permission dialogs. That model is the security boundary:
 
-- Mentioning something in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
-- [Teams](/account/teams) change the defaults for a few block types — tasks are team-visible, calls are shared to team memory unless you opt a call out, and emails flow into the CRM when Email Sync is on for that company.
-- Team roles are **Member**, **Admin**, and **Owner**. Only owners can invite and remove members.
-- **Auto-join on domain**, if an admin turns it on, adds anyone who signs up with an email on the owner's domain to the team automatically. Leave it off if you'd rather approve each member.
-- **Public links** make a doc readable by anyone with the URL, including people without a Macro account. Check the Share menu of anything sensitive.
+* Mentioning a block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
+* [Teams](/account/teams) set the defaults for some block types. Tasks are visible to the team, calls are shared to team memory unless a call is opted out, and emails flow into the CRM when Email Sync is enabled for that company.
+* Team roles are **Member**, **Admin**, and **Owner**. Only owners can invite and remove members.
+* **Auto-join on domain**, when an admin enables it, adds anyone who signs up with an email on the owner's domain to the team.
+* **Public links** make a document readable by anyone with the URL, including people without a Macro account.
 
-Macro never stores a password for you. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Most people sign in with Google, which means your Google Workspace security policies — 2FA, session length, device restrictions — apply to Macro too. Revoking Macro's access from your Google account, or disconnecting it in **Settings → Connections**, cuts off email sync.
+Macro does not store passwords. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Signing in with Google means your Google Workspace policies — two-factor authentication, session length, and device restrictions — apply to Macro. Revoking Macro's access from your Google account, or disconnecting it in **Settings → Connections**, ends email sync.
 
 ## Agents and your data
 
-Agents are the part of Macro people ask about most, so the guarantees are explicit:
+Agents operate on your workspace data under the following guarantees:
 
 <CardGroup cols={2}>
   <Card title="No training on your data" icon="ban">
@@ -73,11 +69,11 @@ Agents are the part of Macro people ask about most, so the guarantees are explic
   </Card>
 
   <Card title="Zero data retention" icon="clock-rotate-left">
-    We run zero-retention agreements with our model providers, so prompts and content aren't retained on their side.
+    We hold zero-retention agreements with our model providers, so prompts and content aren't retained on their side.
   </Card>
 
   <Card title="Agents inherit your permissions" icon="user-lock">
-    An agent can only reach what you can reach. If a doc isn't shared with you, it isn't in your agent's context.
+    An agent can reach only what you can reach. Content that isn't shared with you isn't in your agent's context.
   </Card>
 
   <Card title="You choose the connections" icon="plug">
@@ -85,21 +81,21 @@ Agents are the part of Macro people ask about most, so the guarantees are explic
   </Card>
 </CardGroup>
 
-Macro routes requests to model providers including Anthropic and OpenAI depending on the task. When you connect an outside MCP server yourself, whatever you send to it is governed by that provider's terms, not ours — so treat third-party connectors as a decision about where your data goes.
+Macro routes requests to model providers including Anthropic and OpenAI, depending on the task. Data you send to a third-party MCP server that you connect yourself is governed by that provider's terms, not ours.
 
 ## Retention and deletion
 
-- **Trash is reversible.** Deleting a block moves it to trash first, so an accidental delete is recoverable.
-- **Deleting your account is not.** **Settings → Account → Delete account** permanently removes your account and its associated data, after a confirmation step.
-- **Organizations can set a retention window.** Macro can enforce an org-wide policy that deletes documents and chats which haven't been accessed within a set number of days. Contact [support@macro.com](mailto:support@macro.com) to configure one for your organization.
+* Deleting a block moves it to trash first, so it can be recovered.
+* Deleting your account is permanent. **Settings → Account → Delete account** removes your account and its associated data after a confirmation step.
+* Organizations can set a retention window that deletes documents and chats which haven't been accessed within a set number of days. Contact [support@macro.com](mailto:support@macro.com) to configure one for your organization.
 
-Disconnecting a Gmail account stops future sync but doesn't delete already-synced mail; delete the account or the individual threads if you want that data gone.
+Disconnecting a Gmail account stops future sync but doesn't delete mail that has already synced.
 
 ## Report a vulnerability
 
-Send security reports to [security@macro.com](mailto:security@macro.com). We pay bounties in accordance with the severity and impact of the finding.
+Send suspected security issues to [security@macro.com](mailto:security@macro.com). We pay bounties in accordance with the severity and impact of the finding.
 
-Please include steps to reproduce, the affected surface (web, iOS, API, or MCP), and any accounts involved. Give us a chance to ship a fix before disclosing publicly. Since the codebase is open source, feel free to point at specific files or commits — it speeds things up considerably.
+Please include steps to reproduce, the affected surface (web, iOS, API, or MCP), and any accounts involved, and give us a chance to ship a fix before disclosing publicly. Because the codebase is open source, you can reference specific files or commits.
 
 <Warning>
   Don't file security issues on the public GitHub tracker. Use [security@macro.com](mailto:security@macro.com) so a report isn't visible before there's a fix.
@@ -108,35 +104,35 @@ Please include steps to reproduce, the affected surface (web, iOS, API, or MCP),
 ## FAQ
 
 <AccordionGroup>
-  <Accordion title="Is my data encrypted?">
-    Yes. TLS in transit, AES-256 at rest for databases, file storage, and backups.
+  <Accordion title="Is your data encrypted?">
+    All data is encrypted in transit with TLS, and our databases, file storage, and backups are encrypted at rest with AES-256 using AWS KMS-managed keys.
   </Accordion>
 
   <Accordion title="Do you train models on my data?">
     No. We don't train on customer content, and we hold zero-retention agreements with the model providers we route to, so they don't retain it either.
   </Accordion>
 
-  <Accordion title="Can I keep my data in the EU?">
-    Yes, on request. The default is AWS in the US; email [support@macro.com](mailto:support@macro.com) and we'll host your workspace in an EU region instead.
+  <Accordion title="How can I access, transfer or delete my data?">
+    You can delete your account and its data from **Settings → Account → Delete account**. For a bulk export, or deletion scoped to part of your workspace, contact [support@macro.com](mailto:support@macro.com).
   </Accordion>
 
-  <Accordion title="Can you sign a DPA or a BAA?">
-    Yes to both. Email [support@macro.com](mailto:support@macro.com) for a data processing agreement under GDPR, or a Business Associate Agreement if you're handling protected health information.
+  <Accordion title="How do I keep my data in the European Union?">
+    EU hosting is available on request. The default is AWS in the United States — email [support@macro.com](mailto:support@macro.com) and we'll host your workspace in an EU region instead.
+  </Accordion>
+
+  <Accordion title="How do I set up Macro for HIPAA compliance?">
+    For HIPAA compliance, we offer a Business Associate Agreement (BAA). Contact us at [support@macro.com](mailto:support@macro.com).
   </Accordion>
 
   <Accordion title="Who at Macro can see my workspace?">
     Access to production data is restricted to the engineers who need it to operate the service, and infrastructure access is logged and monitored. We don't browse customer content, and support will ask before looking at anything specific to debug an issue.
   </Accordion>
 
-  <Accordion title="How do I export or delete my data?">
-    Delete your account and its data from **Settings → Account → Delete account**. For a bulk export, or deletion scoped to part of your workspace, email [support@macro.com](mailto:support@macro.com).
-  </Accordion>
-
   <Accordion title="Which subprocessors does Macro use?">
-    The hosted product runs on AWS, and we sublicense LiveKit for video calls, FusionAuth for authentication, and PostHog for product analytics, alongside the model providers described above. Email [security@macro.com](mailto:security@macro.com) for the current list as part of a vendor review.
+    The hosted product runs on AWS. We sublicense LiveKit for video calls, FusionAuth for authentication, and PostHog for product analytics, alongside the model providers described above. Email [security@macro.com](mailto:security@macro.com) for the current list as part of a vendor review.
   </Accordion>
 
   <Accordion title="Does Macro support SAML or SCIM?">
-    Not yet. Sign-in today is Google, Apple on iOS, or a one-time email link — so Google Workspace policies are the practical enforcement point. If you need SAML or SCIM, let us know at [support@macro.com](mailto:support@macro.com) — demand shapes what we build next.
+    Not yet. Sign-in today is Google, Apple on iOS, or a one-time email link, so Google Workspace policies are the practical enforcement point. If you need SAML or SCIM, let us know at [support@macro.com](mailto:support@macro.com).
   </Accordion>
 </AccordionGroup>

@@ -13,6 +13,7 @@ opentelemetry-otlp = { workspace = true }
 rootcause = { workspace = true }
 rootcause-tracing = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-panic = "0.1"
@@ -23,3 +24,4 @@ macro_env_var = { path = "../macro_env_var" }
 
 [dev-dependencies]
 opentelemetry_sdk = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["time"] }

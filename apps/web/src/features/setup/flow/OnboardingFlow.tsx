@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
 import LogoIcon from '@icon/macro-logo.svg';
 import { authKeys } from '@queries/auth/keys';
@@ -29,6 +30,12 @@ import { BuildingStep, type ConnectedTools } from './BuildingStep';
 import { ConnectorStep } from './ConnectorStep';
 import { createFlowFinish } from './createFlowFinish';
 import { EmailStep } from './EmailStep';
+import {
+  ONBOARDING_CONNECTORS_FEATURE_FLAG,
+  type OnboardingConnectorServerName,
+  resolveOnboardingConnectorNames,
+  resolveOnboardingStepIndex,
+} from './onboardingConnectorConfig';
 import { PlanStep } from './PlanStep';
 import { connectorLogo, StepModule } from './StepModule';
 import { SummaryStep } from './SummaryStep';
@@ -80,7 +87,10 @@ interface StepControls {
   skip: () => void;
   finishing: () => boolean;
   finishFree: (planSkipped: boolean) => void;
-  finishPremium: (tier: 'premium') => void;
+  /** Redirect to Stripe checkout without completing the flow. */
+  startPremiumCheckout: (tier: 'premium') => void;
+  /** Finish after checkout confirmed payment (or an existing license). */
+  finishPremium: () => void;
 }
 
 interface ConnectorStepCopy {
@@ -128,15 +138,12 @@ const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
   },
 };
 
-/** Connector steps, in spec order, dropping tools absent from this build
- * (Slack is dev-only in production FEATURED_MCP_SERVERS). */
-const CONNECTOR_STEP_NAMES = ['Linear', 'Notion', 'Slack', 'GitHub'];
-
 function buildSteps(
+  connectorNames: readonly OnboardingConnectorServerName[],
   connectedTools: () => ConnectedTools,
   onBuildingDone: (source: BrandHandoffSource | null) => void
 ): StepDef[] {
-  const connectorSteps: StepDef[] = CONNECTOR_STEP_NAMES.flatMap((name) => {
+  const connectorSteps: StepDef[] = connectorNames.flatMap((name) => {
     const server = FEATURED_MCP_SERVERS.find(
       (candidate) => candidate.server_name === name
     );
@@ -215,7 +222,8 @@ function buildSteps(
         <PlanStep
           finishing={controls.finishing()}
           onFree={controls.finishFree}
-          onPremium={controls.finishPremium}
+          onStartCheckout={controls.startPremiumCheckout}
+          onPremiumPaid={controls.finishPremium}
         />
       ),
     },
@@ -307,10 +315,25 @@ function FlowContent() {
     advance('completed');
   };
 
-  const steps = buildSteps(connectedTools, startBrandHandoff);
+  const connectorConfig = useFeatureFlag(ONBOARDING_CONNECTORS_FEATURE_FLAG);
+  const steps = createMemo(() => {
+    const config = connectorConfig();
+    return buildSteps(
+      resolveOnboardingConnectorNames(config.enabled, config.payload),
+      connectedTools,
+      startBrandHandoff
+    );
+  });
 
-  const [stepIndex, setStepIndex] = createSignal(0);
-  const currentStep = createMemo(() => steps[stepIndex()]);
+  const [activeStepKey, setActiveStepKey] = createSignal('email');
+  const stepIndex = createMemo(() =>
+    resolveOnboardingStepIndex(
+      steps().map((step) => step.key),
+      activeStepKey()
+    )
+  );
+  const currentStep = createMemo(() => steps()[stepIndex()]);
+  const currentStepKey = createMemo(() => currentStep().key);
   const userId = () => userInfoQuery.data?.userId;
 
   // The current step's hero-module state: the email module lights once any
@@ -341,8 +364,7 @@ function FlowContent() {
         sessionStorage.removeItem(FLOW_NEXT_STORAGE_KEY);
         return;
       }
-      const index = steps.findIndex((step) => step.key === saved.step);
-      if (index !== -1) setStepIndex(index);
+      setActiveStepKey(saved.step ?? 'email');
     } catch {
       sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
     }
@@ -358,14 +380,14 @@ function FlowContent() {
     startedTracked = true;
     analytics.track('onboarding_v4_started', {
       signup_method: links.length > 0 ? 'google' : 'email_code',
-      entry_step: currentStep().key,
+      entry_step: currentStepKey(),
     });
   });
 
   createEffect(() => {
     if (!needsOnboarding()) return;
     analytics.track('onboarding_v4_step', {
-      step: currentStep().key,
+      step: currentStepKey(),
       index: stepIndex(),
       state: 'viewed',
     });
@@ -374,15 +396,16 @@ function FlowContent() {
   // Forward-only: there is no back.
   const advance = (state: 'completed' | 'skipped') => {
     analytics.track('onboarding_v4_step', {
-      step: currentStep().key,
+      step: currentStepKey(),
       index: stepIndex(),
       state,
     });
-    const index = Math.min(stepIndex() + 1, steps.length - 1);
-    setStepIndex(index);
+    const index = Math.min(stepIndex() + 1, steps().length - 1);
+    const nextStep = steps()[index];
+    setActiveStepKey(nextStep.key);
     sessionStorage.setItem(
       FLOW_STEP_STORAGE_KEY,
-      JSON.stringify({ user: userId(), step: steps[index].key })
+      JSON.stringify({ user: userId(), step: nextStep.key })
     );
   };
 
@@ -399,7 +422,8 @@ function FlowContent() {
     skip: () => advance('skipped'),
     finishing: finish.finishing,
     finishFree: (planSkipped) => void finish.finishFree(planSkipped),
-    finishPremium: (tier) => void finish.finishPremium(tier),
+    startPremiumCheckout: (tier) => void finish.startPremiumCheckout(tier),
+    finishPremium: () => void finish.finishPremium(),
   };
 
   // Heal a half-landed finish: NewOnboardingRedirect keys off
@@ -487,10 +511,7 @@ function FlowContent() {
                 </Show>
                 {/* Landing slot for the loading-graphic → logo handoff. Kept
                     hidden while the overlay is mid-flight; the overlay lands
-                    exactly here, then this static logo takes over. No
-                    transition: it's swapped in the same tick the overlay is
-                    dropped, so fading would leave a gap with neither visible
-                    — the logo appearing to vanish on landing. */}
+                    exactly here, then this static logo takes over. */}
                 <Show when={currentStep().key === 'summary'}>
                   <LogoIcon
                     id="summary-brand-logo"
@@ -498,7 +519,6 @@ function FlowContent() {
                     style={{ opacity: logoShown() ? 1 : 0 }}
                   />
                 </Show>
-                {/* Title + subtitle held back until the brand handoff lands. */}
                 <div
                   class="flex flex-col gap-1.5 transition-opacity"
                   style={{
@@ -518,7 +538,6 @@ function FlowContent() {
               </div>
             </Show>
 
-            {/* Step body + dots held back with the title during the handoff. */}
             <div
               class="flex flex-col gap-8 transition-opacity"
               style={{
@@ -530,12 +549,9 @@ function FlowContent() {
                 step={stepIndex()}
                 transition={Stepper.transitions.scale}
               >
-                <For each={steps}>
+                <For each={steps()}>
                   {(step) => (
                     <Stepper.Step noTransition={step.noTransition}>
-                      {/* Per-step boundary: a first-load query suspending
-                          inside the Stepper's Transition would drop the
-                          entering node entirely. */}
                       <Suspense fallback={<StepFallback />}>
                         {step.render(controls)}
                       </Suspense>
@@ -546,14 +562,14 @@ function FlowContent() {
 
               <Show when={!currentStep().noDot}>
                 <div class="flex gap-1.5">
-                  <Index each={steps.filter((step) => !step.noDot)}>
+                  <Index each={steps().filter((step) => !step.noDot)}>
                     {(step) => (
                       <div
                         class={cn(
                           'size-1.5 rounded-full transition-colors',
-                          stepIndex() === steps.indexOf(step())
+                          stepIndex() === steps().indexOf(step())
                             ? 'bg-accent'
-                            : stepIndex() > steps.indexOf(step())
+                            : stepIndex() > steps().indexOf(step())
                               ? 'bg-ink/40'
                               : 'bg-ink/15'
                         )}

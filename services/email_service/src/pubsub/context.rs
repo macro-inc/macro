@@ -18,6 +18,10 @@ use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::task::TaskTracker;
+
+/// The event broker used by pubsub workers, with publish tasks tracked for graceful shutdown.
+pub type PubSubEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
 /// The concrete notification ingress service type.
 pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -70,7 +74,7 @@ pub struct PubSubContext {
     pub dss_client: DocumentStorageServiceClient,
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub crm_service: CrmServiceType,
-    pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    pub macro_event_broker: PubSubEventBroker,
     pub notifications_enabled: bool,
     pub retry_worker: bool,
 }

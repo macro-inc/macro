@@ -20,14 +20,14 @@ use soup_realtime::domain::ports::SoupRealtimeSubscriptionService;
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    objects::{GraphqlSoupItem, GroupedSoup, SoupEntityEdges, SoupPage},
+    objects::{GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage},
 };
 
 /// Subscribe to realtime Soup updates for the authenticated user.
 pub async fn resolve_soup_updates<R, Auth, St, Edges>(
     service: &R,
     ctx: &Context<'_>,
-) -> async_graphql::Result<impl Stream<Item = GraphqlSoupItem<Edges>> + Send + 'static>
+) -> async_graphql::Result<impl Stream<Item = GraphqlSoupEntity<Edges>> + Send + 'static>
 where
     R: SoupRealtimeSubscriptionService,
     Auth: MacroAuthorizationService,
@@ -40,7 +40,7 @@ where
 
     Ok(async_stream::stream! {
         while let Some(item) = receiver.recv().await {
-            yield GraphqlSoupItem::from(item.as_ref().clone());
+            yield GraphqlSoupEntity::new(item.as_ref().clone());
         }
     })
 }
@@ -64,7 +64,7 @@ where
     let filters = request.cursor.filter().clone();
     let items = service.get_user_soup_grouped(request).await?;
     let groups: NestedSoupGroups<_, _> = items.collect();
-    Ok(GroupedSoup::from(
+    Ok(GroupedSoup::new(
         groups.with_next_cursors(sort_method, filters),
     ))
 }
@@ -113,9 +113,9 @@ where
         let page = service
             .get_user_soup_with_frecency(request, team_receipt)
             .await?;
-        Ok(SoupPage::from(page.type_erase()))
+        Ok(SoupPage::new_from_enriched(page.type_erase()))
     } else {
         let page = service.get_user_soup(request, team_receipt).await?;
-        Ok(SoupPage::from(page.type_erase()))
+        Ok(SoupPage::new(page.type_erase()))
     }
 }

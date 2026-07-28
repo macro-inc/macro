@@ -23,14 +23,30 @@ fn key(value: &str) -> EntityKey {
     EntityKey(value.to_string())
 }
 
-fn item(id: &str, entity: Option<EntityKey>) -> (EntityKey, Record) {
+fn linked_document(id: &str, property: Option<EntityKey>) -> (EntityKey, Record) {
     let mut fields = vec![("id", CacheValue::String(id.to_string()))];
-    if let Some(entity) = entity {
-        fields.push(("entity", CacheValue::Ref(entity)));
+    if let Some(property) = property {
+        fields.push((
+            "properties",
+            CacheValue::List(vec![CacheValue::Ref(property)]),
+        ));
     }
     (
-        key(&format!("GraphqlSoupItem:{id}")),
-        record("GraphqlSoupItem", fields),
+        key(&format!("GraphqlSoupDocument:{id}")),
+        record("GraphqlSoupDocument", fields),
+    )
+}
+
+fn property(id: &str, name: &str) -> (EntityKey, Record) {
+    (
+        key(&format!("GraphqlProperty:{id}")),
+        record(
+            "GraphqlProperty",
+            [
+                ("id", CacheValue::String(id.to_string())),
+                ("displayName", CacheValue::String(name.to_string())),
+            ],
+        ),
     )
 }
 
@@ -48,14 +64,11 @@ fn document(id: &str, name: &str) -> (EntityKey, Record) {
 }
 
 const ITEM_FRAGMENT: &str = r#"
-fragment SoupItemFields on GraphqlSoupItem {
-  itemId: id
-  entity {
-    __typename
-    ... on GraphqlSoupDocument {
-      id
-      documentName: name
-    }
+fragment SoupItemFields on GraphqlSoupDocument {
+  documentId: id
+  properties {
+    id
+    propertyName: displayName
   }
 }
 "#;
@@ -66,11 +79,11 @@ fn projects_cold_links_skips_incomplete_and_paginates_exclusively() {
         let mut storage = InMemoryStorage::new();
         storage
             .put_batch(vec![
-                item("a", Some(key("GraphqlSoupDocument:a"))),
-                item("b", None),
-                item("c", Some(key("GraphqlSoupDocument:c"))),
-                document("a", "Alpha"),
-                document("c", "Charlie"),
+                linked_document("a", Some(key("GraphqlProperty:a"))),
+                linked_document("b", None),
+                linked_document("c", Some(key("GraphqlProperty:c"))),
+                property("a", "Alpha"),
+                property("c", "Charlie"),
             ])
             .await
             .unwrap();
@@ -81,12 +94,11 @@ fn projects_cold_links_skips_incomplete_and_paginates_exclusively() {
         assert_eq!(
             first.records,
             vec![json!({
-                "itemId": "a",
-                "entity": {
-                    "__typename": "GraphqlSoupDocument",
+                "documentId": "a",
+                "properties": [{
                     "id": "a",
-                    "documentName": "Alpha"
-                }
+                    "propertyName": "Alpha"
+                }]
             })]
         );
         assert!(first.next_cursor.is_some());
@@ -95,9 +107,9 @@ fn projects_cold_links_skips_incomplete_and_paginates_exclusively() {
             .read_records(&selection, first.next_cursor.as_ref(), 1)
             .await
             .unwrap();
-        assert_eq!(second.records[0]["itemId"], json!("c"));
+        assert_eq!(second.records[0]["documentId"], json!("c"));
         assert_eq!(
-            second.records[0]["entity"]["documentName"],
+            second.records[0]["properties"][0]["propertyName"],
             json!("Charlie")
         );
         assert!(second.next_cursor.is_none());
@@ -156,7 +168,6 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
         let mut storage = InMemoryStorage::new();
         storage
             .put_batch(vec![
-                item("item-1", Some(document_key.clone())),
                 (
                     document_key,
                     record(
@@ -189,13 +200,9 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
             .unwrap();
         let mut engine = Engine::with_capacity(storage, 1);
         let selection = RecordSelection::parse(
-            r#"fragment Item on GraphqlSoupItem {
+            r#"fragment Item on GraphqlSoupDocument {
                 id
-                entity {
-                    ... on GraphqlSoupDocument {
-                        properties { id propertyDefinitionId displayName }
-                    }
-                }
+                properties { id propertyDefinitionId displayName }
             }"#,
             "Item",
         )
@@ -236,7 +243,7 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
         let page = engine.read_records(&selection, None, 10).await.unwrap();
         assert_eq!(page.records.len(), 1);
         assert_eq!(
-            page.records[0]["entity"]["properties"][0],
+            page.records[0]["properties"][0],
             json!({
                 "id": "property-1",
                 "propertyDefinitionId": "definition-1",

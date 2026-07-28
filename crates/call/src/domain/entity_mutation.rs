@@ -6,6 +6,7 @@ use entity_access::domain::models::{
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationErrorCode, RenameEntity, UpdateEntitySharePolicy,
 };
+use macro_event_broker::MacroEventBroker;
 use model_entity::Entity;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
@@ -72,8 +73,8 @@ async fn require_archived_call<S: CallService>(
     Ok(())
 }
 
-impl<R, C, Cn, E, N, S, Sm, I, V, Vr> RenameEntity
-    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+impl<R, C, Cn, E, N, S, Sm, I, V, Vr, B> RenameEntity
+    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 where
     R: CallRepository,
     C: CallRtcClient,
@@ -85,6 +86,7 @@ where
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
+    B: MacroEventBroker,
     Self: CallService,
 {
     type Receipt = EditAccessLevel;
@@ -109,8 +111,8 @@ where
     }
 }
 
-impl<R, C, Cn, E, N, S, Sm, I, V, Vr> UpdateEntitySharePolicy
-    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+impl<R, C, Cn, E, N, S, Sm, I, V, Vr, B> UpdateEntitySharePolicy
+    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 where
     R: CallRepository,
     C: CallRtcClient,
@@ -122,6 +124,7 @@ where
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
+    B: MacroEventBroker,
     Self: CallService,
 {
     type Receipt = EditAccessLevel;
@@ -146,8 +149,8 @@ where
     }
 }
 
-impl<R, C, Cn, E, N, S, Sm, I, V, Vr> DeleteEntityPermanently
-    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+impl<R, C, Cn, E, N, S, Sm, I, V, Vr, B> DeleteEntityPermanently
+    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
 where
     R: CallRepository,
     C: CallRtcClient,
@@ -159,6 +162,7 @@ where
     I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
+    B: MacroEventBroker,
     Self: CallService,
 {
     type Receipt = EditAccessLevel;

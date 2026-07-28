@@ -693,14 +693,6 @@ impl NotificationQueue for MockQueue {
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         Ok(())
     }
-
-    async fn delay_message(
-        &self,
-        _receipt_handle: &str,
-        _delay: std::time::Duration,
-    ) -> Result<(), Report> {
-        Ok(())
-    }
 }
 
 impl NotificationQueue for std::sync::Arc<MockQueue> {
@@ -715,16 +707,8 @@ impl NotificationQueue for std::sync::Arc<MockQueue> {
         (**self).receive_messages().await
     }
 
-    async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
-        (**self).delete_message(_receipt_handle).await
-    }
-
-    async fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
-    ) -> Result<(), Report> {
-        (**self).delay_message(receipt_handle, delay).await
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        (**self).delete_message(receipt_handle).await
     }
 }
 
@@ -2129,14 +2113,6 @@ impl NotificationQueue for EgressTestQueue {
             .push(receipt_handle.to_string());
         Ok(())
     }
-
-    async fn delay_message(
-        &self,
-        _receipt_handle: &str,
-        _delay: std::time::Duration,
-    ) -> Result<(), Report> {
-        Ok(())
-    }
 }
 
 /// WebSocket sender that hangs indefinitely (simulates a stuck connection).
@@ -2175,6 +2151,44 @@ impl NotificationSender for FailingMobileSender {
     ) -> Result<String, Report> {
         rootcause::bail!("Simulated FCM failure")
     }
+}
+
+#[tokio::test]
+async fn test_poll_and_deliver_deletes_rate_limited_message() {
+    let recipient = test_user_id("user@example.com");
+    let email = EmailCreateBundle::new(&TestNotification {
+        message: "Hello".to_string(),
+    })
+    .with_recipient(recipient);
+    let message = QueueMessage::new_test(
+        "test_notification".to_string(),
+        NotificationChannel::Email(email),
+    );
+
+    let queue = EgressTestQueue::new(vec![RawQueueMessage {
+        body: message,
+        receipt_handle: "receipt-rate-limited".to_string(),
+    }]);
+    let service = NotificationEgressService {
+        queue,
+        repository: MockRepository::new(),
+        websocket: MockWebSocketSender,
+        mobile: MockMobileSender,
+        email: MockEmailSender,
+        rate_limiter: exceeding_rate_limiter(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: MockDigestBatcher,
+    };
+
+    let results = service.poll_and_deliver().await;
+
+    assert_eq!(results.len(), 1);
+    assert!(results[0].is_err());
+    assert_eq!(
+        service.queue.deleted_handles(),
+        vec!["receipt-rate-limited"],
+        "rate-limited messages must be deleted instead of retried"
+    );
 }
 
 #[tokio::test]

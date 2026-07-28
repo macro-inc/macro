@@ -13,6 +13,7 @@ export function PreviewButton(
     disabled?: boolean;
     disabledLabel?: string;
     onEngage?: () => void;
+    onOpenChange?: (open: boolean) => void;
   } = {}
 ) {
   const panel = useSplitPanelOrThrow();
@@ -29,13 +30,17 @@ export function PreviewButton(
   const togglePreview = () => {
     if (isController()) {
       panel.handle.disengagePreview();
+      props.onOpenChange?.(false);
       return;
     }
     if (!canEngage()) return;
 
     analytics.track('preview_panel_use');
     panel.handle.engagePreview();
-    if (panel.handle.isControllerSplit()) props.onEngage?.();
+    if (panel.handle.isControllerSplit()) {
+      props.onOpenChange?.(true);
+      props.onEngage?.();
+    }
   };
 
   registerHotkey({

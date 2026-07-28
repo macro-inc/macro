@@ -12,6 +12,7 @@ pub mod scheduled;
 pub mod sfs_deleter;
 pub mod sfs_uploader;
 pub(crate) mod util;
+pub(crate) mod worker_lifecycle;
 /// Log-and-drop publisher for `macro.email` events, re-exported for the
 /// HTTP binary's handlers.
 pub use util::publish_email_event;

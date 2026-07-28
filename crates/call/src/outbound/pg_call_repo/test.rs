@@ -511,8 +511,9 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
+    repo.set_egress_id(&CALL1, "egress-archive-test").await?;
 
-    let record_id = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1).await?;
 
     // Ephemeral call should be gone.
     assert!(repo.get_call_by_channel_id(&CH1).await?.is_none());
@@ -525,13 +526,22 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
         FROM call_records
         WHERE id = $1
         "#,
-        record_id,
+        archived.call_id,
     )
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(record.channel_id, CH1);
-    assert_eq!(record.created_by, USER_A.as_ref());
+    assert_eq!(archived.call_id, CALL1);
+    assert_eq!(archived.channel_id, CH1);
+    assert_eq!(archived.created_by, USER_A.as_ref());
+    assert_eq!(archived.started_at, record.started_at);
+    assert_eq!(archived.ended_at, record.ended_at);
+    assert_eq!(archived.duration_ms, record.duration_ms);
+    assert!(archived.has_recording);
+    assert_eq!(archived.participant_count, 2);
+
+    assert_eq!(record.channel_id, archived.channel_id);
+    assert_eq!(record.created_by, archived.created_by);
     assert!(record.duration_ms >= 0);
     assert!(record.ended_at >= record.started_at);
 
@@ -543,12 +553,12 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
         WHERE call_record_id = $1
         ORDER BY joined_at ASC
         "#,
-        record_id,
+        archived.call_id,
     )
     .fetch_all(&pool)
     .await?;
 
-    assert_eq!(participants.len(), 2);
+    assert_eq!(participants.len(), archived.participant_count);
     assert!(participants.contains(&USER_A.to_string()));
     assert!(participants.contains(&USER_B.to_string()));
     Ok(())
@@ -575,7 +585,9 @@ async fn archive_call_preserves_soft_deleted_participants(
     assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
 
     // Archive the call.
-    let record_id = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1).await?;
+    assert_eq!(archived.participant_count, 2);
+    assert!(!archived.has_recording);
 
     // call_record_participants should have both participants with left_at set.
     let rows = sqlx::query!(
@@ -585,17 +597,32 @@ async fn archive_call_preserves_soft_deleted_participants(
         WHERE call_record_id = $1
         ORDER BY joined_at ASC
         "#,
-        record_id,
+        archived.call_id,
     )
     .fetch_all(&pool)
     .await?;
 
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), archived.participant_count);
     let user_ids: Vec<&str> = rows.iter().map(|r| r.user_id.as_str()).collect();
     assert!(user_ids.contains(&USER_A.as_ref()));
     assert!(user_ids.contains(&USER_B.as_ref()));
     // Both should have left_at set since they were soft-deleted.
     assert!(rows.iter().all(|r| r.left_at.is_some()));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_returns_no_result_when_call_is_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    assert!(repo.archive_call(&CALL2).await.is_err());
+    assert!(repo.get_call_record_by_call_id(&CALL2).await?.is_none());
 
     Ok(())
 }
@@ -759,21 +786,55 @@ async fn archive_call_preserves_id_and_share_permission(
     .fetch_one(&pool)
     .await?;
 
-    let record_id = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1).await?;
 
     // The call_record id should be the same as the original call id.
-    assert_eq!(record_id, CALL1);
+    assert_eq!(archived.call_id, CALL1);
 
     // The share_permission_id should carry over to the call_record.
     let record_share_permission_id = sqlx::query_scalar!(
         r#"SELECT share_permission_id FROM call_records WHERE id = $1"#,
-        record_id,
+        archived.call_id,
     )
     .fetch_one(&pool)
     .await?;
 
     assert_eq!(record_share_permission_id, active_share_permission_id);
 
+    Ok(())
+}
+
+// -- get_call_record_by_egress_id --------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_by_egress_id_returns_call_and_channel_context(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let context = repo.get_call_record_by_egress_id("egress-arch-1").await?;
+
+    assert_eq!(context, Some((CALL_ARCHIVED, CH1)));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_by_egress_id_returns_none_for_unknown_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let context = repo
+        .get_call_record_by_egress_id("unknown-egress-id")
+        .await?;
+
+    assert_eq!(context, None);
     Ok(())
 }
 
@@ -813,15 +874,15 @@ async fn set_active_call_recording_key_updates_matching_call(
     assert_eq!(call.egress_id.as_deref(), Some("egress-123"));
 
     // Now archive and verify recording_key and preview key carry forward.
-    let record_id = repo.archive_call(&CALL1).await?;
-    let archived = sqlx::query!(
+    let archived = repo.archive_call(&CALL1).await?;
+    let recording = sqlx::query!(
         r#"SELECT recording_key, preview_url FROM call_records WHERE id = $1"#,
-        record_id,
+        archived.call_id,
     )
     .fetch_one(&pool)
     .await?;
-    assert_eq!(archived.recording_key.as_deref(), Some(recording_key));
-    assert_eq!(archived.preview_url.as_deref(), Some(preview_key));
+    assert_eq!(recording.recording_key.as_deref(), Some(recording_key));
+    assert_eq!(recording.preview_url.as_deref(), Some(preview_key));
 
     Ok(())
 }
@@ -1034,7 +1095,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     repo.create_transcript_segment(&CALL1, &seg, None).await?;
 
     // Archive the call.
-    let record_id = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1).await?;
 
     // Transcripts should be in call_record_transcripts.
     let transcripts = sqlx::query!(
@@ -1043,7 +1104,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
         FROM call_record_transcripts
         WHERE call_record_id = $1
         "#,
-        record_id,
+        archived.call_id,
     )
     .fetch_all(&pool)
     .await?;
@@ -1150,7 +1211,7 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
         .await?;
     }
 
-    let record_id = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1).await?;
 
     let rows = sqlx::query!(
         r#"
@@ -1159,7 +1220,7 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
         WHERE call_record_id = $1
         ORDER BY sequence_num ASC
         "#,
-        record_id,
+        archived.call_id,
     )
     .fetch_all(&pool)
     .await?;
@@ -1269,10 +1330,10 @@ async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consis
         .await?;
     }
 
-    let record_id = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1).await?;
 
     let mut stable = repo
-        .get_stable_speaker_voices_for_call_record(&record_id)
+        .get_stable_speaker_voices_for_call_record(&archived.call_id)
         .await?;
     stable.sort();
 
@@ -2713,9 +2774,11 @@ async fn set_custom_name_if_null_writes_when_column_is_null(
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated Name")
+    let persisted = repo
+        .set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated Name")
         .await?;
 
+    assert!(persisted);
     let stored = sqlx::query_scalar!(
         r#"SELECT custom_name FROM call_records WHERE id = $1"#,
         CALL_ARCHIVED,
@@ -2743,9 +2806,11 @@ async fn set_custom_name_if_null_does_not_overwrite_existing_name(
     .execute(&pool)
     .await?;
 
-    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated")
+    let persisted = repo
+        .set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated")
         .await?;
 
+    assert!(!persisted);
     let stored = sqlx::query_scalar!(
         r#"SELECT custom_name FROM call_records WHERE id = $1"#,
         CALL_ARCHIVED,
@@ -2763,9 +2828,11 @@ async fn set_custom_name_if_null_does_not_overwrite_existing_name(
 async fn set_custom_name_if_null_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    // Idempotent on missing rows — must not error.
-    repo.set_custom_name_if_null(&Uuid::now_v7(), "Whatever")
+    let persisted = repo
+        .set_custom_name_if_null(&Uuid::now_v7(), "Whatever")
         .await?;
+
+    assert!(!persisted);
     Ok(())
 }
 
@@ -2779,8 +2846,9 @@ async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::
     let repo = repo(pool.clone());
     let summary = "A short synopsis of the call.";
 
-    repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
+    let persisted = repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
 
+    assert!(persisted);
     let stored = sqlx::query_scalar!(
         r#"SELECT summary FROM call_records WHERE id = $1"#,
         CALL_ARCHIVED,
@@ -2799,10 +2867,11 @@ async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::
 async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    // Unknown id should be an idempotent no-op (not an error).
-    repo.insert_call_summary(&Uuid::now_v7(), "irrelevant")
+    let persisted = repo
+        .insert_call_summary(&Uuid::now_v7(), "irrelevant")
         .await?;
 
+    assert!(!persisted);
     // The archived fixture row must remain untouched.
     let stored = sqlx::query_scalar!(
         r#"SELECT summary FROM call_records WHERE id = $1"#,

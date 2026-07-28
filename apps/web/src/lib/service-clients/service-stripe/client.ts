@@ -34,45 +34,6 @@ function getGaClientId(): Promise<string | undefined> {
 
 export const stripeServiceClient = {
   /**
-   * Creates a checkout session
-   * @returns The URL of the checkout session
-   */
-  createCheckoutSession: async (
-    args: {
-      type?: string;
-      discount?: string;
-      tier?: string;
-      /** Override the default success URL. Useful for flows (e.g. onboarding) that want the user returned to a specific page. */
-      successUrl?: string;
-    } = {}
-  ) => {
-    const { type = '', discount, tier, successUrl } = args;
-    const gaClientId = await getGaClientId();
-    const { fbp, fbc } = getMetaIds();
-
-    const result = await authServiceClient.createCheckoutSession({
-      successUrl:
-        successUrl ??
-        `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
-      cancelUrl: `${window.location.origin}/app?subscriptionCancel=true${tier ? `&tier=${tier}` : ''}`,
-      discount: discount ?? null,
-      metadata: {
-        gaClientId: gaClientId ?? null,
-        fbp: fbp ?? null,
-        fbc: fbc ?? null,
-      },
-      tier,
-    });
-
-    if (!result.isOk()) {
-      throw new Error(
-        result.error?.[0]?.message ?? 'Failed to create checkout session'
-      );
-    }
-
-    return result.value;
-  },
-  /**
    * Creates a checkout session via the v2 endpoint. Unlike v1, this does not
    * accept a tier — the backend infers it from the new pricing model.
    * @returns The URL of the checkout session
@@ -83,9 +44,11 @@ export const stripeServiceClient = {
       discount?: string;
       /** Override the default success URL. Useful for flows that want the user returned to a specific page. */
       successUrl?: string;
+      /** Override the default cancel URL. Useful for flows that want cancellation to return to a specific page. */
+      cancelUrl?: string;
     } = {}
   ) => {
-    const { type = '', discount, successUrl } = args;
+    const { type = '', discount, successUrl, cancelUrl } = args;
     const gaClientId = await getGaClientId();
     const { fbp, fbc } = getMetaIds();
 
@@ -93,7 +56,8 @@ export const stripeServiceClient = {
       successUrl:
         successUrl ??
         `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
-      cancelUrl: `${window.location.origin}/app?subscriptionCancel=true`,
+      cancelUrl:
+        cancelUrl ?? `${window.location.origin}/app?subscriptionCancel=true`,
       discount: discount ?? null,
       metadata: {
         gaClientId: gaClientId ?? null,

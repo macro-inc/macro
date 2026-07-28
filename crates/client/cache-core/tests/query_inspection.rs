@@ -15,7 +15,7 @@ query GroupViews($input: GroupedSoupInput!) {
   user {
     id
     groupSoup(input: $input) {
-      bins { key nextCursor items { id } }
+      bins { key nextCursor items { __typename id } }
     }
   }
 }
@@ -23,7 +23,7 @@ query GroupViews($input: GroupedSoupInput!) {
 
 const SHORT_GROUP_QUERY: &str = r#"
 query GroupViews($input: GroupedSoupInput!) {
-  user { id groupSoup(input: $input) { bins { key items { id } } } }
+  user { id groupSoup(input: $input) { bins { key items { __typename id } } } }
 }
 "#;
 
@@ -53,7 +53,7 @@ fn page(item: &str, next_cursor: Option<&str>) -> Json {
     json!({"user": {"id": "user-1", "groupSoup": {"bins": [{
         "key": "in-progress",
         "nextCursor": next_cursor,
-        "items": [{"id": item}]
+        "items": [{"__typename": "GraphqlSoupDocument", "id": item}]
     }]}}})
 }
 
@@ -163,7 +163,7 @@ query GroupViews($same: String!, $cursor: String!) {
         groupKey: "in-progress"
         cursor: $cursor
       }
-    }) { bins { key nextCursor items { id } } }
+    }) { bins { key nextCursor items { __typename id } } }
   }
 }
 "#;
@@ -234,7 +234,7 @@ fn inspection_reads_the_effective_optimistic_view() {
         let mut engine = Engine::new(InMemoryStorage::new());
         let variables = initial(20);
         let data = json!({"user": {"id": "user-1", "groupSoup": {"bins": [
-            {"key": "in-progress", "nextCursor": null, "items": [{"id": "task-1"}]},
+            {"key": "in-progress", "nextCursor": null, "items": [{"__typename": "GraphqlSoupDocument", "id": "task-1"}]},
             {"key": "completed", "nextCursor": null, "items": []}
         ]}}});
         write_group(&mut engine, GROUP_QUERY, &variables, &data).await;
@@ -264,7 +264,7 @@ fn inspection_reads_the_effective_optimistic_view() {
                 },
             ],
             operation: LinkOperation::Remove {
-                entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
             },
         };
         let mutation = r#"
@@ -359,7 +359,7 @@ query GroupViews {
     groupSoup(input: { initial: {
       groupBy: { field: PROPERTY, propertyDefinitionId: "status-def" }
       limit: 20
-    } }) { bins { items { id } } }
+    } }) { bins { items { __typename id } } }
   }
 }
 "#;

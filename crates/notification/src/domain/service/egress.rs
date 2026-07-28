@@ -302,31 +302,20 @@ where
             let all_ios_failed = delivery_results.iter().all(
                 |e| matches!(e, Err(e) if matches!(e.current_context(), DeliveryFailure::Ios )),
             );
-            let rate_limited = delivery_results.iter().find_map(|e| {
-                match e.as_ref().map_err(Report::current_context) {
-                    Err(DeliveryFailure::RateLimit(rate_limit)) => Some(rate_limit),
-                    Ok(_)
-                    | Err(
-                        DeliveryFailure::Ios | DeliveryFailure::Other | DeliveryFailure::Timeout,
-                    ) => None,
-                }
+            let rate_limited = delivery_results.iter().any(|e| {
+                matches!(
+                    e.as_ref().map_err(Report::current_context),
+                    Err(DeliveryFailure::RateLimit(_))
+                )
             });
 
-            // Delete from queue if any deliveries succeeded
-            // or all the failed notifs were ios
-            if (any_succeeded || all_ios_failed)
+            // Delete from the queue if any delivery succeeded, all failures were
+            // iOS failures, or delivery was rejected by the rate limit. Rate-limit
+            // rejection is terminal; retrying the same notification would only
+            // deliver stale notifications after the limit window expires.
+            if (any_succeeded || all_ios_failed || rate_limited)
                 && let Err(e) = self.queue.delete_message(&receipt_handle).await
             {
-                // push the failed delete to errors
-                results.push(Err(e))
-            } else if let Some(rate_limited) = rate_limited
-                && let Err(e) = self
-                    .queue
-                    // if we got rate limited, delay this message by the rate limit expiry time
-                    .delay_message(&receipt_handle, rate_limited.retry_after)
-                    .await
-            {
-                // push the failed delay to errors
                 results.push(Err(e))
             }
 

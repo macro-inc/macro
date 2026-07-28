@@ -93,3 +93,7 @@ export type {
   UnifiedNotification,
 } from './types';
 export { compositeEntity, notificationEntity } from './types';
+export {
+  handleNotificationUpdate,
+  useNotificationUpdates,
+} from './use-notification-updates';

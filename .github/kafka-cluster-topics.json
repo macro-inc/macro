@@ -1,5 +1,6 @@
 [
   "macro.bots",
+  "macro.calls",
   "macro.channels",
   "macro.chats",
   "macro.documents",

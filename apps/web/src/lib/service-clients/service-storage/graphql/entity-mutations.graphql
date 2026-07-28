@@ -1,0 +1,71 @@
+fragment EntityMutationRefFields on GraphqlEntity {
+  entityType
+  id
+}
+
+fragment EntityMutationResultFields on GraphqlEntityMutationResult {
+  __typename
+  ... on GraphqlMutationSuccess {
+    affectedEntities {
+      ...EntityMutationRefFields
+    }
+  }
+  ... on GraphqlMutationError {
+    errorCode
+    message
+  }
+}
+
+fragment EntityMutationPayloadFields on EntityMutationPayload {
+  results {
+    ...EntityMutationResultFields
+  }
+}
+
+mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+  renameEntities(inputs: $inputs) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation MoveEntities($inputs: [MoveEntityInput!]!) {
+  moveEntities(inputs: $inputs) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation UpdateEntitySharePolicies($inputs: [UpdateEntitySharePolicyInput!]!) {
+  updateEntitySharePolicies(inputs: $inputs) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation TrashEntities($entities: [EntityRefInput!]!) {
+  trashEntities(entities: $entities) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation RestoreEntities($entities: [EntityRefInput!]!) {
+  restoreEntities(entities: $entities) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation DeleteEntitiesPermanently($entities: [EntityRefInput!]!) {
+  deleteEntitiesPermanently(entities: $entities) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation DuplicateEntities($inputs: [DuplicateEntityInput!]!) {
+  duplicateEntities(inputs: $inputs) {
+    ...EntityMutationPayloadFields
+  }
+}
+
+mutation SetEntityFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
+  setEntityFavorite(entity: $entity, favorite: $favorite) {
+    ...EntityMutationResultFields
+  }
+}

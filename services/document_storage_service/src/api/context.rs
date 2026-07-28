@@ -105,6 +105,7 @@ use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
     SystemPropertiesServiceImpl,
 };
+use tokio_util::task::TaskTracker;
 use webhook::{
     domain::service::WebhookServiceImpl,
     inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
@@ -113,6 +114,9 @@ use webhook::{
         pg_repository::PgRepository as PgWebhookRepo,
     },
 };
+
+/// Event broker shared by DSS services.
+pub(crate) type DssEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
@@ -162,9 +166,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     AuthorizationService,
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
+    DssEntityMutationService,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
+    Arc<FavoritesServiceType>,
+    Arc<EntityAccessService>,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -256,7 +263,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    DssEventBroker,
 >;
 
 /// Type alias for the authorization service.
@@ -274,7 +281,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     ShaCountAdapter,
     EntityAccessManagementService,
     SqsProjectSearchIndexer,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    DssEventBroker,
 >;
 
 /// Type alias for the projects router state.
@@ -299,7 +306,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<NotificationIngressType>,
             SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
-            MacroEventBrokerService<KafkaEventPublisher>,
+            DssEventBroker,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
@@ -311,8 +318,7 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
+pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo, DssEventBroker>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -350,6 +356,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     crate::service::call_search_indexer::SqsCallSearchIndexer,
     DssVoipPushSender,
     call::outbound::pg_voice_repo::PgVoiceRepo,
+    DssEventBroker,
 >;
 
 /// Type alias for the call router state.
@@ -361,6 +368,27 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
+
+/// Chat service used by the unified entity mutation adapter.
+pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
+    chat::outbound::postgres::PgChatRepo,
+    (),
+    EntityAccessManagementService,
+>;
+
+/// Concrete unified entity mutation service wired into GraphQL.
+pub(crate) type DssEntityMutationService =
+    crate::service::entity_mutation::DssEntityMutationService<
+        DocumentService,
+        DssChatMutationService,
+        DssChannelService,
+        DssCallService,
+        DssEmailService,
+        ProjectService,
+        EntityAccessService,
+        FavoritesServiceType,
+        crate::outbound::entity_mutation::DssEntityLifecycleAdapter,
+    >;
 
 /// Type alias for the favorites service.
 pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
@@ -392,11 +420,8 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
 /// Type alias for the product webhook service.
-pub(crate) type DssWebhookService = WebhookServiceImpl<
-    PgWebhookRepo,
-    ReqwestWebhookValidationClient,
-    MacroEventBrokerService<KafkaEventPublisher>,
->;
+pub(crate) type DssWebhookService =
+    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient, DssEventBroker>;
 
 /// Type alias for the product webhook rate limiter.
 pub(crate) type DssWebhookRateLimiter =
@@ -418,6 +443,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,

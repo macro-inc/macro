@@ -17,7 +17,9 @@ fn attachment_type_to_entity_type(at: &AttachmentType) -> EntityType {
 
 /// Insert a message into a chat, returning the message ID.
 ///
-/// User messages also insert their attachments in the same transaction.
+/// User messages also insert their attachments in the same transaction. Both
+/// `MessageService::create` and `MessageService::store` use this path through
+/// `MessageRepo::create`.
 #[tracing::instrument(err, skip(pool, message))]
 pub(crate) async fn create_message(
     pool: &PgPool,
@@ -78,6 +80,8 @@ pub(crate) async fn create_message(
             .await?;
         }
     }
+
+    super::patch_chat::patch_chat(&mut tx, chat_id, None, None).await?;
 
     tx.commit().await?;
     Ok(message_id)

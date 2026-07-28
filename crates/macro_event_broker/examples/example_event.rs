@@ -1,6 +1,6 @@
 use macro_event_broker::{
-    Event, EventBrokerError, EventPublisher, MacroEvent, MacroEventBroker, MacroEventBrokerService,
-    TopicEvent,
+    Event, EventBrokerError, EventPublisher, GlobalSpawner, MacroEvent, MacroEventBroker,
+    MacroEventBrokerService, TopicEvent,
 };
 use macro_event_topics::{MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
@@ -121,7 +121,7 @@ impl ExampleConsumerEvent {
 
 #[tokio::main]
 pub async fn main() -> Result<(), EventBrokerError> {
-    let service = MacroEventBrokerService::new(ExampleEventPublisher);
+    let service = MacroEventBrokerService::new(ExampleEventPublisher, GlobalSpawner);
     let event = ExampleMacroEvent::created(
         "example-123",
         ExampleCreatedMetadata {

@@ -12,11 +12,9 @@ query Soup($input: SoupInput!) {
     id
     soup(input: $input) {
       items {
+        __typename
         id
-        entity {
-          __typename
-          ... on GraphqlSoupDocument { id documentName: name ownerId }
-        }
+        ... on GraphqlSoupDocument { documentName: name ownerId }
       }
       nextCursor
       hasMore
@@ -42,13 +40,10 @@ fn page_for_user(user: &str, names: &[(&str, &str)]) -> Json {
             "id": user,
             "soup": {
                 "items": names.iter().map(|(id, name)| json!({
+                    "__typename": "GraphqlSoupDocument",
                     "id": id,
-                    "entity": {
-                        "__typename": "GraphqlSoupDocument",
-                        "id": id,
-                        "documentName": name,
-                        "ownerId": user
-                    }
+                    "documentName": name,
+                    "ownerId": user
                 })).collect::<Vec<_>>(),
                 "nextCursor": null,
                 "hasMore": false
@@ -133,10 +128,7 @@ fn cross_operation_invalidation() {
         else {
             panic!("expected hit");
         };
-        assert_eq!(
-            data["user"]["soup"]["items"][0]["entity"]["documentName"],
-            json!("B")
-        );
+        assert_eq!(data["user"]["soup"]["items"][0]["documentName"], json!("B"));
 
         // Identical rewrite changes nothing → nobody re-executes.
         let write = engine
@@ -329,11 +321,9 @@ fn capacity_constrained_rewrite_preserves_fields() {
             id
             soup(input: $input) {
               items {
+                __typename
                 id
-                entity {
-                  __typename
-                  ... on GraphqlSoupDocument { id documentName: name }
-                }
+                ... on GraphqlSoupDocument { documentName: name }
               }
               nextCursor
               hasMore
@@ -346,9 +336,9 @@ fn capacity_constrained_rewrite_preserves_fields() {
                 "id": "user-1",
                 "soup": {
                     "items": [
-                        { "id": "doc-1", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-1", "documentName": "A2" } },
-                        { "id": "doc-2", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-2", "documentName": "B2" } },
-                        { "id": "doc-3", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-3", "documentName": "C2" } }
+                        { "__typename": "GraphqlSoupDocument", "id": "doc-1", "documentName": "A2" },
+                        { "__typename": "GraphqlSoupDocument", "id": "doc-2", "documentName": "B2" },
+                        { "__typename": "GraphqlSoupDocument", "id": "doc-3", "documentName": "C2" }
                     ],
                     "nextCursor": null,
                     "hasMore": false
@@ -372,8 +362,8 @@ fn capacity_constrained_rewrite_preserves_fields() {
         let items = data["user"]["soup"]["items"].as_array().unwrap();
         assert_eq!(items.len(), 3);
         for (item, name) in items.iter().zip(["A2", "B2", "C2"]) {
-            assert_eq!(item["entity"]["documentName"], json!(name));
-            assert_eq!(item["entity"]["ownerId"], json!("user-1"));
+            assert_eq!(item["documentName"], json!(name));
+            assert_eq!(item["ownerId"], json!("user-1"));
         }
     });
 }

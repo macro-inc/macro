@@ -253,6 +253,7 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_commit_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_rollback_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_invalidate,
+            graphql_cache_plugin::commands::graphql_cache_delete_records,
             graphql_cache_plugin::commands::graphql_cache_teardown,
             graphql_cache_plugin::commands::graphql_cache_clear,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,

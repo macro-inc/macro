@@ -8,18 +8,17 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import LogoIcon from '@icon/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
-import {
-  invalidateAllAfterLogin,
-  invalidateUserInfo,
-} from '@queries/auth/user-info';
+import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { cn, Surface } from '@ui';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createMemo,
   createSignal,
   Match,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -60,6 +59,10 @@ function LoginOld() {
   const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();
   const analytics = useAnalytics();
+  const authenticatedUserId = createMemo(() => {
+    const user = userInfo();
+    return user?.authenticated ? user.id : undefined;
+  });
 
   onMount(() => {
     analytics.pageView('login');
@@ -77,11 +80,11 @@ function LoginOld() {
     });
   };
 
-  createEffect(() => {
-    if (userInfo()?.authenticated) {
-      invalidateUserInfo().then(identifyUser);
-    }
-  });
+  createEffect(
+    on(authenticatedUserId, (userId) => {
+      if (userId) identifyUser();
+    })
+  );
 
   createEffect(() => {
     if (searchParams.email) {
