@@ -1,4 +1,3 @@
-import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
@@ -43,11 +42,6 @@ export function DocumentAiEditBar(props: { documentId: string }) {
     requestAiEdit({
       documentId: props.documentId,
       prompt: value,
-      onOps: (ops) => {
-        const target = md.editor;
-        const mapping = md.mapping;
-        if (target && mapping) applyAiOps(target, mapping, ops);
-      },
     })
       .then((result) => {
         if (result === 'failed') toast.failure('AI edit failed');

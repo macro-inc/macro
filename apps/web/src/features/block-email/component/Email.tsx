@@ -517,6 +517,7 @@ function EmailContent(props: EmailViewProps) {
       markDone: context.archiveThread,
       markNotDone: context.markThreadNotDone,
       isThreadDone: context.isThreadDone,
+      canMarkNotDone: context.canMarkThreadNotDone,
       markUnread: context.markThreadUnread,
       markRead: context.markThreadRead,
       isThreadMarkedUnread: context.isThreadMarkedUnread,

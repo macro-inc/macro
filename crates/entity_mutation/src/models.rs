@@ -102,4 +102,16 @@ impl EntityMutationErrorCode {
     pub fn conflict<C, O, T>(err: rootcause::Report<C, O, T>) -> Self {
         EntityMutationErrorCode::Conflict(Sentinel(()))
     }
+
+    /// Construct a state-conflict error.
+    #[tracing::instrument(ret)]
+    pub fn unsupported<C, O, T>(err: rootcause::Report<C, O, T>) -> Self {
+        EntityMutationErrorCode::UnsupportedOperation(Sentinel(()))
+    }
+}
+
+/// the success case for the mutated entities
+pub struct EntityMutationSuccess<'a> {
+    /// the entities which were successfully modified
+    pub affected_entities: Vec<Entity<'a>>,
 }

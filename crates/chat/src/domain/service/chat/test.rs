@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
-use agent::types::ChatMessageContent;
+use agent::types::{AssistantMessagePart, ChatMessageContent};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use attachment::FormattedParts;
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
@@ -13,12 +14,28 @@ const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const NEW_CHAT_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
 const PROJECT_ID: &str = "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
 const OWNER: &str = "macro|owner@example.com";
+const MESSAGE_ID: &str = "message-id";
+const TOOL_CALL_ID: &str = "tool-call-id";
+const TOOL_NAME: &str = "test_tool";
 
 // -- Stub ChatRepo --
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MessageContentUpdate {
+    Final,
+    Interim,
+}
+
+#[derive(Default)]
+struct MessagePersistence {
+    content: Option<ChatMessageContent>,
+    updates: Vec<MessageContentUpdate>,
+}
 
 #[derive(Clone, Default)]
 struct StubChatRepo {
     metadata_project_id: Option<String>,
+    message_persistence: Arc<Mutex<MessagePersistence>>,
     fail_create: bool,
     fail_copy_chat: bool,
     fail_delete: bool,
@@ -33,6 +50,26 @@ impl StubChatRepo {
             metadata_project_id: Some(PROJECT_ID.to_string()),
             ..Self::default()
         }
+    }
+
+    fn with_tool_message() -> Self {
+        Self {
+            message_persistence: Arc::new(Mutex::new(MessagePersistence {
+                content: Some(tool_message_content()),
+                updates: Vec::new(),
+            })),
+            ..Self::default()
+        }
+    }
+
+    fn content_updates(&self) -> Vec<MessageContentUpdate> {
+        self.message_persistence.lock().unwrap().updates.clone()
+    }
+
+    fn record_content_update(&self, content: &ChatMessageContent, update: MessageContentUpdate) {
+        let mut persistence = self.message_persistence.lock().unwrap();
+        persistence.content = Some(content.clone());
+        persistence.updates.push(update);
     }
 
     fn repo_err() -> ChatErr {
@@ -141,16 +178,32 @@ impl ChatRepo for StubChatRepo {
         _chat_id: &str,
         _message_id: &str,
     ) -> Result<ChatMessageContent> {
-        unimplemented!("not exercised")
+        self.message_persistence
+            .lock()
+            .unwrap()
+            .content
+            .clone()
+            .ok_or(ChatErr::NotFound)
     }
 
     async fn update_message_content(
         &self,
         _chat_id: &str,
         _message_id: &str,
-        _content: &ChatMessageContent,
+        content: &ChatMessageContent,
     ) -> Result<()> {
-        unimplemented!("not exercised")
+        self.record_content_update(content, MessageContentUpdate::Final);
+        Ok(())
+    }
+
+    async fn update_interim_message_content(
+        &self,
+        _chat_id: &str,
+        _message_id: &str,
+        content: &ChatMessageContent,
+    ) -> Result<()> {
+        self.record_content_update(content, MessageContentUpdate::Interim);
+        Ok(())
     }
 
     async fn store_resolved_message(
@@ -252,7 +305,44 @@ impl MacroEventBroker for RecordingEventBroker {
     }
 }
 
+// -- Test tool --
+
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[schemars(title = "test_tool", description = "A tool used by chat service tests")]
+struct TestTool {
+    value: String,
+}
+
+#[async_trait::async_trait]
+impl AsyncTool<()> for TestTool {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        _service_context: ServiceContext<()>,
+        _request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Ok(serde_json::json!({ "value": self.value }))
+    }
+}
+
 // -- Helpers --
+
+fn tool_message_content() -> ChatMessageContent {
+    ChatMessageContent::AssistantMessageParts(vec![
+        AssistantMessagePart::ToolCall {
+            name: TOOL_NAME.to_string(),
+            json: serde_json::json!({ "value": "initial" }),
+            id: TOOL_CALL_ID.to_string(),
+        },
+        AssistantMessagePart::ToolCallResponseJson {
+            name: TOOL_NAME.to_string(),
+            json: serde_json::to_value(UserToolResponse::<serde_json::Value>::PendingUserExecution)
+                .unwrap(),
+            id: TOOL_CALL_ID.to_string(),
+        },
+    ])
+}
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(OWNER.to_string()).expect("valid user id")
@@ -279,6 +369,17 @@ fn build_service<B: MacroEventBroker>(
     .with_event_broker(event_broker)
 }
 
+fn build_service_with_tools(
+    repo: StubChatRepo,
+) -> ChatServiceImpl<StubChatRepo, (), StubEntityAccessManagement> {
+    ChatServiceImpl::new(
+        repo,
+        Arc::new(AsyncToolCollection::new().add_user_tool::<TestTool, ()>()),
+        (),
+        StubEntityAccessManagement,
+    )
+}
+
 fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
     let share_permission = share_permission_updated.then_some(
         models_permissions::share_permission::UpdateSharePermissionRequestV2 {
@@ -296,6 +397,76 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
 }
 
 // -- Tests --
+
+#[tokio::test]
+async fn update_tool_call_uses_interim_content_persistence() {
+    let repo = StubChatRepo::with_tool_message();
+    let service = build_service_with_tools(repo.clone());
+
+    service
+        .update_tool_call(
+            owner_receipt(CHAT_ID),
+            MESSAGE_ID,
+            TOOL_CALL_ID,
+            serde_json::json!({ "value": "updated" }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(repo.content_updates(), vec![MessageContentUpdate::Interim]);
+}
+
+#[tokio::test]
+async fn update_tool_response_uses_final_content_persistence() {
+    let repo = StubChatRepo::with_tool_message();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    service
+        .update_tool_response(
+            owner_receipt(CHAT_ID),
+            MESSAGE_ID,
+            TOOL_CALL_ID,
+            UserToolResponse::UserAction(serde_json::json!({ "result": "done" })),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(repo.content_updates(), vec![MessageContentUpdate::Final]);
+}
+
+#[tokio::test]
+async fn call_tool_uses_interim_persistence_for_args_and_final_persistence_for_response() {
+    let repo = StubChatRepo::with_tool_message();
+    let service = build_service_with_tools(repo.clone());
+
+    service
+        .call_tool(
+            owner_receipt(CHAT_ID),
+            MESSAGE_ID,
+            TOOL_CALL_ID,
+            Some(serde_json::json!({ "value": "updated" })),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.content_updates(),
+        vec![MessageContentUpdate::Interim, MessageContentUpdate::Final]
+    );
+}
+
+#[tokio::test]
+async fn reject_tool_call_uses_final_content_persistence() {
+    let repo = StubChatRepo::with_tool_message();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    service
+        .reject_tool_call(owner_receipt(CHAT_ID), MESSAGE_ID, TOOL_CALL_ID)
+        .await
+        .unwrap();
+
+    assert_eq!(repo.content_updates(), vec![MessageContentUpdate::Final]);
+}
 
 #[tokio::test]
 async fn create_publishes_chat_created() {

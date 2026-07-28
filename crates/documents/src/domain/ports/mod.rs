@@ -151,6 +151,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         args: EditDocumentRepoArgs,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Update a document's `updatedAt` timestamp.
+    fn update_document_modified(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update a project's `updatedAt` timestamp.
     fn update_project_modified(
         &self,

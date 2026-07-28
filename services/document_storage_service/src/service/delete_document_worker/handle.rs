@@ -1,7 +1,7 @@
 use anyhow::Context;
 use documents_hex::domain::ports::editing::EditingWorkerService;
-use models_properties::{EntityReference, EntityType};
-use properties::outbound::entity_property_queries as entity_properties_delete;
+use entity_access::domain::models::EntityType;
+use properties::{EditReceipt, PropertiesService as _};
 
 use super::DeleteDocumentWorkerContext;
 
@@ -112,8 +112,10 @@ pub async fn handle(
     // Delete document properties
     tracing::trace!(document_id=%document_id, "deleting document properties");
 
-    let entity_reference = EntityReference::new(document_id, EntityType::Document);
-    let _ = entity_properties_delete::delete_entity_properties(&ctx.db, &entity_reference)
+    let cleanup_receipt = document_cleanup_receipt(document_id);
+    let _ = ctx
+        .properties_service
+        .delete_entity_properties(&cleanup_receipt)
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to delete entity properties"));
     tracing::trace!(document_id=%document_id, "deleted document properties");
@@ -123,6 +125,10 @@ pub async fn handle(
     });
 
     Ok(())
+}
+
+pub(crate) fn document_cleanup_receipt(document_id: &str) -> EditReceipt {
+    EditReceipt::dangerously_assert_internal_user(document_id, EntityType::Document)
 }
 
 pub(crate) fn count_occurrences(strings: Vec<String>) -> Vec<(String, i64)> {

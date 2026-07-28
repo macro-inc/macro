@@ -26,6 +26,7 @@ mod code_check_infra;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cloud_storage_on_push;
+mod deploy_fusionauth_instance;
 mod deploy_preview;
 mod deploy_web_app;
 mod deploy_web_app_dev_push;
@@ -183,6 +184,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
             render_patched(
                 deploy_cloud_storage_on_push::deploy_cloud_storage_on_push,
                 deploy_cloud_storage_on_push::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_fusionauth_instance",
+        file_name: "deploy_fusionauth_instance.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_fusionauth_instance::deploy_fusionauth_instance,
+                deploy_fusionauth_instance::patch,
             )
         },
     },

@@ -87,8 +87,8 @@ use projects_hex::{
 };
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
+    inbound::axum_router::PropertiesRouterState,
 };
-use properties_service::PropertiesHandlerState;
 use readonly_pool::ReadOnlyPool;
 use search_service::SearchHandlerState;
 use soup::{
@@ -166,9 +166,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     AuthorizationService,
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
+    DssEntityMutationService,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
+    Arc<FavoritesServiceType>,
+    Arc<EntityAccessService>,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -177,7 +180,12 @@ pub(crate) type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
+    DssEventBroker,
 >;
+
+/// Concrete properties router state wired into DSS.
+pub(crate) type PropertiesHandlerState =
+    PropertiesRouterState<PropertiesService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
@@ -353,6 +361,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     crate::service::call_search_indexer::SqsCallSearchIndexer,
     DssVoipPushSender,
     call::outbound::pg_voice_repo::PgVoiceRepo,
+    DssEventBroker,
 >;
 
 /// Type alias for the call router state.
@@ -364,6 +373,27 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
+
+/// Chat service used by the unified entity mutation adapter.
+pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
+    chat::outbound::postgres::PgChatRepo,
+    (),
+    EntityAccessManagementService,
+>;
+
+/// Concrete unified entity mutation service wired into GraphQL.
+pub(crate) type DssEntityMutationService =
+    crate::service::entity_mutation::DssEntityMutationService<
+        DocumentService,
+        DssChatMutationService,
+        DssChannelService,
+        DssCallService,
+        DssEmailService,
+        ProjectService,
+        EntityAccessService,
+        FavoritesServiceType,
+        crate::outbound::entity_mutation::DssEntityLifecycleAdapter,
+    >;
 
 /// Type alias for the favorites service.
 pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
@@ -418,6 +448,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,

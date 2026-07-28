@@ -7,6 +7,7 @@ query GroupSoupMembership($input: GroupedSoupInput!) {
 				totalCount
 				nextCursor
 				items {
+					__typename
 					id
 				}
 			}

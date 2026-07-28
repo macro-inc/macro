@@ -91,6 +91,10 @@ export function TopBar(props: {
 
   const isDone = () => emailCtx.isThreadDone();
 
+  // A send-only thread is permanently done, so neither half of the toggle
+  // does anything — hide it rather than offer a no-op.
+  const showMarkDoneToggle = () => !isDone() || emailCtx.canMarkThreadNotDone();
+
   const toggleMarkDone = () => {
     if (isDone()) {
       emailCtx.markThreadNotDone();
@@ -289,7 +293,7 @@ export function TopBar(props: {
               </Show>
             </Button>
           </Show>
-          <Show when={isOwnThread()}>
+          <Show when={isOwnThread() && showMarkDoneToggle()}>
             <Button
               class="p-1 rounded-lg"
               label={isDone() ? 'Mark as not done' : 'Mark done'}

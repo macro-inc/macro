@@ -22,6 +22,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
+graphql_permission = { path = "../graphql_permission" }
 item_filters = { path = "../item_filters" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }

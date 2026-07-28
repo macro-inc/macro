@@ -415,6 +415,16 @@ impl EngineHandle {
         Ok(ops.names(affected))
     }
 
+    /// Deletes stale records from durable and hot storage and returns the
+    /// registered operations that traversed them.
+    pub async fn delete_records(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
+        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        let affected = engine.delete_keys(&keys).await.map_err(|e| e.to_string())?;
+        Ok(ops.names(affected))
+    }
+
     /// Unregisters an operation (urql teardown).
     pub async fn teardown(&self, op_id: String) -> Result<(), String> {
         let mut state = self.inner.lock().await;

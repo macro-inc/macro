@@ -338,6 +338,45 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let before = sqlx::query!(
+        "SELECT name, updated_at FROM comms_channels WHERE id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    repo.patch_channel(
+        CH1,
+        USER_A.to_string(),
+        None,
+        PatchChannelRequest {
+            channel_name: Some("renamed-channel".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let after = sqlx::query!(
+        "SELECT name, updated_at FROM comms_channels WHERE id = $1",
+        CH1,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(after.name.as_deref(), Some("renamed-channel"));
+    assert!(after.updated_at > before.updated_at);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_id = macro_user_id(TEAM_OWNER_A);

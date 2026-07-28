@@ -125,6 +125,175 @@ fn slack_gather_lists_channels_with_an_explicit_empty_query() {
 }
 
 #[test]
+fn slack_channel_search_tool_names_match_by_shape() {
+    assert!(is_slack_channel_search_tool_name(
+        "mcp__Slack__search_channels"
+    ));
+    assert!(is_slack_channel_search_tool_name(
+        "mcp__Slack__slack_search_channels"
+    ));
+    assert!(is_slack_channel_search_tool_name(
+        "mcp__Slack__search-channels"
+    ));
+    assert!(is_slack_channel_search_tool_name(
+        "mcp__Slack__list_channels"
+    ));
+    assert!(is_slack_channel_search_tool_name(
+        "mcp__Slack__conversations_list"
+    ));
+
+    // Other channel-adjacent surfaces must not be mistaken for the listing.
+    assert!(!is_slack_channel_search_tool_name(
+        "mcp__Slack__list_channel_members"
+    ));
+    assert!(!is_slack_channel_search_tool_name(
+        "mcp__Slack__search_messages_and_files"
+    ));
+    assert!(!is_slack_channel_search_tool_name(
+        "mcp__Slack__get_channel_history"
+    ));
+    assert!(!is_slack_channel_search_tool_name(
+        "mcp__Slack__create_channel"
+    ));
+    assert!(!is_slack_channel_search_tool_name(
+        "mcp__Slack__search_users"
+    ));
+    assert!(!is_slack_channel_search_tool_name("search_channels")); // unmangled
+}
+
+#[test]
+fn slack_channel_page_parses_structured_results_with_cursors() {
+    let page = parse_slack_channel_page(serde_json::json!({
+        "channels": [
+            {
+                "id": "C0123456789",
+                "name": "engineering",
+                "purpose": { "value": "Build the thing" },
+                "member_count": 42,
+                "is_archived": false,
+            },
+            {
+                "id": "C0000000001",
+                "name": "#design",
+                "topic": "Make it pretty",
+                "num_members": 7,
+            },
+            { "id": "D0123456789", "name": "dm", "is_im": true },
+            { "id": "C0000000002", "name": "old-stuff", "is_archived": true },
+        ],
+        "response_metadata": { "next_cursor": "cursor-2" },
+    }));
+
+    assert_eq!(page.next_cursor.as_deref(), Some("cursor-2"));
+    assert_eq!(
+        page.channels,
+        vec![
+            SlackChannelCandidate {
+                id: Some("C0123456789".into()),
+                name: "engineering".into(),
+                purpose: Some("Build the thing".into()),
+                member_count: Some(42),
+                archived: false,
+            },
+            SlackChannelCandidate {
+                id: Some("C0000000001".into()),
+                name: "design".into(),
+                purpose: Some("Make it pretty".into()),
+                member_count: Some(7),
+                archived: false,
+            },
+            SlackChannelCandidate {
+                id: Some("C0000000002".into()),
+                name: "old-stuff".into(),
+                purpose: None,
+                member_count: None,
+                archived: true,
+            },
+        ]
+    );
+}
+
+#[test]
+fn slack_channel_page_parses_json_text_and_bare_arrays() {
+    // Results without structured content arrive as JSON re-encoded as text.
+    let page = parse_slack_channel_page(serde_json::Value::String(
+        r#"{"results": [{"id": "C1", "name": "general"}], "next_cursor": "abc"}"#.to_string(),
+    ));
+    assert_eq!(page.channels.len(), 1);
+    assert_eq!(page.channels[0].name, "general");
+    assert_eq!(page.next_cursor.as_deref(), Some("abc"));
+
+    let page = parse_slack_channel_page(serde_json::json!([
+        { "id": "C1", "name": "general" },
+        { "id": "C2", "name": "random" },
+    ]));
+    assert_eq!(page.channels.len(), 2);
+    assert_eq!(page.next_cursor, None);
+
+    // Plain prose is not a channel list.
+    let page = parse_slack_channel_page(serde_json::Value::String("No channels found.".into()));
+    assert_eq!(page, SlackChannelPage::default());
+
+    // An empty cursor string means "no more pages", not a page named "".
+    let page = parse_slack_channel_page(serde_json::json!({
+        "channels": [{ "id": "C1", "name": "general" }],
+        "response_metadata": { "next_cursor": "" },
+    }));
+    assert_eq!(page.next_cursor, None);
+}
+
+#[test]
+fn slack_candidates_rank_by_size_dedupe_and_cap() {
+    let channel = |id: &str, name: &str, members: Option<u64>| SlackChannelCandidate {
+        id: Some(id.to_string()),
+        name: name.to_string(),
+        purpose: None,
+        member_count: members,
+        archived: false,
+    };
+
+    let mut channels = vec![
+        channel("C1", "tiny", Some(2)),
+        channel("C2", "big", Some(50)),
+        channel("C2", "big", Some(50)), // duplicate id collapses
+        channel("C3", "medium", Some(10)),
+        SlackChannelCandidate {
+            archived: true,
+            ..channel("C4", "archived", Some(99))
+        },
+        // No id: deduped by name instead.
+        SlackChannelCandidate {
+            id: None,
+            ..channel("", "no-id", None)
+        },
+        SlackChannelCandidate {
+            id: None,
+            ..channel("", "no-id", None)
+        },
+    ];
+    channels
+        .extend((0..20).map(|i| channel(&format!("C{}", 100 + i), &format!("filler-{i}"), None)));
+
+    let selected = select_slack_candidates(channels, SLACK_GATHER_MAX_CHANNELS);
+    assert_eq!(selected.len(), SLACK_GATHER_MAX_CHANNELS);
+    // Largest first; archived and duplicates gone.
+    assert_eq!(selected[0].name, "big");
+    assert_eq!(selected[1].name, "medium");
+    assert_eq!(selected[2].name, "tiny");
+    assert!(selected.iter().all(|channel| !channel.archived));
+    assert_eq!(
+        selected
+            .iter()
+            .filter(|channel| channel.name == "no-id")
+            .count(),
+        1
+    );
+    // Ties keep listing order.
+    assert_eq!(selected[3].name, "no-id");
+    assert_eq!(selected[4].name, "filler-0");
+}
+
+#[test]
 fn notion_fetch_text_parses_the_fetch_document_shape() {
     let parsed = parse_notion_fetch_result(serde_json::Value::String(
         r##"{"id":"abc","title":"Roadmap H2","text":"# Roadmap\ncontent","url":"https://notion.so/x","properties":{"title":"Roadmap H2","Tags":["Planning","H2"],"Done":"__YES__","Score":4.5,"date:Due:start":"2026-08-01","date:Due:is_datetime":0}}"##
@@ -141,14 +310,14 @@ fn notion_fetch_text_parses_the_fetch_document_shape() {
                 value: ImportedDocumentPropertyValue::Boolean { value: true },
             },
             ImportedDocumentProperty {
-                name: "Score".into(),
-                value: ImportedDocumentPropertyValue::Number { value: 4.5 },
-            },
-            ImportedDocumentProperty {
                 name: "Due".into(),
                 value: ImportedDocumentPropertyValue::Date {
                     value: "2026-08-01".into(),
                 },
+            },
+            ImportedDocumentProperty {
+                name: "Score".into(),
+                value: ImportedDocumentPropertyValue::Number { value: 4.5 },
             },
         ]
     );

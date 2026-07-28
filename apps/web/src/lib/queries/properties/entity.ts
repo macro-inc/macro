@@ -846,6 +846,7 @@ export function useBulkSaveEntityPropertiesMutation(
               optimisticCache = await buildOptimisticGroupedPropertyUpdates({
                 host,
                 entityId: item.entityId,
+                entityType: item.entityType,
                 propertyDefinitionId: item.property.propertyDefinitionId,
                 oldGroupKeys: oldGroupKeys ?? [],
                 newGroupKeys: newGroupKeys ?? [],

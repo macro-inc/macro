@@ -2409,6 +2409,8 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -2892,9 +2894,13 @@ dependencies = [
  "axum",
  "email",
  "entity_access",
+ "entity_mutation",
  "graphql_common",
  "graphql_email",
+ "graphql_entity_mutation",
+ "graphql_favorite",
  "graphql_notification",
+ "graphql_permission",
  "graphql_properties",
  "graphql_soup",
  "macro_authorization",
@@ -4258,6 +4264,7 @@ dependencies = [
  "call",
  "channel_bots",
  "channels",
+ "chat",
  "chrono",
  "clap",
  "cloudfront_sign",
@@ -4277,6 +4284,7 @@ dependencies = [
  "embedding",
  "entity_access",
  "entity_access_management",
+ "entity_mutation",
  "favorites",
  "foreign_entity",
  "frecency",
@@ -4332,6 +4340,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.13.4",
+ "rootcause",
  "s3_key",
  "saved_views",
  "schemars 1.2.1",
@@ -5295,7 +5304,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6076,6 +6085,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_entity_mutation"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "cowlike",
+ "entity_mutation",
+ "graphql_common",
+ "graphql_permission",
+ "macro_user_id",
+ "model-entity",
+ "models_permissions",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_favorite"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "favorites",
+ "macro_user_id",
+ "model-entity",
+ "rootcause",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
@@ -6086,6 +6125,20 @@ dependencies = [
  "notification",
  "rootcause",
  "serde_json",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_permission"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "entity_access",
+ "futures",
+ "macro_user_id",
+ "model-entity",
+ "rootcause",
  "tokio",
  "workspace-hack",
 ]
@@ -6124,6 +6177,7 @@ dependencies = [
  "filter_ast",
  "futures",
  "graphql_common",
+ "graphql_permission",
  "item_filters",
  "macro_authorization",
  "macro_user_id",
@@ -7399,7 +7453,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8075,9 +8129,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.13.1"
+version = "1.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bd1b63cd2f0cf66acbbb3191c41feaff03c94c3f6c6bb1e61d2ab3062c301c7"
+checksum = "1bec673c3332ede11cc58d5d88de55a01ba17cf28b0bd0feb66ca1c66fb757ad"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -8121,9 +8175,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.13.1"
+version = "1.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252a84196402ac55a7dd064af87a747a430fc176ec744d5bb99f4ed92e639fa8"
+checksum = "b635801310e2047f74be15f58988f2f78e7874e77aa08643fe9e6eec356f6848"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -8168,9 +8222,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.13.1"
+version = "1.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "950cc8bcc64dcff536e949fbc56ccc3d0759646fa441c7f76b3cd7c3eafa2096"
+checksum = "b42b8d6d2c95abf67d7f50a60171759d693206796d7f8f03f3fe68e531c88794"
 dependencies = [
  "bytes",
  "ensure-cov",
@@ -9816,7 +9870,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -11248,6 +11302,8 @@ dependencies = [
  "futures",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -11329,7 +11385,7 @@ checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
  "heck 0.5.0",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "once_cell",
@@ -11349,7 +11405,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -12314,7 +12370,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -12385,7 +12441,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -14361,7 +14417,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -15875,7 +15931,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

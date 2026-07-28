@@ -448,7 +448,7 @@ where
 
         let content = ChatMessageContent::AssistantMessageParts(parts);
         self.repo
-            .update_message_content(chat_id, message_id, &content)
+            .update_interim_message_content(chat_id, message_id, &content)
             .await
     }
 

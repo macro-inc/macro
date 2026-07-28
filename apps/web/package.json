@@ -113,7 +113,7 @@
     "libheif-js": "^1.19.8",
     "linkify-it": "^5.0.0",
     "livekit-client": "^2.18.0",
-    "loro-crdt": "1.13.3",
+    "loro-crdt": "catalog:",
     "nanoid": "^3.3.7",
     "neverthrow": "^8.2.0",
     "pdfjs-dist": "github:macro-inc/pdf.js#v2.16.52-web",

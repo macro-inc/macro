@@ -422,17 +422,15 @@ mod tests {
         query Soup($input: SoupInput!) {
           soup(input: $input) {
             items {
+              __typename
               id
-              entity {
-                __typename
-                ... on GraphqlSoupDocument { id docName: name }
-                ...ChatFields
-              }
+              ... on GraphqlSoupDocument { docName: name }
+              ...ChatFields
             }
             nextCursor
           }
         }
-        fragment ChatFields on GraphqlSoupChat { id chatName: name }
+        fragment ChatFields on GraphqlSoupChat { chatName: name }
     "#;
 
     #[test]
@@ -450,10 +448,7 @@ mod tests {
         let Selection::Field(items) = &soup.selection_set[0] else {
             panic!()
         };
-        let Selection::Field(entity) = &items.selection_set[1] else {
-            panic!()
-        };
-        let conditions: Vec<_> = entity
+        let conditions: Vec<_> = items
             .selection_set
             .iter()
             .filter_map(|s| match s {

@@ -2,19 +2,19 @@
 
 use sqlx::PgPool;
 
-/// Delete a message, returning an error if it does not exist.
+/// Delete a message, returning its parent chat ID or an error if it does not exist.
 #[tracing::instrument(err, skip(pool))]
-pub(crate) async fn delete_message(pool: &PgPool, message_id: &str) -> anyhow::Result<()> {
-    sqlx::query!(
+pub(crate) async fn delete_message(pool: &PgPool, message_id: &str) -> anyhow::Result<String> {
+    let row = sqlx::query!(
         r#"
         DELETE FROM "ChatMessage"
         WHERE id = $1
-        RETURNING id
+        RETURNING "chatId" as "chat_id!"
         "#,
         message_id
     )
     .fetch_one(pool)
     .await?;
 
-    Ok(())
+    Ok(row.chat_id)
 }

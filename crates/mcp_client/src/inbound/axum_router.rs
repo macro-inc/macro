@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
+#[cfg(test)]
+mod test;
+
 /// Hook invoked after an OAuth flow completes and the credentials are saved.
 /// Hosts use this to react to a connection the moment it exists (e.g. start
 /// import gather jobs); implementations must be quick or spawn.
@@ -165,13 +168,22 @@ pub struct StartAuthResponse {
 }
 
 /// Query parameters received on the OAuth callback redirect.
+///
+/// Providers redirect here on both success (`code` + `state`) and failure
+/// (`error` [+ `error_description`], per RFC 6749 §4.1.2.1). All fields are
+/// optional so a rejected authorization can still be parsed and logged
+/// instead of failing Axum's query extraction before the handler runs.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct AuthCallbackParams {
-    /// Authorization code from the OAuth provider.
-    code: String,
+    /// Authorization code from the OAuth provider. Present on success.
+    code: Option<String>,
     /// CSRF state parameter.
-    state: String,
+    state: Option<String>,
+    /// OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+    error: Option<String>,
+    /// Human-readable error description from the provider.
+    error_description: Option<String>,
 }
 
 /// An MCP server record as returned by the API.
@@ -206,6 +218,12 @@ pub enum McpHandlerErr {
     /// The requested server was not found.
     #[error("server not found")]
     NotFound,
+    /// The OAuth provider rejected the authorization request.
+    #[error("authorization rejected by provider: {0}")]
+    OAuthRejected(String),
+    /// The callback was missing both a code and an error parameter.
+    #[error("malformed OAuth callback: missing code and error parameters")]
+    MalformedCallback,
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -215,6 +233,9 @@ impl IntoResponse for McpHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             McpHandlerErr::NotFound => StatusCode::NOT_FOUND,
+            McpHandlerErr::OAuthRejected(_) | McpHandlerErr::MalformedCallback => {
+                StatusCode::BAD_REQUEST
+            }
             McpHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -428,6 +449,27 @@ where
     Ok(Json(StartAuthResponse { authorization_url }))
 }
 
+/// Classify a callback as a successful `(code, state)` pair or a handler
+/// error, logging provider rejections and malformed callbacks along the way.
+fn parse_callback_params(params: AuthCallbackParams) -> Result<(String, String), McpHandlerErr> {
+    if let Some(error) = params.error {
+        let reason = match params.error_description {
+            Some(description) => format!("{error}: {description}"),
+            None => error,
+        };
+        tracing::warn!(reason, "MCP OAuth provider rejected authorization");
+        return Err(McpHandlerErr::OAuthRejected(reason));
+    }
+
+    match (params.code, params.state) {
+        (Some(code), Some(state)) => Ok((code, state)),
+        _ => {
+            tracing::warn!("MCP OAuth callback missing both code and error parameters");
+            Err(McpHandlerErr::MalformedCallback)
+        }
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/mcp/servers/auth/callback",
@@ -436,11 +478,13 @@ where
     params(AuthCallbackParams),
     responses(
         (status = 200, description = "OAuth flow completed successfully"),
+        (status = 400, body = ErrorResponse, description = "Provider rejected authorization, or the callback was malformed"),
         (status = 500, body = ErrorResponse),
     )
 )]
-/// OAuth callback endpoint — receives code and state from the authorization server.
-#[tracing::instrument(skip_all, err)]
+/// OAuth callback endpoint — receives code and state, or an error, from the
+/// authorization server.
+#[tracing::instrument(skip_all, err, fields(state = ?params.state))]
 pub async fn auth_callback<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
     Query(params): Query<AuthCallbackParams>,
@@ -450,9 +494,11 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
+    let (code, csrf_state) = parse_callback_params(params)?;
+
     let record = state
         .oauth
-        .exchange_authorization_code(&params.code, &params.state)
+        .exchange_authorization_code(&code, &csrf_state)
         .await?;
 
     // Let the host react to the brand-new connection (e.g. kick off import

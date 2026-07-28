@@ -14,18 +14,15 @@ query Soup($input: SoupInput!) {
     id
     soup(input: $input) {
       items {
+        __typename
         id
-        entity {
-          __typename
-          ... on GraphqlSoupDocument {
+        ... on GraphqlSoupDocument {
+          properties {
             id
-            properties {
-              id
-              displayName
-              value {
-                __typename
-                ... on GraphqlStringPropertyValue { stringValue: value }
-              }
+            displayName
+            value {
+              __typename
+              ... on GraphqlStringPropertyValue { stringValue: value }
             }
           }
         }
@@ -78,19 +75,16 @@ fn soup_page(display_name: &str, value: &str) -> Json {
             "id": "user-1",
             "soup": {
                 "items": [{
-                    "id": "item-1",
-                    "entity": {
-                        "__typename": "GraphqlSoupDocument",
-                        "id": "doc-1",
-                        "properties": [{
-                            "id": "prop-1",
-                            "displayName": display_name,
-                            "value": {
-                                "__typename": "GraphqlStringPropertyValue",
-                                "stringValue": value
-                            }
-                        }]
-                    }
+                    "__typename": "GraphqlSoupDocument",
+                    "id": "doc-1",
+                    "properties": [{
+                        "id": "prop-1",
+                        "displayName": display_name,
+                        "value": {
+                            "__typename": "GraphqlStringPropertyValue",
+                            "stringValue": value
+                        }
+                    }]
                 }],
                 "hasMore": false
             }
@@ -112,7 +106,7 @@ fn mutation_response(display_name: &str, value: &str) -> Json {
 }
 
 fn property_of(data: &Json) -> &Json {
-    &data["user"]["soup"]["items"][0]["entity"]["properties"][0]
+    &data["user"]["soup"]["items"][0]["properties"][0]
 }
 
 async fn engine_with_base(display_name: &str, value: &str) -> Engine<InMemoryStorage> {

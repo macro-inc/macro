@@ -140,6 +140,15 @@ pub struct ChatMessageSentMetadata {
     pub attachment_count: usize,
 }
 
+/// Metadata for [`ChatTopicEvent::MessageDeleted`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessageDeletedMetadata {
+    /// Identifier of the chat the message belonged to.
+    pub chat_id: String,
+    /// Identifier of the deleted message.
+    pub message_id: String,
+}
+
 /// Lifecycle and message events published to [`MacroChatsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
@@ -165,6 +174,9 @@ pub enum ChatTopicEvent {
     /// A message was persisted to a chat.
     #[serde(rename = "chat.message_sent")]
     MessageSent(ChatMessageSentMetadata),
+    /// A message was permanently deleted from a chat.
+    #[serde(rename = "chat.message_deleted")]
+    MessageDeleted(ChatMessageDeletedMetadata),
 }
 
 impl TopicEvent for ChatTopicEvent {
@@ -219,6 +231,15 @@ impl ChatMacroEvent {
         Self::new(
             metadata.chat_id.clone(),
             ChatTopicEvent::MessageSent(metadata),
+        )
+    }
+
+    /// Build a message-deleted event keyed by the parent chat id, preserving
+    /// per-chat ordering.
+    pub fn message_deleted(metadata: ChatMessageDeletedMetadata) -> Self {
+        Self::new(
+            metadata.chat_id.clone(),
+            ChatTopicEvent::MessageDeleted(metadata),
         )
     }
 

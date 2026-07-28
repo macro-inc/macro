@@ -26,6 +26,7 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
+import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
 import { mountGlobalFocusListener } from '@app/signal/focus';
@@ -45,7 +46,6 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -292,9 +292,10 @@ function NewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
   const navigate = useNavigate();
   const location = useLocation();
+  const onboardingV4 = useOnboardingV4Flag();
 
   createEffect(() => {
-    if (!ENABLE_ONBOARDING_V4 || isMobile() || isNativeMobilePlatform()) {
+    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
       return;
     }
     const data = userInfoQuery.data;

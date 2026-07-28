@@ -1,6 +1,8 @@
 use super::*;
+use crate::threads::get::get_thread_by_id_and_link_id;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
+use std::time::Duration;
 
 const THREAD_WITH_ICS: &str = "00000000-0000-0000-0000-00000000b201";
 const THREAD_STALE_TRUE_PDF_ONLY: &str = "00000000-0000-0000-0000-00000000b202";
@@ -237,16 +239,26 @@ async fn draft_discard_without_metadata_recompute_syncs_signal_flag(
     fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
 )]
 async fn update_thread_metadata_syncs_signal_flag(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str(SIG_THREAD_STALE_PROMO)?;
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?;
+
     assert!(fetch_signal(&pool, SIG_THREAD_STALE_PROMO).await?);
+    let thread_before = get_thread_by_id_and_link_id(&pool, thread_id, link_id)
+        .await?
+        .expect("thread should exist");
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
 
     let mut conn = pool.acquire().await?;
-    update_thread_metadata(
-        &mut conn,
-        Uuid::parse_str(SIG_THREAD_STALE_PROMO)?,
-        Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?,
-    )
-    .await?;
+    update_thread_metadata(&mut conn, thread_id, link_id).await?;
 
     assert!(!fetch_signal(&pool, SIG_THREAD_STALE_PROMO).await?);
+    let thread_after = get_thread_by_id_and_link_id(&pool, thread_id, link_id)
+        .await?
+        .expect("thread should still exist");
+    assert!(
+        thread_after.updated_at > thread_before.updated_at,
+        "metadata recomputation should advance the thread timestamp"
+    );
     Ok(())
 }

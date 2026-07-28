@@ -168,20 +168,20 @@ pub(super) async fn set_custom_name(
 /// Set `call_records.custom_name` only when the existing value is `NULL`.
 ///
 /// Used by the AI auto-naming flow so a user-set name is never overwritten.
-/// No-op if no `call_records` row matches.
+/// Returns whether the conditional update persisted the name.
 pub(super) async fn set_custom_name_if_null(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
     custom_name: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
         r#"UPDATE call_records SET custom_name = $2 WHERE id = $1 AND custom_name IS NULL"#,
         call_id,
         custom_name,
     )
     .execute(transaction.as_mut())
     .await?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 /// Apply per-(call_record_id, diarized_speaker_id) `custom_speaker` overrides.
