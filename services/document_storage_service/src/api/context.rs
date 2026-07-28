@@ -356,7 +356,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     crate::service::call_search_indexer::SqsCallSearchIndexer,
     DssVoipPushSender,
     call::outbound::pg_voice_repo::PgVoiceRepo,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    DssEventBroker,
 >;
 
 /// Type alias for the call router state.
