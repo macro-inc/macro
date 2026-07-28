@@ -98,9 +98,16 @@ async fn posts_the_welcome_script_with_the_guide_mentioned() {
 
     let posted = gateway.posted.lock().unwrap();
     let [welcome, reply, feedback] = posted.as_slice() else {
-        panic!("expected exactly three posted messages, got {}", posted.len());
+        panic!(
+            "expected exactly three posted messages, got {}",
+            posted.len()
+        );
     };
-    assert!(posted.iter().all(|message| message.channel_id == channel_id));
+    assert!(
+        posted
+            .iter()
+            .all(|message| message.channel_id == channel_id)
+    );
 
     assert_eq!(welcome.actor.as_user(), Some(&user_id("julia@macro.com")));
     assert_eq!(

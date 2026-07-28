@@ -55,5 +55,7 @@ pub fn document_mention(
         block_params: serde_json::Map::new(),
         collapsed: false,
     })?;
-    Ok(format!("<m-document-mention>{payload}</m-document-mention>"))
+    Ok(format!(
+        "<m-document-mention>{payload}</m-document-mention>"
+    ))
 }

@@ -5,6 +5,7 @@ import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unr
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
+import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { createGettingStartedSidebarVisibility } from '@app/features/getting-started/sidebar-visibility';
 import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
@@ -388,7 +389,10 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const links = createMemo((): SidebarItem[] => buildSidebarLinks());
+  const gettingStartedEnabled = useGettingStartedEnabled();
+  const links = createMemo((): SidebarItem[] =>
+    buildSidebarLinks(gettingStartedEnabled())
+  );
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(
@@ -980,13 +984,16 @@ const ACTIVITY_LINK: SidebarItem = {
  * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
  * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
  * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
+ * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
+ * passed in because this runs outside a component; when false the link is
+ * fully absent — row, `g s` hotkey, and command menu entry.
  * Rendered sections additionally drop `hiddenFromSidebar` entries, which have
  * hotkeys but no sidebar row.
  */
-const buildSidebarLinks = (): SidebarItem[] => {
+const buildSidebarLinks = (showGettingStarted: boolean): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
-    GETTING_STARTED_LINK,
+    ...(showGettingStarted ? [GETTING_STARTED_LINK] : []),
     ...SIDEBAR_LINKS,
   ];
 
@@ -1073,7 +1080,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
   });
 
-  const allLinks = createMemo((): SidebarItem[] => buildSidebarLinks());
+  const gettingStartedEnabled = useGettingStartedEnabled();
+  const allLinks = createMemo((): SidebarItem[] =>
+    buildSidebarLinks(gettingStartedEnabled())
+  );
 
   // Hides only the rendered row: the g+s hotkey and command menu entry keep
   // working (like `hiddenFromSidebar` links), so the page stays reachable.

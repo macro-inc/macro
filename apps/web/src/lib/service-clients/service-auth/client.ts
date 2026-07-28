@@ -407,6 +407,7 @@ export const authServiceClient = {
       hasTrialed: data.hasTrialed,
       aiDataConsent: data.aiDataConsent,
       referralCode: data.referralCode,
+      createdAt: data.createdAt,
     }));
   },
 

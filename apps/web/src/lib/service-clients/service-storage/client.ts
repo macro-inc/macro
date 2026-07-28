@@ -1078,15 +1078,17 @@ export const storageServiceClient = {
 
   /**
    * Ids of the starter documents seeded at signup, so the client can open
-   * them directly.
+   * them directly, plus whether the how-to guide has been opened.
    */
   async getStarterDocs() {
     return (
-      await dssFetch<{ how_to_guide_id: string | null }>(
-        '/documents/starter_docs'
-      )
+      await dssFetch<{
+        how_to_guide_id: string | null;
+        how_to_guide_opened: boolean;
+      }>('/documents/starter_docs')
     ).map((result) => ({
       howToGuideId: result.how_to_guide_id ?? undefined,
+      howToGuideOpened: result.how_to_guide_opened,
     }));
   },
 

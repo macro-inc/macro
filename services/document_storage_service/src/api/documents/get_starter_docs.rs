@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::document::get_user_documents_by_names;
 use model::response::{GenericErrorResponse, GenericResponse};
 use sqlx::PgPool;
@@ -36,24 +36,29 @@ pub struct StarterDocumentsResponse {
         (status = 500, body = GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id=?user.authorization.user.macro_user_id))]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn handler(
     State(db): State<PgPool>,
-    user: MacroAuthorizationExtractor<AuthorizationService>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Response {
     let names = [HOW_TO_GUIDE_NAME.to_string()];
-    let documents =
-        match get_user_documents_by_names(&db, user.macro_user_id.as_ref(), &names).await {
-            Ok(documents) => documents,
-            Err(e) => {
-                tracing::error!(error=?e, "failed to look up starter documents");
-                return GenericResponse::builder()
-                    .message("failed to look up starter documents")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+    let documents = match get_user_documents_by_names(
+        &db,
+        user.authorization.user.macro_user_id.as_ref(),
+        &names,
+    )
+    .await
+    {
+        Ok(documents) => documents,
+        Err(e) => {
+            tracing::error!(error=?e, "failed to look up starter documents");
+            return GenericResponse::builder()
+                .message("failed to look up starter documents")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     // Exact indexed lookup, unbounded by document count; the oldest match
     // wins a name collision — that's the seeded guide.
@@ -68,7 +73,7 @@ pub async fn handler(
     let how_to_guide_opened = match &how_to_guide_id {
         Some(id) => macro_db_client::history::user_history_item_opened(
             &db,
-            user.macro_user_id.as_ref(),
+            user.authorization.user.macro_user_id.as_ref(),
             id,
             "document",
         )

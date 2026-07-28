@@ -356,10 +356,13 @@ mod tests {
                 .all(|document| document.document_id != "document-deleted")
         );
 
-        let documents =
-            get_user_documents_by_names(&pool, "macro|user@user.com", &["no_such_name".to_string()])
-                .await
-                .unwrap();
+        let documents = get_user_documents_by_names(
+            &pool,
+            "macro|user@user.com",
+            &["no_such_name".to_string()],
+        )
+        .await
+        .unwrap();
         assert!(documents.is_empty());
     }
 }

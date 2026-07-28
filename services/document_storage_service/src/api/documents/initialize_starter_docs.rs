@@ -12,7 +12,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use favorites::domain::ports::FavoritesService;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document_storage_service_internal::{
     InitializeStarterDocsResponse, StarterDocHowToGuide,
@@ -102,11 +102,7 @@ fn starter_doc_id(user_id: &MacroUserIdStr<'_>, document_name: &str) -> uuid::Uu
 /// Whether a starter document with this name now exists for the user — the
 /// create-error fallback that distinguishes "lost the race to a concurrent
 /// duplicate delivery" from a real failure.
-async fn starter_doc_exists(
-    state: &ApiContext,
-    user_id: &MacroUserIdStr<'_>,
-    name: &str,
-) -> bool {
+async fn starter_doc_exists(state: &ApiContext, user_id: &MacroUserIdStr<'_>, name: &str) -> bool {
     let names = [name.to_string()];
     macro_db_client::document::get_user_documents_by_names(&state.db, user_id.as_ref(), &names)
         .await
@@ -174,14 +170,14 @@ fn internal_error(message: &str) -> Response {
 /// lookup decides what already exists, and deterministic per-user ids dedupe
 /// concurrent duplicate deliveries), so a retry completes a partial seed
 /// instead of skipping or duplicating it.
-#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
+#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.authorization.user.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: MacroAuthorizationExtractor<AuthorizationService>,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
     tracing::info!("initialize starter docs");
 
-    let user_id = &user_context.macro_user_id;
+    let user_id = &user_context.authorization.user.macro_user_id;
 
     // Which starter documents already exist (exact indexed name lookup,
     // unbounded by how many documents the user has). Oldest match wins a
@@ -337,7 +333,7 @@ pub async fn handler(
                 source_entity_id: source_id.clone(),
                 entity_type: "document".to_string(),
                 entity_id: target_id.to_string(),
-                user_id: Some(user_context.user_context.user_id.clone()),
+                user_id: Some(user_context.authorization.user.user_context.user_id.clone()),
             })
             .await
             .inspect_err(|e| {
@@ -359,7 +355,12 @@ pub async fn handler(
     } else {
         resolve_docs_tag(&state, user_id).await
     };
-    let organization_id = user_context.user_context.organization_id.map(i64::from);
+    let organization_id = user_context
+        .authorization
+        .user
+        .user_context
+        .organization_id
+        .map(i64::from);
     let starter_docs = STARTER_TASKS
         .iter()
         .zip(&task_ids)
@@ -372,7 +373,7 @@ pub async fn handler(
         let receipt = match state
             .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
-                &user_context.macro_user_id,
+                &user_context.authorization.user.macro_user_id,
                 organization_id,
                 &document_id,
                 EntityType::Document,
@@ -456,7 +457,8 @@ pub async fn handler(
     let _ = state
         .conn_gateway_client
         .send_message(
-            EntityType::User.with_entity_str(user_context.macro_user_id.as_ref()),
+            EntityType::User
+                .with_entity_str(user_context.authorization.user.macro_user_id.as_ref()),
             STARTER_DOCS_INITIALIZED_MESSAGE_TYPE.to_string(),
             serde_json::json!({}),
         )
