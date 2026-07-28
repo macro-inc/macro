@@ -1,4 +1,5 @@
 import type { Env } from '../src/config';
+import type { EventName } from '../src/events/types';
 import { Macro } from '../src/macro';
 
 const args = process.argv.slice(2);
@@ -19,6 +20,8 @@ const macro = new Macro({
   auth: { type: 'bot', token: botToken },
 }).requestedAs(actAs);
 
+// `as const` keeps the literal types so `.on()` infers each event's payload;
+// `satisfies` makes a typo in this list a compile error.
 const ALL_EVENTS = [
   'channel.created',
   'channel.deleted',
@@ -34,7 +37,7 @@ const ALL_EVENTS = [
   'document.created',
   'document.deleted',
   'document.updated',
-];
+] as const satisfies readonly EventName[];
 
 // Filled in once registration returns the signing secret; until then (i.e.
 // for the registration-time validation ping) deliveries are acked unverified.
@@ -43,18 +46,14 @@ let receiver: ((req: Request) => Promise<Response>) | null = null;
 Bun.serve({
   port,
   fetch: async (req) => {
-    const name = req.headers.get('x-macro-event') ?? '(no event header)';
-    const raw = await req.clone().text();
     if (!receiver) {
-      console.log(`[unverified] ${name} ${raw}`);
+      console.log(`[unverified] ${req.headers.get('x-macro-event')}`);
       return new Response('ok');
     }
     try {
-      const res = await receiver(req);
-      console.log(`${name} ${raw}`);
-      return res;
+      return await receiver(req);
     } catch (e) {
-      console.error(`[bad signature] ${name} ${raw}`, e);
+      console.error('[bad signature]', e);
       return new Response('invalid signature', { status: 401 });
     }
   },
@@ -64,7 +63,7 @@ console.log(`listening on :${port} — expose it with: ngrok http ${port}`);
 const webhook = await macro.webhooks.create({
   url,
   name: 'sdk webhook demo',
-  filters: [{ events: ALL_EVENTS }],
+  filters: [{ events: [...ALL_EVENTS] }],
 });
 
 const secret = webhook.signingSecret;
@@ -73,8 +72,13 @@ if (!secret)
 
 console.log(`webhook ${webhook.id} registered for ${url}, waiting for events`);
 
-receiver = new Macro({
+const events = new Macro({
   env,
   auth: { type: 'bot', token: botToken },
   webhookSecret: secret,
-}).events.webhook();
+}).events;
+
+for (const name of ALL_EVENTS) {
+  events.on(name, (event) => console.log(name, event.metadata));
+}
+receiver = events.webhook();
