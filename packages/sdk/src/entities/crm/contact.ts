@@ -79,6 +79,16 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
+  /** Rename the contact for the caller's current team. */
+  async rename(name: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactName({
+        path: { contact_id: this.id },
+        body: { name },
+      }),
+    );
+  }
+
   /** The comment threads attached to this contact, with comments oldest first. */
   async comments(): Promise<CrmThreadWithComments[]> {
     const threads = unwrap(

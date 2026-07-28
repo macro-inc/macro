@@ -168,6 +168,16 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
+  /** A reusable code that lets a user join this channel. */
+  async joinCode(): Promise<string> {
+    const { join_code } = unwrap(
+      await this.client.storage.getChannelJoinLink({
+        path: { channel_id: this.id },
+      }),
+    );
+    return join_code;
+  }
+
   /** Leave the channel as the current user. */
   async leave(): Promise<void> {
     await this.mutate((c) =>

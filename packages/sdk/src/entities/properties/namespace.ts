@@ -1,4 +1,5 @@
 import type {
+  BulkEntityOptionUpdateResult,
   BulkEntityPropertiesRequest,
   CreatePropertyScope,
   EntityPropertiesResponse,
@@ -10,6 +11,7 @@ import type {
 } from '../../../generated/properties/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { PropertiedEntity, PropertyOptionDelta } from '../entity';
 import { PropertyDefinition } from './property-definition';
 import { PropertyOption } from './property-option';
 
@@ -79,6 +81,28 @@ export class PropertiesNamespace {
     return unwrap(
       await this.client.properties.getBulkEntityProperties({ body: request }),
     );
+  }
+
+  /** Apply one multi-select option delta to several entity handles. */
+  async updateEntityPropertyOptions(
+    entities: PropertiedEntity<unknown>[],
+    change: PropertyOptionDelta,
+  ): Promise<BulkEntityOptionUpdateResult[]> {
+    const response = unwrap(
+      await this.client.properties.bulkUpdateEntitiesPropertyOptions({
+        body: {
+          entities: entities.map((entity) => entity.propertyReference()),
+          property_id: change.property.id,
+          ...(change.add
+            ? { add_option_ids: change.add.map((option) => option.id) }
+            : {}),
+          ...(change.remove
+            ? { remove_option_ids: change.remove.map((option) => option.id) }
+            : {}),
+        },
+      }),
+    );
+    return response.results;
   }
 
   /** Add a select option to a multi-select property value on an entity. */

@@ -1,11 +1,15 @@
 import type {
+  BulkUpdateEntityPropertyOptionsResponse,
   EntityPropertyWithDefinition,
   PropertyTargetEntityType as PropertyEntityType,
+  PropertyTargetReference,
   SetPropertyValue,
 } from '../../generated/properties/types.gen';
 import type { FavoriteEntityRef } from '../../generated/storage/types.gen';
 import { Lazy, unwrap } from '../utils';
 import type { MacroClient } from '../utils/client';
+import type { PropertyDefinition } from './properties/property-definition';
+import type { PropertyOption } from './properties/property-option';
 
 /** How the entity-addressed APIs (favorites) identify an entity's type. */
 export type MacroEntityType = FavoriteEntityRef['entityType'];
@@ -23,6 +27,16 @@ export interface Propertied extends Favoritable {
   }): Promise<EntityPropertyWithDefinition[]>;
   setProperty(propertyId: string, value?: SetPropertyValue): Promise<void>;
   deleteProperty(entityPropertyId: string): Promise<void>;
+}
+
+/** A delta to apply to one multi-select property. */
+export interface PropertyOptionDelta {
+  /** The multi-select property definition to update. */
+  property: PropertyDefinition;
+  /** Options to add to the property's current selection. */
+  add?: PropertyOption[];
+  /** Options to remove from the property's current selection. */
+  remove?: PropertyOption[];
 }
 
 /** `null` folded into `undefined`, so optional API fields read naturally. */
@@ -141,6 +155,11 @@ export abstract class PropertiedEntity<Detail>
    */
   protected abstract readonly propertyEntityType: PropertyEntityType;
 
+  /** This entity's reference for bulk property operations. */
+  propertyReference(): PropertyTargetReference {
+    return { entity_type: this.propertyEntityType, entity_id: this.id };
+  }
+
   /** The properties set on this entity, each with its definition, value, and options. */
   async properties(opts?: {
     includeMetadata?: boolean;
@@ -176,6 +195,28 @@ export abstract class PropertiedEntity<Detail>
           property_id: propertyId,
         },
         body: { value: value ?? null },
+      }),
+    );
+  }
+
+  /** Apply multi-select option deltas atomically across this entity's properties. */
+  async updatePropertyOptions(
+    changes: PropertyOptionDelta[],
+  ): Promise<BulkUpdateEntityPropertyOptionsResponse> {
+    return unwrap(
+      await this.client.properties.bulkUpdateEntityPropertyOptions({
+        path: this.propertyReference(),
+        body: {
+          properties: changes.map((change) => ({
+            property_id: change.property.id,
+            ...(change.add
+              ? { add_option_ids: change.add.map((option) => option.id) }
+              : {}),
+            ...(change.remove
+              ? { remove_option_ids: change.remove.map((option) => option.id) }
+              : {}),
+          })),
+        },
       }),
     );
   }

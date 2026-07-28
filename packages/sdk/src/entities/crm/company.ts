@@ -34,6 +34,11 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     return new Company(client, id);
   }
 
+  /** Build a company from an API record (pre-seeded, no fetch). */
+  static from(client: MacroClient, data: CompanyDetail): Company {
+    return new Company(client, data.id, data);
+  }
+
   /** The company's display name, if resolved. */
   readonly name = this.field('name');
 
@@ -120,6 +125,27 @@ export class Company extends PropertiedEntity<CompanyDetail> {
         body: { email_sync: enabled },
       }),
     );
+  }
+
+  /** Rename the company for the caller's current team. */
+  async rename(name: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmCompanyName({
+        path: { company_id: this.id },
+        body: { name },
+      }),
+    );
+  }
+
+  /** Create a contact under this company. */
+  async createContact(opts: { email: string; name: string }): Promise<Contact> {
+    const contact = await this.mutate((c) =>
+      c.storage.createCrmContact({
+        path: { company_id: this.id },
+        body: opts,
+      }),
+    );
+    return Contact.from(this.client, contact);
   }
 
   /** The comment threads attached to this company, with comments oldest first. */

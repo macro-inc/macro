@@ -1,3 +1,9 @@
+import type {
+  CreateCrmCompanyRequest,
+  CrmTeamSettingsResponse,
+  UpdateCrmTeamSettingsRequest,
+} from '../../../generated/storage/types.gen';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Company } from './company';
 import { Contact } from './contact';
@@ -13,6 +19,28 @@ export class CrmNamespace {
   /** A handle to a CRM contact by id. */
   contactById(id: string): Contact {
     return Contact.byId(this.client, id);
+  }
+
+  /** Create a CRM company for the caller's current team. */
+  async createCompany(opts: CreateCrmCompanyRequest): Promise<Company> {
+    return Company.from(
+      this.client,
+      unwrap(await this.client.storage.createCrmCompany({ body: opts })),
+    );
+  }
+
+  /** The caller's current team's CRM settings. */
+  async settings(): Promise<CrmTeamSettingsResponse> {
+    return unwrap(await this.client.storage.getCrmTeamSettings());
+  }
+
+  /** Partially update the caller's current team's CRM settings. */
+  async updateSettings(
+    settings: UpdateCrmTeamSettingsRequest,
+  ): Promise<CrmTeamSettingsResponse> {
+    return unwrap(
+      await this.client.storage.putCrmTeamSettings({ body: settings }),
+    );
   }
 
   /** Search CRM companies by name/domain, most relevant first, auto-paginated. */
