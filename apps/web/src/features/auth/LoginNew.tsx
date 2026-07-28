@@ -1,10 +1,10 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { NoiseBackground } from '@app/features/setup/flow/shared';
+import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -73,17 +73,27 @@ function PostLoginRedirect() {
  */
 function PostAuthGate() {
   const userInfoQuery = useUserInfoQuery();
+  const onboardingV4 = useOnboardingV4Flag();
 
-  const needsOnboarding = () =>
-    ENABLE_ONBOARDING_V4 &&
+  const isFirstTimeDesktopUser = () =>
     !isMobile() &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     userInfoQuery.data.tutorialComplete === false;
 
+  const needsOnboarding = () =>
+    onboardingV4().enabled && isFirstTimeDesktopUser();
+
+  // Don't redirect into the app while the gate is still unknown: a first-time
+  // user would land on home for a beat and then get yanked to /onboarding.
+  const waitingOnFlag = () =>
+    onboardingV4().loading && isFirstTimeDesktopUser();
+
   return (
-    <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
-      <OnboardingFlow />
+    <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
+      <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+        <OnboardingFlow />
+      </Show>
     </Show>
   );
 }
