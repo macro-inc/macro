@@ -42,6 +42,8 @@ pub struct SoupRealtimePatch {
     pub patch: Patch<Entity<'static>>,
     /// Entity whose current accessors should receive the patch.
     pub access_source: Entity<'static>,
+    /// Explicit recipients that override current-access expansion when present.
+    pub direct_recipients: Option<Vec<MacroUserIdStr<'static>>>,
 }
 
 impl SoupRealtimePatch {
@@ -50,6 +52,7 @@ impl SoupRealtimePatch {
         Self {
             patch,
             access_source,
+            direct_recipients: None,
         }
     }
 
@@ -57,6 +60,19 @@ impl SoupRealtimePatch {
     pub fn for_entity(patch: Patch<Entity<'static>>) -> Self {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
+    }
+
+    /// Creates a patch addressed directly to the supplied users.
+    pub fn for_users(
+        patch: Patch<Entity<'static>>,
+        direct_recipients: Vec<MacroUserIdStr<'static>>,
+    ) -> Self {
+        let access_source = patch.value().clone();
+        Self {
+            patch,
+            access_source,
+            direct_recipients: Some(direct_recipients),
+        }
     }
 }
 

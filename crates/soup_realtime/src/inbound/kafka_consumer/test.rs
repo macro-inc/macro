@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 
 use channels::domain::{
     broker_events::{
-        ChannelMessageAttachmentCreatedMetadata, ChannelMessageDeletedMetadata, ChannelTopicEvent,
+        ChannelMessageAttachmentCreatedMetadata, ChannelMessageDeletedMetadata,
+        ChannelParticipantRemovedMetadata, ChannelTopicEvent,
     },
-    models::ChannelSender,
+    models::{ChannelSender, ChannelType},
 };
 use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use documents::domain::events::{
@@ -135,6 +136,27 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
 }
 
 #[test]
+fn moving_a_document_out_of_a_project_updates_the_previous_project() {
+    let previous_project_id = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user(),
+        actor_user_id: None,
+        document_name: None,
+        previous_project_id: Some(previous_project_id.clone()),
+        project_id: None,
+        file_type: None,
+        share_permission_updated: false,
+    });
+
+    let patches = patches_from_document_event(&event);
+    assert_eq!(patches.len(), 2);
+    assert!(matches!(patches[1].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Project);
+    assert_eq!(patch_entity(&patches[1]).entity_id, previous_project_id);
+}
+
+#[test]
 fn document_edit_interactions_map_to_updated_patches() {
     let edited = DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
         document_id: DOCUMENT_ID.to_string(),
@@ -204,6 +226,25 @@ fn chat_metadata_events_map_to_updated_patches() {
 }
 
 #[test]
+fn moving_a_chat_out_of_a_project_updates_the_previous_project() {
+    let previous_project_id = Uuid::now_v7().to_string();
+    let event = ChatTopicEvent::Updated(ChatUpdatedMetadata {
+        chat_id: DOCUMENT_ID.to_string(),
+        actor_user_id: user(),
+        name: None,
+        previous_project_id: Some(previous_project_id.clone()),
+        project_id: None,
+        share_permission_updated: false,
+    });
+
+    let patches = patches_from_chat_event(&event);
+    assert_eq!(patches.len(), 2);
+    assert!(matches!(patches[1].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Project);
+    assert_eq!(patch_entity(&patches[1]).entity_id, previous_project_id);
+}
+
+#[test]
 fn deleted_chat_messages_do_not_change_soup() {
     let event = ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
         chat_id: DOCUMENT_ID.to_string(),
@@ -258,6 +299,28 @@ fn attachment_events_use_only_metadata_available_on_the_existing_event() {
     assert_eq!(patches.len(), 1);
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
+}
+
+#[test]
+fn removing_channel_participants_sends_deletes_directly_to_them() {
+    let channel_id = Uuid::now_v7();
+    let removed_user = user();
+    let event = ChannelTopicEvent::ParticipantRemoved(ChannelParticipantRemovedMetadata {
+        channel_id,
+        channel_type: ChannelType::Private,
+        removed_by: removed_user.clone(),
+        removed_user_ids: vec![removed_user.clone()],
+    });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Deleted(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
+    assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
+    assert_eq!(
+        patches[0].direct_recipients.as_deref(),
+        Some(&[removed_user][..])
+    );
 }
 
 #[test]

@@ -111,11 +111,11 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
             if let Some(project_id) = metadata.project_id.as_deref() {
                 push_unique_update(&mut updates, EntityType::Project, project_id);
-                if metadata.previous_project_id.as_deref() != Some(project_id)
-                    && let Some(previous_project_id) = metadata.previous_project_id.as_deref()
-                {
-                    push_unique_update(&mut updates, EntityType::Project, previous_project_id);
-                }
+            }
+            if metadata.previous_project_id.as_deref() != metadata.project_id.as_deref()
+                && let Some(previous_project_id) = metadata.previous_project_id.as_deref()
+            {
+                push_unique_update(&mut updates, EntityType::Project, previous_project_id);
             }
         }
         DocumentTopicEvent::Deleted(metadata) => {
@@ -199,11 +199,11 @@ fn patches_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimePatch> {
             push_unique_update(&mut updates, EntityType::Chat, &metadata.chat_id);
             if let Some(project_id) = metadata.project_id.as_deref() {
                 push_unique_update(&mut updates, EntityType::Project, project_id);
-                if metadata.previous_project_id.as_deref() != Some(project_id)
-                    && let Some(previous_project_id) = metadata.previous_project_id.as_deref()
-                {
-                    push_unique_update(&mut updates, EntityType::Project, previous_project_id);
-                }
+            }
+            if metadata.previous_project_id.as_deref() != metadata.project_id.as_deref()
+                && let Some(previous_project_id) = metadata.previous_project_id.as_deref()
+            {
+                push_unique_update(&mut updates, EntityType::Project, previous_project_id);
             }
         }
         ChatTopicEvent::Deleted(metadata) => {
@@ -314,9 +314,10 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::ParticipantAdded(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::ParticipantRemoved(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
+        ChannelTopicEvent::ParticipantRemoved(metadata) => vec![SoupRealtimePatch::for_users(
+            Patch::Deleted(entity(EntityType::Channel, metadata.channel_id)),
+            metadata.removed_user_ids.clone(),
+        )],
         ChannelTopicEvent::Created(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
@@ -514,15 +515,8 @@ where
                                 topic = kafka_message.topic(),
                                 partition = kafka_message.partition(),
                                 offset = kafka_message.offset(),
-                                "realtime Soup fan-out retries exhausted; pausing partition for redelivery"
+                                "realtime Soup fan-out retries exhausted; restarting consumer for redelivery"
                             );
-                            // Kafka commits are cumulative within a partition, so
-                            // pause it before any later record can advance the
-                            // committed offset past this failure.
-                            consumer
-                                .inner()
-                                .pause_message_partition(kafka_message)
-                                .context("failed to pause Kafka partition after fan-out failure")?;
                             return Err(error
                                 .context("realtime Soup entity consumer requires restart for redelivery")
                                 .into_dynamic());

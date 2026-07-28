@@ -137,16 +137,20 @@ where
             entity_id = %patch.patch.value().entity_id,
             access_source_type = %patch.access_source.entity_type,
             access_source_id = %patch.access_source.entity_id,
+            direct_recipients = patch.direct_recipients.is_some(),
             recipient_count = tracing::field::Empty,
         ),
         err
     )]
     async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
-        let mut users = self
-            .access_expander
-            .expand_user_access(&patch.access_source)
-            .await
-            .context("failed to expand current user access")?;
+        let mut users = match patch.direct_recipients.clone() {
+            Some(users) => users,
+            None => self
+                .access_expander
+                .expand_user_access(&patch.access_source)
+                .await
+                .context("failed to expand current user access")?,
+        };
 
         let mut seen = HashSet::with_capacity(users.len());
         users.retain(|user_id| seen.insert(user_id.clone()));

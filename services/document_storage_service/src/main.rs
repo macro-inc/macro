@@ -138,6 +138,14 @@ mod model;
 mod outbound;
 mod service;
 
+const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
+const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
+
+fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
+    let exponent = consecutive_failures.saturating_sub(1).min(6);
+    Duration::from_secs((1_u64 << exponent).min(SOUP_CONSUMER_RESTART_MAX_DELAY_SECS))
+}
+
 maybe_env_vars! {
     struct AppleBundleId;
     struct SnsApnsVoipPlatformArn;
@@ -934,6 +942,7 @@ async fn main() -> anyhow::Result<()> {
         let macro_event_broker = macro_event_broker.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
+            let mut consecutive_failures = 0_u32;
             loop {
                 if cancellation_token.is_cancelled() {
                     break;
@@ -952,20 +961,38 @@ async fn main() -> anyhow::Result<()> {
                     break;
                 }
 
-                match result {
+                let restart_delay = match result {
                     Ok(()) => {
-                        tracing::error!("realtime Soup entity consumer exited unexpectedly")
+                        consecutive_failures = 0;
+                        tracing::error!("realtime Soup entity consumer exited unexpectedly");
+                        soup_consumer_restart_delay(1)
                     }
-                    Err(error) => tracing::error!(
-                        error = ?error,
-                        "realtime Soup entity consumer exited unexpectedly"
-                    ),
-                }
+                    Err(error) => {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        let restart_delay = soup_consumer_restart_delay(consecutive_failures);
+                        if consecutive_failures >= SOUP_CONSUMER_RESTART_ALERT_THRESHOLD {
+                            tracing::error!(
+                                error = ?error,
+                                consecutive_failures,
+                                restart_delay_secs = restart_delay.as_secs(),
+                                "realtime Soup entity consumer repeatedly failed"
+                            );
+                        } else {
+                            tracing::warn!(
+                                error = ?error,
+                                consecutive_failures,
+                                restart_delay_secs = restart_delay.as_secs(),
+                                "realtime Soup entity consumer failed; scheduling restart"
+                            );
+                        }
+                        restart_delay
+                    }
+                };
 
                 tokio::select! {
                     biased;
                     _ = cancellation_token.cancelled() => break,
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                    _ = tokio::time::sleep(restart_delay) => {}
                 }
             }
         }

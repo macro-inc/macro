@@ -211,6 +211,30 @@ async fn recipient_expansion_can_use_a_different_entity_from_the_patch() {
 }
 
 #[tokio::test]
+async fn direct_recipients_bypass_current_access_expansion() {
+    let recipient = user("removed");
+    let harness = harness(vec![user("current")], true, HashSet::new());
+
+    harness
+        .service
+        .notify_users(SoupRealtimePatch::for_users(
+            Patch::Deleted(document(DOCUMENT_ID)),
+            vec![recipient.clone()],
+        ))
+        .await
+        .expect("direct publication succeeds");
+
+    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        harness.messages.lock().expect("messages lock").as_slice(),
+        &[SoupRealtimeMessage::new(
+            recipient,
+            Patch::Deleted(document(DOCUMENT_ID)),
+        )]
+    );
+}
+
+#[tokio::test]
 async fn updated_and_deleted_patches_are_published_unchanged() {
     for patch in [
         Patch::Updated(document(DOCUMENT_ID)),
