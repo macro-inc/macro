@@ -754,8 +754,8 @@ export function Channel(props: ChannelProps) {
                               return messageById().get(threadId);
                             }}
                             threadHasReplies={() =>
-                              (messageById().get(threadId)?.thread.reply_count ??
-                                0) > 0
+                              (messageById().get(threadId)?.thread
+                                .reply_count ?? 0) > 0
                             }
                             onNavigateToTarget={() =>
                               goToMessage(
