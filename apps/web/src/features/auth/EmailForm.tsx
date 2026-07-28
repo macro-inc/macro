@@ -1,15 +1,8 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { platformFetch } from '@core/util/platformFetch';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
-import { createCallback } from '@solid-primitives/rootless';
-import { action, useSearchParams, useSubmission } from '@solidjs/router';
-import { cn } from '@ui';
-import { createEffect, createSignal, Show, untrack } from 'solid-js';
-import { ErrorMsg, Input, Stage } from './Shared';
+import { action, useSubmission } from '@solidjs/router';
+import { Stage } from './Shared';
 
 // Construct the redirect uri to use for passwordless login.
 // This will send us back to the application after clicking the magic link.
@@ -118,101 +111,4 @@ export function useResetEmailCode(setStage: (next: Stage) => void) {
     submission.clear();
     setStage(Stage.Email);
   };
-}
-
-export function EmailForm(props: { setStage: (next: Stage) => void }) {
-  const [isPasswordLogin, setIsPasswordLogin] = createSignal(false);
-  const submission = useSubmission(sendEmailCode);
-  const [searchParams] = useSearchParams();
-  const searchParamsEmail = untrack(() => {
-    const email = searchParams.email;
-    if (typeof email === 'string') return email;
-  });
-
-  createEffect(() => {
-    if (sentEmailCode(submission.result)) {
-      props.setStage(Stage.Verify);
-    } else if (submission.result === 'isPasswordLogin') {
-      setIsPasswordLogin(true);
-    } else if (submission.result === 'LoggedIn') {
-      props.setStage(Stage.Done);
-    }
-  });
-
-  const handleBack = createCallback(() => {
-    submission.clear();
-    props.setStage(Stage.None);
-  });
-
-  return (
-    <div class="grid select-none">
-      <form action={sendEmailCode} method="post" class="m-0">
-        <div
-          class={cn(
-            'flex items-center justify-center text-center py-4 px-6 border-y border-edge-muted',
-            virtualKeyboardVisible() && 'border-t border-edge-muted'
-          )}
-        >
-          <Input
-            value={searchParamsEmail}
-            placeholder="Email Address"
-            type="email"
-            id="email"
-          />
-        </div>
-
-        <Show when={isPasswordLogin()}>
-          <div class="grid items-center justify-center py-4 px-6 border-b border-edge-muted">
-            <Input
-              required={isPasswordLogin()}
-              placeholder="Password"
-              type="password"
-              id="password"
-            />
-          </div>
-        </Show>
-
-        <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
-          <button
-            class="hover:text-accent hover:transition-none transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
-            onClick={() => {
-              if (isTouchDevice()) return;
-              handleBack();
-            }}
-            // Using onPointerDown so that on touch device able to interact with button before closing virtual keyboard
-            onPointerDown={(e) => {
-              if (!isTouchDevice()) return;
-              e.stopPropagation();
-              e.preventDefault();
-              handleBack();
-            }}
-            type="button"
-          >
-            <ArrowLeft class="size-5" />
-            <span>Back</span>
-          </button>
-
-          <button
-            class="hover:text-accent hover:transition-none transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
-            type="submit"
-            disabled={submission.pending}
-            onClick={(e) => {
-              if (isTouchDevice()) e.preventDefault();
-            }}
-            // Using onPointerDown so that on touch device able to interact with button before closing virtual keyboard
-            onPointerDown={(e) => {
-              if (!isTouchDevice()) return;
-              e.stopPropagation();
-              e.preventDefault();
-              e.currentTarget.form?.requestSubmit();
-            }}
-          >
-            <span>Continue</span>
-            <ArrowRight class="size-5" />
-          </button>
-        </div>
-        <ErrorMsg msg={submission.error?.message} />
-      </form>
-    </div>
-  );
 }

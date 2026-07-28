@@ -5,7 +5,6 @@ import { Login } from '@app/features/auth/Login';
 import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
-import { Signup } from '@app/features/auth/Signup';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { SearchProvider } from '@app/features/next-soup/search-context';
@@ -395,7 +394,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: Signup,
+    component: () => <Login signupMode />,
   },
   {
     path: CALLBACK_PATH,
