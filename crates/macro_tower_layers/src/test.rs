@@ -13,6 +13,7 @@ use tracing::{
 #[derive(Default)]
 struct CapturedTracing {
     event_levels: Mutex<Vec<Level>>,
+    event_fields: Mutex<Vec<HashMap<String, String>>>,
     span_level: Mutex<Option<Level>>,
     declared_span_fields: Mutex<HashSet<String>>,
     initial_span_fields: Mutex<HashMap<String, String>>,
@@ -87,6 +88,10 @@ impl tracing::Subscriber for TracingCapture {
             .lock()
             .unwrap()
             .push(*event.metadata().level());
+
+        let mut fields = HashMap::new();
+        event.record(&mut FieldCapture(&mut fields));
+        self.captured.event_fields.lock().unwrap().push(fields);
     }
 
     fn enter(&self, _span: &tracing::span::Id) {}
@@ -150,13 +155,21 @@ fn successful_response_records_telemetry_without_completion_event() {
 }
 
 #[test]
-fn slow_response_emits_one_warning() {
+fn slow_response_warning_includes_request_method_and_path() {
     let (subscriber, captured) = TracingCapture::new();
 
     with_default(subscriber, || {
-        let request = Request::builder().uri("/documents").body(()).unwrap();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/documents?access_token=secret")
+            .body(())
+            .unwrap();
         let span = MakeHttpRequestSpan.make_span(&request);
-        let response = Response::builder().status(200).body(()).unwrap();
+        let mut response = Response::builder().status(200).body(()).unwrap();
+        response.extensions_mut().insert(RequestMetadata {
+            method: request.method().clone(),
+            path: request.uri().path().into(),
+        });
         CustomOnResponse::new_with_threshold(Duration::from_millis(200)).on_response(
             &response,
             Duration::from_millis(200),
@@ -167,6 +180,29 @@ fn slow_response_emits_one_warning() {
     assert_eq!(captured.event_count(Level::WARN), 1);
     assert_eq!(captured.event_count(Level::INFO), 0);
     assert_eq!(captured.event_count(Level::ERROR), 0);
+
+    let events = captured.event_fields.lock().unwrap();
+    assert_eq!(events[0].get("http.request.method").unwrap(), "\"POST\"");
+    assert_eq!(events[0].get("url.path").unwrap(), "\"/documents\"");
+    assert!(events[0].values().all(|value| !value.contains("secret")));
+}
+
+#[tokio::test]
+async fn request_metadata_layer_attaches_method_and_path_to_response() {
+    let request = Request::builder()
+        .method("PATCH")
+        .uri("/documents/123?access_token=secret")
+        .body(())
+        .unwrap();
+    let service = RequestMetadataLayer.layer(tower::service_fn(|_request| async {
+        Ok::<_, std::convert::Infallible>(Response::new(()))
+    }));
+
+    let response = tower::ServiceExt::oneshot(service, request).await.unwrap();
+    let metadata = response.extensions().get::<RequestMetadata>().unwrap();
+
+    assert_eq!(metadata.method, Method::PATCH);
+    assert_eq!(metadata.path.as_ref(), "/documents/123");
 }
 
 #[test]

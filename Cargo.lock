@@ -8633,6 +8633,7 @@ name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
  "http 1.4.0",
+ "pin-project-lite",
  "tokio",
  "tower 0.5.3",
  "tower-http",

@@ -4,17 +4,20 @@
 #[cfg(test)]
 mod test;
 use std::{
+    future::Future,
     sync::{
         Arc,
         atomic::{self, AtomicU64},
     },
+    task::{Context, Poll},
     time::Duration,
 };
 
-use http::{HeaderValue, Request, Response};
+use http::{HeaderValue, Method, Request, Response};
+use pin_project_lite::pin_project;
 use tokio::time::MissedTickBehavior;
 use tower::{
-    ServiceBuilder,
+    Layer, Service, ServiceBuilder,
     layer::util::{Identity, Stack},
 };
 use tower_http::{
@@ -88,6 +91,92 @@ fn latency_millis(latency: Duration) -> u64 {
     latency.as_millis().try_into().unwrap_or(u64::MAX)
 }
 
+#[derive(Clone, Debug)]
+struct RequestMetadata {
+    method: Method,
+    path: Box<str>,
+}
+
+/// Captures request metadata and attaches it to the corresponding response.
+///
+/// This lets response tracing callbacks include request fields directly on their events.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RequestMetadataLayer;
+
+/// Service created by [`RequestMetadataLayer`].
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct RequestMetadataService<S> {
+    inner: S,
+}
+
+impl<S> Layer<S> for RequestMetadataLayer {
+    type Service = RequestMetadataService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RequestMetadataService { inner }
+    }
+}
+
+pin_project! {
+    /// Response future used by [`RequestMetadataService`].
+    #[doc(hidden)]
+    pub struct RequestMetadataFuture<F> {
+        #[pin]
+        inner: F,
+        metadata: Option<RequestMetadata>,
+    }
+}
+
+impl<F, B, E> Future for RequestMetadataFuture<F>
+where
+    F: Future<Output = Result<Response<B>, E>>,
+{
+    type Output = Result<Response<B>, E>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut this = self.project();
+        match this.inner.as_mut().poll(cx) {
+            Poll::Ready(Ok(mut response)) => {
+                response.extensions_mut().insert(
+                    this.metadata
+                        .take()
+                        .expect("future polled after completion"),
+                );
+                Poll::Ready(Ok(response))
+            }
+            Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for RequestMetadataService<S>
+where
+    S: Service<Request<ReqBody>, Response = Response<ResBody>>,
+{
+    type Response = Response<ResBody>;
+    type Error = S::Error;
+    type Future = RequestMetadataFuture<S::Future>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
+        let metadata = RequestMetadata {
+            method: request.method().clone(),
+            path: request.uri().path().into(),
+        };
+
+        RequestMetadataFuture {
+            inner: self.inner.call(request),
+            metadata: Some(metadata),
+        }
+    }
+}
+
 impl<B> OnResponse<B> for CustomOnResponse {
     fn on_response(self, response: &Response<B>, latency: Duration, span: &Span) {
         let status = response.status();
@@ -97,10 +186,20 @@ impl<B> OnResponse<B> for CustomOnResponse {
 
         // Server errors are logged once by CustomOnFailure after this callback returns.
         if !status.is_server_error() && latency >= self.warning_threshold {
+            let metadata = response.extensions().get::<RequestMetadata>();
+            let method = metadata
+                .map(|metadata| metadata.method.as_str())
+                .unwrap_or_default();
+            let path = metadata
+                .map(|metadata| metadata.path.as_ref())
+                .unwrap_or_default();
+
             tracing::warn!(
                 parent: span,
                 latency_ms,
                 status = status.as_u16(),
+                "http.request.method" = method,
+                "url.path" = path,
                 "slow http request"
             );
         }
@@ -146,7 +245,7 @@ type ServiceBuilderAlias = ServiceBuilder<
                 tower_http::trace::DefaultOnEos,
                 CustomOnFailure,
             >,
-            Stack<SetRequestIdLayer<RequestIdBuilder>, Identity>,
+            Stack<RequestMetadataLayer, Stack<SetRequestIdLayer<RequestIdBuilder>, Identity>>,
         >,
     >,
 >;
@@ -194,6 +293,7 @@ impl MacroRequestIdAndTracingLayer {
 
         let svc_builder = ServiceBuilder::new()
             .set_x_request_id(RequestIdBuilder::default())
+            .layer(RequestMetadataLayer)
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(MakeHttpRequestSpan)
