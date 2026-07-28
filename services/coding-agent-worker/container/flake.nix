@@ -10,7 +10,7 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ pkgs.nodejs pkgs.git pkgs.opencode pkgs.github-mcp-server ];
+        packages = [ pkgs.nodejs pkgs.git pkgs.gh pkgs.opencode pkgs.github-mcp-server ];
       };
     };
 }
