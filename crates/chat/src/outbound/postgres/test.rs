@@ -138,6 +138,25 @@ async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
+async fn delete_message_returns_parent_chat_id_and_removes_message(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
+    let (chat_id, message_id) = create_chat_with_message(&repo).await;
+
+    let deleted_from_chat_id = crate::domain::ports::MessageRepo::delete(&repo, &message_id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_from_chat_id, chat_id);
+    assert!(matches!(
+        crate::domain::ports::MessageRepo::get_message_content(&repo, &chat_id, &message_id).await,
+        Err(ChatErr::NotFound)
+    ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool);
     let (chat_id, message_id) = create_chat_with_message(&repo).await;

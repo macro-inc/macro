@@ -385,7 +385,7 @@ impl MessageRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, message_id: &str) -> Result<()> {
+    async fn delete(&self, message_id: &str) -> Result<String> {
         queries::delete_message::delete_message(&self.pool, message_id)
             .await
             .map_err(to_chat_err)
