@@ -508,7 +508,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
               <div class="relative flex items-center pl-2 h-full">
                 <SidebarExpandButton />
                 <SplitCloseButton />
-                <div class='flex items-center @max-[380px]/split-header:hidden'>
+                <div class="flex items-center @max-[380px]/split-header:hidden">
                   <SplitBackButton />
                   <SplitForwardButton />
                 </div>
