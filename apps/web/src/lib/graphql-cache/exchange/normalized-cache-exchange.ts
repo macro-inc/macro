@@ -42,7 +42,6 @@ import {
   Kind,
   type OperationDefinitionNode,
   parse,
-  visit,
 } from 'graphql';
 import {
   empty,
@@ -171,116 +170,7 @@ function cacheResult(
   };
 }
 
-const entityCacheTypeByApiType: Readonly<Record<string, string>> = {
-  DOCUMENT: 'GraphqlSoupDocument',
-  CHAT: 'GraphqlSoupChat',
-  PROJECT: 'GraphqlSoupProject',
-  EMAIL_THREAD: 'GraphqlSoupEmailThread',
-  CHANNEL: 'GraphqlSoupChannel',
-  CHANNEL_MESSAGE: 'GraphqlSoupChannelMessage',
-  CALL: 'GraphqlSoupCall',
-  CRM_COMPANY: 'GraphqlSoupCrmCompany',
-  FOREIGN_ENTITY: 'GraphqlSoupForeignEntity',
-};
-
-type MutationResponseKeys = {
-  affectedEntities: Set<string>;
-  entityType: Set<string>;
-  id: Set<string>;
-};
-
-function mutationResponseKeys(op: Operation): MutationResponseKeys {
-  const keys: MutationResponseKeys = {
-    affectedEntities: new Set(),
-    entityType: new Set(),
-    id: new Set(),
-  };
-  visit(op.query, {
-    Field(node) {
-      const name = node.name.value as keyof MutationResponseKeys;
-      if (name in keys) keys[name].add(node.alias?.value ?? node.name.value);
-    },
-  });
-  return keys;
-}
-
-function cacheKey(apiType: unknown, entityId: unknown): string | undefined {
-  if (typeof entityId !== 'string' || typeof apiType !== 'string') return;
-  const cacheType = entityCacheTypeByApiType[apiType];
-  return cacheType ? `${cacheType}:${entityId}` : undefined;
-}
-
-/** Collect requested refs from mutation variables, independent of selections. */
-function mutationInputCacheKeys(variables: unknown): Set<string> {
-  const keys = new Set<string>();
-  const seen = new Set<object>();
-  const pending: unknown[] = [variables];
-  while (pending.length > 0) {
-    const value = pending.pop();
-    if (value === null || typeof value !== 'object' || seen.has(value))
-      continue;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      pending.push(...value);
-      continue;
-    }
-    const record = value as Record<string, unknown>;
-    const key = cacheKey(record.type, record.id);
-    if (key) keys.add(key);
-    if (typeof record.projectId === 'string') {
-      keys.add(`GraphqlSoupProject:${record.projectId}`);
-    }
-    pending.push(...Object.values(record));
-  }
-  return keys;
-}
-
-/** Collect normalized keys from mutation inputs and selected affected refs. */
-function mutationCacheKeys(data: unknown, op: Operation): string[] {
-  const responseKeys = mutationResponseKeys(op);
-  const keys = mutationInputCacheKeys(op.variables);
-  const seen = new Set<object>();
-  const pending: unknown[] = [data];
-
-  const addRefs = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      for (const item of value) addRefs(item);
-      return;
-    }
-    if (value === null || typeof value !== 'object') return;
-    const ref = value as Record<string, unknown>;
-    const entityId = [...responseKeys.id]
-      .map((key) => ref[key])
-      .find((candidate) => typeof candidate === 'string');
-    const apiType = [...responseKeys.entityType]
-      .map((key) => ref[key])
-      .find((candidate) => typeof candidate === 'string');
-    const key = cacheKey(apiType, entityId);
-    if (key) keys.add(key);
-  };
-
-  while (pending.length > 0) {
-    const value = pending.pop();
-    if (value === null || typeof value !== 'object' || seen.has(value))
-      continue;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      pending.push(...value);
-      continue;
-    }
-    for (const [field, child] of Object.entries(value)) {
-      if (responseKeys.affectedEntities.has(field)) {
-        addRefs(child);
-      } else {
-        pending.push(child);
-      }
-    }
-  }
-
-  return [...keys];
-}
-
-type SubscriptionCacheEffect =
+type CacheEffect =
   | { kind: 'write'; data: unknown }
   | { kind: 'delete'; key: string };
 
@@ -298,42 +188,65 @@ function graphqlCacheDeletionKey(value: unknown): string | undefined {
   return `${record.graphqlTypeName}:${record.entityId}`;
 }
 
+/** Returns whether a response subtree contains an explicit cache deletion. */
+function containsCacheDeletion(data: unknown): boolean {
+  if (graphqlCacheDeletionKey(data) !== undefined) return true;
+  if (data === null || typeof data !== 'object') return false;
+  return Array.isArray(data)
+    ? data.some(containsCacheDeletion)
+    : Object.values(data).some(containsCacheDeletion);
+}
+
 /**
- * Converts a subscription payload into ordered cache effects. Ordinary
- * subscription data is normalized without knowing its schema shape. The only
- * special case is `GraphqlCacheDeletion`; when it occurs in a buffered root
- * list, surrounding values are written as singleton list results so event
- * order remains observable by the cache.
+ * Converts any GraphQL operation payload into ordered cache effects. Ordinary
+ * data remains one normalized write. When an explicit cache deletion is nested
+ * in an object or list, writes are narrowed to the corresponding response path
+ * so surrounding writes and deletions retain their wire order. Response keys
+ * and ancestor scalar context (including `__typename`) are copied verbatim,
+ * which preserves aliases and inline-fragment resolution without schema or
+ * operation knowledge.
  */
-function subscriptionCacheEffects(data: unknown): SubscriptionCacheEffect[] {
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+function operationCacheEffects(data: unknown): CacheEffect[] {
+  const deletionKey = graphqlCacheDeletionKey(data);
+  if (deletionKey !== undefined) {
+    return [{ kind: 'delete', key: deletionKey }];
+  }
+  if (!containsCacheDeletion(data)) return [{ kind: 'write', data }];
+
+  if (Array.isArray(data)) {
+    return data.flatMap((value) =>
+      operationCacheEffects(value).map((effect) =>
+        effect.kind === 'write'
+          ? { kind: 'write' as const, data: [effect.data] }
+          : effect
+      )
+    );
+  }
+
+  if (data === null || typeof data !== 'object') {
     return [{ kind: 'write', data }];
   }
 
-  // GraphQL subscriptions have exactly one root field (which may be aliased).
-  const rootFields = Object.entries(data);
-  if (rootFields.length !== 1) return [{ kind: 'write', data }];
+  const entries = Object.entries(data);
+  const context = entries.filter(([, value]) => !containsCacheDeletion(value));
+  const effectFields = entries.filter(([, value]) =>
+    containsCacheDeletion(value)
+  );
 
-  const [responseKey, payload] = rootFields[0] as [string, unknown];
-  if (Array.isArray(payload)) {
-    const hasDeletion = payload.some(
-      (value) => graphqlCacheDeletionKey(value) !== undefined
-    );
-    if (!hasDeletion) return [{ kind: 'write', data }];
+  return effectFields.flatMap(([effectField, value]) =>
+    operationCacheEffects(value).map((effect) => {
+      if (effect.kind === 'delete') return effect;
 
-    return payload.map((value) => {
-      const key = graphqlCacheDeletionKey(value);
-      return key
-        ? { kind: 'delete' as const, key }
-        : {
-            kind: 'write' as const,
-            data: { [responseKey]: [value] },
-          };
-    });
-  }
-
-  const key = graphqlCacheDeletionKey(payload);
-  return key ? [{ kind: 'delete', key }] : [{ kind: 'write', data }];
+      const wrapped: Record<string, unknown> = {};
+      for (const [field, fieldValue] of entries) {
+        if (field === effectField) wrapped[field] = effect.data;
+        else if (context.some(([contextField]) => contextField === field)) {
+          wrapped[field] = fieldValue;
+        }
+      }
+      return { kind: 'write' as const, data: wrapped };
+    })
+  );
 }
 
 function queuedMutationResult(
@@ -645,6 +558,31 @@ export function normalizedCacheExchange(
         }
       }
 
+      /** Applies operation cache effects serially and isolates every failure. */
+      async function applyOperationCacheEffects(
+        op: Operation,
+        effects: CacheEffect[]
+      ): Promise<void> {
+        for (const effect of effects) {
+          try {
+            if (effect.kind === 'write') {
+              await host.writeQuery({
+                query: queryText(op),
+                operationName: operationName(op),
+                variables: op.variables as Record<string, unknown> | undefined,
+                data: effect.data,
+              });
+            } else {
+              await host.deleteRecords([effect.key]);
+            }
+          } catch (error) {
+            // One failed cache effect must neither skip later effects nor
+            // prevent delivery of the original operation result.
+            options.onCacheError?.(error, op);
+          }
+        }
+      }
+
       async function writeThrough(
         result: OperationResult
       ): Promise<OperationResult> {
@@ -656,28 +594,9 @@ export function normalizedCacheExchange(
           // result after its effects settle.
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve();
-          const effects = previousEffects.then(async () => {
-            for (const effect of subscriptionCacheEffects(result.data)) {
-              try {
-                if (effect.kind === 'write') {
-                  await host.writeQuery({
-                    query: queryText(op),
-                    operationName: operationName(op),
-                    variables: op.variables as
-                      | Record<string, unknown>
-                      | undefined,
-                    data: effect.data,
-                  });
-                } else {
-                  await host.deleteRecords([effect.key]);
-                }
-              } catch (error) {
-                // One failed cache effect must neither skip later effects nor
-                // terminate the subscription result stream.
-                options.onCacheError?.(error, op);
-              }
-            }
-          });
+          const effects = previousEffects.then(() =>
+            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+          );
           subscriptionEffectChains.set(op.key, effects);
           try {
             await effects;
@@ -749,8 +668,13 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
-                const keys = mutationCacheKeys(result.data, op);
-                if (keys.length > 0) await host.deleteRecords(keys);
+                const effects = operationCacheEffects(result.data);
+                if (effects.some((effect) => effect.kind === 'delete')) {
+                  // Commit already normalized the complete result. Replay only
+                  // mixed explicit effects so their final write/delete order is
+                  // identical to a non-optimistic operation.
+                  await applyOperationCacheEffects(op, effects);
+                }
                 revalidateAfterCommit(committed.revalidations ?? [], op);
                 disposition = 'committed';
               }
@@ -777,20 +701,10 @@ export function normalizedCacheExchange(
 
           const optimistic = optimisticContextOf(op);
           if (result.data != null && !result.error) {
-            try {
-              // Plain mutation write-through: normalized entities update
-              // dependent cached queries.
-              await host.writeQuery({
-                query: queryText(op),
-                operationName: operationName(op),
-                variables: op.variables as Record<string, unknown> | undefined,
-                data: result.data,
-              });
-              const keys = mutationCacheKeys(result.data, op);
-              if (keys.length > 0) await host.deleteRecords(keys);
-            } catch (error) {
-              options.onCacheError?.(error, op);
-            }
+            await applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data)
+            );
           }
           if (optimistic) {
             return withOptimisticMutationDisposition(result, {
