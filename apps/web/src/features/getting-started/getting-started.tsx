@@ -1,5 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { HomeBackfillProgress } from '@app/features/home/home-backfill-progress';
+import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -19,6 +20,7 @@ import { createChat } from '@core/util/create';
 import { AnimatedProfileIcon } from '@icon/wide-profile';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import PaletteIcon from '@phosphor/palette.svg';
+import PlayCircleIcon from '@phosphor/play-circle.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
@@ -31,7 +33,7 @@ import {
   lightModeTheme,
   themeMode,
 } from '@theme/signals/themeSignals';
-import { createEffect, For, on, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js';
 import { AGENT_EXAMPLES } from './agent-examples';
 import { ActionRow, SectionHeader } from './getting-started-rows';
 import {
@@ -80,6 +82,11 @@ function GettingStartedContent() {
   const ownUserName = useOwnUserName();
   const starterDocs = useStarterDocsQuery();
   const hasPaidAccess = useHasPaidAccess();
+
+  // The interactive tutorial, replayed on demand. Root auto-opens its own copy
+  // for first-time users; this one is always a replay, so it never passes
+  // isFirstTimeOnboarding.
+  const [tutorialOpen, setTutorialOpen] = createSignal(false);
 
   /**
    * Open content beside the list: re-engage a manually-closed Viewer first so
@@ -166,6 +173,13 @@ function GettingStartedContent() {
       id: 'basics',
       title: 'Set up your account',
       actions: [
+        {
+          id: 'play-tutorial',
+          icon: PlayCircleIcon,
+          title: 'Play the Macro tutorial',
+          description: "Take a quick tour of Macro's core features",
+          onActivate: () => setTutorialOpen(true),
+        },
         {
           id: 'how-to-guide',
           icon: BookOpenIcon,
@@ -284,6 +298,10 @@ function GettingStartedContent() {
           </For>
         </div>
       </div>
+      <InteractiveOnboardingModal
+        open={tutorialOpen()}
+        onOpenChange={setTutorialOpen}
+      />
     </main>
   );
 }

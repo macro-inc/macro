@@ -969,7 +969,6 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "base64 0.22.1",
- "bot_id",
  "channels",
  "chrono",
  "comms_db_client",

@@ -41,7 +41,6 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
-bot_id = { path = "../../crates/bot_id" }
 channels = { path = "../../crates/channels", default-features = false, features = [
   "outbound",
 ] }

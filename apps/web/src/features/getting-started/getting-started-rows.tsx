@@ -8,9 +8,12 @@ import type {
 } from './getting-started-types';
 
 /**
- * One activating action in the shared home-row style (icon + title +
- * description, full width), with a trailing checkbox that fills once the
- * action completes. Rows stay clickable when complete.
+ * One activating action in the shared home-row style (icon + title, full
+ * width), with a trailing checkbox that fills once the action completes. Rows
+ * stay clickable when complete.
+ *
+ * `action.description` is deliberately not rendered for now — we're trying
+ * title-only rows. The copy is kept on the action data so it can come back.
  */
 export function ActionRow(props: {
   action: GettingStartedAction;
@@ -28,7 +31,6 @@ export function ActionRow(props: {
       </span>
       <div class="min-w-0 flex-1">
         <div class="text-sm font-medium text-ink">{props.action.title}</div>
-        <div class="text-xs text-ink-muted">{props.action.description}</div>
       </div>
       <InlineCheckbox checked={props.complete} />
     </button>
