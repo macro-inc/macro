@@ -33,10 +33,14 @@ use reqwest::Url;
 #[derive(Clone, Debug)]
 pub struct AuthedClient {
     inner: reqwest::Client,
+    /// Same Authorization, never the tenant header. reqwest merges default
+    /// headers at execute time, so a default header cannot be removed
+    /// per-request — tenant-agnostic endpoints need their own client.
+    tenantless: reqwest::Client,
 }
 
 /// Used to specify what tenant id we want to use
-const FUSIONAUTH_TENANT_ID_HEADER: &str = "X-FusionAuth-TenantId";
+pub(crate) const FUSIONAUTH_TENANT_ID_HEADER: &str = "X-FusionAuth-TenantId";
 
 impl AuthedClient {
     /// Creates a new authenticated client with the given API key and tenant ID.
@@ -45,18 +49,34 @@ impl AuthedClient {
     }
 
     fn with_tenant_header(api_key: String, tenant_id: String, include_tenant: bool) -> Self {
-        let auth_headers = auth_headers(api_key, tenant_id, include_tenant);
+        let auth_headers = auth_headers(api_key.clone(), tenant_id.clone(), include_tenant);
         let client = reqwest::Client::builder()
             .default_headers(auth_headers)
             .build()
             .unwrap();
+        let tenantless = reqwest::Client::builder()
+            .default_headers(auth_headers_without_tenant(api_key))
+            .build()
+            .unwrap();
 
-        Self { inner: client }
+        Self {
+            inner: client,
+            tenantless,
+        }
     }
 
     /// Returns a reference to the inner reqwest client.
     pub fn client(&self) -> &reqwest::Client {
         &self.inner
+    }
+
+    /// The same authenticated client without the tenant header, for FusionAuth
+    /// APIs that are tenant-agnostic. The identity-provider search API matches
+    /// ZERO identity providers when an X-FusionAuth-TenantId header is present
+    /// (regardless of which tenant); dev/prod never noticed because the tenant
+    /// header is only sent against local FusionAuth (multi-tenant).
+    pub(crate) fn tenantless_client(&self) -> &reqwest::Client {
+        &self.tenantless
     }
 }
 
@@ -65,8 +85,7 @@ fn auth_headers(
     tenant_id: String,
     include_tenant: bool,
 ) -> reqwest::header::HeaderMap {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(reqwest::header::AUTHORIZATION, api_key.parse().unwrap());
+    let mut headers = auth_headers_without_tenant(api_key);
 
     if include_tenant {
         tracing::trace!(
@@ -76,6 +95,12 @@ fn auth_headers(
         headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id.parse().unwrap());
     }
 
+    headers
+}
+
+fn auth_headers_without_tenant(api_key: String) -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(reqwest::header::AUTHORIZATION, api_key.parse().unwrap());
     headers
 }
 

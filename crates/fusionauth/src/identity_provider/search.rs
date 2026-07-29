@@ -29,8 +29,14 @@ pub(crate) async fn get_idp_id_by_name(
     base_url: &str,
     name: &str,
 ) -> Result<String> {
+    // The identity-provider search API is tenant-agnostic: FusionAuth matches
+    // ZERO identity providers when an X-FusionAuth-TenantId header is present
+    // (regardless of which tenant). Use the tenantless client — the tenant
+    // header is a reqwest default header on the regular client (sent against
+    // multi-tenant local FusionAuth) and default headers cannot be removed
+    // per-request.
     let res = client
-        .client()
+        .tenantless_client()
         .get(format!(
             "{base_url}/api/identity-provider/search?name={name}"
         ))
