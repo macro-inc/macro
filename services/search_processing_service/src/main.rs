@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
+use crate::inbound::kafka_consumer::run_call_event_consumer;
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -18,6 +19,7 @@ use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use tokio_util::sync::CancellationToken;
 
 mod api;
 mod config;
@@ -64,6 +66,73 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
 #[derive(RustEmbed)]
 #[folder = "pdfium-lib/linux/"]
 struct PdfiumLib;
+
+const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
+
+async fn supervise_call_event_consumer(
+    brokers: String,
+    db: PgPool,
+    opensearch_client: OpensearchClient,
+    shutdown_token: CancellationToken,
+) {
+    loop {
+        if shutdown_token.is_cancelled() {
+            tracing::info!("call event consumer supervisor stopped");
+            return;
+        }
+
+        let consumer_brokers = brokers.clone();
+        let consumer_db = db.clone();
+        let consumer_opensearch_client = opensearch_client.clone();
+        let consumer_shutdown_token = shutdown_token.clone();
+        let consumer_result = tokio::spawn(async move {
+            run_call_event_consumer(
+                &consumer_brokers,
+                consumer_db,
+                consumer_opensearch_client,
+                consumer_shutdown_token.cancelled_owned(),
+            )
+            .await
+        })
+        .await;
+
+        match consumer_result {
+            Ok(Ok(())) if shutdown_token.is_cancelled() => {
+                tracing::info!("call event consumer stopped after shutdown");
+                return;
+            }
+            Ok(Ok(())) => {
+                tracing::error!("call event consumer exited unexpectedly");
+            }
+            Ok(Err(error)) => {
+                tracing::error!(error = ?error, "call event consumer failed");
+            }
+            Err(error) if error.is_panic() => {
+                tracing::error!(error = ?error, "call event consumer panicked");
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "call event consumer task was cancelled");
+            }
+        }
+
+        if shutdown_token.is_cancelled() {
+            tracing::info!("call event consumer supervisor will not restart after shutdown");
+            return;
+        }
+
+        tracing::warn!(
+            restart_delay_seconds = CONSUMER_RESTART_DELAY.as_secs(),
+            "call event consumer stopped; waiting before restart"
+        );
+        tokio::select! {
+            _ = shutdown_token.cancelled() => {
+                tracing::info!("call event consumer supervisor will not restart after shutdown");
+                return;
+            }
+            _ = tokio::time::sleep(CONSUMER_RESTART_DELAY) => {}
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -142,8 +211,10 @@ async fn main() -> anyhow::Result<()> {
         SqsSearchEventPublisher::new(sqs_client.clone()),
     ));
 
+    let shutdown_token = CancellationToken::new();
+
     #[cfg(feature = "processing")]
-    {
+    let consumer_supervisor = {
         use std::sync::Arc;
 
         // Ensures that pdfium binary exists so we can kill the container early on failure
@@ -174,7 +245,14 @@ async fn main() -> anyhow::Result<()> {
             lexical_client: Arc::new(lexical_client),
         };
         run_search_processing_workers(ctx, config.worker_count);
-    }
+
+        tokio::spawn(supervise_call_event_consumer(
+            config.kafka_brokers.as_ref().to_owned(),
+            db.clone(),
+            opensearch_client.clone(),
+            shutdown_token.clone(),
+        ))
+    };
 
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_jobs = BackfillJobs::new(
@@ -189,15 +267,24 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to ensure backfill jobs table exists")?;
     }
 
-    api::setup_and_serve(ApiContext {
-        db,
-        authorization_state,
-        sqs_client,
-        opensearch_client: Arc::new(opensearch_client),
-        config: Arc::new(config),
-        backfill_service,
-        backfill_jobs,
-    })
-    .await?;
-    Ok(())
+    let api_result = api::setup_and_serve(
+        ApiContext {
+            db,
+            authorization_state,
+            sqs_client,
+            opensearch_client: Arc::new(opensearch_client),
+            config: Arc::new(config),
+            backfill_service,
+            backfill_jobs,
+        },
+        shutdown_token.clone(),
+    )
+    .await;
+
+    shutdown_token.cancel();
+    consumer_supervisor
+        .await
+        .context("call event consumer supervisor failed")?;
+
+    api_result
 }
