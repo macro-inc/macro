@@ -57,25 +57,6 @@ pub async fn process_message(
             )
             .await?;
         }
-        SearchQueueMessage::RemoveChannelMessage(message) => {
-            let channel_id = message
-                .channel_id
-                .parse::<Uuid>()
-                .context("failed to parse channel_id as UUID")?;
-            let message_id = message
-                .message_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .context("failed to parse message_id as UUID")?;
-            channel::process_remove_channel_message(
-                &ctx.opensearch_client,
-                channel_id,
-                message_id,
-                message.index_override.as_deref(),
-            )
-            .await?;
-        }
         SearchQueueMessage::RemoveEmailLink(message) => {
             email::remove::process_remove_messages_by_link_id(&ctx.opensearch_client, &message)
                 .await?;

@@ -2,7 +2,7 @@ use crate::{
     SQS,
     search::{
         call::{CallRecordMessage, RemoveCallRecord},
-        channel::{ChannelMessageUpdate, RemoveChannelMessage},
+        channel::ChannelMessageUpdate,
         chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
@@ -85,7 +85,6 @@ pub enum SearchQueueMessage {
     ExtractEmailThreadBatch(EmailThreadBatchMessage),
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),
-    RemoveChannelMessage(RemoveChannelMessage),
     // Call
     CallRecord(CallRecordMessage),
     RemoveCallRecord(RemoveCallRecord),
@@ -116,13 +115,6 @@ impl PrimaryId for SearchQueueMessage {
             }
             SearchQueueMessage::RemoveEmailLink(message) => message.link_id.clone(),
             SearchQueueMessage::ChannelMessageUpdate(message) => message.message_id.clone(),
-            SearchQueueMessage::RemoveChannelMessage(message) => {
-                format!(
-                    "{}{}",
-                    message.channel_id,
-                    message.message_id.clone().unwrap_or_default()
-                )
-            }
             SearchQueueMessage::CallRecord(message) => message.call_id.clone(),
             SearchQueueMessage::RemoveCallRecord(message) => format!(
                 "{}{}",
@@ -157,7 +149,6 @@ impl SearchQueueMessage {
             SearchQueueMessage::RemoveEmailLink(_) => Operation::Remove,
             // Channels
             SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveChannelMessage(_) => Operation::Remove,
             // Calls
             SearchQueueMessage::CallRecord(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
