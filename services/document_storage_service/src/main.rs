@@ -1044,6 +1044,7 @@ async fn main() -> anyhow::Result<()> {
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
+        macro_event_broker: macro_event_broker.clone(),
         sqs_client: sqs_client.clone(),
         notification_ingress_service: notification_ingress_service.clone(),
         conn_gateway_client: conn_gateway_client.clone(),
