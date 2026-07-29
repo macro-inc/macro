@@ -82,7 +82,7 @@ num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
 opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs"] }
-opentelemetry_sdk = { version = "0.31", default-features = false, features = ["internal-logs", "testing"] }
+opentelemetry_sdk = { version = "0.32", default-features = false, features = ["internal-logs", "testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
@@ -208,7 +208,7 @@ num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
 opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs"] }
-opentelemetry_sdk = { version = "0.31", default-features = false, features = ["internal-logs", "testing"] }
+opentelemetry_sdk = { version = "0.32", default-features = false, features = ["internal-logs", "testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
