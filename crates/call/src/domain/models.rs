@@ -9,6 +9,7 @@ use item_filters::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
+use models_permissions::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -26,6 +27,27 @@ pub struct Call {
     pub created_at: DateTime<Utc>,
     /// Egress (recording) ID, if recording is active.
     pub egress_id: Option<String>,
+}
+
+/// Facts committed when an active call is archived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchivedCall {
+    /// The archived call record identifier.
+    pub call_id: Uuid,
+    /// The channel the call belongs to.
+    pub channel_id: Uuid,
+    /// User who created the call.
+    pub created_by: String,
+    /// When the call started.
+    pub started_at: DateTime<Utc>,
+    /// When the call ended.
+    pub ended_at: DateTime<Utc>,
+    /// Call duration in milliseconds.
+    pub duration_ms: i64,
+    /// Whether a recording egress was started before the call was archived.
+    pub has_recording: bool,
+    /// Number of distinct participants over the call's lifetime.
+    pub participant_count: usize,
 }
 
 /// A participant in an active call.
@@ -402,6 +424,10 @@ pub struct CallRecord {
     /// Viewer-relative call status when fetched in the context of a specific user.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<CallStatus>,
+    /// The caller's effective access level on this call. Set only on the
+    /// single-record read; `None` in list contexts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_access_level: Option<AccessLevel>,
     /// Participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Transcript segments ordered by `sequence_num`.

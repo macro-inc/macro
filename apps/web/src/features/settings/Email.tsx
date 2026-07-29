@@ -2,7 +2,8 @@ import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_EMAIL_SIGNATURES,
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX_OVERRIDE,
@@ -328,7 +329,8 @@ function BackfillProgressBar(props: { progress: BackfillProgress }) {
       </span>
       <div class="flex items-center gap-6 whitespace-nowrap text-xs text-ink-muted">
         <span>
-          {props.progress.completed}/{props.progress.total}
+          {props.progress.completed.toLocaleString()} of{' '}
+          {props.progress.total.toLocaleString()} threads
         </span>
         <Show when={etaLabel()}>{(label) => <span>{label()}</span>}</Show>
       </div>
@@ -383,6 +385,9 @@ function InboxRow(props: {
   onReconnect: () => void;
   onRemove: () => void;
 }) {
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;
   return (
@@ -443,7 +448,7 @@ function InboxRow(props: {
           </Show>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn}>
+          <Show when={emailSignaturesFlag().enabled && props.isOwn}>
             <Tooltip label="Edit signature">
               <Button
                 variant="base"
@@ -505,7 +510,9 @@ function InboxRow(props: {
           </Tooltip>
         </div>
       </div>
-      <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn && showSignature()}>
+      <Show
+        when={emailSignaturesFlag().enabled && props.isOwn && showSignature()}
+      >
         <div id={signatureSectionId} class="px-6 pb-4">
           <SignatureSection link={props.link} />
         </div>

@@ -4,43 +4,76 @@ use crate::domain::{
 };
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
+#[cfg(test)]
+mod test;
+
+/// Hook invoked after an OAuth flow completes and the credentials are saved.
+/// Hosts use this to react to a connection the moment it exists (e.g. start
+/// import gather jobs); implementations must be quick or spawn.
+pub type McpAuthCompletedHook = Arc<
+    dyn Fn(McpServerRecord) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
+>;
+
 /// Shared state for the MCP router.
-pub struct McpRouterState<S, O> {
+pub struct McpRouterState<S, O, Auth> {
     store: Arc<S>,
     oauth: Arc<O>,
+    authorization_state: MacroAuthorizationState<Auth>,
+    on_auth_completed: Option<McpAuthCompletedHook>,
 }
 
-impl<S, O> Clone for McpRouterState<S, O> {
+impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
     fn clone(&self) -> Self {
         Self {
             store: self.store.clone(),
             oauth: self.oauth.clone(),
+            authorization_state: self.authorization_state.clone(),
+            on_auth_completed: self.on_auth_completed.clone(),
         }
     }
 }
 
-impl<S, O> McpRouterState<S, O>
+impl<S, O, Auth> FromRef<McpRouterState<S, O, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &McpRouterState<S, O, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+impl<S, O, Auth> McpRouterState<S, O, Auth>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
 {
-    /// Create a new router state from a server store and OAuth client.
-    pub fn new(store: S, oauth: O) -> Self {
+    /// Create a new router state from a server store, OAuth client, and
+    /// authorization state.
+    pub fn new(store: S, oauth: O, authorization_state: MacroAuthorizationState<Auth>) -> Self {
         Self {
             store: Arc::new(store),
             oauth: Arc::new(oauth),
+            authorization_state,
+            on_auth_completed: None,
         }
+    }
+
+    /// Invoke `hook` whenever an OAuth flow completes (see
+    /// [`McpAuthCompletedHook`]).
+    pub fn with_auth_completed_hook(mut self, hook: McpAuthCompletedHook) -> Self {
+        self.on_auth_completed = Some(hook);
+        self
     }
 
     /// Access the underlying server store.
@@ -50,32 +83,39 @@ where
 }
 
 /// Authenticated MCP routes (CRUD + start auth).
-pub fn mcp_router<S, O, Global>(state: McpRouterState<S, O>) -> Router<Global>
+pub fn mcp_router<S, O, Auth, Global>(state: McpRouterState<S, O, Auth>) -> Router<Global>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
     Global: Send + Sync,
 {
     Router::new()
-        .route("/mcp/servers", get(list_servers::<S, O>))
-        .route("/mcp/servers", post(add_server::<S, O>))
-        .route("/mcp/servers", put(update_server::<S, O>))
-        .route("/mcp/servers", delete(delete_server::<S, O>))
-        .route("/mcp/servers/auth/start", post(start_auth::<S, O>))
+        .route("/mcp/servers", get(list_servers::<S, O, Auth>))
+        .route("/mcp/servers", post(add_server::<S, O, Auth>))
+        .route("/mcp/servers", put(update_server::<S, O, Auth>))
+        .route("/mcp/servers", delete(delete_server::<S, O, Auth>))
+        .route("/mcp/servers/auth/start", post(start_auth::<S, O, Auth>))
         .with_state(state)
 }
 
 /// Unauthenticated OAuth callback route.
-pub fn mcp_oauth_callback_router<S, O, Global>(state: McpRouterState<S, O>) -> Router<Global>
+pub fn mcp_oauth_callback_router<S, O, Auth, Global>(
+    state: McpRouterState<S, O, Auth>,
+) -> Router<Global>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
     Global: Send + Sync,
 {
     Router::new()
-        .route("/mcp/servers/auth/callback", get(auth_callback::<S, O>))
+        .route(
+            "/mcp/servers/auth/callback",
+            get(auth_callback::<S, O, Auth>),
+        )
         .with_state(state)
 }
 
@@ -128,13 +168,22 @@ pub struct StartAuthResponse {
 }
 
 /// Query parameters received on the OAuth callback redirect.
+///
+/// Providers redirect here on both success (`code` + `state`) and failure
+/// (`error` [+ `error_description`], per RFC 6749 §4.1.2.1). All fields are
+/// optional so a rejected authorization can still be parsed and logged
+/// instead of failing Axum's query extraction before the handler runs.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct AuthCallbackParams {
-    /// Authorization code from the OAuth provider.
-    code: String,
+    /// Authorization code from the OAuth provider. Present on success.
+    code: Option<String>,
     /// CSRF state parameter.
-    state: String,
+    state: Option<String>,
+    /// OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+    error: Option<String>,
+    /// Human-readable error description from the provider.
+    error_description: Option<String>,
 }
 
 /// An MCP server record as returned by the API.
@@ -169,6 +218,12 @@ pub enum McpHandlerErr {
     /// The requested server was not found.
     #[error("server not found")]
     NotFound,
+    /// The OAuth provider rejected the authorization request.
+    #[error("authorization rejected by provider: {0}")]
+    OAuthRejected(String),
+    /// The callback was missing both a code and an error parameter.
+    #[error("malformed OAuth callback: missing code and error parameters")]
+    MalformedCallback,
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -178,6 +233,9 @@ impl IntoResponse for McpHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             McpHandlerErr::NotFound => StatusCode::NOT_FOUND,
+            McpHandlerErr::OAuthRejected(_) | McpHandlerErr::MalformedCallback => {
+                StatusCode::BAD_REQUEST
+            }
             McpHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -205,18 +263,20 @@ impl IntoResponse for McpHandlerErr {
 )]
 /// List all MCP servers configured for the authenticated user.
 #[tracing::instrument(skip_all, err)]
-pub async fn list_servers<S, O>(
-    State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn list_servers<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ServerResponse>>, McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let records = state
         .store
-        .list(&macro_user_id)
+        .list(&user.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -239,18 +299,20 @@ where
 )]
 /// Add a new MCP server for the authenticated user.
 #[tracing::instrument(skip_all, err)]
-pub async fn add_server<S, O>(
-    State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn add_server<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<AddServerRequest>,
 ) -> Result<(StatusCode, Json<ServerResponse>), McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let record = McpServerRecord {
-        user_id: macro_user_id,
+        user_id: user.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
         credentials: None,
@@ -284,19 +346,21 @@ where
 )]
 /// Update an existing MCP server's name or enabled status.
 #[tracing::instrument(skip_all, err)]
-pub async fn update_server<S, O>(
-    State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn update_server<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<UpdateServerRequest>,
 ) -> Result<Json<ServerResponse>, McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     let mut record = state
         .store
-        .load(&macro_user_id, &body.url)
+        .load(&user.macro_user_id, &body.url)
         .await
         .map_err(anyhow::Error::from)?
         .ok_or(McpHandlerErr::NotFound)?;
@@ -331,19 +395,21 @@ where
 )]
 /// Delete an MCP server by URL.
 #[tracing::instrument(skip_all, err)]
-pub async fn delete_server<S, O>(
-    State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn delete_server<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(params): Query<DeleteServerParams>,
 ) -> Result<StatusCode, McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
+    let user = &authorization.authorization.user;
     state
         .store
-        .delete(&macro_user_id, &params.url)
+        .delete(&user.macro_user_id, &params.url)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -364,21 +430,44 @@ where
 )]
 /// Start the OAuth authorization flow for an MCP server.
 #[tracing::instrument(skip_all, err)]
-pub async fn start_auth<S, O>(
-    State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn start_auth<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<StartAuthRequest>,
 ) -> Result<Json<StartAuthResponse>, McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
 {
+    let user = &authorization.authorization.user;
     let authorization_url = state
         .oauth
-        .start_authorization(&macro_user_id, &body.server_url, &body.server_name)
+        .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
         .await?;
 
     Ok(Json(StartAuthResponse { authorization_url }))
+}
+
+/// Classify a callback as a successful `(code, state)` pair or a handler
+/// error, logging provider rejections and malformed callbacks along the way.
+fn parse_callback_params(params: AuthCallbackParams) -> Result<(String, String), McpHandlerErr> {
+    if let Some(error) = params.error {
+        let reason = match params.error_description {
+            Some(description) => format!("{error}: {description}"),
+            None => error,
+        };
+        tracing::warn!(reason, "MCP OAuth provider rejected authorization");
+        return Err(McpHandlerErr::OAuthRejected(reason));
+    }
+
+    match (params.code, params.state) {
+        (Some(code), Some(state)) => Ok((code, state)),
+        _ => {
+            tracing::warn!("MCP OAuth callback missing both code and error parameters");
+            Err(McpHandlerErr::MalformedCallback)
+        }
+    }
 }
 
 #[utoipa::path(
@@ -389,23 +478,34 @@ where
     params(AuthCallbackParams),
     responses(
         (status = 200, description = "OAuth flow completed successfully"),
+        (status = 400, body = ErrorResponse, description = "Provider rejected authorization, or the callback was malformed"),
         (status = 500, body = ErrorResponse),
     )
 )]
-/// OAuth callback endpoint — receives code and state from the authorization server.
-#[tracing::instrument(skip_all, err)]
-pub async fn auth_callback<S, O>(
-    State(state): State<McpRouterState<S, O>>,
+/// OAuth callback endpoint — receives code and state, or an error, from the
+/// authorization server.
+#[tracing::instrument(skip_all, err, fields(state = ?params.state))]
+pub async fn auth_callback<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
     Query(params): Query<AuthCallbackParams>,
 ) -> Result<String, McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
+    Auth: MacroAuthorizationService,
 {
-    state
+    let (code, csrf_state) = parse_callback_params(params)?;
+
+    let record = state
         .oauth
-        .exchange_authorization_code(&params.code, &params.state)
+        .exchange_authorization_code(&code, &csrf_state)
         .await?;
+
+    // Let the host react to the brand-new connection (e.g. kick off import
+    // gather jobs) before the user even returns to their original tab.
+    if let Some(hook) = &state.on_auth_completed {
+        hook(record).await;
+    }
 
     Ok("Authorization successful. You can close this tab.".to_string())
 }

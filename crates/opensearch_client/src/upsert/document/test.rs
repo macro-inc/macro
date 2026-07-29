@@ -1,5 +1,5 @@
 use super::*;
-use crate::date_format::EpochSeconds;
+use crate::date_format::EpochMillis;
 
 fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {
     UpsertDocumentArgs {
@@ -10,7 +10,7 @@ fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {
         owner_id: format!("owner-{doc_id}"),
         raw_content: None,
         content: format!("content {doc_id} {node_id}"),
-        updated_at_seconds: EpochSeconds::new(1_700_000_000).unwrap(),
+        updated_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
         sub_type: None,
         properties: vec![],
     }
@@ -24,6 +24,7 @@ fn parent_doc_body_has_metadata_no_chunk_fields() {
     assert_eq!(doc["document_name"], "name-doc1");
     assert_eq!(doc["owner_id"], "owner-doc1");
     assert_eq!(doc["file_type"], "md");
+    assert_eq!(doc["updated_at_millis"], 1_700_000_000_123i64);
     assert_eq!(doc["document_relation"], "document");
     // Child-only fields must not be present on the parent.
     assert!(doc.get("content").is_none());
@@ -199,4 +200,38 @@ fn parent_body_omits_sub_type_when_none_so_index_clears_it() {
     // value rather than leaving it stale.
     let doc = parent_doc_body(&args("doc1", "n1"));
     assert!(doc.get("sub_type").is_none());
+}
+
+#[test]
+fn child_body_keeps_content_under_cap_intact() {
+    let mut a = args("doc1", "n1");
+    a.content = "x".repeat(MAX_CHUNK_CONTENT_CHARS);
+    let doc = child_doc_body(&a);
+    assert_eq!(
+        doc["content"].as_str().unwrap().chars().count(),
+        MAX_CHUNK_CONTENT_CHARS
+    );
+}
+
+#[test]
+fn child_body_truncates_oversized_content() {
+    let mut a = args("doc1", "n1");
+    a.content = "x".repeat(MAX_CHUNK_CONTENT_CHARS + 10);
+    let doc = child_doc_body(&a);
+    assert_eq!(
+        doc["content"].as_str().unwrap().chars().count(),
+        MAX_CHUNK_CONTENT_CHARS
+    );
+}
+
+#[test]
+fn child_body_truncates_on_char_boundary() {
+    let mut a = args("doc1", "n1");
+    // é is 2 bytes per char, so a byte-index split would panic mid-char.
+    a.content = "é".repeat(MAX_CHUNK_CONTENT_CHARS + 5);
+    let doc = child_doc_body(&a);
+    assert_eq!(
+        doc["content"].as_str().unwrap().chars().count(),
+        MAX_CHUNK_CONTENT_CHARS
+    );
 }

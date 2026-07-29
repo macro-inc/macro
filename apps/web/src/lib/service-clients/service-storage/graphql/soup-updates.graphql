@@ -1,0 +1,18 @@
+fragment SoupPatchFields on SoupPatch {
+	__typename
+	... on SoupUpdated {
+		item {
+			...SoupItemFields
+		}
+	}
+	... on GraphqlCacheDeletion {
+		graphqlTypeName
+		entityId
+	}
+}
+
+subscription SoupUpdates {
+	soupUpdates {
+		...SoupPatchFields
+	}
+}

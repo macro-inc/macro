@@ -8,6 +8,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
@@ -15,9 +16,13 @@ use crate::domain::ports::DocumentService;
 
 /// Proxies the cached Loro snapshot bytes, or 404 if none exists.
 #[tracing::instrument(skip(state, _access))]
-pub async fn get_cached_snapshot_url_handler<T: DocumentService, Svc: EntityAccessService>(
-    _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
+pub async fn get_cached_snapshot_url_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     match state.service.get_snapshot(&document_id).await {

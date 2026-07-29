@@ -436,9 +436,7 @@ pub enum EmailTopicEvent {
 impl TopicEvent for EmailTopicEvent {
     type Topic = MacroEmailTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroEmailTopic`], keyed by link (inbox) id.

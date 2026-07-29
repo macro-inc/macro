@@ -67,7 +67,7 @@ export function useUsersMention(
             }) as UserItem
         );
     }
-    return quickAccess.useList('person');
+    return quickAccess.useList('person').items;
   });
 
   const userSearch = () => {

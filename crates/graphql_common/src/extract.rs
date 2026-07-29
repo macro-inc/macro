@@ -1,7 +1,7 @@
 use async_graphql::Context;
 use axum::extract::FromRequestParts;
 
-use crate::request_context::GraphqlSoupRequestParts;
+use crate::request_context::GraphqlRequestParts;
 
 /// Run an axum extractor against the request parts stored in the GraphQL
 /// context, using the embedding router state `St` also stored there.
@@ -11,7 +11,7 @@ where
     T::Rejection: std::fmt::Display,
     St: Clone + Send + Sync + 'static,
 {
-    let parts = ctx.data::<GraphqlSoupRequestParts>()?;
+    let parts = ctx.data::<GraphqlRequestParts>()?;
     let state = ctx.data::<St>()?;
     parts
         .extract_with_state::<T, St>(state)

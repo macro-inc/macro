@@ -3,7 +3,6 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -15,6 +14,7 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { macroEntityToPropertyEntityType } from '@property/utils';
 import { createEffect, onCleanup } from 'solid-js';
 import {
   makeCopyAction,
@@ -41,7 +41,6 @@ export const useBlockEntityCommands = () => {
   const notificationSource = useGlobalNotificationSource();
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
-  const previewPanel = useMaybePreviewPanel();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -81,13 +80,19 @@ export const useBlockEntityCommands = () => {
       openPropertyEditor([entity], mode, property);
     }
   };
+  const canAssignTags = (entity: EntityData) => {
+    try {
+      macroEntityToPropertyEntityType(entity);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
-  // The 'e' hotkey from inside a block is reserved for entities opened full
-  // screen from the inbox/mail lists, mirroring the j/k gating in
-  // use-soup-navigation-hotkeys. Blocks rendered in the preview panel fall
-  // through to the originating list's own 'e' registration.
+  // The 'e' hotkey from inside a block is reserved for entities opened from
+  // the inbox/mail lists, mirroring the j/k gating in
+  // use-soup-navigation-hotkeys.
   const canUseMarkDoneHotkey = () => {
-    if (previewPanel) return false;
     const referredFrom = splitPanel?.handle.referredFrom();
     return referredFrom === 'inbox' || referredFrom === 'mail';
   };
@@ -336,6 +341,26 @@ export const useBlockEntityCommands = () => {
       condition: () => {
         const entity = getEntity();
         return entity !== undefined && isTaskEntity(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Assign tags - 't'
+    registerHotkey({
+      hotkey: ['t'],
+      hotkeyToken: TOKENS.entity.action.tags,
+      scopeId,
+      description: 'Tag item',
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity) return false;
+        openPropertyEditor([entity], 'tag');
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && canAssignTags(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],

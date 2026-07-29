@@ -3,6 +3,7 @@
 //! Provides routes:
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
+//! - `GET /slug/{slug}` - get document by team slug
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
@@ -27,9 +28,11 @@ pub mod edit_document;
 pub mod get_branch_name;
 pub mod get_cached_snapshot_url;
 pub mod get_document;
+pub mod get_document_by_team_slug;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
+pub mod put_interaction;
 pub mod put_snapshot;
 pub mod task_duplicates;
 pub mod team_share;
@@ -46,6 +49,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -64,6 +68,7 @@ use self::{
     get_branch_name::get_branch_name_handler,
     get_cached_snapshot_url::get_cached_snapshot_url_handler,
     get_document::get_document_handler,
+    get_document_by_team_slug::get_document_by_team_slug_handler,
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
@@ -143,11 +148,13 @@ pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
 >;
 
 /// Router state containing document router dependencies.
-pub struct DocumentRouterState<T, Svc> {
+pub struct DocumentRouterState<T, Svc, Auth> {
     /// The document service implementation.
     pub service: Arc<T>,
     /// The entity access service for authorization.
     pub access_service: Arc<Svc>,
+    /// State for request authorization.
+    pub authorization_state: MacroAuthorizationState<Auth>,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
     /// Task duplicate detection service.
@@ -162,12 +169,13 @@ pub struct DocumentRouterState<T, Svc> {
     pub document_permission_jwt_secret: String,
 }
 
-// Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
-impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
+// Manual Clone impl so T, Svc, and Auth don't need to be Clone.
+impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
             pool: self.pool.clone(),
             task_dedup_service: self.task_dedup_service.clone(),
             lexical_client: self.lexical_client.clone(),
@@ -178,9 +186,15 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
     }
 }
 
-impl<T, Svc> FromRef<DocumentRouterState<T, Svc>> for Arc<Svc> {
-    fn from_ref(state: &DocumentRouterState<T, Svc>) -> Self {
+impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for Arc<Svc> {
+    fn from_ref(state: &DocumentRouterState<T, Svc, Auth>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &DocumentRouterState<T, Svc, Auth>) -> Self {
+        state.authorization_state.clone()
     }
 }
 
@@ -191,92 +205,100 @@ pub struct Params {
 }
 
 /// Build the documents router with all endpoints.
-pub fn documents_router<T, Svc, S>(state: DocumentRouterState<T, Svc>) -> Router<S>
+pub fn documents_router<T, Svc, Auth, S>(state: DocumentRouterState<T, Svc, Auth>) -> Router<S>
 where
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     // Routes that need ensure_document_exists middleware
     let document_id_routes = Router::new()
         .route(
             "/{document_id}",
-            axum::routing::get(get_document_handler::<T, Svc>)
-                .patch(edit_document_handler::<T, Svc>)
-                .delete(delete_document_handler::<T, Svc>),
+            axum::routing::get(get_document_handler::<T, Svc, Auth>)
+                .patch(edit_document_handler::<T, Svc, Auth>)
+                .delete(delete_document_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/location_v3",
-            axum::routing::get(get_location_v3_handler::<T, Svc>),
+            axum::routing::get(get_location_v3_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/branch_name",
-            axum::routing::get(get_branch_name_handler::<T, Svc>),
+            axum::routing::get(get_branch_name_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/github_prs",
-            axum::routing::get(get_github_pull_requests_handler::<T, Svc>),
+            axum::routing::get(get_github_pull_requests_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/short_id",
-            axum::routing::get(get_short_id_handler::<T, Svc>),
+            axum::routing::get(get_short_id_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/copy",
-            axum::routing::post(copy_document_handler::<T, Svc>),
+            axum::routing::post(copy_document_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/duplicates",
-            axum::routing::get(get_task_duplicates_handler::<T, Svc>),
+            axum::routing::get(get_task_duplicates_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/duplicates/dismiss",
-            axum::routing::post(dismiss_task_duplicates_handler::<T, Svc>),
+            axum::routing::post(dismiss_task_duplicates_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/duplicates/{match_id}/delete_this",
-            axum::routing::post(delete_this_duplicate_task_handler::<T, Svc>),
+            axum::routing::post(delete_this_duplicate_task_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/cached_snapshot_url",
-            axum::routing::get(get_cached_snapshot_url_handler::<T, Svc>),
+            axum::routing::get(get_cached_snapshot_url_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/snapshot",
-            axum::routing::put(put_snapshot_handler::<T, Svc>),
+            axum::routing::put(put_snapshot_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/team_share",
-            axum::routing::get(get_team_share_handler::<T, Svc>)
-                .put(set_team_share_handler::<T, Svc>),
+            axum::routing::get(get_team_share_handler::<T, Svc, Auth>)
+                .put(set_team_share_handler::<T, Svc, Auth>),
         );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),
-        ensure_document_exists,
+        ensure_document_exists::<T, Svc, Auth>,
     ));
 
     let router = Router::new()
         .merge(document_id_routes)
-        .route("/", axum::routing::post(create_document_handler::<T, Svc>))
+        .route(
+            "/slug/{slug}",
+            axum::routing::get(get_document_by_team_slug_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/",
+            axum::routing::post(create_document_handler::<T, Svc, Auth>),
+        )
         .route(
             "/create_task",
-            axum::routing::post(create_task_handler::<T, Svc>),
+            axum::routing::post(create_task_handler::<T, Svc, Auth>),
         )
         .route(
             "/similarity_search",
-            axum::routing::post(task_similarity_search_handler::<T, Svc>),
+            axum::routing::post(task_similarity_search_handler::<T, Svc, Auth>),
         );
 
     #[cfg(feature = "document_create")]
     let router = router
         .route(
             "/create_markdown",
-            axum::routing::post(create_markdown_handler::<T, Svc>),
+            axum::routing::post(create_markdown_handler::<T, Svc, Auth>),
         )
         .route(
             "/create_snippet",
-            axum::routing::post(create_snippet_handler::<T, Svc>),
+            axum::routing::post(create_snippet_handler::<T, Svc, Auth>),
         );
 
     router.with_state(state)
@@ -293,8 +315,12 @@ pub struct DocumentIdPathParams {
 /// Extracts `document_id` from the path and queries the database.
 /// Returns 404 if the document does not exist.
 #[tracing::instrument(skip(state, request, next))]
-async fn ensure_document_exists<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
+async fn ensure_document_exists<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
     Path(Params { document_id }): Path<Params>,
     request: Request<Body>,
     next: Next,

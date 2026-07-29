@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"SharePermission\"\n        WHERE id IN (\n            SELECT \"sharePermissionId\" FROM \"ProjectPermission\" WHERE \"projectId\" = ANY($1)\n            UNION\n            SELECT \"sharePermissionId\" FROM \"DocumentPermission\" WHERE \"documentId\" = ANY($2)\n            UNION\n            SELECT \"sharePermissionId\" FROM \"ChatPermission\" WHERE \"chatId\" = ANY($3)\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b451aa27d04bc44a6de314b50c9c7666b25c7ca3de87382cabdfb3d3076a3992"
+}

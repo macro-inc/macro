@@ -11,7 +11,16 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { nextCursor hasMore items { id } } }
+    user {
+        id
+        soup(input: $input) {
+            nextCursor
+            items {
+                __typename
+                id
+            }
+        }
+    }
 }"#;
 
 fn js(json: serde_json::Value) -> JsValue {
@@ -27,7 +36,13 @@ async fn write_then_read_through_js_boundary() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let data = serde_json::json!({
-        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "nextCursor": null,
+                "items": [{ "__typename": "GraphqlSoupDocument", "id": "doc-1" }]
+            }
+        }
     });
 
     // Miss first.
@@ -59,6 +74,10 @@ async fn write_then_read_through_js_boundary() {
     assert_eq!(write["affectedOps"], serde_json::json!(["tab1:1"]));
     assert_eq!(write["reset"], serde_json::json!(false));
 
+    let identity = JsFuture::from(engine.bound_identity()).await.unwrap();
+    let identity: Option<String> = serde_wasm_bindgen::from_value(identity).unwrap();
+    assert_eq!(identity.as_deref(), Some("user-1"));
+
     // Hit now; data is a plain JS object round-tripped exactly.
     let read = JsFuture::from(engine.read_query(
         Some("tab1:1".into()),
@@ -72,13 +91,53 @@ async fn write_then_read_through_js_boundary() {
     assert_eq!(read["kind"], "hit");
     assert_eq!(read["data"], data);
 
+    // Generated-query inspection crosses the wasm boundary with one wire
+    // shape and recovers the operation variables from the normalized field.
+    let inspected = JsFuture::from(engine.inspect_query(
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!([{"field": "user"}, {"field": "soup"}])),
+    ))
+    .await
+    .unwrap();
+    let inspected: serde_json::Value = serde_wasm_bindgen::from_value(inspected).unwrap();
+    assert_eq!(inspected[0]["variables"], vars);
+    assert_eq!(inspected[0]["value"], data["user"]["soup"]);
+
     // Cross-instance invalidation path: evict + report local dependents.
     let affected =
-        JsFuture::from(engine.invalidate_keys(vec!["GraphqlSoupItem:doc-1".to_string()]))
+        JsFuture::from(engine.invalidate_keys(vec!["GraphqlSoupDocument:doc-1".to_string()]))
             .await
             .unwrap();
     let affected: Vec<String> = serde_wasm_bindgen::from_value(affected).unwrap();
     assert_eq!(affected, vec!["tab1:1".to_string()]);
+
+    // External invalidation keeps the shared cold-tier record, while local
+    // mutation invalidation removes it from both tiers.
+    let read = JsFuture::from(engine.read_query(
+        Some("tab1:1".into()),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(vars.clone()),
+    ))
+    .await
+    .unwrap();
+    let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
+    assert_eq!(read["kind"], "hit");
+
+    JsFuture::from(engine.delete_keys(vec!["GraphqlSoupDocument:doc-1".to_string()]))
+        .await
+        .unwrap();
+    let read = JsFuture::from(engine.read_query(
+        Some("tab1:1".into()),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(vars),
+    ))
+    .await
+    .unwrap();
+    let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
+    assert_eq!(read["kind"], "miss");
 
     // Lifecycle: close the connection, then deletion completes (would hang
     // on a live connection without versionchange auto-close).
@@ -87,10 +146,11 @@ async fn write_then_read_through_js_boundary() {
 }
 
 const PROPERTY_QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { hasMore items { id entity {
+    user { id soup(input: $input) { nextCursor items {
         __typename
-        ... on GraphqlSoupDocument { id properties { id displayName } }
-    } } } }
+        id
+        ... on GraphqlSoupDocument { properties { id displayName } }
+    } } }
 }"#;
 
 const PROPERTY_MUTATION: &str = r#"mutation SetEntityProperty($input: SetEntityPropertyInput!) {
@@ -106,13 +166,10 @@ async fn optimistic_write_round_trip() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let base = serde_json::json!({
-        "user": { "id": "user-1", "soup": { "hasMore": false, "items": [{
-            "id": "item-1",
-            "entity": {
-                "__typename": "GraphqlSoupDocument",
-                "id": "doc-1",
-                "properties": [{ "id": "prop-1", "displayName": "Status" }]
-            }
+        "user": { "id": "user-1", "soup": { "nextCursor": null, "items": [{
+            "__typename": "GraphqlSoupDocument",
+            "id": "doc-1",
+            "properties": [{ "id": "prop-1", "displayName": "Status" }]
         }] } }
     });
     JsFuture::from(engine.write_query(
@@ -151,6 +208,9 @@ async fn optimistic_write_round_trip() {
         Some("SetEntityProperty".into()),
         js(mutation_vars.clone()),
         js(serde_json::json!({ "setEntityProperty": { "id": "prop-1", "displayName": "Stage" } })),
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        123.0,
     ))
     .await
     .unwrap();
@@ -173,13 +233,22 @@ async fn optimistic_write_round_trip() {
     .unwrap();
     let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
     assert_eq!(
-        read["data"]["user"]["soup"]["items"][0]["entity"]["properties"][0]["displayName"],
+        read["data"]["user"]["soup"]["items"][0]["properties"][0]["displayName"],
         serde_json::json!("Stage")
     );
+
+    let claimed = JsFuture::from(engine.claim_next_mutation("runner".into(), 10.0, 1_000.0))
+        .await
+        .unwrap();
+    let claimed: serde_json::Value = serde_wasm_bindgen::from_value(claimed).unwrap();
+    assert_eq!(claimed["transactionId"], txn);
+    let generation = claimed["leaseGeneration"].as_str().unwrap().to_string();
 
     // Commit with the real response; the layer flushes durably.
     let commit = JsFuture::from(engine.commit_optimistic_write(
         txn.clone(),
+        "runner".into(),
+        generation.clone(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_vars.clone()),
@@ -195,10 +264,16 @@ async fn optimistic_write_round_trip() {
     assert_eq!(commit["affectedOps"], serde_json::json!(["tab1:1"]));
 
     // Settled transactions reject further commits/rollbacks.
-    let err = JsFuture::from(engine.rollback_optimistic_write(txn)).await;
+    let err =
+        JsFuture::from(engine.rollback_optimistic_write(txn, "runner".into(), generation)).await;
     assert!(err.is_err());
     // Malformed ids reject too.
-    let err = JsFuture::from(engine.rollback_optimistic_write("not-a-number".into())).await;
+    let err = JsFuture::from(engine.rollback_optimistic_write(
+        "not-a-number".into(),
+        "runner".into(),
+        "1".into(),
+    ))
+    .await;
     assert!(err.is_err());
 
     JsFuture::from(engine.close()).await.unwrap();

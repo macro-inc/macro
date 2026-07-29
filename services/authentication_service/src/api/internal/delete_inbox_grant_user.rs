@@ -5,10 +5,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use fusionauth::error::FusionAuthClientError;
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, ErrorResponse};
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 #[derive(serde::Deserialize, Debug)]
 pub struct DeleteInboxGrantUserQueryParams {
@@ -22,10 +22,10 @@ pub struct DeleteInboxGrantUserQueryParams {
 /// Refuses to delete an **active** user: relocated mailbox stubs are always deactivated,
 /// while real accounts are active, so the state doubles as a guard against a caller bug
 /// pointing this at a human's account. Idempotent on an already-deleted user.
-#[tracing::instrument(skip(ctx, _valid_access))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _valid_access: ValidInternalKey,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Query(DeleteInboxGrantUserQueryParams { fusionauth_user_id }): extract::Query<
         DeleteInboxGrantUserQueryParams,
     >,

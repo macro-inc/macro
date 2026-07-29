@@ -234,7 +234,20 @@ fn push_thread_candidate_select(
             // mailboxes, whose address differs from the owner's macro_id
             // email) are excluded. The receipt has already been validated
             // upstream, so the team_id is trusted here.
+            //
+            // resolve_filters pre-resolves the team's primary link ids: the
+            // ANY probe gives the planner a tight static link set, and the
+            // membership subquery revalidates it at execution time so a
+            // member or link removed between resolve_filters and this query
+            // can't leak threads (same belt-and-suspenders rationale as the
+            // crm_enabled EXISTS below). The subquery alone remains as a
+            // fallback for resolutions that didn't carry team links.
             Some(team_id) => {
+                if let Some(team_links) = params.resolved.team_link_ids() {
+                    builder.push("t.link_id = ANY(");
+                    builder.push_bind(team_links.to_vec());
+                    builder.push(") AND ");
+                }
                 builder.push(
                     r#"t.link_id IN (
                         SELECT el.id
@@ -409,33 +422,50 @@ fn build_query(
     // When the candidate stage pushes a full per-message EXISTS (view-level
     // message filter), it already enforces "thread has a message the lateral
     // will surface", so the address-only `matching_threads` CTE is redundant.
-    let matching_threads_body = if wants_message_exists_pushdown(view) {
+    let matching_threads = if wants_message_exists_pushdown(view) {
         None
     } else {
-        // Owned-only, non-team queries can scope the CTE's contact/message
-        // scans to the caller's links; shared/team/project candidates
-        // include threads from other links, so scoping there would drop rows.
+        // Owned-only queries can scope the CTE's contact/message scans to
+        // the links the candidate WHERE will accept: the caller's own links,
+        // or every team-member primary link when team-scoped (a thread's
+        // messages/contacts share its link_id, so this can't drop rows).
+        // Shared/project candidates include threads from arbitrary links,
+        // so any scope there would.
         let link_scope = (matches!(params.shared, SharedEmailFilter::Exclude)
-            && params.team_id.is_none()
             && params.project_scope.is_none())
-        .then_some(params.link_ids.as_slice());
-        build_matching_threads_cte_body(email_filter, &params.resolved, link_scope)
+        .then(|| match params.team_id {
+            Some(_) => params.resolved.team_link_ids(),
+            None => Some(params.link_ids.as_slice()),
+        })
+        .flatten();
+        build_matching_threads_ctes(email_filter, &params.resolved, link_scope)
     };
 
     let mut builder = sqlx::QueryBuilder::new("");
-    if needs_shared_cte || matching_threads_body.is_some() {
+    if needs_shared_cte || matching_threads.is_some() {
         builder.push("\n        WITH ");
         let mut needs_comma = false;
         if needs_shared_cte {
             push_shared_cte(&mut builder, &params);
             needs_comma = true;
         }
-        if let Some(body) = matching_threads_body {
+        if let Some(ctes) = matching_threads {
+            // Hoisted contact-lookup CTEs first — matching_threads' branches
+            // reference them by name.
+            for (name, body) in ctes.contact_ctes {
+                if needs_comma {
+                    builder.push(",\n        ");
+                }
+                builder.push(format!("{name} AS MATERIALIZED (\n            "));
+                body.push_into(&mut builder);
+                builder.push("\n        )");
+                needs_comma = true;
+            }
             if needs_comma {
                 builder.push(",\n        ");
             }
             builder.push("matching_threads AS MATERIALIZED (\n            ");
-            body.push_into(&mut builder);
+            ctes.body.push_into(&mut builder);
             builder.push("\n        )");
         }
         builder.push("\n        ");
@@ -709,6 +739,21 @@ pub(super) fn debug_build_query_sql_team_scoped(
         view,
         email_filter,
         ResolvedFilters::empty(),
+        Some(Uuid::nil()),
+        SimpleSortMethod::UpdatedAt,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn debug_build_query_sql_team_scoped_with_resolved(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    resolved: ResolvedFilters,
+) -> String {
+    debug_build_query_sql_inner(
+        view,
+        email_filter,
+        resolved,
         Some(Uuid::nil()),
         SimpleSortMethod::UpdatedAt,
     )

@@ -16,6 +16,7 @@ import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
 import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
+import type { CallRecordUserAccessLevel } from './callRecordUserAccessLevel';
 
 /**
  * Full record of a call, unifying rows from `calls` (active) and
@@ -64,4 +65,5 @@ once summarization has run; active calls always return `None`. */
   summary?: CallRecordSummary;
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
+  userAccessLevel?: CallRecordUserAccessLevel;
 }

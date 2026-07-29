@@ -33,6 +33,7 @@ export enum InlineSearchNodesType {
   Emojis = ':',
   Actions = '/',
   Snippets = ';',
+  Tags = '#',
 }
 
 export const SEARCH_NODE_TYPE_VALUES = {
@@ -40,6 +41,7 @@ export const SEARCH_NODE_TYPE_VALUES = {
   [InlineSearchNodesType.Emojis]: '::',
   [InlineSearchNodesType.Actions]: '//',
   [InlineSearchNodesType.Snippets]: ';;',
+  [InlineSearchNodesType.Tags]: '##',
 };
 
 export function validTriggerPosition(
@@ -74,7 +76,7 @@ export function validTriggerPosition(
   });
 }
 
-const CLEAN_REGEX = /^[@:\/;]/g; // Matches @, :, /, or ; to clean the search term.
+const CLEAN_REGEX = /^[@:\/;#]/g; // Matches menu triggers to clean the search term.
 
 export class InlineSearchNode extends TextNode {
   static getType() {

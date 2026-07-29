@@ -98,6 +98,24 @@ impl InfraEnv {
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
+        // In-network services resolve the gateway through the OVERRIDE_ var;
+        // without it the resolver's Environment::Local default
+        // (http://localhost:8082) points at the calling container itself and
+        // every realtime push silently fails.
+        env.insert(
+            "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
+            "http://connection-gateway:8080".into(),
+        );
+        // Same trap for document storage: the Environment::Local default is
+        // http://localhost:8086, the *host* port mapping, which resolves to
+        // the calling container. Callers like the authentication service's
+        // signup hook (starter docs) then fail with a connection error.
+        // `DOCUMENT_STORAGE_SERVICE_URL` (from Doppler) only covers the older
+        // call sites that read that var directly, not `macro_service_urls`.
+        env.insert(
+            "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
+            "http://document-storage-service:8080".into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -182,7 +200,6 @@ impl MailEnv {
 /// container (services, sync, lexical) agrees. `INTERNAL_API_SECRET_KEY` is the
 /// literal `"local"` to match the FusionAuth webhook's `x-internal-auth-key`.
 struct ServiceAuthEnv {
-    service_internal: String,
     dss_auth: String,
     doc_perm_jwt: String,
     internal_call: String,
@@ -192,7 +209,6 @@ struct ServiceAuthEnv {
 impl ServiceAuthEnv {
     fn for_instance(name: &str) -> Self {
         ServiceAuthEnv {
-            service_internal: identity::instance_secret("service-internal", name),
             dss_auth: identity::instance_secret("dss-auth", name),
             // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
             // ("local") so locally-minted tokens verify. This is ONLY for local
@@ -217,10 +233,12 @@ impl ServiceAuthEnv {
             "SYNC_SERVICE_AUTH_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
-        env.insert(
-            "SERVICE_INTERNAL_AUTH_KEY".into(),
-            self.service_internal.clone(),
-        );
+        // The key the authentication service presents to document storage on
+        // internal calls (e.g. seeding starter docs at signup). In dev/prod
+        // Doppler points it at the *same* secret as DSS's own auth key
+        // (document-storage-service-auth-key-*), so locally the two must be
+        // one value or DSS 401s every auth-service internal call.
+        env.insert("SERVICE_INTERNAL_AUTH_KEY".into(), self.dss_auth.clone());
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
             self.dss_auth.clone(),
@@ -232,23 +250,34 @@ impl ServiceAuthEnv {
 }
 
 /// FusionAuth identity — all fixed UUIDs/secrets shared with the deterministic
-/// kickstart (see [`identity`]). The OAuth redirect is the only per-instance bit.
+/// kickstart (see [`identity`]). Browser-facing URLs are instance-specific.
 struct FusionAuthEnv {
     oauth_redirect_uri: String,
+    public_url: String,
+    /// The auth service's own public origin (`BASE_URL`): OAuth callbacks and
+    /// email verification links are built on it. Same host-port convention as
+    /// [`identity::oauth_redirect_uri`]. Doppler supplies it for dev; the
+    /// code-owned env must too, or a `--no-doppler` stack's auth service dies
+    /// at startup on the missing required value.
+    base_url: String,
 }
 
 impl FusionAuthEnv {
     fn for_instance(instance: &Instance) -> Self {
         FusionAuthEnv {
             oauth_redirect_uri: identity::oauth_redirect_uri(instance.port(Port::Auth)),
+            public_url: format!("http://localhost:{}", instance.port(Port::FusionAuth)),
+            base_url: format!("http://localhost:{}", instance.port(Port::Auth)),
         }
     }
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        env.insert("BASE_URL".into(), self.base_url.clone());
         env.insert(
             "FUSIONAUTH_BASE_URL".into(),
             "http://fusionauth:9011".into(),
         );
+        env.insert("FUSIONAUTH_PUBLIC_URL".into(), self.public_url.clone());
         env.insert(
             "FUSIONAUTH_API_KEY".into(),
             identity::FUSIONAUTH_API_KEY.into(),

@@ -218,6 +218,43 @@ async fn test_soft_delete_document(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_update_document_modified(pool: Pool<Postgres>) {
+    let document_id = "d0000000-0000-0000-0000-000000000001";
+    sqlx::query!(
+        r#"
+        UPDATE "Document"
+        SET "updatedAt" = '2000-01-01 00:00:00'
+        WHERE id = $1
+        "#,
+        document_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let repo = PgDocumentRepo::new(pool);
+    let before = repo
+        .get_document_metadata(document_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+
+    repo.update_document_modified(document_id).await.unwrap();
+
+    let after = repo
+        .get_document_metadata(document_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert!(after > before);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool);
 
@@ -296,7 +333,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: None,
-        file_type: Some(FileTypeUpdate::Set(model_file_type::FileType::Rs)),
+        file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
     })
     .await
     .unwrap();
@@ -832,6 +869,38 @@ async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
 
     assert_eq!(task_metadata.team_id, TEST_TEAM_ID);
     assert_eq!(task_metadata.task_num, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_document_id_by_team_task_number(pool: Pool<Postgres>) {
+    insert_second_team(&pool).await;
+    let repo = PgDocumentRepo::new(pool);
+
+    let first_team_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let second_team_task =
+        create_task_for_team(&repo, "macro|other@user.com", SECOND_TEAM_ID).await;
+
+    assert_eq!(
+        repo.get_document_id_by_team_task_number(&TEST_TEAM_ID, 1)
+            .await
+            .unwrap(),
+        Some(first_team_task.document_id)
+    );
+    assert_eq!(
+        repo.get_document_id_by_team_task_number(&SECOND_TEAM_ID, 1)
+            .await
+            .unwrap(),
+        Some(second_team_task.document_id)
+    );
+    assert_eq!(
+        repo.get_document_id_by_team_task_number(&TEST_TEAM_ID, 2)
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[sqlx::test(

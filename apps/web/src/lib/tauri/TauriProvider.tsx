@@ -48,6 +48,18 @@ interface TauriContextValue {
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
 
+const LOADED_BUNDLE_BUILD = (() => {
+  if (typeof document === 'undefined') return undefined;
+  const value = document
+    .querySelector<HTMLMetaElement>('meta[name="macro-bundle-build"]')
+    ?.getAttribute('content');
+  if (value === undefined || value === null || !/^\d+$/.test(value)) {
+    return undefined;
+  }
+  const bundleBuild = Number(value);
+  return Number.isSafeInteger(bundleBuild) ? bundleBuild : undefined;
+})();
+
 function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
   return (
     status.status === 'ClearRequired' ||
@@ -101,9 +113,13 @@ function TauriProvider(props: { children: JSX.Element }) {
         setBundleUpdateStatus(ev.payload);
       }
     );
-    invoke<boolean>('ack_bundle_update_reload').catch((e) =>
-      console.error('[bundle-update] ack_bundle_update_reload failed', e)
-    );
+    if (LOADED_BUNDLE_BUILD !== undefined) {
+      invoke<boolean>('ack_bundle_update_reload', {
+        loadedBundleBuild: LOADED_BUNDLE_BUILD,
+      }).catch((e) =>
+        console.error('[bundle-update] ack_bundle_update_reload failed', e)
+      );
+    }
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
       setBundleUpdateStatus(status);

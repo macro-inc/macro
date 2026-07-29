@@ -1,12 +1,12 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::email::service::attachment;
 use models_email::service;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -36,28 +36,30 @@ pub struct GetAttachmentResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id
 ))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(attachment_id): Path<Uuid>,
 ) -> Result<Response, Response> {
     // Resolve which of the caller's inboxes owns this attachment. Each inbox is a
     // distinct Google account, so the owning link also determines the Gmail token.
-    let links =
-        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
-            .await
-            .map_err(|e| {
-                tracing::warn!(error=?e, "error fetching links");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "error fetching attachment".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
+    let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
+        &ctx.db,
+        &authorization.authorization.user.user_context.user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::warn!(error=?e, "error fetching links");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "error fetching attachment".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let mut owned = None;
     for link in links {

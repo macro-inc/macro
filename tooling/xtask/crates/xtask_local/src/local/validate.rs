@@ -30,7 +30,7 @@ pub fn local_compose(instance: &Instance, mode: Mode) -> Result<()> {
     // target dir — config rendering does not need the binaries to exist.
     let target = arch::detect()?;
     let binaries = BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    gen_compose::generate(mode, instance, &binaries)?;
+    gen_compose::generate(mode, instance, &binaries, false)?;
     let resolved = env_layer::resolve(mode, instance, true, None)?;
 
     let files = gen_compose::compose_files(instance);
@@ -134,6 +134,7 @@ pub fn local_env(
                 "REDIS_URI",
                 "LOCAL_AWS_URL",
                 "FUSIONAUTH_BASE_URL",
+                "FUSIONAUTH_PUBLIC_URL",
                 "FUSIONAUTH_CLIENT_ID",
                 "JWT_SECRET_KEY",
                 "DOCUMENT_STORAGE_BUCKET",

@@ -1,8 +1,8 @@
-use crate::domain::models::messages::ContactsNodes;
+use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
-use sqlx::types::Uuid;
 use std::collections::HashSet;
+use uuid::Uuid;
 
 /// Port trait for accessing the contacts data store.
 pub trait ContactsRepository: Send + Sync + 'static {
@@ -30,8 +30,17 @@ pub trait ContactsNotifier: Send + Sync + 'static {
 
 /// Port trait for publishing a contacts message to the ingress queue.
 pub trait ContactsIngressQueue: Send + Sync + 'static {
-    /// Publish a contacts message to the queue.
-    fn publish(&self, message: ContactsNodes) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Publishes a complete-graph contacts message to the queue.
+    fn publish_nodes(
+        &self,
+        message: ContactsNodes,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Publishes explicit contact relationships to the queue.
+    fn publish_connections(
+        &self,
+        message: ContactConnections,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port trait for enqueuing contacts messages for async processing.
@@ -40,6 +49,12 @@ pub trait ContactsIngress: Send + Sync + 'static {
     fn enqueue_contacts(
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Enqueues only the supplied contact relationships for upsert.
+    fn enqueue_contact_connections(
+        &self,
+        connections: Vec<ContactConnection>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

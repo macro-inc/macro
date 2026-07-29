@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT el.id\n            FROM email_links el\n            JOIN team_user tu ON tu.user_id = el.macro_id\n            WHERE tu.team_id = $1 AND el.is_primary\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "59494f54fcb77c765e88e7883fcd6171b524642e5c1831885f7b5b885b839dbf"
+}

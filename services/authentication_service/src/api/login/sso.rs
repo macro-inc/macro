@@ -35,6 +35,20 @@ pub(crate) struct LoginQueryParams {
     referral_code: Option<String>,
 }
 
+fn is_allowed_original_url(url: &Url) -> bool {
+    match url.scheme() {
+        // The iOS app uses macro://login as its authentication callback.
+        "macro" => url.host_str() == Some("login"),
+        "tauri" => url.host_str() == Some("localhost"),
+        "http" => matches!(url.host_str(), Some("localhost" | "tauri.localhost")),
+        "https" => matches!(
+            url.host_str(),
+            Some("localhost" | "tauri.localhost" | "dev.macro.com" | "macro.com")
+        ),
+        _ => false,
+    }
+}
+
 /// Initiates an SSO login
 #[utoipa::path(
         get,
@@ -67,6 +81,21 @@ pub async fn handler(
         is_mobile,
         referral_code,
     }) = query;
+
+    let original_url = original_url.map(|url| url.0);
+    if original_url
+        .as_ref()
+        .is_some_and(|url| !is_allowed_original_url(url))
+    {
+        tracing::error!("original_url is not allowed");
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "provided original_url is not allowed".into(),
+            }),
+        )
+            .into_response());
+    }
 
     if idp_name.is_none() && idp_id.is_none() {
         tracing::error!("idp_name and idp_id are both missing");
@@ -128,7 +157,7 @@ pub async fn handler(
 
     let state = SsoState {
         is_mobile,
-        original_url: original_url.map(|x| x.0),
+        original_url,
         referral_code,
     };
 

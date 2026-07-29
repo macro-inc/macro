@@ -1,15 +1,18 @@
 //! Channel access extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt,
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
 
-use super::{ExtractorError, InternalUser};
+use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -17,29 +20,34 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::OptionalMacroUserExtractor;
-
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
+};
 #[derive(Debug, serde::Deserialize)]
 struct ChannelAccessParams {
     channel_id: String,
 }
 
-/// Validates that the user satisfies the required permission for a channel.
+/// Authorizes a request and validates that its identity satisfies the required channel permission.
 ///
 /// Type parameter `T` specifies the required permission marker.
 /// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is the authorization service implementation.
 #[derive(Debug)]
-pub struct ChannelAccessLevelExtractor<T: RequiredPermission, Svc> {
-    /// The entity access receipt
+pub struct ChannelAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
+    /// The entity access receipt.
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for ChannelAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for ChannelAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -47,31 +55,46 @@ where
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-
-        let OptionalMacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        } = parts
-            .extract()
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
+                parts, state,
+            )
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
 
         let Path(ChannelAccessParams { channel_id }) = parts
             .extract::<Path<ChannelAccessParams>>()
             .await
             .map_err(|_| ExtractorError::BadRequest("missing channel_id path parameter"))?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.authorization.as_ref()
+        {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &channel_id,
+                EntityType::Channel,
+            )
+            .await?;
 
-        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let (macro_user_id, user_context) = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
+            .unwrap_or_default();
+
+        if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
@@ -92,14 +115,12 @@ where
             return Err(ExtractorError::Unauthorized);
         };
 
-        let user_org_id = user_context.organization_id.map(i64::from);
-
         let permission = service
             .get_entity_permission(
                 Some(&macro_user_id),
                 &channel_id,
                 EntityType::Channel,
-                user_org_id,
+                user_context.organization_id.map(i64::from),
             )
             .await
             .map_err(ExtractorError::from)?;

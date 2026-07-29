@@ -4,8 +4,6 @@ import {
   config,
   getAiToolsInfra,
   getMacroApiToken,
-  getMacroNotify,
-  getSearchEventQueue,
   stack,
 } from '../../packages/shared';
 import { Queue } from '../../packages/resources';
@@ -105,10 +103,6 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const { notificationIngressQueueArn } = getMacroNotify();
-
-const { searchEventQueueArn } = getSearchEventQueue();
-
 // ── AI projection queue ──────────────────────────────────────────────────────
 // This service both produces (on upsert) and consumes (via the inbound worker)
 // ai projection materialization messages, so the queue is owned here. The Queue
@@ -129,7 +123,8 @@ const aiProjectionsRefreshTrigger = new AiProjectionsRefreshTrigger(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${PROXY_DATABASE_URL}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'ai_projections_refresh_handler=trace,sqs_client=trace',
+      RUST_LOG:
+        'ai_projections_refresh_handler=trace,sqs_client=trace,macro_http_request=info',
     },
     aiProjectionQueueArn: aiProjectionQueue.queue.arn,
     vpc: coparse_api_vpc,
@@ -164,8 +159,6 @@ const documentCognitionService = new DocumentCognitionService(
     queueArns: [
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
-      searchEventQueueArn,
-      notificationIngressQueueArn,
       aiProjectionQueue.queue.arn,
       ...aiTools.queueArns,
     ],

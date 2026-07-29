@@ -8,7 +8,7 @@ use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
-    OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
+    OpensearchClient, date_format::EpochMillis, upsert::document::UpsertDocumentArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use s3_key::{
@@ -19,7 +19,7 @@ use s3_key::{
 #[cfg(feature = "pdf")]
 use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
-    parsers::{canvas::parse_canvas, markdown::parse_markdown_legacy},
+    parsers::markdown::parse_markdown_legacy,
     process::document::document_info::{DocumentInfo, get_document_info},
     process::properties::to_indexed_properties,
 };
@@ -124,7 +124,7 @@ fn generate_parent_only_upsert(
         content: String::new(),
         owner_id: document_info.owner.to_string(),
         file_type,
-        updated_at_seconds: EpochSeconds::new(Utc::now().timestamp())?,
+        updated_at_millis: EpochMillis::new(Utc::now().timestamp_millis())?,
         sub_type: document_info.sub_type.map(|st| st.to_string()),
         properties: vec![],
     }))
@@ -186,6 +186,10 @@ async fn update_search_with_parent_only_document(
     Ok(())
 }
 
+fn should_index_parent_only(file_type: &FileType) -> bool {
+    matches!(file_type, FileType::Canvas) || !is_searchable_association(&file_type.macro_app_path())
+}
+
 /// Processes a message for a standard document and reads the updated contents from s3 and updates
 /// the document in opensearch.
 #[tracing::instrument(skip(opensearch_client, db, s3_client, document_storage_bucket, search_extractor_message), fields(document_id=search_extractor_message.document_id, file_type=?search_extractor_message.file_type))]
@@ -196,7 +200,7 @@ pub async fn update_search_with_raw_document(
     document_storage_bucket: &str,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    if !is_searchable_association(&search_extractor_message.file_type.macro_app_path()) {
+    if should_index_parent_only(&search_extractor_message.file_type) {
         return update_search_with_parent_only_document(
             opensearch_client,
             db,
@@ -292,7 +296,7 @@ pub async fn update_search_with_raw_document(
 
     tracing::trace!("got raw file content");
 
-    let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
+    let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
     let uuid = macro_uuid::generate_uuid_v7().to_string();
 
     let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
@@ -311,7 +315,7 @@ pub async fn update_search_with_raw_document(
                         content: page_content.clone(),
                         owner_id: search_extractor_message.user_id.clone(),
                         file_type: file_type.to_string(),
-                        updated_at_seconds: updated_at,
+                        updated_at_millis,
                         sub_type: sub_type.clone(),
                         properties: vec![],
                     })
@@ -323,22 +327,6 @@ pub async fn update_search_with_raw_document(
                 tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
                 vec![]
             }
-        }
-        FileType::Canvas => {
-            let content =
-                parse_canvas(&String::from_utf8(content)?).context("unable to parse canvas")?;
-            vec![UpsertDocumentArgs {
-                document_id: search_extractor_message.document_id.clone(),
-                node_id: uuid,
-                raw_content: None,
-                document_name,
-                content: content.clone(),
-                owner_id: search_extractor_message.user_id.clone(),
-                file_type: file_type.to_string(),
-                updated_at_seconds: updated_at,
-                sub_type: sub_type.clone(),
-                properties: vec![],
-            }]
         }
         FileType::Md => {
             // NOTE: this is legacy now. MD parsing mainly happens through sync service via
@@ -356,7 +344,7 @@ pub async fn update_search_with_raw_document(
                     content: result.content,
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
-                    updated_at_seconds: updated_at,
+                    updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
                 })
@@ -375,7 +363,7 @@ pub async fn update_search_with_raw_document(
                     content: content.clone(),
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
-                    updated_at_seconds: updated_at,
+                    updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
                 }]
@@ -401,7 +389,7 @@ fn generate_upserts(
     markdown_result: Vec<MarkdownParseResult>,
 ) -> anyhow::Result<Vec<UpsertDocumentArgs>> {
     let result = markdown_result;
-    let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
+    let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
     let file_type = FileType::from_str(
         document_info
             .file_type
@@ -421,7 +409,7 @@ fn generate_upserts(
             content: result.content,
             owner_id: document_info.owner.to_string(),
             file_type: file_type.to_string(),
-            updated_at_seconds: updated_at,
+            updated_at_millis,
             sub_type: sub_type.clone(),
             properties: vec![],
         })
@@ -503,134 +491,4 @@ pub async fn update_search_with_sync_document(
 }
 
 #[cfg(test)]
-mod tests {
-    use macro_user_id::user_id::MacroUserIdStr;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_generate_upsert() {
-        let document_info = DocumentMetadata {
-            document_id: "AAA".to_string(),
-            document_version_id: 0,
-            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
-            document_name: "test_document".to_string(),
-            file_type: Some("md".to_string()),
-            sha: None,
-            project_id: None,
-            project_name: None,
-            branched_from_id: None,
-            branched_from_version_id: None,
-            document_family_id: None,
-            document_bom: None,
-            modification_data: None,
-            created_at: None,
-            updated_at: None,
-            sub_type: None,
-            deleted_at: None,
-        };
-
-        let markdown_result = vec![
-            MarkdownParseResult {
-                node_id: "node1".to_string(),
-                raw_content: "# Test Header".to_string(),
-                content: "Test Header".to_string(),
-            },
-            MarkdownParseResult {
-                node_id: "node2".to_string(),
-                raw_content: "This is test content.".to_string(),
-                content: "This is test content.".to_string(),
-            },
-        ];
-
-        let upserts =
-            generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
-
-        assert!(!upserts.is_empty());
-        assert_eq!(upserts.len(), 2);
-        assert_eq!(upserts[0].sub_type, None);
-    }
-
-    #[tokio::test]
-    async fn test_generate_upsert_with_sub_type() {
-        use document_sub_type::DocumentSubType;
-
-        let document_info = DocumentMetadata {
-            document_id: "BBB".to_string(),
-            document_version_id: 0,
-            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
-            document_name: "test_task".to_string(),
-            file_type: Some("md".to_string()),
-            sha: None,
-            project_id: None,
-            project_name: None,
-            branched_from_id: None,
-            branched_from_version_id: None,
-            document_family_id: None,
-            document_bom: None,
-            modification_data: None,
-            created_at: None,
-            updated_at: None,
-            sub_type: Some(DocumentSubType::Task),
-            deleted_at: None,
-        };
-
-        let markdown_result = vec![MarkdownParseResult {
-            node_id: "node1".to_string(),
-            raw_content: "# Task content".to_string(),
-            content: "Task content".to_string(),
-        }];
-
-        let upserts =
-            generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
-
-        assert_eq!(upserts.len(), 1);
-        assert_eq!(upserts[0].sub_type, Some("task".to_string()));
-    }
-
-    fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
-        DocumentMetadata {
-            document_id: "CCC".to_string(),
-            document_version_id: 0,
-            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
-            document_name: "pdf copy".to_string(),
-            file_type: file_type.map(|ft| ft.to_string()),
-            sha: None,
-            project_id: None,
-            project_name: None,
-            branched_from_id: None,
-            branched_from_version_id: None,
-            document_family_id: None,
-            document_bom: None,
-            modification_data: None,
-            created_at: None,
-            updated_at: None,
-            sub_type: None,
-            deleted_at: None,
-        }
-    }
-
-    #[test]
-    fn test_generate_parent_only_upsert() {
-        let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")))
-            .expect("could not generate parent-only upsert")
-            .expect("expected upsert args");
-
-        assert_eq!(args.document_id, "CCC");
-        assert_eq!(args.document_name, "pdf copy");
-        assert_eq!(args.owner_id, "macro|nobody@macro.com");
-        assert_eq!(args.file_type, "zip");
-        assert_eq!(args.sub_type, None);
-        assert_eq!(args.content, "");
-        assert_eq!(args.raw_content, None);
-        assert!(args.properties.is_empty());
-    }
-
-    #[test]
-    fn test_generate_parent_only_upsert_without_file_type() {
-        let args = generate_parent_only_upsert(parent_only_document_info(None))
-            .expect("could not generate parent-only upsert");
-
-        assert!(args.is_none());
-    }
-}
+mod test;

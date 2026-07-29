@@ -1,5 +1,6 @@
 self-hosted-runner:
   labels:
+    - db-migrator
     - linux-extra-beefy
     - linux-latest-middy
     - namespace-profile-linux-mid

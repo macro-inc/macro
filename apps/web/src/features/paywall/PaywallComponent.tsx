@@ -23,7 +23,6 @@ const PAYWALL_PREMIUM_FEATURES = [
   'All agents',
   'All models',
   'No watermark',
-  'MCP access',
   'AI projections',
   'Multiple email inboxes',
   'Calls',

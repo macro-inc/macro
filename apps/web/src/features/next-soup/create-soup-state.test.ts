@@ -227,6 +227,27 @@ describe('createSoupState', () => {
       });
     });
 
+    it('should skip rows rejected by the navigation predicate', () => {
+      createRoot((dispose) => {
+        const entities = [
+          createTestEntity('1'),
+          createTestEntity('2'),
+          createTestEntity('3'),
+        ];
+        const state = createSoupState({ initialData: entities });
+        state.focus.set('1');
+
+        const result = state.navigate.down({
+          skip: (row) => row.id === '2',
+        });
+
+        expect(result?.row.original).toBe(entities[2]);
+        expect(state.focus.id()).toBe('3');
+
+        dispose();
+      });
+    });
+
     it('should navigate to first', () => {
       createRoot((dispose) => {
         const entities = [createTestEntity('1'), createTestEntity('2')];
@@ -376,24 +397,6 @@ describe('createSoupState', () => {
         expect(state.navigate.down()).toBeUndefined();
         expect(state.navigate.up()).toBeUndefined();
         expect(state.navigate.toFirst()).toBeUndefined();
-
-        dispose();
-      });
-    });
-  });
-
-  describe('previewEntity', () => {
-    it('should manage preview entity state', () => {
-      createRoot((dispose) => {
-        const state = createSoupState();
-
-        expect(state.previewEntity()).toBeUndefined();
-
-        state.setPreviewEntity('entity-1');
-        expect(state.previewEntity()).toBe('entity-1');
-
-        state.setPreviewEntity(undefined);
-        expect(state.previewEntity()).toBeUndefined();
 
         dispose();
       });

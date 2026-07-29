@@ -3,12 +3,17 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::domain::models::{
-    AdminParticipantRole, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
-    MemberParticipantRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo, ViewAccessLevel,
+    AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
+    BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
+    MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
+    ViewAccessLevel, ViewOnly,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 use tokio::sync::Mutex;
 
 /// Mock repository for testing.
@@ -18,12 +23,22 @@ struct MockRepo {
     chat_access: Arc<Mutex<Option<AccessLevel>>>,
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
+    thread_access_calls: Arc<AtomicUsize>,
+    owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_entity_access_calls: Arc<AtomicUsize>,
+    team_channel_role: Arc<Mutex<ChannelRoleResult>>,
+    team_channel_role_calls: Arc<AtomicUsize>,
     foreign_entity_access: Arc<Mutex<bool>>,
+    team_foreign_entity_access: Arc<Mutex<bool>>,
     crm_company_access: Arc<Mutex<Option<AccessLevel>>>,
     crm_contact_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_crm_company_access: Arc<Mutex<Option<CrmEntityAccess>>>,
+    team_crm_contact_access: Arc<Mutex<Option<CrmEntityAccess>>>,
     channel_membership: Arc<Mutex<Vec<Uuid>>>,
     channel_role: Arc<Mutex<ChannelRoleResult>>,
+    last_channel_role_request: Arc<Mutex<Option<(String, Option<i64>)>>>,
     document_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
@@ -40,12 +55,22 @@ impl MockRepo {
             chat_access: Arc::new(Mutex::new(None)),
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
+            thread_access_calls: Arc::new(AtomicUsize::new(0)),
+            owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
+            team_entity_access: Arc::new(Mutex::new(None)),
+            team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
+            team_channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
+            team_channel_role_calls: Arc::new(AtomicUsize::new(0)),
             foreign_entity_access: Arc::new(Mutex::new(false)),
+            team_foreign_entity_access: Arc::new(Mutex::new(false)),
             crm_company_access: Arc::new(Mutex::new(None)),
             crm_contact_access: Arc::new(Mutex::new(None)),
+            team_crm_company_access: Arc::new(Mutex::new(None)),
+            team_crm_contact_access: Arc::new(Mutex::new(None)),
             channel_membership: Arc::new(Mutex::new(vec![])),
             channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
+            last_channel_role_request: Arc::new(Mutex::new(None)),
             document_users: Arc::new(Mutex::new(vec![])),
             chat_users: Arc::new(Mutex::new(vec![])),
             project_users: Arc::new(Mutex::new(vec![])),
@@ -76,14 +101,39 @@ impl MockRepo {
         self
     }
 
+    fn with_owned_email_thread_ids(mut self, ids: Vec<Uuid>) -> Self {
+        self.owned_email_thread_ids = Arc::new(Mutex::new(ids));
+        self
+    }
+
     #[allow(dead_code)]
     fn with_call_access(mut self, level: AccessLevel) -> Self {
         self.call_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
+    fn with_team_entity_access(mut self, level: AccessLevel) -> Self {
+        self.team_entity_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_team_channel_role(mut self, result: ChannelRoleResult) -> Self {
+        self.team_channel_role = Arc::new(Mutex::new(result));
+        self
+    }
+
+    fn team_repository_calls(&self) -> usize {
+        self.team_entity_access_calls.load(Ordering::SeqCst)
+            + self.team_channel_role_calls.load(Ordering::SeqCst)
+    }
+
     fn with_foreign_entity_access(mut self, has_access: bool) -> Self {
         self.foreign_entity_access = Arc::new(Mutex::new(has_access));
+        self
+    }
+
+    fn with_team_foreign_entity_access(mut self, has_access: bool) -> Self {
+        self.team_foreign_entity_access = Arc::new(Mutex::new(has_access));
         self
     }
 
@@ -96,6 +146,16 @@ impl MockRepo {
     #[allow(dead_code)]
     fn with_crm_contact_access(mut self, level: AccessLevel) -> Self {
         self.crm_contact_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_team_crm_company_access(mut self, access: CrmEntityAccess) -> Self {
+        self.team_crm_company_access = Arc::new(Mutex::new(Some(access)));
+        self
+    }
+
+    fn with_team_crm_contact_access(mut self, access: CrmEntityAccess) -> Self {
+        self.team_crm_contact_access = Arc::new(Mutex::new(Some(access)));
         self
     }
 
@@ -126,6 +186,11 @@ impl MockRepo {
 
     fn with_thread_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
         self.thread_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_user_team(mut self, user_team: UserTeamInfo) -> Self {
+        self.user_team = Arc::new(Mutex::new(Some(user_team)));
         self
     }
 }
@@ -160,7 +225,21 @@ impl AccessRepository for MockRepo {
         _thread_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
+        self.thread_access_calls.fetch_add(1, Ordering::SeqCst);
         Ok(*self.thread_access.lock().await)
+    }
+
+    async fn get_owned_email_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        let owned = self.owned_email_thread_ids.lock().await;
+        Ok(thread_ids
+            .iter()
+            .copied()
+            .filter(|id| owned.contains(id))
+            .collect())
     }
 
     async fn check_user_channel_membership(
@@ -174,9 +253,13 @@ impl AccessRepository for MockRepo {
     async fn get_channel_role(
         &self,
         _channel_id: &Uuid,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _user_org_id: Option<i64>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        user_org_id: Option<i64>,
     ) -> Result<ChannelRoleResult, AccessError> {
+        *self.last_channel_role_request.lock().await = Some((
+            user_id.map(AsRef::as_ref).unwrap_or_default().to_string(),
+            user_org_id,
+        ));
         Ok(*self.channel_role.lock().await)
     }
 
@@ -186,6 +269,52 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.call_access.lock().await)
+    }
+
+    async fn get_team_entity_access(
+        &self,
+        _bot_id: BotId,
+        _team_id: Uuid,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.team_entity_access_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(*self.team_entity_access.lock().await)
+    }
+
+    async fn get_team_channel_role(
+        &self,
+        _channel_id: &Uuid,
+        _team_id: Uuid,
+        _bot_id: BotId,
+    ) -> Result<ChannelRoleResult, AccessError> {
+        self.team_channel_role_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(*self.team_channel_role.lock().await)
+    }
+
+    async fn has_team_foreign_entity_access(
+        &self,
+        _foreign_entity_id: &str,
+        _team_id: Uuid,
+        _bot_id: BotId,
+    ) -> Result<bool, AccessError> {
+        Ok(*self.team_foreign_entity_access.lock().await)
+    }
+
+    async fn get_team_crm_company_access(
+        &self,
+        _company_id: &str,
+        _team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        Ok(*self.team_crm_company_access.lock().await)
+    }
+
+    async fn get_team_crm_contact_access(
+        &self,
+        _contact_id: &str,
+        _team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        Ok(*self.team_crm_contact_access.lock().await)
     }
 
     async fn has_foreign_entity_access(
@@ -201,11 +330,12 @@ impl AccessRepository for MockRepo {
         _company_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<CrmEntityAccess>, AccessError> {
-        // Owning team is irrelevant to these access-level tests; pair with nil.
+        // Owning team / role are irrelevant to these access-level tests.
         Ok(
             (*self.crm_company_access.lock().await).map(|access_level| CrmEntityAccess {
                 access_level,
                 team_id: Uuid::nil(),
+                team_role: TeamRole::Member,
             }),
         )
     }
@@ -215,11 +345,12 @@ impl AccessRepository for MockRepo {
         _contact_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<CrmEntityAccess>, AccessError> {
-        // Owning team is irrelevant to these access-level tests; pair with nil.
+        // Owning team / role are irrelevant to these access-level tests.
         Ok(
             (*self.crm_contact_access.lock().await).map(|access_level| CrmEntityAccess {
                 access_level,
                 team_id: Uuid::nil(),
+                team_role: TeamRole::Member,
             }),
         )
     }
@@ -269,6 +400,27 @@ impl AccessRepository for MockRepo {
 
 fn test_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|test@test.com".to_string()).unwrap()
+}
+
+fn test_bot_id() -> BotId {
+    BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"))
+}
+
+fn test_team_id() -> Uuid {
+    uuid::uuid!("00000000-0000-0000-0000-000000000456")
+}
+
+fn test_bot_scope() -> BotAccessScope {
+    BotAccessScope::Team {
+        team_id: test_team_id(),
+    }
+}
+
+fn test_user_bot_scope(user_org_id: Option<i64>) -> BotAccessScope {
+    BotAccessScope::User {
+        user_id: test_user_id(),
+        user_org_id,
+    }
 }
 
 fn user_id(s: &str) -> MacroUserIdStr<'static> {
@@ -558,6 +710,25 @@ async fn test_get_entity_permission_channel_returns_role() {
 }
 
 #[tokio::test]
+async fn test_get_entity_permission_channel_returns_view_only() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::ViewOnly);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(result, EntityPermission::ChannelViewOnly));
+}
+
+#[tokio::test]
 async fn test_get_entity_permission_channel_no_access_returns_unauthorized() {
     let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NoAccess);
     let service = EntityAccessServiceImpl::new(repo);
@@ -696,6 +867,46 @@ async fn test_check_access_with_none_user_id_and_no_access() {
 // --- generate_entity_access_receipt tests ---
 
 #[tokio::test]
+async fn test_batch_email_receipts_use_owned_thread_fast_path() {
+    let thread_id = Uuid::new_v4();
+    let repo = MockRepo::new().with_owned_email_thread_ids(vec![thread_id]);
+    let calls = repo.thread_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let mut receipts = service
+        .generate_email_thread_view_access_receipts(&user_id, None, &[thread_id.to_string()])
+        .await;
+    let receipt = receipts.remove(&thread_id.to_string()).unwrap().unwrap();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(receipt.entity().entity_type, EntityType::EmailThread);
+    assert_eq!(receipt.entity().entity_id, thread_id.to_string());
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_batch_email_receipts_fall_back_for_shared_threads() {
+    let thread_id = Uuid::new_v4();
+    let repo = MockRepo::new().with_thread_access(AccessLevel::View);
+    let calls = repo.thread_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipts = service
+        .generate_email_thread_view_access_receipts(&user_id, None, &[thread_id.to_string()])
+        .await;
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(receipts[&thread_id.to_string()].is_ok());
+}
+
+#[tokio::test]
 async fn test_generate_receipt_document_with_access() {
     let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
     let service = EntityAccessServiceImpl::new(repo);
@@ -738,6 +949,423 @@ async fn test_generate_receipt_document_no_access_returns_unauthorized() {
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn user_scoped_bot_delegates_to_the_acting_user() {
+    let bot_id = test_bot_id();
+    let scope = test_user_bot_scope(Some(42));
+    let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo.clone());
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+            bot_id,
+            scope.clone(),
+            "doc-1",
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(receipt.auth(), EntityAccessAuth::Bot(id) if id.bot_id() == bot_id));
+    assert_eq!(
+        receipt.get_authenticated_bot_auth().unwrap().scope(),
+        &BotReceiptScope::from(&scope)
+    );
+    assert_eq!(receipt.acting_user_id(), Some(&test_user_id()));
+    assert!(matches!(
+        receipt.get_authenticated_user(),
+        Err(AccessError::Unauthorized)
+    ));
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+    assert_eq!(repo.team_repository_calls(), 0);
+}
+
+#[tokio::test]
+async fn user_scoped_bot_preserves_the_acting_users_organization() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Member));
+    let request = repo.last_channel_role_request.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    service
+        .generate_bot_entity_access_receipt::<MemberParticipantRole>(
+            test_bot_id(),
+            test_user_bot_scope(Some(42)),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *request.lock().await,
+        Some((test_user_id().to_string(), Some(42)))
+    );
+}
+
+#[tokio::test]
+async fn user_scoped_bot_receives_the_acting_users_role_on_their_team() {
+    let team_id = test_team_id();
+    let repo = MockRepo::new().with_user_team(UserTeamInfo {
+        team_id,
+        role: TeamRole::Admin,
+    });
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<AdminTeamRole>(
+            test_bot_id(),
+            test_user_bot_scope(None),
+            &team_id.to_string(),
+            EntityType::Team,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::TeamRole {
+            role: TeamRole::Admin
+        }
+    ));
+}
+
+#[tokio::test]
+async fn user_scoped_bot_cannot_access_another_team() {
+    let repo = MockRepo::new().with_user_team(UserTeamInfo {
+        team_id: test_team_id(),
+        role: TeamRole::Owner,
+    });
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .generate_bot_entity_access_receipt::<MemberTeamRole>(
+            test_bot_id(),
+            test_user_bot_scope(None),
+            &Uuid::new_v4().to_string(),
+            EntityType::Team,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn team_scoped_bot_dispatches_all_item_types() {
+    let repo = MockRepo::new().with_team_entity_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo.clone());
+
+    for entity_type in [
+        EntityType::Document,
+        EntityType::Chat,
+        EntityType::Project,
+        EntityType::EmailThread,
+        EntityType::Call,
+    ] {
+        let receipt = service
+            .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+                test_bot_id(),
+                test_bot_scope(),
+                &Uuid::new_v4().to_string(),
+                entity_type,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            receipt.get_authenticated_bot_auth().unwrap().scope(),
+            &BotReceiptScope::from(&test_bot_scope())
+        );
+        assert!(matches!(
+            receipt.entity_permission(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Edit
+            }
+        ));
+    }
+
+    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 5);
+}
+
+#[tokio::test]
+async fn team_scoped_bot_enforces_the_required_item_permission() {
+    let repo = MockRepo::new().with_team_entity_access(AccessLevel::View);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .generate_bot_entity_access_receipt::<EditAccessLevel>(
+            test_bot_id(),
+            test_bot_scope(),
+            &Uuid::new_v4().to_string(),
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn team_scoped_bot_without_item_access_is_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+
+    let result = service
+        .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+            test_bot_id(),
+            test_bot_scope(),
+            &Uuid::new_v4().to_string(),
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn team_scoped_bot_channel_role_succeeds() {
+    let bot_id = test_bot_id();
+    let repo =
+        MockRepo::new().with_team_channel_role(ChannelRoleResult::Role(ParticipantRole::Member));
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<MemberParticipantRole>(
+            bot_id,
+            test_bot_scope(),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.get_authenticated_bot().unwrap().bot_id(), bot_id);
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Member
+        }
+    ));
+}
+
+#[tokio::test]
+async fn team_scoped_bot_channel_errors_are_preserved() {
+    for (result, expected_not_found) in [
+        (ChannelRoleResult::NoAccess, false),
+        (ChannelRoleResult::NotFound, true),
+    ] {
+        let repo = MockRepo::new().with_team_channel_role(result);
+        let service = EntityAccessServiceImpl::new(repo);
+        let error = service
+            .generate_bot_entity_access_receipt::<MemberParticipantRole>(
+                test_bot_id(),
+                test_bot_scope(),
+                "11111111-1111-1111-1111-111111111111",
+                EntityType::Channel,
+            )
+            .await
+            .expect_err("channel access must fail");
+
+        if expected_not_found {
+            assert!(matches!(error, AccessError::NotFound(_)));
+        } else {
+            assert!(matches!(error, AccessError::Unauthorized));
+        }
+    }
+}
+
+#[tokio::test]
+async fn team_scoped_bot_malformed_channel_id_is_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo.clone());
+
+    let result = service
+        .generate_bot_entity_access_receipt::<MemberParticipantRole>(
+            test_bot_id(),
+            test_bot_scope(),
+            "not-a-uuid",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+    assert_eq!(repo.team_repository_calls(), 0);
+}
+
+#[tokio::test]
+async fn team_scoped_bot_foreign_entity_access_is_view_only() {
+    let repo = MockRepo::new().with_team_foreign_entity_access(true);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+            test_bot_id(),
+            test_bot_scope(),
+            FOREIGN_ENTITY_ID,
+            EntityType::ForeignEntity,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+
+    let result = service
+        .generate_bot_entity_access_receipt::<CommentAccessLevel>(
+            test_bot_id(),
+            test_bot_scope(),
+            FOREIGN_ENTITY_ID,
+            EntityType::ForeignEntity,
+        )
+        .await;
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn team_scoped_bot_crm_access_is_always_view_only() {
+    let repository_access = CrmEntityAccess {
+        access_level: AccessLevel::Owner,
+        team_id: test_team_id(),
+        team_role: TeamRole::Owner,
+    };
+    let repo = MockRepo::new()
+        .with_team_crm_company_access(repository_access)
+        .with_team_crm_contact_access(repository_access);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    for entity_type in [EntityType::CrmCompany, EntityType::CrmContact] {
+        let entity_id = Uuid::new_v4().to_string();
+        let receipt = service
+            .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+                test_bot_id(),
+                test_bot_scope(),
+                &entity_id,
+                entity_type,
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            receipt.entity_permission(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View
+            }
+        ));
+
+        let result = service
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                test_bot_id(),
+                test_bot_scope(),
+                &entity_id,
+                entity_type,
+            )
+            .await;
+        assert!(matches!(result, Err(AccessError::Unauthorized)));
+    }
+}
+
+#[tokio::test]
+async fn team_scoped_bot_hidden_or_other_team_crm_rows_are_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+
+    for entity_type in [EntityType::CrmCompany, EntityType::CrmContact] {
+        let result = service
+            .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+                test_bot_id(),
+                test_bot_scope(),
+                &Uuid::new_v4().to_string(),
+                entity_type,
+            )
+            .await;
+        assert!(matches!(result, Err(AccessError::Unauthorized)));
+    }
+}
+
+#[tokio::test]
+async fn team_scoped_bot_receives_member_role_only_for_the_scoped_team() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let receipt = service
+        .generate_bot_entity_access_receipt::<MemberTeamRole>(
+            test_bot_id(),
+            test_bot_scope(),
+            &test_team_id().to_string(),
+            EntityType::Team,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::TeamRole {
+            role: TeamRole::Member
+        }
+    ));
+
+    let result = service
+        .generate_bot_entity_access_receipt::<AdminTeamRole>(
+            test_bot_id(),
+            test_bot_scope(),
+            &test_team_id().to_string(),
+            EntityType::Team,
+        )
+        .await;
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+
+    let result = service
+        .generate_bot_entity_access_receipt::<MemberTeamRole>(
+            test_bot_id(),
+            test_bot_scope(),
+            &Uuid::new_v4().to_string(),
+            EntityType::Team,
+        )
+        .await;
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn bot_team_receipts_reject_malformed_team_ids() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+
+    for scope in [test_bot_scope(), test_user_bot_scope(None)] {
+        let result = service
+            .generate_bot_entity_access_receipt::<MemberTeamRole>(
+                test_bot_id(),
+                scope,
+                "not-a-uuid",
+                EntityType::Team,
+            )
+            .await;
+        assert!(matches!(result, Err(AccessError::BadRequest(_))));
+    }
+}
+
+#[tokio::test]
+async fn team_scoped_bot_unsupported_types_are_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo.clone());
+
+    for entity_type in [
+        EntityType::User,
+        EntityType::ChannelMessage,
+        EntityType::StaticFile,
+    ] {
+        let result = service
+            .generate_bot_entity_access_receipt::<AnyEntityPermission>(
+                test_bot_id(),
+                test_bot_scope(),
+                "unsupported-entity",
+                entity_type,
+            )
+            .await;
+
+        assert!(matches!(result, Err(AccessError::BadRequest(_))));
+    }
+    assert_eq!(repo.team_repository_calls(), 0);
 }
 
 #[tokio::test]
@@ -980,6 +1608,46 @@ async fn test_generate_receipt_channel_with_role() {
             role: ParticipantRole::Admin
         }
     ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_view_only_satisfies_view_only_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::ViewOnly);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<ViewOnly>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelViewOnly
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_view_only_fails_member_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::ViewOnly);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<MemberParticipantRole>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
 }
 
 #[tokio::test]

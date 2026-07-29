@@ -777,7 +777,11 @@ impl NotificationTitle for DocumentMentionMetadata {
             .map(|sender| sender.0.email_part().email_str().to_string())
             .or_else(|| self.channel.sender_display_name.clone())
             .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        Ok(format!("{sender} sent a document",))
+        let noun = match self.sub_type {
+            Some(NotificationDocumentSubType::Task) => "task",
+            _ => "document",
+        };
+        Ok(format!("{sender} sent a {noun}"))
     }
 
     fn format_body(

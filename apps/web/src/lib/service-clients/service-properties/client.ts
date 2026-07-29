@@ -9,21 +9,23 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
+import type { BulkUpdateEntityPropertyOptionsRequest } from './generated/schemas/bulkUpdateEntityPropertyOptionsRequest';
+import type { BulkUpdateEntityPropertyOptionsResponse } from './generated/schemas/bulkUpdateEntityPropertyOptionsResponse';
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
 import type { EnsureTagSetRequest } from './generated/schemas/ensureTagSetRequest';
 import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
-import type { EntityType } from './generated/schemas/entityType';
 import type { GetBulkEntityProperties200 } from './generated/schemas/getBulkEntityProperties200';
 import type { GetEntityPropertiesParams } from './generated/schemas/getEntityPropertiesParams';
 import type { ListPropertiesParams } from './generated/schemas/listPropertiesParams';
 import type { PropertyDefinition } from './generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from './generated/schemas/propertyDefinitionResponse';
 import type { PropertyOption } from './generated/schemas/propertyOption';
+import type { PropertyTargetEntityType } from './generated/schemas/propertyTargetEntityType';
 import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
 import type { TagSetResponse } from './generated/schemas/tagSetResponse';
 import type { UpdatePropertyOptionRequest } from './generated/schemas/updatePropertyOptionRequest';
 
-type PropertiesEntityType = EntityType;
+type PropertiesEntityType = PropertyTargetEntityType;
 
 type ListPropertiesArgs = ListPropertiesParams;
 type CreatePropertyDefinitionArgs = {
@@ -33,12 +35,12 @@ type DeletePropertyDefinitionArgs = {
   definition_id: string;
 };
 type GetEntityPropertiesArgs = {
-  entity_type: EntityType;
+  entity_type: PropertyTargetEntityType;
   entity_id: string;
   query: GetEntityPropertiesParams;
 };
 type SetEntityPropertyArgs = {
-  entity_type: EntityType;
+  entity_type: PropertyTargetEntityType;
   entity_id: string;
   property_id: string;
   body: SetEntityPropertyRequest;
@@ -47,10 +49,15 @@ type DeleteEntityPropertyArgs = {
   entity_property_id: string;
 };
 type EntityPropertyOptionArgs = {
-  entity_type: EntityType;
+  entity_type: PropertyTargetEntityType;
   entity_id: string;
   property_id: string;
   option_id: string;
+};
+type BulkUpdateEntityPropertyOptionsArgs = {
+  entity_type: PropertyTargetEntityType;
+  entity_id: string;
+  body: BulkUpdateEntityPropertyOptionsRequest;
 };
 type GetPropertyOptionsArgs = {
   definition_id: string;
@@ -185,6 +192,16 @@ export const propertiesServiceClient = {
       method: 'DELETE',
     });
     return result.map(() => ({ success: true }));
+  },
+
+  bulkUpdateEntityPropertyOptions: async (
+    args: BulkUpdateEntityPropertyOptionsArgs
+  ) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/options/bulk`;
+    return await propertiesFetch<BulkUpdateEntityPropertyOptionsResponse>(url, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
   },
 
   getPropertyOptions: async (args: GetPropertyOptionsArgs) => {

@@ -1,7 +1,12 @@
-import { ok, okAsync } from 'neverthrow';
+import { ok, okAsync, type Result } from 'neverthrow';
 import { vi } from 'vitest';
+import type { ResultError } from '../internal/result';
 import type { Chatter, ChatterMessage } from './chatter';
-import type { StateUpdate, SyncEngineManager } from './manager';
+import type {
+  LoroManagerError,
+  StateUpdate,
+  SyncEngineManager,
+} from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
@@ -181,7 +186,11 @@ export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
   private _initialized: boolean;
 
   public peerId = BigInt(1);
-  public importUpdate = vi.fn(() => ok(true));
+  public importUpdate = vi.fn(
+    (
+      _update: LoroRawUpdate
+    ): Result<boolean, ResultError<LoroManagerError>[]> => ok(true)
+  );
   public syncToLoro = vi.fn(async () => ok(undefined as void));
   public reset = vi.fn(async () => ok(undefined as void));
 

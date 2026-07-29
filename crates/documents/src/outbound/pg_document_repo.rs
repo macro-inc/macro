@@ -39,6 +39,21 @@ impl PgDocumentRepo {
     }
 }
 
+async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE "Document"
+        SET "updatedAt" = NOW()
+        WHERE id = $1
+        "#,
+        document_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 impl DocumentRepo for PgDocumentRepo {
     type Err = sqlx::Error;
 
@@ -582,6 +597,11 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn update_document_modified(&self, document_id: &str) -> Result<(), Self::Err> {
+        update_document_modified(&self.pool, document_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn update_project_modified(&self, project_id: &str) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"UPDATE "Project" SET "updatedAt" = NOW() WHERE id = $1"#,
@@ -726,6 +746,25 @@ impl DocumentRepo for PgDocumentRepo {
             team_id: row.team_id,
             task_num: row.task_num,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT document_id
+            FROM team_task
+            WHERE team_id = $1 AND task_num = $2
+            "#,
+            team_id,
+            task_num,
+        )
+        .fetch_optional(&self.pool)
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]

@@ -2,8 +2,8 @@ import type { InferType } from '@loro-mirror/core';
 import { SyncEngine } from '@macro-inc/collaboration/collab/engine';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
+import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import type { WALSyncer } from '@macro-inc/collaboration/collab/wal';
-import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
 import type {
   MARKDOWN_LORO_SCHEMA,
   MarkdownLoroSchemaType,
@@ -40,7 +40,7 @@ export class EditingWorkspace {
 
   constructor(
     private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
-    private readonly source: SyncServiceSource,
+    private readonly source: LiveSyncSource,
     wal: WALSyncer<RawUpdate>,
     opts: EditingWorkspaceOptions = {}
   ) {

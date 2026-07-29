@@ -3,7 +3,7 @@ import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 export type ListNavActions = {
   next: VoidFunction;
   previous: VoidFunction;
-  select: VoidFunction;
+  select: (event?: KeyboardEvent) => void;
 };
 
 export function useListKeyBindings(elem: Accessor<HTMLElement | undefined>) {
@@ -19,7 +19,7 @@ export function useListKeyBindings(elem: Accessor<HTMLElement | undefined>) {
       actions?.previous();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      actions?.select();
+      actions?.select(e);
     }
   };
 

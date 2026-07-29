@@ -2,9 +2,7 @@
 pub mod models;
 
 /// Port traits: the inbound and outbound boundaries of the broker.
-#[cfg(feature = "ports")]
 pub mod ports;
 
-/// Service orchestration for publishing events.
-#[cfg(feature = "ports")]
+/// Service orchestration for producing and consuming typed events.
 pub mod service;

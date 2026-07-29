@@ -424,9 +424,9 @@ export function ChannelInput(props: ChannelInputProps) {
         }}
         class={cn(
           'rounded-xl mobile:rounded-3xl mobile:island',
-          isCollapsed() && 'hidden'
+          isCollapsed() && 'hidden',
+          isMobile() && 'bg-chrome'
         )}
-        bgToken={isMobile() ? 'chrome' : undefined}
         hideBorder={isMobile()}
         depth={isMobile() ? 3 : 2}
         solid

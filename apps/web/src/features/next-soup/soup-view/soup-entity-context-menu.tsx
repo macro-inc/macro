@@ -15,7 +15,6 @@ import {
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { useRowTagsVisible } from './filters-bar/search/search-tags-flag';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
 import { useSoupView } from './soup-view-context';
@@ -32,6 +31,7 @@ function tagEntityType(entity: EntityData): EntityType | undefined {
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .otherwise(() => undefined);
 }
 
@@ -67,7 +67,6 @@ export const SoupEntityContextMenu: FlowComponent<
 > = (props) => {
   const { soup } = useSoupView();
   const drawerManager = useSoupEntityActionDrawer();
-  const rowTagsVisible = useRowTagsVisible();
 
   const [tagPickerOpen, setTagPickerOpen] = createSignal(false);
   const [menuPosition, setMenuPosition] = createSignal<{
@@ -85,8 +84,7 @@ export const SoupEntityContextMenu: FlowComponent<
     return [props.entity];
   };
 
-  const canEditTags = () =>
-    rowTagsVisible() && tagEntityType(props.entity) !== undefined;
+  const canEditTags = () => tagEntityType(props.entity) !== undefined;
 
   return (
     <Switch>

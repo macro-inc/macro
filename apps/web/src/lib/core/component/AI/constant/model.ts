@@ -9,11 +9,11 @@ import OpenAiIcon from '@core/component/AI/assets/openai.svg';
  * strings.
  */
 export const Model = {
-  opus48: 'anthropic/claude-opus-4-8',
+  sonnet5: 'anthropic/claude-sonnet-5',
+  opus5: 'anthropic/claude-opus-5',
   haiku45: 'anthropic/claude-haiku-4-5',
-  sonnet46: 'anthropic/claude-sonnet-4-6',
-  gpt55: 'openai/gpt-5.5',
-  gpt5Mini: 'openai/gpt-5-mini',
+  gpt56: 'openai/gpt-5.6',
+  gpt56Mini: 'openai/gpt-5.6-mini',
 } as const;
 
 // `Model` is both a value (the const above) and a type (the union of api ids).
@@ -26,23 +26,23 @@ type ExhaustiveMap = {
 };
 
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
-  'anthropic/claude-opus-4-8': 'Opus 4.8',
+  'anthropic/claude-sonnet-5': 'Sonnet 5',
+  'anthropic/claude-opus-5': 'Opus 5',
   'anthropic/claude-haiku-4-5': 'Haiku 4.5',
-  'anthropic/claude-sonnet-4-6': 'Sonnet 4.6',
-  'openai/gpt-5.5': 'GPT-5.5',
-  'openai/gpt-5-mini': 'GPT-5 mini',
+  'openai/gpt-5.6': 'GPT-5.6',
+  'openai/gpt-5.6-mini': 'GPT-5.6 mini',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
-  'anthropic/claude-opus-4-8': AnthropicIcon,
+  'anthropic/claude-sonnet-5': AnthropicIcon,
+  'anthropic/claude-opus-5': AnthropicIcon,
   'anthropic/claude-haiku-4-5': AnthropicIcon,
-  'anthropic/claude-sonnet-4-6': AnthropicIcon,
-  'openai/gpt-5.5': OpenAiIcon,
-  'openai/gpt-5-mini': OpenAiIcon,
+  'openai/gpt-5.6': OpenAiIcon,
+  'openai/gpt-5.6-mini': OpenAiIcon,
 };
 
 /** Default model for paid users. */
-export const DEFAULT_MODEL: TModel = Model.opus48;
+export const DEFAULT_MODEL: TModel = Model.sonnet5;
 
 /**
  * Default model for free users. Free users aren't entitled to the premium
@@ -74,11 +74,11 @@ export function modelsForPlan(hasPaidAccess: boolean): readonly TModel[] {
 
 /** Provider serving each model — mirrors the backend `provider` field. */
 export const MODEL_PROVIDER: ExhaustiveMap = {
-  'anthropic/claude-opus-4-8': 'anthropic',
+  'anthropic/claude-sonnet-5': 'anthropic',
+  'anthropic/claude-opus-5': 'anthropic',
   'anthropic/claude-haiku-4-5': 'anthropic',
-  'anthropic/claude-sonnet-4-6': 'anthropic',
-  'openai/gpt-5.5': 'openai',
-  'openai/gpt-5-mini': 'openai',
+  'openai/gpt-5.6': 'openai',
+  'openai/gpt-5.6-mini': 'openai',
 } as const;
 
 /** Options for {@link alternateProviderModel}. */

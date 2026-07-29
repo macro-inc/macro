@@ -1,9 +1,8 @@
-import type { Query } from '@app/features/next-soup/filters/filter-store';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
+import { useApplyCrmView } from '@app/features/next-soup/soup-view/views/companies/use-apply-crm-view';
 import {
-  CRM_KANBAN_FIELD_LABELS,
   CRM_LIST_COLUMN_LABELS,
-  type CrmKanbanFieldId,
   type CrmListColumnId,
   useCrmDisplayOptions,
 } from '@companies/crm/display-options';
@@ -18,14 +17,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import FloppyDiskIcon from '@phosphor/floppy-disk.svg';
 import LinkIcon from '@phosphor/link.svg';
+import PushPinIcon from '@phosphor/push-pin.svg';
 import SlidersIcon from '@phosphor/sliders-horizontal.svg';
 import StackIcon from '@phosphor/stack.svg';
 import TrashIcon from '@phosphor/trash.svg';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import { Button, cn, Dropdown, SegmentedControl, Tooltip } from '@ui';
-import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-
-type SoupViewMode = 'list' | 'board';
 
 /** Copy a view's share link, with a toast either way. */
 const copyShareLink = (config: CrmViewConfig) => {
@@ -36,13 +35,16 @@ const copyShareLink = (config: CrmViewConfig) => {
 };
 
 /**
- * Saved-view row: the name applies the view; trailing hover actions copy
- * its share link or delete it.
+ * Saved-view row: the name applies the view; trailing hover actions pin it
+ * as the default, copy its share link, or delete it. The pin stays visible
+ * on the current default.
  */
 const SavedViewRow = (props: {
   name: string;
+  isDefault?: boolean;
   onApply: () => void;
   onCopyLink: () => void;
+  onSetDefault?: () => void;
   onDelete?: () => void;
 }) => (
   <div class="group rounded-lg w-full flex items-center gap-0.5 pl-2 pr-1 hover:bg-ink/5">
@@ -53,6 +55,28 @@ const SavedViewRow = (props: {
     >
       {props.name}
     </button>
+    <Show when={props.isDefault && !props.onSetDefault}>
+      <PushPinIcon class="size-3.5 shrink-0 text-ink-muted" />
+    </Show>
+    <Show when={props.onSetDefault}>
+      {(onSetDefault) => (
+        <Tooltip label={props.isDefault ? 'Remove default' : 'Set as default'}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label={props.isDefault ? 'Remove default' : 'Set as default'}
+            class={cn(
+              'size-6 shrink-0 rounded-md p-1 text-ink-muted',
+              !props.isDefault &&
+                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+            )}
+            onClick={() => onSetDefault()()}
+          >
+            <PushPinIcon class="size-3.5" />
+          </Button>
+        </Tooltip>
+      )}
+    </Show>
     <Tooltip label="Copy link">
       <Button
         variant="ghost"
@@ -92,21 +116,15 @@ const EmptyViewsHint = (props: { children: JSX.Element }) => (
  * list/board mode, stage/owner sub-filters, tab), plus share links that
  * encode the same state into the URL (see `@companies/crm/saved-views`).
  */
-export function CompanyViewsMenu(props: {
-  viewMode: SoupViewMode;
-  setViewMode: (mode: SoupViewMode) => void;
-}) {
+export function CompanyViewsMenu() {
   const {
     soup,
     queryFilters,
     searchText,
-    setSearchText,
     stageFilter,
-    setStageFilter,
     ownerFilter,
-    setOwnerFilter,
     activeTab,
-    setActiveTab,
+    viewMode,
   } = useSoupView();
   const personal = usePersonalCrmViews();
   const team = useTeamCrmViews();
@@ -131,42 +149,16 @@ export function CompanyViewsMenu(props: {
     searchText: searchText(),
     groupBy: soup.grouping.activeGroupId() ?? null,
     sort: soup.sort.active().map((s) => s.id),
-    viewMode: props.viewMode,
+    viewMode: viewMode(),
     stageFilter: [...stageFilter()],
     ownerFilter: [...ownerFilter()],
     activeTab: activeTab(),
   });
 
-  // Mirrors the init/applyTabPreset path: replace filters + predicates
-  // atomically, then re-derive the stage/owner predicate active state from
-  // the saved sub-filter selections (same rule as handleStageChange /
-  // handleOwnerChange in unified-filter-dropdown).
+  const applyCrmView = useApplyCrmView();
+
   const applyView = (config: CrmViewConfig) => {
-    batch(() => {
-      queryFilters.replace((config.filters as Query | undefined) ?? null);
-      soup.predicates.set(config.clientFilters ?? {});
-      setSearchText(config.searchText ?? '');
-      // `groupBy: null` records an explicit "no grouping"; the grouping
-      // store expresses that as `undefined` (same as the init path).
-      soup.grouping.setActiveGroupId(config.groupBy ?? undefined);
-      soup.sort.setAll(
-        (config.sort?.length ? config.sort : ['updated_at']) as Parameters<
-          typeof soup.sort.setAll
-        >[0]
-      );
-      const stages = config.stageFilter ?? [];
-      setStageFilter(stages);
-      if (stages.length > 0 !== soup.predicates.isActive('company-stage')) {
-        soup.predicates.toggle({ and: ['company-stage'] });
-      }
-      const owners = config.ownerFilter ?? [];
-      setOwnerFilter(owners);
-      if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
-        soup.predicates.toggle({ and: ['company-owner'] });
-      }
-      props.setViewMode(config.viewMode ?? 'list');
-      if (config.activeTab !== undefined) setActiveTab(config.activeTab);
-    });
+    applyCrmView(config);
     setOpen(false);
   };
 
@@ -213,8 +205,14 @@ export function CompanyViewsMenu(props: {
             {(view) => (
               <SavedViewRow
                 name={view.name}
+                isDefault={view.config.isDefault === true}
                 onApply={() => applyView(view.config)}
                 onCopyLink={() => copyShareLink(view.config)}
+                onSetDefault={() =>
+                  personal.setDefault.mutate({
+                    id: view.config.isDefault ? undefined : view.id,
+                  })
+                }
                 onDelete={() => personal.remove.mutate({ id: view.id })}
               />
             )}
@@ -230,8 +228,17 @@ export function CompanyViewsMenu(props: {
             {(view) => (
               <SavedViewRow
                 name={view.name}
+                isDefault={view.id === team.defaultViewId()}
                 onApply={() => applyView(view.config as CrmViewConfig)}
                 onCopyLink={() => copyShareLink(view.config as CrmViewConfig)}
+                onSetDefault={
+                  canEditCrm()
+                    ? () =>
+                        team.setDefault(
+                          view.id === team.defaultViewId() ? undefined : view.id
+                        )
+                    : undefined
+                }
                 onDelete={
                   canDeleteTeamView(view.createdBy)
                     ? () => team.remove(view.id)
@@ -310,57 +317,77 @@ export function CompanyViewsMenu(props: {
 
 /**
  * Personal display options for the Customers view: which property columns
- * show in the list and which fields show on board cards. Device-level
- * (preference-backed) — deliberately not captured by saved views.
+ * show in the list. Device-level (preference-backed) — deliberately not
+ * captured by saved views. Admins/owners additionally get a toggle to view
+ * the hidden-companies set (backed by the active/hidden tab presets).
  */
 export function CompanyDisplayMenu() {
-  const { options, toggleListColumn, toggleKanbanField } =
-    useCrmDisplayOptions();
+  const { options, toggleListColumn } = useCrmDisplayOptions();
+  const { activeTab, viewMode } = useSoupView();
+  const { applyTabPreset } = useApplyPreset();
+  const isTeamAdmin = useIsTeamAdmin();
+
+  const showingHidden = () => activeTab() === 'hidden';
+
+  // On the board, the menu holds only the admin-gated hidden toggle — hide
+  // the trigger entirely when there'd be nothing to show.
+  const hasContent = () => viewMode() === 'list' || isTeamAdmin();
 
   return (
-    <Dropdown>
-      <Tooltip label="Display options">
-        <Dropdown.Trigger depth={2} class="bg-surface" label="Display options">
-          <SlidersIcon />
-        </Dropdown.Trigger>
-      </Tooltip>
-
-      <Dropdown.Content class="w-56 shadow-menu">
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>List columns</Dropdown.GroupLabel>
-          <For each={Object.keys(CRM_LIST_COLUMN_LABELS) as CrmListColumnId[]}>
-            {(column) => (
-              <Dropdown.CheckboxItem
-                checked={options().listColumns[column]}
-                onChange={() => toggleListColumn(column)}
-                closeOnSelect={false}
-              >
-                <span class="flex-1 truncate">
-                  {CRM_LIST_COLUMN_LABELS[column]}
-                </span>
-              </Dropdown.CheckboxItem>
-            )}
-          </For>
-        </Dropdown.Group>
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>Board card fields</Dropdown.GroupLabel>
-          <For
-            each={Object.keys(CRM_KANBAN_FIELD_LABELS) as CrmKanbanFieldId[]}
+    <Show when={hasContent()}>
+      <Dropdown>
+        <Tooltip label="Display options">
+          <Dropdown.Trigger
+            depth={2}
+            class="bg-surface"
+            label="Display options"
           >
-            {(field) => (
+            <SlidersIcon />
+          </Dropdown.Trigger>
+        </Tooltip>
+
+        <Dropdown.Content class="w-56 shadow-menu">
+          {/* Column visibility only applies to the list. */}
+          <Show when={viewMode() === 'list'}>
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>List columns</Dropdown.GroupLabel>
+              <For
+                each={Object.keys(CRM_LIST_COLUMN_LABELS) as CrmListColumnId[]}
+              >
+                {(column) => (
+                  <Dropdown.CheckboxItem
+                    checked={options().listColumns[column]}
+                    onChange={() => toggleListColumn(column)}
+                    closeOnSelect={false}
+                  >
+                    <span class="flex-1 truncate">
+                      {CRM_LIST_COLUMN_LABELS[column]}
+                    </span>
+                  </Dropdown.CheckboxItem>
+                )}
+              </For>
+            </Dropdown.Group>
+          </Show>
+          {/* Admin/owner only — the BE rejects hidden-set requests from
+            non-admins, matching the old Hidden tab's gating. */}
+          <Show when={isTeamAdmin()}>
+            <Dropdown.Group>
               <Dropdown.CheckboxItem
-                checked={options().kanbanFields[field]}
-                onChange={() => toggleKanbanField(field)}
+                checked={showingHidden()}
+                onChange={() =>
+                  applyTabPreset(
+                    'companies',
+                    showingHidden() ? 'active' : 'hidden'
+                  )
+                }
                 closeOnSelect={false}
               >
-                <span class="flex-1 truncate">
-                  {CRM_KANBAN_FIELD_LABELS[field]}
-                </span>
+                <span class="flex-1 truncate">Show hidden companies</span>
               </Dropdown.CheckboxItem>
-            )}
-          </For>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
+            </Dropdown.Group>
+          </Show>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
   );
 }

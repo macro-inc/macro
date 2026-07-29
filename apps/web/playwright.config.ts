@@ -3,7 +3,11 @@ import { execFileSync } from 'node:child_process';
 import { defineConfig, devices } from '@playwright/test';
 
 const isLocalE2E = process.env.LOCAL_E2E === 'true';
-const localE2EPort = process.env.PORT ?? '3000';
+const localE2EBaseURL = process.env.LOCAL_E2E_BASE_URL;
+const localE2EPort = localE2EBaseURL
+  ? new URL(localE2EBaseURL).port
+  : (process.env.PORT ?? '3000');
+const localE2EBackendOrigin = process.env.LOCAL_E2E_BACKEND_ORIGIN;
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -34,8 +38,7 @@ function localE2EToken(): string {
     const details = commandOutput(error);
     const message = [
       'Failed to generate LOCAL_JWT for LOCAL_E2E Playwright.',
-      'Prefer running the repo-level harness: `just local-e2e`.',
-      'If you are running Playwright directly, run `just local-e2e-seed` first and ensure `.env` exists from `just get_environment`.',
+      'Run Playwright through the repo-level harness: `just local-e2e`.',
       'You can also bypass token generation by exporting LOCAL_JWT.',
       details ? `Generator output:\n${details}` : undefined,
     ]
@@ -48,9 +51,16 @@ function localE2EToken(): string {
 }
 
 function localE2EWebServerCommand(): string {
+  if (!localE2EBackendOrigin) {
+    throw new Error(
+      'LOCAL_E2E_BACKEND_ORIGIN is required. Run Playwright through `just local-e2e`.'
+    );
+  }
+
   return [
     `PORT=${shellQuote(localE2EPort)}`,
     'VITE_LOCAL_SERVERS=ALL',
+    `VITE_LOCAL_BACKEND_ORIGIN=${shellQuote(localE2EBackendOrigin)}`,
     'VITE_ENABLE_BEARER_TOKEN_AUTH=true',
     `LOCAL_JWT=${shellQuote(localE2EToken())}`,
     'bun run dev',
@@ -129,6 +139,10 @@ export default defineConfig({
   testIgnore: 'tests/e2e/pdf/inputs/*',
   /* Run tests in files in parallel */
   fullyParallel: true,
+  // Local E2E shares one seeded stack and one authenticated user. Running the
+  // full app in several UI-mode workers can leave background channel layouts
+  // unmeasured, so keep this harness serial and deterministic.
+  workers: isLocalE2E ? 1 : undefined,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -139,7 +153,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: `http://localhost:${localE2EPort}/app`,
+    baseURL: localE2EBaseURL ?? `http://localhost:${localE2EPort}/app`,
     /* Only retain traces on the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'retain-on-failure',
   },

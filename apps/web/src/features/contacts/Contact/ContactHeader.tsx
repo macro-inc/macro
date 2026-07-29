@@ -1,11 +1,34 @@
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { getInitialsFromName } from '@core/user';
 import { AnimatedContactIcon } from '@icon/wide-contact';
+import { useSetContactNameMutation } from '@queries/crm/contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { Avatar } from '@ui';
 import { Show } from 'solid-js';
 
+// Renames overwrite `crm_contacts.name`, which is already team-scoped —
+// no global directory involved (unlike company renames).
+function TitleEditor(props: { contact: CrmContactResponse }) {
+  const renameMutation = useSetContactNameMutation();
+  return (
+    <InlineTitleEditor
+      // Nameless contacts display their email; committing it unchanged
+      // is a no-op rather than a save.
+      value={props.contact.name ?? props.contact.email}
+      placeholder="Contact"
+      ariaLabel="Contact name"
+      onRename={(name) =>
+        renameMutation.mutate({
+          contactId: props.contact.id,
+          companyId: props.contact.companyId,
+          name,
+        })
+      }
+    />
+  );
+}
+
 export function ContactHeader(props: { contact?: CrmContactResponse }) {
-  const displayName = () => props.contact?.name ?? props.contact?.email;
   const showSubtitle = () =>
     props.contact?.name != null && props.contact.name !== props.contact.email;
 
@@ -35,8 +58,10 @@ export function ContactHeader(props: { contact?: CrmContactResponse }) {
         </Show>
       </Avatar>
       <div class="flex min-w-0 flex-col gap-1">
-        <h1 class="min-w-0 truncate text-xl font-semibold">
-          {displayName() ?? 'Contact'}
+        <h1 class="min-w-0 text-xl font-semibold">
+          <Show when={props.contact} fallback={'Loading contact…'}>
+            {(contact) => <TitleEditor contact={contact()} />}
+          </Show>
         </h1>
         <Show when={showSubtitle()}>
           <p class="truncate text-sm text-ink-muted">{props.contact?.email}</p>

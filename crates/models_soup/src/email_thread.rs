@@ -4,10 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// A contact participating in an email thread as displayed in Soup.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Contact)]
@@ -26,7 +24,7 @@ pub struct SoupContact {
 }
 
 /// An email label as displayed in Soup.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Label)]
@@ -51,7 +49,7 @@ pub struct SoupLabel {
 }
 
 /// Gmail-style message list visibility for a label.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::MessageListVisibility)]
@@ -64,7 +62,7 @@ pub enum SoupMessageListVisibility {
 }
 
 /// Gmail-style label list visibility.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::LabelListVisibility)]
@@ -79,7 +77,7 @@ pub enum SoupLabelListVisibility {
 }
 
 /// Whether an email label is provider-created or user-created.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::LabelType)]
@@ -92,7 +90,7 @@ pub enum SoupLabelType {
 }
 
 /// An email attachment as displayed in Soup.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Attachment)]
@@ -117,7 +115,7 @@ pub struct SoupAttachment {
 }
 
 /// Email thread preview data as displayed in Soup.
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::EmailThreadPreview)]
@@ -161,10 +159,10 @@ pub struct SoupEmailThreadPreview {
 }
 
 /// Email thread preview enriched with related metadata for Soup.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct SoupEnrichedEmailThreadPreview {
+pub struct SoupEnrichedEmailThreadPreview<T = ()> {
     /// Base email thread preview.
     #[serde(flatten)]
     pub thread: SoupEmailThreadPreview,
@@ -174,6 +172,7 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub participants: Vec<SoupContact>,
     /// Labels attached to the thread.
     pub labels: Vec<SoupLabel>,
-    /// Properties attached to the thread.
-    pub properties: Vec<SoupProperty>,
+    /// Extra fields passed from above
+    #[serde(flatten)]
+    pub extra: T,
 }

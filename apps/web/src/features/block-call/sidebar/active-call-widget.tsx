@@ -1,20 +1,16 @@
-import { useCallContextOptional } from '@channel/Call/CallContext';
-import { stopCallRinger } from '@channel/Call/CallStartedNotifier';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import PhoneIcon from '@icon/wide-call.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
+import XIcon from '@phosphor/x.svg';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar, Button, cn, Tooltip } from '@ui';
 import {
-  createEffect,
   createMemo,
   createSignal,
   type FlowComponent,
@@ -22,27 +18,9 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { dismissIncomingCall, useVisibleIncomingCalls } from './incoming-calls';
 
 const SLIM_MAX = 4;
-const MAX_RING_DURATION_MS = 30_000;
-
-type IncomingCall = {
-  channelId: string;
-  callId: string;
-  createdAt: string;
-  createdBy: string | null;
-};
-
-type CallStartedPayload = {
-  channel_id?: string;
-  call_id?: string;
-  created_by?: string | null;
-};
-
-type CallEndedPayload = {
-  channel_id?: string;
-  call_id?: string;
-};
 
 function displayName(channel: ApiChannelWithLatest | undefined) {
   if (!channel) return 'Channel';
@@ -58,8 +36,8 @@ function ChannelCallBadge(props: {
   slim: boolean;
 }) {
   return (
-    <div class="relative flex items-center justify-center shrink-0 size-5">
-      <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
+    <div class="relative flex items-center justify-center shrink-0 size-[22px]">
+      <Avatar size="fill" class="bg-ink-extra-muted/15 text-ink-muted">
         <Avatar.Fallback class="font-semibold">{props.letters}</Avatar.Fallback>
       </Avatar>
       <Show when={props.slim}>
@@ -130,25 +108,6 @@ function formatDuration(startedAt: string | undefined, nowMs: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function safeJsonParse(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
-}
-
-function parsePayload(raw: unknown): CallStartedPayload | null {
-  const obj =
-    typeof raw === 'string'
-      ? safeJsonParse(raw)
-      : typeof raw === 'object'
-        ? raw
-        : null;
-  if (!obj || typeof obj !== 'object') return null;
-  return obj as CallStartedPayload;
-}
-
 type IncomingCallContextMenuProps = {
   callId: string;
   channelId: string;
@@ -182,117 +141,15 @@ export function SidebarActiveCallWidget(props: {
   class?: string;
 }) {
   const channelsCtx = useChannelsContext();
-  const callCtx = useCallContextOptional();
   const userId = useUserId();
-  const [incomingCalls, setIncomingCalls] = createSignal<IncomingCall[]>([]);
-  const incomingCallTimeouts = new Map<string, number>();
   const [nowMs, setNowMs] = createSignal(Date.now());
   const durationTimer = globalThis.setInterval(
     () => setNowMs(Date.now()),
     1000
   );
-  onCleanup(() => {
-    globalThis.clearInterval(durationTimer);
-    for (const timeoutId of incomingCallTimeouts.values()) {
-      window.clearTimeout(timeoutId);
-    }
-    incomingCallTimeouts.clear();
-  });
+  onCleanup(() => globalThis.clearInterval(durationTimer));
 
-  const dismissIncomingCall = (callId: string) => {
-    stopCallRinger(callId);
-    const timeoutId = incomingCallTimeouts.get(callId);
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-      incomingCallTimeouts.delete(callId);
-    }
-    setIncomingCalls((calls) => calls.filter((call) => call.callId !== callId));
-  };
-
-  const addIncomingCall = (call: IncomingCall) => {
-    const existingTimeoutId = incomingCallTimeouts.get(call.callId);
-    if (existingTimeoutId !== undefined) {
-      window.clearTimeout(existingTimeoutId);
-    }
-    incomingCallTimeouts.set(
-      call.callId,
-      window.setTimeout(
-        () => dismissIncomingCall(call.callId),
-        MAX_RING_DURATION_MS
-      )
-    );
-
-    setIncomingCalls((calls) => {
-      const withoutDuplicate = calls.filter(
-        (candidate) =>
-          candidate.callId !== call.callId &&
-          candidate.channelId !== call.channelId
-      );
-      return [call, ...withoutDuplicate].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    });
-  };
-
-  createEffect(() => {
-    const activeCallId = callCtx?.activeCallId();
-    if (activeCallId) dismissIncomingCall(activeCallId);
-  });
-
-  createConnectionWebsocketEffect((data) => {
-    if (!ENABLE_CALLS()) return;
-
-    const payload = parsePayload(data.data);
-    if (!payload) return;
-
-    if (data.type === 'call_ended') {
-      const { channel_id: channelId, call_id: callId } =
-        payload as CallEndedPayload;
-      if (!channelId || !callId) return;
-
-      dismissIncomingCall(callId);
-      return;
-    }
-
-    if (data.type !== 'call_started') return;
-
-    const {
-      channel_id: channelId,
-      call_id: callId,
-      created_by: createdBy,
-    } = payload;
-    if (!channelId || !callId) return;
-    if (callCtx?.activeCallId() === callId) return;
-    if (createdBy && createdBy === userId()) return;
-
-    addIncomingCall({
-      channelId,
-      callId,
-      createdAt: new Date().toISOString(),
-      createdBy: createdBy ?? null,
-    });
-  });
-
-  const activeCalls = createMemo(() => {
-    const channelsById = channelsCtx.channelsById();
-    const joinedChannelId = callCtx?.isInCall()
-      ? callCtx.activeChannelId()
-      : null;
-    const joinedCallId = callCtx?.isInCall() ? callCtx.activeCallId() : null;
-
-    return incomingCalls()
-      .filter((call) => {
-        if (!channelsById[call.channelId]) return false;
-        return (
-          call.channelId !== joinedChannelId && call.callId !== joinedCallId
-        );
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  });
+  const activeCalls = useVisibleIncomingCalls();
 
   const activeCallChannels = createMemo(() =>
     activeCalls().map((call) => ({
@@ -370,13 +227,10 @@ export function SidebarActiveCallWidget(props: {
         }
       >
         <section
-          class={cn(
-            'size-full flex flex-col justify-center px-2 py-1.5',
-            props.class
-          )}
+          class={cn('size-full flex flex-col justify-center', props.class)}
         >
-          <header class="text-xs font-medium text-ink-muted ml-2 mb-1 whitespace-nowrap">
-            <h1>Incoming calls</h1>
+          <header class="text-xs font-medium text-ink-muted whitespace-nowrap p-2">
+            <h1>Incoming call</h1>
           </header>
 
           <div class="flex-1 w-full">
@@ -391,43 +245,90 @@ export function SidebarActiveCallWidget(props: {
                     ? `${displayName(channel())} call - ${time}`
                     : `${displayName(channel())} call`;
                 };
+                const dismissLabel = () =>
+                  `Dismiss ${displayName(channel())} call`;
+                const openCall = () => {
+                  void openChannelCallTab(call.channelId);
+                };
+
                 return (
-                  <div class="w-full h-8">
+                  <div class="w-full">
                     <IncomingCallContextMenu
                       callId={call.callId}
                       channelId={call.channelId}
                       onDismiss={() => dismissIncomingCall(call.callId)}
                     >
-                      <Tooltip class="w-full" label={label()} placement="right">
-                        <Button
-                          class={cn(
-                            'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
-                            'justify-start gap-2 w-full h-8 py-1'
-                          )}
+                      <div class="flex items-center gap-1.5 w-full rounded-lg p-2 text-ink-extra-muted hover:bg-ink/3">
+                        <Tooltip
+                          class="min-w-0 flex-1"
+                          label={label()}
+                          placement="right"
+                        >
+                          <button
+                            type="button"
+                            class="flex min-w-0 flex-1 items-center justify-start gap-2 cursor-default"
+                            draggable={false}
+                            onMouseDown={(e) => {
+                              if (e.button !== 0) return;
+                              e.preventDefault();
+                            }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openCall();
+                            }}
+                          >
+                            <ChannelCallBadge
+                              channel={channel()}
+                              letters={
+                                channelLetters().get(call.channelId) ?? '?'
+                              }
+                              slim={false}
+                            />
+                            <span class="text-sm font-medium truncate">
+                              {displayName(channel())}
+                            </span>
+                          </button>
+                        </Tooltip>
+                        <button
+                          type="button"
+                          aria-label={label()}
+                          class="shrink-0 size-5 flex items-center justify-center text-xs font-medium bg-success/15 text-success rounded-md"
                           draggable={false}
-                          variant="ghost"
-                          size="sm"
                           onMouseDown={(e) => {
                             if (e.button !== 0) return;
                             e.preventDefault();
-                            void openChannelCallTab(call.channelId);
+                            e.stopPropagation();
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openCall();
                           }}
                         >
-                          <ChannelCallBadge
-                            channel={channel()}
-                            letters={
-                              channelLetters().get(call.channelId) ?? '?'
-                            }
-                            slim={false}
-                          />
-                          <span class="text-sm font-medium truncate">
-                            {displayName(channel())}
-                          </span>
-                          <span class="shrink-0 size-5 flex items-center justify-center text-xs font-medium bg-success/15 text-success rounded-md ml-auto">
-                            <PhoneIcon class="size-3" />
-                          </span>
-                        </Button>
-                      </Tooltip>
+                          <PhoneIcon class="size-3" />
+                        </button>
+                        <Tooltip label={dismissLabel()} placement="right">
+                          <Button
+                            aria-label={dismissLabel()}
+                            class="shrink-0 size-5 p-0 flex items-center justify-center rounded-md bg-ink-muted/10 text-ink-muted/80 not-disabled:hover:bg-failure/10 not-disabled:hover:text-failure"
+                            draggable={false}
+                            variant="ghost"
+                            size="sm"
+                            onMouseDown={(e) => {
+                              if (e.button !== 0) return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              dismissIncomingCall(call.callId);
+                            }}
+                          >
+                            <XIcon class="size-3" />
+                          </Button>
+                        </Tooltip>
+                      </div>
                     </IncomingCallContextMenu>
                   </div>
                 );

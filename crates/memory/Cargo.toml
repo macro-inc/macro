@@ -18,14 +18,17 @@ futures = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-model_user = { path = "../model_user", features = ["axum"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 

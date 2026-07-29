@@ -1,16 +1,11 @@
 use super::*;
 use ai_toolset::AsyncToolCollection;
 use rmcp::{handler::server::ServerHandler, model::ErrorCode};
-use sqlx::postgres::PgPoolOptions;
 
 fn empty_service() -> AuthenticatedToolService<()> {
-    let db = PgPoolOptions::new()
-        .connect_lazy("postgres://localhost/unused")
-        .expect("lazy pool creation should not fail");
     AuthenticatedToolService::new(
         Arc::new(AsyncToolCollection::new()),
         (),
-        db,
         "https://macro.com".to_owned(),
     )
 }

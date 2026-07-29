@@ -6,15 +6,17 @@
  */
 import type { EntityPermissionOneOf } from './entityPermissionOneOf';
 import type { EntityPermissionOneOfFive } from './entityPermissionOneOfFive';
+import type { EntityPermissionOneOfSeven } from './entityPermissionOneOfSeven';
 import type { EntityPermissionOneOfThree } from './entityPermissionOneOfThree';
 
 /**
  * A user's permission for an entity, discriminated by entity kind.
 
 Items (documents, chats, projects, threads) use access levels.
-Channels use participant roles.
+Channels use view-only permission or participant roles.
  */
 export type EntityPermission =
   | EntityPermissionOneOf
   | EntityPermissionOneOfThree
-  | EntityPermissionOneOfFive;
+  | EntityPermissionOneOfFive
+  | EntityPermissionOneOfSeven;

@@ -1,7 +1,11 @@
 //! Favorites service implementation.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
@@ -27,24 +31,8 @@ where
     pub fn new(repo: R) -> Self {
         Self { repo }
     }
-}
 
-fn validate_entity(entity: &Entity<'_>) -> Result<(), FavoritesError> {
-    if entity.entity_id.trim().is_empty() {
-        return Err(FavoritesError::BadRequest(
-            "entity_id must not be empty".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-impl<R> FavoritesService for FavoritesServiceImpl<R>
-where
-    R: FavoritesRepo,
-    anyhow::Error: From<R::Err>,
-{
-    #[tracing::instrument(err, skip(self))]
-    async fn add_favorite(
+    async fn add_favorite_for_user(
         &self,
         user_id: &MacroUserIdStr<'_>,
         entity: &Entity<'_>,
@@ -70,6 +58,45 @@ where
             .add_favorite(user_id, entity)
             .await
             .map_err(anyhow::Error::from)?)
+    }
+}
+
+fn validate_entity(entity: &Entity<'_>) -> Result<(), FavoritesError> {
+    if entity.entity_id.trim().is_empty() {
+        return Err(FavoritesError::BadRequest(
+            "entity_id must not be empty".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+impl<R> FavoritesService for FavoritesServiceImpl<R>
+where
+    R: FavoritesRepo,
+    anyhow::Error: From<R::Err>,
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn add_favorite(
+        &self,
+        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Favorite, FavoritesError> {
+        let user_id = receipt
+            .get_authenticated_user()
+            .map_err(|_| FavoritesError::Unauthorized)?;
+        let receipt_entity = receipt.entity();
+        let entity = receipt_entity
+            .entity_type
+            .with_entity_str(&receipt_entity.entity_id);
+        self.add_favorite_for_user(user_id, &entity).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn add_favorite_with_established_access(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        entity: &Entity<'_>,
+    ) -> Result<Favorite, FavoritesError> {
+        self.add_favorite_for_user(user_id, entity).await
     }
 
     #[tracing::instrument(err, skip(self))]

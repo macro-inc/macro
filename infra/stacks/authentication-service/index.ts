@@ -101,6 +101,17 @@ const fusionAuthStack = new pulumi.StackReference('fusion-auth-stack', {
   name: `macro-inc/fusion-auth/${stack}`,
 });
 
+const contactsServiceStack = new pulumi.StackReference(
+  'contacts-service-stack',
+  {
+    name: `macro-inc/contacts-service/${stack}`,
+  }
+);
+
+const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueArn')
+  .apply((arn) => arn as string);
+
 const fusionAuthClusterArn: pulumi.Output<string> = fusionAuthStack
   .getOutput('fusionAuthClusterArn')
   .apply((fusionAuthClusterArn) => fusionAuthClusterArn as string);
@@ -135,6 +146,7 @@ const service = new AuthenticationService('authentication-service', {
     searchEventQueueArn,
     linkManagerQueueArn,
     backfillQueueArn,
+    contactsQueueArn,
   ],
   containerEnvVars: [
     { name: 'ENVIRONMENT', value: stack },
@@ -155,7 +167,7 @@ new UserLinkCleanupHandler('user-link-cleanup-handler', {
   envVars: {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
     ENVIRONMENT: stack,
-    RUST_LOG: 'user_link_cleanup_handler=info',
+    RUST_LOG: 'user_link_cleanup_handler=info,macro_http_request=info',
   },
   vpc,
   tags,

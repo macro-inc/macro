@@ -1,29 +1,77 @@
-use crate::api::search::simple::SearchError;
+use crate::api::search::simple::{SearchError, simple_channel};
 use crate::api::search::terms::split_search_terms;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use crate::api::context::SearchHandlerState;
+use crate::api::context::{SearchAuthorizationService, SearchHandlerState};
 use crate::api::search::SearchPaginationParams;
 use axum::{
-    Extension, Router,
+    Router,
     extract::{self, State},
     response::Json,
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
-use model::user::UserContext;
 use models_search::MatchType;
 use models_search::channel::{
-    ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem,
-    ChannelSearchResponseItemWithMetadata, ChannelSearchResult, ChannelSortTimestamp,
+    ChannelMessageSearchResponseItem, ChannelNameSearchRequest, ChannelNameSearchResponse,
+    ChannelNameSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
+    ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
+    ChannelSortTimestamp,
 };
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
+
+/// Fetches the per-user channel history info and message deletion states
+/// backing channel search enrichment. Channels without history info are the
+/// caller's signal to drop the hit (no access / channel gone).
+async fn fetch_channel_enrichment(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: &[opensearch_client::search::model::SearchHit],
+) -> Result<
+    (
+        HashMap<Uuid, ChannelHistoryInfo>,
+        HashMap<Uuid, Option<DateTime<Utc>>>,
+    ),
+    SearchError,
+> {
+    let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
+
+    // Message IDs are needed so we can flag any that have been deleted.
+    let message_ids: Vec<Uuid> = results
+        .iter()
+        .filter_map(|r| match &r.goto {
+            Some(SearchGotoContent::Channels(goto)) => Some(goto.channel_message_id),
+            _ => None,
+        })
+        .collect();
+
+    tokio::try_join!(
+        async {
+            comms_db_client::activity::get_activity::get_channel_history_info(
+                &ctx.db,
+                user_id,
+                &channel_ids,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+        },
+        async {
+            comms_db_client::messages::get_deleted_ats::get_message_deletion_states(
+                &ctx.db,
+                &message_ids,
+            )
+            .await
+        },
+    )
+    .map_err(SearchError::InternalError)
+}
 
 /// Enriches channel message search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
@@ -42,37 +90,8 @@ pub(in crate::api::search) async fn enrich_channels(
         return Ok(vec![]);
     }
 
-    // Extract channel IDs from results
-    let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
-
-    // Extract message IDs from results so we can flag any that have been deleted.
-    let message_ids: Vec<Uuid> = results
-        .iter()
-        .filter_map(|r| match &r.goto {
-            Some(SearchGotoContent::Channels(goto)) => Some(goto.channel_message_id),
-            _ => None,
-        })
-        .collect();
-
-    let (channel_histories, message_states) = tokio::try_join!(
-        async {
-            comms_db_client::activity::get_activity::get_channel_history_info(
-                &ctx.db,
-                user_id,
-                &channel_ids,
-            )
-            .await
-            .map_err(anyhow::Error::from)
-        },
-        async {
-            comms_db_client::messages::get_deleted_ats::get_message_deletion_states(
-                &ctx.db,
-                &message_ids,
-            )
-            .await
-        },
-    )
-    .map_err(SearchError::InternalError)?;
+    let (channel_histories, message_states) =
+        fetch_channel_enrichment(ctx, user_id, &results).await?;
 
     // Construct enriched results
     let enriched_results =
@@ -80,6 +99,110 @@ pub(in crate::api::search) async fn enrich_channels(
             .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Enriches channel message hits into one unified response item per message,
+/// keeping the per-message hit order OpenSearch returned.
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_channel_messages(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: Vec<opensearch_client::search::model::SearchHit>,
+) -> Result<Vec<ChannelMessageSearchResponseItem>, SearchError> {
+    let results: Vec<opensearch_client::search::model::SearchHit> = results
+        .into_iter()
+        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Channels)
+        .collect();
+
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let (channel_histories, message_states) =
+        fetch_channel_enrichment(ctx, user_id, &results).await?;
+
+    Ok(construct_channel_message_items(
+        results,
+        channel_histories,
+        message_states,
+    ))
+}
+
+/// Enriches channel name hits with channel metadata.
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_channel_names(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: Vec<opensearch_client::search::model::SearchHit>,
+) -> Result<Vec<ChannelNameSearchResponseItem>, SearchError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let (channel_histories, _) = fetch_channel_enrichment(ctx, user_id, &results).await?;
+    Ok(construct_channel_name_items(results, channel_histories))
+}
+
+fn construct_channel_name_items(
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
+    channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
+) -> Vec<ChannelNameSearchResponseItem> {
+    search_results
+        .into_iter()
+        .filter_map(|hit| {
+            let info = channel_histories.get(&hit.entity_id)?;
+            Some(ChannelNameSearchResponseItem {
+                metadata: Some(models_search::channel::ChannelMetadata {
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
+                    interacted_at: info.interacted_at,
+                }),
+                id: hit.entity_id,
+                owner_id: Some(info.user_id.clone()),
+                channel_type: info.channel_type.clone(),
+                channel_id: hit.entity_id,
+                highlight: hit.highlight.into(),
+                score: hit.score,
+            })
+        })
+        .collect()
+}
+
+/// Builds one per-message item per content hit. Drops hits whose channel has
+/// no history info for the caller (no access / channel gone) and hits whose
+/// message no longer exists in the DB (stale OpenSearch entries); soft-deleted
+/// messages are kept with `deleted_at` set. The channels index carries no
+/// name field, so every hit has message goto content.
+pub fn construct_channel_message_items(
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
+    channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
+    message_states: HashMap<Uuid, Option<DateTime<Utc>>>,
+) -> Vec<ChannelMessageSearchResponseItem> {
+    search_results
+        .into_iter()
+        .filter_map(|hit| {
+            let Some(SearchGotoContent::Channels(goto)) = hit.goto else {
+                return None;
+            };
+            let info = channel_histories.get(&hit.entity_id)?;
+            let deleted_at = *message_states.get(&goto.channel_message_id)?;
+            Some(ChannelMessageSearchResponseItem {
+                id: hit.entity_id,
+                owner_id: Some(info.user_id.clone()),
+                channel_type: info.channel_type.clone(),
+                channel_id: hit.entity_id,
+                message_id: goto.channel_message_id,
+                thread_id: goto.thread_id,
+                sender_id: goto.sender_id,
+                created_at: goto.created_at,
+                updated_at: goto.updated_at,
+                deleted_at,
+                highlight: hit.highlight.into(),
+                score: hit.score,
+            })
+        })
+        .collect()
 }
 
 pub fn construct_search_result(
@@ -170,7 +293,72 @@ pub fn construct_search_result(
 }
 
 pub fn router() -> Router<SearchHandlerState> {
-    Router::new().route("/", post(handler))
+    Router::new()
+        .route("/", post(handler))
+        .route("/name", post(name_handler))
+}
+
+/// Internal viewer-aware channel name search used by AI NameSearch.
+pub async fn name_handler(
+    State(ctx): State<SearchHandlerState>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, InternalOnly>,
+    extract::Query(query_params): extract::Query<SearchPaginationParams>,
+    extract::Json(req): extract::Json<ChannelNameSearchRequest>,
+) -> Result<Json<ChannelNameSearchResponse>, SearchError> {
+    let user_context = authorization
+        .authorization
+        .acting_user
+        .as_ref()
+        .ok_or(SearchError::NoUserId)?
+        .user_context
+        .clone();
+
+    let query = req.query.trim();
+    if query.len() < 3 {
+        return Err(SearchError::InvalidQuerySize);
+    }
+    let page_size = query_params.page_size.unwrap_or(10);
+    if !(0..=100).contains(&page_size) {
+        return Err(SearchError::InvalidPageSize);
+    }
+
+    let user_id = MacroUserId::parse_from_str(&user_context.user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_context.user_id.clone()))?
+        .lowercase();
+    let filters = item_filters::ChannelFilters::default();
+    let channels = simple_channel::filter_channels(
+        &ctx,
+        user_id.as_ref(),
+        user_context.organization_id,
+        &filters,
+    )
+    .await?;
+    let cursor = query_params
+        .cursor
+        .as_deref()
+        .and_then(SearchMethodCursor::decode)
+        .map(|cursor| SearchCursorOption::NotDone(Some(cursor)))
+        .unwrap_or_default();
+    let (hits, next_cursor) = simple_channel::search_names(
+        &ctx.db,
+        &user_id,
+        &channels,
+        query.to_string(),
+        req.match_type == MatchType::Exact,
+        page_size,
+        cursor,
+    )
+    .await?;
+    let results = enrich_channel_names(&ctx, user_id.as_ref(), hits).await?;
+    let next_cursor = match next_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => cursor.encode(),
+        _ => None,
+    };
+
+    Ok(Json(ChannelNameSearchResponse {
+        results,
+        next_cursor,
+    }))
 }
 
 /// Channel content search.
@@ -191,11 +379,16 @@ pub fn router() -> Router<SearchHandlerState> {
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
 ) -> Result<Json<ChannelSearchResponse>, SearchError> {
-    let user_id = user_context.user_id.clone();
+    let user_id = authorization
+        .authorization
+        .user
+        .user_context
+        .user_id
+        .clone();
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
@@ -240,6 +433,28 @@ pub async fn handler(
     if filters.channel_ids.is_empty() {
         return Err(SearchError::NoChannelIds);
     }
+
+    let channel_ids = simple_channel::filter_channels(
+        &ctx,
+        user_id.as_ref(),
+        authorization
+            .authorization
+            .user
+            .user_context
+            .organization_id,
+        &filters,
+    )
+    .await?
+    .channel_ids;
+
+    if channel_ids.is_empty() {
+        return Ok(Json(ChannelSearchResponse {
+            results: vec![],
+            next_cursor: None,
+            total_count: 0,
+        }));
+    }
+
     let sort_mode = match req.sort {
         ChannelSortTimestamp::Message => ChannelSortMode::Message,
         ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
@@ -251,7 +466,7 @@ pub async fn handler(
         match_type: req.match_type.to_string(),
         cursor: cursor_option,
         terms,
-        channel_ids: filters.channel_ids,
+        channel_ids: channel_ids.into_iter().map(|id| id.to_string()).collect(),
         thread_ids: filters.thread_ids,
         mentions: filters.mentions,
         sender_ids: filters.sender_ids,

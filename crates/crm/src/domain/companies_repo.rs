@@ -5,7 +5,7 @@ use crate::domain::comment::{
 };
 use crate::domain::model::{
     CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-    DomainMetadata,
+    CrmTeamSettings, CrmTeamSettingsPatch, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -133,6 +133,92 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Manually creates a company for `(team_id, domain)` with a
+    /// team-scoped display `name`, sharing the insert path
+    /// [`populate_contact`] uses (same per-`(team, lower(domain))`
+    /// advisory lock, same `crm_companies` + `crm_domains` insert). In a
+    /// single transaction:
+    ///
+    /// 1. Take the advisory lock so a concurrent populate/depopulate on
+    ///    the same `(team, domain)` serializes with us.
+    /// 2. Read the team killswitch; returns
+    ///    [`CrmError::CrmDisabledForTeam`] when off (matching populate,
+    ///    which no-ops).
+    /// 3. Returns [`CrmError::CompanyAlreadyExistsForTeam`] when the
+    ///    team already tracks the domain (case-insensitively).
+    /// 4. Inserts the `crm_companies` row (storing `name` on the
+    ///    team-scoped `custom_name` column, which read paths COALESCE
+    ///    over the global directory name) and its
+    ///    `crm_domains` row. `first_interaction` / `last_interaction`
+    ///    are both seeded from `now` — there is no email history yet;
+    ///    the next populate merges real timestamps via LEAST/GREATEST.
+    ///
+    /// `domain` is normalized to lowercase before storage. The caller is
+    /// expected to have validated `name` / `domain` and ensured a
+    /// `crm_domain_directory` entry exists for `domain` (mirroring the
+    /// populate flow) so the company still picks up icon/description
+    /// enrichment.
+    ///
+    /// Returns the created company hydrated like
+    /// [`get_company_for_team`] (domains + display metadata + the —
+    /// empty — contact list).
+    ///
+    /// [`populate_contact`]: CompaniesRepository::populate_contact
+    /// [`get_company_for_team`]: CompaniesRepository::get_company_for_team
+    fn create_company_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        name: &str,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
+
+    /// Manually creates a contact under `company_id` (scoped to
+    /// `team_id`) with a display `name` and `email`. In a single
+    /// transaction:
+    ///
+    /// 1. Reads the team killswitch; returns
+    ///    [`CrmError::CrmDisabledForTeam`] when off.
+    /// 2. Locks the company row (`FOR UPDATE`, serializing with the
+    ///    hide/un-hide contact cascade) and scopes it to `team_id`.
+    ///    Missing, cross-team, or — for `include_hidden = false`
+    ///    (member) callers — hidden companies return
+    ///    [`CrmError::CompanyNotFoundForTeam`].
+    /// 3. Requires the email's domain to be one of the company's
+    ///    `crm_domains` (case-insensitively); returns
+    ///    [`CrmError::ContactEmailDomainMismatch`] otherwise — a
+    ///    foreign-domain contact would never receive populate updates,
+    ///    since its domain resolves to a different company.
+    /// 4. Inserts the `crm_contacts` row, inheriting the company's
+    ///    current `hidden` (an admin adding a contact to a hidden
+    ///    company gets a hidden contact, matching populate's
+    ///    inheritance). Returns
+    ///    [`CrmError::ContactAlreadyExistsForCompany`] when the company
+    ///    already has a contact for the email.
+    ///
+    /// `email` is normalized to lowercase before storage. Both
+    /// interaction endpoints seed from `now`; later populates for the
+    /// same `(company, email)` merge real timestamps via LEAST/GREATEST
+    /// and keep the manual `name` (first non-NULL name wins).
+    ///
+    /// The row is stamped `manually_created = TRUE` so the depopulate
+    /// orphan cleanup ([`depopulate_contact`] /
+    /// [`depopulate_link_in_team`]) never deletes it — manual contacts
+    /// have no `crm_contact_sources` rows and would otherwise be
+    /// indistinguishable from derived-data orphans.
+    ///
+    /// [`depopulate_contact`]: CompaniesRepository::depopulate_contact
+    /// [`depopulate_link_in_team`]: CompaniesRepository::depopulate_link_in_team
+    fn create_contact_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email: &str,
+        name: &str,
+        now: DateTime<Utc>,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
     /// Read the cached [`DomainMetadata`] for `domain` from
     /// `crm_domain_directory`, if any. `domain` is matched
     /// case-insensitively. Returns `Ok(None)` when no row exists for
@@ -178,7 +264,13 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// in a "default sync = true" state.
     ///
     /// Source and contact rows are derived data and are always cleaned
-    /// up regardless of the company's `email_sync`.
+    /// up regardless of the company's `email_sync` — except rows with
+    /// `manually_created = TRUE` (user-created via
+    /// [`create_contact_for_company`] / [`create_company_for_team`]),
+    /// which are never deleted by this teardown.
+    ///
+    /// [`create_contact_for_company`]: CompaniesRepository::create_contact_for_company
+    /// [`create_company_for_team`]: CompaniesRepository::create_company_for_team
     ///
     /// The whole cascade runs in a single transaction that begins by
     /// acquiring the same advisory lock [`populate_contact`] takes (key
@@ -293,6 +385,24 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Set the team-scoped display-name override
+    /// (`crm_companies.custom_name`) for `(company_id, team_id)`. Read
+    /// paths COALESCE the override over the global
+    /// `crm_domain_directory` name, so the new name takes effect on
+    /// every listing/search immediately; the directory itself is never
+    /// touched (it is global across teams). `include_hidden` mirrors
+    /// the other write paths: `false` (member) callers can't reach
+    /// hidden companies. Returns
+    /// [`CrmError::CompanyNotFoundForTeam`] when the company doesn't
+    /// exist, belongs to another team, or is hidden from the caller.
+    fn set_company_custom_name(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        name: &str,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
     /// Toggle `crm_contacts.hidden` for `contact_id`, scoped to
     /// `team_id` via the contact's company. Returns
     /// [`CrmError::ContactNotFoundForTeam`] when the contact does not
@@ -302,6 +412,25 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         contact_id: &uuid::Uuid,
         hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Set `crm_contacts.name` for `contact_id`, scoped to `team_id`
+    /// via the contact's company. Unlike company names there is no
+    /// global directory involved — `name` is already a team-scoped
+    /// column — so this is a plain overwrite. `include_hidden` mirrors
+    /// the read paths ([`get_contact_for_team`]): `false` (member)
+    /// callers can't reach a hidden contact or a contact under a
+    /// hidden company. Returns [`CrmError::ContactNotFoundForTeam`]
+    /// when the contact doesn't exist, belongs to another team, or is
+    /// hidden from the caller.
+    ///
+    /// [`get_contact_for_team`]: CompaniesRepository::get_contact_for_team
+    fn set_contact_name(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        name: &str,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Batched authorization probe for a CRM-scoped email query. Returns
@@ -488,4 +617,21 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         &self,
         comment_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
+
+    /// Read the team's CRM configuration from `team_crm_settings`.
+    /// A missing row yields [`CrmTeamSettings::default`].
+    fn get_team_settings(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
+
+    /// Field-wise partial upsert of the team's CRM configuration.
+    /// Unprovided fields keep their current values (or column defaults
+    /// on insert); `team_views` is replaced whole. Never touches
+    /// `crm_enabled`. Returns the resulting row.
+    fn update_team_settings(
+        &self,
+        team_id: &uuid::Uuid,
+        patch: &CrmTeamSettingsPatch,
+    ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
 }

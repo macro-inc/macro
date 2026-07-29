@@ -61,14 +61,18 @@ export interface LayoutProps {
   ) => void;
 }
 
+export type NarrowLayoutVariant = 'standard' | 'condensed';
+
 interface ListLayoutContextValue {
   isWide: Accessor<boolean>;
+  narrowLayout: Accessor<NarrowLayoutVariant>;
 }
 
 const ListLayoutContext = createContext<ListLayoutContextValue>();
 
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
+  narrowLayout?: NarrowLayoutVariant;
   children: JSX.Element;
 }) {
   const [isWide, setIsWide] = createSignal(true);
@@ -84,7 +88,9 @@ export function ListLayoutProvider(props: {
   });
 
   return (
-    <ListLayoutContext.Provider value={{ isWide }}>
+    <ListLayoutContext.Provider
+      value={{ isWide, narrowLayout: () => props.narrowLayout ?? 'standard' }}
+    >
       {props.children}
     </ListLayoutContext.Provider>
   );

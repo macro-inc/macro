@@ -14,6 +14,8 @@ const LINK_STALE_TIME = 5 * 60 * 1000;
 
 const HEALTH_PROBE_STALE_TIME = 15 * 60 * 1000;
 
+const queryEnabled = () => true;
+
 /**
  * Asks the server to probe each linked inbox's grant against Google and record its
  * health, so a grant that died while the user was away surfaces soon after they return
@@ -35,10 +37,11 @@ export function useInboxHealthProbeQuery() {
   }));
 }
 
-export function useEmailLinksQuery() {
+export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
   return useQuery(() => ({
     queryKey: emailKeys.links.queryKey,
     queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
+    enabled: enabled(),
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always',
   }));

@@ -38,6 +38,13 @@ export type ArrayFieldFilters = {
   emailSender?: string[];
   channelId?: string[];
   channelType?: string[];
+  /**
+   * Membership states to match, OR'd like other array fields: `[true]` for
+   * channels the user is in, `[true, false]` to also match team channels of
+   * their teams they haven't joined (mentioning the field widens the backend
+   * candidate set to those).
+   */
+  channelIsParticipant?: boolean[];
   channelSenderId?: string[];
   channelMessageThreadId?: string[];
   channelThreadId?: string[];

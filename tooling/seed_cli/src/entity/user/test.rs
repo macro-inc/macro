@@ -66,6 +66,7 @@ fn mock_ctx(auth: Auth) -> SeedCliContext {
         db: Db::default(),
         fusionauth_client: auth,
         s3: S3::default(),
+        doc_content: None,
     }
 }
 

@@ -20,6 +20,15 @@ export {
 } from './components/Checkbox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
+export {
+  type CommandListController,
+  CommandMenuEmptyState,
+  CommandMenuHotkeyHint,
+  CommandMenuListItem,
+  CommandMenuSearchInput,
+  CommandMenuShell,
+  createCommandListController,
+} from './components/CommandMenuPrimitives';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
 export { Dropdown } from './components/Dropdown';

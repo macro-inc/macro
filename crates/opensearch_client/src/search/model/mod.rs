@@ -335,6 +335,9 @@ pub(crate) struct Shards {
     pub successful: i32,
     pub skipped: i32,
     pub failed: i32,
+    /// Per-shard failure details, present only when `failed > 0`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failures: Vec<serde_json::Value>,
 }
 
 pub(crate) type DefaultSearchResponse<T> = SearchResponse<T>;
@@ -345,6 +348,23 @@ pub(crate) struct SearchResponse<T> {
     pub took: i32,
     pub timed_out: bool,
     pub _shards: Shards,
+}
+
+impl<T> SearchResponse<T> {
+    /// OpenSearch returns HTTP 200 with partial results when individual
+    /// shards fail their query or fetch phase, so every hit on a failed
+    /// shard is silently absent unless callers check `_shards`.
+    pub(crate) fn warn_on_shard_failures(&self, operation: &str) {
+        if self._shards.failed > 0 {
+            tracing::warn!(
+                operation,
+                failed = self._shards.failed,
+                total = self._shards.total,
+                failures = ?self._shards.failures,
+                "opensearch returned partial results: some shards failed"
+            );
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]

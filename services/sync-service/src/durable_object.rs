@@ -21,7 +21,7 @@ use crate::{
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
-    dss_internal::{DssInternal, DssInternalClient},
+    dss_internal::{DssInternal, DssInternalClient, InteractionReason},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
@@ -287,6 +287,16 @@ async fn report_new_doc_state(document_id: &str, snapshot: &[u8], env: &Env) {
     }
 }
 
+/// Report an interaction (join/leave/periodic edit) to DSS.
+async fn report_interaction(document_id: &str, env: &Env, reason: InteractionReason) {
+    if let Err(err) = DssInternalClient::new(env)
+        .publish_interaction(document_id, reason)
+        .await
+    {
+        warn!(error=?err, "failed to push interaction to DSS");
+    }
+}
+
 /// Schedule an alarm 5 seconds from now.
 async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
@@ -378,7 +388,7 @@ impl DocumentSyncSession {
                                 .url()?
                                 .query_pairs()
                                 .find(|(k, _)| k == "include_ai")
-                                .map_or(true, |(_, v)| !matches!(v.as_ref(), "false" | "0"));
+                                .is_none_or(|(_, v)| !matches!(v.as_ref(), "false" | "0"));
                             return self.active_peer_ids_handler(include_ai).await;
                         }
                         path::INITIALIZE => {
@@ -631,6 +641,7 @@ impl DocumentSyncSession {
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
+            or_unauth!(claims.has_document_id_access(document_id).then_some(()));
             if self.maybe_set_document_id(document_id).await? {
                 trace!("init document_id={document_id}");
             } else {
@@ -639,6 +650,10 @@ impl DocumentSyncSession {
 
             //  Below is websocket stuff only i.e connect
             let pair = WebSocketPair::new().context("failed to create websocket pair")?;
+
+            // Whether this peer is the first to join the session (used to
+            // decide whether to report a `FirstJoin` interaction below).
+            let is_first_join = self.state.get_websockets().is_empty();
 
             // create tag for ws and store it
             let ws_id = new_ws_id();
@@ -679,6 +694,18 @@ impl DocumentSyncSession {
                     document_id = document_id,
                     "snapshot not yet available; deferring initial sync until /initialize"
                 );
+            }
+
+            // This is the single source of truth for `FirstJoin`: whenever
+            // the peer count genuinely transitions 0 -> 1, regardless of
+            // whether the document already has content.
+            if is_first_join {
+                let document_id_owned = document_id.to_string();
+                let env = self.env.clone();
+                self.state.wait_until(async move {
+                    report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin)
+                        .await;
+                });
             }
 
             Response::from_websocket(pair.client).context("failed to create websocket response")?
@@ -999,6 +1026,7 @@ impl DurableObject for DocumentSyncSession {
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
                     report_new_doc_state(&document_id, &snapshot, &env).await;
+                    report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
             });
         }
@@ -1043,16 +1071,16 @@ impl DurableObject for DocumentSyncSession {
             .context("failed to broadcast awareness")?;
         }
 
-        if self.state.get_websockets().len() == 1 {
-            if let Ok(document_id) = self.document_id().await
-                && let Ok(state) = self.document_state().await
-                && let Ok(snapshot) = state.export_shallow_snapshot()
-            {
-                let env = self.env.clone();
-                self.state.wait_until(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env).await;
-                });
-            }
+        if self.state.get_websockets().len() == 1
+            && let Ok(document_id) = self.document_id().await
+            && let Ok(state) = self.document_state().await
+            && let Ok(snapshot) = state.export_shallow_snapshot()
+        {
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                report_new_doc_state(&document_id, &snapshot, &env).await;
+                report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
+            });
         }
         Ok(())
     }
@@ -1112,7 +1140,11 @@ pub fn is_origin_allowed(origin: &str) -> bool {
     if ALLOWED_ORIGINS.contains(&origin) {
         return true;
     }
-    if let Some(port) = origin.strip_prefix("http://localhost:")
+    // `localhost` and `*.localhost` (loopback-reserved; local dev uses
+    // per-persona hostnames so each seeded user gets its own cookie jar).
+    if let Some(rest) = origin.strip_prefix("http://")
+        && let Some((host, port)) = rest.rsplit_once(':')
+        && (host == "localhost" || host.ends_with(".localhost"))
         && let Ok(port) = port.parse::<u16>()
     {
         return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);

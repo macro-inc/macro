@@ -3,13 +3,26 @@
 //! This is used to provide consistent behaviour with e.g. tracing configurations
 
 mod datadog_fmt;
+mod shutdown;
+
+#[cfg(test)]
+mod test;
+
+pub use shutdown::shutdown_signal;
 
 use macro_env::Environment;
-use macro_env_var::{env_vars, maybe_env_var};
+use macro_env_var::{env_vars, maybe_env_vars};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use rootcause::hooks::Hooks;
+use rootcause_tracing::{RootcauseLayer, SpanCollector};
+use tracing_subscriber::{
+    EnvFilter, Layer, Registry,
+    filter::{FilterExt, LevelFilter},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+};
 use tracing_tree::HierarchicalLayer;
 
 env_vars! {
@@ -17,8 +30,9 @@ env_vars! {
     pub struct DdEnv;
 }
 
-maybe_env_var! {
+maybe_env_vars! {
     pub struct RustLog;
+    pub struct OtelTraceFilter;
 }
 
 /// Build an [`EnvFilter`] from `RUST_LOG`, honoring values injected via `APP_SECRETS_JSON`.
@@ -32,6 +46,29 @@ fn rust_log_env_filter() -> EnvFilter {
         Some(value) => EnvFilter::builder().parse_lossy(value),
         None => EnvFilter::from_default_env(),
     }
+}
+
+/// Build an [`EnvFilter`] for the OpenTelemetry span exporter from `OTEL_TRACE_FILTER`.
+///
+/// Traces are filtered independently of `RUST_LOG` so that lowering log verbosity (e.g.
+/// `RUST_LOG=warn`) cannot silence APM traces — `#[tracing::instrument]` spans default to INFO
+/// and a global filter would drop them before the otel layer sees them. Defaults to `info` when
+/// `OTEL_TRACE_FILTER` is unset or contains no valid directives.
+fn otel_env_filter() -> EnvFilter {
+    otel_trace_filter(OtelTraceFilter::new().as_deref())
+}
+
+fn otel_trace_filter(value: Option<&str>) -> EnvFilter {
+    EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse_lossy(value.unwrap_or(""))
+}
+
+fn install_rootcause_hooks() {
+    Hooks::new()
+        .report_creation_hook(SpanCollector::new())
+        .install()
+        .expect("failed to install rootcause tracing hooks");
 }
 
 /// unit struct which defines the behaviour for instantiation
@@ -84,16 +121,24 @@ impl MacroEntrypoint {
     pub fn init(self) -> InitializedEntrypoint {
         let _ = dotenvy::dotenv();
         std::panic::set_hook(Box::new(tracing_panic::panic_hook));
+        install_rootcause_hooks();
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
-                tracing_subscriber::fmt()
+                // Keep rootcause from enabling callsites that RUST_LOG previously disabled.
+                let rust_log_filter = rust_log_env_filter();
+                let fmt_layer = tracing_subscriber::fmt::layer()
                     .with_ansi(true)
-                    .with_env_filter(rust_log_env_filter())
                     .with_file(true)
                     .with_line_number(true)
                     .pretty()
+                    .with_filter(rust_log_filter.clone());
+
+                Registry::default()
+                    .with(RootcauseLayer.with_filter(rust_log_filter))
+                    .with(fmt_layer)
                     .init();
+
                 InitializedEntrypoint {
                     tracer_provider: None,
                 }
@@ -104,7 +149,10 @@ impl MacroEntrypoint {
                     tree_tracing: Some(level),
                 },
             ) => {
-                let subscriber = Registry::default().with(HierarchicalLayer::new(level));
+                let rust_log_filter = rust_log_env_filter();
+                let subscriber = Registry::default()
+                    .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
+                    .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
                 InitializedEntrypoint {
                     tracer_provider: None,
@@ -119,7 +167,13 @@ impl MacroEntrypoint {
                     .unwrap_or_else(|_| "unknown-service".to_string());
 
                 let tracer = tracer_provider.tracer(service_name);
-                let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+                let rust_log_filter = rust_log_env_filter();
+                let otel_filter = otel_env_filter();
+                // Capture anything already enabled for logs or OTEL without enabling new callsites.
+                let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
+                let otel_layer = tracing_opentelemetry::layer()
+                    .with_tracer(tracer)
+                    .with_filter(otel_filter);
 
                 // Build the JSON event format, then wrap it with DatadogFormat
                 // to inject dd.trace_id / dd.span_id for trace-log correlation.
@@ -134,10 +188,11 @@ impl MacroEntrypoint {
                 let fmt_layer = tracing_subscriber::fmt::layer()
                     .with_ansi(false)
                     .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
-                    .event_format(datadog_fmt::DatadogFormat { inner: json_format });
+                    .event_format(datadog_fmt::DatadogFormat { inner: json_format })
+                    .with_filter(rust_log_filter);
 
                 Registry::default()
-                    .with(rust_log_env_filter())
+                    .with(RootcauseLayer.with_filter(rootcause_filter))
                     .with(fmt_layer)
                     .with(otel_layer)
                     .init();

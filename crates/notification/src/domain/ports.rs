@@ -315,20 +315,10 @@ pub trait NotificationQueue: Send + Sync + 'static {
     fn receive_messages(&self)
     -> impl Future<Output = Result<Vec<RawQueueMessage>, Report>> + Send;
 
-    /// Delete a message from the queue (after successful delivery).
+    /// Delete a message from the queue after terminal processing.
     fn delete_message(
         &self,
         receipt_handle: &str,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
-
-    /// Delay a message by changing its visibility timeout.
-    ///
-    /// The message will not be redelivered to consumers until the duration elapses.
-    /// Uses SQS `ChangeMessageVisibility` under the hood.
-    fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -340,7 +330,8 @@ pub trait NotificationEgress: Send + Sync + 'static {
     /// Poll the queue and attempt to deliver notifications.
     ///
     /// Returns results for each delivery attempt across all messages received.
-    /// Messages are automatically deleted from the queue after successful delivery.
+    /// Messages are deleted from the queue after terminal outcomes, including
+    /// successful delivery and rate-limit rejection.
     fn poll_and_deliver(&self)
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 

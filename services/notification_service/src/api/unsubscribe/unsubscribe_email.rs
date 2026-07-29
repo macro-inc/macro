@@ -4,10 +4,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use decode_jwt::DecodedJwt;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 /// Unsubscribes a user from receiving emails
 #[utoipa::path(
@@ -20,12 +20,17 @@ use crate::api::context::ApiContext;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, decoded_jwt))]
+#[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    decoded_jwt: DecodedJwt,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
-    let email = decoded_jwt.user_context.user_id.replace("macro|", "");
+    let email = user
+        .authorization
+        .user
+        .user_context
+        .user_id
+        .replace("macro|", "");
     notification_db_client::unsubscribe::email::upsert_email_unsubscribe(&ctx.db, &email)
         .await
         .map_err(|e| {

@@ -87,8 +87,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               POSTHOG_API_KEY:
                 required: true
-              CACHIX_AUTH_TOKEN:
-                required: true
         "#})?,
     );
     Ok(())

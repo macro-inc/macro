@@ -73,6 +73,7 @@ pub enum SearchQueueMessage {
     RemoveDocument(DocumentId),
     ExtractSync(SearchExtractorMessage),
     UpdateDocumentProperties(DocumentPropertiesUpdate),
+    UpdateDocumentName(DocumentId),
     // Chat
     ChatMessage(ChatMessage),
     RemoveChatMessage(RemoveChatMessage),
@@ -103,6 +104,7 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::RemoveDocument(message) => message.document_id.clone(),
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
             SearchQueueMessage::UpdateDocumentProperties(message) => message.document_id.clone(),
+            SearchQueueMessage::UpdateDocumentName(message) => message.document_id.clone(),
             SearchQueueMessage::ChatMessage(message) => message.message_id.clone(), // needs
             // to be the message id to ensure it's unique for batch
             SearchQueueMessage::RemoveChatMessage(message) => message.chat_id.clone(),
@@ -143,6 +145,7 @@ impl SearchQueueMessage {
             SearchQueueMessage::RemoveDocument(_) => Operation::Remove,
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
             SearchQueueMessage::UpdateDocumentProperties(_) => Operation::UpdateMetadata,
+            SearchQueueMessage::UpdateDocumentName(_) => Operation::UpdateMetadata,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveChatMessage(_) => Operation::Remove,
@@ -235,4 +238,32 @@ pub async fn bulk_enqueue_search_text_extractor(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::document::DocumentId;
+
+    #[test]
+    fn update_document_name_maps_to_update_metadata() {
+        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
+            document_id: "doc-1".to_string(),
+        });
+
+        assert!(matches!(message.operation(), Operation::UpdateMetadata));
+        assert_eq!(message.id(), "doc-1");
+    }
+
+    #[test]
+    fn update_document_name_round_trips() {
+        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
+            document_id: "doc-1".to_string(),
+        });
+
+        let serialized = serde_json::to_string(&message).unwrap();
+        let deserialized: SearchQueueMessage = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(message, deserialized);
+    }
 }

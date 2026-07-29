@@ -44,6 +44,8 @@ import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQuer
 import type { Team } from './generated/schemas/team';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
+import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
+import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -137,6 +139,10 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
+
+/** The team owner's email domain is a generic provider (e.g. gmail.com),
+ *  so auto-join cannot be enabled for it. */
+export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
 
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
@@ -401,6 +407,7 @@ export const authServiceClient = {
       hasTrialed: data.hasTrialed,
       aiDataConsent: data.aiDataConsent,
       referralCode: data.referralCode,
+      createdAt: data.createdAt,
     }));
   },
 
@@ -454,31 +461,6 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
-  async createCheckoutSession(args: {
-    successUrl: string;
-    cancelUrl: string;
-    discount?: string | null;
-    metadata?: {
-      gaClientId?: string | null;
-      fbp?: string | null;
-      fbc?: string | null;
-    };
-    tier?: string;
-  }) {
-    return (
-      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
-        method: 'POST',
-        body: JSON.stringify({
-          successUrl: args.successUrl,
-          cancelUrl: args.cancelUrl,
-          discount: args.discount ?? undefined,
-          metadata: args.metadata,
-          tier: args.tier ?? undefined,
-        }),
-      })
-    ).map((result) => result.url);
-  },
-
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;
@@ -711,6 +693,62 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Toggles automatic domain joining for the caller's team: sets the
+   * auto-join domain from the team owner's email domain when unset,
+   * removes it when set. Returns the domain after the toggle (null when
+   * it was just disabled). Admin/Owner only.
+   */
+  async toggleTeamAutoJoinDomain() {
+    return (
+      await fetchWithAuth<
+        ToggleAutoJoinDomainResponse,
+        ToggleAutoJoinDomainErrorCode
+      >(`${authHost}/team/auto-join-domain/toggle`, {
+        method: 'POST',
+        // The backend rejects enabling auto-join for generic email
+        // provider domains (e.g. gmail.com) with a 400 whose message
+        // names the domain — keep that message so the UI can toast it
+        // verbatim.
+        errorResponseHandler: async (response) => {
+          if (response.status === 400) {
+            const message = await response
+              .json()
+              .then((body) => body?.message)
+              .catch(() => undefined);
+            return {
+              code: 'GENERIC_DOMAIN_NOT_ALLOWED',
+              message:
+                typeof message === 'string'
+                  ? message
+                  : 'This domain cannot be used for auto-join',
+            };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
+      })
+    ).map((result) => result);
+  },
+
+  /**
+   * Toggles whether non-admin members may invite users to the caller's
+   * team. Teams start with this on (any member can invite); turning it
+   * off restricts inviting to team admins and owners. Admin/Owner only.
+   */
+  async toggleTeamNonAdminInvites() {
+    return (
+      await fetchWithAuth<ToggleNonAdminInvitesResponse>(
+        `${authHost}/team/non-admin-invites/toggle`,
+        {
+          method: 'POST',
+        }
+      )
+    ).map((result) => result);
   },
 
   async deleteTeamInvite(teamInviteId: string) {

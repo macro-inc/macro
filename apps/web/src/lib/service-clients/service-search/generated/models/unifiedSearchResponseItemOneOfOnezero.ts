@@ -4,9 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelSearchResponseItemWithMetadata } from './channelSearchResponseItemWithMetadata';
+import type { ChannelMessageSearchResponseItem } from './channelMessageSearchResponseItem';
 import type { UnifiedSearchResponseItemOneOfOnezeroAllOf } from './unifiedSearchResponseItemOneOfOnezeroAllOf';
 
 export type UnifiedSearchResponseItemOneOfOnezero =
-  ChannelSearchResponseItemWithMetadata &
-    UnifiedSearchResponseItemOneOfOnezeroAllOf;
+  ChannelMessageSearchResponseItem & UnifiedSearchResponseItemOneOfOnezeroAllOf;

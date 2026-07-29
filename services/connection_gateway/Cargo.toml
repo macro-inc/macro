@@ -25,6 +25,9 @@ path = "scripts/stale_connections.rs"
 name = "connection_gateway_openapi"
 path = "src/openapi.rs"
 
+[features]
+local_auth = ["macro_authorization/local_auth"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -47,13 +50,13 @@ http-body-util = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
-macro_middleware = { path = "../../crates/macro_middleware", features = ["auth"] }
 mockall.workspace = true
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
@@ -85,3 +88,4 @@ doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

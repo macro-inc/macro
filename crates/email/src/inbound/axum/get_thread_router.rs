@@ -10,6 +10,7 @@ use axum::{
 use entity_access::domain::models::{EntityPermission, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -22,34 +23,43 @@ const DEFAULT_MESSAGE_LIMIT: i64 = 5;
 /// The maximum number of messages that can be returned per request.
 const MESSAGE_MAX: i64 = 100;
 
-pub struct EmailThreadRouterState<T, Svc> {
+pub struct EmailThreadRouterState<T, Svc, Auth> {
     pub service: Arc<T>,
     pub access_service: Arc<Svc>,
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<T, Svc> Clone for EmailThreadRouterState<T, Svc> {
+impl<T, Svc, Auth> Clone for EmailThreadRouterState<T, Svc, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for Arc<Svc> {
-    fn from_ref(state: &EmailThreadRouterState<T, Svc>) -> Self {
+impl<T, Svc, Auth> FromRef<EmailThreadRouterState<T, Svc, Auth>> for Arc<Svc> {
+    fn from_ref(state: &EmailThreadRouterState<T, Svc, Auth>) -> Self {
         state.access_service.clone()
     }
 }
 
-pub fn thread_router<S, T, Svc>(state: EmailThreadRouterState<T, Svc>) -> Router<S>
+impl<T, Svc, Auth> FromRef<EmailThreadRouterState<T, Svc, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &EmailThreadRouterState<T, Svc, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+pub fn thread_router<S, T, Svc, Auth>(state: EmailThreadRouterState<T, Svc, Auth>) -> Router<S>
 where
     S: Send + Sync + 'static,
     T: EmailService,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     Router::new()
-        .route("/{thread_id}", get(get_thread_handler::<T, Svc>))
+        .route("/{thread_id}", get(get_thread_handler::<T, Svc, Auth>))
         .with_state(state)
 }
 
@@ -106,9 +116,13 @@ impl IntoResponse for GetThreadError {
     )
 )]
 #[tracing::instrument(err, skip(state, access))]
-pub async fn get_thread_handler<T: EmailService, Svc: EntityAccessService>(
-    State(state): State<EmailThreadRouterState<T, Svc>>,
-    access: ThreadAccessLevelExtractor<ViewAccessLevel, Svc>,
+pub async fn get_thread_handler<
+    T: EmailService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<EmailThreadRouterState<T, Svc, Auth>>,
+    access: ThreadAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
     extract::Query(params): extract::Query<GetThreadParams>,
 ) -> Result<Json<GetThreadResponse>, GetThreadError> {
     let (offset, limit) = parse_pagination_params(&params)?;

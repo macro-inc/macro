@@ -23,6 +23,7 @@ mod link;
 mod message;
 mod preview;
 mod preview_views;
+mod project;
 mod thread;
 
 #[cfg(test)]
@@ -133,6 +134,13 @@ impl EmailRepo for EmailPgRepo {
         limit: i64,
     ) -> Result<Vec<MessageRow>, Self::Err> {
         thread::messages_by_thread_id_paginated(&self.pool, thread_id, offset, limit).await
+    }
+
+    async fn latest_content_message_rows(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<MessageRow>, Self::Err> {
+        thread::latest_content_message_rows(&self.pool, thread_ids).await
     }
 
     async fn cross_inbox_reply_drafts(
@@ -282,6 +290,15 @@ impl EmailRepo for EmailPgRepo {
         label::update_message_read_status_batch(&self.pool, message_ids, link_id, is_read).await
     }
 
+    async fn update_thread_read_status(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        is_read: bool,
+    ) -> Result<(), Self::Err> {
+        thread::update_thread_read_status(&self.pool, thread_id, link_id, is_read).await
+    }
+
     async fn update_message_starred_status_batch(
         &self,
         message_ids: &[Uuid],
@@ -314,6 +331,10 @@ impl EmailRepo for EmailPgRepo {
 
     async fn get_thread_project_id(&self, thread_id: Uuid) -> Result<Option<String>, Self::Err> {
         thread::get_thread_project_id(&self.pool, thread_id).await
+    }
+
+    async fn touch_project_updated_at(&self, project_id: &str) -> Result<(), Self::Err> {
+        project::touch_project_updated_at(&self.pool, project_id).await
     }
 
     async fn upsert_email_filter(

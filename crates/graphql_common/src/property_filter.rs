@@ -53,6 +53,7 @@ pub enum GraphqlPropertyMatchValue {
 }
 
 impl GraphqlPropertyMatchValue {
+    /// Convert the GraphQL property match value into its domain representation.
     fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
         Ok(match self {
             Self::SelectOption(id) => {
@@ -90,24 +91,9 @@ pub enum GraphqlPropertyEntityType {
     User,
 }
 
-impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
-    fn from(value: GraphqlPropertyEntityType) -> Self {
-        match value {
-            GraphqlPropertyEntityType::CallRecord => Self::CallRecord,
-            GraphqlPropertyEntityType::Channel => Self::Channel,
-            GraphqlPropertyEntityType::Chat => Self::Chat,
-            GraphqlPropertyEntityType::Company => Self::Company,
-            GraphqlPropertyEntityType::Document => Self::Document,
-            GraphqlPropertyEntityType::Project => Self::Project,
-            GraphqlPropertyEntityType::Task => Self::Task,
-            GraphqlPropertyEntityType::Thread => Self::Thread,
-            GraphqlPropertyEntityType::User => Self::User,
-        }
-    }
-}
-
-impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
-    fn from(value: models_properties::EntityType) -> Self {
+impl GraphqlPropertyEntityType {
+    /// Construct a GraphQL property entity type from its properties-domain model.
+    pub fn new(value: models_properties::EntityType) -> Self {
         match value {
             models_properties::EntityType::CallRecord => Self::CallRecord,
             models_properties::EntityType::Channel => Self::Channel,
@@ -118,6 +104,21 @@ impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
             models_properties::EntityType::Task => Self::Task,
             models_properties::EntityType::Thread => Self::Thread,
             models_properties::EntityType::User => Self::User,
+        }
+    }
+
+    /// Convert this GraphQL entity type into its properties-domain model.
+    pub fn into_model(self) -> models_properties::EntityType {
+        match self {
+            Self::CallRecord => models_properties::EntityType::CallRecord,
+            Self::Channel => models_properties::EntityType::Channel,
+            Self::Chat => models_properties::EntityType::Chat,
+            Self::Company => models_properties::EntityType::Company,
+            Self::Document => models_properties::EntityType::Document,
+            Self::Project => models_properties::EntityType::Project,
+            Self::Task => models_properties::EntityType::Task,
+            Self::Thread => models_properties::EntityType::Thread,
+            Self::User => models_properties::EntityType::User,
         }
     }
 }

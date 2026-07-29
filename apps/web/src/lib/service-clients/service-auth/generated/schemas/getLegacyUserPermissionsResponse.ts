@@ -4,12 +4,16 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { GetLegacyUserPermissionsResponseCreatedAt } from './getLegacyUserPermissionsResponseCreatedAt';
 import type { GetLegacyUserPermissionsResponseGroup } from './getLegacyUserPermissionsResponseGroup';
 import type { GetLegacyUserPermissionsResponseName } from './getLegacyUserPermissionsResponseName';
 
 export interface GetLegacyUserPermissionsResponse {
   /** Whether the user has consented to AI data sharing */
   aiDataConsent: boolean;
+  /** When the account was created. Absent for accounts that predate
+creation-time tracking. */
+  createdAt?: GetLegacyUserPermissionsResponseCreatedAt;
   /** The user's email */
   email: string;
   group?: GetLegacyUserPermissionsResponseGroup;

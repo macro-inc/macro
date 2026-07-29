@@ -2,10 +2,7 @@ use super::*;
 use chrono::DateTime;
 use models_search::{
     SearchHighlight,
-    channel::{
-        ChannelMetadata, ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata,
-        ChannelSearchResult,
-    },
+    channel::ChannelMessageSearchResponseItem,
     chat::{ChatMetadata, ChatSearchResponseItem, ChatSearchResponseItemWithMetadata},
     document::{
         DocumentMetadata, DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata,
@@ -14,6 +11,23 @@ use models_search::{
     project::{ProjectMetadata, ProjectSearchResponseItem, ProjectSearchResponseItemWithMetadata},
 };
 use sqlx::types::Uuid;
+
+fn channel_message_item(channel_id: Uuid, message_id: Uuid, ts: i64) -> UnifiedSearchResponseItem {
+    UnifiedSearchResponseItem::ChannelMessage(ChannelMessageSearchResponseItem {
+        id: channel_id,
+        owner_id: Some("owner1".to_string()),
+        channel_type: "public".to_string(),
+        channel_id,
+        message_id,
+        thread_id: None,
+        sender_id: "sender1".to_string(),
+        created_at: DateTime::from_timestamp(ts, 0).unwrap(),
+        updated_at: DateTime::from_timestamp(ts, 0).unwrap(),
+        deleted_at: None,
+        highlight: SearchHighlight::default(),
+        score: None,
+    })
+}
 
 #[test]
 fn test_sort_unified_search_results() {
@@ -150,149 +164,28 @@ fn test_sort_unified_search_results() {
 }
 
 #[test]
-fn test_channel_updated_at_uses_max_from_message_results() {
-    let channel_id = Uuid::new_v4();
-
-    // Channel with metadata.updated_at = 1000, but message results have higher values
-    let channel = UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
-        metadata: Some(ChannelMetadata {
-            created_at: DateTime::from_timestamp(900, 0).unwrap(),
-            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
-            viewed_at: None,
-            interacted_at: None,
-        }),
-        extra: ChannelSearchResponseItem {
-            id: channel_id,
-            owner_id: Some("owner1".to_string()),
-            channel_type: "slack".to_string(),
-            channel_id,
-            channel_message_search_results: vec![
-                ChannelSearchResult {
-                    message_id: Some(Uuid::new_v4()),
-                    thread_id: None,
-                    sender_id: Some("sender1".to_string()),
-                    created_at: Some(DateTime::from_timestamp(1800, 0).unwrap()),
-                    updated_at: Some(DateTime::from_timestamp(2000, 0).unwrap()), // Second highest
-                    deleted_at: None,
-                    highlight: SearchHighlight::default(),
-                    score: None,
-                },
-                ChannelSearchResult {
-                    message_id: Some(Uuid::new_v4()),
-                    thread_id: None,
-                    sender_id: Some("sender2".to_string()),
-                    created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
-                    updated_at: Some(DateTime::from_timestamp(3000, 0).unwrap()), // Highest - should be used
-                    deleted_at: None,
-                    highlight: SearchHighlight::default(),
-                    score: None,
-                },
-                ChannelSearchResult {
-                    message_id: Some(Uuid::new_v4()),
-                    thread_id: None,
-                    sender_id: Some("sender3".to_string()),
-                    created_at: Some(DateTime::from_timestamp(1400, 0).unwrap()),
-                    updated_at: Some(DateTime::from_timestamp(1500, 0).unwrap()), // Lowest of results
-                    deleted_at: None,
-                    highlight: SearchHighlight::default(),
-                    score: None,
-                },
-            ],
-        },
-    });
-
-    // Should return 3000 (max from message results), not 1000 (metadata)
+fn test_channel_message_updated_at_is_own_timestamp() {
+    let item = channel_message_item(Uuid::new_v4(), Uuid::new_v4(), 3000);
     assert_eq!(
-        channel.updated_at(),
+        item.updated_at(),
         Some(DateTime::from_timestamp(3000, 0).unwrap())
     );
 }
 
 #[test]
-fn test_channel_updated_at_falls_back_to_metadata_when_no_results() {
-    let channel_id = Uuid::new_v4();
-
-    // Channel with metadata.updated_at = 1000, but no message results
-    let channel = UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
-        metadata: Some(ChannelMetadata {
-            created_at: DateTime::from_timestamp(900, 0).unwrap(),
-            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
-            viewed_at: None,
-            interacted_at: None,
-        }),
-        extra: ChannelSearchResponseItem {
-            id: channel_id,
-            owner_id: Some("owner1".to_string()),
-            channel_type: "slack".to_string(),
-            channel_id,
-            channel_message_search_results: vec![],
-        },
-    });
-
-    // Should return 1000 (metadata) since no message results
-    assert_eq!(
-        channel.updated_at(),
-        Some(DateTime::from_timestamp(1000, 0).unwrap())
-    );
-}
-
-#[test]
-fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_at() {
-    let channel_id = Uuid::new_v4();
-
-    // Channel with metadata.updated_at = 1000, message results have None for updated_at
-    let channel = UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
-        metadata: Some(ChannelMetadata {
-            created_at: DateTime::from_timestamp(900, 0).unwrap(),
-            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
-            viewed_at: None,
-            interacted_at: None,
-        }),
-        extra: ChannelSearchResponseItem {
-            id: channel_id,
-            owner_id: Some("owner1".to_string()),
-            channel_type: "slack".to_string(),
-            channel_id,
-            channel_message_search_results: vec![
-                ChannelSearchResult {
-                    message_id: Some(Uuid::new_v4()),
-                    thread_id: None,
-                    sender_id: Some("sender1".to_string()),
-                    created_at: Some(DateTime::from_timestamp(1800, 0).unwrap()),
-                    updated_at: None, // No updated_at
-                    deleted_at: None,
-                    highlight: SearchHighlight::default(),
-                    score: None,
-                },
-                ChannelSearchResult {
-                    message_id: Some(Uuid::new_v4()),
-                    thread_id: None,
-                    sender_id: Some("sender2".to_string()),
-                    created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
-                    updated_at: None, // No updated_at
-                    deleted_at: None,
-                    highlight: SearchHighlight::default(),
-                    score: None,
-                },
-            ],
-        },
-    });
-
-    // Should return 1000 (metadata) since all message results have None for updated_at
-    assert_eq!(
-        channel.updated_at(),
-        Some(DateTime::from_timestamp(1000, 0).unwrap())
-    );
-}
-
-#[test]
-fn test_sort_unified_search_results_with_channel() {
-    // Test that channels are sorted correctly based on max message result updated_at
+fn test_channel_messages_interleave_by_own_recency() {
+    // Several matching messages from one channel must not cluster at the
+    // channel's newest hit: each per-message item carries its own timestamp,
+    // so other entities sort in between.
     let doc_id = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
+    let newer_msg = Uuid::new_v4();
+    let older_msg = Uuid::new_v4();
 
     let results: Vec<UnifiedSearchResponseItem> = vec![
-        // Document with updated_at = 2000
+        channel_message_item(channel_id, older_msg, 1500),
+        channel_message_item(channel_id, newer_msg, 3000),
+        // Document with updated_at = 2000, between the two messages
         UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
             properties: None,
             metadata: Some(DocumentMetadata {
@@ -313,40 +206,17 @@ fn test_sort_unified_search_results_with_channel() {
                 document_search_results: vec![],
             },
         }),
-        // Channel with metadata.updated_at = 1000, but message result has updated_at = 3000
-        UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
-            metadata: Some(ChannelMetadata {
-                created_at: DateTime::from_timestamp(900, 0).unwrap(),
-                updated_at: DateTime::from_timestamp(1000, 0).unwrap(), // Would be sorted after document if this was used
-                viewed_at: None,
-                interacted_at: None,
-            }),
-            extra: ChannelSearchResponseItem {
-                id: channel_id,
-                owner_id: Some("owner1".to_string()),
-                channel_type: "slack".to_string(),
-                channel_id,
-                channel_message_search_results: vec![ChannelSearchResult {
-                    message_id: Some(Uuid::new_v4()),
-                    thread_id: None,
-                    sender_id: Some("sender1".to_string()),
-                    created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
-                    updated_at: Some(DateTime::from_timestamp(3000, 0).unwrap()), // Should make channel sort first
-                    deleted_at: None,
-                    highlight: SearchHighlight::default(),
-                    score: None,
-                }],
-            },
-        }),
     ];
-
-    // Channel should be first because its message result has updated_at = 3000
-    let expected_ids: Vec<Uuid> = vec![channel_id, doc_id];
 
     let results = sort_unified_search_results(results);
 
-    assert_eq!(
-        results.iter().map(|r| r.entity_id()).collect::<Vec<Uuid>>(),
-        expected_ids
-    );
+    let message_id = |item: &UnifiedSearchResponseItem| match item {
+        UnifiedSearchResponseItem::ChannelMessage(m) => Some(m.message_id),
+        _ => None,
+    };
+
+    assert_eq!(results.len(), 3);
+    assert_eq!(message_id(&results[0]), Some(newer_msg));
+    assert_eq!(results[1].entity_id(), doc_id);
+    assert_eq!(message_id(&results[2]), Some(older_msg));
 }

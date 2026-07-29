@@ -13,7 +13,7 @@ env:
 jobs:
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
-    uses: ./.github/workflows/deploy-all-services.yml
+    uses: ./.github/workflows/deploy_all_services.yml
     with:
       environment: prod
     secrets:
@@ -24,6 +24,15 @@ jobs:
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+  deploy-sync-service:
+    name: Deploy Sync Service
+    # The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
+    needs: [deploy-cloud-storage]
+    uses: ./.github/workflows/deploy_sync_service.yml
+    with:
+      environment: prod
+    secrets: inherit
+
   build:
     name: Build Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
@@ -32,22 +41,20 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
-      # Namespace cache volume: warm Nix dev shell + bun cache shared with the
-      # web PR checks / previews / dev deploys. Optimization only, hence
-      # continue-on-error.
+      # Namespace's native Nix cache plus Bun's explicit package-cache path,
+      # shared with web PR checks / previews / dev deploys. Bun comes from the
+      # Nix shell, so its native cache planner cannot run this early.
       - name: Mount Namespace cache volume
         continue-on-error: true
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          cache: bun
-          path: /nix
+          cache: nix
+          path: /home/runner/.bun/install/cache
       # Namespace runners don't ship Nix; must run before setup-reqs-web.
       - name: Setup Nix
         uses: ./.github/actions/setup-nix
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build for Production
         working-directory: apps/web
         run: just build-prod
@@ -77,14 +84,12 @@ jobs:
         continue-on-error: true
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          cache: bun
-          path: /nix
+          cache: nix
+          path: /home/runner/.bun/install/cache
       - name: Setup Nix
         uses: ./.github/actions/setup-nix
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:

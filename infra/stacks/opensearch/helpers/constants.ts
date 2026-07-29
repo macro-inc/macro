@@ -13,7 +13,7 @@ export const PROJECTS_ALIAS = 'projects';
 export const CHANNELS_INDEX = 'channels_v2';
 export const CHATS_INDEX = 'chats_v2';
 export const DOCUMENTS_INDEX = 'documents_v2';
-export const EMAILS_INDEX = 'emails_v1';
+export const EMAILS_INDEX = 'emails_v2';
 export const CALL_RECORDS_INDEX = 'call_records_v2';
 export const PROJECTS_INDEX = 'projects_v1';
 

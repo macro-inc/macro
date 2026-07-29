@@ -214,3 +214,27 @@ describe('bufferedStream Macro XML buffering', () => {
     expect(text()).toBe('ABC');
   });
 });
+
+describe('bufferedStream output buffering', () => {
+  it('appends to the output in place instead of copying it on every emitted character', () => {
+    /* Each character tick used to call controller.setData((p) => [...p, part]),
+       copying the whole (ever-growing) output array on every single character —
+       O(n) per unit emitted, O(n^2) over a long message. This is the slow-stream
+       bug: a long response gets progressively slower to render as it grows,
+       and visibly so near the end. A correct implementation mutates one shared
+       buffer and reuses its reference, so the array captured earlier is the
+       same object seen later, just longer. */
+    const { source, out } = setup();
+    source.setData([textPart('abcdef')]);
+    vi.advanceTimersByTime(TICK_MS * 2);
+    const afterTwoRef = out.data();
+    const afterTwoLength = afterTwoRef.length;
+    expect(afterTwoLength).toBeGreaterThan(0);
+    expect(afterTwoLength).toBeLessThan(6);
+
+    vi.advanceTimersByTime(TICK_MS * 3);
+    const afterFiveRef = out.data();
+    expect(afterFiveRef.length).toBeGreaterThan(afterTwoLength);
+    expect(afterFiveRef).toBe(afterTwoRef);
+  });
+});

@@ -18,12 +18,11 @@
  * - `cache-only`: hit → emit; miss → emit `data: undefined`, no network.
  *
  * Mutations:
- * - With an optimistic response (see `executeOptimisticMutation`): an
- *   in-memory optimistic layer is installed *before* the mutation is
- *   forwarded; dependent queries re-execute immediately. The layer commits
- *   with the real response on success and rolls back on error. No synthetic
- *   result is emitted — the caller's mutation promise resolves only with
- *   the network result.
+ * - With an optimistic response (see `executeOptimisticMutation`): the
+ *   mutation and layer are durably queued before the ordered runner forwards
+ *   it. Retryable failures retain optimism for background replay; permanent
+ *   failures roll back. A caller whose operation is blocked behind the queue
+ *   head receives a synthetic `queued` disposition instead of waiting.
  * - Without one: forwarded normally; successful responses are normalized
  *   through the standard write path so dependent cached queries update.
  *
@@ -31,13 +30,19 @@
  */
 
 import {
+  type CombinedError,
   type Exchange,
   makeOperation,
   type Operation,
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
-import { Kind, type OperationDefinitionNode } from 'graphql';
+import {
+  type DocumentNode,
+  Kind,
+  type OperationDefinitionNode,
+  parse,
+} from 'graphql';
 import {
   empty,
   filter,
@@ -52,7 +57,12 @@ import {
   tap,
 } from 'wonka';
 import type { CacheHost } from '../host/types';
-import { optimisticContextOf } from './optimistic';
+import type { OptimisticWriteResult, QueryRevalidationWire } from '../protocol';
+import {
+  normalizedEntityKey,
+  optimisticContextOf,
+  withOptimisticMutationDisposition,
+} from './optimistic';
 
 /**
  * Private operation-context field carrying the optimistic transaction id
@@ -60,7 +70,31 @@ import { optimisticContextOf } from './optimistic';
  * urql operation key): identical concurrent mutations share a key but each
  * carries its own transaction.
  */
-const TRANSACTION_CONTEXT_KEY = 'normalizedCacheTransaction';
+const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
+const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
+const QUEUE_LEASE_MS = 5 * 60_000;
+const EMPTY_QUEUE_POLL_MS = 30_000;
+
+type QueueAttemptContext = {
+  transactionId: string;
+  leaseOwner: string;
+  leaseGeneration: string;
+  attemptCount: number;
+};
+
+function queueAttemptOf(op: Operation): QueueAttemptContext | undefined {
+  const value: unknown = op.context[QUEUE_ATTEMPT_CONTEXT_KEY];
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    'transactionId' in value &&
+    'leaseOwner' in value &&
+    'leaseGeneration' in value
+  ) {
+    return value as QueueAttemptContext;
+  }
+  return undefined;
+}
 
 const queryTextCache = new WeakMap<object, string>();
 
@@ -83,6 +117,45 @@ function operationName(op: Operation): string | undefined {
   return undefined;
 }
 
+function replayDocument(query: string, name?: string): DocumentNode {
+  const document = parse(query);
+  if (!name) return document;
+  const definitions = document.definitions.filter(
+    (definition) =>
+      definition.kind !== Kind.OPERATION_DEFINITION ||
+      definition.name?.value === name
+  );
+  if (
+    !definitions.some(
+      (definition) => definition.kind === Kind.OPERATION_DEFINITION
+    )
+  ) {
+    throw new Error(`queued GraphQL operation ${name} is missing`);
+  }
+  return { ...document, definitions };
+}
+
+function retryDelayMs(attemptCount: number): number {
+  return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
+}
+
+/** Applies a hard network bound well inside the durable queue lease. */
+function withQueueRequestTimeout(op: Operation): Operation {
+  const operationFetch = op.context.fetch ?? globalThis.fetch;
+  return makeOperation(op.kind, op, {
+    ...op.context,
+    fetch: (input, init) => {
+      const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
+      return operationFetch(input, {
+        ...init,
+        signal: init?.signal
+          ? AbortSignal.any([init.signal, timeoutSignal])
+          : timeoutSignal,
+      });
+    },
+  });
+}
+
 function cacheResult(
   op: Operation,
   data: unknown,
@@ -98,6 +171,110 @@ function cacheResult(
   };
 }
 
+type CacheEffect =
+  | { kind: 'write'; data: unknown }
+  | { kind: 'delete'; key: string };
+
+/** Returns the normalized key carried by the cache-deletion GraphQL type. */
+function graphqlCacheDeletionKey(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  if (
+    record.__typename !== 'GraphqlCacheDeletion' ||
+    typeof record.graphqlTypeName !== 'string' ||
+    typeof record.entityId !== 'string'
+  ) {
+    return;
+  }
+  return normalizedEntityKey({
+    __typename: record.graphqlTypeName,
+    id: record.entityId,
+  });
+}
+
+/** Returns whether a response subtree contains an explicit cache deletion. */
+function containsCacheDeletion(data: unknown): boolean {
+  if (graphqlCacheDeletionKey(data) !== undefined) return true;
+  if (data === null || typeof data !== 'object') return false;
+  return Array.isArray(data)
+    ? data.some(containsCacheDeletion)
+    : Object.values(data).some(containsCacheDeletion);
+}
+
+/**
+ * Converts any GraphQL operation payload into ordered cache effects. Ordinary
+ * data remains one normalized write. When an explicit cache deletion is nested
+ * in an object or list, writes are narrowed to the corresponding response path
+ * so surrounding writes and deletions retain their wire order. Response keys
+ * and ancestor scalar context (including `__typename`) are copied verbatim,
+ * which preserves aliases and inline-fragment resolution without schema or
+ * operation knowledge.
+ */
+function operationCacheEffects(data: unknown): CacheEffect[] {
+  const deletionKey = graphqlCacheDeletionKey(data);
+  if (deletionKey !== undefined) {
+    return [{ kind: 'delete', key: deletionKey }];
+  }
+  if (!containsCacheDeletion(data)) return [{ kind: 'write', data }];
+
+  if (Array.isArray(data)) {
+    return data.flatMap((value) =>
+      operationCacheEffects(value).map((effect) =>
+        effect.kind === 'write'
+          ? {
+              kind: 'write' as const,
+              // Safe only for transient operation-root effect lists such as
+              // `soupUpdates`/`effects`, never normalized entity link lists.
+              data: [effect.data],
+            }
+          : effect
+      )
+    );
+  }
+
+  if (data === null || typeof data !== 'object') {
+    return [{ kind: 'write', data }];
+  }
+
+  const entries = Object.entries(data);
+  const context = entries.filter(([, value]) => !containsCacheDeletion(value));
+  const effectFields = entries.filter(([, value]) =>
+    containsCacheDeletion(value)
+  );
+
+  return effectFields.flatMap(([effectField, value]) =>
+    operationCacheEffects(value).map((effect) => {
+      if (effect.kind === 'delete') return effect;
+
+      const wrapped: Record<string, unknown> = {};
+      for (const [field, fieldValue] of entries) {
+        if (field === effectField) wrapped[field] = effect.data;
+        else if (context.some(([contextField]) => contextField === field)) {
+          wrapped[field] = fieldValue;
+        }
+      }
+      return { kind: 'write' as const, data: wrapped };
+    })
+  );
+}
+
+function queuedMutationResult(
+  op: Operation,
+  transactionId: string
+): OperationResult {
+  return withOptimisticMutationDisposition(
+    {
+      operation: op,
+      data: optimisticContextOf(op)?.optimisticResponse,
+      error: undefined,
+      extensions: undefined,
+      stale: false,
+      hasNext: false,
+    },
+    { kind: 'queued', transactionId }
+  );
+}
+
 export interface NormalizedCacheExchangeOptions {
   /** Called when a cache read/write fails (diagnostics; flow already degraded to network). */
   onCacheError?: (error: unknown, op: Operation) => void;
@@ -110,6 +287,12 @@ export interface NormalizedCacheExchangeOptions {
    * layer itself is identity-agnostic.
    */
   extractIdentity?: (data: unknown) => string | undefined;
+  /**
+   * Decides whether a failed optimistic mutation remains queued. The caller
+   * receives a `queued` disposition; `true` retains the optimistic layer for
+   * a later background attempt. Defaults to `false`.
+   */
+  shouldRetryMutation?: (error: CombinedError) => boolean | Promise<boolean>;
 }
 
 export function normalizedCacheExchange(
@@ -141,6 +324,149 @@ export function normalizedCacheExchange(
       // Async cache reads re-inject network-bound operations here.
       const { source: forwardQueue$, next: enqueueForward } =
         makeSubject<Operation>();
+      const queueOwner = `exchange:${host.clientId}`;
+      const liveQueuedOps = new Map<
+        string,
+        {
+          operation: Operation;
+          resolveRoute: (result: OperationResult | undefined) => void;
+        }
+      >();
+      const subscriptionEffectChains = new Map<number, Promise<void>>();
+      let attemptInFlight = false;
+      let drainRunning = false;
+      let deferredUntil: number | undefined;
+      let drainTimer: ReturnType<typeof setTimeout> | undefined;
+
+      function scheduleDrain(delayMs = 0): void {
+        if (drainTimer !== undefined) clearTimeout(drainTimer);
+        drainTimer = setTimeout(() => {
+          drainTimer = undefined;
+          void drainQueue();
+        }, delayMs);
+      }
+
+      function resolveLiveOperationsAsQueued(): void {
+        for (const [transactionId, live] of liveQueuedOps) {
+          liveQueuedOps.delete(transactionId);
+          live.resolveRoute(
+            queuedMutationResult(live.operation, transactionId)
+          );
+        }
+      }
+
+      async function drainQueue(): Promise<void> {
+        if (attemptInFlight) {
+          // Every newly enqueued operation is behind the claimed head. Its
+          // caller can stop waiting; durable replay now owns the mutation.
+          resolveLiveOperationsAsQueued();
+          return;
+        }
+        if (drainRunning) return;
+        drainRunning = true;
+        try {
+          const now = Date.now();
+          const claimed = await host.claimNextMutation(
+            queueOwner,
+            now,
+            now + QUEUE_LEASE_MS
+          );
+          if (!claimed) {
+            resolveLiveOperationsAsQueued();
+            scheduleDrain(
+              deferredUntil === undefined
+                ? EMPTY_QUEUE_POLL_MS
+                : Math.max(0, deferredUntil - Date.now())
+            );
+            return;
+          }
+
+          deferredUntil = undefined;
+          attemptInFlight = true;
+          const attempt: QueueAttemptContext = {
+            transactionId: claimed.transactionId,
+            leaseOwner: queueOwner,
+            leaseGeneration: claimed.leaseGeneration,
+            attemptCount: claimed.attemptCount,
+          };
+          const live = liveQueuedOps.get(claimed.transactionId);
+          if (live) {
+            liveQueuedOps.delete(claimed.transactionId);
+            live.resolveRoute(undefined);
+            enqueueForward(
+              withQueueRequestTimeout(
+                makeOperation(live.operation.kind, live.operation, {
+                  ...live.operation.context,
+                  [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
+                })
+              )
+            );
+          } else {
+            try {
+              const replay = client.mutation(
+                replayDocument(claimed.query, claimed.operationName),
+                claimed.variables,
+                {
+                  requestPolicy: 'network-only',
+                  [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
+                }
+              );
+              void replay.toPromise();
+            } catch (error) {
+              await host.rollbackOptimisticWrite(
+                claimed.transactionId,
+                {
+                  owner: queueOwner,
+                  generation: claimed.leaseGeneration,
+                },
+                error instanceof Error ? error.message : String(error)
+              );
+              attemptInFlight = false;
+              scheduleDrain();
+            }
+          }
+          // Any other live operation is ordered behind the claimed head.
+          resolveLiveOperationsAsQueued();
+        } catch {
+          // Enqueue already succeeded, so callers must observe these as
+          // queued even if the runner cannot currently inspect the head.
+          resolveLiveOperationsAsQueued();
+          scheduleDrain(EMPTY_QUEUE_POLL_MS);
+        } finally {
+          drainRunning = false;
+        }
+      }
+
+      function revalidateAfterCommit(
+        revalidations: QueryRevalidationWire[],
+        mutation: Operation
+      ): void {
+        for (const revalidation of revalidations) {
+          try {
+            const variables: unknown = JSON.parse(revalidation.variablesJson);
+            if (
+              variables === null ||
+              typeof variables !== 'object' ||
+              Array.isArray(variables)
+            ) {
+              throw new Error('cache revalidation variables are not an object');
+            }
+            void client
+              .query(
+                replayDocument(revalidation.query, revalidation.operationName),
+                variables as Record<string, unknown>,
+                { requestPolicy: 'network-only' }
+              )
+              .toPromise()
+              .then((result) => {
+                if (result.error) throw result.error;
+              })
+              .catch((error) => options.onCacheError?.(error, mutation));
+          } catch (error) {
+            options.onCacheError?.(error, mutation);
+          }
+        }
+      }
 
       async function readThenRoute(
         op: Operation
@@ -177,33 +503,92 @@ export function normalizedCacheExchange(
         return undefined;
       }
 
-      /**
-       * Installs the optimistic layer (when the mutation carries one) and
-       * only then releases the mutation to the network. Cache failures
-       * degrade to a plain, non-optimistic network mutation.
-       */
-      async function prepareMutation(op: Operation): Promise<void> {
+      /** Durably queues optimism before allowing the ordered runner to send. */
+      async function prepareMutation(
+        op: Operation
+      ): Promise<OperationResult | undefined> {
+        if (host.disabled) {
+          enqueueForward(op);
+          return undefined;
+        }
+        // Reconstructed startup retries already have a durable transaction.
+        if (queueAttemptOf(op)) {
+          enqueueForward(withQueueRequestTimeout(op));
+          return undefined;
+        }
         const optimistic = optimisticContextOf(op);
         if (!optimistic) {
           enqueueForward(op);
-          return;
+          return undefined;
         }
         try {
-          const begin = await host.beginOptimisticWrite({
+          const args = {
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
             data: optimistic.optimisticResponse,
+            linkPatches: optimistic.linkPatches,
+            revalidations: optimistic.revalidations,
+          };
+          let begin: OptimisticWriteResult;
+          try {
+            begin = await host.beginOptimisticWrite(args);
+          } catch (error) {
+            // A cached bin/page may disappear between inspect and begin. Do
+            // not expose a partial relation move: retain entity optimism and
+            // the post-success revalidation descriptors instead.
+            if (args.linkPatches.length === 0) throw error;
+            options.onCacheError?.(error, op);
+            begin = await host.beginOptimisticWrite({
+              ...args,
+              linkPatches: [],
+              revalidations: [
+                ...args.revalidations,
+                ...args.linkPatches.map((patch) => ({
+                  query: patch.query,
+                  operationName: patch.operationName,
+                  variablesJson: patch.variablesJson,
+                })),
+              ],
+            });
+          }
+          const routed = new Promise<OperationResult | undefined>((resolve) => {
+            liveQueuedOps.set(begin.transactionId, {
+              operation: op,
+              resolveRoute: resolve,
+            });
           });
-          enqueueForward(
-            makeOperation(op.kind, op, {
-              ...op.context,
-              [TRANSACTION_CONTEXT_KEY]: begin.transactionId,
-            })
-          );
+          scheduleDrain();
+          return await routed;
         } catch (error) {
           options.onCacheError?.(error, op);
           enqueueForward(op);
+          return undefined;
+        }
+      }
+
+      /** Applies operation cache effects serially and isolates every failure. */
+      async function applyOperationCacheEffects(
+        op: Operation,
+        effects: CacheEffect[]
+      ): Promise<void> {
+        for (const effect of effects) {
+          try {
+            if (effect.kind === 'write') {
+              await host.writeQuery({
+                query: queryText(op),
+                operationName: operationName(op),
+                variables: op.variables as Record<string, unknown> | undefined,
+                data: effect.data,
+              });
+            } else {
+              await host.deleteRecords([effect.key]);
+            }
+          } catch (error) {
+            // One failed cache effect must neither skip later effects nor
+            // prevent delivery of the original operation result.
+            options.onCacheError?.(error, op);
+          }
         }
       }
 
@@ -211,7 +596,25 @@ export function normalizedCacheExchange(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
-        if (op.kind === 'query' && result.data != null) {
+        if (op.kind === 'subscription' && result.data != null) {
+          // Serialize effects across every emission for this operation, as
+          // well as within buffered payloads, so a slower earlier write cannot
+          // overtake a later delete. Subscribers still receive each original
+          // result after its effects settle.
+          const previousEffects =
+            subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+          const effects = previousEffects.then(() =>
+            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+          );
+          subscriptionEffectChains.set(op.key, effects);
+          try {
+            await effects;
+          } finally {
+            if (subscriptionEffectChains.get(op.key) === effects) {
+              subscriptionEffectChains.delete(op.key);
+            }
+          }
+        } else if (op.kind === 'query' && result.data != null) {
           try {
             await host.writeQuery({
               opKey: op.key,
@@ -225,36 +628,100 @@ export function normalizedCacheExchange(
             options.onCacheError?.(error, op);
           }
         } else if (op.kind === 'mutation') {
-          const transactionId: unknown = op.context[TRANSACTION_CONTEXT_KEY];
-          try {
-            if (typeof transactionId === 'string') {
+          const attempt = queueAttemptOf(op);
+          if (attempt) {
+            const claim = {
+              owner: attempt.leaseOwner,
+              generation: attempt.leaseGeneration,
+            };
+            let retryAt: number | undefined;
+            let disposition: 'committed' | 'queued' | 'permanently-failed' =
+              'queued';
+            try {
               if (result.error || result.data == null) {
-                await host.rollbackOptimisticWrite(transactionId);
+                let retry = false;
+                if (result.error && options.shouldRetryMutation) {
+                  try {
+                    retry = await options.shouldRetryMutation(result.error);
+                  } catch (error) {
+                    options.onCacheError?.(error, op);
+                  }
+                }
+                if (retry) {
+                  retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
+                  await host.deferOptimisticWrite(
+                    attempt.transactionId,
+                    claim,
+                    retryAt,
+                    result.error?.message ?? 'mutation returned no data'
+                  );
+                  disposition = 'queued';
+                } else {
+                  await host.rollbackOptimisticWrite(
+                    attempt.transactionId,
+                    claim,
+                    result.error?.message ?? 'mutation returned no data'
+                  );
+                  disposition = 'permanently-failed';
+                }
               } else {
-                // Atomic replace: dependents move straight from the
-                // optimistic data to the real response, never flickering
-                // back to the pre-mutation state.
-                await host.commitOptimisticWrite(transactionId, {
-                  query: queryText(op),
-                  operationName: operationName(op),
-                  variables: op.variables as
-                    | Record<string, unknown>
-                    | undefined,
-                  data: result.data,
-                });
+                const committed = await host.commitOptimisticWrite(
+                  attempt.transactionId,
+                  claim,
+                  {
+                    query: queryText(op),
+                    operationName: operationName(op),
+                    variables: op.variables as
+                      | Record<string, unknown>
+                      | undefined,
+                    data: result.data,
+                  }
+                );
+                const effects = operationCacheEffects(result.data);
+                if (effects.some((effect) => effect.kind === 'delete')) {
+                  // Commit already normalized the complete result. Replay only
+                  // mixed explicit effects so their final write/delete order is
+                  // identical to a non-optimistic operation.
+                  await applyOperationCacheEffects(op, effects);
+                }
+                revalidateAfterCommit(committed.revalidations ?? [], op);
+                disposition = 'committed';
               }
-            } else if (result.data != null && !result.error) {
-              // Plain mutation write-through: normalized entities update
-              // dependent cached queries.
-              await host.writeQuery({
-                query: queryText(op),
-                operationName: operationName(op),
-                variables: op.variables as Record<string, unknown> | undefined,
-                data: result.data,
-              });
+            } catch (error) {
+              options.onCacheError?.(error, op);
+              retryAt = Date.now() + QUEUE_LEASE_MS;
+              // The durable transaction may still exist (or the settlement
+              // may have completed despite a lost response). Never tell the
+              // caller to roll back while settlement is uncertain.
+              disposition = 'queued';
+            } finally {
+              liveQueuedOps.delete(attempt.transactionId);
+              attemptInFlight = false;
+              deferredUntil = retryAt;
+              scheduleDrain(
+                retryAt === undefined ? 0 : Math.max(0, retryAt - Date.now())
+              );
             }
-          } catch (error) {
-            options.onCacheError?.(error, op);
+            return withOptimisticMutationDisposition(result, {
+              kind: disposition,
+              transactionId: attempt.transactionId,
+            });
+          }
+
+          const optimistic = optimisticContextOf(op);
+          if (result.data != null && !result.error) {
+            await applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data)
+            );
+          }
+          if (optimistic) {
+            return withOptimisticMutationDisposition(result, {
+              kind:
+                result.data != null && !result.error
+                  ? 'committed'
+                  : 'permanently-failed',
+            });
           }
         }
         return result;
@@ -274,16 +741,18 @@ export function normalizedCacheExchange(
         })
       );
 
-      // Mutations are held until their optimistic layer (if any) is
-      // installed, then re-injected through the forward queue. Emits
-      // nothing itself — the network result is the only mutation emission.
+      // Optimistic mutations are held after durable enqueue until the strict
+      // queue runner claims them. Operations behind the head emit a queued
+      // disposition immediately; the head emits its network disposition.
       const mutationPrep$ = pipe(
         shared,
         filter((op) => op.kind === 'mutation'),
         mergeMap((op) =>
           pipe(
             fromPromise(prepareMutation(op)),
-            mergeMap(() => empty as Source<OperationResult>)
+            mergeMap((result) =>
+              result ? fromValue(result) : (empty as Source<OperationResult>)
+            )
           )
         )
       );
@@ -305,6 +774,12 @@ export function normalizedCacheExchange(
         mergeMap((result) => fromPromise(writeThrough(result)))
       );
 
+      if (!host.disabled) {
+        scheduleDrain();
+        if (typeof addEventListener === 'function') {
+          addEventListener('online', () => scheduleDrain());
+        }
+      }
       void unsubscribePush;
       return merge([cacheResults$, mutationPrep$, forwarded$]);
     };

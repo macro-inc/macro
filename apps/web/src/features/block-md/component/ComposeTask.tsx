@@ -3,13 +3,16 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
+import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   autoRegister,
   emojisPlugin,
   singleLinePlugin,
+  tagsPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import type { TagMentionLifecycle } from '@core/component/LexicalMarkdown/plugins/tags';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $getCaretRect,
@@ -18,6 +21,7 @@ import {
   isRectFlushWith,
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
+import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -41,15 +45,18 @@ import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
+import { InlineTagsPill, useLocalDocTags } from '@property/tags';
 import type {
   Property,
   PropertyApiValues,
   PropertyOption,
 } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
+import { useTagsQuery } from '@queries/properties/tags';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
@@ -61,6 +68,7 @@ import {
   COMMAND_PRIORITY_NORMAL,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
+  KEY_BACKSPACE_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   type LexicalEditor,
@@ -95,6 +103,8 @@ const COMPOSER_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
+const COMPOSER_PROPERTY_SET = new Set<string>(COMPOSER_PROPERTIES);
+type ComposerTagLayoutMode = 'bottom' | 'title';
 
 function composerTitleNavigationPlugin(
   bodyEditor: Accessor<LexicalEditor | undefined>,
@@ -154,6 +164,33 @@ function composerTitleNavigationPlugin(
     );
 }
 
+function isTitleSelectionAtStart() {
+  const selection = $getSelection();
+  if (
+    !$isRangeSelection(selection) ||
+    !selection.isCollapsed() ||
+    selection.anchor.offset !== 0
+  ) {
+    return false;
+  }
+
+  const root = $getRoot();
+  let topLevel = selection.anchor.getNode();
+  while (topLevel.getParent() !== root) {
+    const parent = topLevel.getParent();
+    if (!parent) return false;
+    topLevel = parent;
+  }
+
+  let previous = topLevel.getPreviousSibling();
+  while (previous) {
+    if (previous.getTextContent().length > 0) return false;
+    previous = previous.getPreviousSibling();
+  }
+
+  return true;
+}
+
 function ComposeTaskTitleEditor(props: {
   value: Accessor<string>;
   onChange: (value: string) => void;
@@ -161,6 +198,9 @@ function ComposeTaskTitleEditor(props: {
   bodyEditor: Accessor<LexicalEditor | undefined>;
   containerRef: Accessor<HTMLDivElement | undefined>;
   onUserInput: () => void;
+  onTagSelected: (tag: TagMentionLifecycle) => void;
+  onDeleteTagsAtStart: () => boolean;
+  portalScope?: PortalScope;
 }) {
   const [state, setState] = createSignal(props.value());
   const [showPlaceholder, setShowPlaceholder] = createSignal(
@@ -175,6 +215,9 @@ function ComposeTaskTitleEditor(props: {
   });
 
   const emojiMenuOperations = createMenuOperations();
+  const tagMenuOperations = createMenuOperations();
+  const inlineMenuOpen = () =>
+    emojiMenuOperations.isOpen() || tagMenuOperations.isOpen();
 
   initializeEditorEmpty(editor);
   forceSetTextContent(editor, props.value());
@@ -185,11 +228,13 @@ function ComposeTaskTitleEditor(props: {
     .use(singleLinePlugin())
     .use(emojisPlugin({ menu: emojiMenuOperations }))
     .use(
-      composerTitleNavigationPlugin(
-        props.bodyEditor,
-        emojiMenuOperations.isOpen
-      )
+      tagsPlugin({
+        menu: tagMenuOperations,
+        insertTags: false,
+        onCreateTag: props.onTagSelected,
+      })
     )
+    .use(composerTitleNavigationPlugin(props.bodyEditor, inlineMenuOpen))
     .state<string>(setState, 'plain');
 
   plugins.onUpdate(({ editorState }) => {
@@ -223,15 +268,28 @@ function ComposeTaskTitleEditor(props: {
   });
 
   autoRegister(
-    editor.registerCommand(
-      KEY_ESCAPE_COMMAND,
-      (event) => {
-        props.containerRef()?.focus();
-        event?.preventDefault();
-        event?.stopPropagation();
-        return true;
-      },
-      COMMAND_PRIORITY_NORMAL
+    mergeRegister(
+      editor.registerCommand(
+        KEY_BACKSPACE_COMMAND,
+        (event) => {
+          if (!isTitleSelectionAtStart()) return false;
+          if (!props.onDeleteTagsAtStart()) return false;
+          event?.preventDefault();
+          event?.stopPropagation();
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      ),
+      editor.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        (event) => {
+          props.containerRef()?.focus();
+          event?.preventDefault();
+          event?.stopPropagation();
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      )
     )
   );
 
@@ -245,7 +303,7 @@ function ComposeTaskTitleEditor(props: {
   };
 
   return (
-    <div class="relative w-full mb-4">
+    <div class="relative w-full">
       <div
         contentEditable={!props.disabled()}
         class="ph-no-capture w-full text-xl font-medium outline-none whitespace-pre-wrap wrap-break-words"
@@ -257,6 +315,13 @@ function ComposeTaskTitleEditor(props: {
         editor={editor}
         menu={emojiMenuOperations}
         useBlockBoundary={true}
+        portalScope={props.portalScope}
+      />
+      <TagsMenu
+        editor={editor}
+        menu={tagMenuOperations}
+        useBlockBoundary={true}
+        portalScope={props.portalScope}
       />
       <Show when={showPlaceholder()}>
         <div class="pointer-events-none absolute top-1.5 text-xl font-medium text-ink-placeholder">
@@ -279,12 +344,20 @@ async function createTaskWithProperties(
   taskTitle: string,
   taskContent: string,
   properties: Array<[string, PropertyApiValues]>,
-  definitions: Map<string, PropertyDefinition>,
+  definitions: Map<
+    string,
+    PropertyDefinition | PropertyDefinitionDetailResponse
+  >,
   upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
 ) {
   // Convert properties to API format (filter out null values)
   const propertyValues = properties.flatMap(([id, value]) => {
-    const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
+    const definition = definitions.get(id);
+    const isMultiSelect = definition
+      ? 'is_multi_select' in definition
+        ? definition.is_multi_select
+        : definition.isMultiSelect
+      : value.valueType === 'SELECT_STRING' && !COMPOSER_PROPERTY_SET.has(id);
     const apiValue = propertyValueToApi(value, isMultiSelect);
     if (apiValue === null) return [];
     return [{ propertyId: id, value: apiValue }];
@@ -453,6 +526,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const [isCreating, setIsCreating] = createSignal(false);
+  const [tagLayoutMode, setTagLayoutMode] =
+    createSignal<ComposerTagLayoutMode>('bottom');
   let attachInputRef: HTMLInputElement | undefined;
 
   const handleAttachFiles = async (event: Event) => {
@@ -520,6 +595,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     refetchOnReconnect: false,
     placeholderData: (prev) => prev,
   }));
+  const tagsQuery = useTagsQuery();
 
   const definitions = () => {
     if (!systemPropertiesQuery.isSuccess) return new Map();
@@ -530,6 +606,19 @@ export function ComposeTask(props: ComposeTaskProps) {
         return [definition.id, definition];
       })
     );
+  };
+
+  const createDefinitions = () => {
+    const map = new Map<
+      PropertyDefinition['id'],
+      PropertyDefinition | PropertyDefinitionDetailResponse
+    >(definitions());
+    for (const tagSet of tagsQuery.data ?? []) {
+      if (tagSet.definition) {
+        map.set(tagSet.definition.id, tagSet.definition);
+      }
+    }
+    return map;
   };
 
   const options = () => {
@@ -574,6 +663,41 @@ export function ComposeTask(props: ComposeTaskProps) {
         value: date,
       });
     },
+  };
+
+  const composerTags = useLocalDocTags(
+    (definitionId) => {
+      const value = propertyValues[definitionId];
+      return value?.valueType === 'SELECT_STRING' && value.values
+        ? value.values
+        : [];
+    },
+    (definition, optionIds) => {
+      setPropertyValues(definition.id, {
+        valueType: 'SELECT_STRING',
+        values: optionIds,
+      });
+    }
+  );
+
+  const clearComposerTags = () => {
+    const next = structuredClone(unwrap(propertyValues));
+    for (const [definitionId, value] of Object.entries(next)) {
+      if (
+        value.valueType === 'SELECT_STRING' &&
+        !COMPOSER_PROPERTY_SET.has(definitionId)
+      ) {
+        delete next[definitionId];
+      }
+    }
+    setPropertyValues(reconcile(next));
+  };
+
+  const deleteTitleTagsAtStart = () => {
+    if (tagLayoutMode() !== 'title') return false;
+    clearComposerTags();
+    setTagLayoutMode('bottom');
+    return true;
   };
 
   const showTaskCreatedToast = async (
@@ -659,7 +783,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         taskTitle,
         taskContent,
         properties,
-        definitions(),
+        createDefinitions(),
         (params) => upsertToHistoryMutation.mutate(params)
       );
 
@@ -687,7 +811,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       taskTitle,
       taskContent,
       properties,
-      definitions(),
+      createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
@@ -712,6 +836,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       setTitle('');
       setContent('');
       setPropertyValues(reconcile(getDefaultPropertyValues()));
+      setTagLayoutMode('bottom');
       setIsDraftLoaded(false);
       const ed = bodyEditor();
       ed && initializeEditorEmpty(ed);
@@ -747,7 +872,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       taskTitle,
       taskContent,
       properties,
-      definitions(),
+      createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
@@ -808,6 +933,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     setTitle('');
     setContent('');
     setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setTagLayoutMode('bottom');
     setIsDraftLoaded(false);
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
@@ -858,6 +984,11 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   const editorConfig = buildConfig('markdown')
     .withMentions()
+    .withTags({
+      onCreate: (tag) => {
+        void composerTags.applyTag(tag.scope, tag.optionId);
+      },
+    })
     .withEmojis()
     .withActions()
     .withCode()
@@ -876,10 +1007,12 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   const editor = editorConfig.buildHandle().lexical;
   setBodyEditor(editor);
+  const portalScope = (): PortalScope =>
+    splitPanel.handle.isPopover() ? 'local' : 'block';
 
   return (
     <div
-      class="flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
+      class="portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -922,7 +1055,14 @@ export function ComposeTask(props: ComposeTaskProps) {
         </Show>
       </div>
       <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div class="shrink-0 flex gap-2 items-start px-2">
+        <div class="shrink-0 flex gap-2 items-center px-2 mb-4">
+          <Show when={tagLayoutMode() === 'title'}>
+            <InlineTagsPill
+              docTags={composerTags}
+              showPlaceholder
+              class="shrink-0"
+            />
+          </Show>
           <ComposeTaskTitleEditor
             value={title}
             onChange={setTitle}
@@ -934,6 +1074,12 @@ export function ComposeTask(props: ComposeTaskProps) {
                 setErrorMessage('');
               }
             }}
+            onTagSelected={(tag) => {
+              setTagLayoutMode('title');
+              void composerTags.applyTag(tag.scope, tag.optionId);
+            }}
+            onDeleteTagsAtStart={deleteTitleTagsAtStart}
+            portalScope={portalScope()}
           />
         </div>
 
@@ -948,7 +1094,7 @@ export function ComposeTask(props: ComposeTaskProps) {
                   : initialState.content || undefined
               }
               placeholder={props.placeholder ?? 'Add description...'}
-              portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+              portalScope={portalScope()}
             />
           </Scroll>
         </div>
@@ -1004,6 +1150,9 @@ export function ComposeTask(props: ComposeTaskProps) {
                   />
                 )}
               </For>
+              <Show when={tagLayoutMode() === 'bottom'}>
+                <InlineTagsPill docTags={composerTags} showPlaceholder />
+              </Show>
             </div>
             <Modals />
           </PropertiesProvider>

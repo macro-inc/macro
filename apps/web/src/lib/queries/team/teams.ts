@@ -1,11 +1,17 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
-import { authServiceClient } from '@service-auth/client';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
+import {
+  authServiceClient,
+  type ToggleAutoJoinDomainErrorCode,
+} from '@service-auth/client';
 import type { CreateTeamRequest } from '@service-auth/generated/schemas/createTeamRequest';
 import type { PatchTeamRequest } from '@service-auth/generated/schemas/patchTeamRequest';
 import type { Team } from '@service-auth/generated/schemas/team';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
+import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
+import type { ToggleAutoJoinDomainResponse } from '@service-auth/generated/schemas/toggleAutoJoinDomainResponse';
+import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/schemas/toggleNonAdminInvitesResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -126,6 +132,145 @@ export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
   }));
 }
 
+type ToggleAutoJoinDomainArgs = { teamId: string };
+type ToggleAutoJoinDomainCallbacks = MutationCallbacks<
+  ToggleAutoJoinDomainResponse,
+  Error,
+  ToggleAutoJoinDomainArgs
+>;
+
+/** True when the failure is the backend rejecting a generic email provider
+ *  domain (e.g. gmail.com) — the one case whose message we show verbatim. */
+function isGenericDomainError(error: Error): boolean {
+  return (
+    error instanceof ThrownResultError &&
+    error.errors.some(
+      (e) =>
+        e.code ===
+        ('GENERIC_DOMAIN_NOT_ALLOWED' satisfies ToggleAutoJoinDomainErrorCode)
+    )
+  );
+}
+
+export function useToggleAutoJoinDomainMutation(
+  callbacks?: ToggleAutoJoinDomainCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: async (_args: ToggleAutoJoinDomainArgs) =>
+      await throwOnErr(() => authServiceClient.toggleTeamAutoJoinDomain()),
+
+    ...withCallbacks<
+      ToggleAutoJoinDomainResponse,
+      Error,
+      ToggleAutoJoinDomainArgs
+    >(
+      {
+        onSuccess: (data, { teamId }) => {
+          // The response carries the authoritative new value — reflect it
+          // in the cached team right away so the switch doesn't lag behind
+          // the refetch, then invalidate as usual.
+          const applyDomain = (old: TeamWithMembers | null | undefined) =>
+            old
+              ? {
+                  ...old,
+                  team: {
+                    ...old.team,
+                    auto_join_domain: data.auto_join_domain ?? null,
+                  },
+                }
+              : old;
+          queryClient.setQueryData<TeamWithMembers | null>(
+            teamKeys.detail(teamId).queryKey,
+            applyDomain
+          );
+          queryClient.setQueryData<TeamWithMembers | null>(
+            teamKeys.currentTeam.queryKey,
+            applyDomain
+          );
+          invalidateTeam(teamId);
+          invalidateUserTeams();
+          toast.success(
+            data.auto_join_domain
+              ? `Auto-join enabled for @${data.auto_join_domain}`
+              : 'Auto-join disabled'
+          );
+        },
+
+        onError: (error) => {
+          console.error('Failed to toggle team auto-join', error);
+          toast.failure(
+            isGenericDomainError(error)
+              ? error.message
+              : 'Failed to update auto-join'
+          );
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type ToggleNonAdminInvitesArgs = { teamId: string };
+type ToggleNonAdminInvitesCallbacks = MutationCallbacks<
+  ToggleNonAdminInvitesResponse,
+  Error,
+  ToggleNonAdminInvitesArgs
+>;
+
+export function useToggleNonAdminInvitesMutation(
+  callbacks?: ToggleNonAdminInvitesCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: async (_args: ToggleNonAdminInvitesArgs) =>
+      await throwOnErr(() => authServiceClient.toggleTeamNonAdminInvites()),
+
+    ...withCallbacks<
+      ToggleNonAdminInvitesResponse,
+      Error,
+      ToggleNonAdminInvitesArgs
+    >(
+      {
+        onSuccess: (data, { teamId }) => {
+          // The response carries the authoritative new value - reflect it
+          // in the cached team right away so the switch doesn't lag behind
+          // the refetch, then invalidate as usual.
+          const applySetting = (old: TeamWithMembers | null | undefined) =>
+            old
+              ? {
+                  ...old,
+                  team: {
+                    ...old.team,
+                    allow_non_admin_invites: data.allow_non_admin_invites,
+                  },
+                }
+              : old;
+          queryClient.setQueryData<TeamWithMembers | null>(
+            teamKeys.detail(teamId).queryKey,
+            applySetting
+          );
+          queryClient.setQueryData<TeamWithMembers | null>(
+            teamKeys.currentTeam.queryKey,
+            applySetting
+          );
+          invalidateTeam(teamId);
+          invalidateUserTeams();
+          toast.success(
+            data.allow_non_admin_invites
+              ? 'All members can now invite'
+              : 'Inviting is now limited to admins'
+          );
+        },
+
+        onError: (error) => {
+          console.error('Failed to toggle member invites', error);
+          toast.failure('Failed to update member invites');
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
 type DeleteTeamArgs = { teamId: string };
 type DeleteTeamContext = { previousTeams: Team[] | undefined };
 type DeleteTeamCallbacks = MutationCallbacks<
@@ -236,6 +381,9 @@ export function useCreateTeamWithInvitesMutation(
               slug: 'MACRO', // optimisitc slug
               owner_id: userInfo.userId,
               crm_enabled: false,
+              auto_join_domain: null,
+              enterprise: false,
+              allow_non_admin_invites: true,
             };
 
             queryClient.setQueryData<Team[]>(

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::*;
 
 #[sqlx::test(
@@ -38,6 +40,31 @@ async fn test_thread_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()>
     let thread = repo.thread_by_id(thread_id).await?;
 
     assert!(thread.is_none(), "Non-existent thread should return None");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn moving_thread_to_project_advances_thread_timestamp(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
+    let new_project_id = "proj-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let repo = EmailPgRepo::new(pool);
+    let original_updated_at = repo.thread_by_id(thread_id).await?.unwrap().updated_at;
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(
+        repo.update_thread_project(thread_id, Some(new_project_id))
+            .await?
+    );
+
+    let updated_thread = repo.thread_by_id(thread_id).await?.unwrap();
+    assert_eq!(updated_thread.project_id.as_deref(), Some(new_project_id));
+    assert!(updated_thread.updated_at > original_updated_at);
 
     Ok(())
 }
@@ -193,6 +220,80 @@ async fn test_messages_by_thread_id_paginated_fields_populated(
     assert!(middle.is_read);
     assert!(middle.is_sent);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread"))
+)]
+async fn test_latest_content_messages_are_batched_and_exclude_drafts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let thread_2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let draft_id = Uuid::parse_str("ffffffff-aaaa-0001-aaaa-ffffffffffff")?;
+    sqlx::query(
+        r#"
+        INSERT INTO email_messages
+            (id, thread_id, link_id, internal_date_ts, subject, is_draft, created_at, updated_at)
+        VALUES ($1, $2, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                '2025-03-01 00:00:00+00', 'private draft', true, NOW(), NOW())
+        "#,
+    )
+    .bind(draft_id)
+    .bind(thread_1)
+    .execute(&pool)
+    .await?;
+
+    let repo = EmailPgRepo::new(pool);
+    let rows = repo
+        .latest_content_message_rows(&[thread_1, thread_2])
+        .await?;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        rows.iter()
+            .find(|row| row.thread_db_id == thread_1)
+            .and_then(|row| row.provider_id.as_deref()),
+        Some("msg-1-newest")
+    );
+
+    assert!(rows.iter().all(|row| row.db_id != draft_id));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread"))
+)]
+async fn test_latest_content_message_uses_id_as_timestamp_tiebreaker(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let lower_id = Uuid::parse_str("22222222-aaaa-0002-aaaa-222222222222")?;
+    let higher_id = Uuid::parse_str("22222222-aaaa-0003-aaaa-222222222222")?;
+    for (id, subject) in [(lower_id, "lower"), (higher_id, "higher")] {
+        sqlx::query(
+            r#"
+            INSERT INTO email_messages
+                (id, thread_id, link_id, internal_date_ts, subject, created_at, updated_at)
+            VALUES ($1, $2, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                    '2025-03-01 00:00:00+00', $3, NOW(), NOW())
+            "#,
+        )
+        .bind(id)
+        .bind(thread_id)
+        .bind(subject)
+        .execute(&pool)
+        .await?;
+    }
+
+    let repo = EmailPgRepo::new(pool);
+    let rows = repo.latest_content_message_rows(&[thread_id]).await?;
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].db_id, higher_id);
     Ok(())
 }
 

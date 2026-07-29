@@ -8,7 +8,7 @@
 import { TableNode } from '@lexical/table';
 import { mergeRegister } from '@lexical/utils';
 import type { LexicalEditor } from 'lexical';
-import { MIN_COLUMN_WIDTH } from '../../component/misc/TableCellResizer';
+import { MIN_COLUMN_WIDTH } from './tableCellResize';
 
 function registerTableCellResizerPlugin(editor: LexicalEditor) {
   return mergeRegister(

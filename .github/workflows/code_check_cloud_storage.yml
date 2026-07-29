@@ -103,9 +103,23 @@ jobs:
         set -euo pipefail
 
         # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|\.sqlx/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
+        # `.sqlx/` is deliberately not in this list: the test job compiles queries against
+        # live Postgres (SQLX_OFFLINE is unset there), so `.sqlx` contents cannot change
+        # test outcomes, and a query change always comes with a source change in the
+        # owning crate, which the package filter below already maps.
+        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
           echo "Workspace-level change detected; running all tests"
           echo "nextest_filter=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # A diff touching only `.sqlx/` needs no tests at all — without this it would
+        # fall through to the empty-filter "run everything" fallback below. `none()`
+        # selects zero tests, which `--no-tests=pass` treats as success. The `-s` guard
+        # keeps an empty changed-files list (unknown merge-base) on the full-suite path.
+        if [ -s /tmp/changed-files ] && ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
+          echo "Only .sqlx changes detected; running no tests"
+          echo "nextest_filter=none()" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -137,9 +151,7 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: rust
-        path: |-
-          /home/runner/.cache/sccache
-          /nix
+        path: /nix
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -148,10 +160,34 @@ jobs:
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
         dev-shell: 'true'
-    - name: Point sccache at the cache volume
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
-        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
-        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - name: validate Doppler configs
       if: needs.path-check.outputs.doppler_config_bins != ''
       run: |
@@ -242,9 +278,7 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: rust
-        path: |-
-          /home/runner/.cache/sccache
-          /nix
+        path: /nix
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -253,10 +287,34 @@ jobs:
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
         dev-shell: 'true'
-    - name: Point sccache at the cache volume
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
-        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
-        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - name: configure postgres for concurrent tests
       run: |
         postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg16" { print $1; exit }')"

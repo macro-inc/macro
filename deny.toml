@@ -199,15 +199,17 @@ deny = [
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
+    "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
     "native_app_server",         # Dev tooling only
     "notification_sandbox",      # This is not production code its just tooling
+    "projects",                  # Dev logging only
+    "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
-    "tracing-web",               # External WASM tracing layer
-    "loom",                      # External concurrency testing dependency
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
     "tracing-panic",             # External crate allowed to use tracing-subscriber
     "tracing-tree",
+    "tracing-web",               # External WASM tracing layer
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },
 ]
 

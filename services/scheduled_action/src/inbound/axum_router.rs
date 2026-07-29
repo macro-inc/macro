@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{FromRef, Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::Utc;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::models::{
     ActionExecutionRecord, AlreadyRunningError, CreateScheduledAction, InProgressExecution,
@@ -16,34 +18,51 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ScheduledActionService;
 
-pub struct ScheduledActionRouterState<S> {
+pub struct ScheduledActionRouterState<S, Auth> {
     pub service: Arc<S>,
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S> Clone for ScheduledActionRouterState<S> {
+impl<S, Auth> Clone for ScheduledActionRouterState<S, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: Arc::clone(&self.service),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-pub fn scheduled_action_router<S, St>(state: ScheduledActionRouterState<S>) -> Router<St>
+impl<S, Auth> FromRef<ScheduledActionRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &ScheduledActionRouterState<S, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+pub fn scheduled_action_router<S, Auth, St>(
+    state: ScheduledActionRouterState<S, Auth>,
+) -> Router<St>
 where
     S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
     St: Send + Sync,
 {
     Router::new()
         .route(
             "/scheduled-actions",
-            get(list_actions::<S>).post(create_action::<S>),
+            get(list_actions::<S, Auth>).post(create_action::<S, Auth>),
         )
         .route(
             "/scheduled-actions/{id}",
-            put(update_action::<S>).delete(delete_action::<S>),
+            put(update_action::<S, Auth>).delete(delete_action::<S, Auth>),
         )
-        .route("/scheduled-actions/{id}/execute", post(execute_action::<S>))
-        .route("/scheduled-actions/{id}/history", get(list_history::<S>))
+        .route(
+            "/scheduled-actions/{id}/execute",
+            post(execute_action::<S, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/history",
+            get(list_history::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -72,9 +91,12 @@ pub async fn health() -> impl IntoResponse {
         (status = 500, body = String),
     )
 )]
-pub async fn create_action<S: ScheduledActionService + Send + Sync + 'static>(
-    State(state): State<ScheduledActionRouterState<S>>,
-    user: MacroUserExtractor,
+pub async fn create_action<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<CreateScheduledAction>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let now = Utc::now();
@@ -84,7 +106,7 @@ pub async fn create_action<S: ScheduledActionService + Send + Sync + 'static>(
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: None,
-        owner: user.macro_user_id,
+        owner: user.authorization.user.macro_user_id.clone(),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -111,11 +133,17 @@ pub async fn create_action<S: ScheduledActionService + Send + Sync + 'static>(
         (status = 500, body = String),
     )
 )]
-pub async fn list_actions<S: ScheduledActionService + Send + Sync + 'static>(
-    State(state): State<ScheduledActionRouterState<S>>,
-    user: MacroUserExtractor,
+pub async fn list_actions<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    let actions = state.service.get_actions(user.macro_user_id).await?;
+    let actions = state
+        .service
+        .get_actions(user.authorization.user.macro_user_id.clone())
+        .await?;
     Ok(Json(actions))
 }
 
@@ -133,9 +161,12 @@ pub async fn list_actions<S: ScheduledActionService + Send + Sync + 'static>(
         (status = 500, body = String),
     )
 )]
-pub async fn update_action<S: ScheduledActionService + Send + Sync + 'static>(
-    State(state): State<ScheduledActionRouterState<S>>,
-    user: MacroUserExtractor,
+pub async fn update_action<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateScheduledAction>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
@@ -146,7 +177,7 @@ pub async fn update_action<S: ScheduledActionService + Send + Sync + 'static>(
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: Some(id),
-        owner: user.macro_user_id.clone(),
+        owner: user.authorization.user.macro_user_id.clone(),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -160,7 +191,7 @@ pub async fn update_action<S: ScheduledActionService + Send + Sync + 'static>(
     };
     let updated = state
         .service
-        .update_action(action, user.macro_user_id)
+        .update_action(action, user.authorization.user.macro_user_id.clone())
         .await?;
     Ok(Json(updated))
 }
@@ -178,12 +209,18 @@ pub async fn update_action<S: ScheduledActionService + Send + Sync + 'static>(
         (status = 500, body = String),
     )
 )]
-pub async fn delete_action<S: ScheduledActionService + Send + Sync + 'static>(
-    State(state): State<ScheduledActionRouterState<S>>,
-    user: MacroUserExtractor,
+pub async fn delete_action<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    state.service.delete_action(&id, user.macro_user_id).await?;
+    state
+        .service
+        .delete_action(&id, user.authorization.user.macro_user_id.clone())
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -201,14 +238,17 @@ pub async fn delete_action<S: ScheduledActionService + Send + Sync + 'static>(
         (status = 500, body = String),
     )
 )]
-pub async fn execute_action<S: ScheduledActionService + Send + Sync + 'static>(
-    State(state): State<ScheduledActionRouterState<S>>,
-    user: MacroUserExtractor,
+pub async fn execute_action<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let execution = state
         .service
-        .execute_action_now(&id, user.macro_user_id)
+        .execute_action_now(&id, user.authorization.user.macro_user_id.clone())
         .await?;
     Ok(Json(execution))
 }
@@ -226,14 +266,17 @@ pub async fn execute_action<S: ScheduledActionService + Send + Sync + 'static>(
         (status = 500, body = String),
     )
 )]
-pub async fn list_history<S: ScheduledActionService + Send + Sync + 'static>(
-    State(state): State<ScheduledActionRouterState<S>>,
-    user: MacroUserExtractor,
+pub async fn list_history<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let records = state
         .service
-        .get_execution_records(&id, user.macro_user_id)
+        .get_execution_records(&id, user.authorization.user.macro_user_id.clone())
         .await?;
     Ok(Json(records))
 }

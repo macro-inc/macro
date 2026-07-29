@@ -167,6 +167,24 @@ const processService = async (
 		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 		console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
 
+		// Orval bug workaround: with input.filters, excluded schemas are not
+		// generated, but the schemas barrel still re-exports them. Drop barrel
+		// exports whose target file does not exist.
+		const schemasIndex = path.join(generatedDir, "schemas", "index.ts");
+		if (await Bun.file(schemasIndex).exists()) {
+			const lines = (await Bun.file(schemasIndex).text()).split("\n");
+			const kept: string[] = [];
+			for (const line of lines) {
+				const target = line.match(/^export \* from ['"]\.\/(.+)['"];$/);
+				const file = target
+					? Bun.file(path.join(generatedDir, "schemas", `${target[1]}.ts`))
+					: null;
+				if (file && !(await file.exists())) continue;
+				kept.push(line);
+			}
+			await write(schemasIndex, kept.join("\n"));
+		}
+
 		// Special handling for document-cognition: generate AI tool schema types.
 		if (service.name === "document-cognition") {
 			stepStart = performance.now();

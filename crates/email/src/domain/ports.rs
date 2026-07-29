@@ -2,9 +2,9 @@ use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
     CreatedDraft, EmailErr, EmailFilter, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-    ParsedAddresses, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+    ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType,
+    ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
+    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -111,6 +111,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_id: Uuid,
         offset: i64,
         limit: i64,
+    ) -> impl Future<Output = Result<Vec<MessageRow>, Self::Err>> + Send;
+
+    /// Fetch the newest non-draft content message for each requested thread.
+    fn latest_content_message_rows(
+        &self,
+        thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<MessageRow>, Self::Err>> + Send;
 
     /// Find macro reply drafts (across the given inboxes) that reply to any of
@@ -246,6 +252,14 @@ pub trait EmailRepo: Send + Sync + 'static {
         is_read: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Update the denormalized thread-level read status, verified by link_id.
+    fn update_thread_read_status(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        is_read: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the starred status for a batch of messages, verified by link_id.
     fn update_message_starred_status_batch(
         &self,
@@ -281,6 +295,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Advance a project's activity timestamp.
+    fn touch_project_updated_at(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Upsert an email filter (by address or domain) for a link.
     fn upsert_email_filter(
@@ -325,6 +345,15 @@ pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
             EmailErr,
         >,
     > + Send;
+}
+
+/// Read-only domain service used to hydrate lightweight email content edges.
+pub trait EmailContentService: Send + Sync + 'static {
+    /// Fetch the newest non-draft parsed content message for each authorized thread.
+    fn get_latest_messages_parsed(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, ParsedMessage>, EmailErr>> + Send;
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
@@ -427,10 +456,10 @@ pub trait EmailService: Send + Sync + 'static {
         link: &Link,
     ) -> impl Future<Output = Result<Vec<LinkLabel>, EmailErr>> + Send;
 
-    /// Add or remove a label from all messages in a thread.
+    /// Add or remove a label from all messages in a thread. Provider sync
+    /// happens asynchronously via the gmail_ops queue.
     fn update_thread_labels(
         &self,
-        access_token: &str,
         link: &Link,
         thread_id: Uuid,
         label_id: Uuid,
@@ -624,7 +653,6 @@ impl EmailService for NoOpEmailService {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &Link,
         _thread_id: Uuid,
         _label_id: Uuid,
@@ -654,6 +682,15 @@ impl EmailService for NoOpEmailService {
     }
 
     async fn list_email_filters(&self, _link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
+impl EmailContentService for NoOpEmailService {
+    async fn get_latest_messages_parsed(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
         Err(no_op_email_err())
     }
 }

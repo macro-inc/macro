@@ -13,16 +13,6 @@ import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './components/app/FatalError';
 import { Root } from './routes/Root';
 
-declare global {
-  interface Window {
-    __MACRO_BROWSER_FETCH__?: typeof window.fetch;
-    __MACRO_RUNTIME_ENTRY_URL__?: string;
-  }
-}
-
-window.__MACRO_BROWSER_FETCH__ = window.fetch.bind(window);
-window.__MACRO_RUNTIME_ENTRY_URL__ = import.meta.url;
-
 // Override global fetch with platformFetch for Tauri compatibility
 // Skip localhost requests (dev server) to avoid breaking HMR
 if (isTauri()) {

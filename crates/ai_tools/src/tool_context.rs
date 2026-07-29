@@ -8,13 +8,21 @@ use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
 use channels::domain::ports::ChannelEventDispatcher;
 use channels::domain::service::{NoopChannelEventDispatcher, NoopChannelReferenceSharePermissions};
+use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
 use channels::domain::{list_service::ChannelListServiceImpl, service::ChannelServiceImpl};
 use channels::inbound::toolset::ChannelToolContext;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels::outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
+    pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+    sqs_search_indexer::SqsChannelSearchIndexer,
+};
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
 use chat::outbound::postgres::PgChatRepo;
 use connection::domain::ports::ConnectionService;
+use connection_gateway_client::ConnectionGatewayClient;
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use crm::inbound::toolset::CrmToolContext;
 use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
@@ -27,16 +35,19 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use lexical_mention_extractor::LexicalMentionExtractor;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 use system_properties::{
-    PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
+    PgSystemPropertiesRepository, PriorityOption, StatusOption, SystemPropertiesService as _,
     SystemPropertiesServiceImpl,
 };
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
+use tokio_util::task::TaskTracker;
 
 pub use ai_toolset::RequestContext;
 
@@ -71,6 +82,10 @@ pub type ToolEmailService = EmailServiceImpl<
     ToolEamService,
 >;
 
+/// Event broker used by AI tools, with spawned publish tasks tracked for
+/// graceful shutdown by the hosting process.
+pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+
 /// Type alias for the send-capable email service implementation used by user
 /// tools. Carries the real event broker: these tools mutate email state, and
 /// the Gmail-echo suppression means events skipped here are never recovered.
@@ -80,7 +95,7 @@ pub type ToolUserEmailService = EmailServiceImpl<
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    ToolEventBroker,
 >;
 
 /// Type alias for the channel list service implementation.
@@ -90,10 +105,11 @@ pub type ToolCommsService = ChannelListServiceImpl<
     frecency::outbound::postgres::FrecencyPgStorage,
 >;
 
-/// A channel event dispatcher injected into the tool service. Defaults to a
-/// no-op; hosts that own the realtime/notification clients (e.g. the
-/// document-storage service running the Macro agent) inject a real
-/// side-effect-wired dispatcher so agent-sent messages notify and broadcast.
+/// A channel event dispatcher injected into the tool service, wired via
+/// [`build_channel_tool_context_with_side_effects`] (or a host-owned
+/// side-effect service, as in the document-storage service) so agent-sent
+/// messages notify and broadcast. The no-op variant exists for tests and
+/// hosts without the side-effect clients.
 pub type ToolChannelEventDispatcher = std::sync::Arc<dyn ChannelEventDispatcher>;
 
 /// Type alias for the channel messages service implementation used by AI tools.
@@ -109,16 +125,74 @@ pub type ToolChannelToolContext =
     ChannelToolContext<ToolChannelMessagesService, ToolEntityAccessService>;
 
 /// Build the channel AI tool context from a Postgres pool, with no side
-/// effects (no notifications/realtime) for hosts that lack those clients.
+/// effects (no notifications/realtime/search indexing) — messages sent
+/// through it are persisted but never notify anyone. Only for tests and
+/// hosts that genuinely lack the side-effect clients; production hosts
+/// should use [`build_channel_tool_context_with_side_effects`].
 /// `lexical_client` derives the mention list for messages the agent sends,
 /// since bot-authored content arrives without the editor-tracked mentions.
-pub fn build_channel_tool_context(
+pub fn build_channel_tool_context_without_side_effects(
     pool: sqlx::PgPool,
     lexical_client: Arc<lexical_client::LexicalClient>,
 ) -> ToolChannelToolContext {
     build_channel_tool_context_with_dispatcher(
         pool,
         std::sync::Arc::new(NoopChannelEventDispatcher),
+        lexical_client,
+    )
+}
+
+/// Clients a host provides to wire the real channel side effects for AI
+/// tools. Queue names (notification ingress, contacts, search events) are
+/// resolved through `macro_queues`, so hosts only supply the shared clients.
+pub struct ChannelSideEffectClients {
+    /// Connection gateway client used to fan realtime updates out to
+    /// connected clients.
+    pub connection_gateway: Arc<ConnectionGatewayClient>,
+    /// SQS client used for the notification-ingress, contacts, and
+    /// search-event queues.
+    pub sqs: aws_sdk_sqs::Client,
+    /// Broker publishing channel events to the `macro.channels` topic.
+    pub macro_event_broker: ToolEventBroker,
+}
+
+/// Build the channel AI tool context dispatching the same side effects as the
+/// document-storage channel API: realtime updates via the connection gateway,
+/// notifications via the notification-ingress queue, search indexing via the
+/// search-event queue, contact sync via the contacts queue, and channel
+/// events on the macro event broker. Hosts that let the agent send channel
+/// messages need this so mentions and replies notify their recipients.
+pub fn build_channel_tool_context_with_side_effects(
+    pool: sqlx::PgPool,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+    clients: ChannelSideEffectClients,
+) -> ToolChannelToolContext {
+    let notification_ingress = Arc::new(SqsNotificationIngress {
+        queue: notification::outbound::queue::SqsQueue::new(
+            clients.sqs.clone(),
+            macro_queues::NotificationIngressQueue::new().to_string(),
+        ),
+    });
+    let contacts_ingress = Arc::new(SqsContactsIngress {
+        queue: SqsContactsQueue::new(
+            clients.sqs.clone(),
+            macro_queues::ContactsQueue::new().to_string(),
+        ),
+    });
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let search_sqs =
+        Arc::new(sqs_client::SQS::new(clients.sqs).search_event_queue(&search_event_queue));
+    let side_effects = ChannelSideEffectService::new(
+        PgChannelSideEffectContext::new(pool.clone()),
+        ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway),
+        NotificationChannelSender::new(notification_ingress),
+        SqsChannelSearchIndexer::new(search_sqs),
+        ContactsChannelDispatcher::new(contacts_ingress),
+    )
+    .with_macro_event_broker(clients.macro_event_broker);
+    build_channel_tool_context_with_dispatcher(
+        pool,
+        Arc::new(SpawnedChannelEventDispatcher::new(side_effects)),
         lexical_client,
     )
 }
@@ -171,6 +245,12 @@ pub type ToolTeamService = TeamRepositoryImpl;
 
 /// Type alias for the team AI tool context.
 pub type ToolTeamToolContext = TeamToolContext<ToolTeamService, ToolEntityAccessService>;
+
+/// Build the team repository used for roster lookups (e.g. resolving
+/// imported items' emails to teammates).
+pub fn build_team_repository(pool: sqlx::PgPool) -> Arc<ToolTeamService> {
+    Arc::new(TeamRepositoryImpl::new(pool))
+}
 
 /// Build the team AI tool context from a Postgres pool.
 pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
@@ -256,16 +336,11 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                 &user_id,
                 None,
                 entity_id,
-                properties::access_entity_type(models_properties::EntityType::Task),
+                model_entity::EntityType::Document,
             )
             .await?;
-        let access = properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            models_properties::EntityType::Task,
-        )?;
-
         self.properties
-            .set_entity_property(&access, property_definition_id, value)
+            .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
             .map(|_| ())
             .map_err(Into::into)
@@ -487,24 +562,6 @@ impl notification::domain::ports::NotificationQueue for ToolNotificationQueue {
             ToolNotificationQueue::NoOp => Ok(()),
         }
     }
-
-    async fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
-    ) -> Result<(), rootcause::Report> {
-        match self {
-            ToolNotificationQueue::Sqs(queue) => {
-                notification::domain::ports::NotificationQueue::delay_message(
-                    queue,
-                    receipt_handle,
-                    delay,
-                )
-                .await
-            }
-            ToolNotificationQueue::NoOp => Ok(()),
-        }
-    }
 }
 
 /// Type alias for the entity access management service implementation used by AI tools
@@ -521,7 +578,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    ToolEventBroker,
 >;
 
 /// Type alias for the entity access service implementation
@@ -545,7 +602,7 @@ pub type ToolSoupService = SoupImpl<
     ToolFrecencyService,
     email::domain::ports::ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
-    call::domain::ports::NoOpCallRecordQueryService,
+    ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
     ToolForeignEntityService,
 >;
@@ -574,6 +631,10 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
 >;
+
+/// Imported-document property enrichment backed by the AI tool host's Properties service.
+pub type ToolDocumentPropertiesApplicator =
+    import::outbound::document_properties::DocumentPropertiesApplicator<ToolPropertiesService>;
 
 /// Type alias for the properties tool context
 pub type ToolPropertiesToolContext =
@@ -640,8 +701,7 @@ pub type ToolCallService = CallServiceImpl<
 pub type ToolCallRecordQueryService = CallRecordQueryServiceImpl<PgCallRepo>;
 
 /// Type alias for the call tool context
-pub type ToolCallToolContext =
-    CallToolContext<ToolCallService, ToolCallRecordQueryService, ToolEntityAccessService>;
+pub type ToolCallToolContext = CallToolContext<ToolCallService, ToolEntityAccessService>;
 
 /// Type alias for the notification reader service used by AI tools.
 pub type ToolNotificationService = notification::domain::service::NotificationReaderService<
@@ -659,6 +719,308 @@ pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManag
 
 /// Type alias for the chat tool context
 pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
+
+/// Creates the Macro entities the import pipeline's fixed mapping calls for
+/// (linear → task, notion → md, slack → channel), reusing the same document
+/// creator and channel service the other AI tools run on. Task system
+/// properties (status, priority, due date, assignee) and channel teammate
+/// invites are applied best-effort — an enrichment that fails never fails
+/// the import itself.
+#[derive(Clone)]
+pub struct ToolEntityCreator {
+    /// Backend-owned document creation use case (shared with document tools).
+    pub document_creator:
+        documents::inbound::toolset::DefaultDocumentToolCreator<ToolDocumentService>,
+    /// Team lookup so imported tasks get the user's team task numbering.
+    pub entity_access_service: Arc<ToolEntityAccessService>,
+    /// Channel creation service.
+    pub channel_service: Arc<ToolChannelMessagesService>,
+    /// Task system-property writes (status / priority / due date / assignees).
+    pub task_properties: TaskPropertiesAdapter,
+    /// Notion document property and tag enrichment.
+    pub document_properties: ToolDocumentPropertiesApplicator,
+    /// Team roster lookups, to resolve source-tool emails to teammates.
+    pub team_repository: Arc<ToolTeamService>,
+}
+
+impl ToolEntityCreator {
+    async fn create_doc(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        markdown: &str,
+        is_task: bool,
+        team_id: Option<uuid::Uuid>,
+    ) -> anyhow::Result<String> {
+        use std::str::FromStr as _;
+        let document = documents::domain::create::NewPlainTextDocument::builder(
+            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
+        )
+        .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
+        .text(markdown.to_string())
+        .task_flag(is_task, team_id)
+        .build()?;
+        let created = self
+            .document_creator
+            .create_plain_text(user.clone(), document)
+            .await?;
+        Ok(created
+            .into_response()
+            .document_response
+            .document_metadata
+            .metadata
+            .document_id
+            .to_string())
+    }
+
+    /// The user's team id (when they have one) and its member ids.
+    async fn team_roster(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> (Option<uuid::Uuid>, Vec<MacroUserIdStr<'static>>) {
+        use teams::domain::team_repo::TeamRepository as _;
+        let team_id = match self.entity_access_service.get_user_team(user).await {
+            Ok(team) => team.map(|team| team.team_id),
+            Err(e) => {
+                tracing::warn!(%user, error = ?e, "failed to get user's team");
+                None
+            }
+        };
+        let Some(team_id) = team_id else {
+            return (None, Vec::new());
+        };
+        match self.team_repository.get_team_members(&team_id).await {
+            Ok(members) => (
+                Some(team_id),
+                members
+                    .into_iter()
+                    .map(|member| macro_user_id::cowlike::CowLike::into_owned(member.user_id))
+                    .collect(),
+            ),
+            Err(e) => {
+                tracing::warn!(%user, %team_id, error = ?e, "failed to list team members");
+                (Some(team_id), Vec::new())
+            }
+        }
+    }
+
+    /// Apply imported task properties best-effort: each one logs and is
+    /// skipped on failure so a bad label or unknown assignee never sinks
+    /// the import.
+    async fn apply_task_properties(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_id: &str,
+        properties: &import::domain::ports::ImportedTaskProperties,
+        roster: &[MacroUserIdStr<'static>],
+    ) {
+        use models_properties::api::requests::SetPropertyValue;
+        use system_properties::SystemPropertyKey;
+
+        if let Some(status) = properties.status.as_deref()
+            && let Err(e) = self
+                .task_properties
+                .update_task_status(task_id, status)
+                .await
+        {
+            tracing::warn!(task_id, status, error = ?e, "failed to set imported task status");
+        }
+
+        if let Some(priority) = properties.priority.as_deref() {
+            let option = match priority {
+                "Low" => Some(PriorityOption::Low),
+                "Medium" => Some(PriorityOption::Medium),
+                "High" => Some(PriorityOption::High),
+                "Urgent" => Some(PriorityOption::Urgent),
+                _ => None,
+            };
+            match option {
+                Some(option) => {
+                    if let Err(e) = self
+                        .task_properties
+                        .set_entity_property(
+                            user.as_ref(),
+                            task_id,
+                            SystemPropertyKey::Priority.uuid(),
+                            Some(SetPropertyValue::SelectOption {
+                                option_id: option.uuid(),
+                            }),
+                        )
+                        .await
+                    {
+                        tracing::warn!(task_id, priority, error = ?e, "failed to set imported task priority");
+                    }
+                }
+                None => tracing::warn!(task_id, priority, "unknown imported task priority label"),
+            }
+        }
+
+        if let Some(due_date) = properties.due_date.as_deref() {
+            match chrono::NaiveDate::parse_from_str(due_date, "%Y-%m-%d") {
+                Ok(date) => {
+                    let value = date.and_time(chrono::NaiveTime::MIN).and_utc();
+                    if let Err(e) = self
+                        .task_properties
+                        .set_entity_property(
+                            user.as_ref(),
+                            task_id,
+                            SystemPropertyKey::DueDate.uuid(),
+                            Some(SetPropertyValue::Date { value }),
+                        )
+                        .await
+                    {
+                        tracing::warn!(task_id, due_date, error = ?e, "failed to set imported task due date");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(task_id, due_date, error = ?e, "unparseable imported task due date");
+                }
+            }
+        }
+
+        if let Some(email) = properties.assignee_email.as_deref() {
+            // Only assign teammates — an email with no roster match (an
+            // external collaborator, a bot) is silently skipped.
+            let Some(assignee) = roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+            else {
+                return;
+            };
+            let reference = models_properties::EntityReference::new(
+                assignee.as_ref().to_string(),
+                models_properties::EntityType::User,
+            );
+            if let Err(e) = self
+                .task_properties
+                .set_entity_property(
+                    user.as_ref(),
+                    task_id,
+                    SystemPropertyKey::Assignees.uuid(),
+                    Some(SetPropertyValue::MultiEntityReference {
+                        references: vec![reference],
+                    }),
+                )
+                .await
+            {
+                tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
+            }
+        }
+    }
+}
+
+impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn create_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        markdown: &str,
+        properties: &import::domain::ports::ImportedTaskProperties,
+    ) -> anyhow::Result<String> {
+        // Same team resolution as the CreateDocument tool, so imported tasks
+        // number correctly within the user's team; the roster doubles as the
+        // assignee-email lookup.
+        let (team_id, roster) = self.team_roster(user).await;
+        let task_id = self.create_doc(user, name, markdown, true, team_id).await?;
+        self.apply_task_properties(user, &task_id, properties, &roster)
+            .await;
+        Ok(task_id)
+    }
+
+    async fn create_markdown_doc(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        markdown: &str,
+        properties: &import::domain::ports::ImportedDocumentProperties,
+    ) -> anyhow::Result<String> {
+        let document_id = self.create_doc(user, name, markdown, false, None).await?;
+        let access = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &document_id,
+                model_entity::EntityType::Document,
+            )
+            .await
+        {
+            Ok(access) => access,
+            Err(error) => {
+                tracing::warn!(
+                    document_id,
+                    error = ?error,
+                    "failed to authorize imported document properties"
+                );
+                return Ok(document_id);
+            }
+        };
+        self.document_properties
+            .apply(user, &access, &document_id, properties)
+            .await;
+        Ok(document_id)
+    }
+
+    async fn create_channel(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        team_id: Option<uuid::Uuid>,
+        participant_emails: &[String],
+    ) -> anyhow::Result<String> {
+        use channels::domain::ports::ChannelService as _;
+        // Teammates who were in the source channel join the Macro one; emails
+        // with no roster match (external collaborators, bots) are skipped.
+        let (_, roster) = self.team_roster(user).await;
+        let mut participants: std::collections::HashSet<MacroUserIdStr<'static>> =
+            std::iter::once(user.clone()).collect();
+        for email in participant_emails {
+            if let Some(member) = roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+            {
+                participants.insert(member.clone());
+            }
+        }
+        let request = channels::domain::models::CreateChannelRequest {
+            name: Some(name.to_string()),
+            channel_type: if team_id.is_some() {
+                channels::domain::models::ChannelType::Team
+            } else {
+                channels::domain::models::ChannelType::Public
+            },
+            team_id,
+            // The creator is always included (the service requires a
+            // non-empty participant list and the repo filters out the
+            // owner), plus any teammates matched by email above. Explicit
+            // membership mirrors the source channel — never the whole team.
+            auto_join_team: false,
+            participants,
+        };
+        let response = self
+            .channel_service
+            .create_channel(
+                channels::domain::models::Sender::new_from_user(user.clone()),
+                None,
+                request,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to create channel: {e:?}"))?;
+        Ok(response.id)
+    }
+}
+
+/// Type alias for the import service implementation used by AI tools.
+pub type ToolImportService = import::domain::service::ImportServiceImpl<
+    import::outbound::pg_import_repo::PgImportRepo,
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    ToolEntityCreator,
+>;
+
+/// Type alias for the import tool context. Built `unwired` by the shared
+/// context builder; hosts that can run the import pipeline (DCS) replace it
+/// with a wired one after constructing the import service.
+pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
@@ -681,6 +1043,13 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
+    /// Import staging/tracking tools. `unwired` in hosts that can't build
+    /// the import service — calls there fail with a clear error.
+    pub import_tool_context: ToolImportToolContext,
+    /// Built per-request via a manual `FromRef` below so it can carry the
+    /// running chat's id — the derive's field-clone would freeze it at
+    /// startup with no chat id set.
+    #[from_ref(skip)]
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
     pub team_tool_context: ToolTeamToolContext,
@@ -706,6 +1075,26 @@ impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService, ToolEmailS
         SoupToolContext {
             service: ctx.soup_service.clone(),
             email_service: ctx.email_service.clone(),
+            self_chat_id: self_chat_id(ctx),
         }
     }
+}
+
+impl FromRef<ToolServiceContext> for ToolChatToolContext {
+    fn from_ref(ctx: &ToolServiceContext) -> Self {
+        ChatToolContext {
+            service: ctx.chat_tool_context.service.clone(),
+            entity_access_service: ctx.chat_tool_context.entity_access_service.clone(),
+            self_chat_id: self_chat_id(ctx),
+        }
+    }
+}
+
+/// Entity id of the chat this request belongs to, when the request is an
+/// interactive chat session. `None` for every other feature, in which case
+/// nothing about the running chat should be excluded/blocked.
+fn self_chat_id(ctx: &ToolServiceContext) -> Option<uuid::Uuid> {
+    matches!(ctx.usage_context.feature, ai_usage::AiFeature::Chat)
+        .then_some(ctx.usage_context.entity)
+        .flatten()
 }

@@ -4,10 +4,8 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -17,56 +15,27 @@ import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
-import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
-import { Button, Tooltip } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
-import { useSoup } from '../../soup-context';
 
-export function SoupFiltersBar() {
+export function SoupFiltersBar(props: {
+  variant?: 'default' | 'tag';
+  hasPreviewItems: boolean;
+  onPreviewEngage: () => void;
+  onPreviewOpenChange?: (open: boolean) => void;
+}) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
 
   const [filterDropdownOpen, setFilterDropdownOpen] = createSignal(false);
 
   const panel = useSplitPanelOrThrow();
-  const analytics = useAnalytics();
-  const soup = useSoup();
-  const { setPreviewOpen } = useSoupView();
-
-  const { isWideSplitPanel, previewOpen, selectedEntity } =
-    usePreviewPaneVisiblity();
-
-  const togglePreview = () => {
-    if (previewOpen()) {
-      setPreviewOpen(false);
-      soup.setPreviewEntity(undefined);
-      return;
-    }
-
-    analytics.track('preview_panel_use');
-    soup.setPreviewEntity(selectedEntity()?.id);
-    setPreviewOpen(true);
-  };
-
-  registerHotkey({
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    scopeId: panel.splitHotkeyScope,
-    description: 'Toggle preview',
-    keyDownHandler: () => {
-      togglePreview();
-      return true;
-    },
-    hotkey: 'space',
-  });
 
   const isSearchView = createMemo(() => {
     const content = panel.handle.content();
     return content.type === 'component' && content.id === 'search';
   });
+  const isTagView = createMemo(() => props.variant === 'tag');
 
   // The new inbox hides sort (it's fixed to updated_at for this view).
   const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
@@ -85,7 +54,17 @@ export function SoupFiltersBar() {
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
         <div class="flex items-start gap-1 min-w-0 flex-1">
-          <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
+          <Show
+            when={!isSearchView() && !isTagView()}
+            fallback={
+              <Show when={isTagView()} fallback={<SearchFiltersRow />}>
+                <Show when={!isNewInbox()}>
+                  <SoupViewContextSort />
+                </Show>
+                <SoupViewContextGroup />
+              </Show>
+            }
+          >
             <Show when={!isNewInbox()}>
               <SoupViewContextSort />
             </Show>
@@ -98,27 +77,15 @@ export function SoupFiltersBar() {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Tooltip
-          hotkey={
-            isWideSplitPanel() ? TOKENS.unifiedList.togglePreview : undefined
-          }
-          label={isWideSplitPanel() ? 'Preview' : 'No space for preview'}
-        >
-          <Button
-            onClick={togglePreview}
-            variant="base"
-            size="sm"
-            depth={2}
-            class="bg-surface"
-            disabled={!isWideSplitPanel()}
-          >
-            {previewOpen() ? <EyeSlashIcon /> : <EyeIcon />}
-            <span>Preview</span>
-          </Button>
-        </Tooltip>
+        <PreviewButton
+          disabled={!props.hasPreviewItems}
+          disabledLabel="No items to preview"
+          onEngage={props.onPreviewEngage}
+          onOpenChange={props.onPreviewOpenChange}
+        />
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
-      <Show when={!isSearchView()}>
+      <Show when={!isSearchView() && !isTagView()}>
         <SoupActiveFiltersBar
           filters={consolidatedFiltersList()}
           onClearAll={resetToTabDefaults}

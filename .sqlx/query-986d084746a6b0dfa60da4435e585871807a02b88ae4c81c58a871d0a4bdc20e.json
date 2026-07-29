@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            'view'::\"AccessLevel\" AS \"access_level!: AccessLevel\",\n            c.team_id AS \"team_id!\",\n            'member'::team_role AS \"team_role!: TeamRole\"\n        FROM crm_contacts ct\n        JOIN crm_companies c\n          ON c.id = ct.company_id\n        WHERE ct.id = $1\n          AND c.team_id = $2\n          AND ct.hidden = false\n          AND c.hidden = false\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_role!: TeamRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "986d084746a6b0dfa60da4435e585871807a02b88ae4c81c58a871d0a4bdc20e"
+}

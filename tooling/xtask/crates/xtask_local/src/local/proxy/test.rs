@@ -6,7 +6,7 @@ use crate::local::{inventory, repo_root};
 /// the guarantee that replaces the old hand-maintained route list.
 #[test]
 fn generates_a_route_for_every_prefixed_service() {
-    let caddy = caddyfile(Mode::Local);
+    let caddy = caddyfile(Mode::Local, false);
     for svc in inventory::RUST_SERVICES {
         let Some(prefix) = svc.path_prefix else {
             continue;
@@ -27,7 +27,7 @@ fn generates_a_route_for_every_prefixed_service() {
 /// services use `handle_path`.
 #[test]
 fn websocket_services_use_a_matcher() {
-    let caddy = caddyfile(Mode::Local);
+    let caddy = caddyfile(Mode::Local, false);
     // connection-gateway is the inventoried WebSocket service.
     assert!(caddy.contains("@connection_gateway path /connection-gateway /connection-gateway/*"));
     assert!(caddy.contains("uri strip_prefix /connection-gateway"));
@@ -35,13 +35,23 @@ fn websocket_services_use_a_matcher() {
     assert!(caddy.contains("handle_path /auth/* {"));
 }
 
+#[test]
+fn document_content_services_are_available_through_the_proxy() {
+    let caddy = caddyfile(Mode::Local, false);
+
+    assert!(caddy.contains("uri strip_prefix /sync"));
+    assert!(caddy.contains("reverse_proxy sync-service:8787"));
+    assert!(caddy.contains("handle_path /lexical/*"));
+    assert!(caddy.contains("reverse_proxy lexical-service:8096"));
+}
+
 /// The static-file block is the one route that differs by mode: LocalStack S3
 /// fan-out locally, the dev-pointed service in dev.
 #[test]
 fn static_file_block_is_mode_specific() {
-    assert!(caddyfile(Mode::Local).contains("/static-file-storage"));
-    assert!(caddyfile(Mode::Dev).contains("handle_path /static-file/*"));
-    assert!(!caddyfile(Mode::Dev).contains("/static-file-storage"));
+    assert!(caddyfile(Mode::Local, false).contains("/static-file-storage"));
+    assert!(caddyfile(Mode::Dev, false).contains("handle_path /static-file/*"));
+    assert!(!caddyfile(Mode::Dev, false).contains("/static-file-storage"));
 }
 
 /// Drift gate across the Rust↔TypeScript seam: every proxied service's prefix
@@ -66,4 +76,25 @@ fn frontend_wires_every_inventory_prefix() {
             svc.compose_name
         );
     }
+}
+
+/// The static-frontend block only appears in headless mode, and serves the
+/// mounted bundle under `/app` with an SPA fallback. Attached `run_local` keeps
+/// the dev server as the frontend origin and must not grow the block.
+#[test]
+fn static_frontend_block_is_opt_in() {
+    let headless = caddyfile(Mode::Local, true);
+    assert!(headless.contains("handle_path /app/* {"));
+    assert!(headless.contains("root * /srv/frontend"));
+    assert!(headless.contains("try_files {path} /index.html"));
+    assert!(headless.contains("redir / /app/ 302"));
+    assert!(headless.contains("handle /mailpit/*"));
+
+    let attached = caddyfile(Mode::Local, false);
+    assert!(!attached.contains("/srv/frontend"));
+    assert!(!attached.contains("redir / /app/ 302"));
+    assert!(!attached.contains("handle /mailpit/*"));
+
+    let headless_dev = caddyfile(Mode::Dev, true);
+    assert!(!headless_dev.contains("handle /mailpit/*"));
 }

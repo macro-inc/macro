@@ -1,6 +1,6 @@
 use super::SearchPaginationParams;
 use crate::api::{
-    context::SearchHandlerState,
+    context::{SearchAuthorizationService, SearchHandlerState},
     search::{
         crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
         enrich::enrich_search_response,
@@ -8,11 +8,11 @@ use crate::api::{
     },
 };
 use axum::{
-    Extension,
     extract::{self, State},
     response::Json,
 };
-use model::{response::ErrorResponse, user::UserContext};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use model::response::ErrorResponse;
 use models_search::unified::{
     UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
@@ -39,10 +39,12 @@ use std::cmp::Ordering;
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
+    let user_context = &authorization.authorization.user.user_context;
+
     tracing::info!(
         user_id = user_context.user_id,
         query = ?req.query,
@@ -54,7 +56,7 @@ pub async fn handler(
     // CRM is opt-in: only when the caller asks for it does this resolve a
     // team membership and mint a capability receipt. No membership → empty
     // CRM slice, not a failed search. See `resolve_crm_team_receipt`.
-    let crm_access = resolve_crm_team_receipt(&ctx, &user_context, req.include_crm).await?;
+    let crm_access = resolve_crm_team_receipt(&ctx, user_context, req.include_crm).await?;
 
     let document_name_term = match req.search_on {
         models_search::SearchOn::Name | models_search::SearchOn::NameContent => {
@@ -65,7 +67,7 @@ pub async fn handler(
     };
 
     let (results, next_cursor) =
-        perform_unified_search(&ctx, &user_context, crm_access.as_ref(), query_params, req).await?;
+        perform_unified_search(&ctx, user_context, crm_access.as_ref(), query_params, req).await?;
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {
@@ -76,10 +78,7 @@ pub async fn handler(
         project,
         call_record,
         crm_company,
-    } = {
-        let _span = tracing::info_span!("split_search_response_by_type").entered();
-        results.into_iter().split_search_response()
-    };
+    } = results.into_iter().split_search_response();
 
     let (
         enriched_document_results,
@@ -137,8 +136,6 @@ pub async fn handler(
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
     let results = {
-        let _span = tracing::info_span!("combine_and_sort_enriched_results").entered();
-
         let mut results = vec![];
 
         results.extend(enriched_document_results);
@@ -160,7 +157,6 @@ pub async fn handler(
 
 /// Sorts the unified results
 /// This method is so we can more easily test sorting
-#[tracing::instrument(skip(results), fields(count = results.len()))]
 fn sort_unified_search_results(
     mut results: Vec<UnifiedSearchResponseItem>,
 ) -> Vec<UnifiedSearchResponseItem> {

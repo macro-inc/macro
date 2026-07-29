@@ -442,6 +442,13 @@ pub struct ChannelFilters {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
 
+    /// Filter by whether the requesting user is an active participant of the channel.
+    /// Presence of this filter also widens the candidate set to team channels of the
+    /// user's teams that they have not joined, so `false` matches those channels.
+    /// None to ignore (participant channels only, today's default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_participant: Option<bool>,
+
     /// Filter by channel notification state.
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
     pub notification_filters: NotificationFilters,
@@ -458,6 +465,7 @@ impl IsEmpty for ChannelFilters {
             sender_ids,
             channel_types,
             importance,
+            is_participant,
             notification_filters,
         } = self;
         thread_ids.is_empty()
@@ -468,6 +476,7 @@ impl IsEmpty for ChannelFilters {
             && sender_ids.is_empty()
             && channel_types.is_empty()
             && importance.is_none()
+            && is_participant.is_none()
             && notification_filters.is_empty()
     }
 }

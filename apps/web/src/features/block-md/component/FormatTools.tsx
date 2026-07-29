@@ -14,12 +14,20 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
+import {
+  $isTableCellNode,
+  $isTableSelection,
+  $mergeCells,
+  $unmergeCell,
+} from '@lexical/table';
 import type { ElementName } from '@macro-inc/lexical-core';
 import CaretRight from '@phosphor/caret-right.svg';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Check from '@phosphor/check-square.svg';
 import TextCode from '@phosphor/code.svg';
 import CodeBlock from '@phosphor/code-block.svg';
+import CornersIn from '@phosphor/corners-in.svg';
+import CornersOut from '@phosphor/corners-out.svg';
 import ThreeDots from '@phosphor/dots-three.svg';
 import MathIcon from '@phosphor/function.svg';
 import Grid from '@phosphor/grid-four.svg';
@@ -47,6 +55,7 @@ import TextT from '@phosphor/text-t.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
 import { Button, Dropdown, Hotkey, SingleSelectCheck } from '@ui';
 import {
+  $getSelection,
   COMMAND_PRIORITY_LOW,
   FOCUS_COMMAND,
   FORMAT_TEXT_COMMAND,
@@ -393,6 +402,18 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     const currentEditor = editor();
     if (currentEditor === undefined) return;
     currentEditor.dispatchCommand(TRY_INSERT_EQUATION_COMMAND, undefined);
+  }
+
+  function handleMergeCells() {
+    editor()?.update(() => {
+      const lexicalSelection = $getSelection();
+      if (!$isTableSelection(lexicalSelection)) return;
+      $mergeCells(lexicalSelection.getNodes().filter($isTableCellNode));
+    });
+  }
+
+  function handleSplitCell() {
+    editor()?.update(() => $unmergeCell());
   }
 
   createEffect(() => {
@@ -781,6 +802,32 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
             />
           </Button>
+          <Show when={selection()?.onMergableCells}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-md"
+              depth={3}
+              tooltip="Merge cells"
+              onClick={handleMergeCells}
+              disabled={buttonIsDisabled()}
+            >
+              <CornersIn />
+            </Button>
+          </Show>
+          <Show when={selection()?.onSplittableCells}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-md"
+              depth={3}
+              tooltip="Split cell"
+              onClick={handleSplitCell}
+              disabled={buttonIsDisabled()}
+            >
+              <CornersOut />
+            </Button>
+          </Show>
         </Show>
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
           <Button

@@ -3,16 +3,16 @@ use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 use crate::api::search::crm_company;
 use crate::api::search::simple::simple_chat;
 use crate::api::{
-    context::SearchHandlerState,
+    context::{SearchAuthorizationService, SearchHandlerState},
     search::{SearchPaginationParams, simple::SearchError},
 };
 use axum::{
-    Extension,
     extract::{self, State},
     response::Json,
 };
 use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
@@ -529,9 +529,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let crm_count = crm_hits.len();
 
     let final_tagged = {
-        let _span = tracing::info_span!("combine_and_sort_results", chat_name_count, content_count)
-            .entered();
-
         // Wrap results with source tags
         let mut combined: Vec<TaggedSearchHit> = Vec::new();
         combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
@@ -547,8 +544,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             source: SearchSource::CrmCompany,
         }));
 
-        tracing::debug!(total_combined = combined.len(), "combined all results");
-
         // Sort: updated_at DESC (None to bottom), entity_id DESC as tiebreaker
         combined.sort_by(|a, b| match (&b.hit.updated_at, &a.hit.updated_at) {
             (Some(b_ts), Some(a_ts)) => b_ts
@@ -562,19 +557,10 @@ pub(in crate::api::search) async fn perform_unified_search(
         // Take the first page_size distinct entities (keeping all of each
         // entity's hits), not the first page_size hits.
         let page_size_usize = page_size as usize;
-        let final_tagged: Vec<TaggedSearchHit> = take_first_n_entities(combined, page_size_usize);
-
-        tracing::debug!(
-            final_count = final_tagged.len(),
-            "final results after pagination"
-        );
-
-        final_tagged
+        take_first_n_entities(combined, page_size_usize)
     };
 
     let next_cursor = {
-        let _span = tracing::info_span!("compute_pagination_cursors").entered();
-
         // Count included results by source
         let included_chat_names = final_tagged
             .iter()
@@ -661,10 +647,12 @@ pub(in crate::api::search) async fn perform_unified_search(
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
+    let user_context = &authorization.authorization.user.user_context;
+
     tracing::info!(
         user_id = user_context.user_id,
         query = ?req.query,
@@ -674,7 +662,7 @@ pub async fn handler(
 
     // CRM opt-in is wired through the unified `/search` endpoint only.
     let (results, _next_cursor) =
-        perform_unified_search(&ctx, &user_context, None, query_params, req).await?;
+        perform_unified_search(&ctx, user_context, None, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_onboarding (user_id) VALUES ($1)\n            ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id\n            RETURNING status, skipped, started_at, completed_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "skipped",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "27116f1f2063eee335be586f808937c5077fba102e14e3966b0c5c2c403ebf7f"
+}

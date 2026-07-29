@@ -1,5 +1,5 @@
-use crate::domain::models::{Error, McpServer, McpServerRecord};
-use crate::domain::ports::McpConnector;
+use crate::domain::models::{CallToolResultExt, Error, MacroUserIdStr, McpServer, McpServerRecord};
+use crate::domain::ports::{McpConnector, McpServerStore};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
     ToolResult, ToolSet, ToolSetError,
@@ -55,34 +55,56 @@ pub struct McpToolSet {
     tools: BTreeMap<MangledName, RegisteredTool>,
     /// Kept alive so the background transport tasks aren't cancelled.
     _connections: Vec<McpServer>,
+    /// The owning user, for correlating tool-call failures in logs. All
+    /// records passed to [`McpToolSet::new`] belong to one user in practice.
+    user_id: Option<MacroUserIdStr<'static>>,
 }
 
 impl McpToolSet {
     /// Connect to every server in `records` concurrently, discover tools, and
-    /// register them.
+    /// register them. Credential updates (e.g. refreshed OAuth tokens) are
+    /// persisted through `server_store`.
     ///
     /// Servers that fail to connect or list tools are silently skipped.
     #[tracing::instrument(skip_all)]
-    pub async fn new(records: &[McpServerRecord]) -> Self {
-        let futs = records
-            .iter()
-            .filter(|r| r.enabled)
-            .map(|record| async move {
-                let client = record.connect().await.inspect_err(|e| {
-                    tracing::warn!(server = %record.server_name, error = ?e, "failed to connect");
-                }).ok()?;
+    pub async fn new<S: McpServerStore>(records: &[McpServerRecord], server_store: Arc<S>) -> Self {
+        let user_id = records.first().map(|r| r.user_id.clone());
+
+        let futs = records.iter().filter(|r| r.enabled).map(|record| {
+            let server_store = server_store.clone();
+            async move {
+                let client = record
+                    .connect(server_store)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::warn!(
+                            user_id = %record.user_id,
+                            server = %record.server_name,
+                            url = %record.url,
+                            error = ?e,
+                            "failed to connect"
+                        );
+                    })
+                    .ok()?;
 
                 let server_tools = match client.list_all_tools().await {
                     Ok(t) => t,
                     Err(e) => {
-                        tracing::warn!(server = %record.server_name, error = ?e, "failed to list tools");
+                        tracing::warn!(
+                            user_id = %record.user_id,
+                            server = %record.server_name,
+                            url = %record.url,
+                            error = ?e,
+                            "failed to list tools"
+                        );
                         let _ = client.cancel().await;
                         return None;
                     }
                 };
 
                 Some((record.server_name.clone(), client, server_tools))
-            });
+            }
+        });
 
         let results = futures::future::join_all(futs).await;
 
@@ -111,6 +133,7 @@ impl McpToolSet {
         Self {
             tools,
             _connections: connections,
+            user_id,
         }
     }
 
@@ -152,7 +175,7 @@ impl McpToolSet {
         names
     }
 
-    #[tracing::instrument(skip(self, arguments), err)]
+    #[tracing::instrument(skip(self, arguments), err, fields(user_id = ?self.user_id))]
     async fn call_tool(
         &self,
         name: &str,
@@ -204,20 +227,14 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
                 }
             };
 
-            let text = result
-                .content
-                .into_iter()
-                .filter_map(|c| c.raw.as_text().map(|t| t.text.clone()))
-                .collect::<Vec<_>>()
-                .join("");
-
             if result.is_error.unwrap_or(false) {
+                let description = result.error_description();
                 Ok(Err(ToolCallError {
-                    internal_error: anyhow::anyhow!("{}", &text),
-                    description: text,
+                    internal_error: anyhow::anyhow!("{}", &description),
+                    description,
                 }))
             } else {
-                Ok(Ok(serde_json::Value::String(text)))
+                Ok(Ok(result.into_value()))
             }
         })
     }
@@ -267,11 +284,15 @@ pub struct CombinedToolSet<T> {
 
 impl<T> CombinedToolSet<T> {
     /// Build a combined toolset from the static tools and the user's MCP servers.
-    pub async fn new(
+    ///
+    /// Credential updates from the MCP connections (e.g. refreshed OAuth
+    /// tokens) are persisted through `server_store`.
+    pub async fn new<S: McpServerStore>(
         static_tools: Arc<AsyncToolCollection<T>>,
         records: &[McpServerRecord],
+        server_store: Arc<S>,
     ) -> Self {
-        let mcp_tools = McpToolSet::new(records).await;
+        let mcp_tools = McpToolSet::new(records, server_store).await;
         Self {
             static_tools,
             mcp_tools,

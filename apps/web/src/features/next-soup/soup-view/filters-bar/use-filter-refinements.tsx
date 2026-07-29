@@ -1,5 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, TAGGABLE_LIST_VIEWS } from '@app/constants/list-views';
 import {
   type FilterContext,
   type FilterID,
@@ -300,10 +300,11 @@ export function useFilterRefinements() {
 
   /**
    * Stage options for the Customers view's stage sub-filter: the team's
-   * active deal-stage set plus a trailing "No stage" row.
+   * active deal-stage set (plus retired legacy stages on the default set)
+   * and a trailing "No stage" row.
    */
   const stageSearchableOptions = createMemo((): SearchableOption[] => [
-    ...dealStages.stages().map((stage, index) => ({
+    ...dealStages.filterStages().map((stage, index) => ({
       id: stage.id,
       label: stage.label,
       icon: () => (
@@ -682,10 +683,10 @@ export function useFilterRefinements() {
       );
     };
 
-    // Tags chip (consolidated, searchable) for the documents/tasks views.
+    // Tags chip (consolidated, searchable) for every taggable list view.
     const pushTagsConsolidatedChip = () => {
-      if (view !== 'tasks' && view !== 'documents') return;
-      if (!tagFilter.enabled() || !tagFilter.hasTags()) return;
+      if (!view || !TAGGABLE_LIST_VIEWS.has(view)) return;
+      if (!tagFilter.hasTags()) return;
 
       const key = 'tags';
       const popupOpen =
@@ -815,6 +816,9 @@ export function useFilterRefinements() {
             activeSearchableIds: stageFilter,
             onSearchableChange: handleStageChange,
             searchPlaceholder: 'Filter stages...',
+            // Stages read as a pipeline — keep canonical order, don't pin
+            // checked ones to the top.
+            preserveOptionOrder: true,
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => handleStageChange([]),

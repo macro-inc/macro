@@ -211,7 +211,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                   class="w-full grow overflow-hidden relative"
                   data-block-content
                 >
-                  <Scroll class="relative" ref={setScrollRef}>
+                  <Scroll class="relative" scrollRef={setScrollRef}>
                     <div class="relative portal-scope mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
                       <Suspense>
                         <Show

@@ -3,11 +3,11 @@
 //! dep-closure map. Generated into `cargo_workspace_dependency_check.yml`
 //! (replaces the hand-written `cargo-workspace-dependency-check.yml`).
 //!
-//! Both jobs build Rust, so they run on the rust-ci profile with the shared
-//! `sccache-ci` volume and the Nix dev shell — this replaces the deprecated
-//! `actions-rs/toolchain` + hardcoded `rustup default 1.85` (which drifted
-//! from the workspace toolchain) and gives the `cargo install`/xtask builds
-//! warm caches instead of compiling cold on every run.
+//! Both jobs build Rust, so they run on the rust-ci profile with the Nix/Cargo
+//! cache volume and Namespace's shared `sccache-ci` remote cache. This replaces
+//! the deprecated `actions-rs/toolchain` + hardcoded `rustup default 1.85`
+//! (which drifted from the workspace toolchain) and gives the `cargo install`
+//! and xtask builds warm caches instead of compiling cold on every run.
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
@@ -56,8 +56,8 @@ fn rust_ci_job() -> Job {
         .add_step(checkout())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_dev_shell())
-        .add_step(steps::pin_sccache_dir())
+        .add_step(steps::setup_cachix_dev_shell())
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
 }
 
 fn dependency_check() -> Job {
@@ -88,7 +88,7 @@ fn checkout() -> Step<Use> {
 
 /// `cargo install` skips the build when the same version is already present
 /// in `~/.cargo/bin` (persisted on the cache volume); cold installs compile
-/// through the volume-backed sccache.
+/// through Namespace's remote sccache.
 fn install_checker() -> Step<Run> {
     Step::new("install tool").run("cargo install cargo-workspace-dependency-checker@1.0.1")
 }

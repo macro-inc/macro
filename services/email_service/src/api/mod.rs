@@ -42,31 +42,14 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         port
     );
     axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .nest(
-            "/email",
-            email::router(state.clone()).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
-        )
+        .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
-        .nest(
-            "/internal",
-            internal::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state,
-                        macro_middleware::auth::internal_access::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::initialize_user_context::handler,
-                    )),
-            ),
-        )
+        .nest("/internal", internal::router())
 }

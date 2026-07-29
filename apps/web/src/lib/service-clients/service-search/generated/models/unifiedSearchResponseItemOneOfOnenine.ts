@@ -4,8 +4,9 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CrmCompanySearchResponseItem } from './crmCompanySearchResponseItem';
+import type { CallRecordSearchResponseItemWithMetadata } from './callRecordSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfOnenineAllOf } from './unifiedSearchResponseItemOneOfOnenineAllOf';
 
 export type UnifiedSearchResponseItemOneOfOnenine =
-  CrmCompanySearchResponseItem & UnifiedSearchResponseItemOneOfOnenineAllOf;
+  CallRecordSearchResponseItemWithMetadata &
+    UnifiedSearchResponseItemOneOfOnenineAllOf;

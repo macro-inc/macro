@@ -1,12 +1,15 @@
+import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
@@ -19,15 +22,19 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
+  ENABLE_ACTIVITY,
   ENABLE_CRM,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import { EmptyStatePanel } from '@ui';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
+import { previewEmptyStateForContent } from './previewController';
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
@@ -141,6 +148,14 @@ registerComponent(
 );
 
 registerComponent(
+  'getting-started',
+  withAuth(() => {
+    usePageViewTracking('getting-started');
+    return <GettingStarted />;
+  })
+);
+
+registerComponent(
   'inbox',
   withAuth(() => {
     usePageViewTracking('inbox');
@@ -156,6 +171,34 @@ registerComponent(
     );
   })
 );
+
+const ActivityView = lazy(() =>
+  import('@app/features/activity-timeline/activity-view').then((module) => ({
+    default: module.ActivityView,
+  }))
+);
+
+registerComponent(
+  'activity',
+  withAuth(() => {
+    // Keep the registration so direct navigation and restored splits can
+    // recover safely without loading the data-owning Activity view.
+    if (!ENABLE_ACTIVITY) {
+      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    }
+    usePageViewTracking('activity');
+    return <ActivityView />;
+  })
+);
+
+// The Activity tab briefly shipped as two separate views; restored splits
+// may still reference their ids.
+registerComponent('firehose', () => (
+  <RedirectSplit to={{ type: 'component', id: 'activity' }} />
+));
+registerComponent('my-activity', () => (
+  <RedirectSplit to={{ type: 'component', id: 'activity' }} />
+));
 
 registerComponent(
   'agents',
@@ -351,13 +394,80 @@ registerComponent(
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
+// Placeholder a Preview Pair's Viewer opens before its Controller has
+// navigated anywhere (see layoutManager engagePreviewMode). Controllers can
+// override the copy via `emptyState` in previewController.ts; resolving it
+// from the live pair (rather than params) keeps the override across URL
+// restore.
+registerComponent('preview-empty', () => {
+  const panel = useSplitPanelOrThrow();
+  onMount(() => panel.handle.setDisplayName('Preview'));
+  const emptyState = () => {
+    const manager = globalSplitManager();
+    const controllerId = manager?.controllerOf(panel.handle.id);
+    const controllerContent = controllerId
+      ? manager?.getSplit(controllerId)?.content()
+      : undefined;
+    return controllerContent
+      ? previewEmptyStateForContent(controllerContent)
+      : undefined;
+  };
+  return (
+    <EmptyStatePanel
+      graphic={EmptyStatePreviewIcon}
+      title={emptyState()?.title ?? 'No content selected'}
+      description={
+        emptyState()?.description ??
+        'Select an item from the connected list to preview it here'
+      }
+      centered
+    />
+  );
+});
+// Join prompt for a channel the viewer can see but hasn't joined, shown in a
+// Preview Pair's Viewer when the controlling list focuses such a row (see
+// openEntityInSplitFromUnifiedList). Params don't round-trip through the URL,
+// so a restored split has none — fall back to the placeholder and let the
+// controller's focus→preview effect re-open the real prompt.
+registerComponent('non-member-channel', (params) => {
+  const panel = useSplitPanelOrThrow();
+  const channelId =
+    typeof params?.channelId === 'string' ? params.channelId : undefined;
+  if (!channelId) {
+    return <RedirectSplit to={{ type: 'component', id: 'preview-empty' }} />;
+  }
+  const channelName =
+    typeof params?.channelName === 'string' ? params.channelName : 'Channel';
+  const memberCount =
+    typeof params?.memberCount === 'number' ? params.memberCount : 0;
+  onMount(() => panel.handle.setDisplayName(channelName));
+  return (
+    <NonMemberChannelPreview
+      channelId={channelId}
+      channelName={channelName}
+      memberCount={memberCount}
+      // Join landed — hand the Viewer off to the real channel block in place.
+      onJoined={() =>
+        panel.handle.replace({ next: { type: 'channel', id: channelId } })
+      }
+    />
+  );
+});
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  return <EmailCompose draftID={params?.draftID} />;
+  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  const toParam = new URLSearchParams(window.location.search).get('to');
+  const initialTo =
+    params?.initialTo ??
+    toParam
+      ?.split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+  return <EmailCompose draftID={params?.draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');

@@ -21,7 +21,6 @@ import { createSignal, onCleanup } from 'solid-js';
 type UseChannelBotManagementOptions = {
   channelId: string;
   hotkeyScopeId: string;
-  isPreview: boolean;
   openParticipants: () => void;
 };
 
@@ -37,9 +36,7 @@ export function useChannelBotManagement(
 
   const enabled = () => featureFlag().enabled;
   const canManageBots = () =>
-    !options.isPreview &&
-    enabled() &&
-    channelType() === ChannelTypeEnum.Private;
+    enabled() && channelType() === ChannelTypeEnum.Private;
 
   const openCreateBot = () => {
     requestBotCreation(options.channelId);
@@ -101,7 +98,7 @@ export function useChannelBotManagement(
     icon: CopyIcon,
     keywords: ['bot', 'webhook', 'endpoint'],
     displayPriority: 8,
-    condition: () => enabled() && !options.isPreview,
+    condition: enabled,
     keyDownHandler: () => {
       void copyWebhookUrl();
       return true;

@@ -17,8 +17,10 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::InternalApiKey;
+use macro_authorization::{
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::websocket::ConnectionGatewayClient;
@@ -32,6 +34,22 @@ use stream::domain::StreamRepo;
 /// Type alias for the entity access service.
 pub type DcsEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Type alias for the authorization service.
+pub type DcsAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+
+/// Type alias for the roles-and-permissions service backed by MacroDB.
+pub type DcsUserPermissionsService =
+    roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
+        roles_and_permissions::outbound::pgpool::MacroDB,
+        roles_and_permissions::outbound::pgpool::MacroDB,
+    >;
+
+/// Type alias for the chat model entitlement extractor wired to DCS services.
+pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
+    DcsAuthorizationService,
+    DcsUserPermissionsService,
+>;
+
 /// Type alias for the attachment provider wired to concrete DCS services.
 pub type DcsAttachmentProvider = AttachmentProvider<
     DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
@@ -41,8 +59,14 @@ pub type DcsAttachmentProvider = AttachmentProvider<
     StaticFileAttachmentService<CdnStaticFileRepo>,
 >;
 
+/// Kafka-backed event broker with publish tasks tracked for graceful shutdown.
+pub type DcsEventBroker = macro_event_broker::MacroEventBrokerService<
+    macro_event_broker::KafkaEventPublisher,
+    tokio_util::task::TaskTracker,
+>;
+
 /// Type alias for the message service wired to concrete DCS services.
-pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider>;
+pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider, DcsEventBroker>;
 
 #[cfg(test)]
 mod test;
@@ -74,6 +98,19 @@ pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
         mcp_client::outbound::pg_server_repo::PgServerRepo,
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore,
     >,
+    DcsAuthorizationService,
+>;
+
+/// The import pipeline service, shared between the import router, the chat
+/// toolset, and the onboarding flow.
+pub type DcsImportService = ai_tools::ToolImportService;
+
+/// The onboarding orchestrator wired to the Postgres repo, the MCP server
+/// store, and the import service.
+pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceImpl<
+    onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    DcsImportService,
 >;
 
 #[derive(Clone, FromRef)]
@@ -83,7 +120,8 @@ pub struct ApiContext {
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
-    pub jwt_args: JwtValidationArgs,
+    pub authorization_state: MacroAuthorizationState<DcsAuthorizationService>,
+    pub user_permissions_service: Arc<DcsUserPermissionsService>,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,
@@ -106,6 +144,20 @@ pub struct ApiContext {
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
     pub mcp_state: DcsMcpRouterState,
+    pub import_service: Arc<DcsImportService>,
+    pub onboarding_service: Arc<DcsOnboardingService>,
+    /// Kafka-backed macro event broker for publishing domain events.
+    pub macro_event_broker: DcsEventBroker,
+}
+
+impl FromRef<ApiContext>
+    for chat::inbound::http::extractors::UserPermissionsState<DcsUserPermissionsService>
+{
+    fn from_ref(state: &ApiContext) -> Self {
+        chat::inbound::http::extractors::UserPermissionsState(
+            state.user_permissions_service.clone(),
+        )
+    }
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

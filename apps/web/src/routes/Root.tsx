@@ -5,11 +5,15 @@ import { Login } from '@app/features/auth/Login';
 import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
-import { Signup } from '@app/features/auth/Signup';
+import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
+import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
+import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
+import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
+import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
@@ -17,8 +21,11 @@ import {
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
+import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
+import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { CallKitSync } from '@channel/Call/use-callkit';
@@ -26,10 +33,12 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { toast } from '@core/component/Toast/Toast';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { TeamContextProvider } from '@core/context/team';
 import {
@@ -40,6 +49,7 @@ import {
 import { initAndStartEmailSync } from '@core/email-link';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -51,6 +61,7 @@ import {
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -59,6 +70,7 @@ import {
   BrowserNotificationModal,
   createNotificationSource,
   type UnifiedNotification,
+  useNotificationUpdates,
   usePlatformNotificationState,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
@@ -72,8 +84,6 @@ import {
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
-import { prefetchHistory } from '@queries/history/history';
-import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
@@ -86,12 +96,13 @@ import {
   type RoutePreloadFunc,
   Router,
   type RouterProps,
+  useLocation,
   useSearchParams,
 } from '@solidjs/router';
-import { currentThemeId } from '@theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
+  resolveActiveThemeId,
   systemThemeEffect,
 } from '@theme/utils/themeUtils';
 import { Button } from '@ui';
@@ -105,6 +116,7 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -125,7 +137,6 @@ function useSyncLoginCookie() {
 
 const rootPreload: RoutePreloadFunc = async (args) => {
   await prefetchUserInfo();
-  prefetchHistory();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -188,27 +199,56 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   );
 }
 
+const OFFLINE_ROUTE = '/offline';
+
+function getCurrentQueryString() {
+  const params = new URLSearchParams(window.location.search);
+  return params.toString().length > 0 ? `?${params.toString()}` : '';
+}
+
+function shouldShowNativeOfflineFallback(
+  userInfoQuery: ReturnType<typeof useUserInfoQuery>
+) {
+  return (
+    userInfoQuery.isError &&
+    hasLoginCookie() &&
+    isNativeMobilePlatform() &&
+    !thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
+  );
+}
+
+function SessionExpiredRedirect() {
+  void clearLocalAuthSession().catch((error) => {
+    console.error('Failed to clear local auth session', error);
+  });
+  return <Navigate href={`/welcome${getCurrentQueryString()}`} />;
+}
+
+function OfflineFallbackRoute() {
+  const userInfoQuery = useUserInfoQuery();
+
+  // Once the query settles into anything other than a genuine connectivity
+  // failure, bounce to the base path.
+  return (
+    <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
+      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
+        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      </Match>
+    </Switch>
+  );
+}
+
 function BasePathComponent() {
-  const analytics = useAnalytics();
-
   const [searchParams] = useSearchParams();
+  const userInfoQuery = useUserInfoQuery();
+  const checkoutRefreshPending = useCheckoutCompletionListener();
 
-  const subscriptionSuccess = searchParams.subscriptionSuccess;
-  const type = searchParams.type;
-  if (subscriptionSuccess === 'true') {
-    toast.success('Your plan has been activated!');
-    analytics.track('subscription_success', { type });
-    // Invalidate user info to refresh trial status and subscription data
-    invalidateUserInfo();
-  }
-
-  if (searchParams.subscriptionCancel === 'true') {
-    analytics.track('subscription_cancel', { tier: searchParams.tier });
-  }
-
-  if (searchParams.upgrade === 'true') {
-    sessionStorage.setItem('showUpgradeModal', 'true');
-  }
+  onMount(() => {
+    if (searchParams.upgrade === 'true') {
+      sessionStorage.setItem('showUpgradeModal', 'true');
+    }
+  });
 
   // check session storage for redirect url
   const redirectUrl = sessionStorage.getItem('redirectUrl');
@@ -219,31 +259,33 @@ function BasePathComponent() {
     return;
   }
 
-  const userInfoQuery = useUserInfoQuery();
-
   // Preserve existing query parameters when redirecting
-  const params = new URLSearchParams(window.location.search);
-  const queryString =
-    params.toString().length > 0 ? `?${params.toString()}` : '';
+  const queryString = getCurrentQueryString();
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
   return (
     <Switch>
-      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={userInfoQuery.isLoading || checkoutRefreshPending()}>
+        {null}
+      </Match>
       <Match
         when={
-          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
+          hasLoginCookie() &&
+          thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
         }
       >
-        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+        <SessionExpiredRedirect />
+      </Match>
+      <Match when={userInfoQuery.data?.authenticated}>
+        <Navigate href={redirectPath} />
+      </Match>
+      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
+        <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
       </Match>
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={`/welcome${window.location.search}`} />
-      </Match>
-      <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
+        <Navigate href={`/welcome${queryString}`} />
       </Match>
     </Switch>
   );
@@ -262,11 +304,55 @@ const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
     successPath: '/',
   });
 
+/** The retired /setup path forwards to the onboarding flow, query intact. */
+function SetupRedirect() {
+  const location = useLocation();
+  return <Navigate href={`/onboarding${location.search}`} />;
+}
+
+/**
+ * The old split-screen /setup surface is retired; the onboarding flow lives at
+ * /onboarding now. Flag off, /setup must go home — forwarding would land
+ * flag-off web users on /login and native users on MobileOnboarding.
+ */
+function SetupRoute() {
+  const onboardingV4 = useOnboardingV4Flag();
+
+  return (
+    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
+      <Show when={onboardingV4().enabled} fallback={<Navigate href="/" />}>
+        <SetupRedirect />
+      </Show>
+    </Show>
+  );
+}
+
+/**
+ * Web/desktop gate for /onboarding. Waits for PostHog to report flags before
+ * bouncing: with the flag on but not yet loaded, a direct visit (or a reload
+ * mid-flow) would otherwise get kicked to /login and lose its ?next.
+ */
+function OnboardingRoute() {
+  const onboardingV4 = useOnboardingV4Flag();
+
+  return (
+    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
+      <Show when={onboardingV4().enabled} fallback={<Navigate href="/login" />}>
+        <OnboardingFlow />
+      </Show>
+    </Show>
+  );
+}
+
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
     path: '/inbox',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/activity',
     component: LAYOUT_ROUTE.component,
   },
   {
@@ -309,7 +395,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: Signup,
+    component: () => <Login signupMode />,
   },
   {
     path: CALLBACK_PATH,
@@ -358,26 +444,42 @@ const ROUTES: RouteDefinition[] = [
     component: () => <Login />,
   },
   {
+    path: OFFLINE_ROUTE,
+    component: OfflineFallbackRoute,
+  },
+  {
     path: '/welcome',
     component: () =>
-      isNativeMobilePlatform() ? (
-        <MobileAuthWelcome />
-      ) : (
-        <Navigate href="/login" />
-      ),
+      isNativeMobilePlatform() ? <MobileAuthWelcome /> : <Login />,
+  },
+  {
+    // Mobile-web visitors can't sign up on a phone, so instead of pushing them
+    // through Google SSO + onboarding we capture their email and email them a
+    // link to open on desktop. The marketing site redirects mobile browsers
+    // here.
+    path: '/mobile-email-signup',
+    component: MobileWebSignup,
   },
   {
     path: '/onboarding',
+    // Flag-gated at the route, not just the redirect: with the flag off a
+    // direct visit must not touch the onboarding backend (reading it
+    // creates the flow's row and starts gathers).
     component: () =>
-      isNativeMobilePlatform() ? (
-        <MobileOnboarding />
-      ) : (
-        <Navigate href="/login" />
-      ),
+      isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingRoute />,
+  },
+  {
+    // Preserve the query (?next deep links) when forwarding to /onboarding.
+    path: '/setup',
+    component: SetupRoute,
   },
   {
     path: '/team-invite',
     component: TeamInviteAcceptance,
+  },
+  {
+    path: '/channel-invite',
+    component: ChannelInviteAcceptance,
   },
   {
     // This splat route must be last to catch all unmatched routes
@@ -391,6 +493,10 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
+
+  if (isNativeMobilePlatform()) {
+    useInvalidateQueriesOnReconnect();
+  }
 
   const onNotification = (notification: UnifiedNotification) => {
     if (notifInterface === 'not-supported') return;
@@ -406,18 +512,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     connectionGatewayWebsocket,
     onNotification
   );
-
-  if (isNativeMobilePlatform()) {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        invalidateUserNotifications();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    onCleanup(() =>
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    );
-  }
+  useNotificationUpdates(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);
@@ -442,10 +537,13 @@ function UserInfoSideEffects() {
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
 
+  useSoupBackfills(() => userInfo()?.id);
+
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
 
   let identified = false;
+  let syncedPlanKey: string | undefined;
   createEffect(
     on(userInfo, (user) => {
       // Keep Datadog log user context in sync with auth state: set on every
@@ -459,7 +557,10 @@ function UserInfoSideEffects() {
         clearDatadogUser();
       }
 
-      if (!user || !user.authenticated) return;
+      if (!user || !user.authenticated) {
+        syncedPlanKey = undefined;
+        return;
+      }
 
       if (!posthog.instance._isIdentified() && !identified) {
         identified = true;
@@ -471,6 +572,12 @@ function UserInfoSideEffects() {
           email: user.email,
           os,
         });
+      }
+
+      const planKey = `${user.id}:${user.licenseStatus}`;
+      if (syncedPlanKey !== planKey) {
+        syncedPlanKey = planKey;
+        analytics.setPlanProperties(user.licenseStatus);
       }
 
       // Fires sign_up + ad conversions once when the auth service flagged this
@@ -495,11 +602,16 @@ function QuerySyncProviderWithUserId() {
 
 function InitialInteractiveOnboardingModal() {
   const userInfoQuery = useUserInfoQuery();
+  const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
 
   const modalOpen = () =>
     open() &&
+    // Onboarding-v4 replaces this modal on desktop; the Layout redirect
+    // sends first-time users to /onboarding instead. Desktop waits for the
+    // flag to resolve so this doesn't flash before that redirect fires.
+    (isMobile() || (!onboardingV4().loading && !onboardingV4().enabled)) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
@@ -562,7 +674,7 @@ export function Root() {
   });
 
   onMount(() => {
-    applyTheme(currentThemeId());
+    applyTheme(resolveActiveThemeId());
     ensureMinimalThemeContrast();
   });
 
@@ -576,46 +688,49 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <BrowserNotificationModal />
-                <IosPushNotificationModal />
-                <GlobalShareInboxConflictDialog />
-                <QuerySyncProviderWithUserId />
-                <UserInfoSideEffects />
-                <TeamContextProvider>
-                  <ConfiguredGlobalAppStateProvider>
-                    <MutationUndoProvider>
-                      <ChannelsContextProvider>
-                        <CallProvider>
-                          <CallKitSync />
-                          <CallStartedNotifier />
-                          <QuickAccessProvider>
-                            <SearchProvider>
-                              <ChatAttachmentsInit />
-                              <ReactiveFavicon />
-                              <Title>{tabTitle()}</Title>
-                              <Suspense>
-                                <IsomorphicRouter
-                                  transformUrl={transformShortIdInUrlPathname}
-                                  root={Layout}
-                                  rootPreload={rootPreload}
-                                  base={ROUTER_BASE}
-                                >
-                                  {{
-                                    path: '/',
-                                    component: TauriRouteListener,
-                                    children: ROUTES,
-                                  }}
-                                </IsomorphicRouter>
-                              </Suspense>
-                              <InitialInteractiveOnboardingModal />
-                              <ToastRegion />
-                            </SearchProvider>
-                          </QuickAccessProvider>
-                        </CallProvider>
-                      </ChannelsContextProvider>
-                    </MutationUndoProvider>
-                  </ConfiguredGlobalAppStateProvider>
-                </TeamContextProvider>
+                <EmailLinksContextProvider>
+                  <BrowserNotificationModal />
+                  <IosPushNotificationModal />
+                  <GlobalShareInboxConflictDialog />
+                  <QuerySyncProviderWithUserId />
+                  <UserInfoSideEffects />
+                  <TeamContextProvider>
+                    <ConfiguredGlobalAppStateProvider>
+                      <MutationUndoProvider>
+                        <ChannelsContextProvider>
+                          <CallProvider>
+                            <CallKitSync />
+                            <CallStartedNotifier />
+                            <IncomingCallEvents />
+                            <QuickAccessProvider>
+                              <SearchProvider>
+                                <ChatAttachmentsInit />
+                                <ReactiveFavicon />
+                                <Title>{tabTitle()}</Title>
+                                <Suspense>
+                                  <IsomorphicRouter
+                                    transformUrl={transformShortIdInUrlPathname}
+                                    root={Layout}
+                                    rootPreload={rootPreload}
+                                    base={ROUTER_BASE}
+                                  >
+                                    {{
+                                      path: '/',
+                                      component: TauriRouteListener,
+                                      children: ROUTES,
+                                    }}
+                                  </IsomorphicRouter>
+                                </Suspense>
+                                <InitialInteractiveOnboardingModal />
+                                <ToastRegion />
+                              </SearchProvider>
+                            </QuickAccessProvider>
+                          </CallProvider>
+                        </ChannelsContextProvider>
+                      </MutationUndoProvider>
+                    </ConfiguredGlobalAppStateProvider>
+                  </TeamContextProvider>
+                </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

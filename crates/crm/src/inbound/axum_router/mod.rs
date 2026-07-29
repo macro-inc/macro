@@ -6,8 +6,15 @@ pub mod set_email_sync;
 /// Toggle the `hidden` flag on a `crm_companies` row.
 pub mod set_company_hidden;
 
+/// Set the team-scoped display-name override (`custom_name`) on a
+/// `crm_companies` row.
+pub mod set_company_name;
+
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
+
+/// Set the display name (`name`) on a `crm_contacts` row.
+pub mod set_contact_name;
 
 /// List contacts of a `crm_companies` row. Role-aware: members see
 /// visible contacts only; admin/owner see hidden contacts too.
@@ -20,8 +27,18 @@ pub mod get_contact;
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
+/// Manually create a CRM company (name + domain) for the caller's team.
+pub mod create_company;
+
+/// Manually create a contact (name + email) under a CRM company.
+pub mod create_contact;
+
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
+
+/// Team-level CRM configuration (permission thresholds, closed stages,
+/// team saved views).
+pub mod team_settings;
 
 use std::sync::Arc;
 
@@ -30,24 +47,34 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, patch, put},
+    routing::{get, patch, post, put},
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{model::CrmError, service::CrmService};
 
-/// Router state for the CRM endpoints.
-pub struct CrmRouterState<C, Eas> {
+/// Router state for the CRM endpoints, including service-backed authorization
+/// for direct user credentials and internal service access.
+pub struct CrmRouterState<C, Eas, Auth> {
     /// CRM service.
     pub service: Arc<C>,
     /// Entity access service used by the team-scoped extractors.
     pub entity_access_service: Arc<Eas>,
+    /// State used to authorize direct users and internal service callers.
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for Arc<Eas> {
-    fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
+impl<C, Eas, Auth> FromRef<CrmRouterState<C, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &CrmRouterState<C, Eas, Auth>) -> Self {
         state.entity_access_service.clone()
+    }
+}
+
+impl<C, Eas, Auth> FromRef<CrmRouterState<C, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &CrmRouterState<C, Eas, Auth>) -> Self {
+        state.authorization_state.clone()
     }
 }
 
@@ -66,61 +93,80 @@ impl<C> Clone for CrmServiceRef<C> {
     }
 }
 
-impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for CrmServiceRef<C> {
-    fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
+impl<C, Eas, Auth> FromRef<CrmRouterState<C, Eas, Auth>> for CrmServiceRef<C> {
+    fn from_ref(state: &CrmRouterState<C, Eas, Auth>) -> Self {
         CrmServiceRef(state.service.clone())
     }
 }
 
-// Manual Clone so C, Eas don't need Clone.
-impl<C, Eas> Clone for CrmRouterState<C, Eas> {
+// Manual Clone so C, Eas, and Auth don't need Clone.
+impl<C, Eas, Auth> Clone for CrmRouterState<C, Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
 /// Build the CRM router with all endpoints.
-pub fn crm_router<C, Eas, S>(state: CrmRouterState<C, Eas>) -> Router<S>
+pub fn crm_router<C, Eas, Auth, S>(state: CrmRouterState<C, Eas, Auth>) -> Router<S>
 where
     C: CrmService,
     Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     Router::new()
+        .route("/companies", post(create_company::handler::<C, Eas, Auth>))
         .route(
             "/companies/{company_id}/email-sync",
-            put(set_email_sync::handler::<C, Eas>),
+            put(set_email_sync::handler::<C, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/hidden",
-            put(set_company_hidden::handler::<C, Eas>),
+            put(set_company_hidden::handler::<C, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/name",
+            put(set_company_name::handler::<C, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}",
-            get(get_company::handler::<C, Eas>),
+            get(get_company::handler::<C, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/contacts",
-            get(list_company_contacts::handler::<C, Eas>),
+            get(list_company_contacts::handler::<C, Eas, Auth>)
+                .post(create_contact::handler::<C, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}",
-            get(get_contact::handler::<C, Eas>),
+            get(get_contact::handler::<C, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/hidden",
-            put(set_contact_hidden::handler::<C, Eas>),
+            put(set_contact_hidden::handler::<C, Eas, Auth>),
+        )
+        .route(
+            "/contacts/{contact_id}/name",
+            put(set_contact_name::handler::<C, Eas, Auth>),
         )
         .route(
             "/comments/{entity_type}/{entity_id}",
-            get(comments::list_handler::<C, Eas>).post(comments::create_handler::<C, Eas>),
+            get(comments::list_handler::<C, Eas, Auth>)
+                .post(comments::create_handler::<C, Eas, Auth>),
         )
         .route(
             "/comment/{comment_id}",
-            patch(comments::edit_handler::<C, Eas>).delete(comments::delete_handler::<C, Eas>),
+            patch(comments::edit_handler::<C, Eas, Auth>)
+                .delete(comments::delete_handler::<C, Eas, Auth>),
+        )
+        .route(
+            "/settings",
+            get(team_settings::get_handler::<C, Eas, Auth>)
+                .put(team_settings::update_handler::<C, Eas, Auth>),
         )
         .with_state(state)
 }
@@ -170,10 +216,42 @@ impl IntoResponse for CrmError {
                     message: "querying hidden crm entities requires admin/owner team role".into(),
                 }),
             ),
+            CrmError::SettingsAdminRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message:
+                        "changing crm permission or stage settings requires admin/owner team role"
+                            .into(),
+                }),
+            ),
             CrmError::CompanyHidden => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "crm company is hidden; un-hide before enabling email sync".into(),
+                }),
+            ),
+            CrmError::CompanyAlreadyExistsForTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm company already exists for this domain".into(),
+                }),
+            ),
+            CrmError::ContactAlreadyExistsForCompany => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm contact with this email already exists for the company".into(),
+                }),
+            ),
+            CrmError::ContactEmailDomainMismatch => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "contact email domain must match one of the company's domains".into(),
+                }),
+            ),
+            CrmError::CrmDisabledForTeam => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "crm is not enabled for this team".into(),
                 }),
             ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (

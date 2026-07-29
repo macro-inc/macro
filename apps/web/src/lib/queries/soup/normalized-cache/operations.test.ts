@@ -51,6 +51,7 @@ import {
   optimisticUpdateSoupItemUpdatedAt,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromDoneFilteredQueries,
 } from './operations';
 
 // -- Fixtures --
@@ -122,11 +123,14 @@ function mockSearchResult(type: string, id: string): UnifiedSearchResponseItem {
         type: 'chat',
         chat_id: id,
       } as unknown as UnifiedSearchResponseItem;
-    case 'channel':
+    case 'channelMessage': {
+      const [channelId, messageId] = id.split(':');
       return {
-        type: 'channel',
-        channel_id: id,
+        type: 'channelMessage',
+        channel_id: channelId,
+        message_id: messageId,
       } as unknown as UnifiedSearchResponseItem;
+    }
     case 'project':
       return { type: 'project', id } as unknown as UnifiedSearchResponseItem;
     default:
@@ -330,6 +334,58 @@ describe('removeSoupEntities', () => {
   });
 });
 
+describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
+  const emailItem = (id: string): SoupApiItem =>
+    ({
+      tag: 'emailThread',
+      data: { id, inboxVisible: true },
+      frecency_score: 1,
+    }) as unknown as SoupApiItem;
+
+  // Query keys carry the compiled filter body; done-excluding views embed
+  // `emailView: 'inbox'` or a compiled `*Done: false` literal.
+  const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
+  const doneFilterKey = [
+    ...soupKeys.items._def,
+    { ef: [{ l: { NotificationDone: false } }] },
+  ];
+  const ndFilterKey = [...soupKeys.items._def, { df: [{ l: { nd: false } }] }];
+  const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
+
+  const itemsAt = (key: unknown[]) =>
+    testQueryClient
+      .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
+      .pages[0].items.map(getSoupItemId);
+
+  it('removes from done-filtered queries and keeps done-inclusive ones', () => {
+    const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
+    testQueryClient.setQueryData(inboxViewKey, data());
+    testQueryClient.setQueryData(doneFilterKey, data());
+    testQueryClient.setQueryData(ndFilterKey, data());
+    testQueryClient.setQueryData(allViewKey, data());
+
+    removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+
+    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
+    expect(itemsAt(doneFilterKey)).toEqual(['c-1']);
+    expect(itemsAt(ndFilterKey)).toEqual(['c-1']);
+    expect(itemsAt(allViewKey)).toEqual(['e-1', 'c-1']);
+  });
+
+  it('rollback restores removed rows', () => {
+    testQueryClient.setQueryData(
+      inboxViewKey,
+      mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]])
+    );
+
+    const tx = removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
+
+    tx.rollback();
+    expect(itemsAt(inboxViewKey)).toEqual(['e-1', 'c-1']);
+  });
+});
+
 describe('removeSearchEntities', () => {
   it('filters matching IDs from search results', () => {
     seedSearchQuery(
@@ -338,11 +394,11 @@ describe('removeSearchEntities', () => {
           mockSearchResult('document', 'doc-1'),
           mockSearchResult('chat', 'chat-1'),
         ],
-        [mockSearchResult('channel', 'ch-1')],
+        [mockSearchResult('channelMessage', 'ch-1:msg-1')],
       ])
     );
 
-    removeSearchEntities(new Set(['doc-1', 'ch-1']));
+    removeSearchEntities(new Set(['doc-1', 'ch-1:msg-1']));
 
     const cached = getSearchQuery()!;
     expect(cached.pages[0].results).toHaveLength(1);
@@ -480,9 +536,14 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 
 // -- Normalized grouped cache tests --
 
+import type { Query } from '@app/features/next-soup/filters/filter-store/types';
+import {
+  soupItemMatchesProjectMembership,
+  soupItemMatchesQuery,
+} from '@app/features/next-soup/filters/query-filters';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import { NOT_SET_GROUP_KEY } from '../grouped/types';
-import type { SoupAstItemsGroupedPage } from '../items';
+import type { SoupAstItemsFlatPage, SoupAstItemsGroupedPage } from '../items';
 
 const STATUS_DEF = 'status-def-id';
 const STATUS_GROUP_BY: GroupByField = {
@@ -842,5 +903,122 @@ describe('optimisticUpdateSoupEntity — parent item filter gate', () => {
     const notSet = page.groups.find((g) => g.key === NOT_SET_GROUP_KEY)!;
     expect(notSet.itemIds).toEqual([]);
     expect(notSet.totalCount).toBe(0);
+  });
+});
+
+/**
+ * End-to-end gate for the dynamic-UI `list` widget (macro-2587): the widget
+ * drives a flat astItems query from a raw `Query` and now attaches
+ * `soupItemMatchesQuery` as its `itemFilter`. Without it, any optimistic insert
+ * (e.g. creating a task) prepended into an email-scoped list's cache.
+ */
+describe('insertSoupEntity — dynamic-ui list query gate', () => {
+  function seedFlatAstQueryWithFilter(
+    items: SoupApiItem[],
+    query: Query,
+    suffix = 'widget-seed'
+  ) {
+    const key = [...soupKeys.astItems._def, {}, {}, undefined, suffix];
+    const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {
+      pages: [{ kind: 'flat', items, nextCursor: null }],
+      pageParams: [null],
+    };
+    testQueryClient.setQueryDefaults(key, {
+      meta: {
+        itemFilter: (item: SoupApiItem) => soupItemMatchesQuery(item, query),
+      },
+    });
+    testQueryClient.setQueryData(key, data);
+    return key;
+  }
+
+  const emailScopedQuery: Query = { include: { threadId: ['e-1'] } };
+
+  it('rejects a newly created task from an email-scoped list', () => {
+    const key = seedFlatAstQueryWithFilter(
+      [mockEmailItem('e-1')],
+      emailScopedQuery
+    );
+
+    insertSoupEntity(mockTaskItem('task-new', 'in_progress'));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['e-1']);
+  });
+
+  it('still inserts a matching email optimistically', () => {
+    const key = seedFlatAstQueryWithFilter([mockEmailItem('e-1')], {
+      include: { threadId: ['e-1', 'e-2'] },
+    });
+
+    insertSoupEntity(mockEmailItem('e-2'));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['e-2', 'e-1']);
+  });
+});
+
+/**
+ * End-to-end gate for the folder (project) block (macro-2290): the block drives
+ * a project-scoped soup view and attaches `soupItemMatchesProjectMembership` as
+ * its `itemFilter`. Without it, creating or opening an entity outside the folder
+ * (which refetches the item and prepends it into every matching list cache)
+ * flashed into the folder's contents until the server refetch corrected it.
+ */
+describe('insertSoupEntity — folder membership gate', () => {
+  const FOLDER = 'proj-1';
+
+  function folderDocItem(id: string, projectId: string | null): SoupApiItem {
+    return {
+      tag: 'document',
+      data: { id, title: `doc ${id}`, projectId },
+      frecency_score: 1,
+    } as unknown as SoupApiItem;
+  }
+
+  function seedFolderScopedQuery(items: SoupApiItem[], suffix = 'folder-seed') {
+    const key = [...soupKeys.astItems._def, {}, {}, undefined, suffix];
+    const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {
+      pages: [{ kind: 'flat', items, nextCursor: null }],
+      pageParams: [null],
+    };
+    testQueryClient.setQueryDefaults(key, {
+      meta: {
+        itemFilter: (item: SoupApiItem) =>
+          soupItemMatchesProjectMembership(item, FOLDER),
+      },
+    });
+    testQueryClient.setQueryData(key, data);
+    return key;
+  }
+
+  it('rejects a task created outside the folder', () => {
+    const key = seedFolderScopedQuery([folderDocItem('d-in', FOLDER)]);
+
+    insertSoupEntity(folderDocItem('d-root', null));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['d-in']);
+  });
+
+  it('still inserts an entity that belongs to the folder', () => {
+    const key = seedFolderScopedQuery([folderDocItem('d-in', FOLDER)]);
+
+    insertSoupEntity(folderDocItem('d-new', FOLDER));
+
+    const page =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(
+        key
+      )!.pages[0];
+    expect(page.items.map(getSoupItemId)).toEqual(['d-new', 'd-in']);
   });
 });

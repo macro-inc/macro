@@ -61,6 +61,13 @@ export const COMPANY_GROUP_OPTIONS: GroupOption[] = [
   { value: `property:${SYSTEM_PROPERTY_IDS.COMPANY_OWNER}`, label: 'Owner' },
 ];
 
+export const TAG_VIEW_GROUP_OPTIONS: GroupOption[] = [
+  { value: 'none', label: 'None' },
+  { value: 'entity_type', label: 'Type' },
+  { value: 'project', label: 'Project' },
+  { value: 'date', label: 'Date' },
+];
+
 const _EMAIL_GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: 'date', label: 'Date' },

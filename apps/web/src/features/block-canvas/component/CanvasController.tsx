@@ -992,10 +992,7 @@ export function CanvasController(props: ParentProps) {
       use:droppable={!isDisabled()}
       use:observedSize={{ setSize: setDomRect }}
       // SCUFFED THEMING? The color-mix below is a little rough, not necessarily ideal
-      class={cn(
-        'relative size-full overflow-hidden z-0 bg-[oklch(from_color-mix(in_oklch,var(--color-surface)_75%,var(--color-ink)_25%)_l_0_var(--surface-h))]',
-        cursor()
-      )}
+      class={cn('relative size-full overflow-hidden z-0', cursor())}
       use:fileDrop={{
         disabled: isDisabled(),
         acceptedMimeTypes: acceptedMimeTypes,

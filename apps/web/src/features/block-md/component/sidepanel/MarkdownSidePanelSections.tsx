@@ -1,4 +1,7 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
@@ -85,6 +88,8 @@ export function MarkdownSidePanelSections(
 
   const itemType = blockNameToItemType(rawBlockName);
   const entity = (): Entity => ({ id: blockId, type: itemType as EntityType });
+  const propertiesEntityType = (): PropertiesEntityType =>
+    blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
   return (
     <>
@@ -94,11 +99,17 @@ export function MarkdownSidePanelSections(
       <Show when={isSnippet()}>
         <SnippetSharingOwnerSectionConditional documentId={blockId} />
       </Show>
+      <EntityTagsSection
+        entityId={blockId}
+        entityType={propertiesEntityType()}
+        canEdit={props.canEdit}
+        order={20}
+      />
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
-        order={20}
+        order={25}
       >
         <PropertiesSectionContent
           canEdit={props.canEdit}
@@ -135,6 +146,16 @@ function HistorySectionContent() {
       sidePanel?.setOpenSectionIds(['history']);
     }
   });
+
+  // Discover whether history exists (to choose between the empty state and
+  // the scrubber) once the user actually expands this accordion section —
+  // nothing inside the section can trigger the load itself, since the
+  // scrubber and "Show activity" toggle only render once sessions exist.
+  createEffect(() => {
+    if (sidePanel?.openSectionIds().includes('history')) {
+      history.requestLoad();
+    }
+  });
   const isShowingSessions = () => history.isOpen() || showSessions();
 
   const totalEdits = createMemo(() => {
@@ -144,55 +165,66 @@ function HistorySectionContent() {
   });
 
   return (
-    <Show
-      when={
-        !history.loading.sessions() && totalEdits() > 1 && history.sessions()
-      }
-      fallback={<p class="text-xs text-ink-muted">No history yet</p>}
-    >
-      {(sessions) => (
-        <div class="hidden min-w-0 overflow-hidden md:block">
-          <HistoryScrubber compact />
-          <Show when={sessions().length > 0}>
-            <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
-              <button
-                type="button"
-                aria-expanded={isShowingSessions()}
-                class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                onClick={() => {
-                  history.enter();
-                  setShowSessions(true);
-                }}
-              >
-                <CaretRightIcon
-                  class={cn(
-                    'size-3 shrink-0 transition-transform duration-90',
-                    isShowingSessions() && 'rotate-90'
-                  )}
-                />
-                <span>
-                  {isShowingSessions() ? 'Activity' : 'Show activity'}
-                </span>
-              </button>
-              <Show when={isShowingSessions()}>
-                <HistorySessionList
-                  sessions={sessions()}
-                  selectedAt={history.selectedAt}
-                  onSelect={history.enter}
-                  onViewSessionDiff={(session) => {
-                    if (history.diff.session()?.startMs === session.startMs) {
-                      history.diff.clear();
-                    } else {
-                      history.diff.view(session);
-                    }
+    <Show when={!history.loading.sessions()} fallback={<HistorySkeleton />}>
+      <Show
+        when={totalEdits() > 1 && history.sessions()}
+        fallback={<p class="text-xs text-ink-muted">No history yet</p>}
+      >
+        {(sessions) => (
+          <div class="hidden min-w-0 overflow-hidden md:block">
+            <HistoryScrubber compact />
+            <Show when={sessions().length > 0}>
+              <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
+                <button
+                  type="button"
+                  aria-expanded={isShowingSessions()}
+                  class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  onClick={() => {
+                    history.enter();
+                    setShowSessions(true);
                   }}
-                />
-              </Show>
-            </div>
-          </Show>
-        </div>
-      )}
+                >
+                  <CaretRightIcon
+                    class={cn(
+                      'size-3 shrink-0 transition-transform duration-90',
+                      isShowingSessions() && 'rotate-90'
+                    )}
+                  />
+                  <span>
+                    {isShowingSessions() ? 'Activity' : 'Show activity'}
+                  </span>
+                </button>
+                <Show when={isShowingSessions()}>
+                  <HistorySessionList
+                    sessions={sessions()}
+                    selectedAt={history.selectedAt}
+                    onSelect={history.enter}
+                    onViewSessionDiff={(session) => {
+                      if (history.diff.session()?.startMs === session.startMs) {
+                        history.diff.clear();
+                      } else {
+                        history.diff.view(session);
+                      }
+                    }}
+                  />
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </Show>
     </Show>
+  );
+}
+
+function HistorySkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
+    >
+      <div class="skeleton-shimmer h-12 w-full rounded-md bg-ink/3" />
+    </div>
   );
 }
 
@@ -440,6 +472,7 @@ function PropertiesSectionContent(props: {
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
       onPropertyPinned={handlePropertyPinned}
       onPropertyUnpinned={handlePropertyUnpinned}
+      showTags={false}
     />
   );
 }

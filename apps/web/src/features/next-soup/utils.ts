@@ -4,6 +4,7 @@ import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   getChannelParams,
+  goToChannelLatest,
   goToChannelMessage,
 } from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
@@ -11,8 +12,10 @@ import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {
   ReferredFrom,
+  SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
@@ -25,11 +28,15 @@ import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
-  type ChannelEntityTarget,
+  type ChannelClickTarget,
   type EntityData,
+  emailQueryKeyExcludesDone,
   getSnippetHit,
+  isChannelEntity,
+  isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
+  isNonMemberChannelEntity,
   isSearchEntity,
   isWithNotification,
   queryKeys,
@@ -42,6 +49,7 @@ import {
   getAllNotificationsFromGroup,
   getChannelNotificationParams,
   type NotificationSource,
+  notificationIsRead,
   setDoneOverride,
   stackNotifications,
   type UnifiedNotification,
@@ -60,10 +68,12 @@ import {
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
   removeSoupEntities,
+  removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
+import { withPreviewSourceEntityId } from './preview-history';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -178,6 +188,13 @@ const isNewerEntity = (
   return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
+/**
+ * Opens an entity via {@link openExternalUrl}. On web this is a new browser
+ * tab; inside the native Tauri shell a same-origin Macro `/app` link is routed
+ * in-app (in place) instead — `window.open` there would kick the user out to
+ * the system browser. So despite the name, this does not guarantee a separate
+ * tab/pane under Tauri.
+ */
 export const openEntityInNewTab = ({
   entity,
   location,
@@ -266,7 +283,7 @@ export const openEntityInNewTab = ({
     }
   }
 
-  window.open(entityUrl.toString(), '_blank', 'noopener');
+  openExternalUrl(entityUrl.toString());
 };
 
 /**
@@ -276,23 +293,15 @@ export const openEntityInNewTab = ({
  * like 'escape' won't work.
  *
  * @param entityId - Optional entity ID to focus on. If not provided, focuses the first entity in the list.
- * @param inPreview - Whether to check for the soup view in a preview panel
  */
-export const restoreSoupFocus = async (
-  entityId?: string,
-  inPreview = false
-): Promise<void> => {
+export const restoreSoupFocus = async (entityId?: string): Promise<void> => {
   // Get the active split's soup view DOM reference
   const activeSplitId = globalSplitManager()?.activeSplitId();
   if (!activeSplitId) return;
 
-  let domRef = document.querySelector(`[data-soup-view-id="${activeSplitId}"]`);
-
-  if (inPreview) {
-    domRef = document.querySelector(
-      `[data-soup-view-id="${activeSplitId}-preview"]`
-    );
-  }
+  const domRef = document.querySelector(
+    `[data-soup-view-id="${activeSplitId}"]`
+  );
 
   if (!(domRef instanceof HTMLElement)) return;
 
@@ -328,6 +337,37 @@ interface OpenEntityOptions {
   referredFrom?: ReferredFrom;
 }
 
+const DUPLICATE_CONTENT_MESSAGE = 'Content already open.';
+
+/** Whether this entity is open outside the controller's own preview viewer. */
+export function isDuplicatePreviewEntityOpen(
+  entity: EntityData,
+  controller: SplitHandle
+): boolean {
+  const splitManager = globalSplitManager();
+  const viewerId = controller.viewerId();
+  if (!splitManager || !viewerId) return false;
+
+  const content = getEntitySplitContent(entity);
+  const existing = splitManager.getSplitByContent(content.type, content.id);
+  return existing !== undefined && existing.id !== viewerId;
+}
+
+/** Show the standard duplicate-content notification. */
+export function notifyDuplicateContentOpen() {
+  toast.alert(DUPLICATE_CONTENT_MESSAGE);
+}
+
+/** Reject and notify for an entity already owned by another split. */
+export function preventDuplicatePreviewEntityOpen(
+  entity: EntityData,
+  controller: SplitHandle
+): boolean {
+  if (!isDuplicatePreviewEntityOpen(entity, controller)) return false;
+  notifyDuplicateContentOpen();
+  return true;
+}
+
 /**
  * Resolve which channel message to activate when a channel row is opened.
  *
@@ -343,14 +383,24 @@ interface OpenEntityOptions {
  * driving notification (the same data the card renders), so read the target
  * from there, exactly like the old inbox did via getChannelNotificationParams.
  * Notifications are scoped to the row first (top-level sends for a channel,
- * this thread's replies for a thread) and the most recent one wins. With no
- * notification either, fall back to the row's own ids — a `channel_thread`
- * row opens at its root and a `channel` row has no message to target (open
- * latest).
+ * this thread's replies for a thread) and the most recent one wins.
+ *
+ * Read state only changes a whole-`channel` row: its notifications are skipped
+ * when read, because a channel aggregates many messages and the newest unread
+ * one (never your own send) can sit far above the latest — jumping there feels
+ * wrong once the row looks read. A `channel_thread`/`channel_message` row is
+ * scoped to one message, so it targets its driving notification read or not —
+ * that is the reply the row stands for and the message to highlight.
+ *
+ * With no aiming notification, fall back to the row's own semantics: a
+ * `channel_thread`/`channel_message` row opens at its own root/message, and a
+ * whole `channel` row opens at `latest` — landing on the newest message the
+ * row's preview shows (which may be your own send) rather than an older
+ * notification or nothing.
  */
 export function getChannelEntityTarget(
   entity: EntityData
-): ChannelEntityTarget | undefined {
+): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
     entity.type !== 'channel_message' &&
@@ -359,12 +409,22 @@ export function getChannelEntityTarget(
     return undefined;
   }
 
-  if (entity.target) return entity.target;
+  if (entity.target) {
+    return {
+      kind: 'message',
+      messageId: entity.target.messageId,
+      threadId: entity.target.threadId,
+    };
+  }
 
-  const fallback =
+  const fallback: ChannelClickTarget =
     entity.type === 'channel'
-      ? undefined
-      : { messageId: entity.messageId, threadId: entity.threadId };
+      ? { kind: 'latest' }
+      : {
+          kind: 'message',
+          messageId: entity.messageId,
+          threadId: entity.threadId,
+        };
 
   if (!isWithNotification(entity)) return fallback;
 
@@ -373,8 +433,20 @@ export function getChannelEntityTarget(
     entity.notifications?.() ?? []
   );
   for (const notification of scoped) {
+    // For a whole-`channel` row, ignore notifications you have already read:
+    // the row stands for the entire channel, so once read it should open at
+    // the latest message, not scroll up to an already-seen one. (Read ones
+    // are skipped here; if all are read the loop falls through to the
+    // `latest` fallback.) A read notification is also usually well above the
+    // latest message — you are never notified of your own sends, so the newest
+    // notification is someone else's and predates any message you sent after.
+    //
+    // A thread/message row stands for one specific message, so it always jumps
+    // to its notification's message, read or not — that is the message the row
+    // is about and the one to highlight.
+    if (entity.type === 'channel' && notificationIsRead(notification)) continue;
     const { messageId, threadId } = getChannelNotificationParams(notification);
-    if (messageId) return { messageId, threadId };
+    if (messageId) return { kind: 'message', messageId, threadId };
   }
 
   return fallback;
@@ -404,6 +476,11 @@ export async function navigateChannelEntityToTarget(
         : undefined;
   if (!channelId) return;
 
+  if (target.kind === 'latest') {
+    await goToChannelLatest(blockOrchestrator, channelId);
+    return;
+  }
+
   await goToChannelMessage(
     blockOrchestrator,
     channelId,
@@ -411,6 +488,19 @@ export async function navigateChannelEntityToTarget(
     target.threadId
   );
 }
+
+/**
+ * Location a plain row click falls back to when no explicit location is given.
+ * Email rows open like plain soup rows — at the latest message, expanded —
+ * so only non-email snippet entities (calls) fall back to their row hit.
+ * Clicking a specific content hit still passes an explicit location.
+ */
+export const getRowClickFallbackLocation = (
+  entity: EntityData
+): SearchLocation | undefined =>
+  isHitSnippetEntity(entity) && !isEmailEntity(entity)
+    ? getSnippetHit(entity)?.location
+    : undefined;
 
 /**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
@@ -426,14 +516,40 @@ export const openEntityInSplitFromUnifiedList = async (
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  if (!location && isHitSnippetEntity(entity)) {
-    location = getSnippetHit(entity)?.location;
+  if (!location) {
+    location = getRowClickFallbackLocation(entity);
   }
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
   if (!splitManager) {
     console.error('No split manager found');
+    return;
+  }
+
+  // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
+  // the Join prompt in the Viewer; otherwise the row's inline Join button is
+  // the only affordance.
+  if (isNonMemberChannelEntity(entity)) {
+    if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
+      const joinPromptContent = withPreviewSourceEntityId(
+        {
+          type: 'component',
+          id: 'non-member-channel',
+          params: {
+            channelId: entity.id,
+            channelName: entity.name,
+            memberCount: entity.participantIds?.length ?? 0,
+          },
+        },
+        entity.id
+      );
+      splitManager.openWithSplit(joinPromptContent, {
+        referredFrom: options.referredFrom,
+        activate: true,
+        handle: splitHandle,
+      });
+    }
     return;
   }
 
@@ -460,13 +576,28 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
+  if (
+    !allowDuplicate &&
+    !openInNewSplit &&
+    splitHandle &&
+    preventDuplicatePreviewEntityOpen(entity, splitHandle)
+  ) {
+    return;
+  }
+
   const channelTarget = getChannelEntityTarget(entity);
+  const channelMessageTarget =
+    channelTarget?.kind === 'message' ? channelTarget : undefined;
+  const openChannelAtLatest = channelTarget?.kind === 'latest';
 
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
-  } else if (channelTarget) {
-    params = getChannelParams(channelTarget.messageId, channelTarget.threadId);
+  } else if (channelMessageTarget) {
+    params = getChannelParams(
+      channelMessageTarget.messageId,
+      channelMessageTarget.threadId
+    );
   } else if (entity.type === 'call' && location?.type === 'call_record') {
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
@@ -480,36 +611,43 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  splitManager.openWithSplit(
-    { ...content, params },
-    {
-      referredFrom,
-      activate: true,
-      preferNewSplit: openInNewSplit,
-      handle: splitHandle,
-      mergeHistory,
-      allowDuplicate,
-      reopen:
-        entity.type === 'channel' && !location && !channelTarget
-          ? 'latest'
-          : undefined,
-    }
-  );
+  let splitContent: SplitContent = { ...content, params };
+  if (splitHandle?.isControllerSplit()) {
+    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
+  }
+
+  splitManager.openWithSplit(splitContent, {
+    referredFrom,
+    activate: true,
+    preferNewSplit: openInNewSplit,
+    handle: splitHandle,
+    mergeHistory,
+    allowDuplicate,
+    reopen:
+      entity.type === 'channel' && !location && openChannelAtLatest
+        ? 'latest'
+        : undefined,
+  });
 
   // Navigate to specific location if provided
   if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (channelTarget) {
+  } else if (channelMessageTarget) {
     // NOTE: This will force target message navigation in case the split is already open.
     await navigateToLocation(
       content.id,
       {
         type: 'channel',
-        messageId: channelTarget.messageId,
-        threadId: channelTarget.threadId,
+        messageId: channelMessageTarget.messageId,
+        threadId: channelMessageTarget.threadId,
       },
       blockOrchestrator
     );
+  } else if (openChannelAtLatest) {
+    // Force the scroll-to-bottom even when the channel is already open in a
+    // (preview) split, where reopen: 'latest' only reactivates the parked
+    // split without re-pinning it to the newest message.
+    await goToChannelLatest(blockOrchestrator, content.id);
   }
 };
 
@@ -906,9 +1044,10 @@ export function resolveMarkEntitiesDoneVariables(args: {
 }
 
 /**
- * Applies the optimistic UI state for marking entities as done — removes
- * emails from the soup + email caches and flips the notification `done`
- * override. Returns a context the mutation uses for rollback / reapply.
+ * Applies the optimistic UI state for marking entities as done — removes the
+ * entities from done-filtered soup/email caches, flips surviving email rows
+ * to the done state, and sets the notification `done` override. Returns a
+ * context the mutation uses for rollback / reapply.
  */
 export function applyEntitiesDoneOptimistic(args: {
   entityIds: string[];
@@ -935,6 +1074,8 @@ export function applyEntitiesDoneOptimistic(args: {
       queryKey: queryKeys.all.email,
     })) {
       if (!data) continue;
+      // Views that show done threads keep their rows.
+      if (!emailQueryKeyExcludesDone(key)) continue;
       const bucket = removedEmails.get(key) ?? new Map<string, EntityData>();
       let mutated = false;
       const pages = data.pages.map((page) => {
@@ -984,26 +1125,45 @@ export function applyEntitiesDoneOptimistic(args: {
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
+  let emailRowTxns: { rollback: () => void }[] = [];
 
   const reapply = () => {
-    // Remove every marked entity from the soup feed cache so the hide is
-    // authoritative for all types; undo restores them via this transaction's
-    // rollback.
-    soupTxn = entityIds.length > 0 ? removeSoupEntities(entityIdSet) : null;
+    // Remove the marked entities from done-filtered soup queries (inbox,
+    // mail Important/Noise); views that show done content (e.g. mail All)
+    // keep their rows. Undo restores them via this transaction's rollback.
+    soupTxn =
+      entityIds.length > 0
+        ? removeSoupEntitiesFromDoneFilteredQueries(entityIdSet)
+        : null;
+    // Rows that remain visible flip to the done state.
+    emailRowTxns = emailIds.map((id) =>
+      optimisticUpdateSoupEntity({
+        tag: 'emailThread',
+        data: { id, inboxVisible: false },
+        frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
+      })
+    );
     filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
 
-  const rollback = () => {
+  const rollbackSoup = () => {
+    for (const txn of [...emailRowTxns].reverse()) {
+      txn.rollback();
+    }
+    emailRowTxns = [];
     soupTxn?.rollback();
     soupTxn = null;
+  };
+
+  const rollback = () => {
+    rollbackSoup();
     restoreEmailCache();
     setDoneOverride(notificationIds, undefined);
   };
 
   const applyUndone = () => {
-    soupTxn?.rollback();
-    soupTxn = null;
+    rollbackSoup();
     restoreEmailCache();
     restoreUserNotifications(notificationSnapshots);
     // Force `done=false` — cache may have reconciled to `done=true` from the
@@ -1014,6 +1174,37 @@ export function applyEntitiesDoneOptimistic(args: {
   reapply();
 
   return { rollback, reapply, applyUndone };
+}
+
+/**
+ * Optimistic UI for marking entities as not done — flips email rows back to
+ * inbox-visible and forces the notification `done` override off. Rows are
+ * patched in place; done-filtered views regain the entities when the caller
+ * invalidates after the server confirms.
+ */
+export function applyEntitiesNotDoneOptimistic(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): { rollback: () => void } {
+  const { emailIds, notificationIds } = args;
+
+  const emailRowTxns = emailIds.map((id) =>
+    optimisticUpdateSoupEntity({
+      tag: 'emailThread',
+      data: { id, inboxVisible: true },
+      frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
+    })
+  );
+  setDoneOverride(notificationIds, false);
+
+  return {
+    rollback: () => {
+      for (const txn of [...emailRowTxns].reverse()) {
+        txn.rollback();
+      }
+      setDoneOverride(notificationIds, undefined);
+    },
+  };
 }
 
 /**
@@ -1116,5 +1307,11 @@ export async function executeMarkEntitiesUndone(args: {
       queryKey: notificationKeys.user._def,
       refetchType: 'none',
     }),
+    // Refetch open thread views so the unarchive restores `inbox_visible`.
+    ...emailIds.map((id) =>
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(id).queryKey,
+      })
+    ),
   ]);
 }

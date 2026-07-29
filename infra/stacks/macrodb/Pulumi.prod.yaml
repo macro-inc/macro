@@ -3,13 +3,13 @@ config:
   macrodb:db_password_secret_key: macrodb-password-prod
   macrodb:parameter_group_family_legacy: postgres14
   macrodb:parameter_group_family: postgres16
-  macrodb:engine_version: 14.17
-  macrodb:instance_size: db.t4g.xlarge
+  macrodb:engine_version: 14.22
+  macrodb:instance_size: db.m9g.2xlarge
   macrodb:storage_type: gp3
   macrodb:storage_iops: 12000
   macrodb:storage_throughput: 500
-  macrodb:allocated_storage: 1500
-  macrodb:max_allocated_storage: 2000
+  macrodb:allocated_storage: 2000
+  macrodb:max_allocated_storage: 2500
   macrodb:ca_cert_identifier: rds-ca-rsa2048-g1
   macrodb:kms_key_id: arn:aws:kms:us-east-1:569036502058:key/6a0ba9c2-b8ab-4a65-b0f2-6f8f39ccda72
   macrodb:performance_insights_retention_days: 7
@@ -19,4 +19,4 @@ config:
   macrodb:monitoring_interval: 60
   macrodb:rds_monitoring_role_arn: arn:aws:iam::569036502058:role/rds-monitoring-role
   macrodb:backup_retention_days: 6
-  macrodb:read_replica_instance_size: db.t4g.xlarge
+  macrodb:read_replica_instance_size: db.m9g.xlarge

@@ -12,8 +12,9 @@ inbound = [
   "dep:entity_access",
   "entity_access/inbound",
   "entity_access/ports",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
+  "macro_authorization/axum",
   "dep:serde_json",
   "dep:utoipa",
   "ports",
@@ -29,10 +30,12 @@ channels = { path = "../channels", optional = true, default-features = false, fe
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 hex = { workspace = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
@@ -50,6 +53,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }

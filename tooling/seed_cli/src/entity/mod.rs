@@ -37,6 +37,15 @@ impl EntityCommand {
         }
     }
 
+    /// Run destructive pre-connection setup (e.g. `scenario apply --force`
+    /// dropping and re-migrating the database) before the pool opens.
+    pub async fn pre_connect(&self, database_url: &str) -> anyhow::Result<()> {
+        match self {
+            EntityCommand::Scenario(args) => args.pre_connect(database_url).await,
+            _ => Ok(()),
+        }
+    }
+
     /// Execute the entity command.
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self {

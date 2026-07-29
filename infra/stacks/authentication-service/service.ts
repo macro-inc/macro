@@ -14,6 +14,7 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
 
@@ -151,7 +152,12 @@ export class AuthenticationService extends pulumi.ComponentResource {
         name: `${BASE_NAME}-role-${stack}`,
         assumeRolePolicy: ecsTaskAssumeRolePolicy,
         tags: this.tags,
-        managedPolicyArns: [secretsPolicy.arn, sesPolicy.arn, queuePolicy.arn],
+        managedPolicyArns: [
+          secretsPolicy.arn,
+          sesPolicy.arn,
+          queuePolicy.arn,
+          getKafkaClusterPolicy(),
+        ],
       },
       { parent: this }
     );

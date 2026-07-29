@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM crm_cleanup_candidates\n        WHERE link_id = $1 AND contact_email = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f188a83d94141f189fa0cbae17122fcc70a2bffb407d975755541c8b05972e3b"
+}

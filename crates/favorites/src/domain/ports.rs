@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
@@ -65,6 +66,17 @@ pub trait FavoritesRepo: Send + Sync + 'static {
 pub trait FavoritesService: Send + Sync + 'static {
     /// Add an entity to the user's favorites (idempotent).
     fn add_favorite(
+        &self,
+        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
+
+    /// Add an entity after a trusted caller has already established that the
+    /// user can view it.
+    ///
+    /// This supports internal workflows, such as favoriting an entity that the
+    /// same workflow just created for the user, where no access receipt exists
+    /// at the driving boundary.
+    fn add_favorite_with_established_access(
         &self,
         user_id: &MacroUserIdStr<'_>,
         entity: &Entity<'_>,

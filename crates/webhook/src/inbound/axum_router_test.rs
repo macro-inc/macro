@@ -1,20 +1,31 @@
 use super::axum_router::{WebhookRouterState, webhook_router};
 use crate::domain::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookId,
+        CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,
+        Webhook, WebhookId,
     },
     ports::{WebhookError, WebhookService},
 };
 use axum::{
     body::{Body, to_bytes},
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header},
+};
+use macro_authorization::{
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
+use rootcause::Report;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use tower::ServiceExt;
+
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone, Default)]
 struct FakeService {
@@ -25,6 +36,8 @@ struct FakeService {
 #[derive(Debug)]
 enum ServiceCall {
     Create(MacroUserIdStr<'static>, CreateWebhookRequest),
+    Get(MacroUserIdStr<'static>, WebhookId),
+    List(MacroUserIdStr<'static>),
     Patch(MacroUserIdStr<'static>, WebhookId, PatchWebhookRequest),
     Validate(MacroUserIdStr<'static>, WebhookId),
     Delete(MacroUserIdStr<'static>, WebhookId),
@@ -32,6 +45,7 @@ enum ServiceCall {
 
 enum ServiceResponse {
     Webhook(Webhook),
+    List(ListWebhooksResponse),
     Validate(ValidateWebhookResponse),
 }
 
@@ -49,12 +63,56 @@ impl Clone for ServiceCall {
     fn clone(&self) -> Self {
         match self {
             Self::Create(user, request) => Self::Create(user.clone(), request.clone()),
+            Self::Get(user, id) => Self::Get(user.clone(), id.clone()),
+            Self::List(user) => Self::List(user.clone()),
             Self::Patch(user, id, request) => {
                 Self::Patch(user.clone(), id.clone(), request.clone())
             }
             Self::Validate(user, id) => Self::Validate(user.clone(), id.clone()),
             Self::Delete(user, id) => Self::Delete(user.clone(), id.clone()),
         }
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeAuthorizationService {
+    calls: Arc<AtomicUsize>,
+}
+
+impl FakeAuthorizationService {
+    fn calls(&self) -> usize {
+        self.calls.load(Ordering::SeqCst)
+    }
+}
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if jwt != "valid" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(UserContext {
+            user_id: user_id().to_string(),
+            ..UserContext::default()
+        })
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.map(|user_id| UserContext {
+            user_id,
+            fusion_user_id: claims.fusion_user_id.unwrap_or_default(),
+            organization_id: claims.organization_id,
+            permissions: None,
+        }))
     }
 }
 
@@ -76,7 +134,43 @@ impl WebhookService for FakeService {
             .unwrap_or_else(|| Ok(ServiceResponse::Webhook(webhook())))?
         {
             ServiceResponse::Webhook(webhook) => Ok(webhook),
-            ServiceResponse::Validate(_) => panic!("unexpected validate response"),
+            _ => panic!("unexpected non-webhook response"),
+        }
+    }
+
+    async fn get_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> Result<Webhook, WebhookError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(ServiceCall::Get(caller, webhook_id));
+        match self
+            .response
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap_or_else(|| Ok(ServiceResponse::Webhook(webhook())))?
+        {
+            ServiceResponse::Webhook(webhook) => Ok(webhook),
+            _ => panic!("unexpected non-webhook response"),
+        }
+    }
+
+    async fn list_webhooks(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<ListWebhooksResponse, WebhookError> {
+        self.calls.lock().unwrap().push(ServiceCall::List(caller));
+        match self.response.lock().unwrap().take().unwrap_or_else(|| {
+            Ok(ServiceResponse::List(ListWebhooksResponse {
+                webhooks: vec![webhook()],
+            }))
+        })? {
+            ServiceResponse::List(response) => Ok(response),
+            _ => panic!("unexpected non-list response"),
         }
     }
 
@@ -98,7 +192,7 @@ impl WebhookService for FakeService {
             .unwrap_or_else(|| Ok(ServiceResponse::Webhook(webhook())))?
         {
             ServiceResponse::Webhook(webhook) => Ok(webhook),
-            ServiceResponse::Validate(_) => panic!("unexpected validate response"),
+            _ => panic!("unexpected non-webhook response"),
         }
     }
 
@@ -119,7 +213,7 @@ impl WebhookService for FakeService {
             .unwrap_or_else(|| Ok(ServiceResponse::Validate(validate_response(true))))?
         {
             ServiceResponse::Validate(response) => Ok(response),
-            ServiceResponse::Webhook(_) => panic!("unexpected webhook response"),
+            _ => panic!("unexpected non-validate response"),
         }
     }
 
@@ -241,12 +335,67 @@ async fn patch_passes_authenticated_user_path_and_body_to_service() {
 }
 
 #[tokio::test]
-async fn validate_passes_authenticated_user_and_path_to_service() {
+async fn get_passes_authenticated_user_and_path_to_service() {
     let service = FakeService::default();
-    let limiter = FakeRateLimiter::default();
+    let response = send(
+        service.clone(),
+        FakeRateLimiter::default(),
+        "GET",
+        "/webhooks/wh_123",
+        json!({}),
+    )
+    .await;
+
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.get("id").is_some());
+    assert!(body.get("signing_secret").is_none());
+    match &service.calls()[0] {
+        ServiceCall::Get(user, webhook_id) => {
+            assert_eq!(user.as_ref(), user_id());
+            assert_eq!(webhook_id, "wh_123");
+        }
+        other => panic!("unexpected call: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn list_passes_authenticated_user_to_service_and_is_not_rate_limited() {
+    let service = FakeService::default();
+    let limiter = FakeRateLimiter::exceeded();
     let response = send(
         service.clone(),
         limiter.clone(),
+        "GET",
+        "/webhooks",
+        json!({}),
+    )
+    .await;
+
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["webhooks"].is_array());
+    assert_eq!(limiter.checks(), 0);
+    match &service.calls()[0] {
+        ServiceCall::List(user) => assert_eq!(user.as_ref(), user_id()),
+        other => panic!("unexpected call: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn validate_passes_authenticated_user_and_path_to_service() {
+    let service = FakeService::default();
+    let limiter = FakeRateLimiter::default();
+    let authorization = FakeAuthorizationService::default();
+    let response = send_request(
+        service.clone(),
+        limiter.clone(),
+        authorization.clone(),
+        Some("Bearer valid"),
         "POST",
         "/webhooks/wh_123/validate",
         json!({}),
@@ -254,6 +403,7 @@ async fn validate_passes_authenticated_user_and_path_to_service() {
     .await;
 
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(authorization.calls(), 1);
     assert_eq!(limiter.checks(), 1);
     match &service.calls()[0] {
         ServiceCall::Validate(user, webhook_id) => {
@@ -309,7 +459,27 @@ async fn validation_rate_limit_exceeded_maps_to_429_and_skips_service() {
 }
 
 #[tokio::test]
-async fn create_and_patch_are_not_rate_limited() {
+async fn missing_credentials_are_rejected_before_rate_limit_and_service_calls() {
+    let service = FakeService::default();
+    let limiter = FakeRateLimiter::default();
+    let response = send_request(
+        service.clone(),
+        limiter.clone(),
+        FakeAuthorizationService::default(),
+        None,
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(limiter.checks(), 0);
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn create_patch_and_delete_are_not_rate_limited() {
     let service = FakeService::default();
     let limiter = FakeRateLimiter::exceeded();
 
@@ -322,16 +492,25 @@ async fn create_and_patch_are_not_rate_limited() {
     )
     .await;
     let patch_response = send(
-        service,
+        service.clone(),
         limiter.clone(),
         "PATCH",
         "/webhooks/wh_123",
         json!({"name":"Renamed"}),
     )
     .await;
+    let delete_response = send(
+        service,
+        limiter.clone(),
+        "DELETE",
+        "/webhooks/wh_123",
+        json!({}),
+    )
+    .await;
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
     assert_eq!(patch_response.status(), StatusCode::OK);
+    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
     assert_eq!(limiter.checks(), 0);
 }
 
@@ -378,20 +557,44 @@ async fn send(
     uri: &str,
     body: serde_json::Value,
 ) -> axum::response::Response {
-    let router = webhook_router::<_, _, ()>(WebhookRouterState::new(service, limiter));
+    send_request(
+        service,
+        limiter,
+        FakeAuthorizationService::default(),
+        Some("Bearer valid"),
+        method,
+        uri,
+        body,
+    )
+    .await
+}
+
+async fn send_request(
+    service: FakeService,
+    limiter: FakeRateLimiter,
+    authorization: FakeAuthorizationService,
+    authorization_header: Option<&str>,
+    method: &str,
+    uri: &str,
+    body: serde_json::Value,
+) -> axum::response::Response {
+    let authorization_state = MacroAuthorizationState::new(Arc::new(authorization));
+    let router = webhook_router::<_, _, _, ()>(WebhookRouterState::new(
+        service,
+        limiter,
+        authorization_state,
+    ));
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json");
+    let request = match authorization_header {
+        Some(value) => request.header(header::AUTHORIZATION, value),
+        None => request,
+    };
+
     router
-        .oneshot(
-            Request::builder()
-                .method(method)
-                .uri(uri)
-                .extension(UserContext {
-                    user_id: user_id().to_string(),
-                    ..UserContext::default()
-                })
-                .header("content-type", "application/json")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
         .await
         .unwrap()
 }

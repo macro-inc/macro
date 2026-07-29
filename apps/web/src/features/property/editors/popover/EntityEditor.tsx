@@ -1,7 +1,11 @@
+import type { IUser } from '@core/user';
+import { idToDisplayName, idToEmail } from '@core/user/util';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '@property/utils/entityConversion';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createSignal, Show, Suspense } from 'solid-js';
@@ -36,6 +40,18 @@ export function EntityEditor(props: EntityEditorProps) {
 function EntityEditorBody(props: EntityEditorProps) {
   const ctx = useProperty();
   const property = ctx.property() as EntityProperty;
+
+  // Company owners are always teammates, so the owner picker offers the
+  // team roster instead of the default quick-access people pool.
+  const isCompanyOwner =
+    property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
+  const teamQuery = useCurrentTeamQuery();
+  const teamMembers = (): IUser[] =>
+    (teamQuery.data?.members ?? []).map((member) => ({
+      id: member.user_id,
+      email: idToEmail(member.user_id),
+      name: idToDisplayName(member.user_id),
+    }));
 
   const initialRefs: EntityReference[] = property.value ?? [];
   const [selectedRefs, setSelectedRefs] =
@@ -83,6 +99,7 @@ function EntityEditorBody(props: EntityEditorProps) {
             placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
+            users: isCompanyOwner ? teamMembers : undefined,
           }}
           selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
           setSelectedOptions={(newOptions, entityInfo) => {

@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
@@ -13,14 +13,16 @@ use email::{
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{AuthServiceUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::task::TaskTracker;
 
 mod api;
 mod utils;
@@ -124,6 +126,14 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args.clone()),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: Some("macro|INTERNAL@macro.com".to_string()),
+        },
+        macro_authorization::NoBotAuthorizer,
+    )));
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
@@ -134,9 +144,11 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
@@ -157,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
+        authorization_state: authorization_state.clone(),
     };
     let auth_service_client = Arc::new(auth_service_client);
     let redis_conn = redis_client
@@ -169,7 +182,7 @@ async fn main() -> anyhow::Result<()> {
         redis_conn,
         auth_service_client.clone(),
     ));
-    api::setup_and_serve(ApiContext {
+    let api_result = api::setup_and_serve(ApiContext {
         db,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
@@ -181,6 +194,7 @@ async fn main() -> anyhow::Result<()> {
         s3_client: Arc::new(s3_client),
         dss_client: Arc::new(dss_client),
         system_properties_service,
+        authorization_state: authorization_state.clone(),
         jwt_args,
         email_service,
         entity_access_service,
@@ -188,6 +202,22 @@ async fn main() -> anyhow::Result<()> {
         gmail_token_state,
         macro_event_broker: Arc::new(macro_event_broker),
     })
-    .await?;
-    Ok(())
+    .await;
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    api_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);

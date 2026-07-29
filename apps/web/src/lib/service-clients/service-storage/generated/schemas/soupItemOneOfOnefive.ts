@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupCrmCompany } from './soupCrmCompany';
+import type { SoupCrmCompanySoupPropertiesField } from './soupCrmCompanySoupPropertiesField';
 import type { SoupItemOneOfOnefiveTag } from './soupItemOneOfOnefiveTag';
 
 /**
@@ -12,6 +12,6 @@ import type { SoupItemOneOfOnefiveTag } from './soupItemOneOfOnefiveTag';
  */
 export type SoupItemOneOfOnefive = {
   /** CRM company item. */
-  data: SoupCrmCompany;
+  data: SoupCrmCompanySoupPropertiesField;
   tag: SoupItemOneOfOnefiveTag;
 };

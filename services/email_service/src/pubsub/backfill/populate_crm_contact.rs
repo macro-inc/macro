@@ -41,7 +41,6 @@ pub async fn populate_crm_contact(
         })?;
 
     let Some(team_id) = team_id else {
-        tracing::debug!("User has no team; skipping CRM population");
         return Ok(());
     };
 

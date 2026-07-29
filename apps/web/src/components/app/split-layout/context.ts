@@ -5,7 +5,6 @@ import {
   createContext,
   type JSX,
   type Setter,
-  type Signal,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
 
@@ -33,11 +32,6 @@ export type HeaderCollapser = {
 export const SplitLayoutContext = createContext<{
   manager: SplitManager;
 }>();
-
-export type HalfSplitState = {
-  percentage: number;
-  side: 'left' | 'right';
-};
 
 export type SplitBottomPanelRegistration = {
   id: string;
@@ -85,10 +79,8 @@ export type SplitPanelContextType = {
   panelSize: NullableSize;
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
-  halfSplitState?: Accessor<HalfSplitState | undefined>;
   bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
   registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
-  previewState: Signal<boolean>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;

@@ -4,12 +4,15 @@ use crate::domain::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
         TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers,
+        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
 use macro_user_id::{
-    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+    cowlike::CowLike,
+    email::{Email, ReadEmailParts},
+    lowercased::Lowercase,
+    user_id::MacroUserIdStr,
 };
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -19,54 +22,6 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     sqlx::Error::TypeNotFound {
         type_name: e.to_string(),
     }
-}
-
-const MAX_TEAM_SLUG_LEN: usize = 20;
-
-fn normalize_team_slug(slug: &str) -> Result<String, TeamError> {
-    let mut normalized = String::new();
-    let mut last_was_separator = false;
-
-    for ch in slug.chars() {
-        let normalized_char = if ch.is_ascii_alphabetic() {
-            ch.to_ascii_uppercase()
-        } else if ch == '_' || ch == '-' || ch.is_ascii_whitespace() {
-            '_'
-        } else {
-            return Err(TeamError::BadRequest(
-                "team slug may only contain ASCII letters, spaces, hyphens, and underscores"
-                    .to_string(),
-            ));
-        };
-
-        if normalized_char == '_' {
-            if !normalized.is_empty() && !last_was_separator {
-                normalized.push('_');
-            }
-            last_was_separator = true;
-        } else {
-            normalized.push(normalized_char);
-            last_was_separator = false;
-        }
-    }
-
-    while normalized.ends_with('_') {
-        normalized.pop();
-    }
-
-    if normalized.is_empty() {
-        return Err(TeamError::BadRequest(
-            "team slug cannot be empty".to_string(),
-        ));
-    }
-
-    if normalized.len() > MAX_TEAM_SLUG_LEN {
-        return Err(TeamError::BadRequest(format!(
-            "team slug cannot be longer than {MAX_TEAM_SLUG_LEN} characters"
-        )));
-    }
-
-    Ok(normalized)
 }
 
 #[cfg(test)]
@@ -135,7 +90,8 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        team_slug: &str,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -143,14 +99,16 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, 1, $4, TRUE)
-            RETURNING id, name, slug, owner_id
+            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
+            VALUES ($1, $2, $3, $4, 1, $5, $6)
+            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites
             "#,
             id,
             team_name,
+            team_slug,
             user_id.as_ref(),
-            subscription_id.to_string(),
+            subscription_id.map(|s| s.to_string()),
+            subscription_id.is_some(),
         )
         .try_map(|row| {
             Ok(Team {
@@ -162,6 +120,10 @@ impl TeamRepositoryImpl {
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
                 crm_enabled: false,
+                // New teams start without an auto-join domain.
+                auto_join_domain: None,
+                enterprise: row.enterprise,
+                allow_non_admin_invites: row.allow_non_admin_invites,
             })
         })
         .fetch_one(&mut *transaction)
@@ -228,6 +190,12 @@ impl From<sqlx::Error> for RemoveUserFromTeamError {
 impl From<sqlx::Error> for RemoveTeamInviteError {
     fn from(e: sqlx::Error) -> Self {
         Self::StorageLayerError(e.into())
+    }
+}
+
+impl From<sqlx::Error> for ToggleAutoJoinDomainError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::TeamError(e.into())
     }
 }
 
@@ -344,17 +312,34 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_team_enterprise_status(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        let enterprise = sqlx::query_scalar!(
+            r#"
+            SELECT enterprise
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(enterprise)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        team_slug: &str,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, subscription_id)
+        self.create_team_inner(user_id, team_name, team_slug, subscription_id)
             .await
             .map_err(|e| e.into())
     }
@@ -1051,7 +1036,8 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
+                t.allow_non_admin_invites,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1068,6 +1054,9 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
+                auto_join_domain: row.auto_join_domain,
+                enterprise: row.enterprise,
+                allow_non_admin_invites: row.allow_non_admin_invites,
             })
         })
         .fetch_one(&self.pool)
@@ -1105,7 +1094,8 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
+                t.allow_non_admin_invites,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1123,6 +1113,9 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
+                auto_join_domain: row.auto_join_domain,
+                enterprise: row.enterprise,
+                allow_non_admin_invites: row.allow_non_admin_invites,
             })
         })
         .fetch_all(&self.pool)
@@ -1392,5 +1385,159 @@ impl TeamRepository for TeamRepositoryImpl {
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn toggle_auto_join_domain(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
+        let mut transaction = self.pool.begin().await.map_err(TeamError::from)?;
+
+        // Lock the row so concurrent toggles serialize instead of both
+        // reading the same current value.
+        let team = sqlx::query!(
+            r#"
+            SELECT auto_join_domain, owner_id
+            FROM team
+            WHERE id = $1
+            FOR UPDATE
+            "#,
+            team_id,
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+
+        let new_domain = if team.auto_join_domain.is_some() {
+            None
+        } else {
+            let owner_id = MacroUserIdStr::parse_from_str(&team.owner_id)
+                .map_err(|e| TeamError::StorageLayerError(e.into()))?;
+            let owner_email = owner_id.email_part().lowercase();
+            let domain = owner_email.domain_part();
+
+            if is_generic_email_domain(domain) {
+                return Err(ToggleAutoJoinDomainError::GenericDomainNotAllowed(
+                    domain.to_owned(),
+                ));
+            }
+
+            Some(domain.to_owned())
+        };
+
+        sqlx::query!(
+            r#"
+            UPDATE team
+            SET auto_join_domain = $2
+            WHERE id = $1
+            "#,
+            team_id,
+            new_domain.as_deref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await.map_err(TeamError::from)?;
+
+        Ok(new_domain)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<bool, TeamError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT allow_non_admin_invites
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(TeamError::TeamDoesNotExist)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn toggle_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<bool, TeamError> {
+        sqlx::query_scalar!(
+            r#"
+            UPDATE team
+            SET allow_non_admin_invites = NOT allow_non_admin_invites
+            WHERE id = $1
+            RETURNING allow_non_admin_invites
+            "#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(TeamError::TeamDoesNotExist)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn add_user_to_team(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, TeamError> {
+        let mut transaction = self.pool.begin().await?;
+
+        let inserted = sqlx::query!(
+            r#"
+            INSERT INTO team_user (team_id, user_id, team_role)
+            VALUES ($1, $2, 'member')
+            ON CONFLICT DO NOTHING
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        // Already a member — nothing was added, so don't touch the seat count.
+        if inserted.rows_affected() == 0 {
+            return Ok(None);
+        }
+
+        TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, 1).await?;
+
+        transaction.commit().await?;
+
+        Ok(Some(TeamMember {
+            team_id: *team_id,
+            user_id: user_id.clone().into_owned(),
+            role: TeamRole::Member,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_id_by_domain(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<uuid::Uuid>, TeamError> {
+        let user_email = user_id.email_part().lowercase();
+        let domain = user_email.domain_part();
+
+        // Uses the partial index on auto_join_domain; when several teams
+        // claim the same domain, pick the oldest (ids are UUIDv7).
+        let team_id = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM team
+            WHERE auto_join_domain = $1
+            ORDER BY id
+            LIMIT 1
+            "#,
+            domain,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(team_id)
     }
 }

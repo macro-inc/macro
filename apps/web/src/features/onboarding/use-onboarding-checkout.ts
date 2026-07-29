@@ -18,6 +18,28 @@ interface OnboardingCheckoutResult {
   checkoutUrl: string;
 }
 
+/**
+ * Creates a Stripe checkout session whose round-trip returns to the
+ * onboarding flow: the flow is still incomplete during checkout, so both
+ * legs land back on the plan step (restored from sessionStorage), which
+ * reads the query params to show the paid or cancelled state.
+ */
+export async function createOnboardingCheckoutSession(
+  tier: PaidPlanTier
+): Promise<OnboardingCheckoutResult> {
+  const onboardingUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}onboarding`;
+  const checkoutUrl = await stripeServiceClient.createCheckoutSessionV2({
+    successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
+    cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
+  });
+
+  if (!checkoutUrl) {
+    throw new Error('No checkout URL returned');
+  }
+
+  return { checkoutUrl };
+}
+
 // Pending team info is saved to localStorage before checkout redirect,
 // then retrieved and used to create the team after successful payment return.
 export function savePendingTeam(team: PendingTeamInfo): void {
@@ -45,19 +67,8 @@ export function useOnboardingCheckoutMutation(callbacks?: {
   return useMutation(() => ({
     mutationFn: async (
       args: OnboardingCheckoutArgs
-    ): Promise<OnboardingCheckoutResult> => {
-      const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${args.tier}`;
-      const checkoutUrl = await stripeServiceClient.createCheckoutSession({
-        tier: args.tier,
-        successUrl,
-      });
-
-      if (!checkoutUrl) {
-        throw new Error('No checkout URL returned');
-      }
-
-      return { checkoutUrl };
-    },
+    ): Promise<OnboardingCheckoutResult> =>
+      await createOnboardingCheckoutSession(args.tier),
     onSuccess: callbacks?.onSuccess,
     onError: callbacks?.onError,
   }));

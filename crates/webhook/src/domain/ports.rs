@@ -1,10 +1,10 @@
 //! Webhook domain ports.
 
 use super::models::{
-    CreateWebhookRequest, NormalizedWebhookEvent, PatchWebhookRequest, PreparedWebhookDelivery,
-    RawWebhookEventQueueMessage, ValidateWebhookResponse, Webhook, WebhookDeliveryAttempt,
-    WebhookEventQueueMessage, WebhookHttpOutcome, WebhookHttpOutcomeDetails, WebhookId,
-    WebhookValidationResult, WebhookWorkerDisposition,
+    CreateWebhookRequest, ListWebhooksResponse, NormalizedWebhookEvent, PatchWebhookRequest,
+    PreparedWebhookDelivery, RawWebhookEventQueueMessage, ValidateWebhookResponse, Webhook,
+    WebhookDeliveryAttempt, WebhookEventQueueMessage, WebhookHttpOutcome,
+    WebhookHttpOutcomeDetails, WebhookId, WebhookValidationResult, WebhookWorkerDisposition,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -30,6 +30,15 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         &self,
         webhook_id: WebhookId,
     ) -> impl Future<Output = Result<Option<Webhook>, Self::Err>> + Send;
+
+    /// List all non-deleted webhooks owned by any of the given workspaces, newest first.
+    ///
+    /// Unlike [`list_active_webhooks_matching_event`], this is a management view: it returns
+    /// webhooks of every status and validity, not only delivery-eligible ones.
+    fn list_webhooks_for_workspaces(
+        &self,
+        workspace_ids: Vec<String>,
+    ) -> impl Future<Output = Result<Vec<Webhook>, Self::Err>> + Send;
 
     /// List delivery-eligible webhooks whose typed filters match an event and entity id.
     ///
@@ -221,6 +230,19 @@ pub trait WebhookService: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         request: CreateWebhookRequest,
     ) -> impl Future<Output = Result<Webhook, WebhookError>> + Send;
+
+    /// Get a webhook the caller is authorized to see.
+    fn get_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> impl Future<Output = Result<Webhook, WebhookError>> + Send;
+
+    /// List the webhooks the caller can see across their personal and team workspaces.
+    fn list_webhooks(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ListWebhooksResponse, WebhookError>> + Send;
 
     /// Patch a webhook.
     fn patch_webhook(

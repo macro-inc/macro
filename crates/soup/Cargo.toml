@@ -22,8 +22,8 @@ all = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "email/axum",
   "email/inbound",
@@ -50,8 +50,10 @@ async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 call = { path = "../call", default-features = false, features = ["ports"] }
+channels = { path = "../channels", default-features = false, features = [
+  "list",
+] }
 chrono = { workspace = true }
-channels = { path = "../channels", default-features = false, features = ["list"] }
 cowlike = { path = "../cowlike" }
 crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
@@ -60,13 +62,16 @@ either = { workspace = true }
 email = { path = "../email", features = ["ports"] }
 entity_access = { path = "../entity_access", default-features = false }
 filter_ast = { path = "../filter_ast" }
-foreign_entity = { path = "../foreign_entity", default-features = false, features = ["ports"] }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = [
+  "ports",
+] }
 frecency = { path = "../frecency" }
+indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
@@ -97,6 +102,7 @@ futures = { workspace = true }
 http-body-util = { workspace = true }
 item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
 mockall = { workspace = true }
 ordered-float = { workspace = true }
 rootcause = { workspace = true }

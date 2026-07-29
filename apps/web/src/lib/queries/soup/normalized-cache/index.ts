@@ -12,6 +12,7 @@ export {
   refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromDoneFilteredQueries,
   removeSoupEntitiesFromQueriesReferencing,
 } from './operations';
 export type {

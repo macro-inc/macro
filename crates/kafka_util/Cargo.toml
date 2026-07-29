@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "kafka_util"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-msk-iam-sasl-signer = { workspace = true }
+aws-types = { workspace = true }
+either = { workspace = true }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+rdkafka = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

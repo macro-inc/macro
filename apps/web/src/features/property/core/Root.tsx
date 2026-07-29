@@ -1,6 +1,6 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn, Dropdown } from '@ui';
-import { createSignal, type JSX, onMount, splitProps } from 'solid-js';
+import { createSignal, type JSX, splitProps } from 'solid-js';
 import type { Property } from '../types';
 import {
   type PropertyEditFn,
@@ -33,13 +33,6 @@ export function Root(props: PropertyRootProps) {
   const [editorAnchor, setEditorAnchor] = createSignal<HTMLElement | undefined>(
     undefined
   );
-  const [portalMount, setPortalMount] = createSignal<HTMLElement | undefined>();
-
-  let rootEl!: HTMLDivElement;
-  onMount(() => {
-    const scoped = rootEl.closest<HTMLElement>('.portal-scope');
-    if (scoped) setPortalMount(scoped);
-  });
 
   // Focus restoration helper - used by both closeEditor and onOpenChange
   // When a value is saved, the component may remount (due to reactive updates),
@@ -85,7 +78,6 @@ export function Root(props: PropertyRootProps) {
       setEditorOpen(false);
       restoreFocusToAnchor();
     },
-    portalMount,
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -102,9 +94,9 @@ export function Root(props: PropertyRootProps) {
         onOpenChange={handleOpenChange}
         getAnchorRect={() => editorAnchor()?.getBoundingClientRect()}
         placement={virtualKeyboardVisible() ? 'top-start' : 'bottom-start'}
+        fitViewport
       >
         <div
-          ref={rootEl}
           class={cn('property-root', local.class)}
           data-property
           data-property-id={local.property.propertyId}

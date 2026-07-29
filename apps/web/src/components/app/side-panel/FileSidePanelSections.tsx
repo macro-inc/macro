@@ -1,4 +1,7 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -17,7 +20,8 @@ export function FileSidePanelSections() {
   return (
     <>
       <FileDetailsSection order={10} />
-      <FilePropertiesSection order={20} />
+      <FileTagsSection order={20} />
+      <FilePropertiesSection order={30} />
     </>
   );
 }
@@ -48,6 +52,20 @@ export function FilePropertiesSection(props: { order?: number }) {
   );
 }
 
+export function FileTagsSection(props: { order?: number }) {
+  const blockId = useBlockId();
+  const canEdit = useCanEdit();
+
+  return (
+    <EntityTagsSection
+      entityId={blockId}
+      entityType="DOCUMENT"
+      canEdit={canEdit()}
+      order={props.order}
+    />
+  );
+}
+
 function PropertiesSectionContent() {
   const blockId = useBlockId();
   const canEdit = useCanEdit();
@@ -59,6 +77,7 @@ function PropertiesSectionContent() {
       entityType="DOCUMENT"
       canEdit={canEdit()}
       documentName={documentName()}
+      showTags={false}
     />
   );
 }

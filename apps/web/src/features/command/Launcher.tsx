@@ -1,8 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
+import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
@@ -16,11 +18,8 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import type {
-  HotkeyRegistrationOptions,
-  ValidHotkey,
-} from '@core/hotkey/types';
+import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import {
   createCanvasFileFromJsonString,
@@ -30,6 +29,8 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import WideChannel from '@icon/wide-channel.svg';
 import { AnimatedChatIcon } from '@icon/wide-chat';
 import WideChat from '@icon/wide-chat.svg';
 import { AnimatedDiagramIcon } from '@icon/wide-diagram';
@@ -52,10 +53,9 @@ import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
-import { cn, Hotkey, Layer } from '@ui';
+import { CommandMenuShell, cn, Hotkey, Layer } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
-  type Component,
   createEffect,
   createSignal,
   For,
@@ -65,6 +65,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
+import type { CreatableBlock } from './types';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -112,7 +113,6 @@ const createBlock = async (spec: {
         type: blockName,
         id,
         params: createMdParams,
-        preserveParams: true,
       },
       mergeHistory: true,
       referredFrom: 'launcher',
@@ -122,9 +122,7 @@ const createBlock = async (spec: {
       {
         type: blockName,
         id,
-        ...(createMdParams
-          ? { params: createMdParams, preserveParams: true }
-          : {}),
+        ...(createMdParams ? { params: createMdParams } : {}),
       },
       {
         referredFrom: 'launcher',
@@ -237,6 +235,16 @@ export function runCreateAction(
       });
       return;
     case 'chat':
+      // On mobile the chat input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The chat mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(CHAT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
       createBlock({
         blockName: 'chat',
         createFn: async () => {
@@ -280,12 +288,7 @@ export function runCreateAction(
   }
 }
 
-export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
-  label: string;
-  blockName: BlockName | BlockAlias;
-  altHotkeyToken?: HotkeyToken;
-  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
-};
+export type { CreatableBlock } from './types';
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
@@ -375,6 +378,21 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'm',
     keyDownHandler: () => {
       runCreateAction('channel', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Channel',
+    icon: WideChannel,
+    animatedIcon: AnimatedChannelIcon,
+    description: 'Create channel',
+    keywords: ['new', 'make', 'add', 'channel', 'group', 'conversation'],
+    blockName: 'channel',
+    hotkeyToken: TOKENS.create.channel,
+    hotkey: 'g',
+    keyDownHandler: () => {
+      openNewChannelModal();
+      setCreateMenuOpen(false, false);
       return true;
     },
   },
@@ -737,8 +755,11 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <div class="bg-surface ring ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
-      <div class="flex items-center justify-between p-2 px-4 sm:px-6 border-b border-edge-muted">
+    <CommandMenuShell
+      depth={2}
+      class="h-auto w-fit max-w-[calc(100vw-2rem)] shadow-menu"
+    >
+      <CommandMenuShell.Header class="my-0 justify-between p-2 px-4 sm:px-6 bg-surface">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           <style>{`
@@ -769,23 +790,25 @@ export const LauncherInner = (props: LauncherInnerProps) => {
           </span>
           to launch in new split
         </p>
-      </div>
-      <div
-        class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
-        ref={ref}
-      >
-        <For each={blocks()}>
-          {(item, index) => (
-            <LauncherMenuItem
-              creatableBlock={item}
-              onMouseEnter={() => setFocusedIndex(index())}
-              onFocus={() => setFocusedIndex(index())}
-              focused={focusedIndex() === index()}
-            />
-          )}
-        </For>
-      </div>
-    </div>
+      </CommandMenuShell.Header>
+      <CommandMenuShell.Body>
+        <div
+          class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
+          ref={ref}
+        >
+          <For each={blocks()}>
+            {(item, index) => (
+              <LauncherMenuItem
+                creatableBlock={item}
+                onMouseEnter={() => setFocusedIndex(index())}
+                onFocus={() => setFocusedIndex(index())}
+                focused={focusedIndex() === index()}
+              />
+            )}
+          </For>
+        </div>
+      </CommandMenuShell.Body>
+    </CommandMenuShell>
   );
 };
 
@@ -798,24 +821,25 @@ export const Launcher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"></Dialog.Overlay>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay"></Dialog.Overlay>
         <Dialog.Content>
-          <Layer depth={3}>
-            <div
-              class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  props.onOpenChange(false);
-                }
-              }}
-            >
-              <LauncherInner
-                onClose={(shouldReturnFocus) =>
-                  props.onOpenChange(false, shouldReturnFocus)
-                }
-              />
-            </div>
-          </Layer>
+          <div
+            class={cn(
+              'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
+              isMobile() ? 'items-center' : 'items-start pt-[10vh]'
+            )}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                props.onOpenChange(false);
+              }
+            }}
+          >
+            <LauncherInner
+              onClose={(shouldReturnFocus) =>
+                props.onOpenChange(false, shouldReturnFocus)
+              }
+            />
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

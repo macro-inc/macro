@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 cached = { workspace = true }
+channels = { path = "../channels", default-features = false, features = ["outbound"] }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_opensearch = { path = "../models_opensearch" }

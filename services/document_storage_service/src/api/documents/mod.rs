@@ -20,15 +20,15 @@ pub(in crate::api) mod get_document_version;
 pub(in crate::api) mod get_document_views;
 pub(in crate::api) mod get_documents_metadata;
 pub(in crate::api) mod get_full_pdf_modification_data;
+pub(in crate::api) mod get_starter_docs;
 pub(in crate::api) mod get_user_documents;
-pub(in crate::api) mod initialize_how_to_guide;
+pub(in crate::api) mod initialize_starter_docs;
 pub(in crate::api) mod initialize_user_documents;
 pub(in crate::api) mod job_processing_result;
 pub(in crate::api) mod list_documents_with_access;
 pub(in crate::api) mod location;
 pub(in crate::api) mod permissions_token;
 pub(in crate::api) mod pre_save;
-pub(in crate::api) mod put_document_update;
 pub(in crate::api) mod revert_delete_document;
 pub(in crate::api) mod save_document;
 pub(in crate::api) mod simple_save;
@@ -46,33 +46,20 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/permissions_token",
             permissions_token::router(state.clone()),
         )
-        .route(
-            "/",
-            get(get_user_documents::get_user_documents_handler).layer(axum::middleware::from_fn(
-                macro_middleware::auth::ensure_user_exists::handler,
-            )),
-        )
+        .route("/", get(get_user_documents::get_user_documents_handler))
+        .route("/starter_docs", get(get_starter_docs::handler))
         // NOTE: POST / (create_document) is now served by the documents hex crate router
         // NOTE: POST /create_task is now served by the documents hex crate router
         .route(
             "/initialize_user_documents",
-            post(initialize_user_documents::handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        middleware::ensure_user_is_onboarded::handler,
-                    )),
-            ),
-        )
-        .route(
-            "/list",
-            get(get_document_list::get_document_list_handler).layer(axum::middleware::from_fn(
-                macro_middleware::auth::ensure_user_exists::handler,
+            post(initialize_user_documents::handler).layer(ServiceBuilder::new().layer(
+                axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    middleware::ensure_user_is_onboarded::handler,
+                ),
             )),
         )
+        .route("/list", get(get_document_list::get_document_list_handler))
         .route(
             "/{document_id}/permissions",
             get(get_document_permissions::get_document_permissions_handler)

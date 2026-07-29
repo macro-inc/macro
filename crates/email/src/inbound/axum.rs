@@ -19,6 +19,5 @@ pub use api_types::{
 };
 pub use axum_impls::{
     EmailLinkErr, EmailLinkExtractor, GetPreviewsCursorError, GetPreviewsCursorParams,
-    GmailAccessTokenErr, GmailAccessTokenExtractor, GmailTokenState, MultiEmailLinkExtractor,
-    OptionalEmailLinkExtractor,
+    GmailTokenState, MultiEmailLinkExtractor,
 };

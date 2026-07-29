@@ -1,23 +1,28 @@
 //! Generic entity permission extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
+};
 
-use super::{ExtractorError, InternalUser};
+use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        ViewAccessLevel,
+        AccessLevel, AnyEntityPermission, Entity, EntityAccessAuth, EntityAccessReceipt,
+        EntityPermission, EntityType,
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Path parameters for entity permission routes.
 #[derive(serde::Deserialize)]
@@ -31,16 +36,18 @@ struct EntityPermissionParams {
 /// Reads `{entity_type}` and `{entity_id}` from path parameters and resolves
 /// the user's permission via `EntityAccessService::get_entity_permission`.
 #[derive(Debug)]
-pub struct EntityPermissionExtractor<Svc> {
+pub struct EntityPermissionExtractor<Svc, Auth> {
     /// The entity access receipt
-    pub entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    _marker: PhantomData<Svc>,
+    pub entity_access_receipt: EntityAccessReceipt<AnyEntityPermission>,
+    _marker: PhantomData<(Svc, Auth)>,
 }
 
-impl<S, Svc> FromRequestParts<S> for EntityPermissionExtractor<Svc>
+impl<S, Svc, Auth> FromRequestParts<S> for EntityPermissionExtractor<Svc, Auth>
 where
     Arc<Svc>: FromRef<S>,
+    MacroAuthorizationState<Auth>: FromRef<S>,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -49,14 +56,12 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        } = parts
-            .extract()
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
+                parts, state,
+            )
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
 
         let Path(EntityPermissionParams {
             entity_type,
@@ -67,17 +72,33 @@ where
 
         let parsed_type = parse_entity_type(&entity_type)?;
 
-        let internal_user: Option<Extension<InternalUser>> =
-            if macro_user_id.is_none() || parsed_type == EntityType::ForeignEntity {
-                parts
-                    .extract()
-                    .await
-                    .map_err(|_| ExtractorError::Internal)?
-            } else {
-                None
-            };
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.authorization.as_ref()
+        {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<AnyEntityPermission>(
+                service.as_ref(),
+                authentication,
+                &entity_id,
+                parsed_type,
+            )
+            .await?;
 
-        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let (is_internal_access, acting_user) = match authorization.authorization.as_ref() {
+            Some(MacroAuthorization::User(user)) => (false, Some(user)),
+            Some(MacroAuthorization::Internal(user)) => (true, user.as_ref()),
+            Some(MacroAuthorization::Bot(_)) => unreachable!("bot authorization returned above"),
+            None => (false, None),
+        };
+        let (macro_user_id, user_context) = acting_user
+            .map(|user| (Some(user.macro_user_id.clone()), user.user_context.clone()))
+            .unwrap_or_default();
+
+        if is_internal_access && macro_user_id.is_none() {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
@@ -104,11 +125,7 @@ where
             None => {
                 // For unauthenticated users, check public access at View level
                 let access_level = service
-                    .check_public_access(
-                        &entity_id,
-                        parsed_type,
-                        crate::domain::models::AccessLevel::View,
-                    )
+                    .check_public_access(&entity_id, parsed_type, AccessLevel::View)
                     .await
                     .map_err(ExtractorError::from)?;
                 EntityPermission::AccessLevel { access_level }

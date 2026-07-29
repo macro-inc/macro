@@ -34,6 +34,7 @@ import type {
   MacroApiTokenResponse,
   PasswordlessCallbackParams,
   PasswordlessRequest,
+  PasswordlessStartedResponse,
   PasswordRequest,
   PatchTeamCrmSettingsRequest,
   PatchTeamCrmSettingsResponse,
@@ -56,6 +57,8 @@ import type {
   Team,
   TeamInvitesResponse,
   TeamWithMembers,
+  ToggleAutoJoinDomainResponse,
+  ToggleNonAdminInvitesResponse,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -1077,7 +1080,7 @@ export const passwordLogin = async (
  * @summary Initiates a passwordless login
  */
 export type passwordlessLoginResponse200 = {
-  data: EmptyResponse;
+  data: PasswordlessStartedResponse;
   status: 200;
 };
 
@@ -2246,6 +2249,86 @@ export const patchTeam = async (
 };
 
 /**
+ * @summary Toggles automatic domain joining for the team. When the team has no
+auto-join domain, sets it to the team owner's email domain — rejected
+with a 400 when that domain is a generic email provider domain (e.g.
+gmail.com). When one is already set, removes it. New users whose email
+domain matches a team's auto-join domain are added to that team on
+signup. Requires the caller to be an Admin or Owner of the team.
+ */
+export type toggleTeamAutoJoinDomainResponse200 = {
+  data: ToggleAutoJoinDomainResponse;
+  status: 200;
+};
+
+export type toggleTeamAutoJoinDomainResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type toggleTeamAutoJoinDomainResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type toggleTeamAutoJoinDomainResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type toggleTeamAutoJoinDomainResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type toggleTeamAutoJoinDomainResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type toggleTeamAutoJoinDomainResponseSuccess =
+  toggleTeamAutoJoinDomainResponse200 & {
+    headers: Headers;
+  };
+export type toggleTeamAutoJoinDomainResponseError = (
+  | toggleTeamAutoJoinDomainResponse400
+  | toggleTeamAutoJoinDomainResponse401
+  | toggleTeamAutoJoinDomainResponse403
+  | toggleTeamAutoJoinDomainResponse404
+  | toggleTeamAutoJoinDomainResponse500
+) & {
+  headers: Headers;
+};
+
+export type toggleTeamAutoJoinDomainResponse =
+  | toggleTeamAutoJoinDomainResponseSuccess
+  | toggleTeamAutoJoinDomainResponseError;
+
+export const getToggleTeamAutoJoinDomainUrl = () => {
+  return `/team/auto-join-domain/toggle`;
+};
+
+export const toggleTeamAutoJoinDomain = async (
+  options?: RequestInit
+): Promise<toggleTeamAutoJoinDomainResponse> => {
+  const res = await fetch(getToggleTeamAutoJoinDomainUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: toggleTeamAutoJoinDomainResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as toggleTeamAutoJoinDomainResponse;
+};
+
+/**
  * @summary Enables or disables CRM for the team. On enable with `backfill`
 (the default), kicks off a best-effort backfill that enqueues a
 `PopulateCrmForUser` message per team member (no-op if CRM is
@@ -2650,6 +2733,78 @@ export const rejectInvitation = async (
     status: res.status,
     headers: res.headers,
   } as rejectInvitationResponse;
+};
+
+/**
+ * @summary Toggles whether non-admin members may invite users to the team. Teams
+start with this on (any member can invite); turning it off restricts
+inviting to team admins and owners. Requires the caller to be an Admin
+or Owner of the team.
+ */
+export type toggleTeamNonAdminInvitesResponse200 = {
+  data: ToggleNonAdminInvitesResponse;
+  status: 200;
+};
+
+export type toggleTeamNonAdminInvitesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type toggleTeamNonAdminInvitesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type toggleTeamNonAdminInvitesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type toggleTeamNonAdminInvitesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type toggleTeamNonAdminInvitesResponseSuccess =
+  toggleTeamNonAdminInvitesResponse200 & {
+    headers: Headers;
+  };
+export type toggleTeamNonAdminInvitesResponseError = (
+  | toggleTeamNonAdminInvitesResponse401
+  | toggleTeamNonAdminInvitesResponse403
+  | toggleTeamNonAdminInvitesResponse404
+  | toggleTeamNonAdminInvitesResponse500
+) & {
+  headers: Headers;
+};
+
+export type toggleTeamNonAdminInvitesResponse =
+  | toggleTeamNonAdminInvitesResponseSuccess
+  | toggleTeamNonAdminInvitesResponseError;
+
+export const getToggleTeamNonAdminInvitesUrl = () => {
+  return `/team/non-admin-invites/toggle`;
+};
+
+export const toggleTeamNonAdminInvites = async (
+  options?: RequestInit
+): Promise<toggleTeamNonAdminInvitesResponse> => {
+  const res = await fetch(getToggleTeamNonAdminInvitesUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: toggleTeamNonAdminInvitesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as toggleTeamNonAdminInvitesResponse;
 };
 
 /**

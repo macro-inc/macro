@@ -9,7 +9,8 @@ use model::document::{
     response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
 };
 use model::document_storage_service_internal::{
-    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse,
+    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse, InitializeStarterDocsResponse,
+    StarterDocHowToGuide,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::StatusCode;
@@ -384,11 +385,17 @@ impl DocumentStorageServiceClient {
         Ok(response_data)
     }
 
-    /// Create the "Macro how to guide" onboarding document for a user and pin
-    /// it to their sidebar favorites
+    /// Create the starter documents for a user — the "Macro how to guide"
+    /// plus the starter tasks it links to — and pin the guide to their
+    /// sidebar favorites. Returns a reference to the guide document when it
+    /// could be resolved, so callers can link to it (e.g. the support
+    /// channel welcome message).
     #[tracing::instrument(skip(self))]
-    pub async fn initialize_how_to_guide(&self, user_id: &str) -> Result<()> {
-        let url = format!("{}/internal/documents/initialize_how_to_guide", self.url);
+    pub async fn initialize_starter_docs(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<StarterDocHowToGuide>> {
+        let url = format!("{}/internal/documents/initialize_starter_docs", self.url);
 
         let res = self
             .client
@@ -410,7 +417,8 @@ impl DocumentStorageServiceClient {
             anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
-        Ok(())
+        let response: InitializeStarterDocsResponse = res.json().await?;
+        Ok(response.how_to_guide)
     }
 
     /// Create a document

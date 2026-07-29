@@ -24,6 +24,7 @@ import {
   type PullRequestMentionInfo,
   type PullRequestMentionNode,
 } from '../nodes/PullRequestMentionNode';
+import type { TagMentionInfo } from '../nodes/TagMentionNode';
 import {
   $isUserMentionNode,
   type UserMentionInfo,
@@ -144,7 +145,8 @@ export type MentionInfo =
   | (DocumentMentionInfo & { type: 'document' })
   | (PullRequestMentionInfo & { type: 'pr' })
   | (ContactMentionInfo & { type: 'contact' })
-  | (DateMentionInfo & { type: 'date' });
+  | (DateMentionInfo & { type: 'date' })
+  | (TagMentionInfo & { type: 'tag' });
 
 export function buildMentionMarkdownString(info: MentionInfo): string {
   switch (info.type) {
@@ -158,6 +160,8 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
       return wrapXml('m-contact-mention', dropKey(info, 'type'));
     case 'date':
       return wrapXml('m-date-mention', dropKey(info, 'type'));
+    case 'tag':
+      return wrapXml('m-tag', dropKey(info, 'type'));
   }
 }
 
@@ -170,5 +174,6 @@ export {
   parseGroupMentions,
   parseLinks,
   parsePullRequestMentions,
+  parseTagMentions,
   parseUserMentions,
 } from './parsers';

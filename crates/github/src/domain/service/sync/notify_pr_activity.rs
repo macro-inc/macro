@@ -76,7 +76,7 @@ impl<
         }
 
         let reviewer_login = Self::payload_string(&event.payload, &["requested_reviewer", "login"]);
-        let sender_id = self.notification_sender_id(event).await;
+        let sender = self.notification_sender(event).await;
         for upsert in upserts {
             let recipients = self.notification_recipient_ids(&upsert.source).await;
             let scoped_reviewers: HashSet<_> =
@@ -99,7 +99,7 @@ impl<
             self.send_github_notification(
                 notification,
                 upsert.foreign_entity_id,
-                sender_id.clone(),
+                &sender,
                 scoped_reviewers,
             )
             .await;
@@ -145,7 +145,7 @@ impl<
             .pull_request_participant_macro_user_ids(pull_request, upserts)
             .await;
         let snippet = GithubPrNotificationCommon::snippet(&body);
-        let sender_id = self.notification_sender_id(event).await;
+        let sender = self.notification_sender(event).await;
         for upsert in upserts {
             let source_recipients = self.notification_recipient_ids(&upsert.source).await;
 
@@ -171,7 +171,7 @@ impl<
                 self.send_github_notification(
                     notification,
                     upsert.foreign_entity_id,
-                    sender_id.clone(),
+                    &sender,
                     mention_recipients,
                 )
                 .await;
@@ -188,7 +188,7 @@ impl<
                 self.send_github_notification(
                     notification,
                     upsert.foreign_entity_id,
-                    sender_id.clone(),
+                    &sender,
                     comment_recipients,
                 )
                 .await;
@@ -245,7 +245,7 @@ impl<
             (!body.trim().is_empty()).then(|| GithubPrNotificationCommon::snippet(&body));
 
         let mentioned_users = self.mentioned_macro_users(&body).await;
-        let sender_id = self.notification_sender_id(event).await;
+        let sender = self.notification_sender(event).await;
         for upsert in upserts {
             let recipients = self.notification_recipient_ids(&upsert.source).await;
 
@@ -262,7 +262,7 @@ impl<
                 self.send_github_notification(
                     notification,
                     upsert.foreign_entity_id,
-                    sender_id.clone(),
+                    &sender,
                     review_recipients.clone(),
                 )
                 .await;
@@ -285,7 +285,7 @@ impl<
                 self.send_github_notification(
                     notification,
                     upsert.foreign_entity_id,
-                    sender_id.clone(),
+                    &sender,
                     mention_recipients,
                 )
                 .await;
@@ -344,7 +344,7 @@ impl<
 
         let comment_url = Self::payload_string(&event.payload, &["pull_request", "html_url"]);
         let snippet = GithubPrNotificationCommon::snippet(&body);
-        let sender_id = self.notification_sender_id(event).await;
+        let sender = self.notification_sender(event).await;
         for upsert in upserts {
             let recipients = self.notification_recipient_ids(&upsert.source).await;
             let mention_recipients: HashSet<_> =
@@ -363,7 +363,7 @@ impl<
             self.send_github_notification(
                 notification,
                 upsert.foreign_entity_id,
-                sender_id.clone(),
+                &sender,
                 mention_recipients,
             )
             .await;

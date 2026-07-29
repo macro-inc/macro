@@ -131,21 +131,51 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
   ? ItemForBucket<First> | ItemsForBuckets<Rest>
   : never;
 
+export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
+  items: Accessor<T[]>;
+  /** Total matching items, including pages not loaded yet. */
+  totalCount: Accessor<number>;
+  hasMore: Accessor<boolean>;
+  isLoading: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
+};
+
+export type QuickAccessListOptions<
+  B extends readonly Bucket[] = readonly Bucket[],
+> = {
+  buckets: B;
+  /** Search only this list; omitted values retain ordinary browse ordering. */
+  searchTerm?: Accessor<string>;
+  /** Disable this list without affecting other Quick Access consumers. */
+  enabled?: Accessor<boolean>;
+};
+
 export type QuickAccessContextValue = {
   /**
    * Get items from specific buckets, cached and reactive.
-   * Returns all items if no buckets specified.
+   * Returns all items if no buckets specified. Passing options scopes search
+   * to that list without affecting other Quick Access consumers.
    *
    * @example
-   * const channels = quickAccess.useList('channel', 'dm');
-   * const people = quickAccess.useList('person');
-   * const everything = quickAccess.useList();
+   * const channels = quickAccess.useList('channel', 'dm').items;
+   * const people = quickAccess.useList('person').items;
+   * const results = quickAccess.useList({
+   *   buckets: ['document'],
+   *   searchTerm,
+   * }).items;
    */
   useList: {
-    (): Accessor<QuickAccessItem[]>;
-    <B extends Bucket>(...buckets: [B]): Accessor<ItemForBucket<B>[]>;
-    <B extends Bucket[]>(...buckets: B): Accessor<ItemsForBuckets<B>[]>;
+    (): QuickAccessList;
+    <B extends Bucket>(...buckets: [B]): QuickAccessList<ItemForBucket<B>>;
+    <B extends Bucket[]>(...buckets: B): QuickAccessList<ItemsForBuckets<B>>;
+    <const B extends readonly Bucket[]>(
+      options: QuickAccessListOptions<B>
+    ): QuickAccessList<ItemForBucket<B[number]>>;
   };
+
+  /** Whether this source reads normalized records through cache fragments. */
+  usesRecordSelection: Accessor<boolean>;
 
   /**
    * Whether any data sources are still loading.

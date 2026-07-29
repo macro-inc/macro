@@ -3,6 +3,7 @@ import {
   stripColorSchemeMediaQueries,
   type ThemeColorParams,
 } from '@core/email';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
 import { themeReactive } from '@theme/signals/themeReactive';
 import { themeUpdate } from '@theme/signals/themeSignals';
@@ -58,6 +59,8 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
     if (!el) return;
     // Reset to the raw html so recoloring never compounds
     el.innerHTML = props.html;
+    // Raw mailto: anchors open the in-app composer instead of the OS mail client
+    interceptMailtoLinks(el);
     for (const styleEl of el.querySelectorAll('style')) {
       styleEl.textContent = stripColorSchemeMediaQueries(
         styleEl.textContent ?? ''

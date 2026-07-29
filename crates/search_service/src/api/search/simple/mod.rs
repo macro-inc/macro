@@ -26,6 +26,9 @@ pub enum SearchError {
     /// No user id found in user context
     #[error("no user id found in user context")]
     NoUserId,
+    /// The endpoint only accepts internal service authentication.
+    #[error("internal access required")]
+    InternalAccessRequired,
     /// Invalid macro user id
     #[error("invalid macro user id {0}")]
     InvalidUserId(String),
@@ -64,7 +67,9 @@ pub enum SearchError {
 impl IntoResponse for SearchError {
     fn into_response(self) -> Response {
         let status_code = match self {
-            SearchError::NoUserId | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
+            SearchError::NoUserId
+            | SearchError::InternalAccessRequired
+            | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
             | SearchError::TooManyTerms

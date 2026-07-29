@@ -16,6 +16,7 @@ use super::models::FileTypeUpdate;
 
 /// Metadata for [`DocumentTopicEvent::Created`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
@@ -35,6 +36,7 @@ pub struct DocumentCreatedMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Updated`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentUpdatedMetadata {
     /// The id of the updated document.
     pub document_id: String,
@@ -58,6 +60,7 @@ pub struct DocumentUpdatedMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Deleted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentDeletedMetadata {
     /// The id of the deleted document.
     pub document_id: String,
@@ -68,8 +71,32 @@ pub struct DocumentDeletedMetadata {
     pub project_id: Option<String>,
 }
 
+/// Why a document interaction was reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum InteractionReason {
+    /// A periodic save of pending content changes.
+    Edited,
+    /// The first peer joined the document session.
+    FirstJoin,
+    /// The last connected peer left the document session.
+    LastLeave,
+}
+
+/// Metadata for [`DocumentTopicEvent::Interaction`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentInteractionMetadata {
+    /// The id of the document.
+    pub document_id: String,
+    /// What triggered this interaction.
+    pub reason: InteractionReason,
+}
+
 /// Metadata for [`DocumentTopicEvent::Copied`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentCopiedMetadata {
     /// The id of the newly created copy.
     pub document_id: String,
@@ -91,6 +118,7 @@ pub struct DocumentCopiedMetadata {
 
 /// Events that can be published to [`MacroDocumentsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum DocumentTopicEvent {
     /// A document was created.
@@ -105,14 +133,15 @@ pub enum DocumentTopicEvent {
     /// A document was copied.
     #[serde(rename = "document.copied")]
     Copied(DocumentCopiedMetadata),
+    /// A peer joined, left, or a periodic save occurred.
+    #[serde(rename = "document.interaction")]
+    Interaction(DocumentInteractionMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
     type Topic = MacroDocumentsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroDocumentsTopic`], keyed by document id.
@@ -140,6 +169,11 @@ impl DocumentMacroEvent {
     /// Build a copied event keyed by the new document id.
     pub fn copied(key: impl Into<String>, metadata: DocumentCopiedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Copied(metadata))
+    }
+
+    /// Build an interaction event keyed by the document id.
+    pub fn interaction(key: impl Into<String>, metadata: DocumentInteractionMetadata) -> Self {
+        Self::new(key, DocumentTopicEvent::Interaction(metadata))
     }
 
     /// Build an event from a topic-specific event variant.

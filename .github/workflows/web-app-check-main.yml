@@ -37,7 +37,7 @@ jobs:
             - 'Cargo.lock'
             - 'rust-toolchain.toml'
             - 'services/lexical-service/**'
-            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/setup-reqs-web/**'
             - '.github/workflows/web-app-check-main.yml'
           api_changed:
@@ -50,7 +50,7 @@ jobs:
             - 'flake.lock'
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
-            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/setup-reqs-web/**'
             - '.github/workflows/web-app-check-main.yml'
   typescript:
@@ -65,21 +65,44 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun,rust
+        cache: nix
         path: |-
-          /home/runner/.cache/sccache
-          /nix
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-    - name: Point sccache at the cache volume
+    - name: Configure Namespace remote sccache
+      if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && (needs.path-check.outputs.api_changed == 'true')
       run: |-
-        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
-        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - name: Generate API Types
       if: needs.path-check.outputs.api_changed == 'true'
       run: bun run gen-api -- --check
@@ -107,15 +130,12 @@ jobs:
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        path: /nix
+        cache: nix
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: apps/web
@@ -136,15 +156,13 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun
-        path: /nix
+        cache: nix
+        path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Check Tailwind Classes
       run: just check-tailwind
       working-directory: apps/web
@@ -160,15 +178,14 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun
-        path: /nix
+        cache: nix
+        path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
         playwright: 'true'
     - name: Test
       run: bunx vitest
@@ -185,15 +202,12 @@ jobs:
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        path: /nix
+        cache: nix
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: apps/web
@@ -212,15 +226,13 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun
-        path: /nix
+        cache: nix
+        path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Build
       run: just build-dev
       working-directory: apps/web

@@ -13,7 +13,6 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
-import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 import {
   makeBlockSenderAction,
@@ -25,11 +24,15 @@ import {
   makeFavoriteAction,
   makeHideCompanyAction,
   makeMarkDoneAction,
+  makeMarkNotDoneAction,
+  makeMarkReadAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
+  makeMarkUnreadAction,
   makeMoveToProjectAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
+  makeSetCompanyPropertyAction,
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
@@ -85,13 +88,19 @@ export function createSoupEntityActions(): {
   const analytics = useAnalytics();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const isTeamAdmin = useIsTeamAdmin();
   const hiddenMutation = useSetCompanyHiddenMutation();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
     notificationSource: () => notificationSource,
   });
+
+  const markNotDone = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
+  });
+
+  const markRead = makeMarkReadAction();
+  const markUnread = makeMarkUnreadAction();
 
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
@@ -113,10 +122,10 @@ export function createSoupEntityActions(): {
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
   const hideCompanyAction = makeHideCompanyAction({
-    isTeamAdmin: () => isTeamAdmin(),
     setHidden: (companyId, hidden) =>
       hiddenMutation.mutateAsync({ companyId, hidden }),
   });
+  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const buildActionGroups: BuildActionGroups = (
     soup,
@@ -137,14 +146,46 @@ export function createSoupEntityActions(): {
     if (
       activeTab &&
       isListViewID(activeListView) &&
-      canExecuteMarkDoneOnView(activeListView, activeTab) &&
-      canExecuteAll(markDone.canExecute)
+      canExecuteMarkDoneOnView(activeListView, activeTab)
+    ) {
+      // A fully-done selection (e.g. archived threads in mail "All") gets the
+      // reverse action; anything else gets Mark Done.
+      if (canExecuteAll(markNotDone.canExecute)) {
+        topItems.push({
+          id: 'mark-not-done',
+          label: 'Mark Not Done',
+          hotkeyToken: TOKENS.entity.action.markNotDone,
+          onClick: handle(markNotDone.executeWithSoup),
+        });
+      } else if (canExecuteAll(markDone.canExecute)) {
+        topItems.push({
+          id: 'mark-done',
+          label: 'Mark Done',
+          hotkeyToken: TOKENS.entity.action.markDone,
+          onClick: handle(markDone.executeWithSoup),
+        });
+      }
+    }
+
+    // Read-state toggle for email selections: a fully-read selection gets
+    // Mark Unread; anything with an unread thread gets Mark Read (which
+    // skips the already-read ones).
+    if (canExecuteAll(markUnread.canExecute)) {
+      topItems.push({
+        id: 'mark-unread',
+        label: 'Mark Unread',
+        hotkeyToken: TOKENS.entity.action.markUnread,
+        onClick: handle(markUnread.executeWithSoup),
+      });
+    } else if (
+      entities.every((e) => e.type === 'email') &&
+      entities.some(markRead.canExecute)
     ) {
       topItems.push({
-        id: 'mark-done',
-        label: 'Mark Done',
-        hotkeyToken: TOKENS.entity.action.markDone,
-        onClick: handle(markDone.executeWithSoup),
+        id: 'mark-read',
+        label: 'Mark Read',
+        hotkeyToken: TOKENS.entity.action.markRead,
+        onClick: handle(markRead.executeWithSoup),
       });
     }
 
@@ -191,11 +232,14 @@ export function createSoupEntityActions(): {
         ) {
           // Thread rows are keyed by their root; getChannelEntityTarget
           // recovers the clicked reply from the driving notification so the
-          // new split lands on it rather than the root message.
-          const target = getChannelEntityTarget(entity) ?? {
-            messageId: entity.messageId,
-            threadId: entity.threadId,
-          };
+          // new split lands on it rather than the root message. These rows
+          // always resolve to a message target (their own ids at worst), never
+          // `latest`, which only a whole-channel row produces.
+          const resolved = getChannelEntityTarget(entity);
+          const target =
+            resolved?.kind === 'message'
+              ? resolved
+              : { messageId: entity.messageId, threadId: entity.threadId };
           splitManager.createNewSplit({
             content: {
               type: 'channel',
@@ -273,8 +317,8 @@ export function createSoupEntityActions(): {
 
     if (entities.length === 1 && openTagPicker) {
       middleItems.push({
-        id: 'add-label',
-        label: 'Add label',
+        id: 'add-tag',
+        label: 'Add tag',
         onClick: openTagPicker,
       });
     }
@@ -370,8 +414,29 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // CRM group: Hide / Unhide (admin/owner only, single company)
+    // CRM group: Set stage/owner/revenue on the whole company
+    // selection, Hide / Unhide for a single company.
     const crmItems: SoupEntityActionItem[] = [];
+
+    if (canExecuteAll(setCompanyPropertyAction.canExecute)) {
+      crmItems.push(
+        {
+          id: 'set-stage',
+          label: 'Set stage',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'stage'),
+        },
+        {
+          id: 'set-owner',
+          label: 'Set owner',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'owner'),
+        },
+        {
+          id: 'set-revenue',
+          label: 'Set revenue',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'revenue'),
+        }
+      );
+    }
 
     const singleEntity = entities.length === 1 ? entities[0] : undefined;
     if (

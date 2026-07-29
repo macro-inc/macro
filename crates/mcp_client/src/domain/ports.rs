@@ -1,4 +1,5 @@
-use super::models::{MacroUserIdStr, McpServer, McpServerRecord, StoredCredentials};
+use super::models::{MacroUserIdStr, McpServer, McpServerRecord};
+use std::sync::Arc;
 
 /// Port for persisting MCP server records, keyed by user.
 pub trait McpServerStore: Send + Sync + 'static {
@@ -32,7 +33,14 @@ pub trait McpServerStore: Send + Sync + 'static {
 /// Port for establishing a connection to an MCP server.
 pub trait McpConnector: Send + Sync {
     /// Connect to the MCP server described by this value.
-    fn connect(&self) -> impl Future<Output = anyhow::Result<McpServer>> + Send;
+    ///
+    /// Credential updates produced while connecting — and later, while the
+    /// connection is in use (e.g. refreshed OAuth tokens) — are persisted
+    /// through `server_store`.
+    fn connect<S: McpServerStore>(
+        &self,
+        server_store: Arc<S>,
+    ) -> impl Future<Output = anyhow::Result<McpServer>> + Send;
 }
 
 /// Everything needed to resume the OAuth flow on callback.
@@ -91,11 +99,11 @@ pub trait OAuthClient: Send + Sync + 'static {
     /// Complete the OAuth flow using the `code` and `state` returned by the
     /// authorization server's redirect.
     ///
-    /// Exchanges the authorization code for tokens and returns the resulting
-    /// credentials ready to be persisted.
+    /// Exchanges the authorization code for tokens, persists them, and
+    /// returns the saved server record (user, url, credentials).
     fn exchange_authorization_code(
         &self,
         code: &str,
         state: &str,
-    ) -> impl Future<Output = anyhow::Result<StoredCredentials>> + Send;
+    ) -> impl Future<Output = anyhow::Result<McpServerRecord>> + Send;
 }

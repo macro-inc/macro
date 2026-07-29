@@ -8,6 +8,7 @@ import {
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
 import {
+  DEV_MODE_ENV,
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
@@ -34,17 +35,13 @@ import TrashIcon from '@phosphor/trash.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
+import {
+  invalidateOwnUserName,
+  useOwnUserName,
+} from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  Button,
-  cn,
-  Dialog,
-  Dropdown,
-  Panel,
-  ToggleSwitch,
-  Tooltip,
-} from '@ui';
+import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -57,8 +54,12 @@ import {
   Switch,
 } from 'solid-js';
 import { Transition } from 'solid-transition-group';
-import { formatAssetUrl, loadEntryAssetInfo } from './entryAssetInfo';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import {
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from './primitives';
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
@@ -127,6 +128,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
 /**
  * Save one name field with an optimistic update and rollback on failure.
  * Returns whether the save succeeded, which drives NameInput's status icon.
+ * This panel renders its own value from a local signal, so the invalidation
+ * is for everything else reading the name (see invalidateOwnUserName).
  */
 async function saveUserName(
   value: string,
@@ -143,27 +146,12 @@ async function saveUserName(
       setValue(prev); // rollback on a returned error
       return false;
     }
+    void invalidateOwnUserName();
     return true;
   } catch {
     setValue(prev); // rollback if the call throws before returning a Result
     return false;
   }
-}
-
-function useUserName() {
-  const fetchUserName = async () => {
-    const response = await authServiceClient.getUserName();
-    return response.isOk() ? response.value : null;
-  };
-
-  const [userNameResource] = createResource(fetchUserName);
-
-  const userName = createMemo(() => {
-    if (userNameResource.loading) return undefined;
-    return userNameResource() || undefined;
-  });
-
-  return userName;
 }
 
 function ProfilePictureRow(props: { userId: string }) {
@@ -326,7 +314,10 @@ export function Account() {
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);
 
-  const userName = useUserName();
+  // The shared own-name cache entry (the one saveUserName invalidates), so
+  // this panel and other readers (e.g. the Getting Started checklist) can't
+  // drift.
+  const userName = useOwnUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
   >(undefined);
@@ -416,108 +407,117 @@ export function Account() {
 
       <Show when={isMobile()}>
         <SettingsSection>
-          <div class="flex items-center justify-center">
-            <Button
-              variant="base"
-              size="md"
-              depth={3}
-              class="px-4"
-              onClick={() => logout()}
-            >
-              <SignOutIcon class="size-4" />
-              Log out
-            </Button>
-          </div>
+          <SettingsCard>
+            <div class="px-6 py-3.5">
+              <Button
+                fullWidth
+                variant="active"
+                depth={4}
+                onClick={() => logout()}
+              >
+                <SignOutIcon class="size-4" />
+                Log out
+              </Button>
+            </div>
+          </SettingsCard>
         </SettingsSection>
       </Show>
 
-      <Show when={isNativeMobilePlatform()}>
+      {/* Account deletion ships on native mobile (App Store requirement) and
+          in dev builds, where deleting test users keeps flows like onboarding
+          re-runnable. */}
+      <Show when={isNativeMobilePlatform() || DEV_MODE_ENV}>
         <SettingsSection title="Danger zone">
-          <div>
-            <Button
-              variant="danger"
-              depth={3}
-              onClick={() => setShowDeleteModal(true)}
+          <SettingsCard>
+            <SettingsRow
+              label="Delete account"
+              description="Permanently delete your account and all associated data."
             >
-              Delete Account
-            </Button>
-            <Dialog
-              open={showDeleteModal()}
-              onOpenChange={setShowDeleteModal}
-              position="center"
-              class="w-120"
-            >
-              <Panel depth={2} class="rounded-xl">
-                <Panel.Header class="px-6">
-                  <Dialog.Title class="text-ink text-sm font-semibold">
-                    Delete Account
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                    Are you sure you want to delete your account? This action is
-                    permanent and cannot be undone.
-                  </Dialog.Description>
-                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                    <Button
-                      variant="base"
-                      depth={3}
-                      onClick={() => setShowDeleteModal(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      depth={3}
-                      onClick={() => {
-                        setShowDeleteModal(false);
-                        setShowDeleteConfirmModal(true);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </Panel.Body>
-              </Panel>
-            </Dialog>
-            <Dialog
-              open={showDeleteConfirmModal()}
-              onOpenChange={setShowDeleteConfirmModal}
-              position="center"
-              class="w-120"
-            >
-              <Panel depth={2} class="rounded-xl">
-                <Panel.Header class="px-6">
-                  <Dialog.Title class="text-ink text-sm font-semibold">
-                    Are you absolutely sure?
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                    This will permanently delete your account and all associated
-                    data. This cannot be undone.
-                  </Dialog.Description>
-                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                    <Button
-                      variant="base"
-                      depth={3}
-                      onClick={() => setShowDeleteConfirmModal(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      depth={3}
-                      onClick={deleteAccountHandler}
-                    >
-                      Delete My Account
-                    </Button>
-                  </div>
-                </Panel.Body>
-              </Panel>
-            </Dialog>
-          </div>
+              <Button
+                variant="danger"
+                depth={3}
+                onClick={() => setShowDeleteModal(true)}
+              >
+                Delete Account
+              </Button>
+            </SettingsRow>
+          </SettingsCard>
         </SettingsSection>
+        <Dialog
+          open={showDeleteModal()}
+          onOpenChange={setShowDeleteModal}
+          position="center"
+          class="w-120"
+        >
+          <Panel depth={2} class="rounded-xl">
+            <Panel.Header class="px-6">
+              <Dialog.Title class="text-ink text-sm font-semibold">
+                Delete Account
+              </Dialog.Title>
+            </Panel.Header>
+            <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+              <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                Are you sure you want to delete your account? This action is
+                permanent and cannot be undone.
+              </Dialog.Description>
+              <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                <Button
+                  variant="base"
+                  depth={3}
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  depth={3}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setShowDeleteConfirmModal(true);
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </Panel.Body>
+          </Panel>
+        </Dialog>
+        <Dialog
+          open={showDeleteConfirmModal()}
+          onOpenChange={setShowDeleteConfirmModal}
+          position="center"
+          class="w-120"
+        >
+          <Panel depth={2} class="rounded-xl">
+            <Panel.Header class="px-6">
+              <Dialog.Title class="text-ink text-sm font-semibold">
+                Are you absolutely sure?
+              </Dialog.Title>
+            </Panel.Header>
+            <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+              <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                This will permanently delete your account and all associated
+                data. This cannot be undone.
+              </Dialog.Description>
+              <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                <Button
+                  variant="base"
+                  depth={3}
+                  onClick={() => setShowDeleteConfirmModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  depth={3}
+                  onClick={deleteAccountHandler}
+                >
+                  Delete My Account
+                </Button>
+              </div>
+            </Panel.Body>
+          </Panel>
+        </Dialog>
       </Show>
     </SettingsPage>
   );
@@ -709,15 +709,11 @@ type BundleDebugInfo = {
 
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [showBuildInfo, setShowBuildInfo] = createSignal(false);
   const [bundleDebugInfo] = createResource(() =>
     invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
       console.error('[bundle-update] get_bundle_debug_info failed', error);
       return null;
     })
-  );
-  const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
-    open ? loadEntryAssetInfo() : null
   );
 
   return (
@@ -725,103 +721,9 @@ function BundleVersionRow() {
       {(info) => (
         <>
           <Row label="Version">
-            <button
-              type="button"
-              class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              onClick={() => setShowBuildInfo(true)}
-            >
-              {info().bundleBuild} (
-              {info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
-              {info().nativeBuild}
-            </button>
+            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'}
+            ) - {info().nativeBuild}
           </Row>
-          <Dialog
-            open={showBuildInfo()}
-            onOpenChange={setShowBuildInfo}
-            position="center"
-            class="w-120"
-          >
-            <Panel active depth={2} class="rounded-xl">
-              <Panel.Header class="px-6">
-                <Dialog.Title class="text-ink text-sm font-semibold">
-                  App Debug Info
-                </Dialog.Title>
-              </Panel.Header>
-              <Panel.Body class="p-6 font-sans flex flex-col gap-4">
-                <div class="grid gap-2 text-sm">
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Selected bundle</span>
-                    <span class="text-ink">
-                      {info().bundleBuild} (
-                      {info().source === 'embedded' ? 'app' : 'ota'})
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Native build</span>
-                    <span class="text-ink">{info().nativeBuild}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Runtime entry</span>
-                    <span
-                      class={cn(
-                        'text-right break-all',
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : formatAssetUrl(entryAssetInfo()?.loadedEntryUrl)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Fresh index entry</span>
-                    <span
-                      class={cn(
-                        'text-right break-all',
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : formatAssetUrl(entryAssetInfo()?.freshIndexEntryUrl)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Matches</span>
-                    <span
-                      class={cn(
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : entryAssetInfo()?.matches == null
-                          ? 'unknown'
-                          : entryAssetInfo()?.matches
-                            ? 'true'
-                            : 'false'}
-                    </span>
-                  </div>
-                  <Show when={entryAssetInfo()?.error}>
-                    {(error) => (
-                      <div class="flex items-center justify-between gap-4">
-                        <span class="text-ink-muted">Error</span>
-                        <span class="text-right text-failure break-all">
-                          {error()}
-                        </span>
-                      </div>
-                    )}
-                  </Show>
-                </div>
-              </Panel.Body>
-            </Panel>
-          </Dialog>
         </>
       )}
     </Show>

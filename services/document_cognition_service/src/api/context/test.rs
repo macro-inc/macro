@@ -7,6 +7,7 @@ use stream::domain::{
     ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
 };
 use tokio::sync::broadcast::{self, Receiver};
+use tokio_util::task::TaskTracker;
 
 pub struct MockConnectionRepo;
 
@@ -188,7 +189,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        call::domain::service::CallRecordQueryServiceImpl::new(
+            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
@@ -255,6 +258,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new("localhost:9092")
             .expect("kafka producer config is valid"),
+        TaskTracker::new(),
     );
 
     let document_service = documents::domain::service::DocumentServiceImpl::new(
@@ -287,8 +291,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let search_service_client = Arc::new(search_service_client);
 
     // Build properties tool context
-    let properties_tool_context =
-        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+    let properties_tool_context = ai_tools::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(
@@ -304,7 +310,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 ),
                 0,
             )
-            .with_macro_event_broker(macro_event_broker),
+            .with_macro_event_broker(macro_event_broker.clone()),
         ),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
@@ -319,12 +325,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-    );
     let call_tool_context = call::inbound::toolset::CallToolContext::new(
         call_service,
-        call_query_service,
         (*entity_access_service).clone(),
     );
 
@@ -350,8 +352,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         notification_tool_context: notification_tool_context.clone(),
+        import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(
+        channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
         ),
@@ -366,6 +369,40 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
+
+    let (import_service, onboarding_service) = {
+        let mcp_key =
+            mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
+        let mcp_repo =
+            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+        let creator = ai_tools::ToolEntityCreator {
+            document_creator: document_tool_context.creator.clone(),
+            entity_access_service: entity_access_service.clone(),
+            channel_service: tool_service_context.channel_tool_context.service.clone(),
+            task_properties: ai_tools::build_task_properties_adapter(
+                pool.clone(),
+                properties_service.clone(),
+                entity_access_service.clone(),
+            ),
+            document_properties:
+                import::outbound::document_properties::DocumentPropertiesApplicator::new(
+                    properties_service.clone(),
+                ),
+            team_repository: ai_tools::build_team_repository(pool.clone()),
+        };
+        let import_service = Arc::new(import::domain::service::ImportServiceImpl::new(
+            import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
+            Arc::new(mcp_repo.clone()),
+            Arc::new(creator),
+            ai_usage::pg_recorder(pool.clone()),
+        ));
+        let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),
+            Arc::new(mcp_repo),
+            import_service.clone(),
+        ));
+        (import_service, onboarding_service)
+    };
 
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
@@ -404,13 +441,33 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
     );
 
+    let authorization_state =
+        MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+            MacroAuthJwtValidator::new(
+                macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
+            ),
+            macro_authorization::InternalAuthConfig {
+                api_key: "testing".to_string(),
+                default_user_id: None,
+            },
+            macro_authorization::NoBotAuthorizer,
+        )));
+
+    let user_permissions_service = Arc::new(
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+        ),
+    );
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         search_service_client,
         email_service_client_external,
-        jwt_args: JwtValidationArgs::new_testing(),
+        authorization_state: authorization_state.clone(),
+        user_permissions_service,
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),
         notification_ingress_service,
@@ -435,33 +492,36 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service: entity_access_service.clone(),
-        message_service: Arc::new(chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
-            attachment::provider::AttachmentProvider {
-                document: documents::inbound::attachment::DocumentAttachmentService::new(
-                    document_tool_context.service.clone(),
-                    document_tool_context.entity_access_service.clone(),
-                    document_tool_context.lexical_client.clone(),
-                ),
-                email_thread: email::inbound::attachment::EmailAttachmentService::new(
-                    email_service_for_tools.clone(),
-                    entity_access_service.clone(),
-                ),
-                chat: chat::inbound::attachment::ChatAttachmentService::new(
-                    Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
-                    entity_access_service.clone(),
-                ),
-                channel: channels::inbound::attachment::ChannelAttachmentService::new(
-                    Arc::new(PgChannelsRepo::new(pool.clone())),
-                    entity_access_service.clone(),
-                ),
-                static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(
-                    Arc::new(static_file::outbound::CdnStaticFileRepo::new(
-                        "http://localhost".into(),
-                    )),
-                ),
-            },
-        )),
+        message_service: Arc::new(
+            chat::domain::service::MessageServiceImpl::new(
+                chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+                attachment::provider::AttachmentProvider {
+                    document: documents::inbound::attachment::DocumentAttachmentService::new(
+                        document_tool_context.service.clone(),
+                        document_tool_context.entity_access_service.clone(),
+                        document_tool_context.lexical_client.clone(),
+                    ),
+                    email_thread: email::inbound::attachment::EmailAttachmentService::new(
+                        email_service_for_tools.clone(),
+                        entity_access_service.clone(),
+                    ),
+                    chat: chat::inbound::attachment::ChatAttachmentService::new(
+                        Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
+                        entity_access_service.clone(),
+                    ),
+                    channel: channels::inbound::attachment::ChannelAttachmentService::new(
+                        Arc::new(PgChannelsRepo::new(pool.clone())),
+                        entity_access_service.clone(),
+                    ),
+                    static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(
+                        Arc::new(static_file::outbound::CdnStaticFileRepo::new(
+                            "http://localhost".into(),
+                        )),
+                    ),
+                },
+            )
+            .with_event_broker(macro_event_broker.clone()),
+        ),
         ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
             redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
         )),
@@ -480,8 +540,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 "http://localhost/mcp/servers/auth/callback".to_string(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
-            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
+            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth, authorization_state)
         },
+        import_service: import_service.clone(),
+        onboarding_service,
+        macro_event_broker,
     };
     Arc::new(api_context)
 }

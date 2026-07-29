@@ -184,7 +184,7 @@ pub struct BotTokenCandidate {
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateBotRequest {
-    /// Team owner. Omit for a user-owned bot.
+    /// Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
     pub team_id: Option<Uuid>,
     /// Display name.
     pub name: String,
@@ -232,7 +232,7 @@ pub struct AddChannelBotRequest {
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateChannelScopedBotRequest {
-    /// Team owner. Omit for a user-owned bot.
+    /// Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
     pub team_id: Option<Uuid>,
     /// Display name.
     pub name: String,

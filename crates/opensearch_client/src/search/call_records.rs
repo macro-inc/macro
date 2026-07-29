@@ -9,10 +9,10 @@ use crate::{
         },
         properties::build_tag_filter,
         query::Keys,
+        utils::millis_to_datetime,
     },
 };
 
-use chrono::DateTime;
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
     BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
@@ -45,9 +45,10 @@ pub(crate) struct CallRecordIndex {
     pub channel_name: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
-    pub started_at_seconds: i64,
     #[serde(default)]
-    pub ended_at_seconds: Option<i64>,
+    pub started_at_millis: Option<i64>,
+    #[serde(default)]
+    pub ended_at_millis: Option<i64>,
 }
 
 pub(crate) struct CallRecordSearchConfig;
@@ -251,6 +252,7 @@ impl CallRecordQueryBuilder {
 fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "require_field_match": true,
+        "max_analyzer_offset": super::HIGHLIGHT_MAX_ANALYZER_OFFSET,
         "pre_tags": ["<macro_em>"],
         "post_tags": ["</macro_em>"],
         "fields": {
@@ -355,9 +357,10 @@ struct SegmentSource {
     speaker_id: Option<String>,
     #[serde(default)]
     sequence_num: Option<i32>,
-    started_at_seconds: i64,
     #[serde(default)]
-    ended_at_seconds: Option<i64>,
+    started_at_millis: Option<i64>,
+    #[serde(default)]
+    ended_at_millis: Option<i64>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -415,15 +418,12 @@ pub(crate) fn expand_inner_hits_to_search_hits(
                     transcript_id: seg.source.transcript_id,
                     speaker_id: seg.source.speaker_id.unwrap_or_default(),
                     sequence_num: seg.source.sequence_num.unwrap_or_default(),
-                    started_at: DateTime::from_timestamp(seg.source.started_at_seconds, 0)
+                    started_at: millis_to_datetime(seg.source.started_at_millis)
                         .unwrap_or_default(),
-                    ended_at: seg
-                        .source
-                        .ended_at_seconds
-                        .and_then(|s| DateTime::from_timestamp(s, 0)),
+                    ended_at: millis_to_datetime(seg.source.ended_at_millis),
                     participant_ids: parent.participant_ids.clone(),
                 })),
-                updated_at: DateTime::from_timestamp(parent.started_at_seconds, 0),
+                updated_at: millis_to_datetime(parent.started_at_millis),
             });
         }
     }
