@@ -131,6 +131,13 @@ impl GmailArgs {
     }
 }
 
+fn http_client() -> anyhow::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .context("building the HTTP client")
+}
+
 fn require_test_account(email: &str) -> anyhow::Result<()> {
     if !email.ends_with(TEST_DOMAIN) {
         bail!("refusing to touch {email}: only {TEST_DOMAIN} test accounts are allowed");
@@ -178,7 +185,7 @@ impl GmailApi {
             .clone();
 
         let api = GmailApi {
-            http: reqwest::Client::new(),
+            http: http_client()?,
             access_token: tokio::sync::RwLock::new(String::new()),
             refresh_gate: tokio::sync::Mutex::new(()),
             client_id,
@@ -789,7 +796,7 @@ async fn ensure_subscription(
 /// `GmailInboxSyncPayload`). Messages are acked only after the webhook accepts
 /// them, so a stack that is down redelivers instead of losing sync events.
 async fn forward(args: ForwardArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = http_client()?;
     let mut sa = SaToken::from_env(http.clone()).await?;
     ensure_subscription(&http, &mut sa, &args.subscription, &args.topic).await?;
     let pull_url = format!(
