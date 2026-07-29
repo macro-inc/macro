@@ -488,7 +488,11 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    gen_compose::generate(mode, instance, &binaries, static_frontend)?;
+    let gmail_forwarder = env
+        .merged
+        .get("GMAIL_FORWARDER_SA_KEY")
+        .is_some_and(|key| !key.trim().is_empty());
+    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode.spec().runs_local_infra {
         let google = kickstart::GoogleIdp::from_env(&env.merged);
@@ -805,7 +809,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
     println!("{}", path.display());
     Ok(())
 }
