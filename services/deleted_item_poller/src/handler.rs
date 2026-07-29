@@ -13,9 +13,7 @@ use macro_db_client::projects::ProjectToDelete;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
-use sqs_client::search::{
-    SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project::RemoveProject,
-};
+use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
@@ -31,8 +29,6 @@ pub async fn handler(
     Ok(())
 }
 
-// This preparatory helper is wired into the poller in the Kafka follow-up.
-#[cfg_attr(not(test), allow(dead_code))]
 #[tracing::instrument(skip(event_broker, projects_to_delete), err)]
 async fn publish_project_purge_events<B: MacroEventBroker>(
     event_broker: &B,
@@ -94,26 +90,14 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
 
     tracing::debug!(projects_to_delete=?projects_to_delete, "projects to delete");
 
-    // Idempotent safety net — the soft delete already removed these from the
-    // search index.
-    ctx.sqs_client
-        .bulk_send_message_to_search_event_queue(
-            projects_to_delete
-                .iter()
-                .map(|project| {
-                    SearchQueueMessage::RemoveProject(RemoveProject {
-                        project_id: project.project_id.clone(),
-                        index_override: None,
-                    })
-                })
-                .collect(),
-        )
-        .await?;
+    publish_project_purge_events(&ctx.macro_event_broker, &projects_to_delete)
+        .await
+        .context("unable to publish project purge events")?;
 
     let project_ids = projects_to_delete
         .into_iter()
         .map(|project| project.project_id)
-        .collect::<Vec<_>>();
+        .collect::<Vec<String>>();
 
     // We can actually perform the project deletion here as we will automatically be queuing all
     // the items in the project for deletion as well
