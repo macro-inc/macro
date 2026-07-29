@@ -50,6 +50,20 @@ const originalParameterGroup = new aws.rds.ParameterGroup(
       { name: 'auto_explain.log_nested_statements', value: 'on' },
       { name: 'auto_explain.sample_rate', value: '1' },
       { name: 'idle_in_transaction_session_timeout', value: '300000' },
+      // Query-latency tuning (all dynamic parameters — applied without reboot).
+      // random_page_cost/effective_io_concurrency: correct the planner's
+      // spinning-disk cost assumptions for gp3 SSD.
+      { name: 'random_page_cost', value: '1.1' },
+      { name: 'effective_io_concurrency', value: '256' },
+      // 16MB (kB units), sized for the current 16GiB instance; raise to
+      // 32768 when the instance moves to 32GiB.
+      { name: 'work_mem', value: '16384' },
+      // Dynamically generated queries never repeat, so JIT compilation
+      // cost is never amortized.
+      { name: 'jit', value: '0' },
+      // Log any query spilling >=10MB to temp files to observe residual
+      // work_mem overflows.
+      { name: 'log_temp_files', value: '10240' },
     ],
     tags,
   },
@@ -84,6 +98,20 @@ if (stack === 'prod') {
         { name: 'auto_explain.log_nested_statements', value: 'on' },
         { name: 'auto_explain.sample_rate', value: '1' },
         { name: 'idle_in_transaction_session_timeout', value: '300000' },
+        // Query-latency tuning (all dynamic parameters — applied without reboot).
+        // random_page_cost/effective_io_concurrency: correct the planner's
+        // spinning-disk cost assumptions for gp3 SSD.
+        { name: 'random_page_cost', value: '1.1' },
+        { name: 'effective_io_concurrency', value: '256' },
+        // 16MB (kB units), sized for the current 16GiB instance; raise to
+        // 32768 when the instance moves to 32GiB.
+        { name: 'work_mem', value: '16384' },
+        // Dynamically generated queries never repeat, so JIT compilation
+        // cost is never amortized.
+        { name: 'jit', value: '0' },
+        // Log any query spilling >=10MB to temp files to observe residual
+        // work_mem overflows.
+        { name: 'log_temp_files', value: '10240' },
       ],
       tags,
     },
