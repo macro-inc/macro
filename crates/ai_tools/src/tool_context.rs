@@ -15,7 +15,6 @@ use channels::outbound::{
     connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
     contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
     pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-    sqs_search_indexer::SqsChannelSearchIndexer,
 };
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
@@ -124,11 +123,11 @@ pub type ToolChannelMessagesService = ChannelServiceImpl<
 pub type ToolChannelToolContext =
     ChannelToolContext<ToolChannelMessagesService, ToolEntityAccessService>;
 
-/// Build the channel AI tool context from a Postgres pool, with no side
-/// effects (no notifications/realtime/search indexing) — messages sent
-/// through it are persisted but never notify anyone. Only for tests and
-/// hosts that genuinely lack the side-effect clients; production hosts
-/// should use [`build_channel_tool_context_with_side_effects`].
+/// Build the channel AI tool context from a Postgres pool with no side
+/// effects. Messages sent through it are persisted, but never notify connected
+/// clients or publish the channel macro events that drive live search indexing.
+/// Only for tests and hosts that genuinely lack the side-effect clients;
+/// production hosts should use [`build_channel_tool_context_with_side_effects`].
 /// `lexical_client` derives the mention list for messages the agent sends,
 /// since bot-authored content arrives without the editor-tracked mentions.
 pub fn build_channel_tool_context_without_side_effects(
@@ -143,14 +142,13 @@ pub fn build_channel_tool_context_without_side_effects(
 }
 
 /// Clients a host provides to wire the real channel side effects for AI
-/// tools. Queue names (notification ingress, contacts, search events) are
-/// resolved through `macro_queues`, so hosts only supply the shared clients.
+/// tools. Notification-ingress and contacts queue names are resolved through
+/// `macro_queues`, so hosts only supply the shared clients.
 pub struct ChannelSideEffectClients {
     /// Connection gateway client used to fan realtime updates out to
     /// connected clients.
     pub connection_gateway: Arc<ConnectionGatewayClient>,
-    /// SQS client used for the notification-ingress, contacts, and
-    /// search-event queues.
+    /// SQS client used for the notification-ingress and contacts queues.
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
     pub macro_event_broker: ToolEventBroker,
@@ -158,10 +156,10 @@ pub struct ChannelSideEffectClients {
 
 /// Build the channel AI tool context dispatching the same side effects as the
 /// document-storage channel API: realtime updates via the connection gateway,
-/// notifications via the notification-ingress queue, search indexing via the
-/// search-event queue, contact sync via the contacts queue, and channel
-/// events on the macro event broker. Hosts that let the agent send channel
-/// messages need this so mentions and replies notify their recipients.
+/// notifications via the notification-ingress queue, contact sync via the
+/// contacts queue, and channel events on the macro event broker. Those channel
+/// macro events drive live search indexing. Hosts that let the agent send
+/// channel messages need this so mentions and replies notify their recipients.
 pub fn build_channel_tool_context_with_side_effects(
     pool: sqlx::PgPool,
     lexical_client: Arc<lexical_client::LexicalClient>,
@@ -179,14 +177,10 @@ pub fn build_channel_tool_context_with_side_effects(
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let search_event_queue = macro_queues::SearchEventQueue::new();
-    let search_sqs =
-        Arc::new(sqs_client::SQS::new(clients.sqs).search_event_queue(&search_event_queue));
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway),
         NotificationChannelSender::new(notification_ingress),
-        SqsChannelSearchIndexer::new(search_sqs),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(clients.macro_event_broker);
@@ -198,8 +192,8 @@ pub fn build_channel_tool_context_with_side_effects(
 }
 
 /// Build the channel AI tool context wired to `dispatcher`, so messages sent by
-/// agent tools fire the host's channel side effects (notifications, realtime,
-/// search indexing).
+/// agent tools fire the host's notification, realtime, and macro-event side
+/// effects. Channel macro events drive live search indexing.
 pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,

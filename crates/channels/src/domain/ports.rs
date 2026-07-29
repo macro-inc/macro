@@ -1096,19 +1096,6 @@ pub trait ChannelContactsDispatcher: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Indexer for channel search updates.
-pub trait ChannelSearchIndexer: Send + Sync + 'static {
-    /// Enqueue a message upsert.
-    fn index_message(&self, channel_id: Uuid, message_id: Uuid) -> impl Future<Output = ()> + Send;
-
-    /// Enqueue a message or channel removal.
-    fn remove_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Option<Uuid>,
-    ) -> impl Future<Output = ()> + Send;
-}
-
 /// Share-permission updater for items referenced by channel messages.
 pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     /// Error type for reference share-permission operations.

@@ -30,7 +30,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use connection::{
@@ -309,7 +308,6 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
-            SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
             DssEventBroker,
         >,

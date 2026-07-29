@@ -2778,7 +2778,6 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
- "sqs_client",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",

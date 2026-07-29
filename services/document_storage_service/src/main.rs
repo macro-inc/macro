@@ -44,7 +44,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use config::{Config, Environment};
@@ -834,7 +833,6 @@ async fn main() -> anyhow::Result<()> {
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_bot_trigger_sender(bot_trigger_sender)
