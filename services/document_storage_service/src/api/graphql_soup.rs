@@ -143,11 +143,15 @@ fn graphql_query_context_data(
         state.soup_router_state.email_service(),
     );
     let req = req
+        .data(macro_user_id.clone())
         .data(entity_mutation::EntityMutationActor {
             user_id: macro_user_id.clone(),
             organization_id,
         })
         .data(state.graphql_entity_mutation_service.clone())
+        .data(state.channel_service.clone())
+        .data(state.graphql_notification_reader.clone())
+        .data(state.entity_access_service.clone())
         .data(soup_item_loader);
 
     req.data(complete_graph::entity_properties_loader(
