@@ -505,8 +505,15 @@ async fn seed(args: SeedArgs) -> anyhow::Result<()> {
             .await;
 
     if let Some(first_failed) = failures.iter().min() {
+        // Imports after the first failure may have succeeded (concurrency), so
+        // resuming at the first failed index would re-import those and create
+        // duplicates. `--offset` is only exact for a clean interruption
+        // (ctrl-c/crash); scattered failures need a reset.
         bail!(
-            "{} imports failed; resume with `--offset {first_failed}` after checking the errors above",
+            "{} of {total} imports failed (first at index {first_failed}); the mailbox now has \
+             gaps that `--offset` cannot resume without duplicates — run `gmail reset` and reseed \
+             (consider lower --rps/--concurrency: sustained failures usually mean quota contention, \
+             e.g. a connected local stack live-syncing this mailbox while it seeds)",
             failures.len()
         );
     }
