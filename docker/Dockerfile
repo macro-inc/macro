@@ -7,6 +7,12 @@ WORKDIR /app
 FROM chef AS builder
 ARG SERVICE_NAME
 
+# cmake is needed to compile librdkafka (via rdkafka-sys, pulled in
+# transitively by workspace-hack for every binary) from source; rust:latest
+# doesn't include it by default.
+RUN apt-get update && apt-get install -y --no-install-recommends cmake && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 
 # Build the service

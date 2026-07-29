@@ -4,6 +4,14 @@ name = "agent_proxy_service"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "agent_proxy_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "agent_proxy_service_openapi"
+path = "src/openapi.rs"
+
 [dependencies]
 agent_proxy = { path = "../../crates/agent_proxy" }
 anyhow = { workspace = true }

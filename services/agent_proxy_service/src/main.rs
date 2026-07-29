@@ -1,8 +1,8 @@
 //! Composition root for the agent proxy service.
 //!
 //! Runs the user-facing HTTP API (agent CRUD, provisioning runtime
-//! connections, and posting ACP messages to sessions) alongside a single
-//! shared runtime WebSocket endpoint
+//! connections, and posting ACP messages to sessions) on the same router and
+//! port as a shared runtime WebSocket endpoint
 //! ([`agent_proxy::outbound::shared_runtime_connections::SharedRuntimeConnections`])
 //! that every external agent's runtime dials into, disambiguated by an
 //! `?id=` query parameter; accepted connections are drained and driven into
@@ -72,7 +72,8 @@ async fn main() -> Result<()> {
     let (incoming_tx, incoming_rx) = tokio::sync::mpsc::unbounded_channel();
     let runtime_connections = Arc::new(SharedRuntimeConnections::new(
         config.runtime_advertise_host,
-        config.runtime_port,
+        config.port as u16,
+        config.runtime_public_url,
         incoming_tx,
     ));
 
@@ -90,15 +91,6 @@ async fn main() -> Result<()> {
         Arc::clone(&service),
     ));
     tokio::spawn(connection_driver.run(incoming_rx));
-
-    let runtime_addr = format!("0.0.0.0:{}", config.runtime_port);
-    let runtime_listener = tokio::net::TcpListener::bind(&runtime_addr)
-        .await
-        .context("failed to bind shared runtime listener")?;
-    tracing::info!("shared runtime endpoint listening on {runtime_addr}");
-    tokio::spawn(async move {
-        let _ = axum::serve(runtime_listener, runtime_connections.into_router()).await;
-    });
 
     // User-facing HTTP API.
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
@@ -125,6 +117,7 @@ async fn main() -> Result<()> {
         .route("/health", axum::routing::get(health))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .merge(agent_proxy_router::<_, _, ()>(state))
+        .merge(runtime_connections.into_router())
         .layer(macro_cors::cors_layer());
 
     let addr = format!("0.0.0.0:{}", config.port);

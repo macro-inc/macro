@@ -23,7 +23,10 @@ fn event_names_are_opaque_wire_strings() {
 
 #[test]
 fn acp_ready_round_trips_as_a_typed_variant() {
-    assert_eq!(serde_json::to_value(SystemEvent::AcpReady).unwrap(), json!("acp_ready"));
+    assert_eq!(
+        serde_json::to_value(SystemEvent::AcpReady).unwrap(),
+        json!("acp_ready")
+    );
     assert_eq!(
         serde_json::from_value::<SystemEvent>(json!("acp_ready")).unwrap(),
         SystemEvent::AcpReady

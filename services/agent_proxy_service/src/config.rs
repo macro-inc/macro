@@ -17,19 +17,18 @@ pub struct Config {
     #[macro_config_default(8080)]
     pub port: usize,
     /// Host runtimes should use to dial back into the shared runtime
-    /// WebSocket endpoint (it binds every interface; only the advertised
-    /// host varies by deployment). Defaults to `127.0.0.1` for local
-    /// development.
+    /// WebSocket endpoint when `runtime_public_url` is unset. Only correct
+    /// for a bare `cargo run` with nothing in front of it. Defaults to
+    /// `127.0.0.1` for local development.
     #[macro_config_default("127.0.0.1".to_string())]
     pub runtime_advertise_host: String,
-    /// Port the shared runtime WebSocket endpoint listens on. An OS-assigned
-    /// port has no fixed mapping out of a container, so this is a fixed,
-    /// pre-published port instead. Defaults to `9700` (clear of the local
-    /// stack's other published ports, e.g. Kafka on 9092 and OpenSearch on
-    /// 9200/9600); must match what's published to the host in
-    /// `docker/docker-compose.yml`.
-    #[macro_config_default(9700)]
-    pub runtime_port: u16,
+    /// Full scheme+host(+port) external runtimes should dial for the shared
+    /// runtime WebSocket endpoint, e.g. `wss://agent-proxy.macro.com` behind
+    /// a TLS-terminating load balancer, or `ws://localhost:8091` when the
+    /// externally published port differs from this process's own `port`
+    /// (as in local docker-compose). Unset locally by default, in which case
+    /// `runtime_advertise_host`/`port` are used instead.
+    pub runtime_public_url: Option<String>,
     /// The connection URL for the Postgres database this application uses.
     pub database_url: DatabaseUrl,
     /// The internal api key, used for the connection gateway client and

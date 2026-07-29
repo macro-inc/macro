@@ -250,12 +250,9 @@ pub const RUST_SERVICES: &[RustService] = &[
         package: "agent_proxy_service",
         host_port: Some(Port::AgentProxy),
         // No frontend proxy route yet; clients hit the host port directly.
-        // Each external agent's runtime dials its own ephemeral WebSocket
-        // listener, provisioned on demand within a fixed port range
-        // (RUNTIME_PORT_RANGE_START/_END, published in the base compose file
-        // rather than derived here). Named instances only remap `host_port`
-        // (see `gen_compose::generate`), so they currently don't get a
-        // remapped range and would collide with the default instance's.
+        // The shared agent-runtime WebSocket endpoint lives on this same
+        // port (route `/runtime`, sessions disambiguated by `?id=`) rather
+        // than a listener of its own.
         path_prefix: None,
         is_websocket: true,
         modes: &[Mode::Local],

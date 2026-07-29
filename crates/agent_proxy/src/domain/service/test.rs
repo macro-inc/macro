@@ -138,6 +138,15 @@ impl ChatRepo for FakeRepo {
         unimplemented!()
     }
 
+    async fn update_interim_message_content(
+        &self,
+        _chat_id: &str,
+        _message_id: &str,
+        _content: &ChatMessageContent,
+    ) -> ChatResult<()> {
+        unimplemented!()
+    }
+
     async fn store_resolved_message(
         &self,
         _message_id: &str,
@@ -161,7 +170,7 @@ impl MessageRepo for FakeRepo {
         Ok(format!("msg-{}", stored.len()))
     }
 
-    async fn delete(&self, _message_id: &str) -> ChatResult<()> {
+    async fn delete(&self, _message_id: &str) -> ChatResult<String> {
         unimplemented!()
     }
 

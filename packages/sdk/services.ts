@@ -17,6 +17,7 @@ export const services = [
   'static-files',
   'storage',
   'unfurl',
+  'agent-proxy'
 ] as const;
 
 export type ServiceSpec = (typeof services)[number];

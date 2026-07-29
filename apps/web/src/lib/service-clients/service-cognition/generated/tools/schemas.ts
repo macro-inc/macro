@@ -6,16 +6,17 @@ import { z } from 'zod/v3';
 export const BashCodeExecution = z.object({ input: z.string() });
 
 export const BashCodeExecutionResponse = z.object({
+  tool_use_id: z.string(),
   content: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.intersection(
         z.object({
+          stdout: z.string(),
+          stderr: z.string(),
+          return_code: z.number().int(),
           content: z
             .union([z.array(z.object({ file_id: z.string() })), z.null()])
             .optional(),
-          return_code: z.number().int(),
-          stderr: z.string(),
-          stdout: z.string(),
         }),
         z.object({ type: z.literal('bash_code_execution_result') })
       ),
@@ -68,14 +69,11 @@ export const BashCodeExecutionResponse = z.object({
       });
     }
   }),
-  tool_use_id: z.string(),
 });
 
 export const BulkSetEntityPropertyOptions = z.object({
-  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
   entities: z.array(
     z.object({
-      entity_id: z.string(),
       entity_type: z.enum([
         'document',
         'project',
@@ -86,38 +84,28 @@ export const BulkSetEntityPropertyOptions = z.object({
         'user',
         'company',
       ]),
+      entity_id: z.string(),
     })
   ),
   property_definition_id: z.string().uuid(),
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
   remove_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
 });
 
 export const BulkSetEntityPropertyOptionsResponse = z.object({
   results: z.array(
     z.object({
-      entityId: z.string(),
       entityType: z.string(),
-      error: z.union([z.string(), z.null()]).optional(),
+      entityId: z.string(),
       status: z.string(),
+      error: z.union([z.string(), z.null()]).optional(),
     })
   ),
   summary: z.string(),
 });
 
 export const ContentSearch = z.object({
-  entityTypes: z
-    .array(
-      z.enum([
-        'documents',
-        'chats',
-        'emails',
-        'channels',
-        'projects',
-        'call_records',
-      ])
-    )
-    .optional(),
-  inbox: z.union([z.string(), z.null()]).optional(),
+  query: z.string(),
   matchType: z
     .intersection(
       z.any().superRefine((x, ctx) => {
@@ -141,7 +129,19 @@ export const ContentSearch = z.object({
       z.any().default('partial')
     )
     .optional(),
-  query: z.string(),
+  entityTypes: z
+    .array(
+      z.enum([
+        'documents',
+        'chats',
+        'emails',
+        'channels',
+        'projects',
+        'call_records',
+      ])
+    )
+    .optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   tags: z
     .union([
       z.array(
@@ -235,39 +235,19 @@ export const SearchToolResponse = z.object({
           const schemas = [
             z.intersection(
               z.object({
-                document_id: z.string().uuid(),
-                document_name: z.string(),
-                document_search_results: z.array(
-                  z.object({
-                    highlight: z.object({
-                      bcc: z.array(z.string()).optional(),
-                      cc: z.array(z.string()).optional(),
-                      content: z.array(z.string()).optional(),
-                      name: z.union([z.string(), z.null()]).optional(),
-                      recipients: z.array(z.string()).optional(),
-                      sender: z.union([z.string(), z.null()]).optional(),
-                      user_id: z.union([z.string(), z.null()]).optional(),
-                    }),
-                    node_id: z.union([z.string(), z.null()]).optional(),
-                    raw_content: z.union([z.string(), z.null()]).optional(),
-                    score: z.union([z.number(), z.null()]).optional(),
-                  })
-                ),
-                file_type: z.union([z.string(), z.null()]).optional(),
-                id: z.string().uuid(),
                 metadata: z
                   .union([
                     z.object({
                       created_at: z.string().datetime({ offset: true }),
-                      deleted_at: z
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
                         ])
                         .optional(),
                       project_id: z.union([z.string(), z.null()]).optional(),
-                      updated_at: z.string().datetime({ offset: true }),
-                      viewed_at: z
+                      deleted_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
@@ -277,8 +257,12 @@ export const SearchToolResponse = z.object({
                     z.null(),
                   ])
                   .optional(),
+                id: z.string().uuid(),
                 name: z.string(),
                 owner_id: z.string(),
+                document_id: z.string().uuid(),
+                document_name: z.string(),
+                file_type: z.union([z.string(), z.null()]).optional(),
                 sub_type: z
                   .union([
                     z.any().superRefine((x, ctx) => {
@@ -303,44 +287,40 @@ export const SearchToolResponse = z.object({
                     z.null(),
                   ])
                   .optional(),
+                document_search_results: z.array(
+                  z.object({
+                    node_id: z.union([z.string(), z.null()]).optional(),
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    raw_content: z.union([z.string(), z.null()]).optional(),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
               }),
               z.object({ type: z.literal('document') })
             ),
             z.intersection(
               z.object({
-                chat_id: z.string().uuid(),
-                chat_search_results: z.array(
-                  z.object({
-                    chat_message_id: z
-                      .union([z.string().uuid(), z.null()])
-                      .optional(),
-                    highlight: z.object({
-                      bcc: z.array(z.string()).optional(),
-                      cc: z.array(z.string()).optional(),
-                      content: z.array(z.string()).optional(),
-                      name: z.union([z.string(), z.null()]).optional(),
-                      recipients: z.array(z.string()).optional(),
-                      sender: z.union([z.string(), z.null()]).optional(),
-                      user_id: z.union([z.string(), z.null()]).optional(),
-                    }),
-                    role: z.union([z.string(), z.null()]).optional(),
-                    score: z.union([z.number(), z.null()]).optional(),
-                  })
-                ),
-                id: z.string().uuid(),
                 metadata: z
                   .union([
                     z.object({
                       created_at: z.string().datetime({ offset: true }),
-                      deleted_at: z
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
                         ])
                         .optional(),
                       project_id: z.union([z.string(), z.null()]).optional(),
-                      updated_at: z.string().datetime({ offset: true }),
-                      viewed_at: z
+                      deleted_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
@@ -350,119 +330,127 @@ export const SearchToolResponse = z.object({
                     z.null(),
                   ])
                   .optional(),
+                id: z.string().uuid(),
                 name: z.string(),
                 owner_id: z.string(),
+                chat_id: z.string().uuid(),
                 user_id: z.string(),
+                chat_search_results: z.array(
+                  z.object({
+                    chat_message_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    role: z.union([z.string(), z.null()]).optional(),
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
               }),
               z.object({ type: z.literal('chat') })
             ),
             z.intersection(
               z.object({
                 created_at: z.string().datetime({ offset: true }),
-                email_message_search_results: z.array(
-                  z.object({
-                    bcc: z.array(z.string()),
-                    cc: z.array(z.string()),
-                    highlight: z.object({
-                      bcc: z.array(z.string()).optional(),
-                      cc: z.array(z.string()).optional(),
-                      content: z.array(z.string()).optional(),
-                      name: z.union([z.string(), z.null()]).optional(),
-                      recipients: z.array(z.string()).optional(),
-                      sender: z.union([z.string(), z.null()]).optional(),
-                      user_id: z.union([z.string(), z.null()]).optional(),
-                    }),
-                    labels: z.array(z.string()),
-                    message_id: z
-                      .union([z.string().uuid(), z.null()])
-                      .optional(),
-                    pretty_sender: z.string(),
-                    recipients: z.array(z.string()),
-                    score: z.union([z.number(), z.null()]).optional(),
-                    sender: z.string(),
-                    sent_at: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                  })
-                ),
-                id: z.string().uuid(),
+                updated_at: z.string().datetime({ offset: true }),
+                viewed_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+                snippet: z.union([z.string(), z.null()]).optional(),
+                is_read: z.boolean(),
                 inbox_visible: z.boolean(),
                 is_draft: z.boolean(),
                 is_important: z.boolean(),
-                is_read: z.boolean(),
-                link_id: z.string().uuid(),
+                id: z.string().uuid(),
                 name: z.union([z.string(), z.null()]).optional(),
                 owner_id: z.string(),
+                subject: z.union([z.string(), z.null()]).optional(),
+                thread_id: z.string().uuid(),
+                user_id: z.string(),
+                link_id: z.string().uuid(),
+                email_message_search_results: z.array(
+                  z.object({
+                    message_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    sender: z.string(),
+                    pretty_sender: z.string(),
+                    recipients: z.array(z.string()),
+                    cc: z.array(z.string()),
+                    bcc: z.array(z.string()),
+                    labels: z.array(z.string()),
+                    sent_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
                 participants: z.array(
                   z.object({
                     email: z.string(),
                     name: z.union([z.string(), z.null()]).optional(),
                   })
                 ),
-                snippet: z.union([z.string(), z.null()]).optional(),
-                subject: z.union([z.string(), z.null()]).optional(),
-                thread_id: z.string().uuid(),
-                updated_at: z.string().datetime({ offset: true }),
-                user_id: z.string(),
-                viewed_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
               }),
               z.object({ type: z.literal('email') })
             ),
             z.intersection(
               z.object({
-                channel_id: z.string().uuid(),
+                id: z.string().uuid(),
+                owner_id: z.union([z.string(), z.null()]).optional(),
                 channel_type: z.string(),
+                channel_id: z.string().uuid(),
+                message_id: z.string().uuid(),
+                thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+                sender_id: z.string(),
                 created_at: z.string().datetime({ offset: true }),
+                updated_at: z.string().datetime({ offset: true }),
                 deleted_at: z
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
                 highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
                   name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
+                  content: z.array(z.string()).optional(),
                   user_id: z.union([z.string(), z.null()]).optional(),
+                  sender: z.union([z.string(), z.null()]).optional(),
+                  recipients: z.array(z.string()).optional(),
+                  cc: z.array(z.string()).optional(),
+                  bcc: z.array(z.string()).optional(),
                 }),
-                id: z.string().uuid(),
-                message_id: z.string().uuid(),
-                owner_id: z.union([z.string(), z.null()]).optional(),
                 score: z.union([z.number(), z.null()]).optional(),
-                sender_id: z.string(),
-                thread_id: z.union([z.string().uuid(), z.null()]).optional(),
-                updated_at: z.string().datetime({ offset: true }),
               }),
               z.object({ type: z.literal('channelMessage') })
             ),
             z.intersection(
               z.object({
-                channel_id: z.string().uuid(),
-                channel_type: z.string(),
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                id: z.string().uuid(),
                 metadata: z
                   .union([
                     z.object({
                       created_at: z.string().datetime({ offset: true }),
-                      interacted_at: z
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
                         ])
                         .optional(),
-                      updated_at: z.string().datetime({ offset: true }),
-                      viewed_at: z
+                      interacted_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
@@ -472,20 +460,31 @@ export const SearchToolResponse = z.object({
                     z.null(),
                   ])
                   .optional(),
+                id: z.string().uuid(),
                 owner_id: z.union([z.string(), z.null()]).optional(),
+                channel_type: z.string(),
+                channel_id: z.string().uuid(),
+                highlight: z.object({
+                  name: z.union([z.string(), z.null()]).optional(),
+                  content: z.array(z.string()).optional(),
+                  user_id: z.union([z.string(), z.null()]).optional(),
+                  sender: z.union([z.string(), z.null()]).optional(),
+                  recipients: z.array(z.string()).optional(),
+                  cc: z.array(z.string()).optional(),
+                  bcc: z.array(z.string()).optional(),
+                }),
                 score: z.union([z.number(), z.null()]).optional(),
               }),
               z.object({ type: z.literal('channel') })
             ),
             z.intersection(
               z.object({
-                created_at: z.string().datetime({ offset: true }),
-                id: z.string().uuid(),
                 metadata: z
                   .union([
                     z.object({
                       created_at: z.string().datetime({ offset: true }),
-                      deleted_at: z
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
@@ -494,8 +493,7 @@ export const SearchToolResponse = z.object({
                       parent_project_id: z
                         .union([z.string(), z.null()])
                         .optional(),
-                      updated_at: z.string().datetime({ offset: true }),
-                      viewed_at: z
+                      deleted_at: z
                         .union([
                           z.string().datetime({ offset: true }),
                           z.null(),
@@ -505,67 +503,39 @@ export const SearchToolResponse = z.object({
                     z.null(),
                   ])
                   .optional(),
+                id: z.string().uuid(),
                 name: z.string(),
                 owner_id: z.string(),
+                updated_at: z.string().datetime({ offset: true }),
+                created_at: z.string().datetime({ offset: true }),
                 project_search_results: z.array(
                   z.object({
                     highlight: z.object({
-                      bcc: z.array(z.string()).optional(),
-                      cc: z.array(z.string()).optional(),
-                      content: z.array(z.string()).optional(),
                       name: z.union([z.string(), z.null()]).optional(),
-                      recipients: z.array(z.string()).optional(),
-                      sender: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
                       user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
                     }),
                     score: z.union([z.number(), z.null()]).optional(),
                   })
                 ),
-                updated_at: z.string().datetime({ offset: true }),
               }),
               z.object({ type: z.literal('project') })
             ),
             z.intersection(
               z.object({
-                call_id: z.string().uuid(),
-                call_search_results: z.array(
-                  z.object({
-                    ended_at: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                    highlight: z.object({
-                      bcc: z.array(z.string()).optional(),
-                      cc: z.array(z.string()).optional(),
-                      content: z.array(z.string()).optional(),
-                      name: z.union([z.string(), z.null()]).optional(),
-                      recipients: z.array(z.string()).optional(),
-                      sender: z.union([z.string(), z.null()]).optional(),
-                      user_id: z.union([z.string(), z.null()]).optional(),
-                    }),
-                    score: z.union([z.number(), z.null()]).optional(),
-                    sequence_num: z
-                      .union([z.number().int(), z.null()])
-                      .optional(),
-                    speaker_id: z.union([z.string(), z.null()]).optional(),
-                    started_at: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                    transcript_id: z
-                      .union([z.string().uuid(), z.null()])
-                      .optional(),
-                  })
-                ),
-                channel_id: z.string().uuid(),
-                id: z.string().uuid(),
                 metadata: z
                   .union([
                     z.object({
-                      attended: z.boolean(),
-                      channel_name: z.union([z.string(), z.null()]).optional(),
                       created_by: z.string(),
-                      duration_ms: z.number().int(),
-                      ended_at: z.string().datetime({ offset: true }),
                       started_at: z.string().datetime({ offset: true }),
+                      ended_at: z.string().datetime({ offset: true }),
+                      duration_ms: z.number().int(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      channel_name: z.union([z.string(), z.null()]).optional(),
                       status: z.any().superRefine((x, ctx) => {
                         const schemas = [
                           z.literal('ATTENDED'),
@@ -589,35 +559,65 @@ export const SearchToolResponse = z.object({
                           });
                         }
                       }),
-                      updated_at: z.string().datetime({ offset: true }),
+                      attended: z.boolean(),
                     }),
                     z.null(),
                   ])
                   .optional(),
+                id: z.string().uuid(),
                 name: z.union([z.string(), z.null()]).optional(),
                 owner_id: z.string(),
+                call_id: z.string().uuid(),
+                channel_id: z.string().uuid(),
                 participant_ids: z.array(z.string()),
+                call_search_results: z.array(
+                  z.object({
+                    transcript_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    speaker_id: z.union([z.string(), z.null()]).optional(),
+                    sequence_num: z
+                      .union([z.number().int(), z.null()])
+                      .optional(),
+                    started_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    ended_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
               }),
               z.object({ type: z.literal('call') })
             ),
             z.intersection(
               z.object({
-                createdAt: z.string().datetime({ offset: true }),
-                description: z.union([z.string(), z.null()]).optional(),
-                domains: z.array(
-                  z.object({
-                    companyId: z.string().uuid(),
-                    createdAt: z.string().datetime({ offset: true }),
-                    domain: z.string(),
-                    id: z.string().uuid(),
-                  })
-                ),
-                hidden: z.boolean(),
                 id: z.string().uuid(),
+                teamId: z.string().uuid(),
                 name: z.union([z.string(), z.null()]).optional(),
                 nameHighlighted: z.union([z.string(), z.null()]).optional(),
-                teamId: z.string().uuid(),
+                description: z.union([z.string(), z.null()]).optional(),
+                hidden: z.boolean(),
+                createdAt: z.string().datetime({ offset: true }),
                 updatedAt: z.string().datetime({ offset: true }),
+                domains: z.array(
+                  z.object({
+                    id: z.string().uuid(),
+                    companyId: z.string().uuid(),
+                    domain: z.string(),
+                    createdAt: z.string().datetime({ offset: true }),
+                  })
+                ),
               }),
               z.object({ type: z.literal('company') })
             ),
@@ -654,9 +654,6 @@ export const CreateDocumentResponse = z.object({
 });
 
 export const CreateImportEntity = z.object({
-  entityId: z.union([z.string(), z.null()]).optional(),
-  foreignId: z.string(),
-  metadata: z.any(),
   source: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('linear'),
@@ -679,6 +676,7 @@ export const CreateImportEntity = z.object({
       });
     }
   }),
+  foreignId: z.string(),
   status: z.any().superRefine((x, ctx) => {
     const schemas = [z.literal('staged'), z.literal('imported')];
     const errors = schemas.reduce<z.ZodError[]>(
@@ -697,16 +695,14 @@ export const CreateImportEntity = z.object({
       });
     }
   }),
+  metadata: z.any(),
+  entityId: z.union([z.string(), z.null()]).optional(),
 });
 
 export const CreateImportEntityResponse = z.object({
+  outcome: z.string(),
   entity: z.object({
-    entityId: z.union([z.string(), z.null()]).optional(),
-    entityType: z.union([z.string(), z.null()]).optional(),
-    foreignId: z.string(),
     id: z.string().uuid(),
-    importedByTeammate: z.boolean(),
-    label: z.string(),
     source: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('linear'),
@@ -729,6 +725,7 @@ export const CreateImportEntityResponse = z.object({
         });
       }
     }),
+    foreignId: z.string(),
     status: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('staged'),
@@ -752,12 +749,16 @@ export const CreateImportEntityResponse = z.object({
         });
       }
     }),
+    label: z.string(),
+    entityId: z.union([z.string(), z.null()]).optional(),
+    entityType: z.union([z.string(), z.null()]).optional(),
+    importedByTeammate: z.boolean(),
   }),
   message: z.string(),
-  outcome: z.string(),
 });
 
 export const CreateTag = z.object({
+  label: z.string(),
   color: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('red'),
@@ -789,7 +790,6 @@ export const CreateTag = z.object({
       });
     }
   }),
-  label: z.string(),
   scope: z
     .intersection(
       z.any().superRefine((x, ctx) => {
@@ -816,9 +816,9 @@ export const CreateTag = z.object({
 });
 
 export const CreateTagResponse = z.object({
-  color: z.union([z.string(), z.null()]).optional(),
   id: z.string().uuid(),
   label: z.string(),
+  color: z.union([z.string(), z.null()]).optional(),
   propertyDefinitionId: z.string().uuid(),
   scope: z.any().superRefine((x, ctx) => {
     const schemas = [z.literal('personal'), z.literal('team')];
@@ -854,8 +854,8 @@ export const DeleteTag = z.object({
 });
 
 export const DeleteTagResponse = z.object({
-  message: z.string(),
   success: z.boolean(),
+  message: z.string(),
 });
 
 export const DisplayResults = z.object({ view: z.any() });
@@ -868,11 +868,14 @@ export const EditDocument = z.object({
 });
 
 export const EditDocumentResponse = z.object({
-  clarification: z.union([z.string(), z.null()]).optional(),
   summary: z.string(),
+  clarification: z.union([z.string(), z.null()]).optional(),
 });
 
 export const EditTag = z.object({
+  id: z.string().uuid(),
+  property_definition_id: z.string().uuid(),
+  label: z.union([z.string(), z.null()]).optional(),
   color: z
     .union([
       z.any().superRefine((x, ctx) => {
@@ -909,15 +912,12 @@ export const EditTag = z.object({
       z.null(),
     ])
     .optional(),
-  id: z.string().uuid(),
-  label: z.union([z.string(), z.null()]).optional(),
-  property_definition_id: z.string().uuid(),
 });
 
 export const EditTagResponse = z.object({
-  color: z.union([z.string(), z.null()]).optional(),
   id: z.string().uuid(),
   label: z.string(),
+  color: z.union([z.string(), z.null()]).optional(),
   propertyDefinitionId: z.string().uuid(),
   summary: z.string(),
 });
@@ -925,43 +925,43 @@ export const EditTagResponse = z.object({
 export const GetCompany = z.object({ company_id: z.string().uuid() });
 
 export const GetCompanyResponse = z.object({
-  contacts: z.array(
-    z.object({
-      email: z.string(),
-      id: z.string().uuid(),
-      lastInteraction: z.string().datetime({ offset: true }),
-      name: z.union([z.string(), z.null()]).optional(),
-    })
-  ),
+  id: z.string().uuid(),
+  name: z.union([z.string(), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
   domains: z.array(z.string()),
+  hidden: z.boolean(),
   emailSync: z.boolean(),
   firstInteraction: z.string().datetime({ offset: true }),
-  hidden: z.boolean(),
-  id: z.string().uuid(),
   lastInteraction: z.string().datetime({ offset: true }),
-  name: z.union([z.string(), z.null()]).optional(),
-  ownerUserId: z.union([z.string(), z.null()]).optional(),
-  properties: z.array(
-    z.object({
-      currentValue: z.any().optional(),
-      dataType: z.string(),
-      displayName: z.string(),
-      isMultiSelect: z.boolean(),
-      isSystem: z.boolean(),
-      options: z.array(
-        z.object({ displayValue: z.string(), id: z.string().uuid() })
-      ),
-      propertyDefinitionId: z.string().uuid(),
-    })
-  ),
-  revenue: z.union([z.number(), z.null()]).optional(),
   stage: z
     .union([
-      z.object({ label: z.string(), optionId: z.string().uuid() }),
+      z.object({ optionId: z.string().uuid(), label: z.string() }),
       z.null(),
     ])
     .optional(),
+  ownerUserId: z.union([z.string(), z.null()]).optional(),
+  revenue: z.union([z.number(), z.null()]).optional(),
+  contacts: z.array(
+    z.object({
+      id: z.string().uuid(),
+      email: z.string(),
+      name: z.union([z.string(), z.null()]).optional(),
+      lastInteraction: z.string().datetime({ offset: true }),
+    })
+  ),
+  properties: z.array(
+    z.object({
+      propertyDefinitionId: z.string().uuid(),
+      displayName: z.string(),
+      dataType: z.string(),
+      isMultiSelect: z.boolean(),
+      isSystem: z.boolean(),
+      currentValue: z.any().optional(),
+      options: z.array(
+        z.object({ id: z.string().uuid(), displayValue: z.string() })
+      ),
+    })
+  ),
   summary: z.string(),
 });
 
@@ -982,22 +982,13 @@ export const GetEntityProperties = z.object({
 export const GetEntityPropertiesResponse = z.object({
   properties: z.array(
     z.object({
-      currentValue: z.any().optional(),
-      currentValueLabels: z.union([z.array(z.string()), z.null()]).optional(),
-      dataType: z.string(),
+      propertyDefinitionId: z.string().uuid(),
       displayName: z.string(),
+      dataType: z.string(),
       isMultiSelect: z.boolean(),
       isSystem: z.boolean(),
-      options: z
-        .array(
-          z.object({
-            displayOrder: z.number().int(),
-            displayValue: z.string(),
-            id: z.string().uuid(),
-          })
-        )
-        .optional(),
-      propertyDefinitionId: z.string().uuid(),
+      currentValue: z.any().optional(),
+      currentValueLabels: z.union([z.array(z.string()), z.null()]).optional(),
       scope: z
         .union([
           z.any().superRefine((x, ctx) => {
@@ -1022,29 +1013,33 @@ export const GetEntityPropertiesResponse = z.object({
           z.null(),
         ])
         .optional(),
+      options: z
+        .array(
+          z.object({
+            id: z.string().uuid(),
+            displayOrder: z.number().int(),
+            displayValue: z.string(),
+          })
+        )
+        .optional(),
     })
   ),
   summary: z.string(),
 });
 
 export const GetThread = z.object({
-  limit: z.union([z.number().int(), z.null()]).optional(),
   threadId: z.string().uuid(),
+  limit: z.union([z.number().int(), z.null()]).optional(),
 });
 
 export const GetThreadResponse = z.object({
+  threadId: z.string().uuid(),
   isRead: z.boolean(),
   labels: z.array(z.string()),
   messages: z.array(
     z.object({
-      bodyParsed: z.union([z.string(), z.null()]).optional(),
-      cc: z.array(
-        z.object({
-          email: z.string(),
-          name: z.union([z.string(), z.null()]).optional(),
-        })
-      ),
-      date: z.union([z.string(), z.null()]).optional(),
+      id: z.string().uuid(),
+      subject: z.union([z.string(), z.null()]).optional(),
       from: z
         .union([
           z.object({
@@ -1054,31 +1049,32 @@ export const GetThreadResponse = z.object({
           z.null(),
         ])
         .optional(),
-      id: z.string().uuid(),
-      labels: z.array(z.string()),
-      subject: z.union([z.string(), z.null()]).optional(),
       to: z.array(
         z.object({
           email: z.string(),
           name: z.union([z.string(), z.null()]).optional(),
         })
       ),
+      cc: z.array(
+        z.object({
+          email: z.string(),
+          name: z.union([z.string(), z.null()]).optional(),
+        })
+      ),
+      bodyParsed: z.union([z.string(), z.null()]).optional(),
+      date: z.union([z.string(), z.null()]).optional(),
+      labels: z.array(z.string()),
     })
   ),
   summary: z.string(),
-  threadId: z.string().uuid(),
 });
 
 export const ImportNotionPage = z.object({ pageUrl: z.string() });
 
 export const ImportNotionPageResponse = z.object({
+  outcome: z.string(),
   entity: z.object({
-    entityId: z.union([z.string(), z.null()]).optional(),
-    entityType: z.union([z.string(), z.null()]).optional(),
-    foreignId: z.string(),
     id: z.string().uuid(),
-    importedByTeammate: z.boolean(),
-    label: z.string(),
     source: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('linear'),
@@ -1101,6 +1097,7 @@ export const ImportNotionPageResponse = z.object({
         });
       }
     }),
+    foreignId: z.string(),
     status: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('staged'),
@@ -1124,51 +1121,44 @@ export const ImportNotionPageResponse = z.object({
         });
       }
     }),
+    label: z.string(),
+    entityId: z.union([z.string(), z.null()]).optional(),
+    entityType: z.union([z.string(), z.null()]).optional(),
+    importedByTeammate: z.boolean(),
   }),
   message: z.string(),
-  outcome: z.string(),
 });
 
 export const ListCompanies = z.object({
-  include_hidden: z.union([z.boolean(), z.null()]).optional(),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
-  owner_user_id: z.union([z.string(), z.null()]).optional(),
   search: z.union([z.string(), z.null()]).optional(),
   stage: z.union([z.string(), z.null()]).optional(),
+  owner_user_id: z.union([z.string(), z.null()]).optional(),
+  include_hidden: z.union([z.boolean(), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
 });
 
 export const ListCompaniesResponse = z.object({
   companies: z.array(
     z.object({
+      id: z.string().uuid(),
+      name: z.union([z.string(), z.null()]).optional(),
       domains: z.array(z.string()),
       hidden: z.boolean(),
-      id: z.string().uuid(),
       lastInteraction: z.string().datetime({ offset: true }),
-      name: z.union([z.string(), z.null()]).optional(),
-      ownerUserId: z.union([z.string(), z.null()]).optional(),
-      revenue: z.union([z.number(), z.null()]).optional(),
       stage: z
         .union([
-          z.object({ label: z.string(), optionId: z.string().uuid() }),
+          z.object({ optionId: z.string().uuid(), label: z.string() }),
           z.null(),
         ])
         .optional(),
+      ownerUserId: z.union([z.string(), z.null()]).optional(),
+      revenue: z.union([z.number(), z.null()]).optional(),
     })
   ),
   summary: z.string(),
 });
 
 export const ListEntities = z.object({
-  callf: z.any().optional(),
-  cf: z.any().optional(),
-  chanf: z.any().optional(),
-  cthf: z.any().optional(),
-  df: z.any().optional(),
-  ef: z.any().optional(),
-  emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
-  emailView: z.union([z.string(), z.null()]).optional(),
-  fef: z.any().optional(),
-  inbox: z.union([z.string(), z.null()]).optional(),
   includeTypes: z
     .union([
       z.array(
@@ -1203,9 +1193,6 @@ export const ListEntities = z.object({
       z.null(),
     ])
     .optional(),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
-  pf: z.any().optional(),
-  propf: z.any().optional(),
   sortBy: z
     .any()
     .superRefine((x, ctx) => {
@@ -1231,6 +1218,18 @@ export const ListEntities = z.object({
       }
     })
     .optional(),
+  df: z.any().optional(),
+  pf: z.any().optional(),
+  cf: z.any().optional(),
+  emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
+  ef: z.any().optional(),
+  chanf: z.any().optional(),
+  cthf: z.any().optional(),
+  callf: z.any().optional(),
+  fef: z.any().optional(),
+  propf: z.any().optional(),
+  emailView: z.union([z.string(), z.null()]).optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   tags: z
     .union([
       z.array(
@@ -1286,6 +1285,7 @@ export const ListEntities = z.object({
       }
     })
     .optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
 });
 
 export const ListEntitiesResponse = z.object({
@@ -1293,9 +1293,9 @@ export const ListEntitiesResponse = z.object({
     z.any().superRefine((x, ctx) => {
       const schemas = [
         z.object({
-          fileType: z.union([z.string(), z.null()]).optional(),
           id: z.string().uuid(),
           name: z.string(),
+          fileType: z.union([z.string(), z.null()]).optional(),
           subType: z.union([z.string(), z.null()]).optional(),
           tags: z
             .array(
@@ -1389,13 +1389,13 @@ export const ListEntitiesResponse = z.object({
         }),
         z.object({
           id: z.string().uuid(),
-          inboxVisible: z.boolean(),
-          isDraft: z.boolean(),
-          isRead: z.boolean(),
-          senderEmail: z.union([z.string(), z.null()]).optional(),
-          senderName: z.union([z.string(), z.null()]).optional(),
-          snippet: z.union([z.string(), z.null()]).optional(),
           subject: z.union([z.string(), z.null()]).optional(),
+          snippet: z.union([z.string(), z.null()]).optional(),
+          senderName: z.union([z.string(), z.null()]).optional(),
+          senderEmail: z.union([z.string(), z.null()]).optional(),
+          inboxVisible: z.boolean(),
+          isRead: z.boolean(),
+          isDraft: z.boolean(),
           tags: z
             .array(
               z.object({
@@ -1430,13 +1430,13 @@ export const ListEntitiesResponse = z.object({
           type: z.literal('channel'),
         }),
         z.object({
-          channelId: z.string().uuid(),
           id: z.string().uuid(),
+          channelId: z.string().uuid(),
           type: z.literal('channelThread'),
         }),
         z.object({
-          createdBy: z.string(),
           id: z.string().uuid(),
+          createdBy: z.string(),
           tags: z
             .array(
               z.object({
@@ -1466,9 +1466,9 @@ export const ListEntitiesResponse = z.object({
           type: z.literal('call'),
         }),
         z.object({
+          id: z.string().uuid(),
           foreignEntityId: z.string(),
           foreignEntitySource: z.string(),
-          id: z.string().uuid(),
           metadata: z.any(),
           type: z.literal('foreignEntity'),
         }),
@@ -1554,12 +1554,7 @@ export const ListImportEntities = z.object({
 export const ListImportEntitiesResponse = z.object({
   entities: z.array(
     z.object({
-      entityId: z.union([z.string(), z.null()]).optional(),
-      entityType: z.union([z.string(), z.null()]).optional(),
-      foreignId: z.string(),
       id: z.string().uuid(),
-      importedByTeammate: z.boolean(),
-      label: z.string(),
       source: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('linear'),
@@ -1582,6 +1577,7 @@ export const ListImportEntitiesResponse = z.object({
           });
         }
       }),
+      foreignId: z.string(),
       status: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('staged'),
@@ -1605,6 +1601,10 @@ export const ListImportEntitiesResponse = z.object({
           });
         }
       }),
+      label: z.string(),
+      entityId: z.union([z.string(), z.null()]).optional(),
+      entityType: z.union([z.string(), z.null()]).optional(),
+      importedByTeammate: z.boolean(),
     })
   ),
 });
@@ -1615,16 +1615,16 @@ export const ListInboxesResponse = z.object({
   inboxes: z.array(
     z.object({
       emailAddress: z.string(),
-      isDelegated: z.boolean(),
       isPrimary: z.boolean(),
+      isDelegated: z.boolean(),
     })
   ),
   summary: z.string(),
 });
 
 export const ListLabels = z.object({
-  inbox: z.union([z.string(), z.null()]).optional(),
   thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
 });
 
 export const ListLabelsResponse = z.object({
@@ -1635,7 +1635,27 @@ export const ListLabelsResponse = z.object({
 });
 
 export const ListNotifications = z.object({
+  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
   done: z.union([z.boolean(), z.null()]).optional(),
+  seen: z.union([z.boolean(), z.null()]).optional(),
+  includeTypes: z
+    .union([
+      z.array(
+        z.enum([
+          'email',
+          'message',
+          'channel',
+          'document',
+          'project',
+          'chat',
+          'call',
+          'task',
+          'github',
+        ])
+      ),
+      z.null(),
+    ])
+    .optional(),
   entities: z
     .union([
       z.array(
@@ -1657,52 +1677,30 @@ export const ListNotifications = z.object({
       z.null(),
     ])
     .optional(),
-  includeTypes: z
-    .union([
-      z.array(
-        z.enum([
-          'email',
-          'message',
-          'channel',
-          'document',
-          'project',
-          'chat',
-          'call',
-          'task',
-          'github',
-        ])
-      ),
-      z.null(),
-    ])
-    .optional(),
-  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
-  seen: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const ListNotificationsResponse = z.object({
-  hasMore: z.boolean(),
   notifications: z.array(
     z.object({
-      createdAt: z.string(),
-      done: z.boolean(),
-      entityId: z.string(),
-      entityType: z.string(),
-      eventType: z.string(),
       id: z.string().uuid(),
-      metadata: z.any(),
+      eventType: z.string(),
+      entityType: z.string(),
+      entityId: z.string(),
       seen: z.boolean(),
+      done: z.boolean(),
+      createdAt: z.string(),
+      metadata: z.any(),
       senderId: z.union([z.string(), z.null()]).optional(),
     })
   ),
+  hasMore: z.boolean(),
 });
 
 export const ListTags = z.record(z.any());
 
 export const ListTagsResponse = z.object({
-  summary: z.string(),
   tagSets: z.array(
     z.object({
-      propertyDefinitionId: z.string().uuid(),
       scope: z.any().superRefine((x, ctx) => {
         const schemas = [z.literal('personal'), z.literal('team')];
         const errors = schemas.reduce<z.ZodError[]>(
@@ -1721,39 +1719,41 @@ export const ListTagsResponse = z.object({
           });
         }
       }),
+      propertyDefinitionId: z.string().uuid(),
       tags: z.array(
         z.object({
-          color: z.union([z.string(), z.null()]).optional(),
           id: z.string().uuid(),
           label: z.string(),
+          color: z.union([z.string(), z.null()]).optional(),
         })
       ),
     })
   ),
+  summary: z.string(),
 });
 
 export const ListTeamMembers = z.record(z.any());
 
 export const ListTeamMembersResponse = z.object({
+  members: z.array(z.object({ userId: z.string(), role: z.string() })),
   invited: z.array(z.object({ email: z.string(), role: z.string() })),
-  members: z.array(z.object({ role: z.string(), userId: z.string() })),
 });
 
 export const LoadTools = z.object({ names: z.array(z.string()) });
 
 export const LoadToolsResponse = z.object({
-  loaded: z.array(z.object({ description: z.string(), name: z.string() })),
+  loaded: z.array(z.object({ name: z.string(), description: z.string() })),
   not_found: z.array(z.string()),
 });
 
 export const MarkNotificationsDone = z.object({
-  done: z.boolean(),
   notificationIds: z.array(z.string().uuid()),
+  done: z.boolean(),
 });
 
 export const MarkNotificationsResponse = z.object({
-  count: z.number().int().gte(0),
   success: z.boolean(),
+  count: z.number().int().gte(0),
 });
 
 export const MarkNotificationsSeen = z.object({
@@ -1761,19 +1761,7 @@ export const MarkNotificationsSeen = z.object({
 });
 
 export const NameSearch = z.object({
-  entityTypes: z
-    .array(
-      z.enum([
-        'documents',
-        'chats',
-        'emails',
-        'channels',
-        'projects',
-        'call_records',
-      ])
-    )
-    .optional(),
-  inbox: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
   matchType: z
     .intersection(
       z.any().superRefine((x, ctx) => {
@@ -1797,7 +1785,19 @@ export const NameSearch = z.object({
       z.any().default('partial')
     )
     .optional(),
-  name: z.string(),
+  entityTypes: z
+    .array(
+      z.enum([
+        'documents',
+        'chats',
+        'emails',
+        'channels',
+        'projects',
+        'call_records',
+      ])
+    )
+    .optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   tags: z
     .union([
       z.array(
@@ -1862,39 +1862,39 @@ export const ReadCallRecordResponse = z.object({
   summary: z.union([z.string(), z.null()]).optional(),
   transcript: z.array(
     z.object({
-      content: z.string(),
+      speakerId: z.string(),
       diarizedSpeakerId: z.union([z.string(), z.null()]).optional(),
+      content: z.string(),
+      startedAt: z.string().datetime({ offset: true }),
       endedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
-      speakerId: z.string(),
-      startedAt: z.string().datetime({ offset: true }),
     })
   ),
 });
 
 export const ReadChannelMessageContext = z.object({
-  channelAfter: z
-    .union([z.number().int().gte(0).lte(65535), z.null()])
-    .optional(),
+  channelId: z.string().uuid(),
+  messageId: z.string().uuid(),
   channelBefore: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
     .optional(),
-  channelId: z.string().uuid(),
-  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
-  messageId: z.string().uuid(),
-  threadAfter: z
+  channelAfter: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
     .optional(),
   threadBefore: z
     .union([z.number().int().gte(0).lte(65535), z.null()])
     .optional(),
+  threadAfter: z
+    .union([z.number().int().gte(0).lte(65535), z.null()])
+    .optional(),
+  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
 export const ReadChannelMessageContextResponse = z.object({
   anchor: z.object({
+    messageId: z.string().uuid(),
     channelId: z.string().uuid(),
-    createdAt: z.string().datetime({ offset: true }),
     kind: z.any().superRefine((x, ctx) => {
       const schemas = [z.literal('topLevelMessage'), z.literal('threadReply')];
       const errors = schemas.reduce<z.ZodError[]>(
@@ -1913,211 +1913,364 @@ export const ReadChannelMessageContextResponse = z.object({
         });
       }
     }),
-    messageId: z.string().uuid(),
     threadId: z.string().uuid(),
+    createdAt: z.string().datetime({ offset: true }),
   }),
   channelContext: z.object({
-    after: z.array(
+    before: z.array(
       z.object({
-        attachments: z.array(
-          z.object({
-            createdAt: z.string().datetime({ offset: true }),
-            entityId: z.string(),
-            entityType: z.string(),
-            id: z.string().uuid(),
-          })
-        ),
+        id: z.string().uuid(),
         channelId: z.string().uuid(),
+        senderId: z.string(),
         content: z.string(),
         contentTruncated: z.boolean(),
         createdAt: z.string().datetime({ offset: true }),
-        deletedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
+        updatedAt: z.string().datetime({ offset: true }),
         editedAt: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
-        id: z.string().uuid(),
-        reactions: z.array(
-          z.object({ emoji: z.string(), users: z.array(z.string()) })
-        ),
-        senderId: z.string(),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
         thread: z.object({
+          threadId: z.string().uuid(),
+          replyCount: z.number().int(),
           latestReplyAt: z
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
-          omittedReplyCount: z.number().int(),
           preview: z
             .union([
               z.array(
                 z.object({
-                  attachments: z.array(
-                    z.object({
-                      createdAt: z.string().datetime({ offset: true }),
-                      entityId: z.string(),
-                      entityType: z.string(),
-                      id: z.string().uuid(),
-                    })
-                  ),
+                  id: z.string().uuid(),
+                  threadId: z.string().uuid(),
+                  senderId: z.string(),
                   content: z.string(),
                   contentTruncated: z.boolean(),
                   createdAt: z.string().datetime({ offset: true }),
+                  updatedAt: z.string().datetime({ offset: true }),
                   editedAt: z
                     .union([z.string().datetime({ offset: true }), z.null()])
                     .optional(),
-                  id: z.string().uuid(),
                   reactions: z.array(
                     z.object({ emoji: z.string(), users: z.array(z.string()) })
                   ),
-                  senderId: z.string(),
-                  threadId: z.string().uuid(),
-                  updatedAt: z.string().datetime({ offset: true }),
+                  attachments: z.array(
+                    z.object({
+                      id: z.string().uuid(),
+                      entityType: z.string(),
+                      entityId: z.string(),
+                      createdAt: z.string().datetime({ offset: true }),
+                    })
+                  ),
                 })
               ),
               z.null(),
             ])
             .optional(),
-          replyCount: z.number().int(),
-          threadId: z.string().uuid(),
+          omittedReplyCount: z.number().int(),
         }),
-        updatedAt: z.string().datetime({ offset: true }),
+        reactions: z.array(
+          z.object({ emoji: z.string(), users: z.array(z.string()) })
+        ),
+        attachments: z.array(
+          z.object({
+            id: z.string().uuid(),
+            entityType: z.string(),
+            entityId: z.string(),
+            createdAt: z.string().datetime({ offset: true }),
+          })
+        ),
       })
     ),
     anchorOrParent: z.object({
-      attachments: z.array(
-        z.object({
-          createdAt: z.string().datetime({ offset: true }),
-          entityId: z.string(),
-          entityType: z.string(),
-          id: z.string().uuid(),
-        })
-      ),
+      id: z.string().uuid(),
       channelId: z.string().uuid(),
+      senderId: z.string(),
       content: z.string(),
       contentTruncated: z.boolean(),
       createdAt: z.string().datetime({ offset: true }),
-      deletedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
+      updatedAt: z.string().datetime({ offset: true }),
       editedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
-      id: z.string().uuid(),
-      reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
-      ),
-      senderId: z.string(),
+      deletedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
       thread: z.object({
+        threadId: z.string().uuid(),
+        replyCount: z.number().int(),
         latestReplyAt: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
-        omittedReplyCount: z.number().int(),
         preview: z
           .union([
             z.array(
               z.object({
-                attachments: z.array(
-                  z.object({
-                    createdAt: z.string().datetime({ offset: true }),
-                    entityId: z.string(),
-                    entityType: z.string(),
-                    id: z.string().uuid(),
-                  })
-                ),
+                id: z.string().uuid(),
+                threadId: z.string().uuid(),
+                senderId: z.string(),
                 content: z.string(),
                 contentTruncated: z.boolean(),
                 createdAt: z.string().datetime({ offset: true }),
+                updatedAt: z.string().datetime({ offset: true }),
                 editedAt: z
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
-                id: z.string().uuid(),
                 reactions: z.array(
                   z.object({ emoji: z.string(), users: z.array(z.string()) })
                 ),
-                senderId: z.string(),
-                threadId: z.string().uuid(),
-                updatedAt: z.string().datetime({ offset: true }),
+                attachments: z.array(
+                  z.object({
+                    id: z.string().uuid(),
+                    entityType: z.string(),
+                    entityId: z.string(),
+                    createdAt: z.string().datetime({ offset: true }),
+                  })
+                ),
               })
             ),
             z.null(),
           ])
           .optional(),
-        replyCount: z.number().int(),
-        threadId: z.string().uuid(),
+        omittedReplyCount: z.number().int(),
       }),
-      updatedAt: z.string().datetime({ offset: true }),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      attachments: z.array(
+        z.object({
+          id: z.string().uuid(),
+          entityType: z.string(),
+          entityId: z.string(),
+          createdAt: z.string().datetime({ offset: true }),
+        })
+      ),
     }),
-    before: z.array(
+    after: z.array(
       z.object({
-        attachments: z.array(
-          z.object({
-            createdAt: z.string().datetime({ offset: true }),
-            entityId: z.string(),
-            entityType: z.string(),
-            id: z.string().uuid(),
-          })
-        ),
+        id: z.string().uuid(),
         channelId: z.string().uuid(),
+        senderId: z.string(),
         content: z.string(),
         contentTruncated: z.boolean(),
         createdAt: z.string().datetime({ offset: true }),
-        deletedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
+        updatedAt: z.string().datetime({ offset: true }),
         editedAt: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
-        id: z.string().uuid(),
-        reactions: z.array(
-          z.object({ emoji: z.string(), users: z.array(z.string()) })
-        ),
-        senderId: z.string(),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
         thread: z.object({
+          threadId: z.string().uuid(),
+          replyCount: z.number().int(),
           latestReplyAt: z
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
-          omittedReplyCount: z.number().int(),
           preview: z
             .union([
               z.array(
                 z.object({
-                  attachments: z.array(
-                    z.object({
-                      createdAt: z.string().datetime({ offset: true }),
-                      entityId: z.string(),
-                      entityType: z.string(),
-                      id: z.string().uuid(),
-                    })
-                  ),
+                  id: z.string().uuid(),
+                  threadId: z.string().uuid(),
+                  senderId: z.string(),
                   content: z.string(),
                   contentTruncated: z.boolean(),
                   createdAt: z.string().datetime({ offset: true }),
+                  updatedAt: z.string().datetime({ offset: true }),
                   editedAt: z
                     .union([z.string().datetime({ offset: true }), z.null()])
                     .optional(),
-                  id: z.string().uuid(),
                   reactions: z.array(
                     z.object({ emoji: z.string(), users: z.array(z.string()) })
                   ),
-                  senderId: z.string(),
-                  threadId: z.string().uuid(),
-                  updatedAt: z.string().datetime({ offset: true }),
+                  attachments: z.array(
+                    z.object({
+                      id: z.string().uuid(),
+                      entityType: z.string(),
+                      entityId: z.string(),
+                      createdAt: z.string().datetime({ offset: true }),
+                    })
+                  ),
                 })
               ),
               z.null(),
             ])
             .optional(),
-          replyCount: z.number().int(),
-          threadId: z.string().uuid(),
+          omittedReplyCount: z.number().int(),
         }),
-        updatedAt: z.string().datetime({ offset: true }),
+        reactions: z.array(
+          z.object({ emoji: z.string(), users: z.array(z.string()) })
+        ),
+        attachments: z.array(
+          z.object({
+            id: z.string().uuid(),
+            entityType: z.string(),
+            entityId: z.string(),
+            createdAt: z.string().datetime({ offset: true }),
+          })
+        ),
       })
     ),
   }),
+  threadContext: z
+    .union([
+      z.object({
+        threadId: z.string().uuid(),
+        parent: z.object({
+          id: z.string().uuid(),
+          channelId: z.string().uuid(),
+          senderId: z.string(),
+          content: z.string(),
+          contentTruncated: z.boolean(),
+          createdAt: z.string().datetime({ offset: true }),
+          updatedAt: z.string().datetime({ offset: true }),
+          editedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          thread: z.object({
+            threadId: z.string().uuid(),
+            replyCount: z.number().int(),
+            latestReplyAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            preview: z
+              .union([
+                z.array(
+                  z.object({
+                    id: z.string().uuid(),
+                    threadId: z.string().uuid(),
+                    senderId: z.string(),
+                    content: z.string(),
+                    contentTruncated: z.boolean(),
+                    createdAt: z.string().datetime({ offset: true }),
+                    updatedAt: z.string().datetime({ offset: true }),
+                    editedAt: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    reactions: z.array(
+                      z.object({
+                        emoji: z.string(),
+                        users: z.array(z.string()),
+                      })
+                    ),
+                    attachments: z.array(
+                      z.object({
+                        id: z.string().uuid(),
+                        entityType: z.string(),
+                        entityId: z.string(),
+                        createdAt: z.string().datetime({ offset: true }),
+                      })
+                    ),
+                  })
+                ),
+                z.null(),
+              ])
+              .optional(),
+            omittedReplyCount: z.number().int(),
+          }),
+          reactions: z.array(
+            z.object({ emoji: z.string(), users: z.array(z.string()) })
+          ),
+          attachments: z.array(
+            z.object({
+              id: z.string().uuid(),
+              entityType: z.string(),
+              entityId: z.string(),
+              createdAt: z.string().datetime({ offset: true }),
+            })
+          ),
+        }),
+        repliesBefore: z.array(
+          z.object({
+            id: z.string().uuid(),
+            threadId: z.string().uuid(),
+            senderId: z.string(),
+            content: z.string(),
+            contentTruncated: z.boolean(),
+            createdAt: z.string().datetime({ offset: true }),
+            updatedAt: z.string().datetime({ offset: true }),
+            editedAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            reactions: z.array(
+              z.object({ emoji: z.string(), users: z.array(z.string()) })
+            ),
+            attachments: z.array(
+              z.object({
+                id: z.string().uuid(),
+                entityType: z.string(),
+                entityId: z.string(),
+                createdAt: z.string().datetime({ offset: true }),
+              })
+            ),
+          })
+        ),
+        anchorReply: z
+          .union([
+            z.object({
+              id: z.string().uuid(),
+              threadId: z.string().uuid(),
+              senderId: z.string(),
+              content: z.string(),
+              contentTruncated: z.boolean(),
+              createdAt: z.string().datetime({ offset: true }),
+              updatedAt: z.string().datetime({ offset: true }),
+              editedAt: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
+              reactions: z.array(
+                z.object({ emoji: z.string(), users: z.array(z.string()) })
+              ),
+              attachments: z.array(
+                z.object({
+                  id: z.string().uuid(),
+                  entityType: z.string(),
+                  entityId: z.string(),
+                  createdAt: z.string().datetime({ offset: true }),
+                })
+              ),
+            }),
+            z.null(),
+          ])
+          .optional(),
+        repliesAfter: z.array(
+          z.object({
+            id: z.string().uuid(),
+            threadId: z.string().uuid(),
+            senderId: z.string(),
+            content: z.string(),
+            contentTruncated: z.boolean(),
+            createdAt: z.string().datetime({ offset: true }),
+            updatedAt: z.string().datetime({ offset: true }),
+            editedAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            reactions: z.array(
+              z.object({ emoji: z.string(), users: z.array(z.string()) })
+            ),
+            attachments: z.array(
+              z.object({
+                id: z.string().uuid(),
+                entityType: z.string(),
+                entityId: z.string(),
+                createdAt: z.string().datetime({ offset: true }),
+              })
+            ),
+          })
+        ),
+        omittedBefore: z.number().int().gte(0),
+        omittedAfter: z.number().int().gte(0),
+      }),
+      z.null(),
+    ])
+    .optional(),
   omissions: z.array(
     z.object({
-      count: z.union([z.number().int(), z.null()]).optional(),
-      cursor: z.union([z.string(), z.null()]).optional(),
       kind: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('olderMessages'),
@@ -2143,176 +2296,14 @@ export const ReadChannelMessageContextResponse = z.object({
       }),
       messageId: z.union([z.string().uuid(), z.null()]).optional(),
       threadId: z.union([z.string().uuid(), z.null()]).optional(),
+      count: z.union([z.number().int(), z.null()]).optional(),
+      cursor: z.union([z.string(), z.null()]).optional(),
     })
   ),
-  threadContext: z
-    .union([
-      z.object({
-        anchorReply: z
-          .union([
-            z.object({
-              attachments: z.array(
-                z.object({
-                  createdAt: z.string().datetime({ offset: true }),
-                  entityId: z.string(),
-                  entityType: z.string(),
-                  id: z.string().uuid(),
-                })
-              ),
-              content: z.string(),
-              contentTruncated: z.boolean(),
-              createdAt: z.string().datetime({ offset: true }),
-              editedAt: z
-                .union([z.string().datetime({ offset: true }), z.null()])
-                .optional(),
-              id: z.string().uuid(),
-              reactions: z.array(
-                z.object({ emoji: z.string(), users: z.array(z.string()) })
-              ),
-              senderId: z.string(),
-              threadId: z.string().uuid(),
-              updatedAt: z.string().datetime({ offset: true }),
-            }),
-            z.null(),
-          ])
-          .optional(),
-        omittedAfter: z.number().int().gte(0),
-        omittedBefore: z.number().int().gte(0),
-        parent: z.object({
-          attachments: z.array(
-            z.object({
-              createdAt: z.string().datetime({ offset: true }),
-              entityId: z.string(),
-              entityType: z.string(),
-              id: z.string().uuid(),
-            })
-          ),
-          channelId: z.string().uuid(),
-          content: z.string(),
-          contentTruncated: z.boolean(),
-          createdAt: z.string().datetime({ offset: true }),
-          deletedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-          editedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-          id: z.string().uuid(),
-          reactions: z.array(
-            z.object({ emoji: z.string(), users: z.array(z.string()) })
-          ),
-          senderId: z.string(),
-          thread: z.object({
-            latestReplyAt: z
-              .union([z.string().datetime({ offset: true }), z.null()])
-              .optional(),
-            omittedReplyCount: z.number().int(),
-            preview: z
-              .union([
-                z.array(
-                  z.object({
-                    attachments: z.array(
-                      z.object({
-                        createdAt: z.string().datetime({ offset: true }),
-                        entityId: z.string(),
-                        entityType: z.string(),
-                        id: z.string().uuid(),
-                      })
-                    ),
-                    content: z.string(),
-                    contentTruncated: z.boolean(),
-                    createdAt: z.string().datetime({ offset: true }),
-                    editedAt: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                    id: z.string().uuid(),
-                    reactions: z.array(
-                      z.object({
-                        emoji: z.string(),
-                        users: z.array(z.string()),
-                      })
-                    ),
-                    senderId: z.string(),
-                    threadId: z.string().uuid(),
-                    updatedAt: z.string().datetime({ offset: true }),
-                  })
-                ),
-                z.null(),
-              ])
-              .optional(),
-            replyCount: z.number().int(),
-            threadId: z.string().uuid(),
-          }),
-          updatedAt: z.string().datetime({ offset: true }),
-        }),
-        repliesAfter: z.array(
-          z.object({
-            attachments: z.array(
-              z.object({
-                createdAt: z.string().datetime({ offset: true }),
-                entityId: z.string(),
-                entityType: z.string(),
-                id: z.string().uuid(),
-              })
-            ),
-            content: z.string(),
-            contentTruncated: z.boolean(),
-            createdAt: z.string().datetime({ offset: true }),
-            editedAt: z
-              .union([z.string().datetime({ offset: true }), z.null()])
-              .optional(),
-            id: z.string().uuid(),
-            reactions: z.array(
-              z.object({ emoji: z.string(), users: z.array(z.string()) })
-            ),
-            senderId: z.string(),
-            threadId: z.string().uuid(),
-            updatedAt: z.string().datetime({ offset: true }),
-          })
-        ),
-        repliesBefore: z.array(
-          z.object({
-            attachments: z.array(
-              z.object({
-                createdAt: z.string().datetime({ offset: true }),
-                entityId: z.string(),
-                entityType: z.string(),
-                id: z.string().uuid(),
-              })
-            ),
-            content: z.string(),
-            contentTruncated: z.boolean(),
-            createdAt: z.string().datetime({ offset: true }),
-            editedAt: z
-              .union([z.string().datetime({ offset: true }), z.null()])
-              .optional(),
-            id: z.string().uuid(),
-            reactions: z.array(
-              z.object({ emoji: z.string(), users: z.array(z.string()) })
-            ),
-            senderId: z.string(),
-            threadId: z.string().uuid(),
-            updatedAt: z.string().datetime({ offset: true }),
-          })
-        ),
-        threadId: z.string().uuid(),
-      }),
-      z.null(),
-    ])
-    .optional(),
 });
 
 export const ReadChannelMessages = z.object({
   channelId: z.string().uuid(),
-  cursor: z.union([z.string(), z.null()]).optional(),
-  direction: z.union([z.enum(['older', 'newer']), z.null()]).optional(),
-  from: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
-  includeThreadPreviews: z.union([z.boolean(), z.null()]).optional(),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
-  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
-  messageId: z.union([z.string().uuid(), z.null()]).optional(),
-  messageIds: z.array(z.string().uuid()).optional(),
-  to: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
   windowType: z.enum([
     'latest',
     'timeRange',
@@ -2320,86 +2311,107 @@ export const ReadChannelMessages = z.object({
     'page',
     'messages',
   ]),
+  from: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+  to: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+  messageId: z.union([z.string().uuid(), z.null()]).optional(),
+  cursor: z.union([z.string(), z.null()]).optional(),
+  direction: z.union([z.enum(['older', 'newer']), z.null()]).optional(),
+  messageIds: z.array(z.string().uuid()).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  includeThreadPreviews: z.union([z.boolean(), z.null()]).optional(),
+  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
 export const ReadChannelMessagesResponse = z.object({
   channelId: z.string().uuid(),
+  window: z.object({
+    windowType: z.enum([
+      'latest',
+      'timeRange',
+      'aroundMessage',
+      'page',
+      'messages',
+    ]),
+    from: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+    to: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+    messageId: z.union([z.string().uuid(), z.null()]).optional(),
+    direction: z.union([z.enum(['older', 'newer']), z.null()]).optional(),
+    messageIds: z.array(z.string().uuid()),
+  }),
   messages: z.array(
     z.object({
-      attachments: z.array(
-        z.object({
-          createdAt: z.string().datetime({ offset: true }),
-          entityId: z.string(),
-          entityType: z.string(),
-          id: z.string().uuid(),
-        })
-      ),
+      id: z.string().uuid(),
       channelId: z.string().uuid(),
+      senderId: z.string(),
       content: z.string(),
       contentTruncated: z.boolean(),
       createdAt: z.string().datetime({ offset: true }),
-      deletedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
+      updatedAt: z.string().datetime({ offset: true }),
       editedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
-      id: z.string().uuid(),
-      reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
-      ),
-      senderId: z.string(),
+      deletedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
       thread: z.object({
+        threadId: z.string().uuid(),
+        replyCount: z.number().int(),
         latestReplyAt: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
-        omittedReplyCount: z.number().int(),
         preview: z
           .union([
             z.array(
               z.object({
-                attachments: z.array(
-                  z.object({
-                    createdAt: z.string().datetime({ offset: true }),
-                    entityId: z.string(),
-                    entityType: z.string(),
-                    id: z.string().uuid(),
-                  })
-                ),
+                id: z.string().uuid(),
+                threadId: z.string().uuid(),
+                senderId: z.string(),
                 content: z.string(),
                 contentTruncated: z.boolean(),
                 createdAt: z.string().datetime({ offset: true }),
+                updatedAt: z.string().datetime({ offset: true }),
                 editedAt: z
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
-                id: z.string().uuid(),
                 reactions: z.array(
                   z.object({ emoji: z.string(), users: z.array(z.string()) })
                 ),
-                senderId: z.string(),
-                threadId: z.string().uuid(),
-                updatedAt: z.string().datetime({ offset: true }),
+                attachments: z.array(
+                  z.object({
+                    id: z.string().uuid(),
+                    entityType: z.string(),
+                    entityId: z.string(),
+                    createdAt: z.string().datetime({ offset: true }),
+                  })
+                ),
               })
             ),
             z.null(),
           ])
           .optional(),
-        replyCount: z.number().int(),
-        threadId: z.string().uuid(),
+        omittedReplyCount: z.number().int(),
       }),
-      updatedAt: z.string().datetime({ offset: true }),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      attachments: z.array(
+        z.object({
+          id: z.string().uuid(),
+          entityType: z.string(),
+          entityId: z.string(),
+          createdAt: z.string().datetime({ offset: true }),
+        })
+      ),
     })
   ),
   navigation: z.object({
-    hasMoreNewer: z.boolean(),
-    hasMoreOlder: z.boolean(),
-    newerCursor: z.union([z.string(), z.null()]).optional(),
     olderCursor: z.union([z.string(), z.null()]).optional(),
+    newerCursor: z.union([z.string(), z.null()]).optional(),
+    hasMoreOlder: z.boolean(),
+    hasMoreNewer: z.boolean(),
   }),
   omissions: z.array(
     z.object({
-      count: z.union([z.number().int(), z.null()]).optional(),
-      cursor: z.union([z.string(), z.null()]).optional(),
       kind: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('olderMessages'),
@@ -2425,42 +2437,30 @@ export const ReadChannelMessagesResponse = z.object({
       }),
       messageId: z.union([z.string().uuid(), z.null()]).optional(),
       threadId: z.union([z.string().uuid(), z.null()]).optional(),
+      count: z.union([z.number().int(), z.null()]).optional(),
+      cursor: z.union([z.string(), z.null()]).optional(),
     })
   ),
-  window: z.object({
-    direction: z.union([z.enum(['older', 'newer']), z.null()]).optional(),
-    from: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
-    messageId: z.union([z.string().uuid(), z.null()]).optional(),
-    messageIds: z.array(z.string().uuid()),
-    to: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
-    windowType: z.enum([
-      'latest',
-      'timeRange',
-      'aroundMessage',
-      'page',
-      'messages',
-    ]),
-  }),
 });
 
 export const ReadChannelThread = z.object({
-  after: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
-  before: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
   channelId: z.string().uuid(),
-  includeChannelContext: z.union([z.boolean(), z.null()]).optional(),
-  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
-  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
   messageId: z.string().uuid(),
-  replyId: z.union([z.string().uuid(), z.null()]).optional(),
   windowType: z
     .union([z.enum(['allIfSmall', 'latest', 'aroundReply']), z.null()])
     .optional(),
+  replyId: z.union([z.string().uuid(), z.null()]).optional(),
+  before: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  after: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+  includeChannelContext: z.union([z.boolean(), z.null()]).optional(),
+  maxCharsPerMessage: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
 export const ReadChannelThreadResponse = z.object({
   anchor: z.object({
+    messageId: z.string().uuid(),
     channelId: z.string().uuid(),
-    createdAt: z.string().datetime({ offset: true }),
     kind: z.any().superRefine((x, ctx) => {
       const schemas = [z.literal('topLevelMessage'), z.literal('threadReply')];
       const errors = schemas.reduce<z.ZodError[]>(
@@ -2479,78 +2479,175 @@ export const ReadChannelThreadResponse = z.object({
         });
       }
     }),
-    messageId: z.string().uuid(),
     threadId: z.string().uuid(),
+    createdAt: z.string().datetime({ offset: true }),
   }),
+  thread: z.object({
+    channelId: z.string().uuid(),
+    threadId: z.string().uuid(),
+    parent: z.object({
+      id: z.string().uuid(),
+      channelId: z.string().uuid(),
+      senderId: z.string(),
+      content: z.string(),
+      contentTruncated: z.boolean(),
+      createdAt: z.string().datetime({ offset: true }),
+      updatedAt: z.string().datetime({ offset: true }),
+      editedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      deletedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      thread: z.object({
+        threadId: z.string().uuid(),
+        replyCount: z.number().int(),
+        latestReplyAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        preview: z
+          .union([
+            z.array(
+              z.object({
+                id: z.string().uuid(),
+                threadId: z.string().uuid(),
+                senderId: z.string(),
+                content: z.string(),
+                contentTruncated: z.boolean(),
+                createdAt: z.string().datetime({ offset: true }),
+                updatedAt: z.string().datetime({ offset: true }),
+                editedAt: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+                reactions: z.array(
+                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                ),
+                attachments: z.array(
+                  z.object({
+                    id: z.string().uuid(),
+                    entityType: z.string(),
+                    entityId: z.string(),
+                    createdAt: z.string().datetime({ offset: true }),
+                  })
+                ),
+              })
+            ),
+            z.null(),
+          ])
+          .optional(),
+        omittedReplyCount: z.number().int(),
+      }),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      attachments: z.array(
+        z.object({
+          id: z.string().uuid(),
+          entityType: z.string(),
+          entityId: z.string(),
+          createdAt: z.string().datetime({ offset: true }),
+        })
+      ),
+    }),
+    replyCount: z.number().int().gte(0),
+    latestReplyAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+  }),
+  replies: z.array(
+    z.object({
+      id: z.string().uuid(),
+      threadId: z.string().uuid(),
+      senderId: z.string(),
+      content: z.string(),
+      contentTruncated: z.boolean(),
+      createdAt: z.string().datetime({ offset: true }),
+      updatedAt: z.string().datetime({ offset: true }),
+      editedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      attachments: z.array(
+        z.object({
+          id: z.string().uuid(),
+          entityType: z.string(),
+          entityId: z.string(),
+          createdAt: z.string().datetime({ offset: true }),
+        })
+      ),
+    })
+  ),
   channelContext: z
     .union([
       z.array(
         z.object({
-          attachments: z.array(
-            z.object({
-              createdAt: z.string().datetime({ offset: true }),
-              entityId: z.string(),
-              entityType: z.string(),
-              id: z.string().uuid(),
-            })
-          ),
+          id: z.string().uuid(),
           channelId: z.string().uuid(),
+          senderId: z.string(),
           content: z.string(),
           contentTruncated: z.boolean(),
           createdAt: z.string().datetime({ offset: true }),
-          deletedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
+          updatedAt: z.string().datetime({ offset: true }),
           editedAt: z
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
-          id: z.string().uuid(),
-          reactions: z.array(
-            z.object({ emoji: z.string(), users: z.array(z.string()) })
-          ),
-          senderId: z.string(),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
           thread: z.object({
+            threadId: z.string().uuid(),
+            replyCount: z.number().int(),
             latestReplyAt: z
               .union([z.string().datetime({ offset: true }), z.null()])
               .optional(),
-            omittedReplyCount: z.number().int(),
             preview: z
               .union([
                 z.array(
                   z.object({
-                    attachments: z.array(
-                      z.object({
-                        createdAt: z.string().datetime({ offset: true }),
-                        entityId: z.string(),
-                        entityType: z.string(),
-                        id: z.string().uuid(),
-                      })
-                    ),
+                    id: z.string().uuid(),
+                    threadId: z.string().uuid(),
+                    senderId: z.string(),
                     content: z.string(),
                     contentTruncated: z.boolean(),
                     createdAt: z.string().datetime({ offset: true }),
+                    updatedAt: z.string().datetime({ offset: true }),
                     editedAt: z
                       .union([z.string().datetime({ offset: true }), z.null()])
                       .optional(),
-                    id: z.string().uuid(),
                     reactions: z.array(
                       z.object({
                         emoji: z.string(),
                         users: z.array(z.string()),
                       })
                     ),
-                    senderId: z.string(),
-                    threadId: z.string().uuid(),
-                    updatedAt: z.string().datetime({ offset: true }),
+                    attachments: z.array(
+                      z.object({
+                        id: z.string().uuid(),
+                        entityType: z.string(),
+                        entityId: z.string(),
+                        createdAt: z.string().datetime({ offset: true }),
+                      })
+                    ),
                   })
                 ),
                 z.null(),
               ])
               .optional(),
-            replyCount: z.number().int(),
-            threadId: z.string().uuid(),
+            omittedReplyCount: z.number().int(),
           }),
-          updatedAt: z.string().datetime({ offset: true }),
+          reactions: z.array(
+            z.object({ emoji: z.string(), users: z.array(z.string()) })
+          ),
+          attachments: z.array(
+            z.object({
+              id: z.string().uuid(),
+              entityType: z.string(),
+              entityId: z.string(),
+              createdAt: z.string().datetime({ offset: true }),
+            })
+          ),
         })
       ),
       z.null(),
@@ -2558,8 +2655,6 @@ export const ReadChannelThreadResponse = z.object({
     .optional(),
   omissions: z.array(
     z.object({
-      count: z.union([z.number().int(), z.null()]).optional(),
-      cursor: z.union([z.string(), z.null()]).optional(),
       kind: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('olderMessages'),
@@ -2585,164 +2680,29 @@ export const ReadChannelThreadResponse = z.object({
       }),
       messageId: z.union([z.string().uuid(), z.null()]).optional(),
       threadId: z.union([z.string().uuid(), z.null()]).optional(),
+      count: z.union([z.number().int(), z.null()]).optional(),
+      cursor: z.union([z.string(), z.null()]).optional(),
     })
   ),
-  replies: z.array(
-    z.object({
-      attachments: z.array(
-        z.object({
-          createdAt: z.string().datetime({ offset: true }),
-          entityId: z.string(),
-          entityType: z.string(),
-          id: z.string().uuid(),
-        })
-      ),
-      content: z.string(),
-      contentTruncated: z.boolean(),
-      createdAt: z.string().datetime({ offset: true }),
-      editedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
-      id: z.string().uuid(),
-      reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
-      ),
-      senderId: z.string(),
-      threadId: z.string().uuid(),
-      updatedAt: z.string().datetime({ offset: true }),
-    })
-  ),
-  thread: z.object({
-    channelId: z.string().uuid(),
-    latestReplyAt: z
-      .union([z.string().datetime({ offset: true }), z.null()])
-      .optional(),
-    parent: z.object({
-      attachments: z.array(
-        z.object({
-          createdAt: z.string().datetime({ offset: true }),
-          entityId: z.string(),
-          entityType: z.string(),
-          id: z.string().uuid(),
-        })
-      ),
-      channelId: z.string().uuid(),
-      content: z.string(),
-      contentTruncated: z.boolean(),
-      createdAt: z.string().datetime({ offset: true }),
-      deletedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
-      editedAt: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
-      id: z.string().uuid(),
-      reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
-      ),
-      senderId: z.string(),
-      thread: z.object({
-        latestReplyAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        omittedReplyCount: z.number().int(),
-        preview: z
-          .union([
-            z.array(
-              z.object({
-                attachments: z.array(
-                  z.object({
-                    createdAt: z.string().datetime({ offset: true }),
-                    entityId: z.string(),
-                    entityType: z.string(),
-                    id: z.string().uuid(),
-                  })
-                ),
-                content: z.string(),
-                contentTruncated: z.boolean(),
-                createdAt: z.string().datetime({ offset: true }),
-                editedAt: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-                id: z.string().uuid(),
-                reactions: z.array(
-                  z.object({ emoji: z.string(), users: z.array(z.string()) })
-                ),
-                senderId: z.string(),
-                threadId: z.string().uuid(),
-                updatedAt: z.string().datetime({ offset: true }),
-              })
-            ),
-            z.null(),
-          ])
-          .optional(),
-        replyCount: z.number().int(),
-        threadId: z.string().uuid(),
-      }),
-      updatedAt: z.string().datetime({ offset: true }),
-    }),
-    replyCount: z.number().int().gte(0),
-    threadId: z.string().uuid(),
-  }),
 });
 
 export const ReadChat = z.object({ chatId: z.string() });
 
 export const ReadChatResponse = z.object({
   chatId: z.string(),
+  title: z.string(),
   messages: z.array(
     z.object({
-      attachmentIds: z.array(z.string()),
-      content: z.string(),
       role: z.string(),
+      content: z.string(),
+      attachmentIds: z.array(z.string()),
     })
   ),
-  title: z.string(),
 });
 
 export const ReadContent = z.object({ documentId: z.string().uuid() });
 
 export const ReadContentResponse = z.object({
-  comments: z.array(
-    z.object({
-      comments: z.array(
-        z.object({
-          commentId: z.number().int(),
-          createdAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-          deletedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-          metadata: z.any().optional(),
-          order: z.union([z.number().int(), z.null()]).optional(),
-          owner: z.string(),
-          sender: z.union([z.string(), z.null()]).optional(),
-          text: z.string(),
-          threadId: z.number().int(),
-          updatedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-        })
-      ),
-      thread: z.object({
-        createdAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        deletedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        documentId: z.string(),
-        metadata: z.any().optional(),
-        owner: z.string(),
-        resolved: z.boolean(),
-        threadId: z.number().int(),
-        updatedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-      }),
-    })
-  ),
   content: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.object({ text: z.string() }).strict(),
@@ -2752,12 +2712,12 @@ export const ReadContentResponse = z.object({
             z.any().superRefine((x, ctx) => {
               const schemas = [
                 z.object({
-                  content: z.string(),
                   nodeId: z.string(),
+                  content: z.string(),
                   tag: z.string(),
                   type: z.literal('generic'),
                 }),
-                z.object({ type: z.literal('staticImage'), url: z.string() }),
+                z.object({ url: z.string(), type: z.literal('staticImage') }),
                 z.object({ id: z.string(), type: z.literal('dssImage') }),
               ];
               const errors = schemas.reduce<z.ZodError[]>(
@@ -2797,16 +2757,122 @@ export const ReadContentResponse = z.object({
       });
     }
   }),
+  comments: z.array(
+    z.object({
+      thread: z.object({
+        threadId: z.number().int(),
+        owner: z.string(),
+        resolved: z.boolean(),
+        documentId: z.string(),
+        createdAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        updatedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        metadata: z.any().optional(),
+      }),
+      comments: z.array(
+        z.object({
+          commentId: z.number().int(),
+          threadId: z.number().int(),
+          order: z.union([z.number().int(), z.null()]).optional(),
+          owner: z.string(),
+          sender: z.union([z.string(), z.null()]).optional(),
+          text: z.string(),
+          metadata: z.any().optional(),
+          createdAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          updatedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+        })
+      ),
+    })
+  ),
 });
 
 export const ReadMetadata = z.object({ documentId: z.string().uuid() });
 
 export const ReadMetadataResponse = z.object({
   documentMetadata: z.object({
-    branchName: z.union([z.string(), z.null()]).optional(),
+    documentId: z.string(),
+    documentVersionId: z.number().int(),
+    owner: z.string(),
+    documentName: z.string(),
+    fileType: z.union([z.string(), z.null()]).optional(),
+    sha: z.union([z.string(), z.null()]).optional(),
+    projectId: z.union([z.string(), z.null()]).optional(),
+    projectName: z.union([z.string(), z.null()]).optional(),
     branchedFromId: z.union([z.string(), z.null()]).optional(),
     branchedFromVersionId: z.union([z.number().int(), z.null()]).optional(),
+    documentFamilyId: z.union([z.number().int(), z.null()]).optional(),
+    documentBom: z.any().optional(),
+    modificationData: z.any().optional(),
+    createdAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    updatedAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    deletedAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    subType: z
+      .union([
+        z.any().superRefine((x, ctx) => {
+          const schemas = [z.literal('task'), z.literal('snippet')];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        z.null(),
+      ])
+      .optional(),
+    teamId: z.union([z.string(), z.null()]).optional(),
+    teamTaskId: z.union([z.number().int(), z.null()]).optional(),
     content: z.object({
+      state: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('unknown'),
+          z.literal('pending'),
+          z.literal('ready'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
       location: z
         .union([
           z.any().superRefine((x, ctx) => {
@@ -2837,74 +2903,8 @@ export const ReadMetadataResponse = z.object({
           z.null(),
         ])
         .optional(),
-      state: z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.literal('unknown'),
-          z.literal('pending'),
-          z.literal('ready'),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
     }),
-    createdAt: z
-      .union([z.string().datetime({ offset: true }), z.null()])
-      .optional(),
-    deletedAt: z
-      .union([z.string().datetime({ offset: true }), z.null()])
-      .optional(),
-    documentBom: z.any().optional(),
-    documentFamilyId: z.union([z.number().int(), z.null()]).optional(),
-    documentId: z.string(),
-    documentName: z.string(),
-    documentVersionId: z.number().int(),
-    fileType: z.union([z.string(), z.null()]).optional(),
-    modificationData: z.any().optional(),
-    owner: z.string(),
-    projectId: z.union([z.string(), z.null()]).optional(),
-    projectName: z.union([z.string(), z.null()]).optional(),
-    sha: z.union([z.string(), z.null()]).optional(),
-    subType: z
-      .union([
-        z.any().superRefine((x, ctx) => {
-          const schemas = [z.literal('task'), z.literal('snippet')];
-          const errors = schemas.reduce<z.ZodError[]>(
-            (errors, schema) =>
-              ((result) => (result.error ? [...errors, result.error] : errors))(
-                schema.safeParse(x)
-              ),
-            []
-          );
-          if (schemas.length - errors.length !== 1) {
-            ctx.addIssue({
-              path: ctx.path,
-              code: 'invalid_union',
-              unionErrors: errors,
-              message: 'Invalid input: Should pass single schema',
-            });
-          }
-        }),
-        z.null(),
-      ])
-      .optional(),
-    teamId: z.union([z.string(), z.null()]).optional(),
-    teamTaskId: z.union([z.number().int(), z.null()]).optional(),
-    updatedAt: z
-      .union([z.string().datetime({ offset: true }), z.null()])
-      .optional(),
+    branchName: z.union([z.string(), z.null()]).optional(),
   }),
   userAccessLevel: z.enum(['view', 'comment', 'edit', 'owner']),
 });
@@ -2915,18 +2915,18 @@ export const RenameDocument = z.object({
 });
 
 export const RenameDocumentResponse = z.object({
+  success: z.boolean(),
   documentId: z.string().uuid(),
   message: z.string(),
-  success: z.boolean(),
 });
 
 export const SearchTools = z.object({ query: z.string() });
 
 export const SearchToolsResponse = z.object({
+  results: z.array(z.object({ name: z.string(), description: z.string() })),
   additional_matches: z.array(
-    z.object({ description: z.string(), name: z.string() })
+    z.object({ name: z.string(), description: z.string() })
   ),
-  results: z.array(z.object({ description: z.string(), name: z.string() })),
 });
 
 export const SelfKnowledge = z.record(z.any());
@@ -2934,8 +2934,8 @@ export const SelfKnowledge = z.record(z.any());
 export const SelfKnowledgeResponse = z.object({ about: z.string() });
 
 export const SendChannelMessage = z.object({
-  channel_id: z.string().uuid(),
   content: z.string(),
+  channel_id: z.string().uuid(),
   thread_id: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
@@ -2945,15 +2945,14 @@ export const SendChannelMessageResponse = z.object({
 });
 
 export const SendEmail = z.object({
-  bcc: z
-    .array(
-      z.object({
-        email: z.string(),
-        name: z.union([z.string(), z.null()]).optional(),
-      })
-    )
-    .optional(),
+  subject: z.string(),
   body: z.string(),
+  to: z.array(
+    z.object({
+      email: z.string(),
+      name: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
   cc: z
     .array(
       z.object({
@@ -2962,15 +2961,16 @@ export const SendEmail = z.object({
       })
     )
     .optional(),
-  includeSignature: z.union([z.boolean(), z.null()]).optional(),
+  bcc: z
+    .array(
+      z.object({
+        email: z.string(),
+        name: z.union([z.string(), z.null()]).optional(),
+      })
+    )
+    .optional(),
   replyingToId: z.union([z.string().uuid(), z.null()]).optional(),
-  subject: z.string(),
-  to: z.array(
-    z.object({
-      email: z.string(),
-      name: z.union([z.string(), z.null()]).optional(),
-    })
-  ),
+  includeSignature: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const UserToolResponse = z.any().superRefine((x, ctx) => {
@@ -3033,16 +3033,31 @@ export const UserToolResponse = z.any().superRefine((x, ctx) => {
 });
 
 export const SetEntityProperty = z.object({
-  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  entity_id: z.string(),
+  entity_type: z.enum([
+    'document',
+    'project',
+    'chat',
+    'thread',
+    'channel',
+    'call',
+    'user',
+    'company',
+  ]),
+  property_definition_id: z.string().uuid(),
   boolean_value: z.union([z.boolean(), z.null()]).optional(),
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
-  entity_id: z.string(),
+  number_value: z.union([z.number(), z.null()]).optional(),
+  string_value: z.union([z.string(), z.null()]).optional(),
+  option_id: z.union([z.string().uuid(), z.null()]).optional(),
+  option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  remove_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
   entity_ref: z
     .union([
       z.object({
-        entityId: z.string(),
         entityType: z.enum([
           'document',
           'task',
@@ -3054,6 +3069,7 @@ export const SetEntityProperty = z.object({
           'user',
           'company',
         ]),
+        entityId: z.string(),
       }),
       z.null(),
     ])
@@ -3062,7 +3078,6 @@ export const SetEntityProperty = z.object({
     .union([
       z.array(
         z.object({
-          entityId: z.string(),
           entityType: z.enum([
             'document',
             'task',
@@ -3074,34 +3089,19 @@ export const SetEntityProperty = z.object({
             'user',
             'company',
           ]),
+          entityId: z.string(),
         })
       ),
       z.null(),
     ])
     .optional(),
-  entity_type: z.enum([
-    'document',
-    'project',
-    'chat',
-    'thread',
-    'channel',
-    'call',
-    'user',
-    'company',
-  ]),
   link_url: z.union([z.string(), z.null()]).optional(),
   link_urls: z.union([z.array(z.string()), z.null()]).optional(),
-  number_value: z.union([z.number(), z.null()]).optional(),
-  option_id: z.union([z.string().uuid(), z.null()]).optional(),
-  option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
-  property_definition_id: z.string().uuid(),
-  remove_option_ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
-  string_value: z.union([z.string(), z.null()]).optional(),
 });
 
 export const SetEntityPropertyResponse = z.object({
-  message: z.string(),
   success: z.boolean(),
+  message: z.string(),
 });
 
 export const Subagent = z.object({ task: z.string() });
@@ -3111,37 +3111,38 @@ export const SubagentResponse = z.object({ result: z.string() });
 export const TextEditorCodeExecution = z.object({ input: z.string() });
 
 export const TextEditorCodeExecutionResponse = z.object({
+  tool_use_id: z.string(),
   content: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.intersection(
         z.object({
-          content: z.union([z.string(), z.null()]).optional(),
           file_type: z.union([z.string(), z.null()]).optional(),
-          is_file_update: z.union([z.boolean(), z.null()]).optional(),
-          lines: z.union([z.array(z.string()), z.null()]).optional(),
-          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
           numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
           startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
           totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          is_file_update: z.union([z.boolean(), z.null()]).optional(),
+          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          lines: z.union([z.array(z.string()), z.null()]).optional(),
         }),
         z.object({ type: z.literal('text_editor_code_execution_view_result') })
       ),
       z.intersection(
         z.object({
-          content: z.union([z.string(), z.null()]).optional(),
           file_type: z.union([z.string(), z.null()]).optional(),
-          is_file_update: z.union([z.boolean(), z.null()]).optional(),
-          lines: z.union([z.array(z.string()), z.null()]).optional(),
-          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
           numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
           startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
           totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          is_file_update: z.union([z.boolean(), z.null()]).optional(),
+          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          lines: z.union([z.array(z.string()), z.null()]).optional(),
         }),
         z.object({
           type: z.literal('text_editor_code_execution_create_result'),
@@ -3149,17 +3150,17 @@ export const TextEditorCodeExecutionResponse = z.object({
       ),
       z.intersection(
         z.object({
-          content: z.union([z.string(), z.null()]).optional(),
           file_type: z.union([z.string(), z.null()]).optional(),
-          is_file_update: z.union([z.boolean(), z.null()]).optional(),
-          lines: z.union([z.array(z.string()), z.null()]).optional(),
-          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
           numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
           startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
           totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          is_file_update: z.union([z.boolean(), z.null()]).optional(),
+          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          lines: z.union([z.array(z.string()), z.null()]).optional(),
         }),
         z.object({
           type: z.literal('text_editor_code_execution_str_replace_result'),
@@ -3216,42 +3217,40 @@ export const TextEditorCodeExecutionResponse = z.object({
       });
     }
   }),
-  tool_use_id: z.string(),
 });
 
 export const UpdateThreadLabels = z.object({
-  add: z.boolean(),
-  label_id: z.string().uuid(),
   thread_id: z.string().uuid(),
+  label_id: z.string().uuid(),
+  add: z.boolean(),
 });
 
 export const UpdateThreadLabelsResponse = z.object({
-  failedCount: z.number().int().gte(0),
   successfulCount: z.number().int().gte(0),
+  failedCount: z.number().int().gte(0),
   summary: z.string(),
 });
 
 export const WebFetch = z.object({ input: z.string() });
 
 export const WebFetchResponse = z.object({
+  tool_use_id: z.string(),
   content: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.intersection(
         z.object({
+          url: z.string(),
           content: z.object({
-            citations: z
-              .union([z.object({ enabled: z.boolean() }), z.null()])
-              .optional(),
             source: z.any().superRefine((x, ctx) => {
               const schemas = [
                 z.object({
-                  data: z.string(),
                   media_type: z.string(),
+                  data: z.string(),
                   type: z.literal('text'),
                 }),
                 z.object({
-                  data: z.string(),
                   media_type: z.string(),
+                  data: z.string(),
                   type: z.literal('base64'),
                 }),
               ];
@@ -3273,9 +3272,11 @@ export const WebFetchResponse = z.object({
               }
             }),
             title: z.union([z.string(), z.null()]).optional(),
+            citations: z
+              .union([z.object({ enabled: z.boolean() }), z.null()])
+              .optional(),
           }),
           retrieved_at: z.string(),
-          url: z.string(),
         }),
         z.object({ type: z.literal('web_fetch_result') })
       ),
@@ -3329,7 +3330,6 @@ export const WebFetchResponse = z.object({
       });
     }
   }),
-  tool_use_id: z.string(),
 });
 
 export const WebSearch = z.object({ input: z.string() });
@@ -3338,14 +3338,14 @@ export const WebSearchResponse = z.object({
   content: z.union([
     z.array(
       z.object({
+        title: z.string(),
+        url: z.string(),
         encrypted_content: z.union([z.string(), z.null()]).optional(),
         page_age: z.union([z.string(), z.null()]).optional(),
-        title: z.string(),
         type: z.literal('web_search_result'),
-        url: z.string(),
       })
     ),
-    z.object({ error_code: z.string(), type: z.string() }),
+    z.object({ type: z.string(), error_code: z.string() }),
   ]),
   tool_use_id: z.string(),
 });
@@ -3377,14 +3377,14 @@ export const ReadResponse = z.object({
         conversation: z.array(
           z.object({
             chat_id: z.string(),
+            title: z.string(),
             messages: z.array(
               z.object({
-                attachmentIds: z.array(z.string()),
                 content: z.string(),
                 date: z.string().datetime({ offset: true }),
+                attachmentIds: z.array(z.string()),
               })
             ),
-            title: z.string(),
           })
         ),
         type: z.literal('chat'),

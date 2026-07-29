@@ -36,9 +36,17 @@ struct RuntimeQuery {
 /// runtime dials with, then handed to the composition root the same way for
 /// every session.
 pub struct SharedRuntimeConnections {
-    /// Host runtimes should use to dial back in.
+    /// Host runtimes should use to dial back in, used only when
+    /// `public_base_url` is unset.
     advertise_host: String,
     port: u16,
+    /// Full scheme+host(+port) external runtimes should dial, e.g.
+    /// `wss://agent-proxy.macro.com` behind a TLS-terminating load balancer.
+    /// Overrides `advertise_host`/`port` entirely when set; falls back to
+    /// `ws://{advertise_host}:{port}` (the container's own bind address)
+    /// otherwise, which only resolves correctly for a bare `cargo run` with
+    /// no reverse proxy in front of it.
+    public_base_url: Option<String>,
     incoming: UnboundedSender<(Uuid, ServerChannel)>,
 }
 
@@ -49,11 +57,13 @@ impl SharedRuntimeConnections {
     pub fn new(
         advertise_host: String,
         port: u16,
+        public_base_url: Option<String>,
         incoming: UnboundedSender<(Uuid, ServerChannel)>,
     ) -> Self {
         Self {
             advertise_host,
             port,
+            public_base_url,
             incoming,
         }
     }
@@ -74,10 +84,11 @@ impl RuntimeProvisioner for SharedRuntimeConnections {
         // asked for it. The remaining value of this call is the access check
         // the HTTP handler already performs before reaching here (Edit
         // access, `kind == External`).
-        Ok(format!(
-            "ws://{}:{}/runtime",
-            self.advertise_host, self.port
-        ))
+        let base = self
+            .public_base_url
+            .clone()
+            .unwrap_or_else(|| format!("ws://{}:{}", self.advertise_host, self.port));
+        Ok(format!("{base}/runtime"))
     }
 }
 

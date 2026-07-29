@@ -14,6 +14,7 @@ const serviceClientDirectories = {
 	"static-files": "service-static-files",
 	storage: "service-storage",
 	unfurl: "service-unfurl",
+	"agent-proxy": "service-agent-proxy",
 } satisfies Record<(typeof services)[number], string>;
 
 const serviceClientsDirectory = path.resolve(
