@@ -6,10 +6,12 @@
 //! retried in-process; exhausted events are logged and dropped because their
 //! offsets are already committed.
 
+#![allow(clippy::enum_variant_names)]
+
 #[cfg(test)]
 mod test;
 
-use std::{future::Future, time::Duration};
+use std::{collections::HashSet, future::Future, time::Duration};
 
 use call::domain::events::{CallMacroEvent, CallTopicEvent};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
@@ -18,12 +20,14 @@ use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
 use opensearch_client::OpensearchClient;
+use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use rdkafka::{
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
 use sqlx::PgPool;
+use sqs_client::search::project::UpsertProject;
 use tokio::sync::mpsc;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use uuid::Uuid;
@@ -31,6 +35,7 @@ use uuid::Uuid;
 use crate::process::{
     call::{process_call_record, process_remove_call_record},
     channel::{process_channel_message_update, process_remove_channel_message},
+    project::upsert_project,
 };
 
 /// Consumer group used for live search-index event offsets.
@@ -46,7 +51,7 @@ type SearchProcessingKafkaConsumer =
     MacroEventConsumerService<SearchProcessingBrokerEvent, SearchProcessingKafkaAdapter>;
 
 macro_event_broker::declare_topics!(
-    SearchProcessingBrokerEvent: CallMacroEvent, ChannelMacroEvent
+    SearchProcessingBrokerEvent: CallMacroEvent, ChannelMacroEvent, ProjectMacroEvent
 );
 
 /// Maximum number of decoded events waiting for the sequential worker.
@@ -91,6 +96,18 @@ enum ChannelIndexAction {
 struct ChannelEventDescription {
     action: ChannelIndexAction,
     channel_id: Uuid,
+    event_type: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ProjectIndexAction {
+    Reconcile { project_ids: Vec<String> },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProjectEventDescription<'a> {
+    action: ProjectIndexAction,
+    project_id: &'a str,
     event_type: &'static str,
 }
 
@@ -233,6 +250,97 @@ fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventDescription 
     }
 }
 
+fn collect_project_ids<'a>(project_ids: impl IntoIterator<Item = Option<&'a str>>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut collected = Vec::new();
+
+    for project_id in project_ids.into_iter().flatten() {
+        if !project_id.is_empty() && seen.insert(project_id) {
+            collected.push(project_id.to_string());
+        }
+    }
+
+    collected
+}
+
+fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventDescription<'_> {
+    match event {
+        ProjectTopicEvent::Created(metadata) => ProjectEventDescription {
+            action: ProjectIndexAction::Reconcile {
+                project_ids: collect_project_ids([
+                    Some(metadata.project_id.as_str()),
+                    metadata.parent_project_id.as_deref(),
+                ]),
+            },
+            project_id: &metadata.project_id,
+            event_type: "project.created",
+        },
+        ProjectTopicEvent::Updated(metadata) => ProjectEventDescription {
+            action: ProjectIndexAction::Reconcile {
+                project_ids: collect_project_ids([
+                    Some(metadata.project_id.as_str()),
+                    metadata.previous_parent_id.as_deref(),
+                    metadata.parent_id.as_deref(),
+                ]),
+            },
+            project_id: &metadata.project_id,
+            event_type: "project.updated",
+        },
+        ProjectTopicEvent::Deleted(metadata) => ProjectEventDescription {
+            action: ProjectIndexAction::Reconcile {
+                project_ids: collect_project_ids(
+                    metadata
+                        .deleted_project_ids
+                        .iter()
+                        .map(|project_id| Some(project_id.as_str()))
+                        .chain([metadata.parent_project_id.as_deref()]),
+                ),
+            },
+            project_id: &metadata.project_id,
+            event_type: "project.deleted",
+        },
+        ProjectTopicEvent::Restored(metadata) => ProjectEventDescription {
+            action: ProjectIndexAction::Reconcile {
+                project_ids: collect_project_ids(
+                    metadata
+                        .restored_project_ids
+                        .iter()
+                        .map(|project_id| Some(project_id.as_str()))
+                        .chain([metadata.parent_project_id.as_deref()]),
+                ),
+            },
+            project_id: &metadata.project_id,
+            event_type: "project.restored",
+        },
+        ProjectTopicEvent::PermanentlyDeleted(metadata) => ProjectEventDescription {
+            action: ProjectIndexAction::Reconcile {
+                project_ids: collect_project_ids(
+                    metadata
+                        .purged_project_ids
+                        .iter()
+                        .map(|project_id| Some(project_id.as_str()))
+                        .chain([metadata.parent_project_id.as_deref()]),
+                ),
+            },
+            project_id: &metadata.project_id,
+            event_type: "project.permanently_deleted",
+        },
+        ProjectTopicEvent::Uploaded(metadata) => ProjectEventDescription {
+            action: ProjectIndexAction::Reconcile {
+                project_ids: collect_project_ids(
+                    metadata
+                        .project_ids
+                        .iter()
+                        .map(|project_id| Some(project_id.as_str()))
+                        .chain([metadata.parent_project_id.as_deref()]),
+                ),
+            },
+            project_id: &metadata.root_project_id,
+            event_type: "project.uploaded",
+        },
+    }
+}
+
 fn processing_retry_strategy() -> impl Iterator<Item = Duration> {
     ExponentialBackoff::from_millis(2)
         .factor(500)
@@ -332,6 +440,29 @@ async fn process_channel_index_action(
             process_remove_channel_message(opensearch_client, channel_id, None, None).await
         }
         ChannelIndexAction::Ignore => Ok(()),
+    }
+}
+
+async fn process_project_index_action(
+    db: &PgPool,
+    opensearch_client: &OpensearchClient,
+    action: ProjectIndexAction,
+) -> anyhow::Result<()> {
+    match action {
+        ProjectIndexAction::Reconcile { project_ids } => {
+            for project_id in project_ids {
+                upsert_project(
+                    opensearch_client,
+                    db,
+                    &UpsertProject {
+                        project_id,
+                        index_override: None,
+                    },
+                )
+                .await?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -467,6 +598,64 @@ async fn process_channel_event(
     }
 }
 
+async fn process_project_event(
+    db: &PgPool,
+    opensearch_client: &OpensearchClient,
+    event: &ProjectMacroEvent,
+    partition: i32,
+    offset: i64,
+) -> EventOutcome {
+    let description = describe_project_event(&event.event().event);
+    let result = retry_processing(|attempt| {
+        let action = description.action.clone();
+        async move {
+            tracing::trace!(
+                project_id = description.project_id,
+                event_type = description.event_type,
+                partition,
+                offset,
+                attempt,
+                "processing project search-index event"
+            );
+            process_project_index_action(db, opensearch_client, action)
+                .await
+                .inspect_err(|error| {
+                    if attempt < MAX_PROCESSING_ATTEMPTS {
+                        let retry_delay =
+                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
+                        tracing::warn!(
+                            error = ?error,
+                            project_id = description.project_id,
+                            event_type = description.event_type,
+                            partition,
+                            offset,
+                            attempt,
+                            delay_secs = retry_delay.as_secs(),
+                            "project search-index processing failed, retrying"
+                        );
+                    }
+                })
+        }
+    })
+    .await;
+
+    match result {
+        Ok(()) => EventOutcome::Indexed,
+        Err(error) => {
+            tracing::error!(
+                error = ?error,
+                project_id = description.project_id,
+                event_type = description.event_type,
+                partition,
+                offset,
+                attempts = MAX_PROCESSING_ATTEMPTS,
+                "dropping project event after processing retries were exhausted"
+            );
+            EventOutcome::Dropped
+        }
+    }
+}
+
 #[tracing::instrument(skip(db, opensearch_client, event), fields(partition, offset))]
 async fn process_event(
     db: &PgPool,
@@ -481,6 +670,9 @@ async fn process_event(
         }
         SearchProcessingBrokerEvent::ChannelMacroEvent(event) => {
             process_channel_event(db, opensearch_client, event, partition, offset).await
+        }
+        SearchProcessingBrokerEvent::ProjectMacroEvent(event) => {
+            process_project_event(db, opensearch_client, event, partition, offset).await
         }
     }
 }

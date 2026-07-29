@@ -4,7 +4,7 @@ mod chat;
 pub mod context;
 mod document;
 mod email;
-mod project;
+pub(crate) mod project;
 mod properties;
 mod user;
 pub mod worker;

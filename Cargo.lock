@@ -12857,6 +12857,7 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
+ "projects",
  "properties",
  "rdkafka",
  "rootcause",
