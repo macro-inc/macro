@@ -8,6 +8,7 @@ use channels::domain::{
     models::ChannelSender,
 };
 use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
+use chrono::Utc;
 use documents::domain::events::{
     DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentInteractionMetadata,
     DocumentUpdatedMetadata, InteractionReason,
@@ -18,6 +19,9 @@ use email::domain::events::{
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
+use properties::domain::events::{
+    EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
+};
 use uuid::Uuid;
 
 use super::*;
@@ -104,6 +108,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.chats",
             "macro.email",
             "macro.channels",
+            "macro.properties",
         ]
     );
 }
@@ -251,6 +256,71 @@ fn deleted_chat_messages_do_not_change_soup() {
     });
 
     assert!(patches_from_chat_event(&event).is_empty());
+}
+
+#[test]
+fn task_property_updates_map_to_document_updates() {
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::now_v7(),
+        entity_id: DOCUMENT_ID.to_string(),
+        entity_type: PropertyEntityType::Task,
+        property_definition_id: Uuid::now_v7(),
+        actor_user_id: Some(user()),
+        value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
+    assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn deleting_or_clearing_properties_updates_the_soup_entity() {
+    let thread_id = Uuid::now_v7().to_string();
+    let deleted = PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
+        entity_property_id: Uuid::now_v7(),
+        entity_id: thread_id.clone(),
+        entity_type: PropertyEntityType::Thread,
+        property_definition_id: Uuid::now_v7(),
+        actor_user_id: Some(user()),
+    });
+    let company_id = Uuid::now_v7().to_string();
+    let cleared = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: company_id.clone(),
+        entity_type: PropertyEntityType::Company,
+        actor_user_id: Some(user()),
+    });
+
+    let deleted = patches_from_property_event(&deleted);
+    assert!(matches!(deleted[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&deleted[0]).entity_type,
+        EntityType::EmailThread
+    );
+    assert_eq!(patch_entity(&deleted[0]).entity_id, thread_id);
+
+    let cleared = patches_from_property_event(&cleared);
+    assert!(matches!(cleared[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&cleared[0]).entity_type,
+        EntityType::CrmCompany
+    );
+    assert_eq!(patch_entity(&cleared[0]).entity_id, company_id);
+}
+
+#[test]
+fn property_events_for_non_property_soup_items_are_ignored() {
+    for entity_type in [PropertyEntityType::Channel, PropertyEntityType::User] {
+        let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+            entity_id: DOCUMENT_ID.to_string(),
+            entity_type,
+            actor_user_id: Some(user()),
+        });
+        assert!(patches_from_property_event(&event).is_empty());
+    }
 }
 
 #[test]
