@@ -153,9 +153,6 @@ pub async fn process_message(
         SearchQueueMessage::UpsertProject(message) => {
             project::upsert_project(&ctx.opensearch_client, &ctx.db, &message).await?;
         }
-        SearchQueueMessage::RemoveProject(message) => {
-            project::remove_project(&ctx.opensearch_client, &message).await?;
-        }
     }
 
     ctx.worker.cleanup_message(message).await?;
