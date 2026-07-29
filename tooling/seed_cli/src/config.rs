@@ -39,6 +39,8 @@ maybe_env_vars! {
     pub struct GoogleClientSecretKey;
     /// JSON map of test-account email -> refresh token for the gmail entity
     pub struct GmailTestAccountTokens;
+    /// GCP service-account key JSON for `gmail forward` (Pub/Sub subscriber)
+    pub struct GmailForwarderSaKey;
 }
 
 /// Clients for initializing native markdown document content.

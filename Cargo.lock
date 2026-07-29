@@ -13042,6 +13042,7 @@ dependencies = [
  "entity_access_db_utils",
  "fusionauth",
  "futures",
+ "jsonwebtoken 10.3.0",
  "lexical_client",
  "macro_aws_config",
  "macro_db_client",

@@ -16,6 +16,7 @@ email_db_client = { path = "../../crates/email_db_client" }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 fusionauth = { path = "../../crates/fusionauth" }
+jsonwebtoken = { workspace = true }
 futures = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }

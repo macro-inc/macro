@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
 use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use clap::{Args, Subcommand};
 use rand::rngs::StdRng;
@@ -26,7 +26,9 @@ use rand::{Rng, SeedableRng};
 #[cfg(test)]
 mod test;
 
-use crate::config::{GmailTestAccountTokens, GoogleClientId, GoogleClientSecretKey};
+use crate::config::{
+    GmailForwarderSaKey, GmailTestAccountTokens, GoogleClientId, GoogleClientSecretKey,
+};
 use crate::entity::email::{FAKE_CONTACTS, SUBJECTS, sample_bodies};
 
 const GMAIL_BASE: &str = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -51,6 +53,34 @@ pub enum GmailCommand {
     Reset(AccountArg),
     /// Print the mailbox's message/thread totals
     Status(AccountArg),
+    /// Forward Gmail push notifications from the Pub/Sub subscription to a
+    /// local stack's webhook, so connected inboxes sync live (runs forever)
+    Forward(ForwardArgs),
+}
+
+/// Arguments for `gmail forward`.
+#[derive(Debug, Args)]
+pub struct ForwardArgs {
+    /// The local email-service webhook to deliver notifications to, through
+    /// the instance proxy (e.g. http://localhost:50009/email/gmail/webhook
+    /// for `--instance 2634`)
+    #[arg(long, default_value = "http://localhost:8090/email/gmail/webhook")]
+    target: String,
+    /// The Pub/Sub pull subscription attached to the Gmail watch topic
+    #[arg(
+        long,
+        default_value = "projects/macro-email-testing/subscriptions/gmail-local-watch-sub"
+    )]
+    subscription: String,
+    /// OIDC audience the webhook validates (`GmailClient` hardcodes this)
+    #[arg(long, default_value = "macro-gmail-webhook")]
+    webhook_audience: String,
+    /// Topic to attach the subscription to if it does not exist yet
+    #[arg(
+        long,
+        default_value = "projects/macro-email-testing/topics/gmail-local-watch"
+    )]
+    topic: String,
 }
 
 /// Arguments for `gmail seed`.
@@ -96,6 +126,7 @@ impl GmailArgs {
             GmailCommand::Seed(args) => seed(args).await,
             GmailCommand::Reset(args) => reset(args).await,
             GmailCommand::Status(args) => status(args).await,
+            GmailCommand::Forward(args) => forward(args).await,
         }
     }
 }
@@ -536,4 +567,326 @@ async fn status(args: AccountArg) -> anyhow::Result<()> {
         "mailbox status"
     );
     Ok(())
+}
+
+/// A service-account access token, minted via the OAuth JWT-bearer grant and
+/// re-minted before expiry.
+struct SaToken {
+    http: reqwest::Client,
+    client_email: String,
+    encoding_key: jsonwebtoken::EncodingKey,
+    access_token: String,
+    minted_at: Instant,
+    /// Google-signed OIDC identity token presented to the webhook — the same
+    /// authentication a real Pub/Sub push subscription uses.
+    id_token: String,
+    id_token_audience: String,
+    id_minted_at: Instant,
+}
+
+impl SaToken {
+    async fn from_env(http: reqwest::Client) -> anyhow::Result<Self> {
+        let key_json = GmailForwarderSaKey::new()
+            .context("GMAIL_FORWARDER_SA_KEY is not set (use `just gmail …`)")?
+            .to_string();
+        let key: serde_json::Value =
+            serde_json::from_str(&key_json).context("GMAIL_FORWARDER_SA_KEY is not JSON")?;
+        let client_email = key["client_email"]
+            .as_str()
+            .context("SA key has no client_email")?
+            .to_string();
+        let encoding_key = jsonwebtoken::EncodingKey::from_rsa_pem(
+            key["private_key"]
+                .as_str()
+                .context("SA key has no private_key")?
+                .as_bytes(),
+        )
+        .context("SA private_key is not a valid RSA PEM")?;
+        let mut token = SaToken {
+            http,
+            client_email,
+            encoding_key,
+            access_token: String::new(),
+            minted_at: Instant::now(),
+            id_token: String::new(),
+            id_token_audience: String::new(),
+            id_minted_at: Instant::now(),
+        };
+        token.refresh().await?;
+        Ok(token)
+    }
+
+    /// Google-signed OIDC id token for `audience`, re-minted before expiry.
+    /// The JWT-bearer grant with a `target_audience` claim (instead of
+    /// `scope`) returns an identity token with iss=accounts.google.com and
+    /// aud=`audience` — which is exactly what the webhook's
+    /// `validate_google_token` verifies.
+    async fn webhook_bearer(&mut self, audience: &str) -> anyhow::Result<&str> {
+        if self.id_token_audience == audience
+            && self.id_minted_at.elapsed() < Duration::from_secs(50 * 60)
+            && !self.id_token.is_empty()
+        {
+            return Ok(&self.id_token);
+        }
+        #[derive(serde::Serialize)]
+        struct IdClaims<'a> {
+            iss: &'a str,
+            aud: &'a str,
+            target_audience: &'a str,
+            iat: u64,
+            exp: u64,
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock before unix epoch")
+            .as_secs();
+        let assertion = jsonwebtoken::encode(
+            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
+            &IdClaims {
+                iss: &self.client_email,
+                aud: TOKEN_URL,
+                target_audience: audience,
+                iat: now,
+                exp: now + 3600,
+            },
+            &self.encoding_key,
+        )
+        .context("signing the id-token assertion")?;
+        let resp: serde_json::Value = self
+            .http
+            .post(TOKEN_URL)
+            .form(&[
+                ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+                ("assertion", assertion.as_str()),
+            ])
+            .send()
+            .await
+            .context("id-token request failed")?
+            .json()
+            .await
+            .context("id-token response was not JSON")?;
+        self.id_token = resp["id_token"]
+            .as_str()
+            .with_context(|| format!("no id_token in response: {resp}"))?
+            .to_string();
+        self.id_token_audience = audience.to_string();
+        self.id_minted_at = Instant::now();
+        Ok(&self.id_token)
+    }
+
+    async fn refresh(&mut self) -> anyhow::Result<()> {
+        #[derive(serde::Serialize)]
+        struct Claims<'a> {
+            iss: &'a str,
+            scope: &'a str,
+            aud: &'a str,
+            iat: u64,
+            exp: u64,
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock before unix epoch")
+            .as_secs();
+        let assertion = jsonwebtoken::encode(
+            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
+            &Claims {
+                iss: &self.client_email,
+                scope: "https://www.googleapis.com/auth/pubsub",
+                aud: TOKEN_URL,
+                iat: now,
+                exp: now + 3600,
+            },
+            &self.encoding_key,
+        )
+        .context("signing the service-account JWT")?;
+        let resp: serde_json::Value = self
+            .http
+            .post(TOKEN_URL)
+            .form(&[
+                ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+                ("assertion", assertion.as_str()),
+            ])
+            .send()
+            .await
+            .context("SA token request failed")?
+            .json()
+            .await
+            .context("SA token response was not JSON")?;
+        self.access_token = resp["access_token"]
+            .as_str()
+            .with_context(|| format!("no access_token in SA token response: {resp}"))?
+            .to_string();
+        self.minted_at = Instant::now();
+        Ok(())
+    }
+
+    async fn bearer(&mut self) -> anyhow::Result<&str> {
+        // SA access tokens live an hour; re-mint with headroom.
+        if self.minted_at.elapsed() > Duration::from_secs(50 * 60) {
+            self.refresh().await?;
+        }
+        Ok(&self.access_token)
+    }
+}
+
+/// Create the pull subscription if it does not exist. Per-instance
+/// subscriptions let concurrent local stacks each receive every notification
+/// (a subscription is a queue, not a broadcast); the expiration policy lets
+/// Google garbage-collect subscriptions of instances nobody runs anymore.
+async fn ensure_subscription(
+    http: &reqwest::Client,
+    sa: &mut SaToken,
+    subscription: &str,
+    topic: &str,
+) -> anyhow::Result<()> {
+    let url = format!("https://pubsub.googleapis.com/v1/{subscription}");
+    let token = sa.bearer().await?.to_string();
+    let status = http
+        .get(&url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .context("subscription lookup failed")?
+        .status();
+    if status.is_success() {
+        return Ok(());
+    }
+    if status != reqwest::StatusCode::NOT_FOUND {
+        bail!("subscription lookup returned {status}");
+    }
+    let resp = http
+        .put(&url)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "topic": topic,
+            "ackDeadlineSeconds": 30,
+            "expirationPolicy": { "ttl": "2678400s" },
+        }))
+        .send()
+        .await
+        .context("subscription create failed")?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        bail!(
+            "creating subscription {subscription} failed: {status}: {body} \
+             (the service account needs Pub/Sub Editor on the topic/project)"
+        );
+    }
+    tracing::info!(%subscription, %topic, "created pull subscription");
+    Ok(())
+}
+
+/// Pull Gmail watch notifications and re-deliver them to the local webhook in
+/// Pub/Sub push-envelope shape (what the webhook deserializes as
+/// `GmailInboxSyncPayload`). Messages are acked only after the webhook accepts
+/// them, so a stack that is down redelivers instead of losing sync events.
+async fn forward(args: ForwardArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut sa = SaToken::from_env(http.clone()).await?;
+    ensure_subscription(&http, &mut sa, &args.subscription, &args.topic).await?;
+    let pull_url = format!(
+        "https://pubsub.googleapis.com/v1/{}:pull",
+        args.subscription
+    );
+    let ack_url = format!(
+        "https://pubsub.googleapis.com/v1/{}:acknowledge",
+        args.subscription
+    );
+    tracing::info!(subscription = %args.subscription, target = %args.target, "forwarding gmail notifications (ctrl-c to stop)");
+
+    let mut forwarded = 0u64;
+    loop {
+        let token = sa.bearer().await?;
+        let pull: serde_json::Value = match http
+            .post(&pull_url)
+            .bearer_auth(token)
+            .json(&serde_json::json!({ "maxMessages": 25 }))
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                resp.json().await.unwrap_or(serde_json::Value::Null)
+            }
+            Ok(resp) => {
+                tracing::warn!(status = %resp.status(), "pull failed, backing off");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!(error = ?e, "pull error, backing off");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+        let received = pull["receivedMessages"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        if received.is_empty() {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        }
+
+        let mut ack_ids: Vec<String> = Vec::new();
+        for entry in &received {
+            // Pub/Sub pull returns STANDARD base64 but the webhook's
+            // deserializer strictly decodes URL_SAFE (the push alphabet) —
+            // transcode so payloads containing '+'/'/' can't poison the queue.
+            let data = entry["message"]["data"].as_str().unwrap_or_default();
+            let decoded = match STANDARD.decode(data) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    tracing::warn!(error = ?e, "notification data is not base64; acking to discard");
+                    if let Some(ack) = entry["ackId"].as_str() {
+                        ack_ids.push(ack.to_string());
+                    }
+                    continue;
+                }
+            };
+            let envelope = serde_json::json!({
+                "message": {
+                    "data": URL_SAFE.encode(&decoded),
+                    "messageId": entry["message"]["messageId"],
+                    "publishTime": entry["message"]["publishTime"],
+                },
+                "subscription": args.subscription,
+            });
+            let webhook_token = sa.webhook_bearer(&args.webhook_audience).await?.to_string();
+            match http
+                .post(&args.target)
+                .bearer_auth(webhook_token)
+                .json(&envelope)
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Some(ack) = entry["ackId"].as_str() {
+                        ack_ids.push(ack.to_string());
+                    }
+                    forwarded += 1;
+                    let notification = String::from_utf8_lossy(&decoded);
+                    tracing::info!(forwarded, %notification, "delivered to webhook");
+                }
+                Ok(resp) => {
+                    tracing::warn!(status = %resp.status(), "webhook rejected notification; leaving unacked");
+                }
+                Err(e) => {
+                    tracing::warn!(error = ?e, "webhook unreachable; leaving unacked");
+                }
+            }
+        }
+        if !ack_ids.is_empty() {
+            let token = sa.bearer().await?;
+            if let Err(e) = http
+                .post(&ack_url)
+                .bearer_auth(token)
+                .json(&serde_json::json!({ "ackIds": ack_ids }))
+                .send()
+                .await
+            {
+                tracing::warn!(error = ?e, "ack failed; notifications will redeliver");
+            }
+        }
+    }
 }

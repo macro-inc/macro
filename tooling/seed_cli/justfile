@@ -25,6 +25,7 @@ gmail *ARGS:
   @GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-$(aws secretsmanager get-secret-value --secret-id google-client-id-local --query SecretString --output text)}" \
   GOOGLE_CLIENT_SECRET_KEY="${GOOGLE_CLIENT_SECRET_KEY:-$(aws secretsmanager get-secret-value --secret-id google-client-secret-local --query SecretString --output text)}" \
   GMAIL_TEST_ACCOUNT_TOKENS="${GMAIL_TEST_ACCOUNT_TOKENS:-$(aws secretsmanager get-secret-value --secret-id gmail-test-account-tokens --query SecretString --output text)}" \
+  GMAIL_FORWARDER_SA_KEY="${GMAIL_FORWARDER_SA_KEY:-$(aws secretsmanager get-secret-value --secret-id gmail-local-watch-forwarder-sa --query SecretString --output text)}" \
   SQLX_OFFLINE="true" \
   cargo r -- gmail "$@"
 
