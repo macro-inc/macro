@@ -97,11 +97,11 @@ const service = new FusionAuthService('fusionauth-service', {
     },
     {
       name: 'FUSIONAUTH_APP_RUNTIME_MODE',
-      value: stack === 'prod' ? 'production' : 'development',
+      value: stack === 'prod' ? 'production' : 'development', // NOTE: to perform upgrades to prod, temporarily set to `development`, deploy new version, set back to production
     },
     {
-      name: 'FUSIONAUTH_APP_SLENT_MODE',
-      value: 'true',
+      name: 'FUSIONAUTH_APP_SILENT_MODE',
+      value: 'true', // NOTE: This is disabled when FUSIONAUTH_APP_RUNTIME_MODE is production
     },
   ],
 });
