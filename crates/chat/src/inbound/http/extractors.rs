@@ -11,8 +11,8 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal,
+    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use roles_and_permissions::domain::model::PermissionId;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
@@ -104,7 +104,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let user =
-            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+            MacroAuthorizationExtractor::<Auth, ActingUser>::from_request_parts(parts, state)
                 .await
                 .map_err(ChatModelAccessRejection::Unauthorized)?;
         let user = &user.authorization.user;

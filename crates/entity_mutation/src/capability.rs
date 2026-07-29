@@ -10,29 +10,28 @@
 //! Every trait declares its required access level as an associated
 //! [`RequiredPermission`] type, so each entity kind's permission requirement
 //! lives with its implementation and the router resolves receipts
-//! generically. Implementations return the additional records they affected
-//! (containers, cascade descendants); the router attributes outcomes to the
-//! requested entity.
+//! generically. Implementations classify every requested, container, and
+//! cascade consequence as an ordered update or deletion effect.
 
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, RequiredPermission};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
-use crate::EntityMutationErrorCode;
+use crate::{EntityMutationEffect, EntityMutationErrorCode};
 
 /// Rename an entity's user-visible display name.
 pub trait RenameEntity {
     /// Access requirement for renaming this entity kind.
     type Receipt: RequiredPermission;
 
-    /// Rename the entity, returning any additionally affected records.
+    /// Rename the entity, returning all ordered update effects.
     fn rename_entity(
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }
 
 /// The payload to move an entity
@@ -64,11 +63,12 @@ pub trait MoveEntity {
 
     /// Move the entity. `project_id` of `None` means the root; the router
     /// has already validated edit access to the target project and passes
-    /// the receipt along for domains that consume it.
+    /// the receipt along for domains that consume it. The result classifies
+    /// the moved entity and affected containers in application order.
     fn move_entity(
         &self,
         req: MoveEntityRequest<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }
 
 /// Update an entity's public and channel share policy.
@@ -76,13 +76,13 @@ pub trait UpdateEntitySharePolicy {
     /// Access requirement for changing this entity kind's share policy.
     type Receipt: RequiredPermission;
 
-    /// Apply the share-policy update, returning affected records.
+    /// Apply the share-policy update, returning ordered update effects.
     fn update_share_policy(
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }
 
 /// Soft-delete an entity with a reversible trash lifecycle.
@@ -90,12 +90,12 @@ pub trait TrashEntity {
     /// Access requirement for trashing this entity kind.
     type Receipt: RequiredPermission;
 
-    /// Trash the entity, returning affected records (containers, cascades).
+    /// Trash the entity, classifying deleted values and updated containers.
     fn trash_entity(
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }
 
 /// Restore a reversibly deleted entity.
@@ -103,12 +103,12 @@ pub trait RestoreEntity {
     /// Access requirement for restoring this entity kind.
     type Receipt: RequiredPermission;
 
-    /// Restore the entity, returning affected records.
+    /// Restore the entity, classifying restored values and updated containers.
     fn restore_entity(
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }
 
 /// Irreversibly delete an entity.
@@ -116,12 +116,12 @@ pub trait DeleteEntityPermanently {
     /// Access requirement for permanently deleting this entity kind.
     type Receipt: RequiredPermission;
 
-    /// Permanently delete the entity, returning affected records.
+    /// Permanently delete the entity, classifying deletions and updated containers.
     fn delete_entity_permanently(
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }
 
 /// Duplicate an entity.
@@ -129,12 +129,12 @@ pub trait DuplicateEntity {
     /// Access requirement for duplicating this entity kind.
     type Receipt: RequiredPermission;
 
-    /// Duplicate the entity, returning the newly created entity.
+    /// Duplicate the entity, returning cache effects for the created entity.
     fn duplicate_entity(
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
-    ) -> impl Future<Output = Result<Entity<'static>, EntityMutationErrorCode>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send;
 }

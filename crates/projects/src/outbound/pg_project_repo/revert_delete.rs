@@ -89,7 +89,11 @@ pub(super) async fn revert_delete_project(
         }
     }
 
-    Ok(RevertDeleteResult { project_ids })
+    Ok(RevertDeleteResult {
+        project_ids,
+        document_ids,
+        chat_ids,
+    })
 }
 
 async fn restore_items(

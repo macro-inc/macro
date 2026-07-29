@@ -1,8 +1,65 @@
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Object, Request, Schema, value};
-use entity_mutation::{EntityMutationActor, UnavailableEntityMutationService};
+use async_graphql::{Context, EmptySubscription, Object, Request, Schema, SimpleObject, value};
+use entity_mutation::{
+    EntityMutationActor, EntityMutationEffect, UnavailableEntityMutationService,
+};
+use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
+
+/// Minimal composed Soup edge object used by the isolated mutation schema.
+#[derive(Clone, SimpleObject)]
+struct TestSoupEdges {
+    /// Keeps the GraphQL object non-empty.
+    available: bool,
+}
+
+/// Minimal email-specific edge object used by the isolated mutation schema.
+#[derive(Clone, SimpleObject)]
+struct TestEmailThreadEdges {
+    /// Keeps the GraphQL object non-empty.
+    available: bool,
+}
+
+impl SoupEntityEdges for TestSoupEdges {
+    type Property = String;
+    type Notification = String;
+    type EmailThreadEdges = TestEmailThreadEdges;
+
+    fn from_entity(_entity: Entity<'static>) -> Self {
+        Self { available: true }
+    }
+
+    fn email_thread_edges(_email_thread_id: uuid::Uuid) -> Self::EmailThreadEdges {
+        TestEmailThreadEdges { available: true }
+    }
+
+    async fn resolve_properties(
+        &self,
+        _ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<Self::Property>> {
+        Ok(Vec::new())
+    }
+
+    async fn resolve_notifications(
+        &self,
+        _ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<Self::Notification>> {
+        Ok(Vec::new())
+    }
+
+    async fn resolve_is_favorited(&self, _ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        Ok(false)
+    }
+
+    async fn resolve_viewer_permission(
+        &self,
+        _ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_permission::GraphqlEntityPermission>> {
+        Ok(None)
+    }
+}
 
 /// Minimal query root used to exercise the mutation module in isolation.
 struct QueryRoot;
@@ -12,6 +69,16 @@ impl QueryRoot {
     /// Return a trivial value so the test schema has a valid query root.
     async fn health(&self) -> bool {
         true
+    }
+
+    /// Return a successful domain outcome whose deletion cannot be represented by Soup.
+    async fn unsupported_deletion(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
+        super::GraphqlMutationSuccess {
+            effects: vec![EntityMutationEffect::deleted(
+                EntityType::User.with_entity_string("user-1".to_string()),
+            )],
+            edges: std::marker::PhantomData,
+        }
     }
 }
 
@@ -34,7 +101,10 @@ async fn mutation_results_return_typed_errors() {
             results {
               __typename
               ... on GraphqlMutationSuccess {
-                affectedEntities { id entityType }
+                effects {
+                  __typename
+                  ... on GraphqlCacheDeletion { graphqlTypeName entityId }
+                }
               }
               ... on GraphqlMutationError {
                 errorCode
@@ -50,7 +120,7 @@ async fn mutation_results_return_typed_errors() {
 
     let response = Schema::build(
         QueryRoot,
-        crate::EntityMutationRoot::<UnavailableEntityMutationService>::new(),
+        crate::EntityMutationRoot::<UnavailableEntityMutationService, TestSoupEdges>::new(),
         EmptySubscription,
     )
     .finish()
@@ -69,6 +139,25 @@ async fn mutation_results_return_typed_errors() {
                 }],
             },
         })
+    );
+}
+
+#[tokio::test]
+async fn unsupported_soup_deletion_is_a_graphql_error() {
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: Some(42),
+    };
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(Request::new("{ unsupportedDeletion { effects { __typename } } }").data(actor))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert!(
+        response.errors[0]
+            .message
+            .contains("cannot be represented as a Soup cache deletion")
     );
 }
 

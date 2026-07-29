@@ -49,6 +49,10 @@ pub struct SoftDeleteResult {
 pub struct RevertDeleteResult {
     /// Restored project identifiers.
     pub project_ids: Vec<String>,
+    /// Restored document identifiers.
+    pub document_ids: Vec<String>,
+    /// Restored chat identifiers.
+    pub chat_ids: Vec<String>,
 }
 
 /// Data returned after permanently purging a soft-deleted project tree.

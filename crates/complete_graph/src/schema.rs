@@ -22,8 +22,8 @@ use graphql_properties::{
     PropertiesMutationRoot,
 };
 use graphql_soup::{
-    GroupedSoup, GroupedSoupInput, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup,
-    resolve_soup, resolve_soup_updates,
+    GroupedSoup, GroupedSoupInput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
+    resolve_grouped_soup, resolve_soup, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -40,17 +40,20 @@ use crate::SoupEdges;
 /// Mutation root combining property-specific and capability-oriented entity
 /// mutations without coupling either domain adapter to the other.
 #[derive(MergedObject)]
-pub struct CompleteMutationRoot<W: EntityPropertyWriter, M: EntityMutationService>(
-    PropertiesMutationRoot<W>,
-    EntityMutationRoot<M>,
-);
+pub struct CompleteMutationRoot<
+    W: EntityPropertyWriter,
+    M: EntityMutationService,
+    E: SoupEntityEdges,
+>(PropertiesMutationRoot<W>, EntityMutationRoot<M, E>);
 
-impl<W: EntityPropertyWriter, M: EntityMutationService> CompleteMutationRoot<W, M> {
+impl<W: EntityPropertyWriter, M: EntityMutationService, E: SoupEntityEdges>
+    CompleteMutationRoot<W, M, E>
+{
     /// Construct the composed mutation root.
     fn new() -> Self {
         Self(
             PropertiesMutationRoot::<W>::new(),
-            EntityMutationRoot::<M>::new(),
+            EntityMutationRoot::<M, E>::new(),
         )
     }
 }
@@ -65,7 +68,7 @@ impl<W: EntityPropertyWriter, M: EntityMutationService> CompleteMutationRoot<W, 
 /// favorite edge reader, and `AR` the access edge reader.
 pub type SoupSchema<S, R, E, EAS, Auth, St, W, M, NR, PR, ER, FR, AR> = Schema<
     SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR>,
-    CompleteMutationRoot<W, M>,
+    CompleteMutationRoot<W, M, SoupEdges<NR, PR, ER, FR, AR>>,
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR>,
 >;
 
@@ -236,7 +239,7 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W, M>::new(),
+        CompleteMutationRoot::<W, M, SoupEdges<NR, PR, ER, FR, AR>>::new(),
         SoupSubscriptionRoot::new(realtime_service),
     )
     .finish()
@@ -360,7 +363,9 @@ where
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<
-        impl async_graphql::futures_util::Stream<Item = SoupPatch<SoupEdges<NR, PR, ER, FR, AR>>>,
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<SoupPatch<SoupEdges<NR, PR, ER, FR, AR>>>>,
+        >,
     > {
         resolve_soup_updates::<R, Auth, St, SoupEdges<NR, PR, ER, FR, AR>>(&self.service, ctx).await
     }

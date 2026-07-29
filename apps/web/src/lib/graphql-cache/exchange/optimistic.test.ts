@@ -25,11 +25,11 @@ describe('typed optimistic graph updates', () => {
   it('serializes a generated query entrypoint, variables, path, and diff', () => {
     const removal = update(
       itemsIn('in-progress'),
-      remove('GraphqlSoupItem:task-1')
+      remove({ __typename: 'GraphqlSoupDocument', id: 'task-1' })
     );
     const prepend = update(
       itemsIn('completed'),
-      prependUnique('GraphqlSoupItem:task-1')
+      prependUnique({ __typename: 'GraphqlSoupDocument', id: 'task-1' })
     );
 
     expect(removal.operationName).toBe('GroupSoupMembership');
@@ -43,7 +43,7 @@ describe('typed optimistic graph updates', () => {
     ]);
     expect(removal.operation).toEqual({
       kind: 'remove',
-      entityKey: 'GraphqlSoupItem:task-1',
+      entityKey: 'GraphqlSoupDocument:task-1',
     });
     expect(prepend.operation.kind).toBe('prependUnique');
   });
@@ -62,8 +62,11 @@ describe('typed optimistic graph updates', () => {
       bins.item('missing', 'value');
       // @ts-expect-error The generated bin key is a string.
       bins.item('key', 123);
-      // @ts-expect-error Updates must target a generated list selection.
-      update(root.field('user'), remove('GraphqlUser:user-1'));
+      update(
+        // @ts-expect-error Updates must target a generated list selection.
+        root.field('user'),
+        remove({ __typename: 'GraphqlUser', id: 'user-1' })
+      );
     };
 
     expect(typeAssertions).toBeTypeOf('function');

@@ -10,8 +10,8 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_mutation::{
-    DuplicateEntity, EntityMutationErrorCode, MoveEntity, RenameEntity, TrashEntity,
-    UpdateEntitySharePolicy, capability::MoveEntityRequest,
+    DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode, MoveEntity, RenameEntity,
+    TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
@@ -91,7 +91,7 @@ where
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let document = live_document(self, &entity, "rename").await?;
         self.edit_document(
             receipt,
@@ -104,7 +104,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -125,7 +125,7 @@ where
     async fn move_entity(
         &self,
         request: MoveEntityRequest<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let (entity, receipt, project_id) = match request {
             MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
             MoveEntityRequest::MoveToProject {
@@ -149,7 +149,13 @@ where
             },
         )
         .await?;
-        Ok(project_refs([old_project_id, project_id]))
+        Ok(std::iter::once(EntityMutationEffect::updated(entity))
+            .chain(
+                project_refs([old_project_id, project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
@@ -172,7 +178,7 @@ where
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let document = live_document(self, &entity, "update sharing for").await?;
         self.edit_document(
             receipt,
@@ -185,7 +191,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -207,14 +213,20 @@ where
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project_id = self
             .internal_get_basic_document(&entity.entity_id)
             .await?
             .project_id;
         let affected_project_id = project_id.clone().map(|id| id.to_string());
         self.delete_document(receipt, project_id).await?;
-        Ok(project_refs([affected_project_id]))
+        Ok(std::iter::once(EntityMutationEffect::deleted(entity))
+            .chain(
+                project_refs([affected_project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
@@ -238,16 +250,16 @@ where
         receipt: EntityAccessReceipt<Self::Receipt>,
         user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
-    ) -> Result<Entity<'static>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let document = self.internal_get_basic_document(&entity.entity_id).await?;
         let display_name =
             display_name.unwrap_or_else(|| format!("{} copy", document.document_name));
         let response = self
             .copy_document(receipt, document, user_id, display_name, None, None)
             .await?;
-        Ok(
+        Ok(vec![EntityMutationEffect::updated(
             EntityType::Document
                 .with_entity_string(response.document_metadata.metadata.document_id),
-        )
+        )])
     }
 }

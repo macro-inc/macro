@@ -5,7 +5,6 @@ use opensearch_client::{
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use sqlx::PgPool;
-use sqs_client::search::call::{CallRecordMessage, RemoveCallRecord};
 use uuid::Uuid;
 
 use crate::process::properties::to_indexed_properties;
@@ -14,13 +13,9 @@ use crate::process::properties::to_indexed_properties;
 pub async fn process_call_record(
     opensearch_client: &OpensearchClient,
     db: &PgPool,
-    message: &CallRecordMessage,
+    call_id: Uuid,
+    index_override: Option<&str>,
 ) -> anyhow::Result<()> {
-    let call_id: Uuid = message
-        .call_id
-        .parse()
-        .context("failed to parse call_id as UUID")?;
-
     let Some(payload) =
         macro_db_client::call_record::get::get_call_record_search_payload(db, &call_id).await?
     else {
@@ -78,7 +73,7 @@ pub async fn process_call_record(
         .collect::<Result<Vec<_>, _>>()?;
 
     let result = opensearch_client
-        .bulk_upsert_call_record_segments(&segments, message.index_override.as_deref())
+        .bulk_upsert_call_record_segments(&segments, index_override)
         .await
         .context("failed to bulk upsert call record segments")?;
 
@@ -97,16 +92,19 @@ pub async fn process_call_record(
 #[tracing::instrument(skip(opensearch_client), err)]
 pub async fn process_remove_call_record(
     opensearch_client: &OpensearchClient,
-    message: &RemoveCallRecord,
+    channel_id: Uuid,
+    call_id: Option<Uuid>,
+    index_override: Option<&str>,
 ) -> anyhow::Result<()> {
-    let index_override = message.index_override.as_deref();
-    if let Some(call_id) = &message.call_id {
+    if let Some(call_id) = call_id {
+        let call_id = call_id.to_string();
         opensearch_client
-            .delete_call_record(call_id, index_override)
+            .delete_call_record(&call_id, index_override)
             .await?;
     } else {
+        let channel_id = channel_id.to_string();
         opensearch_client
-            .delete_call_records_by_channel(&message.channel_id, index_override)
+            .delete_call_records_by_channel(&channel_id, index_override)
             .await?;
     }
     Ok(())

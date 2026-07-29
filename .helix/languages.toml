@@ -1,8 +1,22 @@
-# Keep rust-analyzer from loading or checking the Cloudflare Worker crate,
-# which must be compiled for WebAssembly rather than the host target.
-
+# Keep rust-analyzer from loading the Cloudflare Worker crate, which must be
+# compiled for WebAssembly rather than the host target.
 [language-server.rust-analyzer.config.files]
 exclude = ["services/sync-service"]
 
+# Avoid eagerly analyzing all 224 workspace packages at startup. Crates are
+# analyzed on demand as their files and symbols are used.
+[language-server.rust-analyzer.config.cachePriming]
+enable = false
+
+# Load and check default targets instead of every test, example, and benchmark.
+[language-server.rust-analyzer.config.cargo]
+allTargets = false
+
+# Check the package containing the active file instead of the entire workspace.
 [language-server.rust-analyzer.config.check]
-extraArgs = ["--exclude", "sync_service"]
+allTargets = false
+workspace = false
+
+# Retain fewer parsed syntax trees to reduce steady-state memory use.
+[language-server.rust-analyzer.config.lru]
+capacity = 64

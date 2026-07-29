@@ -18,7 +18,9 @@ use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
 use model_entity::{Entity, EntityType};
+use models_properties::EntityType as PropertyEntityType;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
+use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
@@ -48,6 +50,7 @@ macro_event_broker::declare_topics!(
         ChatMacroEvent,
         EmailMacroEvent,
         ChannelMacroEvent,
+        PropertyMacroEvent,
 );
 
 /// Total service attempts before returning for supervisor-driven redelivery.
@@ -326,6 +329,45 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
     }
 }
 
+fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<EntityType> {
+    match entity_type {
+        PropertyEntityType::CallRecord => Some(EntityType::Call),
+        PropertyEntityType::Chat => Some(EntityType::Chat),
+        PropertyEntityType::Company => Some(EntityType::CrmCompany),
+        PropertyEntityType::Document | PropertyEntityType::Task => Some(EntityType::Document),
+        PropertyEntityType::Project => Some(EntityType::Project),
+        PropertyEntityType::Thread => Some(EntityType::EmailThread),
+        // Soup channels do not expose properties, and users are not Soup items.
+        PropertyEntityType::Channel | PropertyEntityType::User => None,
+    }
+}
+
+fn property_update(entity_type: PropertyEntityType, entity_id: &str) -> Vec<SoupRealtimePatch> {
+    soup_entity_type_from_property(entity_type)
+        .map(|entity_type| update(entity_type, entity_id))
+        .into_iter()
+        .collect()
+}
+
+fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        PropertyTopicEvent::EntityPropertyUpdated(metadata) => {
+            property_update(metadata.entity_type, &metadata.entity_id)
+        }
+        PropertyTopicEvent::EntityPropertyDeleted(metadata) => {
+            property_update(metadata.entity_type, &metadata.entity_id)
+        }
+        PropertyTopicEvent::EntityPropertiesCleared(metadata) => {
+            property_update(metadata.entity_type, &metadata.entity_id)
+        }
+        PropertyTopicEvent::Created(_)
+        | PropertyTopicEvent::Deleted(_)
+        | PropertyTopicEvent::OptionCreated(_)
+        | PropertyTopicEvent::OptionUpdated(_)
+        | PropertyTopicEvent::OptionDeleted(_) => Vec::new(),
+    }
+}
+
 fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     match event {
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
@@ -340,6 +382,9 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             patches_from_channel_event(&event.event().event)
+        }
+        DeclaredMacroEvent::PropertyMacroEvent(event) => {
+            patches_from_property_event(&event.event().event)
         }
     }
 }

@@ -35,12 +35,16 @@ fn soup_response_schema_exposes_frontend_fields() {
         "deletedAt: String",
         "type GraphqlSoupProject implements GraphqlSoupEntity {",
         "parent: GraphqlEntity",
-        "type SoupPatch {",
-        "operation: GraphqlPatchOperation!",
-        "entity: GraphqlEntity!",
+        "type GraphqlCacheDeletion {",
+        "graphqlTypeName: String!",
+        "entityId: ID!",
+        "type SoupUpdated {",
         "item: GraphqlSoupEntity",
+        "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
+        "type GraphqlMutationSuccess {",
+        "effects: [SoupPatch!]!",
         "type SoupSubscriptionRoot {",
-        "soupUpdates: SoupPatch!",
+        "soupUpdates: [SoupPatch!]!",
     ] {
         assert_sdl_line(&sdl, expected);
     }

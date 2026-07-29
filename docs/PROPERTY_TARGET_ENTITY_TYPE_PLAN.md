@@ -286,7 +286,9 @@ This work uses an atomic deployment strategy. Removing `TASK` from the GraphQL t
 
 Create the target-only enum without `TASK` immediately, regenerate all clients in the same change, and deploy the backend and clients atomically. Do not add a deprecated `TASK` alias or a compatibility phase.
 
-Changing the committed GraphQL SDL rotates the normalized cache schema hash, so persisted client caches will rebuild automatically. Do not add manual cache-version logic.
+This input-only GraphQL change does not alter normalized record identity or
+field storage shape, so it does not require a normalized-cache schema
+compatibility epoch bump. Persisted records may remain in place.
 
 ## Test plan
 

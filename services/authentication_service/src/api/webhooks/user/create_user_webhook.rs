@@ -28,7 +28,6 @@ use macro_user_id::{
     user_id::MacroUserIdStr,
 };
 use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
-use model::document_storage_service_internal::StarterDocHowToGuide;
 use model_entity::EntityType;
 use std::collections::HashSet;
 use teams::domain::team_repo::TeamService;
@@ -353,9 +352,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         let email = email.clone();
         let support_channel_name = support_channel_name.clone();
         async move {
-            let how_to_guide =
-                initialize_starter_docs_with_retries(&document_storage_service_client, &user_id)
-                    .await;
+            initialize_starter_docs_with_retries(&document_storage_service_client, &user_id).await;
 
             let owner_id = match MacroUserIdStr::try_from(user_id) {
                 Ok(owner_id) => owner_id,
@@ -406,14 +403,9 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
 
-            let _ = post_support_channel_welcome(
-                channel_service.as_ref(),
-                &channel.id,
-                owner_id,
-                how_to_guide.as_ref(),
-            )
-            .await
-            .inspect_err(|e| {
+            let _ = post_support_channel_welcome(channel_service.as_ref(), &channel.id, owner_id)
+                .await
+                .inspect_err(|e| {
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");
             });
         }
@@ -431,17 +423,16 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     Ok(())
 }
 
-/// Seed the starter documents with retries, returning the "Macro how to
-/// guide" reference when it could be resolved.
+/// Seed the starter documents with retries.
 async fn initialize_starter_docs_with_retries(
     client: &document_storage_service_client::DocumentStorageServiceClient,
     user_id: &str,
-) -> Option<StarterDocHowToGuide> {
+) {
     const MAX_ATTEMPTS: u32 = 3;
     const RETRY_DELAY_SECS: u64 = 2;
     for attempt in 1..=MAX_ATTEMPTS {
         match client.initialize_starter_docs(user_id).await {
-            Ok(how_to_guide) => return how_to_guide,
+            Ok(_) => return,
             Err(e) if attempt < MAX_ATTEMPTS => {
                 tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
                 tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
@@ -451,7 +442,6 @@ async fn initialize_starter_docs_with_retries(
             }
         }
     }
-    None
 }
 
 /// Initializes the experiments for a provided user

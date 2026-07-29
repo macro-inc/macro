@@ -4,14 +4,11 @@ use crate::domain::{
     models::{BotId, EntityMention, ParticipantRole, Sender},
     ports::{
         ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
-        ChannelSearchIndexer, ChannelSideEffectContext,
+        ChannelSideEffectContext,
     },
 };
 use chrono::Utc;
 use std::sync::{Arc, Mutex};
-
-type IndexedMessages = Arc<Mutex<Vec<(Uuid, Uuid)>>>;
-type RemovedMessages = Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>;
 
 #[derive(Clone)]
 struct FakeContext {
@@ -115,22 +112,6 @@ impl ChannelNotificationSender for FakeNotifications {
 }
 
 #[derive(Clone, Default)]
-struct FakeSearch {
-    indexed: IndexedMessages,
-    removed: RemovedMessages,
-}
-
-impl ChannelSearchIndexer for FakeSearch {
-    async fn index_message(&self, channel_id: Uuid, message_id: Uuid) {
-        self.indexed.lock().unwrap().push((channel_id, message_id));
-    }
-
-    async fn remove_message(&self, channel_id: Uuid, message_id: Option<Uuid>) {
-        self.removed.lock().unwrap().push((channel_id, message_id));
-    }
-}
-
-#[derive(Clone, Default)]
 struct FakeContacts {
     users: Arc<Mutex<Vec<HashSet<MacroUserIdStr<'static>>>>>,
 }
@@ -166,7 +147,6 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         },
         FakeRealtime::default(),
         FakeNotifications::default(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
     let now = Utc::now();
@@ -203,7 +183,6 @@ async fn non_macro_bot_profile_uses_context_lookup() {
         },
         FakeRealtime::default(),
         FakeNotifications::default(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
     let now = Utc::now();
@@ -230,20 +209,18 @@ async fn non_macro_bot_profile_uses_context_lookup() {
 }
 
 #[tokio::test]
-async fn message_posted_derives_realtime_search_and_notification_effects() {
+async fn message_posted_derives_realtime_and_notification_effects() {
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let sender = user("sender@example.com");
     let recipient = user("recipient@example.com");
     let realtime = FakeRealtime::default();
     let notifications = FakeNotifications::default();
-    let search = FakeSearch::default();
     let contacts = FakeContacts::default();
     let service = ChannelSideEffectService::new(
         FakeContext::default(),
         realtime.clone(),
         notifications.clone(),
-        search.clone(),
         contacts,
     );
     let now = Utc::now();
@@ -306,11 +283,6 @@ async fn message_posted_derives_realtime_search_and_notification_effects() {
     assert_eq!(nonce.as_deref(), Some("nonce-1"));
     assert_eq!(recipients.len(), 2);
     drop(realtime_effects);
-
-    assert_eq!(
-        *search.indexed.lock().unwrap(),
-        vec![(channel_id, message_id)]
-    );
 
     let notification_effects = notifications.effects.lock().unwrap();
     assert_eq!(notification_effects.len(), 1);
@@ -383,12 +355,10 @@ async fn silent_message_posted_skips_notifications_only() {
     let recipient = user("recipient@example.com");
     let realtime = FakeRealtime::default();
     let notifications = FakeNotifications::default();
-    let search = FakeSearch::default();
     let service = ChannelSideEffectService::new(
         FakeContext::default(),
         realtime.clone(),
         notifications.clone(),
-        search.clone(),
         FakeContacts::default(),
     );
     let now = Utc::now();
@@ -437,10 +407,6 @@ async fn silent_message_posted_skips_notifications_only() {
         .await;
 
     assert_eq!(realtime.effects.lock().unwrap().len(), 1);
-    assert_eq!(
-        *search.indexed.lock().unwrap(),
-        vec![(channel_id, message_id)]
-    );
     assert!(notifications.effects.lock().unwrap().is_empty());
 }
 
@@ -461,7 +427,6 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
         },
         FakeRealtime::default(),
         notifications.clone(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
     let now = Utc::now();
@@ -531,7 +496,6 @@ async fn message_changed_with_posted_notification_context_sends_notification() {
         },
         FakeRealtime::default(),
         notifications.clone(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
     let now = Utc::now();
@@ -595,12 +559,10 @@ async fn bot_message_posted_sends_channel_message_notification() {
     let recipient = user("recipient@example.com");
     let realtime = FakeRealtime::default();
     let notifications = FakeNotifications::default();
-    let search = FakeSearch::default();
     let service = ChannelSideEffectService::new(
         FakeContext::default(),
         realtime.clone(),
         notifications.clone(),
-        search.clone(),
         FakeContacts::default(),
     );
 
@@ -614,11 +576,6 @@ async fn bot_message_posted_sends_channel_message_notification() {
         .await;
 
     assert_eq!(realtime.effects.lock().unwrap().len(), 1);
-    assert_eq!(
-        *search.indexed.lock().unwrap(),
-        vec![(channel_id, message_id)]
-    );
-
     let notification_effects = notifications.effects.lock().unwrap();
     assert_eq!(notification_effects.len(), 1);
     let ChannelNotificationEffect::ChannelMessage {
@@ -651,7 +608,6 @@ async fn bot_message_without_profile_skips_notifications() {
     let recipient = user("recipient@example.com");
     let realtime = FakeRealtime::default();
     let notifications = FakeNotifications::default();
-    let search = FakeSearch::default();
     let service = ChannelSideEffectService::new(
         FakeContext {
             bot_profile: None,
@@ -659,7 +615,6 @@ async fn bot_message_without_profile_skips_notifications() {
         },
         realtime.clone(),
         notifications.clone(),
-        search.clone(),
         FakeContacts::default(),
     );
 
@@ -673,10 +628,6 @@ async fn bot_message_without_profile_skips_notifications() {
         .await;
 
     assert_eq!(realtime.effects.lock().unwrap().len(), 1);
-    assert_eq!(
-        *search.indexed.lock().unwrap(),
-        vec![(channel_id, message_id)]
-    );
     assert!(notifications.effects.lock().unwrap().is_empty());
 }
 
@@ -692,7 +643,6 @@ async fn bot_first_message_sends_channel_message_not_invite() {
         },
         FakeRealtime::default(),
         notifications.clone(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
 
@@ -729,7 +679,6 @@ async fn bot_thread_reply_sends_reply_notification() {
         },
         FakeRealtime::default(),
         notifications.clone(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
 
@@ -776,7 +725,6 @@ async fn bot_participant_is_never_a_notification_recipient() {
         FakeContext::default(),
         FakeRealtime::default(),
         notifications.clone(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
 
@@ -810,7 +758,6 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
         FakeContext::default(),
         FakeRealtime::default(),
         FakeNotifications::default(),
-        FakeSearch::default(),
         FakeContacts::default(),
     )
     .with_bot_trigger_sender(bot_trigger_sender);
@@ -891,7 +838,6 @@ async fn document_mentions_notify_participants_except_sender() {
         },
         FakeRealtime::default(),
         notifications.clone(),
-        FakeSearch::default(),
         FakeContacts::default(),
     );
     let now = Utc::now();
@@ -1137,7 +1083,9 @@ impl MacroEventBroker for TestEventBroker {
 }
 
 #[derive(Clone, Default)]
-struct FailingEventBroker;
+struct FailingEventBroker {
+    attempts: Arc<Mutex<usize>>,
+}
 
 impl MacroEventBroker for FailingEventBroker {
     fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
@@ -1147,6 +1095,7 @@ impl MacroEventBroker for FailingEventBroker {
         tokio::task::JoinHandle<Result<(), macro_event_broker::EventBrokerError>>,
         macro_event_broker::EventBrokerError,
     > {
+        *self.attempts.lock().unwrap() += 1;
         Err(macro_event_broker::EventBrokerError::Publish(
             "broker unavailable".to_string(),
         ))
@@ -1159,7 +1108,6 @@ fn broker_service(
     FakeContext,
     FakeRealtime,
     FakeNotifications,
-    FakeSearch,
     FakeContacts,
     TestEventBroker,
 > {
@@ -1167,7 +1115,6 @@ fn broker_service(
         FakeContext::default(),
         FakeRealtime::default(),
         FakeNotifications::default(),
-        FakeSearch::default(),
         FakeContacts::default(),
     )
     .with_macro_event_broker(broker)
@@ -1183,6 +1130,22 @@ fn attachment(channel_id: Uuid, message_id: Uuid) -> MutatedAttachment {
         width: None,
         height: None,
         created_at: Utc::now(),
+    }
+}
+
+fn channel_message(channel_id: Uuid, message_id: Uuid) -> MutatedMessage {
+    let now = Utc::now();
+    MutatedMessage {
+        id: message_id,
+        channel_id,
+        thread_id: None,
+        sender_id: Sender::new_from_user(user("alice@example.com")),
+        triggered_by: None,
+        content: "updated message".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: Some(now),
+        deleted_at: None,
     }
 }
 
@@ -1317,6 +1280,65 @@ async fn handle_publishes_attachment_deltas() {
 }
 
 #[tokio::test]
+async fn handle_publishes_message_patch_and_delete_events() {
+    let broker = TestEventBroker::default();
+    let service = broker_service(broker.clone());
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let actor = Sender::new_from_user(user("alice@example.com"));
+    let patched_message = channel_message(channel_id, message_id);
+    let mut deleted_message = patched_message.clone();
+    deleted_message.deleted_at = Some(Utc::now());
+
+    service
+        .handle(ChannelEvent::MessageChanged {
+            channel_id,
+            actor: actor.clone(),
+            message: patched_message,
+            recipients: Vec::new(),
+            nonce: None,
+            posted_notification: None,
+        })
+        .await;
+    service
+        .handle(ChannelEvent::MessageDeleted {
+            channel_id,
+            actor: actor.clone(),
+            message: deleted_message,
+            recipients: Vec::new(),
+            nonce: None,
+        })
+        .await;
+    service
+        .handle(ChannelEvent::ChannelDeleted { channel_id, actor })
+        .await;
+
+    let published = broker.published.lock().unwrap();
+    assert_eq!(published.len(), 3);
+    assert_eq!(
+        published[0].envelope["event_type"],
+        "channel.message_patched"
+    );
+    assert_eq!(
+        published[1].envelope["event_type"],
+        "channel.message_deleted"
+    );
+    assert_eq!(published[2].envelope["event_type"], "channel.deleted");
+    assert_eq!(
+        published[0].envelope["metadata"]["message_id"],
+        message_id.to_string()
+    );
+    assert_eq!(
+        published[1].envelope["metadata"]["message_id"],
+        message_id.to_string()
+    );
+    for event in published.iter() {
+        assert_eq!(event.topic, "macro.channels");
+        assert_eq!(event.key, channel_id.to_string());
+    }
+}
+
+#[tokio::test]
 async fn handle_publishes_participant_events() {
     let broker = TestEventBroker::default();
     let service = broker_service(broker.clone());
@@ -1368,28 +1390,36 @@ async fn handle_publishes_nothing_for_typing() {
 
 #[tokio::test]
 async fn publish_failure_does_not_break_other_side_effects() {
-    let search = FakeSearch::default();
+    let realtime = FakeRealtime::default();
+    let broker = FailingEventBroker::default();
     let service = ChannelSideEffectService::new(
         FakeContext::default(),
-        FakeRealtime::default(),
+        realtime.clone(),
         FakeNotifications::default(),
-        search.clone(),
         FakeContacts::default(),
     )
-    .with_macro_event_broker(FailingEventBroker);
+    .with_macro_event_broker(broker.clone());
     let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
 
     service
-        .handle(ChannelEvent::ChannelDeleted {
+        .handle(ChannelEvent::MessageChanged {
             channel_id,
             actor: Sender::new_from_user(user("alice@example.com")),
+            message: channel_message(channel_id, message_id),
+            recipients: users(&["bob@example.com"]),
+            nonce: Some("nonce-1".to_string()),
+            posted_notification: None,
         })
         .await;
 
-    assert_eq!(
-        search.removed.lock().unwrap().as_slice(),
-        &[(channel_id, None)]
-    );
+    assert_eq!(*broker.attempts.lock().unwrap(), 1);
+    let realtime_effects = realtime.effects.lock().unwrap();
+    let ChannelRealtimeEffect::Message { message, nonce, .. } = &realtime_effects[0] else {
+        panic!("expected message realtime effect");
+    };
+    assert_eq!(message.id, message_id);
+    assert_eq!(nonce.as_deref(), Some("nonce-1"));
 }
 
 #[test]

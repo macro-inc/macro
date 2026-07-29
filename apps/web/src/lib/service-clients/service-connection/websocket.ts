@@ -15,6 +15,8 @@ import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 
+export { parseWebsocketPayload } from './websocket-payload';
+
 const wsHost: string = SERVER_HOSTS['connection-gateway'];
 
 export type ConnectionGatewayWebsocket = Websocket<

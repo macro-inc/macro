@@ -136,6 +136,20 @@ type GraphqlBooleanPropertyValue {
 }
 
 """
+Marker instructing a normalized GraphQL cache to delete one entity record.
+"""
+type GraphqlCacheDeletion {
+	"""
+	Concrete GraphQL object type used in the normalized cache key.
+	"""
+	graphqlTypeName: String!
+	"""
+	Identifier used in the normalized cache key.
+	"""
+	entityId: ID!
+}
+
+"""
 The two operands of a recursive `CallFilterExpr` binary expression.
 """
 input GraphqlCallBinaryExpr {
@@ -1269,9 +1283,9 @@ Successful result for one requested entity mutation.
 """
 type GraphqlMutationSuccess {
 	"""
-	Canonical references to every entity changed by the mutation.
+	Ordered normalized-cache effects produced by the mutation.
 	"""
-	affectedEntities: [GraphqlEntity!]!
+	effects: [SoupPatch!]!
 }
 
 """
@@ -1282,20 +1296,6 @@ type GraphqlNumberPropertyValue {
 	The stored number.
 	"""
 	value: Float!
-}
-
-"""
-Operation carried by a realtime entity patch.
-"""
-enum GraphqlPatchOperation {
-	"""
-	The entity was created or updated.
-	"""
-	UPDATED
-	"""
-	The entity was deleted.
-	"""
-	DELETED
 }
 
 """
@@ -3271,22 +3271,9 @@ type SoupPage {
 }
 
 """
-Lightweight realtime Soup patch with optional lazy item hydration.
+Realtime Soup patch represented as exactly one update or cache deletion.
 """
-type SoupPatch {
-	"""
-	Operation represented by this patch.
-	"""
-	operation: GraphqlPatchOperation!
-	"""
-	Canonical identity of the affected entity.
-	"""
-	entity: GraphqlEntity!
-	"""
-	Hydrate the current Soup item only when selected by the client.
-	"""
-	item: GraphqlSoupEntity
-}
+union SoupPatch = SoupUpdated | GraphqlCacheDeletion
 
 """
 Root entry point for the complete GraphQL API.
@@ -3305,7 +3292,17 @@ type SoupSubscriptionRoot {
 	"""
 	Subscribe to realtime Soup updates for the authenticated user.
 	"""
-	soupUpdates: SoupPatch!
+	soupUpdates: [SoupPatch!]!
+}
+
+"""
+GraphQL representation of a created or updated Soup entity.
+"""
+type SoupUpdated {
+	"""
+	Hydrate the current Soup entity.
+	"""
+	item: GraphqlSoupEntity
 }
 
 """

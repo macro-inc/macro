@@ -41,10 +41,9 @@ pub type RecordUpdates = BTreeMap<EntityKey, Record>;
 /// Normalizes a response's `data` object into record updates.
 ///
 /// Query responses are rooted at [`ROOT_QUERY`](crate::value::ROOT_QUERY).
-/// Mutation responses traverse from the schema's mutation root: entities in
-/// the payload are normalized as usual, but the root mutation fields
-/// themselves are discarded — mutation roots are transient cache entry
-/// points, never read back.
+/// Mutation and subscription responses traverse from their schema roots:
+/// nested entities are normalized as usual, but operation-root fields are
+/// discarded. Those roots are transient cache entry points, never read back.
 pub fn normalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
@@ -54,6 +53,8 @@ pub fn normalize(
         OperationKind::Query => meta::QUERY_ROOT_TYPE,
         OperationKind::Mutation => meta::MUTATION_ROOT_TYPE
             .ok_or_else(|| NormalizeError::UnknownType("(mutation root)".to_string()))?,
+        OperationKind::Subscription => meta::SUBSCRIPTION_ROOT_TYPE
+            .ok_or_else(|| NormalizeError::UnknownType("(subscription root)".to_string()))?,
     };
     let Json::Object(data) = data else {
         return Err(NormalizeError::Shape {

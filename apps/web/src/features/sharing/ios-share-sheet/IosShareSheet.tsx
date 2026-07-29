@@ -544,7 +544,7 @@ export function IosShareSheet() {
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
-          <MobileDrawer.Content aria-label="Share to Macro">
+          <MobileDrawer.Content aria-label="Share to Macro" targetHeight={80}>
             <MobileDrawer.Handle />
             <Show when={isOpen() ? shareBatchKey() : undefined} keyed>
               {(batchKey) => (

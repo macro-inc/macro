@@ -25,6 +25,7 @@ import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { CallKitSync } from '@channel/Call/use-callkit';
@@ -700,6 +701,7 @@ export function Root() {
                           <CallProvider>
                             <CallKitSync />
                             <CallStartedNotifier />
+                            <IncomingCallEvents />
                             <QuickAccessProvider>
                               <SearchProvider>
                                 <ChatAttachmentsInit />

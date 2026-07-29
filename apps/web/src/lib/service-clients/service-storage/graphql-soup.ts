@@ -15,7 +15,17 @@ import {
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
-import { type Client, createClient, fetchExchange } from '@urql/core';
+import {
+  type Client,
+  createClient,
+  fetchExchange,
+  subscriptionExchange,
+} from '@urql/core';
+import { print } from 'graphql';
+import {
+  createClient as createGraphqlWsClient,
+  type Client as GraphqlWsClient,
+} from 'graphql-ws';
 import { match } from 'ts-pattern';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupPage } from './generated/schemas/soupPage';
@@ -30,6 +40,12 @@ import {
   SoupDocument as SoupQueryDocument,
   type SoupQueryVariables,
 } from './graphql/generated/graphql';
+import {
+  createGraphqlSoupWebSocketUrlResolver,
+  createSoupUpdatesSubscriptionLifecycle,
+  SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+  shouldRetryGraphqlSoupWebSocket,
+} from './graphql-soup-websocket';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 
@@ -104,11 +120,15 @@ export function getGraphqlSoupClient(): Client {
   if (!graphqlCacheEnabled()) return graphqlSoupClient;
   cachedClient ??= (() => {
     let host: CacheHost | undefined;
+    let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
+    const soupUpdatesLifecycle = createSoupUpdatesSubscriptionLifecycle();
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
       unregisterHost();
       host.dispose();
+      soupUpdatesLifecycle.dispose();
+      if (websocketClient) void websocketClient.dispose();
       cachedCacheHost = undefined;
       cachedClient = graphqlSoupClient;
       console.warn(
@@ -121,6 +141,23 @@ export function getGraphqlSoupClient(): Client {
       host = isTauri()
         ? createTauriCacheHost({ scope, onInitializationError })
         : createWorkerCacheHost({ scope, onInitializationError });
+      const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
+        dssHost,
+        bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
+        getApiToken: getMacroApiToken,
+        refreshCookieAuth: async () => {
+          const result = await fetchToken();
+          if (result.isErr()) {
+            throw new Error('Unable to refresh GraphQL websocket cookie');
+          }
+        },
+      });
+      const graphqlWsClient = createGraphqlWsClient({
+        url: resolveWebSocketUrl,
+        retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+        shouldRetry: shouldRetryGraphqlSoupWebSocket,
+      });
+      websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
@@ -135,15 +172,38 @@ export function getGraphqlSoupClient(): Client {
             // GraphQL application errors are permanent and roll back.
             shouldRetryMutation: (error) => error.networkError != null,
           }),
+          subscriptionExchange({
+            forwardSubscription(payload, request) {
+              const graphqlWsPayload = {
+                query: print(request.query),
+                operationName: payload.operationName,
+                variables: payload.variables,
+                extensions: payload.extensions,
+              };
+              return {
+                subscribe(sink) {
+                  const unsubscribe = graphqlWsClient.subscribe(
+                    graphqlWsPayload,
+                    sink
+                  );
+                  return { unsubscribe };
+                },
+              };
+            },
+          }),
           fetchExchange,
         ],
         fetch: dssGraphqlFetch,
       });
       cachedCacheHost = host;
       unregisterHost = registerCacheHost(host);
+      soupUpdatesLifecycle.replace(client, host);
       return client;
     } catch (error) {
+      unregisterHost();
       host?.dispose();
+      soupUpdatesLifecycle.dispose();
+      if (websocketClient) void websocketClient.dispose();
       cachedCacheHost = undefined;
       console.warn('graphql cache init failed; using uncached client', error);
       return graphqlSoupClient;

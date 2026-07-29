@@ -9,6 +9,7 @@ import { serviceLoadBalancer } from './resources/load_balancer';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  config,
   stack,
 } from './resources/shared';
 
@@ -142,7 +143,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           containers: {
             service: {
               name: BASE_NAME,
-              image: 'fusionauth/fusionauth-app:1.62.1',
+              image: config.require('image'),
               cpu: stack === 'prod' ? 2048 : 2048,
               memory: stack === 'prod' ? 4096 : 4096,
               environment: containerEnvVars,

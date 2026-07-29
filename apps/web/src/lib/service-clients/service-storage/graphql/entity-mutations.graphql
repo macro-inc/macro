@@ -1,13 +1,8 @@
-fragment EntityMutationRefFields on GraphqlEntity {
-  entityType
-  id
-}
-
 fragment EntityMutationResultFields on GraphqlEntityMutationResult {
   __typename
   ... on GraphqlMutationSuccess {
-    affectedEntities {
-      ...EntityMutationRefFields
+    effects {
+      ...SoupPatchFields
     }
   }
   ... on GraphqlMutationError {

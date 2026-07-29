@@ -3,11 +3,8 @@ import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
-import {
-  IncomingCallWidgetEvents,
-  SidebarActiveCallWidget,
-  useIncomingCallWidgetVisible,
-} from '@app/features/block-call/sidebar/active-call-widget';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
+import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -195,12 +192,18 @@ function DraggableCallWidget(props: {
     });
   });
 
+  // Set while a drag is in flight so hiding/unmounting can tear it down; a
+  // cancelled pointer (touch interrupted, pointer takeover) never fires
+  // pointerup, which would otherwise leave the move listener stuck on window.
+  let stopActiveDrag: (() => void) | undefined;
+
   const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0) return;
 
     const el = root();
     if (!el) return;
 
+    stopActiveDrag?.();
     e.preventDefault();
     const rect = el.getBoundingClientRect();
     const pointerStartX = e.clientX;
@@ -219,15 +222,24 @@ function DraggableCallWidget(props: {
       );
     };
 
-    const handleUp = () => {
+    const stopDrag = () => {
       setDragging(false);
       window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+      if (stopActiveDrag === stopDrag) stopActiveDrag = undefined;
     };
+    stopActiveDrag = stopDrag;
 
     window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
   };
+
+  createEffect(() => {
+    if (!props.visible) stopActiveDrag?.();
+  });
+  onCleanup(() => stopActiveDrag?.());
 
   return (
     <Show when={props.visible}>
@@ -425,9 +437,6 @@ function LayoutInner(props: RouteSectionProps) {
               <FavoritesCommands />
               <CommandMenu />
             </Suspense>
-          </Show>
-          <Show when={isSidebarVisible()}>
-            <IncomingCallWidgetEvents />
           </Show>
           <Suspense>
             <PropertyEditorModal />
