@@ -558,8 +558,12 @@ pub fn down(args: &DownArgs) -> Result<()> {
 pub fn snapshot_status(args: &SnapshotArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     // The key hashes the generated kickstart; (re)write it so the verb works
-    // before any `up` has run. Deterministic, so this never changes a key.
-    super::fusionauth::write_kickstart(&instance)?;
+    // before any `up` has run. The kickstart depends on the resolved env (the
+    // optional Google IdP client), so resolve it the same way `up` does —
+    // otherwise the key reported here could differ from the key `up` computes.
+    let env = env_layer::resolve(Mode::Local, &instance, false, None, true)?;
+    let google = super::kickstart::GoogleIdp::from_env(&env.merged);
+    super::fusionauth::write_kickstart(&instance, google.as_ref())?;
     let plan = snapshot::Plan::compute(&instance)?;
     if args.json {
         println!(

@@ -491,7 +491,8 @@ fn prepare(
     gen_compose::generate(mode, instance, &binaries, static_frontend)?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode.spec().runs_local_infra {
-        fusionauth::write_kickstart(instance)?;
+        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        fusionauth::write_kickstart(instance, google.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;

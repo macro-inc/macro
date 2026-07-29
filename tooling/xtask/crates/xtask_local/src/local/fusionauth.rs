@@ -8,12 +8,15 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{gen_compose, identity, kickstart, stage::Stage};
 
-/// The local populate-JWT lambda body, read from the tracked template at
+/// The FusionAuth lambda sources, read from the tracked templates at
 /// generation time (anchored on [`xtask_paths::repo_root`], so any cwd works).
-/// It is the unlicensed local variant — see the file's header for why local
-/// diverges from production and why it must use block comments only.
+/// `populate_jwt_local.js` is the unlicensed local variant (see its header);
+/// the reconcile lambda is the same file production deploys via Pulumi.
 const POPULATE_JWT_LAMBDA: xtask_paths::RepoFile<'static> =
     xtask_paths::RepoFile::new("infra/stacks/fusionauth-instance/templates/populate_jwt_local.js");
+const RECONCILE_LAMBDA: xtask_paths::RepoFile<'static> = xtask_paths::RepoFile::new(
+    "infra/stacks/fusionauth-instance/templates/reconcile_secondary_idp_link.js",
+);
 
 fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
     let path = xtask_paths::repo_root().join(file.as_str());
@@ -23,8 +26,11 @@ fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
 /// Generate `kickstart.json` into the instance's kickstart dir, which the
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
 /// run_local pre-seeds no users — passwordless login auto-creates any user on
-/// demand.
-pub fn write_kickstart(instance: &Instance) -> Result<()> {
+/// demand. `google` (from the resolved run env) additionally configures the
+/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally;
+/// the generated file is gitignored, and the init-snapshot key hashes it, so
+/// adding/removing the Google client re-inits the stack automatically.
+pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp>) -> Result<()> {
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
@@ -33,6 +39,8 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
         &read_lambda(POPULATE_JWT_LAMBDA)?,
+        &read_lambda(RECONCILE_LAMBDA)?,
+        google,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
