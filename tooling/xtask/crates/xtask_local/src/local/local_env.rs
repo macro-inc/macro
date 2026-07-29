@@ -116,6 +116,19 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Same failure mode for the email connect flows: without these,
+        // first-inbox provisioning (auth-service → `/email/init`) and Gmail
+        // token fetches (email-service → `/internal/google_access_token`)
+        // fail with connection errors. (Plain `EMAIL_SERVICE_URL` in Doppler
+        // is ignored — macro_service_urls only honors the `OVERRIDE_` prefix.)
+        env.insert(
+            "OVERRIDE_EMAIL_SERVICE_URL".into(),
+            "http://email-service:8080".into(),
+        );
+        env.insert(
+            "OVERRIDE_AUTH_SERVICE_URL".into(),
+            "http://authentication-service:8080".into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
