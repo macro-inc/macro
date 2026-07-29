@@ -676,12 +676,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
-        Arc::new(sqs_client.clone()),
-    );
     let call_service = Arc::new(
         call_service_builder
-            .with_search_indexer(call_search_indexer)
             .with_voice_repo(PgVoiceRepo::new(db.clone()))
             .with_event_broker(macro_event_broker.clone()),
     );

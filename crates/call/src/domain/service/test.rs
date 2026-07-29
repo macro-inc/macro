@@ -24,7 +24,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
-    NoOpCallSearchIndexer, NoOpVoiceRepository,
+    NoOpVoiceRepository,
 };
 
 use super::{
@@ -1689,7 +1689,6 @@ type SummarizationCallService<B> = CallServiceImpl<
     StubNotificationIngress,
     StubRecordingStorage,
     StubCallSummarizer,
-    NoOpCallSearchIndexer,
     (),
     NoOpVoiceRepository,
     B,

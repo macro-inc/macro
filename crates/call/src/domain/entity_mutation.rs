@@ -20,8 +20,7 @@ use connection::domain::ports::ConnectionService;
 use notification::domain::{ports::VoipPushSender, service::NotificationIngress};
 
 use crate::domain::ports::{
-    CallRepository, CallRtcClient, CallSearchIndexer, CallSummarizer, RecordingStorage,
-    VoiceRepository,
+    CallRepository, CallRtcClient, CallSummarizer, RecordingStorage, VoiceRepository,
 };
 
 impl From<CallError> for EntityMutationErrorCode {
@@ -74,8 +73,8 @@ async fn require_archived_call<S: CallService>(
     Ok(())
 }
 
-impl<R, C, Cn, E, N, S, Sm, I, V, Vr, B> RenameEntity
-    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
+impl<R, C, Cn, E, N, S, Sm, V, Vr, B> RenameEntity
+    for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 where
     R: CallRepository,
     C: CallRtcClient,
@@ -84,7 +83,6 @@ where
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
     B: MacroEventBroker,
@@ -112,8 +110,8 @@ where
     }
 }
 
-impl<R, C, Cn, E, N, S, Sm, I, V, Vr, B> UpdateEntitySharePolicy
-    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
+impl<R, C, Cn, E, N, S, Sm, V, Vr, B> UpdateEntitySharePolicy
+    for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 where
     R: CallRepository,
     C: CallRtcClient,
@@ -122,7 +120,6 @@ where
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
     B: MacroEventBroker,
@@ -150,8 +147,8 @@ where
     }
 }
 
-impl<R, C, Cn, E, N, S, Sm, I, V, Vr, B> DeleteEntityPermanently
-    for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
+impl<R, C, Cn, E, N, S, Sm, V, Vr, B> DeleteEntityPermanently
+    for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 where
     R: CallRepository,
     C: CallRtcClient,
@@ -160,7 +157,6 @@ where
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
     B: MacroEventBroker,

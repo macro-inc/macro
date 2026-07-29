@@ -358,7 +358,6 @@ pub(crate) type DssCallService = CallServiceImpl<
     NotificationIngressType,
     Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
     call::outbound::ai_call_summarizer::AiCallSummarizer,
-    crate::service::call_search_indexer::SqsCallSearchIndexer,
     DssVoipPushSender,
     call::outbound::pg_voice_repo::PgVoiceRepo,
     DssEventBroker,
