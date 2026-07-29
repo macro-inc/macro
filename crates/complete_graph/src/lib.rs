@@ -50,7 +50,7 @@ pub use graphql_properties::{
     entity_properties_loader,
 };
 pub use schema::{
-    SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot, SoupSchema,
-    SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,
+    EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,
+    SoupSchema, SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,
     build_schema_with_service, build_schema_with_services,
 };

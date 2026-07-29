@@ -95,6 +95,16 @@ input DuplicateEntityInput {
 }
 
 """
+Input for fetching one email thread by its canonical identifier.
+"""
+input EmailThreadInput {
+	"""
+	The canonical email thread identifier.
+	"""
+	threadId: ID!
+}
+
+"""
 Results for a batch mutation, preserving the input order.
 """
 type EntityMutationPayload {
@@ -3131,6 +3141,10 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	Fetch one accessible email thread by its canonical identifier.
+	"""
+	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
 	"""
 	Fetch Soup items nested into grouping bins.
 	"""

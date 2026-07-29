@@ -144,11 +144,14 @@ where
 }
 
 /// default limit of messages if none is provided
+/// REST-compatible default number of email messages returned per page.
 const DEFAULT_EMAIL_MESSAGE_LIMIT: i32 = 5;
 /// max possible limit of messages
+/// Maximum number of email messages one field may request.
 const MAX_EMAIL_MESSAGE_LIMIT: i32 = 100;
 
 /// parses the incoming optional limits into the actual range
+/// Validate email-message pagination and apply REST-compatible defaults.
 fn parse_email_message_pagination(
     offset: Option<i32>,
     limit: Option<i32>,
