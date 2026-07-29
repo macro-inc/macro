@@ -1,0 +1,22 @@
+{
+	"name": "anthropic-status-bot",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run --watch src/server.ts",
+		"start": "bun run src/server.ts",
+		"test": "bun test",
+		"check": "tsc --noEmit --project tsconfig.json",
+		"deploy": "wrangler deploy"
+	},
+	"dependencies": {
+		"hono": "^4.6.20",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.3",
+		"bun-types": "^1.3.14",
+		"wrangler": "^4.110.0"
+	}
+}

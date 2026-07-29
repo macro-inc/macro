@@ -1,0 +1,22 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ *
+ * Single prod deployment only — there is no dev environment.
+ *
+ * Secrets (set with `wrangler secret put <NAME>`):
+ *   BOT_TOKEN       - channel-scoped bot token (x-macro-channel-bot-token)
+ *   WEBHOOK_SECRET  - shared secret embedded in the webhook URL path
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "anthropic-status-bot",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-01-01",
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"CHANNEL_ID": "019f9058-ca27-7db5-9f1c-af1d97f09529"
+	}
+}
