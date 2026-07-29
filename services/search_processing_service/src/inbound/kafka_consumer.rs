@@ -358,7 +358,7 @@ async fn poll_call_events(
 /// normal shutdown the sender is dropped and all buffered events are processed
 /// before this function returns.
 #[tracing::instrument(skip(db, opensearch_client, shutdown), fields(brokers), err)]
-pub(crate) async fn run_call_event_consumer(
+pub(crate) async fn run_event_consumer(
     brokers: &str,
     db: PgPool,
     opensearch_client: OpensearchClient,

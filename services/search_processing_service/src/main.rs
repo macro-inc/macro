@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 use std::{sync::Arc, time::Duration};
 
-use crate::inbound::kafka_consumer::run_call_event_consumer;
+use crate::inbound::kafka_consumer::run_event_consumer;
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -69,7 +69,7 @@ struct PdfiumLib;
 
 const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 
-async fn supervise_call_event_consumer(
+async fn supervise_event_consumer(
     brokers: String,
     db: PgPool,
     opensearch_client: OpensearchClient,
@@ -86,7 +86,7 @@ async fn supervise_call_event_consumer(
         let consumer_opensearch_client = opensearch_client.clone();
         let consumer_shutdown_token = shutdown_token.clone();
         let consumer_result = tokio::spawn(async move {
-            run_call_event_consumer(
+            run_event_consumer(
                 &consumer_brokers,
                 consumer_db,
                 consumer_opensearch_client,
@@ -246,7 +246,7 @@ async fn main() -> anyhow::Result<()> {
         };
         run_search_processing_workers(ctx, config.worker_count);
 
-        tokio::spawn(supervise_call_event_consumer(
+        tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
             db.clone(),
             opensearch_client.clone(),
