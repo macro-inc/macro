@@ -11,15 +11,8 @@ type LayoutPath = {
 
 function LayoutRoute(props: RouteSectionProps & LayoutPath) {
   return (
-    <SplitLayoutRouteContent pairs={props.params.splits?.split('/') ?? []} />
-  );
-}
-
-/** Renders the split layout for an explicit set of URL segment pairs. */
-export function SplitLayoutRouteContent(props: { pairs: string[] }) {
-  return (
     <SplitLayoutContainer
-      pairs={props.pairs}
+      pairs={props.params.splits?.split('/') ?? []}
       setManager={setGlobalSplitManager}
     />
   );

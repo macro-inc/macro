@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -13,13 +14,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true as boolean | undefined,
   getDocumentByTeamSlug: vi.fn(),
   navigate: vi.fn(),
-  taskIdOrSlug: 'ENG-42',
-}));
-
-vi.mock('@components/app/split-layout/SplitLayoutRoute', () => ({
-  SplitLayoutRouteContent: (props: { pairs: string[] }) => (
-    <div>{props.pairs.join(':')}</div>
-  ),
+  taskSlug: 'ENG-42',
 }));
 
 vi.mock('@core/auth', () => ({
@@ -39,8 +34,8 @@ vi.mock('@service-storage/client', () => ({
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
   useParams: () => ({
-    get taskIdOrSlug() {
-      return mocks.taskIdOrSlug;
+    get taskSlug() {
+      return mocks.taskSlug;
     },
   }),
 }));
@@ -58,9 +53,20 @@ let dispose: (() => void) | undefined;
 function renderRoute(): HTMLElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
-  const disposeRender = render(() => <TaskRoute />, container);
+  // No retry override: the hook itself must disable retries so deterministic
+  // resolution failures surface immediately.
+  const queryClient = new QueryClient();
+  const disposeRender = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <TaskRoute />
+      </QueryClientProvider>
+    ),
+    container
+  );
   dispose = () => {
     disposeRender();
+    queryClient.clear();
     container.remove();
   };
   return container;
@@ -68,14 +74,14 @@ function renderRoute(): HTMLElement {
 
 beforeEach(() => {
   mocks.authenticated = true;
-  mocks.taskIdOrSlug = 'ENG-42';
+  mocks.taskSlug = 'ENG-42';
   mocks.navigate.mockReset();
   mocks.getDocumentByTeamSlug.mockReset();
   mocks.getDocumentByTeamSlug.mockResolvedValue(
     ok({ documentMetadata: { documentId: DOCUMENT_ID } })
   );
   sessionStorage.clear();
-  window.history.replaceState({}, '', '/app/task/ENG-42');
+  window.history.replaceState({}, '', '/app/task-slug/ENG-42');
 });
 
 afterEach(() => {
@@ -84,12 +90,14 @@ afterEach(() => {
 });
 
 describe('TaskRoute', () => {
-  it('preserves the existing UUID task route without resolving a slug', () => {
-    mocks.taskIdOrSlug = DOCUMENT_ID;
+  it('rejects an invalid task slug without resolving it', async () => {
+    mocks.taskSlug = 'ENG-0';
 
     const container = renderRoute();
 
-    expect(container.textContent).toContain(`task:${DOCUMENT_ID}`);
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Task not found');
+    });
     expect(mocks.getDocumentByTeamSlug).not.toHaveBeenCalled();
   });
 
@@ -99,6 +107,7 @@ describe('TaskRoute', () => {
     await vi.waitFor(() => {
       expect(mocks.getDocumentByTeamSlug).toHaveBeenCalledWith({
         slug: 'ENG-42',
+        signal: expect.any(AbortSignal),
       });
       expect(mocks.navigate).toHaveBeenCalledWith(`/task/${DOCUMENT_ID}`, {
         replace: true,
@@ -128,6 +137,74 @@ describe('TaskRoute', () => {
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Task not found');
     });
+    expect(mocks.getDocumentByTeamSlug).toHaveBeenCalledTimes(1);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows the not-found state when the user has no team access', async () => {
+    mocks.getDocumentByTeamSlug.mockResolvedValue(
+      err([{ code: 'FORBIDDEN', message: 'Forbidden' }])
+    );
+
+    const container = renderRoute();
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Task not found');
+    });
+    expect(container.textContent).not.toContain('Try again');
+  });
+
+  it('recovers from a transient error through the retry button', async () => {
+    let releaseRefetch = (): void => undefined;
+    mocks.getDocumentByTeamSlug
+      .mockResolvedValueOnce(
+        err([{ code: 'SERVER_ERROR', message: 'Internal server error' }])
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseRefetch = () =>
+              resolve(ok({ documentMetadata: { documentId: DOCUMENT_ID } }));
+          })
+      );
+
+    const container = renderRoute();
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Unable to open task');
+    });
+
+    const retryButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Try again'
+    );
+    expect(retryButton).toBeDefined();
+    retryButton?.click();
+
+    // While the refetch is in flight the error state yields to the loading
+    // state instead of leaving the retry click without feedback.
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Loading task…');
+    });
+
+    releaseRefetch();
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(`/task/${DOCUMENT_ID}`, {
+        replace: true,
+      });
+    });
+  });
+
+  it('shows a retryable error when a success payload has no document id', async () => {
+    mocks.getDocumentByTeamSlug.mockResolvedValue(
+      ok({ documentMetadata: { documentId: '' } })
+    );
+
+    const container = renderRoute();
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Unable to open task');
+    });
+    expect(container.textContent).toContain('Try again');
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 });

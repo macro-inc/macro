@@ -1,59 +1,41 @@
-import { SplitLayoutRouteContent } from '@components/app/split-layout/SplitLayoutRoute';
+import { isValidTeamTaskSlug } from '@app/features/settings/teamSlug';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { storageServiceClient } from '@service-storage/client';
+import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import { useTeamTaskQuery } from '@queries/storage/team-task';
 import { useNavigate, useParams } from '@solidjs/router';
 import { Button } from '@ui';
-import {
-  createEffect,
-  createResource,
-  Match,
-  on,
-  Show,
-  Switch,
-} from 'solid-js';
-import { validate as isUuid } from 'uuid';
+import { createEffect, createMemo, Match, on, Show, Switch } from 'solid-js';
 
 type TaskRouteParams = {
-  taskIdOrSlug: string;
+  taskSlug: string;
 };
 
-/** Resolves team task slugs while preserving the existing UUID task route. */
+/** Resolves a team-scoped task slug to the existing canonical task route. */
 export function TaskRoute() {
   const params = useParams<TaskRouteParams>();
   const navigate = useNavigate();
   const isAuthenticated = useIsAuthenticated();
-  const taskReference = () => params.taskIdOrSlug;
-  const isDocumentId = () => isUuid(taskReference());
-  const slugToResolve = () =>
-    isAuthenticated() === true && !isDocumentId() ? taskReference() : undefined;
-
-  const [task, { refetch }] = createResource(slugToResolve, async (slug) => {
-    const result = await storageServiceClient.getDocumentByTeamSlug({ slug });
-    if (result.isErr()) {
-      return { ok: false as const, errors: result.error };
-    }
-    return { ok: true as const, data: result.value };
-  });
-  const documentId = () => {
-    const result = task();
-    return result?.ok ? result.data.documentMetadata.documentId : undefined;
-  };
-  const resolutionFailed = () => task()?.ok === false || task.error;
-  const taskNotFound = () => {
-    const result = task();
-    return (
-      result?.ok === false &&
-      result.errors.some((error) => error.code === 'NOT_FOUND')
-    );
-  };
+  const taskSlug = () => params.taskSlug;
+  const isValidSlug = () => isValidTeamTaskSlug(taskSlug());
+  const slugToResolve = createMemo(() =>
+    isAuthenticated() === true && isValidSlug() ? taskSlug() : undefined
+  );
+  const taskQuery = useTeamTaskQuery(slugToResolve);
+  const documentId = () => taskQuery.data?.documentMetadata.documentId;
+  // FORBIDDEN covers a user who is not part of a Macro team yet; to them the
+  // reference is just as unavailable as a slug that does not resolve.
+  const taskNotFound = () =>
+    thrownResultErrorHasCode(taskQuery.error, 'NOT_FOUND') ||
+    thrownResultErrorHasCode(taskQuery.error, 'FORBIDDEN');
 
   // A GitHub autolink may be opened before the user has signed in. Preserve
   // the full URL so BasePathComponent can restore it after authentication.
   createEffect(
     on(isAuthenticated, (authenticated) => {
-      if (authenticated !== false || isDocumentId()) return;
-      sessionStorage.setItem('redirectUrl', window.location.href);
+      if (authenticated !== false) return;
+      setPostLoginRedirect(window.location.href);
       navigate('/login', { replace: true });
     })
   );
@@ -66,26 +48,29 @@ export function TaskRoute() {
 
   return (
     <Switch fallback={<LoadingBlock />}>
-      <Match when={isDocumentId()}>
-        <SplitLayoutRouteContent pairs={['task', taskReference()]} />
-      </Match>
       <Match when={isAuthenticated() !== true}>
         <LoadingBlock />
       </Match>
-      <Match when={task.loading}>
-        <LoadingBlock />
+      <Match when={!isValidSlug()}>
+        <TaskRouteError notFound />
       </Match>
-      <Match when={resolutionFailed()}>
+      <Match when={taskQuery.isError && !taskQuery.isFetching}>
         <TaskRouteError
           notFound={taskNotFound()}
-          onRetry={() => void refetch()}
+          onRetry={() => void taskQuery.refetch()}
+        />
+      </Match>
+      <Match when={taskQuery.isSuccess && !documentId()}>
+        <TaskRouteError
+          notFound={false}
+          onRetry={() => void taskQuery.refetch()}
         />
       </Match>
     </Switch>
   );
 }
 
-function TaskRouteError(props: { notFound: boolean; onRetry: () => void }) {
+function TaskRouteError(props: { notFound: boolean; onRetry?: () => void }) {
   const navigate = useNavigate();
 
   return (
@@ -103,10 +88,12 @@ function TaskRouteError(props: { notFound: boolean; onRetry: () => void }) {
           <Button variant="base" size="sm" onClick={() => navigate('/tasks')}>
             Go to tasks
           </Button>
-          <Show when={!props.notFound}>
-            <Button variant="base" size="sm" onClick={props.onRetry}>
-              Try again
-            </Button>
+          <Show when={!props.notFound && props.onRetry}>
+            {(onRetry) => (
+              <Button variant="base" size="sm" onClick={onRetry()}>
+                Try again
+              </Button>
+            )}
           </Show>
         </div>
       </div>
