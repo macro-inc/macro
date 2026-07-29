@@ -15,6 +15,19 @@ get_environment:
 seed *ARGS:
   cargo r "$@"
 
+# Seed/reset/status a REAL @macro-test.com Gmail test mailbox via the Gmail
+# API. Credentials come from AWS Secrets Manager, so an authenticated `aws` CLI is required.
+#   just gmail seed --account bigbox-10k@macro-test.com --count 10000
+#   just gmail reset --account bigbox-10k@macro-test.com
+#   just gmail status --account bigbox-10k@macro-test.com
+[positional-arguments]
+gmail *ARGS:
+  @GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-$(aws secretsmanager get-secret-value --secret-id google-client-id-local --query SecretString --output text)}" \
+  GOOGLE_CLIENT_SECRET_KEY="${GOOGLE_CLIENT_SECRET_KEY:-$(aws secretsmanager get-secret-value --secret-id google-client-secret-local --query SecretString --output text)}" \
+  GMAIL_TEST_ACCOUNT_TOKENS="${GMAIL_TEST_ACCOUNT_TOKENS:-$(aws secretsmanager get-secret-value --secret-id gmail-test-account-tokens --query SecretString --output text)}" \
+  SQLX_OFFLINE="true" \
+  cargo r -- gmail "$@"
+
 # Reset and seed deterministic data for the local Playwright smoke suite.
 local-e2e-smoke:
   LOCAL_E2E_SEED="true" \

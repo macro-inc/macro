@@ -34,6 +34,11 @@ pub async fn main() -> anyhow::Result<()> {
     // Force to use local tracing
     MacroEntrypoint::new(Environment::Local).init();
     let cli = Cli::parse();
+    // The gmail entity talks only to Google — dispatch it before the required
+    // env vars / database connection so it works without the local stack.
+    if let EntityCommand::Gmail(args) = cli.command {
+        return args.execute().await;
+    }
     let env_vars = EnvVars::new()?;
     cli.command.validate_environment(&env_vars)?;
     tracing::trace!("initializing");
