@@ -10,7 +10,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use chat::domain::models::ChatAgentKind;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_uuid::Uuid;
 use model::response::{EmptyResponse, StringIDResponse};
@@ -119,7 +119,7 @@ pub struct PatchAgentRequest {
 #[tracing::instrument(skip(state, user, req), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn create_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Json(req): Json<CreateAgentRequest>,
 ) -> Result<Json<StringIDResponse>, AgentProxyApiError> {
     let id = state
@@ -155,7 +155,7 @@ pub async fn create_agent<S: AgentProxyService, Auth: MacroAuthorizationService>
 #[tracing::instrument(skip(state, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn get_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<GetAgentResponse>, AgentProxyApiError> {
     let response = state
@@ -183,7 +183,7 @@ pub async fn get_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
 #[tracing::instrument(skip(state, user, req), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn patch_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(agent_id): Path<Uuid>,
     Json(req): Json<PatchAgentRequest>,
 ) -> Result<Json<EmptyResponse>, AgentProxyApiError> {
@@ -219,7 +219,7 @@ pub async fn patch_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
 #[tracing::instrument(skip(state, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn delete_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<EmptyResponse>, AgentProxyApiError> {
     state
@@ -246,7 +246,7 @@ pub async fn delete_agent<S: AgentProxyService, Auth: MacroAuthorizationService>
 #[tracing::instrument(skip(state, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn permanently_delete_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<EmptyResponse>, AgentProxyApiError> {
     state
@@ -284,7 +284,7 @@ pub struct ProvisionRuntimeConnectionResponse {
 #[tracing::instrument(skip(state, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn provision_runtime_connection<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<ProvisionRuntimeConnectionResponse>, AgentProxyApiError> {
     let url = state
@@ -315,7 +315,7 @@ pub async fn provision_runtime_connection<S: AgentProxyService, Auth: MacroAutho
 #[tracing::instrument(skip(state, user, message), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
 pub async fn post_acp<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, ActingUser>,
     Path(session_id): Path<Uuid>,
     Json(message): Json<serde_json::Value>,
 ) -> Result<StatusCode, AgentProxyApiError> {
