@@ -28,6 +28,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
 
   const collapse = () => {
     setExpanded(false);
+    setPrompt('');
     md.editor?.focus();
   };
 
