@@ -78,8 +78,8 @@ fn claim_matches(mutation: &cache_core::queue::StoredMutation, claim: &MutationC
 
 impl IdbStorage {
     /// Opens the cache database for `scope` and initializes all stores.
-    /// Record namespace changes clear only disposable records; a scope change
-    /// also clears queued user intent.
+    /// Compatibility-epoch or cache-format changes clear only disposable
+    /// records; a scope change also clears queued user intent.
     pub async fn open(scope: &str) -> Result<Self, IdbStorageError> {
         let name = cache_database_name(scope);
         let factory = Factory::new()?;
