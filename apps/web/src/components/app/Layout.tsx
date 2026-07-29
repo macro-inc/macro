@@ -233,7 +233,7 @@ function DraggableCallWidget(props: {
     <Show when={props.visible}>
       <div
         ref={setRoot}
-        class="fixed z-page-overlay w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
+        class="fixed z-float w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
         style={{
           left: position() ? `${position()!.left}px` : '50%',
           top: position() ? `${position()!.top}px` : undefined,

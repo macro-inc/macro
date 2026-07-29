@@ -152,7 +152,7 @@ export function FloatingSearchHighlight({
           <div
             style={item.style}
             class={cn(
-              'z-150 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
+              'z-10 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
               item.idx === FindAndReplaceStore.get.currentMatch + 1
                 ? 'bg-accent'
                 : 'bg-accent/50'

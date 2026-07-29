@@ -224,12 +224,12 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
   return (
     <Show when={props.open}>
       <div
-        class="fixed inset-0 bg-transparent z-99"
+        class="fixed inset-0 bg-transparent z-action-menu"
         onClick={handleOverlayClick}
         onMouseDown={handleOverlayClick}
       >
         <div
-          class="absolute z-full-page-modal-base"
+          class="absolute"
           ref={setPopupRef}
           use:clickOutside={props.close}
           onKeyDown={handleKeyDown}
