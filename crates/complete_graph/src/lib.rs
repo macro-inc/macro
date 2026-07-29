@@ -21,7 +21,9 @@ pub use graphql_channel::{
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailServiceEmailContentReader,
-    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, email_content_loader,
+    GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailProvider,
+    GraphqlEmailQuery, GraphqlEmailSyncStatus, NoOpSoupEmailContentEdgeReader,
+    SoupEmailContentEdgeReader, email_content_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,

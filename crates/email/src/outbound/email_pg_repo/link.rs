@@ -1,4 +1,6 @@
-use crate::domain::models::{Link, UserProvider};
+use crate::domain::models::{
+    EmailBackfillStatus, EmailInboxDetails, Link, UserEmailLinkSettings, UserProvider,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -170,6 +172,59 @@ pub(super) async fn inboxes_for_macro_id(
         .map(|v| {
             v.try_into_model()
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+        })
+        .collect()
+}
+
+/// Fetch and map the enriched, user-scoped inbox details used by inbound
+/// email catalog adapters.
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn inbox_details_for_macro_id(
+    pool: &PgPool,
+    macro_id: &MacroUserIdStr<'_>,
+) -> anyhow::Result<Vec<EmailInboxDetails>> {
+    email_db_client::links::get::fetch_inbox_details_for_macro_id(pool, macro_id)
+        .await?
+        .into_iter()
+        .map(|inbox| {
+            let provider = match inbox.link.provider {
+                models_email::email::service::link::UserProvider::Gmail => UserProvider::Gmail,
+            };
+            let latest_backfill_status = inbox.latest_backfill_status.map(|status| match status {
+                models_email::email::service::backfill::BackfillJobStatus::Init => {
+                    EmailBackfillStatus::Init
+                }
+                models_email::email::service::backfill::BackfillJobStatus::InProgress => {
+                    EmailBackfillStatus::InProgress
+                }
+                models_email::email::service::backfill::BackfillJobStatus::Complete => {
+                    EmailBackfillStatus::Complete
+                }
+                models_email::email::service::backfill::BackfillJobStatus::Cancelled => {
+                    EmailBackfillStatus::Cancelled
+                }
+                models_email::email::service::backfill::BackfillJobStatus::Failed => {
+                    EmailBackfillStatus::Failed
+                }
+            });
+
+            Ok(EmailInboxDetails {
+                id: inbox.link.id,
+                macro_id: inbox.link.macro_id,
+                email_address: inbox.link.email_address,
+                photo_url: inbox.photo_url,
+                provider,
+                is_sync_active: inbox.link.is_sync_active,
+                needs_reauth: inbox.link.needs_reauth,
+                settings: UserEmailLinkSettings {
+                    signature_on_replies_forwards: inbox.settings.signature_on_replies_forwards,
+                    signature: inbox.settings.signature,
+                },
+                is_primary: inbox.link.is_primary,
+                latest_backfill_status,
+                created_at: inbox.link.created_at,
+                updated_at: inbox.link.updated_at,
+            })
         })
         .collect()
 }

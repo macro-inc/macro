@@ -1,11 +1,12 @@
 use crate::domain::{
     models::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-        EmailFilter, EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel,
-        MessageRow, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage,
-        SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        EmailFilter, EmailInboxDetails, EmailThreadPreview, Label, Link, LinkLabel,
+        MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, PreviewCursorQuery,
+        ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
+        UpsertedContacts, UserProvider,
     },
-    ports::{EmailRepo, LinkEmailSettings, RecipientsByMessageId},
+    ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -52,6 +53,32 @@ impl EmailPgRepo {
             provider,
         )
         .await
+    }
+}
+
+impl EmailUserRepo for EmailPgRepo {
+    async fn user_accessible_inboxes(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Link>, EmailErr> {
+        link::inboxes_for_macro_id(&self.pool, macro_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+
+    async fn user_labels_for_link(&self, link_id: Uuid) -> Result<Vec<LinkLabel>, EmailErr> {
+        label::list_labels_by_link_id(&self.pool, link_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+
+    async fn user_inbox_details(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<EmailInboxDetails>, EmailErr> {
+        link::inbox_details_for_macro_id(&self.pool, &macro_id)
+            .await
+            .map_err(EmailErr::RepoErr)
     }
 }
 

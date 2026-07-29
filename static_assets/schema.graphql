@@ -859,6 +859,74 @@ input GraphqlEmailFilterAst {
 }
 
 """
+Enriched email link accessible to the authenticated user.
+"""
+type GraphqlEmailLink {
+	"""
+	Stable email link identifier.
+	"""
+	id: ID!
+	"""
+	Macro user that owns the inbox.
+	"""
+	macroId: String!
+	"""
+	Provider email address for the inbox.
+	"""
+	emailAddress: String!
+	"""
+	SFS URL of the inbox's self-contact photo, when available.
+	"""
+	photoUrl: String
+	"""
+	Email provider.
+	"""
+	provider: GraphqlEmailProvider!
+	"""
+	Whether ongoing provider synchronization is enabled.
+	"""
+	isSyncActive: Boolean!
+	"""
+	Coarse synchronization state derived by the email domain.
+	"""
+	syncStatus: GraphqlEmailSyncStatus!
+	"""
+	Whether the provider grant must be reauthorized.
+	"""
+	needsReauth: Boolean!
+	"""
+	Inbox signature settings.
+	"""
+	settings: GraphqlEmailLinkSettings!
+	"""
+	Whether this is the owner's primary inbox.
+	"""
+	isPrimary: Boolean!
+	"""
+	Link creation timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Link last-updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+}
+
+"""
+Signature settings embedded in an authenticated user's email link.
+"""
+type GraphqlEmailLinkSettings {
+	"""
+	Whether signatures are included on replies and forwards.
+	"""
+	signatureOnRepliesForwards: Boolean!
+	"""
+	Saved, sanitized signature HTML, when configured.
+	"""
+	signature: String
+}
+
+"""
 GraphQL input representing the email literal.
 """
 input GraphqlEmailLiteral @oneOf {
@@ -918,6 +986,42 @@ input GraphqlEmailLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+}
+
+"""
+Email provider for an authenticated user's linked inbox.
+"""
+enum GraphqlEmailProvider {
+	"""
+	Google Gmail.
+	"""
+	GMAIL
+}
+
+"""
+Coarse synchronization state for an authenticated user's linked inbox.
+"""
+enum GraphqlEmailSyncStatus {
+	"""
+	Initial synchronization is queued or running.
+	"""
+	SYNCING
+	"""
+	The inbox is active and synchronized.
+	"""
+	UP_TO_DATE
+	"""
+	Initial synchronization failed or was cancelled.
+	"""
+	ERROR
+	"""
+	The provider grant must be reauthorized.
+	"""
+	NEEDS_REAUTH
+	"""
+	Synchronization is disabled.
+	"""
+	INACTIVE
 }
 
 """
@@ -2490,39 +2594,40 @@ type GraphqlSoupEmailContact {
 }
 
 """
-GraphQL representation of the soup email label.
+Canonical normalized GraphQL email label used by both email threads and
+the authenticated user's label catalog.
 """
 type GraphqlSoupEmailLabel {
 	"""
-	The unique identifier.
+	Stable database identifier for the label.
 	"""
 	id: ID!
 	"""
-	The identifier of the link.
+	Identifier of the email link that owns the label.
 	"""
 	linkId: ID!
 	"""
-	The identifier of the provider label.
+	Provider-specific label identifier.
 	"""
 	providerLabelId: String!
 	"""
-	The name.
+	User-visible label name.
 	"""
 	name: String!
 	"""
-	The created timestamp in RFC 3339 format.
+	Label creation timestamp in RFC 3339 format.
 	"""
 	createdAt: String!
 	"""
-	The message list visibility.
+	Provider message-list visibility value.
 	"""
 	messageListVisibility: String!
 	"""
-	The label list visibility.
+	Provider label-list visibility value.
 	"""
 	labelListVisibility: String!
 	"""
-	The type.
+	Whether the label is provider-created or user-created.
 	"""
 	type: String!
 }
@@ -3141,6 +3246,14 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	Labels across every owned or delegated inbox accessible to the authenticated user.
+	"""
+	emailLabels: [GraphqlSoupEmailLabel!]!
+	"""
+	Enriched owned or delegated email links accessible to the authenticated user.
+	"""
+	emailLinks: [GraphqlEmailLink!]!
 	"""
 	Fetch one accessible email thread by its canonical identifier.
 	"""

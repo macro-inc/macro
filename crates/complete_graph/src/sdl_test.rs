@@ -13,6 +13,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "latestNonThreadMessage: GraphqlSoupChannelMessagePreview",
         "input EmailThreadInput {",
         "threadId: ID!",
+        "emailLabels: [GraphqlSoupEmailLabel!]!",
+        "emailLinks: [GraphqlEmailLink!]!",
         "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
@@ -22,6 +24,19 @@ fn soup_response_schema_exposes_frontend_fields() {
         "participants: [GraphqlSoupEmailParticipant!]!",
         "attachments: [GraphqlSoupEmailAttachment!]!",
         "labels: [GraphqlSoupEmailLabel!]!",
+        "type GraphqlEmailLink {",
+        "macroId: String!",
+        "emailAddress: String!",
+        "photoUrl: String",
+        "provider: GraphqlEmailProvider!",
+        "isSyncActive: Boolean!",
+        "syncStatus: GraphqlEmailSyncStatus!",
+        "needsReauth: Boolean!",
+        "settings: GraphqlEmailLinkSettings!",
+        "isPrimary: Boolean!",
+        "type GraphqlEmailLinkSettings {",
+        "signatureOnRepliesForwards: Boolean!",
+        "signature: String",
         "properties: [GraphqlProperty!]!",
         "messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!",
         "latestContentMessage: GraphqlSoupEmailMessage",
@@ -64,6 +79,15 @@ fn soup_response_schema_exposes_frontend_fields() {
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),
         "Soup metadata must reuse the canonical GraphqlEntity object"
+    );
+    assert_eq!(
+        sdl.matches("type GraphqlSoupEmailLabel {").count(),
+        1,
+        "thread labels and the user catalog must share one normalized typename"
+    );
+    assert!(
+        !sdl.to_ascii_lowercase().contains("fusionauth"),
+        "internal FusionAuth identifiers must not enter the GraphQL contract"
     );
 }
 
