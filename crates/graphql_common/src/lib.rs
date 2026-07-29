@@ -20,7 +20,7 @@ mod property_filter;
 /// Request-scoped context used by GraphQL resolvers.
 mod request_context;
 
-pub use authorization::require_authorized_user;
+pub use authorization::{require_authenticated_user, require_authorized_user};
 pub use entity_type::{
     GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlSoupEntityType,
 };
