@@ -1,6 +1,9 @@
 #![recursion_limit = "256"]
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+#[cfg(feature = "processing")]
+use std::time::Duration;
 
+#[cfg(feature = "processing")]
 use crate::inbound::kafka_consumer::run_event_consumer;
 use crate::{
     api::context::{ApiContext, AuthorizationService},
@@ -19,6 +22,7 @@ use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+#[cfg(feature = "processing")]
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tokio_util::sync::CancellationToken;
 
@@ -68,8 +72,10 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
 #[folder = "pdfium-lib/linux/"]
 struct PdfiumLib;
 
+#[cfg(feature = "processing")]
 const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 
+#[cfg(feature = "processing")]
 async fn supervise_event_consumer(
     brokers: String,
     db: PgPool,
@@ -279,6 +285,7 @@ async fn main() -> anyhow::Result<()> {
     .await;
 
     shutdown_token.cancel();
+    #[cfg(feature = "processing")]
     consumer_supervisor
         .await
         .context("search processing event consumer supervisor failed")?;
