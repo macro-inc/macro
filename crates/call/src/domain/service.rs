@@ -919,10 +919,6 @@ impl<
                     self.spawn_summarize_call(archived.call_id);
                     self.spawn_process_voices_for_call(archived.call_id);
 
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&archived.call_id).await {
-                        tracing::error!(error=?e, call_id=%archived.call_id, "failed to enqueue call record for search indexing");
-                    }
-
                     self.send_call_event(
                         &archived.channel_id,
                         "call_ended",
@@ -1032,10 +1028,6 @@ impl<
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(archived.call_id);
                     self.spawn_process_voices_for_call(archived.call_id);
-
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&archived.call_id).await {
-                        tracing::error!(error=?e, call_id=%archived.call_id, "failed to enqueue call record for search indexing");
-                    }
 
                     // Stop egress explicitly before deleting the room. DeleteRoom
                     // is expected to cascade-stop egress, but a failed or slow
@@ -1228,7 +1220,7 @@ impl<
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
         let actor_user_id = event_actor_user_id(receipt.auth());
 
-        // Look up channel_id before deletion to keep the search-remove message id unique.
+        // Look up channel_id before deletion so the deleted event includes channel context.
         let channel_id = self
             .repo
             .get_call_record_by_call_id(&call_id)
@@ -1250,15 +1242,6 @@ impl<
                 channel_id,
                 actor_user_id,
             }));
-        }
-
-        if let Some(channel_id) = channel_id
-            && let Err(e) = self
-                .search_indexer
-                .enqueue_remove(&channel_id, &call_id)
-                .await
-        {
-            tracing::error!(error=?e, call_id=%call_id, "failed to enqueue call record removal from search");
         }
 
         if let Some(storage_keys) = storage_keys {
