@@ -27,7 +27,7 @@ use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::Nest
 use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
-use crate::loaders::{SoupItemDataLoader, is_soup_item_not_found};
+use crate::loaders::SoupItemDataLoader;
 
 /// Extension fields attached to every top-level Soup entity.
 ///
@@ -1790,10 +1790,6 @@ impl<E: SoupEntityEdges> SoupUpdated<E> {
     async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
         let loader = ctx.data::<SoupItemDataLoader>()?;
         let key = (self.user_id.clone(), self.entity.clone());
-        match loader.load_one(key).await {
-            Ok(item) => Ok(Some(GraphqlSoupEntity::new(item))),
-            Err(error) if is_soup_item_not_found(&error) => Ok(None),
-            Err(error) => Err(error.into()),
-        }
+        Ok(loader.load_one(key).await?.map(GraphqlSoupEntity::new))
     }
 }

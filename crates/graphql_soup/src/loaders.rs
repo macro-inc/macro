@@ -5,7 +5,6 @@ mod test;
 
 use std::{
     collections::{HashMap, HashSet},
-    fmt,
     future::Future,
     sync::Arc,
 };
@@ -35,7 +34,6 @@ use models_soup::item::SoupItem;
 use rootcause::{
     Report,
     markers::{Cloneable, Dynamic},
-    report,
 };
 use soup::domain::{
     models::{SoupQuery, SoupRequest, SoupType},
@@ -51,26 +49,6 @@ pub type SoupItemLoaderKey = (MacroUserIdStr<'static>, Entity<'static>);
 
 /// Cloneable error returned by the realtime Soup item loader.
 pub type SoupItemLoaderError = Report<Dynamic, Cloneable>;
-
-#[derive(Clone, Copy, Debug)]
-struct SoupItemNotFound;
-
-impl fmt::Display for SoupItemNotFound {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Soup item not found for user")
-    }
-}
-
-impl std::error::Error for SoupItemNotFound {}
-
-/// Returns whether a loader error means the requested entity is no longer visible.
-pub(crate) fn is_soup_item_not_found(error: &SoupItemLoaderError) -> bool {
-    error.iter_reports().any(|report| {
-        report
-            .downcast_current_context::<SoupItemNotFound>()
-            .is_some()
-    })
-}
 
 /// Resolves the inboxes visible to a user for email-thread Soup hydration.
 pub trait SoupInboxReader: Send + Sync + 'static {
@@ -269,7 +247,9 @@ where
 }
 
 /// Type-erased function that loads one Soup item through a concrete DataLoader.
-type LoadOne = dyn Fn(OwnedSoupItemLoaderKey) -> BoxFuture<'static, Result<SoupItem<()>, SoupItemLoaderError>>
+type LoadOne = dyn Fn(
+        OwnedSoupItemLoaderKey,
+    ) -> BoxFuture<'static, Result<Option<SoupItem<()>>, SoupItemLoaderError>>
     + Send
     + Sync;
 
@@ -277,17 +257,12 @@ type LoadOne = dyn Fn(OwnedSoupItemLoaderKey) -> BoxFuture<'static, Result<SoupI
 async fn load_one_owned<S, I>(
     loader: Arc<DataLoader<SoupItemLoader<S, I>>>,
     key: OwnedSoupItemLoaderKey,
-) -> Result<SoupItem<()>, SoupItemLoaderError>
+) -> Result<Option<SoupItem<()>>, SoupItemLoaderError>
 where
     S: SoupService,
     I: SoupInboxReader,
 {
-    loader
-        .load_one::<OwnedSoupItemLoaderKey>(key)
-        .await
-        .transpose()
-        .ok_or_else(|| report!(SoupItemNotFound).into_dynamic().into_cloneable())
-        .flatten()
+    loader.load_one::<OwnedSoupItemLoaderKey>(key).await
 }
 
 /// Type-erased Soup DataLoader stored in GraphQL request or connection data.
@@ -320,7 +295,7 @@ impl SoupItemDataLoader {
     pub async fn load_one(
         &self,
         key: SoupItemLoaderKey,
-    ) -> Result<SoupItem<()>, SoupItemLoaderError> {
+    ) -> Result<Option<SoupItem<()>>, SoupItemLoaderError> {
         let (user_id, entity) = key;
         (self.load_one)(OwnedSoupItemLoaderKey { user_id, entity }).await
     }

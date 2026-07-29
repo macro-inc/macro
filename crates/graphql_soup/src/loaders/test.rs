@@ -333,7 +333,8 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     let first = loader
         .load_one((user_id.clone(), entity.clone()))
         .await
-        .expect("first load succeeds");
+        .expect("first load succeeds")
+        .expect("first item exists");
     responses
         .lock()
         .expect("responses lock")
@@ -341,7 +342,8 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     let second = loader
         .load_one((user_id, entity))
         .await
-        .expect("second load succeeds");
+        .expect("second load succeeds")
+        .expect("second item exists");
 
     assert!(matches!(first, SoupItem::Document(document) if document.name == "First"));
     assert!(matches!(second, SoupItem::Document(document) if document.name == "Second"));
@@ -349,7 +351,7 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
 }
 
 #[tokio::test]
-async fn context_loader_reports_a_missing_item() {
+async fn context_loader_returns_none_for_a_missing_item() {
     let user_id = user("macro|missing@example.com");
     let entity = EntityType::Document.with_entity_string(Uuid::from_u128(21).to_string());
     let loader = SoupItemDataLoader::new(SoupItemLoader::new(
@@ -357,15 +359,12 @@ async fn context_loader_reports_a_missing_item() {
         RecordingInboxReader::default(),
     ));
 
-    let error = loader
+    let item = loader
         .load_one((user_id, entity))
         .await
-        .expect_err("missing item returns an error");
+        .expect("missing item is not a loader failure");
 
-    assert!(
-        error.to_string().contains("Soup item not found for user"),
-        "unexpected error: {error}"
-    );
+    assert!(item.is_none());
 }
 
 #[test]
