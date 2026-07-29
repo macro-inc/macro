@@ -329,7 +329,8 @@ function BackfillProgressBar(props: { progress: BackfillProgress }) {
       </span>
       <div class="flex items-center gap-6 whitespace-nowrap text-xs text-ink-muted">
         <span>
-          {props.progress.completed}/{props.progress.total}
+          {props.progress.completed.toLocaleString()} of{' '}
+          {props.progress.total.toLocaleString()} threads
         </span>
         <Show when={etaLabel()}>{(label) => <span>{label()}</span>}</Show>
       </div>
