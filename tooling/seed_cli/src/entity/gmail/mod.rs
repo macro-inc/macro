@@ -262,6 +262,17 @@ impl GmailApi {
                 self.refresh_access_token(token).await?;
                 continue;
             }
+            // Gmail reports per-user quota exhaustion as 403 rateLimitExceeded
+            // (not 429); it is transient and must back off like a 429.
+            if status == reqwest::StatusCode::FORBIDDEN {
+                let text = resp.text().await.unwrap_or_default();
+                if text.contains("rateLimitExceeded") && attempt < 6 {
+                    tracing::warn!(attempt, "gmail per-user quota exceeded, backing off");
+                    tokio::time::sleep(Duration::from_secs(1 << attempt)).await;
+                    continue;
+                }
+                bail!("gmail request to {url} failed: {status}: {text}");
+            }
             if (status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error())
                 && attempt < 6
             {
