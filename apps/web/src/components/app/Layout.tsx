@@ -201,11 +201,12 @@ function DraggableCallWidget(props: {
   let stopActiveDrag: (() => void) | undefined;
 
   const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0) return;
 
     const el = root();
     if (!el) return;
 
+    stopActiveDrag?.();
     e.preventDefault();
     const rect = el.getBoundingClientRect();
     const pointerStartX = e.clientX;
