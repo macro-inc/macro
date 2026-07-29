@@ -1,10 +1,15 @@
 import type { Property } from '@property/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const setEntityPropertyMock = vi.hoisted(() => vi.fn());
+const getGraphqlEntityPropertiesMock = vi.hoisted(() => vi.fn());
+const getRestEntityPropertiesMock = vi.hoisted(() => vi.fn());
+const entityPropertyFromApiMock = vi.hoisted(() => vi.fn());
+const soupPropertyToPropertyMock = vi.hoisted(() => vi.fn());
 const rollbackMock = vi.hoisted(() => vi.fn());
 const optimisticUpdateSoupEntityMock = vi.hoisted(() => vi.fn());
 const invalidateSoupEntityMock = vi.hoisted(() => vi.fn());
@@ -34,8 +39,12 @@ vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
 }));
 
+vi.mock('@entity/extractors-property/property-helpers', () => ({
+  soupPropertyToProperty: soupPropertyToPropertyMock,
+}));
+
 vi.mock('@property/api/converters', () => ({
-  entityPropertyFromApi: vi.fn(),
+  entityPropertyFromApi: entityPropertyFromApiMock,
   propertyValueToApi: vi.fn(() => ({ type: 'string', value: 'doing' })),
 }));
 
@@ -44,8 +53,17 @@ vi.mock('@property/utils', () => ({
 }));
 
 vi.mock('../../service-clients/service-properties/client', () => ({
-  propertiesServiceClient: {},
+  propertiesServiceClient: {
+    getEntityProperties: getRestEntityPropertiesMock,
+  },
 }));
+
+vi.mock(
+  '../../service-clients/service-storage/graphql-entity-properties',
+  () => ({
+    getGraphqlEntityProperties: getGraphqlEntityPropertiesMock,
+  })
+);
 
 vi.mock('../../service-clients/service-storage/graphql-properties', () => ({
   setEntityProperty: setEntityPropertyMock,
@@ -106,11 +124,13 @@ vi.mock('./graphql-optimistic', () => ({
 import {
   useAddEntityPropertyMutation,
   useBulkSaveEntityPropertiesMutation,
+  useEntityPropertiesQuery,
 } from './entity';
 
 let testQueryClient: QueryClient;
 let mutation: ReturnType<typeof useBulkSaveEntityPropertiesMutation>;
 let addMutation: ReturnType<typeof useAddEntityPropertyMutation>;
+let entityQuery: ReturnType<typeof useEntityPropertiesQuery>;
 let dispose: (() => void) | undefined;
 
 const property = {
@@ -133,15 +153,14 @@ const variables = {
   ],
 };
 
-function renderMutation(): void {
+function renderWithQueryClient(factory: () => void): void {
   const container = document.createElement('div');
   document.body.appendChild(container);
   dispose = render(
     () => (
       <QueryClientProvider client={testQueryClient}>
         {(() => {
-          mutation = useBulkSaveEntityPropertiesMutation();
-          addMutation = useAddEntityPropertyMutation();
+          factory();
           return null as unknown as JSX.Element;
         })()}
       </QueryClientProvider>
@@ -149,6 +168,109 @@ function renderMutation(): void {
     container
   );
 }
+
+function renderMutation(): void {
+  renderWithQueryClient(() => {
+    mutation = useBulkSaveEntityPropertiesMutation();
+    addMutation = useAddEntityPropertyMutation();
+  });
+}
+
+function renderEntityQuery(
+  includeMetadata: boolean,
+  entityType: 'DOCUMENT' | 'USER' = 'DOCUMENT',
+  entityId = 'document-1'
+): void {
+  renderWithQueryClient(() => {
+    entityQuery = useEntityPropertiesQuery(
+      () => entityType,
+      () => entityId,
+      includeMetadata
+    );
+  });
+}
+
+describe('useEntityPropertiesQuery transport', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    graphqlSoupEnabledMock.mockReturnValue(true);
+    testQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+  });
+
+  afterEach(() => {
+    dispose?.();
+    document.body.replaceChildren();
+  });
+
+  it('uses GraphQL for non-metadata entity properties when enabled', async () => {
+    const soupProperty = { id: 'assignment-1' };
+    getGraphqlEntityPropertiesMock.mockResolvedValue([soupProperty]);
+    soupPropertyToPropertyMock.mockReturnValue(property);
+
+    renderEntityQuery(false);
+
+    await vi.waitFor(() => expect(entityQuery.data).toEqual([property]));
+    expect(getGraphqlEntityPropertiesMock).toHaveBeenCalledWith(
+      'DOCUMENT',
+      'document-1'
+    );
+    expect(soupPropertyToPropertyMock).toHaveBeenCalledWith(soupProperty);
+    expect(getRestEntityPropertiesMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps metadata requests on REST', async () => {
+    const apiProperty = { property: { id: 'assignment-1' } };
+    getRestEntityPropertiesMock.mockResolvedValue(
+      ok({ properties: [apiProperty] })
+    );
+    entityPropertyFromApiMock.mockReturnValue(property);
+
+    renderEntityQuery(true);
+
+    await vi.waitFor(() => expect(entityQuery.data).toEqual([property]));
+    expect(getGraphqlEntityPropertiesMock).not.toHaveBeenCalled();
+    expect(getRestEntityPropertiesMock).toHaveBeenCalledWith({
+      entity_type: 'DOCUMENT',
+      entity_id: 'document-1',
+      query: { include_metadata: true },
+    });
+  });
+
+  it('uses REST when the GraphQL feature is disabled', async () => {
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    getRestEntityPropertiesMock.mockResolvedValue(ok({ properties: [] }));
+
+    renderEntityQuery(false);
+
+    await vi.waitFor(() => expect(entityQuery.data).toEqual([]));
+    expect(getGraphqlEntityPropertiesMock).not.toHaveBeenCalled();
+    expect(getRestEntityPropertiesMock).toHaveBeenCalledWith({
+      entity_type: 'DOCUMENT',
+      entity_id: 'document-1',
+      query: { include_metadata: false },
+    });
+  });
+
+  it('falls back to REST for USER properties, which Soup cannot query', async () => {
+    getGraphqlEntityPropertiesMock.mockResolvedValue(undefined);
+    getRestEntityPropertiesMock.mockResolvedValue(ok({ properties: [] }));
+
+    renderEntityQuery(false, 'USER', 'user-1');
+
+    await vi.waitFor(() => expect(entityQuery.data).toEqual([]));
+    expect(getGraphqlEntityPropertiesMock).toHaveBeenCalledWith(
+      'USER',
+      'user-1'
+    );
+    expect(getRestEntityPropertiesMock).toHaveBeenCalledWith({
+      entity_type: 'USER',
+      entity_id: 'user-1',
+      query: { include_metadata: false },
+    });
+  });
+});
 
 describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   beforeEach(() => {
