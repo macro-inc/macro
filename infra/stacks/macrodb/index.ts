@@ -53,9 +53,7 @@ const originalParameterGroup = new aws.rds.ParameterGroup(
       // Tune planner costs and prefetch for gp3 SSD.
       { name: 'random_page_cost', value: '1.1' },
       { name: 'effective_io_concurrency', value: '256' },
-      // Reduce sort and hash spills to disk. Shared by all stacks, so sized
-      // for the smallest instance (8GiB dev); bump to 32768 for prod when it
-      // moves to a 32GiB class. Per-operation cap, not a reservation.
+      // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
       { name: 'work_mem', value: '16384' },
       // Avoid JIT startup cost for one-off dynamic Soup queries.
       { name: 'jit', value: '0' },
@@ -98,11 +96,7 @@ if (stack === 'prod') {
         // Tune planner costs and prefetch for gp3 SSD.
         { name: 'random_page_cost', value: '1.1' },
         { name: 'effective_io_concurrency', value: '256' },
-        // Reduce sort and hash spills to disk. Shared by all stacks, so sized
-        // for the smallest instance (8GiB dev); bump to 32768 for prod when
-        // it moves to a 32GiB class. Per-operation cap, not a reservation.
-        // Note: on PG15+ hash operations may use 2x this value
-        // (hash_mem_multiplier defaults to 2.0) — factor that into any bump.
+        // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
         { name: 'work_mem', value: '16384' },
         // Avoid JIT startup cost for one-off dynamic Soup queries.
         { name: 'jit', value: '0' },
