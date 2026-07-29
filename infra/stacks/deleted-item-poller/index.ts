@@ -23,6 +23,17 @@ const cloudStorageServiceStack = new pulumi.StackReference(
   }
 );
 
+const kafkaClusterStack = new pulumi.StackReference(
+  'kafka-cluster-brokers-stack',
+  {
+    name: `macro-inc/kafka-cluster/${stack}`,
+  }
+);
+
+const kafkaBrokers = kafkaClusterStack
+  .getOutput('bootstrapBrokersSaslIam')
+  .apply((brokers) => brokers as string);
+
 const deleteDocumentQueueArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('deleteDocumentQueueArn')
   .apply((arn) => arn as string);
@@ -41,6 +52,7 @@ const deletedItemPoller = new DeleteItemPoller('deleted-item-poller', {
   envVars: {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
     ENVIRONMENT: stack,
+    KAFKA_BROKERS: kafkaBrokers,
     RUST_LOG: 'deleted_item_poller=info,macro_http_request=info',
   },
   tags,
