@@ -22,6 +22,9 @@ use sqlx::postgres::PgPoolOptions;
 mod api;
 mod config;
 mod domain;
+#[cfg(feature = "processing")]
+#[allow(dead_code)] // Wired into service startup with the Kafka configuration.
+mod inbound;
 mod outbound;
 mod parsers;
 mod process;

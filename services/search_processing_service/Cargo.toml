@@ -7,7 +7,15 @@ version = "0.1.0"
 
 [features]
 default = ["processing", "service", "pdf"]
-processing = []
+processing = [
+  "dep:call",
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:macro_event_topics",
+  "dep:rdkafka",
+  "dep:rootcause",
+  "dep:tokio-retry",
+]
 service = ["macro_db_client", "models_properties", "properties"]
 pdf = ["dep:pdfium-render"]
 
@@ -26,11 +34,13 @@ aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+call = { path = "../../crates/call", default-features = false, optional = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email_db_client = { path = "../../crates/email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
+kafka_util = { path = "../../crates/kafka_util", optional = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization" }
@@ -41,6 +51,10 @@ macro_db_client = { path = "../../crates/macro_db_client", optional = true } # M
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+macro_event_broker = { path = "../../crates/macro_event_broker", default-features = false, features = [
+  "outbound",
+], optional = true }
+macro_event_topics = { path = "../../crates/macro_event_topics", optional = true }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 macro_user_id = { path = "../../crates/macro_user_id" }
@@ -62,6 +76,8 @@ pdfium-render = { workspace = true, optional = true }
 properties = { path = "../../crates/properties", default-features = false, features = [
   "outbound",
 ], optional = true }
+rdkafka = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
 rust-embed = "8.6.0"
 s3_client = { path = "../../crates/s3_client" }
 serde = { workspace = true }
@@ -73,7 +89,8 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
 sqs_worker = { path = "../../crates/sqs_worker" }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["signal"] }
+tokio = { workspace = true, features = ["signal", "sync", "time"] }
+tokio-retry = { workspace = true, optional = true }
 tokio-util = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
