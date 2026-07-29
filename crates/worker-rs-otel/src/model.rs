@@ -19,7 +19,7 @@ pub(super) struct ClosedSpan {
 pub(super) struct ClosedLog {
     pub(super) service_name: &'static str,
     pub(super) time_ns: u64,
-    pub(super) level: &'static str,
+    pub(super) level: tracing::Level,
     pub(super) body: String,
     pub(super) attrs: Vec<(String, String)>,
     pub(super) target: &'static str,

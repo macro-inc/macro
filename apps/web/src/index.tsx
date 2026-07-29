@@ -1,10 +1,5 @@
+import { initializeBrowserObservability } from './observability/browser';
 import './index.css';
-// hands @macro-inc/observability its config before anything emits, and lands
-// the zone.js Promise patch (via the library's zone entry) before app code
-// captures unpatched Promise references.
-import { Telemetry } from '@macro-inc/observability';
-import { createWebTracingProvider } from '@macro-inc/observability/web';
-import { ZoneContextManager } from '@macro-inc/observability/zone';
 
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
@@ -92,74 +87,8 @@ const renderApp = () => {
   render(() => <Root />, root);
 };
 
-async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
-  const override = import.meta.env.VITE_ENABLE_BROWSER_OTEL;
-
-  if (override === 'false') return false;
-  if (override === 'true') return true;
-
-  if (import.meta.hot) return hasExporter;
-
-  if (!import.meta.env.VITE_POSTHOG_API_KEY) return false;
-
-  const { analytics } = await import('@app/lib/analytics');
-  const flag = 'enable-browser-otel';
-  const current = analytics.posthog.isFeatureEnabled(flag);
-  if (current !== undefined) return current;
-
-  return new Promise((resolve) => {
-    let unsubscribe: (() => void) | undefined;
-    let settled = false;
-    const timeout = window.setTimeout(() => finish(false), 3_000);
-
-    const finish = (enabled: boolean) => {
-      settled = true;
-      window.clearTimeout(timeout);
-      unsubscribe?.();
-      resolve(enabled);
-    };
-
-    unsubscribe = analytics.posthog.onFeatureFlags((_flags, _variants, ctx) => {
-      finish(
-        !ctx?.errorsLoading &&
-          (analytics.posthog.isFeatureEnabled(flag) ?? false)
-      );
-    });
-
-    if (settled) unsubscribe();
-  });
-}
-
 async function main() {
-  const tracesUrl =
-    import.meta.env.VITE_OTEL_EXPORTER_URL ??
-    (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
-  const telemetryConfig = {
-    serviceName: 'web-app',
-    environment:
-      import.meta.env.VITE_OTEL_ENV ??
-      (import.meta.env.MODE === 'production' ? 'prod' : 'dev'),
-    tracesUrl,
-    logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
-    contextManager: new ZoneContextManager(),
-    enabled: () => browserTelemetryEnabled(Boolean(tracesUrl)),
-  };
-  await Telemetry.init({
-    ...telemetryConfig,
-    tracingProvider: (resource, getUserId) =>
-      createWebTracingProvider(telemetryConfig, resource, getUserId),
-  });
-  window.addEventListener('pagehide', () => void Telemetry.flush());
-  window.addEventListener('error', (event) => {
-    Telemetry.error(event.error ?? event.message, {
-      'error.source': 'window',
-    });
-  });
-  window.addEventListener('unhandledrejection', (event) => {
-    Telemetry.error(event.reason, {
-      'error.source': 'unhandledrejection',
-    });
-  });
+  await initializeBrowserObservability();
 
   console.log('App Version ', import.meta.env.__APP_VERSION__);
 

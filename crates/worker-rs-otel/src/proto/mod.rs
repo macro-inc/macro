@@ -110,14 +110,13 @@ pub(super) fn export_traces_request(
     }
 }
 
-fn severity_number(level: &str) -> SeverityNumber {
+fn severity_number(level: tracing::Level) -> SeverityNumber {
     match level {
-        "ERROR" => SeverityNumber::Error,
-        "WARN" => SeverityNumber::Warn,
-        "INFO" => SeverityNumber::Info,
-        "DEBUG" => SeverityNumber::Debug,
-        "TRACE" => SeverityNumber::Trace,
-        _ => SeverityNumber::Unspecified,
+        tracing::Level::ERROR => SeverityNumber::Error,
+        tracing::Level::WARN => SeverityNumber::Warn,
+        tracing::Level::INFO => SeverityNumber::Info,
+        tracing::Level::DEBUG => SeverityNumber::Debug,
+        tracing::Level::TRACE => SeverityNumber::Trace,
     }
 }
 
@@ -144,7 +143,7 @@ fn log_proto(log: ClosedLog) -> LogRecord {
         time_unix_nano: log.time_ns,
         observed_time_unix_nano: log.time_ns,
         severity_number: severity_number(log.level) as i32,
-        severity_text: log.level.to_string(),
+        severity_text: log.level.as_str().to_string(),
         body: Some(string_value(&log.body)),
         attributes,
         flags: u32::from(correlated),

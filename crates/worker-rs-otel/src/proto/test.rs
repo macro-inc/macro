@@ -9,7 +9,7 @@ fn builds_correlated_log_record() {
         vec![ClosedLog {
             service_name: "sync-service",
             time_ns: 42,
-            level: "WARN",
+            level: tracing::Level::WARN,
             body: "peer send failed".to_string(),
             attrs: vec![("document.id".to_string(), "doc-1".to_string())],
             target: "sync_service::websocket",

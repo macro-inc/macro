@@ -159,7 +159,7 @@ where
         buffer_log(ClosedLog {
             service_name: self.service_name,
             time_ns,
-            level: level.as_str(),
+            level,
             body: name,
             attrs,
             target: meta.target(),
