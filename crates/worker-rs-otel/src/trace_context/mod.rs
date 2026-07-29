@@ -61,19 +61,6 @@ pub fn traceparent_from_headers(headers: &impl HeadersLike) -> Option<SpanContex
         .and_then(|value| parse_traceparent(&value))
 }
 
-/// Read a valid `traceparent` from a request header or WebSocket query parameter.
-pub fn traceparent_value(request: &worker::Request) -> Option<String> {
-    let raw = request.headers().header(TRACEPARENT).or_else(|| {
-        request
-            .url()
-            .ok()?
-            .query_pairs()
-            .find(|(key, _)| key == TRACEPARENT)
-            .map(|(_, value)| value.into_owned())
-    });
-    raw.filter(|value| parse_traceparent(value).is_some())
-}
-
 /// Extract parsed remote trace context from a Worker request.
 pub fn traceparent_from_request(request: &worker::Request) -> Option<SpanContext> {
     traceparent_from_headers(request.headers()).or_else(|| {

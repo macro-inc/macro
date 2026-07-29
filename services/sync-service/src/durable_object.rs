@@ -37,11 +37,6 @@ use crate::{
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
 
-#[derive(Serialize, Deserialize)]
-struct WebSocketAttachment {
-    traceparent: String,
-}
-
 pub mod status_codes {
     pub const OK: u16 = 200;
     pub const NOT_FOUND: u16 = 404;
@@ -668,17 +663,6 @@ impl DocumentSyncSession {
             self.state
                 .accept_websocket_with_tags(&pair.server, &[&ws_id]);
 
-            // Attach the connect request's raw trace context so later
-            // websocket errors (post-hibernation too) can join it.
-            if let Some(traceparent) = worker_rs_otel::traceparent_value(&req) {
-                _ = pair
-                    .server
-                    .serialize_attachment(WebSocketAttachment { traceparent })
-                    .inspect_err(
-                        |e| warn!(error = ?e, "failed to attach traceparent to websocket"),
-                    );
-            }
-
             let ws_meta = WebSocketMetadata {
                 user_id: claims.user_id,
                 access_level: claims.access_level,
@@ -998,37 +982,22 @@ impl DurableObject for DocumentSyncSession {
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
         worker_rs_otel::scope(&self.env, &self.state, async {
-            let span_checkpoint = worker_rs_otel::span_checkpoint();
-            let traceparent = ws
-                .deserialize_attachment::<WebSocketAttachment>()
-                .ok()
-                .flatten()
-                .and_then(|attachment| worker_rs_otel::parse_traceparent(&attachment.traceparent));
-            let (remote_id, remote_parent) = worker_rs_otel::remote_fields(traceparent.as_ref());
-            let message = match websocket::deserialize_message(&binary_message) {
-                Ok(message) => message,
-                Err(error) => {
-                    let span = websocket::inbound_message_error_span(
-                        "invalid",
-                        &remote_id,
-                        &remote_parent,
-                    );
-                    {
-                        let _entered = span.enter();
-                        tracing::error!(error = ?error, "failed to deserialize websocket message");
-                    }
-                    return Err(error);
-                }
-            };
-            let message_type = websocket::message_type(&message);
+            let mut telemetry = websocket::InboundMessageTelemetry::new(binary_message.len());
 
             let res: Result<()> = async {
-                let document_id = self.document_id().await?;
-                let current = tracing::Span::current();
-                current.record("document.id", document_id.as_str());
-                if let Ok(ws_id) = get_ws_id_from_tags(&self.state.get_tags(&ws)) {
-                    current.record("ws.id", ws_id.as_str());
-                }
+                let document_id = self.document_id().await.inspect_err(|_| {
+                    telemetry.record_error_stage("document_context");
+                })?;
+                let ws_id = get_ws_id_from_tags(&self.state.get_tags(&ws)).ok();
+                telemetry.record_context(&document_id, ws_id);
+
+                let message =
+                    websocket::deserialize_message(&binary_message).inspect_err(|_| {
+                        telemetry.record_message_type("invalid");
+                        telemetry.record_error_stage("deserialize");
+                    })?;
+                telemetry.record_message_type(websocket::message_type(&message));
+
                 websocket::process_message(
                     &ws,
                     &document_id,
@@ -1038,12 +1007,19 @@ impl DurableObject for DocumentSyncSession {
                     message,
                     self.msg_buffer.clone(),
                     self,
+                    &mut telemetry,
                 )
                 .await
+                .inspect_err(|_| {
+                    telemetry.record_error_stage("process");
+                })
                 .context("failed to process websocket message")?;
 
                 bump_alarm(&self.state)
                     .await
+                    .inspect_err(|_| {
+                        telemetry.record_error_stage("alarm");
+                    })
                     .context("failed to keep document alive")?;
 
                 Ok(())
@@ -1051,14 +1027,11 @@ impl DurableObject for DocumentSyncSession {
             .await;
 
             if let Err(error) = &res {
-                let span =
-                    websocket::inbound_message_error_span(message_type, &remote_id, &remote_parent);
+                let span = telemetry.error_span();
                 {
                     let _entered = span.enter();
-                    tracing::error!(error = ?error, "failed to process websocket message");
+                    tracing::error!(error = ?error, "failed to handle websocket message");
                 }
-            } else {
-                worker_rs_otel::discard_spans_since(span_checkpoint);
             }
             res
         })

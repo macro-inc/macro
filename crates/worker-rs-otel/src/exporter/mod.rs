@@ -61,16 +61,6 @@ pub(super) fn buffer_log(log: ClosedLog) {
     });
 }
 
-/// Capture the current span-buffer position.
-pub fn span_checkpoint() -> usize {
-    SPAN_BUFFER.with(|buffer| buffer.borrow().len())
-}
-
-/// Drop spans buffered after `checkpoint` without dropping operational logs.
-pub fn discard_spans_since(checkpoint: usize) {
-    SPAN_BUFFER.with(|buffer| buffer.borrow_mut().truncate(checkpoint));
-}
-
 fn flush() -> Option<impl Future<Output = ()> + 'static> {
     let spans = SPAN_BUFFER.with(|buffer| std::mem::take(&mut *buffer.borrow_mut()));
     let logs = LOG_BUFFER.with(|buffer| std::mem::take(&mut *buffer.borrow_mut()));

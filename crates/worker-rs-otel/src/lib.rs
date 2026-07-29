@@ -8,11 +8,10 @@ mod trace_context;
 
 use std::{future::Future, pin::Pin};
 
-pub use exporter::{discard_spans_since, span_checkpoint};
 pub use layer::{OtelLayer, traceparent_for_span};
 pub use trace_context::{
     HeadersLike, TRACEPARENT, parse_traceparent, remote_fields, traceparent_from_headers,
-    traceparent_from_request, traceparent_value,
+    traceparent_from_request,
 };
 
 /// Reserved span field containing a 32-character hexadecimal remote trace ID.
