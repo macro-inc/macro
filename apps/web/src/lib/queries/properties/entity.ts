@@ -2,6 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
@@ -20,6 +21,7 @@ import type { EntityType } from '../../service-clients/service-properties/genera
 import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
+import { getGraphqlEntityProperties } from '../../service-clients/service-storage/graphql-entity-properties';
 import {
   type SetEntityPropertyDisposition,
   setEntityProperty,
@@ -59,19 +61,43 @@ export function useEntityPropertiesQuery(
       const type = entityType();
       const id = entityId();
       return {
-        queryKey: propertiesKeys.entity({
-          entityType: type,
-          entityId: id,
-        }).queryKey,
+        queryKey: [
+          ...propertiesKeys.entity({
+            entityType: type,
+            entityId: id,
+          }).queryKey,
+          { includeMetadata },
+        ],
         queryFn: async () => {
-          // Always fetch with metadata so consumers with different
-          // `includeMetadata` values share one cache entry and one request.
+          // Metadata properties are computed by the REST properties endpoint
+          // and are not part of the GraphQL Soup property edge. Keep that
+          // explicit request (and USER, which Soup does not represent) on REST.
+          // TODO: Fetch metadata through GraphQL once Soup exposes the missing
+          // email-thread fields (first message timestamps/subject, latest
+          // inbound/outbound timestamps, and message count).
+          if (ENABLE_GRAPHQL_SOUP() && !includeMetadata) {
+            const properties = await getGraphqlEntityProperties(type, id);
+            if (properties) {
+              return properties.flatMap((property) => {
+                try {
+                  return [soupPropertyToProperty(property)];
+                } catch (error) {
+                  console.warn(
+                    'Skipping GraphQL property with unsupported type',
+                    error
+                  );
+                  return [];
+                }
+              });
+            }
+          }
+
           const data = await throwOnErr(
             async () =>
               await propertiesServiceClient.getEntityProperties({
                 entity_type: toPropertyTargetEntityType(type),
                 entity_id: id,
-                query: { include_metadata: true },
+                query: { include_metadata: includeMetadata },
               })
           );
           return data.properties.flatMap((property) => {

@@ -29,6 +29,7 @@ import {
 import { match } from 'ts-pattern';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { SoupProperty } from './generated/schemas/soupProperty';
 import {
   type GroupedSoupInput,
   type GroupSoupQuery,
@@ -36,6 +37,7 @@ import {
   type GroupSoupQueryVariables,
   type SoupInitialInput,
   type SoupInput,
+  type SoupPropertyFieldsFragment,
   type SoupQuery,
   SoupDocument as SoupQueryDocument,
   type SoupQueryVariables,
@@ -305,7 +307,10 @@ function mapGraphqlPropertyValue(
     .exhaustive();
 }
 
-function mapGraphqlProperties(properties: GraphqlProperty[]) {
+/** Maps GraphQL property fragments to the shared Soup property shape. */
+export function mapGraphqlProperties(
+  properties: SoupPropertyFieldsFragment[]
+): SoupProperty[] {
   return properties.map((property) => ({
     id: property.id,
     definition: {
