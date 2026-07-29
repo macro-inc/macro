@@ -40,7 +40,12 @@ import {
   SoupDocument as SoupQueryDocument,
   type SoupQueryVariables,
 } from './graphql/generated/graphql';
-import { createGraphqlSoupWebSocketUrlResolver } from './graphql-soup-websocket';
+import {
+  createGraphqlSoupWebSocketUrlResolver,
+  createSoupUpdatesSubscriptionLifecycle,
+  SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+  shouldRetryGraphqlSoupWebSocket,
+} from './graphql-soup-websocket';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 
@@ -117,10 +122,12 @@ export function getGraphqlSoupClient(): Client {
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
+    const soupUpdatesLifecycle = createSoupUpdatesSubscriptionLifecycle();
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
       unregisterHost();
       host.dispose();
+      soupUpdatesLifecycle.dispose();
       if (websocketClient) void websocketClient.dispose();
       cachedCacheHost = undefined;
       cachedClient = graphqlSoupClient;
@@ -147,8 +154,8 @@ export function getGraphqlSoupClient(): Client {
       });
       const graphqlWsClient = createGraphqlWsClient({
         url: resolveWebSocketUrl,
-        retryAttempts: Number.POSITIVE_INFINITY,
-        shouldRetry: () => true,
+        retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+        shouldRetry: shouldRetryGraphqlSoupWebSocket,
       });
       websocketClient = graphqlWsClient;
       const client = createClient({
@@ -190,10 +197,12 @@ export function getGraphqlSoupClient(): Client {
       });
       cachedCacheHost = host;
       unregisterHost = registerCacheHost(host);
+      soupUpdatesLifecycle.replace(client, host);
       return client;
     } catch (error) {
       unregisterHost();
       host?.dispose();
+      soupUpdatesLifecycle.dispose();
       if (websocketClient) void websocketClient.dispose();
       cachedCacheHost = undefined;
       console.warn('graphql cache init failed; using uncached client', error);

@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
 use async_graphql::{Context, EmptySubscription, Object, Request, Schema, SimpleObject, value};
-use entity_mutation::{EntityMutationActor, UnavailableEntityMutationService};
+use entity_mutation::{
+    EntityMutationActor, EntityMutationEffect, UnavailableEntityMutationService,
+};
 use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 
 /// Minimal composed Soup edge object used by the isolated mutation schema.
 #[derive(Clone, SimpleObject)]
@@ -68,6 +70,16 @@ impl QueryRoot {
     async fn health(&self) -> bool {
         true
     }
+
+    /// Return a successful domain outcome whose deletion cannot be represented by Soup.
+    async fn unsupported_deletion(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
+        super::GraphqlMutationSuccess {
+            effects: vec![EntityMutationEffect::deleted(
+                EntityType::User.with_entity_string("user-1".to_string()),
+            )],
+            edges: std::marker::PhantomData,
+        }
+    }
 }
 
 #[tokio::test]
@@ -127,6 +139,25 @@ async fn mutation_results_return_typed_errors() {
                 }],
             },
         })
+    );
+}
+
+#[tokio::test]
+async fn unsupported_soup_deletion_is_a_graphql_error() {
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: Some(42),
+    };
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(Request::new("{ unsupportedDeletion { effects { __typename } } }").data(actor))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert!(
+        response.errors[0]
+            .message
+            .contains("cannot be represented as a Soup cache deletion")
     );
 }
 

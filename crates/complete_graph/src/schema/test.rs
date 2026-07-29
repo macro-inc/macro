@@ -648,13 +648,20 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         ))
         .await
         .expect("subscription remains open");
-    let response = responses.next().await.expect("one subscription response");
+    let mut updates = Vec::new();
+    while updates.len() < 2 {
+        let response = responses.next().await.expect("subscription response");
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().expect("response data is JSON");
+        updates.extend(
+            data["soupUpdates"]
+                .as_array()
+                .expect("soupUpdates is a buffered list")
+                .iter()
+                .cloned(),
+        );
+    }
 
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().expect("response data is JSON");
-    let updates = data["soupUpdates"]
-        .as_array()
-        .expect("soupUpdates is a buffered list");
     assert_eq!(updates.len(), 2);
     assert_eq!(updates[0]["__typename"], "SoupUpdated");
     assert!(updates[0]["item"].is_null());

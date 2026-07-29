@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+
+const toastFailure = vi.hoisted(() => vi.fn());
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: toastFailure },
+}));
+
 import {
   buildGraphqlSoupWebSocketUrl,
   createGraphqlSoupWebSocketUrlResolver,
   createSoupUpdatesSubscriptionLifecycle,
+  SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+  shouldRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
 
 describe('GraphQL Soup websocket auth', () => {
@@ -56,6 +64,21 @@ describe('GraphQL Soup websocket auth', () => {
   });
 });
 
+describe('GraphQL Soup websocket retry policy', () => {
+  it('bounds retries and accepts only transient failures', () => {
+    expect(SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS).toBe(5);
+    expect(shouldRetryGraphqlSoupWebSocket({ code: 1006 })).toBe(true);
+    expect(shouldRetryGraphqlSoupWebSocket({ code: 1013 })).toBe(true);
+    expect(shouldRetryGraphqlSoupWebSocket(new Event('error'))).toBe(true);
+    expect(shouldRetryGraphqlSoupWebSocket({ code: 4401 })).toBe(false);
+    expect(shouldRetryGraphqlSoupWebSocket({ code: 4403 })).toBe(false);
+    expect(shouldRetryGraphqlSoupWebSocket({ code: 4406 })).toBe(false);
+    expect(shouldRetryGraphqlSoupWebSocket(new Error('auth failed'))).toBe(
+      false
+    );
+  });
+});
+
 describe('Soup updates subscription lifecycle', () => {
   it('keeps one subscription, cleans up replacements, and skips disabled hosts', () => {
     const firstUnsubscribe = vi.fn();
@@ -85,5 +108,29 @@ describe('Soup updates subscription lifecycle', () => {
 
     lifecycle.dispose();
     expect(secondUnsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('signals a terminal subscription failure once', () => {
+    toastFailure.mockClear();
+    let receive: ((result: { error?: unknown }) => void) | undefined;
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn((next) => {
+          receive = next;
+          return { unsubscribe: vi.fn() };
+        }),
+      })),
+    };
+    const lifecycle = createSoupUpdatesSubscriptionLifecycle();
+    lifecycle.replace(client as never, { disabled: false } as never);
+
+    receive?.({ error: new Error('retry budget exhausted') });
+    receive?.({ error: new Error('duplicate terminal result') });
+
+    expect(toastFailure).toHaveBeenCalledOnce();
+    expect(toastFailure).toHaveBeenCalledWith('Live updates disconnected', {
+      subtext: 'Refresh the app to reconnect.',
+    });
+    lifecycle.dispose();
   });
 });

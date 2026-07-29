@@ -27,7 +27,9 @@ use crate::{
 pub async fn resolve_soup_updates<R, Auth, St, Edges>(
     service: &R,
     ctx: &Context<'_>,
-) -> async_graphql::Result<impl Stream<Item = Vec<SoupPatch<Edges>>> + Send + 'static>
+) -> async_graphql::Result<
+    impl Stream<Item = async_graphql::Result<Vec<SoupPatch<Edges>>>> + Send + 'static,
+>
 where
     R: SoupRealtimeSubscriptionService,
     Auth: MacroAuthorizationService,
@@ -42,8 +44,11 @@ where
 
     Ok(async_stream::stream! {
         while let x @ 1.. = receiver.recv_many(&mut buf, BUFFER_SIZE).await {
-            let out = buf.drain(..x).map(|patch| SoupPatch::new(macro_user_id.clone(), patch)).collect();
-            yield out;
+            let patches = buf
+                .drain(..x)
+                .map(|patch| SoupPatch::new(macro_user_id.clone(), patch))
+                .collect();
+            yield patches;
         }
     })
 }

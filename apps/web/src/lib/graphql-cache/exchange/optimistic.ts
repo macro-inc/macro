@@ -206,7 +206,8 @@ export function select<TData, TVariables extends AnyVariables>(
   });
 }
 
-function normalizedEntityKey(entity: NormalizedEntityIdentity): string {
+/** Construct the wire key for one normalized `id: ID!` GraphQL entity. */
+export function normalizedEntityKey(entity: NormalizedEntityIdentity): string {
   return `${entity.__typename}:${entity.id}`;
 }
 

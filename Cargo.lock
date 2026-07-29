@@ -6055,6 +6055,7 @@ dependencies = [
  "models_properties",
  "rootcause",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

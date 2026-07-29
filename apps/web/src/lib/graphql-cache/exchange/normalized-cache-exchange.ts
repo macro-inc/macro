@@ -59,6 +59,7 @@ import {
 import type { CacheHost } from '../host/types';
 import type { OptimisticWriteResult, QueryRevalidationWire } from '../protocol';
 import {
+  normalizedEntityKey,
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
@@ -185,7 +186,10 @@ function graphqlCacheDeletionKey(value: unknown): string | undefined {
   ) {
     return;
   }
-  return `${record.graphqlTypeName}:${record.entityId}`;
+  return normalizedEntityKey({
+    __typename: record.graphqlTypeName,
+    id: record.entityId,
+  });
 }
 
 /** Returns whether a response subtree contains an explicit cache deletion. */
@@ -217,7 +221,12 @@ function operationCacheEffects(data: unknown): CacheEffect[] {
     return data.flatMap((value) =>
       operationCacheEffects(value).map((effect) =>
         effect.kind === 'write'
-          ? { kind: 'write' as const, data: [effect.data] }
+          ? {
+              kind: 'write' as const,
+              // Safe only for transient operation-root effect lists such as
+              // `soupUpdates`/`effects`, never normalized entity link lists.
+              data: [effect.data],
+            }
           : effect
       )
     );

@@ -363,7 +363,9 @@ where
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<
-        impl async_graphql::futures_util::Stream<Item = Vec<SoupPatch<SoupEdges<NR, PR, ER, FR, AR>>>>,
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<SoupPatch<SoupEdges<NR, PR, ER, FR, AR>>>>,
+        >,
     > {
         resolve_soup_updates::<R, Auth, St, SoupEdges<NR, PR, ER, FR, AR>>(&self.service, ctx).await
     }

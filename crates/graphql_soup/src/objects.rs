@@ -285,19 +285,24 @@ where
     E: SoupEntityEdges,
 {
     /// Return the concrete GraphQL object name associated with a Soup entity type.
-    fn graphql_type_name_for(entity_type: model_entity::EntityType) -> String {
-        match GraphqlSoupEntityType::new(entity_type) {
-            GraphqlSoupEntityType::Document => GraphqlSoupDocument::<E>::type_name(),
-            GraphqlSoupEntityType::Chat => GraphqlSoupChat::<E>::type_name(),
-            GraphqlSoupEntityType::Project => GraphqlSoupProject::<E>::type_name(),
-            GraphqlSoupEntityType::EmailThread => GraphqlSoupEmailThread::<E>::type_name(),
-            GraphqlSoupEntityType::Channel => GraphqlSoupChannel::<E>::type_name(),
-            GraphqlSoupEntityType::ChannelMessage => GraphqlSoupChannelMessage::<E>::type_name(),
-            GraphqlSoupEntityType::Call => GraphqlSoupCall::<E>::type_name(),
-            GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
-            GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
-        }
-        .into_owned()
+    fn graphql_type_name_for(entity_type: model_entity::EntityType) -> Option<String> {
+        let entity_type = GraphqlSoupEntityType::try_new(entity_type)?;
+        Some(
+            match entity_type {
+                GraphqlSoupEntityType::Document => GraphqlSoupDocument::<E>::type_name(),
+                GraphqlSoupEntityType::Chat => GraphqlSoupChat::<E>::type_name(),
+                GraphqlSoupEntityType::Project => GraphqlSoupProject::<E>::type_name(),
+                GraphqlSoupEntityType::EmailThread => GraphqlSoupEmailThread::<E>::type_name(),
+                GraphqlSoupEntityType::Channel => GraphqlSoupChannel::<E>::type_name(),
+                GraphqlSoupEntityType::ChannelMessage => {
+                    GraphqlSoupChannelMessage::<E>::type_name()
+                }
+                GraphqlSoupEntityType::Call => GraphqlSoupCall::<E>::type_name(),
+                GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
+                GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
+            }
+            .into_owned(),
+        )
     }
 
     /// Construct a GraphQL entity from a plain Soup item.
@@ -1760,21 +1765,27 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
     }
 
     /// Construct a deletion patch for one normalized Soup entity.
-    pub fn deleted(entity: Entity<'static>) -> Self {
-        let graphql_type_name = GraphqlSoupEntity::<E>::graphql_type_name_for(entity.entity_type);
-        Self::Deleted(GraphqlCacheDeletion::new(
+    pub fn deleted(entity: Entity<'static>) -> async_graphql::Result<Self> {
+        let entity_type = entity.entity_type;
+        let graphql_type_name = GraphqlSoupEntity::<E>::graphql_type_name_for(entity_type)
+            .ok_or_else(|| {
+                async_graphql::Error::new(format!(
+                    "{entity_type} cannot be represented as a Soup cache deletion"
+                ))
+            })?;
+        Ok(Self::Deleted(GraphqlCacheDeletion::new(
             graphql_type_name,
             ID(entity.entity_id.into_owned()),
-        ))
+        )))
     }
 
     /// Construct a GraphQL patch for one recipient-targeted realtime patch.
     pub fn new(
         user_id: MacroUserIdStr<'static>,
         patch: Patch<model_entity::Entity<'static>>,
-    ) -> Self {
+    ) -> async_graphql::Result<Self> {
         match patch {
-            Patch::Updated(entity) => Self::updated(user_id, entity),
+            Patch::Updated(entity) => Ok(Self::updated(user_id, entity)),
             Patch::Deleted(entity) => Self::deleted(entity),
         }
     }

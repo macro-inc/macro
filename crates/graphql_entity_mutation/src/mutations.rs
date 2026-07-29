@@ -332,16 +332,15 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
-        Ok(self
-            .effects
+        self.effects
             .iter()
             .map(|effect| match effect {
                 EntityMutationEffect::Updated(entity) => {
-                    SoupPatch::updated(user_id.clone(), entity.clone())
+                    Ok(SoupPatch::updated(user_id.clone(), entity.clone()))
                 }
                 EntityMutationEffect::Deleted(entity) => SoupPatch::deleted(entity.clone()),
             })
-            .collect())
+            .collect()
     }
 }
 

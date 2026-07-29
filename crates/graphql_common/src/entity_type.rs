@@ -58,7 +58,15 @@ pub enum GraphqlEntityType {
 impl GraphqlSoupEntityType {
     /// Construct a GraphQL Soup entity type from the canonical model type.
     pub fn new(entity_type: EntityType) -> Self {
-        match entity_type {
+        Self::try_new(entity_type).unwrap_or_else(|| {
+            tracing::error!("{entity_type:?}");
+            Self::Document
+        })
+    }
+
+    /// Try to construct a GraphQL Soup entity type from the canonical model type.
+    pub fn try_new(entity_type: EntityType) -> Option<Self> {
+        Some(match entity_type {
             EntityType::Document => Self::Document,
             EntityType::Chat => Self::Chat,
             EntityType::Project => Self::Project,
@@ -68,8 +76,8 @@ impl GraphqlSoupEntityType {
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
-            unsupported => panic!("{unsupported} is not a Soup entity type"),
-        }
+            _ => return None,
+        })
     }
 
     /// Convert this GraphQL Soup entity type into the canonical model type.

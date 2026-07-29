@@ -1,8 +1,37 @@
+import { toast } from '@core/component/Toast/Toast';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client } from '@urql/core';
 import { SoupUpdatesDocument } from './graphql/generated/graphql';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
+
+/** Maximum reconnect attempts for the Soup updates websocket. */
+export const SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS = 5;
+
+const RETRYABLE_WEBSOCKET_CLOSE_CODES = new Set([
+  1001, // endpoint is temporarily going away
+  1005, // no close status received
+  1006, // abnormal network closure
+  1012, // service restart
+  1013, // try again later
+  1014, // bad gateway
+  4408, // connection initialisation timeout
+  4504, // connection acknowledgement timeout
+]);
+
+/** Retry transient transport failures, but not auth or protocol failures. */
+export function shouldRetryGraphqlSoupWebSocket(error: unknown): boolean {
+  if (error !== null && typeof error === 'object' && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    return (
+      typeof code === 'number' && RETRYABLE_WEBSOCKET_CLOSE_CODES.has(code)
+    );
+  }
+
+  // Browser websocket network failures arrive as Events. Errors thrown while
+  // resolving auth or processing the protocol are not retryable.
+  return typeof Event !== 'undefined' && error instanceof Event;
+}
 
 /** Converts a DSS HTTP origin into its Soup GraphQL websocket endpoint. */
 export function buildGraphqlSoupWebSocketUrl(
@@ -61,6 +90,7 @@ export function createSoupUpdatesSubscriptionLifecycle(): {
       unsubscribe = undefined;
       if (!client || !host || host.disabled) return;
 
+      let signaledFailure = false;
       const subscription = client
         .subscription(SoupUpdatesDocument, {})
         .subscribe((result) => {
@@ -69,6 +99,12 @@ export function createSoupUpdatesSubscriptionLifecycle(): {
               'GraphQL Soup updates subscription error',
               result.error
             );
+            if (!signaledFailure) {
+              signaledFailure = true;
+              toast.failure('Live updates disconnected', {
+                subtext: 'Refresh the app to reconnect.',
+              });
+            }
           }
         });
       unsubscribe = () => subscription.unsubscribe();
