@@ -2071,6 +2071,129 @@ async fn mark_projects_uploaded_publication_failure_is_non_fatal() {
 }
 
 #[tokio::test]
+async fn upload_folder_publishes_uploaded_event() {
+    let project_ids = vec!["root-project".to_string(), "child-project".to_string()];
+    let expected_project_ids = project_ids.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_upload_folder()
+        .withf(|args| {
+            args.user_id.as_ref() == "macro|owner@example.com"
+                && args.root_folder_name == "Uploaded tree"
+                && args.upload_request_id == "request"
+                && args.parent_id.as_deref() == Some("parent-project")
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(UploadFolderWithIdsResponse {
+                    file_system: FileSystemNodeWithIds::Folder {
+                        content: Default::default(),
+                        project_id: "root-project".to_string(),
+                    },
+                    project_ids,
+                    documents: vec![upload_document("document", FileType::Pdf)],
+                })
+            })
+        });
+    let upload_urls = RecordingUploadUrls {
+        calls: Arc::new(Mutex::new(Vec::new())),
+        fail_document: false,
+    };
+    let upload_url_calls = upload_urls.calls.clone();
+    let indexer = RecordingIndexer::default();
+    let index_calls = indexer.calls.clone();
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = ProjectServiceImpl::new(
+        repo,
+        upload_urls,
+        RecordingBulkUpload::default(),
+        NullPort,
+        NullPort,
+        indexer,
+        None,
+        event_broker,
+    );
+
+    service
+        .upload_folder(
+            user_id("macro|owner@example.com"),
+            false,
+            UploadFolderRequest {
+                content: vec![FolderItem {
+                    name: "document".to_string(),
+                    full_name: "document.pdf".to_string(),
+                    file_type: Some(FileType::Pdf),
+                    relative_path: "Uploaded tree".to_string(),
+                    sha: "0123456789abcdef".to_string(),
+                }],
+                root_folder_name: "Uploaded tree".to_string(),
+                upload_request_id: "request".to_string(),
+                parent_id: Some("parent-project".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(upload_url_calls.lock().unwrap().len(), 1);
+    assert_eq!(
+        *index_calls.lock().unwrap(),
+        vec![IndexCall::Upsert(expected_project_ids.clone())]
+    );
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.projects");
+    assert_eq!(published[0].key, "root-project");
+    assert_eq!(published[0].payload["schema_version"], 1);
+    assert_eq!(published[0].payload["event_type"], "project.uploaded");
+    assert_eq!(
+        published[0].payload["metadata"],
+        serde_json::json!({
+            "root_project_id": "root-project",
+            "owner": "macro|owner@example.com",
+            "name": "Uploaded tree",
+            "parent_project_id": "parent-project",
+            "project_ids": expected_project_ids,
+        })
+    );
+}
+
+#[tokio::test]
+async fn upload_folder_with_no_project_ids_publishes_no_event() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_upload_folder().return_once(|_| {
+        Box::pin(async {
+            Ok(UploadFolderWithIdsResponse {
+                file_system: FileSystemNodeWithIds::Folder {
+                    content: Default::default(),
+                    project_id: "root-project".to_string(),
+                },
+                project_ids: Vec::new(),
+                documents: Vec::new(),
+            })
+        })
+    });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
+
+    service
+        .upload_folder(
+            user_id("macro|owner@example.com"),
+            false,
+            UploadFolderRequest {
+                content: Vec::new(),
+                root_folder_name: "Uploaded tree".to_string(),
+                upload_request_id: "request".to_string(),
+                parent_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn upload_folder_compensates_after_destination_failure() {
     let mut repo = MockProjectRepo::new();
     repo.expect_upload_folder().return_once(|_| {
@@ -2088,6 +2211,8 @@ async fn upload_folder_compensates_after_destination_failure() {
     repo.expect_delete_uploaded_tree()
         .withf(|projects, documents| projects == ["project"] && documents == ["document"])
         .return_once(|_, _| Box::pin(async { Ok(()) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
     let service = ProjectServiceImpl::new(
         repo,
         RecordingUploadUrls {
@@ -2099,7 +2224,7 @@ async fn upload_folder_compensates_after_destination_failure() {
         NullPort,
         NullPort,
         None,
-        TestEventBroker::default(),
+        event_broker,
     );
 
     let result = service
@@ -2122,6 +2247,7 @@ async fn upload_folder_compensates_after_destination_failure() {
         .await;
 
     assert!(matches!(result, Err(ProjectError::Internal(_))));
+    assert!(published.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

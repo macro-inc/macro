@@ -10,7 +10,7 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::folder::{UploadFolderRequest, UploadFolderResponseData};
+use model::folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData};
 use model::item::{Item, ItemWithUserAccessLevel};
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
@@ -655,6 +655,9 @@ where
         internal: bool,
         args: UploadFolderRequest,
     ) -> Result<UploadFolderResponseData, ProjectError> {
+        let event_owner = actor.clone();
+        let event_name = args.root_folder_name.clone();
+        let event_parent_project_id = args.parent_id.clone();
         let root_folder = build_root_folder(&args.root_folder_name, args.content)
             .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
         let uploaded = self
@@ -701,11 +704,32 @@ where
         if !uploaded.project_ids.is_empty() {
             let _ = self
                 .search_indexer
-                .upsert_projects(uploaded.project_ids)
+                .upsert_projects(uploaded.project_ids.clone())
                 .await
                 .inspect_err(|error| {
                     tracing::error!(error = ?error, "unable to enqueue uploaded projects for search");
                 });
+
+            match &uploaded.file_system {
+                FileSystemNodeWithIds::Folder {
+                    project_id: root_project_id,
+                    ..
+                } => {
+                    self.publish_project_event(&ProjectMacroEvent::uploaded(
+                        root_project_id.clone(),
+                        ProjectUploadedMetadata {
+                            root_project_id: root_project_id.clone(),
+                            owner: event_owner,
+                            name: event_name,
+                            parent_project_id: event_parent_project_id,
+                            project_ids: uploaded.project_ids,
+                        },
+                    ));
+                }
+                FileSystemNodeWithIds::File { .. } => {
+                    tracing::error!("unable to publish folder upload event: root node is a file");
+                }
+            }
         }
 
         Ok(UploadFolderResponseData {
