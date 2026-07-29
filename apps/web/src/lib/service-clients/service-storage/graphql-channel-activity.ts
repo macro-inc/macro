@@ -1,3 +1,6 @@
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import { throwOnErr } from '@core/util/result';
+import { storageServiceClient } from './client';
 import type { ActivityType } from './generated/schemas/activityType';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import {
@@ -12,11 +15,21 @@ const ACTIVITY_TYPE_TO_GRAPHQL: Record<ActivityType, ChannelActivityType> = {
   interact: 'INTERACT',
 };
 
-/** Record channel activity through the normalized-cache-aware GraphQL client. */
+/** Record channel activity through the configured REST or GraphQL transport. */
 export async function recordChannelActivity(args: {
   channelId: string;
   activityType: ActivityType;
 }): Promise<ApiActivity> {
+  if (!ENABLE_GRAPHQL_SOUP()) {
+    return await throwOnErr(
+      async () =>
+        await storageServiceClient.postActivity({
+          channel_id: args.channelId,
+          activity_type: args.activityType,
+        })
+    );
+  }
+
   const variables: RecordChannelActivityMutationVariables = {
     input: {
       channelId: args.channelId,

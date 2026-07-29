@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityData } from '../../../features/entity/types/entity';
 import type { WithNotification } from '../../../features/entity/types/notification';
@@ -9,7 +10,37 @@ import {
 import { recordChannelActivity } from './graphql-channel-activity';
 import { updateNotifications } from './graphql-notifications';
 
-const { mutationMock } = vi.hoisted(() => ({ mutationMock: vi.fn() }));
+const {
+  graphqlSoupEnabledMock,
+  markDoneMock,
+  markSeenMock,
+  markUndoneMock,
+  mutationMock,
+  postActivityMock,
+} = vi.hoisted(() => ({
+  graphqlSoupEnabledMock: vi.fn(() => true),
+  markDoneMock: vi.fn(),
+  markSeenMock: vi.fn(),
+  markUndoneMock: vi.fn(),
+  mutationMock: vi.fn(),
+  postActivityMock: vi.fn(),
+}));
+
+vi.mock('@core/constant/featureFlags', () => ({
+  ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
+}));
+
+vi.mock('./client', () => ({
+  storageServiceClient: { postActivity: postActivityMock },
+}));
+
+vi.mock('../service-notification/client', () => ({
+  notificationServiceClient: {
+    bulkMarkNotificationAsDone: markDoneMock,
+    bulkMarkNotificationAsSeen: markSeenMock,
+    bulkMarkNotificationAsUndone: markUndoneMock,
+  },
+}));
 
 vi.mock('./graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mutationMock }),
@@ -18,6 +49,7 @@ vi.mock('./graphql-soup', () => ({
 describe('channel activity and notification GraphQL cache separation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    graphqlSoupEnabledMock.mockReturnValue(true);
   });
 
   it('marks the linked notification seen while VIEW activity leaves unread state unchanged', async () => {
@@ -103,5 +135,58 @@ describe('channel activity and notification GraphQL cache separation', () => {
     expect(updated[0].__typename).toBe('GraphqlSoupNotification');
     expect(updated[0].id).toBe('notification-1');
     expect(unreadFilterFn(channel)).toBe(false);
+  });
+
+  it('uses only REST writes while GraphQL Soup is disabled', async () => {
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    const activity = {
+      id: 'activity-1',
+      user_id: 'macro|user@example.com',
+      channel_id: 'channel-1',
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:01Z',
+      viewed_at: '2025-01-01T00:00:01Z',
+      interacted_at: undefined,
+    };
+    postActivityMock.mockResolvedValue(ok(activity));
+    markSeenMock.mockResolvedValue(ok({ success: true }));
+    markDoneMock.mockResolvedValue(ok({ success: true }));
+    markUndoneMock.mockResolvedValue(ok({ success: true }));
+
+    await expect(
+      recordChannelActivity({
+        channelId: 'channel-1',
+        activityType: 'view',
+      })
+    ).resolves.toEqual(activity);
+    await expect(
+      updateNotifications({
+        notificationIds: ['notification-1'],
+        operation: 'MARK_SEEN',
+      })
+    ).resolves.toEqual([]);
+    await updateNotifications({
+      notificationIds: ['notification-1'],
+      operation: 'MARK_DONE',
+    });
+    await updateNotifications({
+      notificationIds: ['notification-1'],
+      operation: 'MARK_UNDONE',
+    });
+
+    expect(postActivityMock).toHaveBeenCalledWith({
+      channel_id: 'channel-1',
+      activity_type: 'view',
+    });
+    expect(markSeenMock).toHaveBeenCalledWith({
+      notificationIds: ['notification-1'],
+    });
+    expect(markDoneMock).toHaveBeenCalledWith({
+      notificationIds: ['notification-1'],
+    });
+    expect(markUndoneMock).toHaveBeenCalledWith({
+      notificationIds: ['notification-1'],
+    });
+    expect(mutationMock).not.toHaveBeenCalled();
   });
 });
