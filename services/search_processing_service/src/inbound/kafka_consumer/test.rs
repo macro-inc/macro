@@ -8,7 +8,7 @@ use call::domain::events::{
 };
 use chrono::Utc;
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
-use macro_event_topics::Topic as _;
+use macro_event_topics::{MacroCallsTopic, Topic as _};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
@@ -104,12 +104,15 @@ fn encoded_message(event: Event<CallTopicEvent>) -> TestMessage {
 }
 
 #[test]
-fn declares_only_the_calls_topic_and_durable_group() {
+fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert_eq!(
         SearchProcessingConsumerGroup::GROUP_NAME,
         "search-processing-service"
     );
-    assert_eq!(DeclaredMacroEvent::topics(), [MacroCallsTopic::TOPIC_STR]);
+    assert_eq!(
+        SearchProcessingBrokerEvent::topics(),
+        [MacroCallsTopic::TOPIC_STR]
+    );
 }
 
 #[test]
@@ -173,21 +176,24 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         key: Some(CALL_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = decode_received_call_event(&malformed, 1, 10);
+    let malformed =
+        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&malformed), 1, 10);
     assert!(matches!(malformed, Err(EventBrokerError::Serialization(_))));
 
     let missing_key = TestMessage {
         key: None,
         payload: encoded_message(Event::new(archived_event())).payload,
     };
-    let missing_key = decode_received_call_event(&missing_key, 1, 11);
+    let missing_key =
+        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&missing_key), 1, 11);
     assert!(matches!(
         missing_key,
         Err(EventBrokerError::MissingMessageKey)
     ));
 
     let unsupported = encoded_message(Event::with_schema_version(archived_event(), 2));
-    let unsupported = decode_received_call_event(&unsupported, 1, 12);
+    let unsupported =
+        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&unsupported), 1, 12);
     assert!(matches!(
         unsupported,
         Err(EventBrokerError::UnsupportedSchemaVersion {
@@ -214,7 +220,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
 async fn successful_handoff_carries_event_partition_and_offset() {
     let event = archived_event();
     let message = encoded_message(Event::new(event.clone()));
-    let decoded = decode_received_call_event(&message, 3, 42);
+    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 3, 42);
     let (sender, mut receiver) = mpsc::channel(1);
 
     assert!(matches!(
@@ -225,13 +231,14 @@ async fn successful_handoff_carries_event_partition_and_offset() {
     let received = receiver.recv().await.expect("handed-off event");
     assert_eq!(received.partition, 3);
     assert_eq!(received.offset, 42);
-    assert_eq!(received.event.event().event, event);
+    let SearchProcessingBrokerEvent::CallMacroEvent(received_event) = received.event;
+    assert_eq!(received_event.event().event, event);
 }
 
 #[tokio::test]
 async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
     let message = encoded_message(Event::new(archived_event()));
-    let decoded = decode_received_call_event(&message, 3, 42);
+    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 3, 42);
     let (sender, receiver) = mpsc::channel(1);
     drop(receiver);
 
@@ -267,7 +274,7 @@ async fn bounded_handoff_blocks_when_full_and_preserves_order() {
 
 #[test]
 fn production_channel_and_retry_bounds_match_the_delivery_contract() {
-    let (sender, _receiver) = mpsc::channel::<ReceivedCallEvent>(CHANNEL_CAPACITY);
+    let (sender, _receiver) = mpsc::channel::<ReceivedEvent>(CHANNEL_CAPACITY);
     assert_eq!(sender.max_capacity(), 128);
     assert_eq!(
         processing_retry_strategy().collect::<Vec<_>>(),

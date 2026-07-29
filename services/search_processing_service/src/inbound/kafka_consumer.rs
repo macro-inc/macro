@@ -1,10 +1,10 @@
-//! Kafka consumer for call lifecycle events that update the search index.
+//! Kafka consumer for broker events that update the search index.
 //!
 //! The poll loop hands decoded events to one bounded, sequential worker and
-//! commits each offset after that handoff. Poison records are committed without
-//! a handoff so they cannot wedge a partition. Processing is retried in-process;
-//! exhausted events are logged and dropped because their offsets are already
-//! committed.
+//! commits each offset immediately after that handoff. Poison records are
+//! committed without a handoff so they cannot wedge a partition. Processing is
+//! retried in-process; exhausted events are logged and dropped because their
+//! offsets are already committed.
 
 #[cfg(test)]
 mod test;
@@ -14,10 +14,8 @@ use std::{future::Future, time::Duration};
 use call::domain::events::{CallMacroEvent, CallTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
-    EventBrokerError, KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _,
-    MacroEventConsumerService, MessageParts,
+    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
-use macro_event_topics::{MacroCallsTopic, Topic as _};
 use opensearch_client::OpensearchClient;
 use rdkafka::{
     consumer::CommitMode,
@@ -31,19 +29,19 @@ use uuid::Uuid;
 
 use crate::process::call::{process_call_record, process_remove_call_record};
 
-/// Durable group used for live call search-index updates.
+/// Consumer group used for live search-index event offsets.
 pub(crate) struct SearchProcessingConsumerGroup;
 
 impl GroupName for SearchProcessingConsumerGroup {
     const GROUP_NAME: &'static str = "search-processing-service";
 }
 
-macro_event_broker::declare_topics!(DeclaredMacroEvent: CallMacroEvent);
-
 type SearchProcessingKafkaAdapter =
-    KafkaConsumerAdapter<SearchProcessingConsumerGroup, DeclaredMacroEvent>;
+    KafkaConsumerAdapter<SearchProcessingConsumerGroup, SearchProcessingBrokerEvent>;
 type SearchProcessingKafkaConsumer =
-    MacroEventConsumerService<DeclaredMacroEvent, SearchProcessingKafkaAdapter>;
+    MacroEventConsumerService<SearchProcessingBrokerEvent, SearchProcessingKafkaAdapter>;
+
+macro_event_broker::declare_topics!(SearchProcessingBrokerEvent: CallMacroEvent);
 
 /// Maximum number of decoded events waiting for the sequential worker.
 const CHANNEL_CAPACITY: usize = 128;
@@ -52,9 +50,9 @@ const MAX_PROCESSING_ATTEMPTS: u32 = 5;
 /// Delay before the first retry; each later delay doubles.
 const PROCESSING_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
-/// A decoded call event and its Kafka coordinates.
-struct ReceivedCallEvent {
-    event: CallMacroEvent,
+/// A decoded search-processing event and its Kafka coordinates.
+struct ReceivedEvent {
+    event: SearchProcessingBrokerEvent,
     partition: i32,
     offset: i64,
 }
@@ -71,6 +69,17 @@ struct CallEventDescription {
     action: CallIndexAction,
     call_id: Uuid,
     event_type: &'static str,
+}
+
+/// Outcome after the worker handles one decoded broker event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EventOutcome {
+    /// The corresponding search-index operation succeeded.
+    Indexed,
+    /// The recognized event does not require a search-index operation.
+    Ignored,
+    /// Processing failed after all retries and the already-committed event was dropped.
+    Dropped,
 }
 
 /// Result of decoding and attempting a channel handoff.
@@ -175,20 +184,19 @@ async fn handoff_decoded<T, E>(
     }
 }
 
-fn decode_received_call_event<M: MessageParts>(
-    message: &M,
+fn attach_event_coordinates<E>(
+    decoded: Result<SearchProcessingBrokerEvent, E>,
     partition: i32,
     offset: i64,
-) -> Result<ReceivedCallEvent, EventBrokerError> {
-    let DeclaredMacroEvent::CallMacroEvent(event) = DeclaredMacroEvent::decode(message)?;
-    Ok(ReceivedCallEvent {
+) -> Result<ReceivedEvent, E> {
+    decoded.map(|event| ReceivedEvent {
         event,
         partition,
         offset,
     })
 }
 
-async fn process_index_action(
+async fn process_call_index_action(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
     action: CallIndexAction,
@@ -205,33 +213,35 @@ async fn process_index_action(
     }
 }
 
-async fn process_received_call_event(
+async fn process_call_event(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
-    received: ReceivedCallEvent,
-) {
-    let description = describe_call_event(&received.event.event().event);
+    event: &CallMacroEvent,
+    partition: i32,
+    offset: i64,
+) -> EventOutcome {
+    let description = describe_call_event(&event.event().event);
     if description.action == CallIndexAction::Ignore {
         tracing::trace!(
             call_id = %description.call_id,
             event_type = description.event_type,
-            partition = received.partition,
-            offset = received.offset,
+            partition,
+            offset,
             "ignoring call event without a search-index action"
         );
-        return;
+        return EventOutcome::Ignored;
     }
 
     let result = retry_processing(|attempt| async move {
         tracing::trace!(
             call_id = %description.call_id,
             event_type = description.event_type,
-            partition = received.partition,
-            offset = received.offset,
+            partition,
+            offset,
             attempt,
             "processing call search-index event"
         );
-        process_index_action(db, opensearch_client, description.action)
+        process_call_index_action(db, opensearch_client, description.action)
             .await
             .inspect_err(|error| {
                 if attempt < MAX_PROCESSING_ATTEMPTS {
@@ -241,8 +251,8 @@ async fn process_received_call_event(
                         error = ?error,
                         call_id = %description.call_id,
                         event_type = description.event_type,
-                        partition = received.partition,
-                        offset = received.offset,
+                        partition,
+                        offset,
                         attempt,
                         delay_secs = retry_delay.as_secs(),
                         "call search-index processing failed, retrying"
@@ -252,69 +262,97 @@ async fn process_received_call_event(
     })
     .await;
 
-    let _ = result.inspect_err(|error| {
-        tracing::error!(
-            error = ?error,
-            call_id = %description.call_id,
-            event_type = description.event_type,
-            partition = received.partition,
-            offset = received.offset,
-            attempts = MAX_PROCESSING_ATTEMPTS,
-            "dropping call event after processing retries were exhausted"
-        );
-    });
+    match result {
+        Ok(()) => EventOutcome::Indexed,
+        Err(error) => {
+            tracing::error!(
+                error = ?error,
+                call_id = %description.call_id,
+                event_type = description.event_type,
+                partition,
+                offset,
+                attempts = MAX_PROCESSING_ATTEMPTS,
+                "dropping call event after processing retries were exhausted"
+            );
+            EventOutcome::Dropped
+        }
+    }
 }
 
-async fn run_call_event_worker(
+#[tracing::instrument(skip(db, opensearch_client, event), fields(partition, offset))]
+async fn process_event(
+    db: &PgPool,
+    opensearch_client: &OpensearchClient,
+    event: &SearchProcessingBrokerEvent,
+    partition: i32,
+    offset: i64,
+) -> EventOutcome {
+    match event {
+        SearchProcessingBrokerEvent::CallMacroEvent(event) => {
+            process_call_event(db, opensearch_client, event, partition, offset).await
+        }
+    }
+}
+
+async fn run_event_worker(
     db: PgPool,
     opensearch_client: OpensearchClient,
-    mut events: mpsc::Receiver<ReceivedCallEvent>,
+    mut events: mpsc::Receiver<ReceivedEvent>,
 ) {
     while let Some(received) = events.recv().await {
-        process_received_call_event(&db, &opensearch_client, received).await;
+        let _ = process_event(
+            &db,
+            &opensearch_client,
+            &received.event,
+            received.partition,
+            received.offset,
+        )
+        .await;
     }
-    tracing::trace!("call search-index worker drained");
+    tracing::trace!("search processing event worker drained");
 }
 
 fn commit_logged(consumer: &SearchProcessingKafkaConsumer, message: &BorrowedMessage<'_>) {
     match consumer.inner().commit_message(message, CommitMode::Async) {
         Ok(()) => tracing::trace!(
+            topic = rdkafka::Message::topic(message),
             partition = message.partition(),
             offset = message.offset(),
-            "committed call event offset"
+            "committed search processing event offset"
         ),
         Err(error) => tracing::error!(
             error = ?error,
+            topic = rdkafka::Message::topic(message),
             partition = message.partition(),
             offset = message.offset(),
-            "failed to commit call event offset"
+            "failed to commit search processing event offset"
         ),
     }
 }
 
-async fn poll_call_events(
+async fn poll_events(
     consumer: &SearchProcessingKafkaConsumer,
-    events: mpsc::Sender<ReceivedCallEvent>,
+    events: mpsc::Sender<ReceivedEvent>,
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), Report> {
     let mut shutdown = std::pin::pin!(shutdown);
     loop {
         tokio::select! {
             _ = &mut shutdown => {
-                tracing::info!("call event consumer shutting down");
+                tracing::info!("search processing event consumer shutting down");
                 break;
             }
             result = consumer.recv() => {
                 let message = match result {
                     Ok(message) => message,
                     Err(error) => {
-                        tracing::error!(error = ?error, "Kafka receive error for call events");
+                        tracing::error!(error = ?error, "Kafka receive error for search processing events");
                         continue;
                     }
                 };
                 let kafka_message = message.inner();
-                let decoded = decode_received_call_event(
-                    kafka_message,
+                let decoded = attach_event_coordinates(
+                    message.decode_payload(),
                     kafka_message.partition(),
                     kafka_message.offset(),
                 );
@@ -326,23 +364,26 @@ async fn poll_call_events(
                         topic = rdkafka::Message::topic(kafka_message),
                         partition = kafka_message.partition(),
                         offset = kafka_message.offset(),
-                        "dropping undecodable call event"
+                        "dropping undecodable search processing event"
                     ),
                     HandoffOutcome::WorkerClosed => {
                         tracing::error!(
                             topic = rdkafka::Message::topic(kafka_message),
                             partition = kafka_message.partition(),
                             offset = kafka_message.offset(),
-                            "call event worker channel closed; leaving offset uncommitted"
+                            "search processing event worker channel closed; leaving offset uncommitted"
                         );
                         return Err(rootcause::report!(
-                            "call event worker channel closed at partition {} offset {}",
+                            "search processing event worker channel closed for topic {} at partition {} offset {}",
+                            rdkafka::Message::topic(kafka_message),
                             kafka_message.partition(),
                             kafka_message.offset(),
                         ));
                     }
                 }
 
+                // Deliberately commit immediately after a successful handoff. The worker
+                // owns retries and drops exhausted events without requesting redelivery.
                 commit_logged(consumer, kafka_message);
             }
         }
@@ -351,7 +392,7 @@ async fn poll_call_events(
     Ok(())
 }
 
-/// Runs the bounded call event poll-loop/worker pair until `shutdown` resolves.
+/// Runs the bounded broker event poll-loop/worker pair until `shutdown` resolves.
 ///
 /// The caller is responsible for supervising this function. A closed worker
 /// channel returns an error without committing the current Kafka message. On
@@ -366,18 +407,18 @@ pub(crate) async fn run_event_consumer(
 ) -> Result<(), Report> {
     let consumer = KafkaEventConsumer::<SearchProcessingConsumerGroup>::from_env(brokers)?;
     let consumer = KafkaConsumerAdapter::<SearchProcessingConsumerGroup, ()>::new(consumer)
-        .subscribe::<DeclaredMacroEvent>()
-        .context("failed to subscribe to the calls topic")?;
+        .subscribe::<SearchProcessingBrokerEvent>()
+        .context("failed to subscribe to search processing event topics")?;
     let consumer = SearchProcessingKafkaConsumer::new(consumer);
     tracing::info!(
-        topic = MacroCallsTopic::TOPIC_STR,
+        topics = ?SearchProcessingBrokerEvent::topics(),
         group = SearchProcessingConsumerGroup::GROUP_NAME,
-        "call event consumer listening"
+        "search processing event consumer listening"
     );
 
     let (events_tx, events_rx) = mpsc::channel(CHANNEL_CAPACITY);
-    let worker = tokio::spawn(run_call_event_worker(db, opensearch_client, events_rx));
-    let poll_result = poll_call_events(&consumer, events_tx, shutdown).await;
+    let worker = tokio::spawn(run_event_worker(db, opensearch_client, events_rx));
+    let poll_result = poll_events(&consumer, events_tx, shutdown).await;
     let worker_result = worker.await;
 
     poll_result?;
