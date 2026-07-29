@@ -468,6 +468,7 @@ fn prepare(
         instance,
         args.env.no_doppler,
         args.env.env_file.as_deref(),
+        static_frontend,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
 

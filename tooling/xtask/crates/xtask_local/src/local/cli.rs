@@ -185,7 +185,13 @@ fn run(cli: Cli) -> Result<()> {
                 a.instance.port_base,
             )?;
             let mode = if a.dev { Mode::Dev } else { Mode::Local };
-            super::validate::local_env(&instance, mode, a.env.no_doppler, a.env.env_file.as_deref())
+            super::validate::local_env(
+                &instance,
+                mode,
+                a.env.no_doppler,
+                a.env.env_file.as_deref(),
+                true,
+            )
         }
         Cmd::KafkaProvision(a) => {
             super::kafka::ensure_available("kafka-provision")?;

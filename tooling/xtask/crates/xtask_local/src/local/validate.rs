@@ -31,7 +31,7 @@ pub fn local_compose(instance: &Instance, mode: Mode) -> Result<()> {
     let target = arch::detect()?;
     let binaries = BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
     gen_compose::generate(mode, instance, &binaries, false)?;
-    let resolved = env_layer::resolve(mode, instance, true, None)?;
+    let resolved = env_layer::resolve(mode, instance, true, None, true)?;
 
     let files = gen_compose::compose_files(instance);
     let mut cmd = gen_compose::docker_compose(instance, &files, &resolved.generated_path);
@@ -116,8 +116,9 @@ pub fn local_env(
     mode: Mode,
     no_doppler: bool,
     env_file: Option<&std::path::Path>,
+    static_frontend: bool,
 ) -> Result<()> {
-    let resolved = env_layer::resolve(mode, instance, no_doppler, env_file)?;
+    let resolved = env_layer::resolve(mode, instance, no_doppler, env_file, static_frontend)?;
     let env = &resolved.merged;
     let mut failures: Vec<String> = Vec::new();
 

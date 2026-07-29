@@ -11,12 +11,15 @@ use super::{Mode, frontend, mailpit, proxy};
 /// The host-facing endpoints of an instance: (label, url, host port).
 /// Shared by the startup summary and `status-local`.
 pub fn endpoint_rows(instance: &Instance) -> Vec<(&'static str, String, u16)> {
+    // Headless stacks serve the app from the proxy origin; showing the
+    // dev-server URL there reads as "frontend down" when nothing is wrong.
+    let (frontend_url, frontend_port) = if super::stack::frontend_is_static(instance) {
+        (frontend::static_url(instance), instance.port(Port::Proxy))
+    } else {
+        (frontend::url(instance), instance.port(Port::Frontend))
+    };
     vec![
-        (
-            "frontend",
-            frontend::url(instance),
-            instance.port(Port::Frontend),
-        ),
+        ("frontend", frontend_url, frontend_port),
         ("proxy", proxy::url(instance), instance.port(Port::Proxy)),
         (
             "fusionauth",

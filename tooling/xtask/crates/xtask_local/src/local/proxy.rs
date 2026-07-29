@@ -158,7 +158,7 @@ const STATIC_FILE_DEV: &str = r#"    handle_path /static-file/* {
 /// with `base: /app`, so URL space `/app/*` maps onto the dist root after the
 /// prefix strip; unknown paths fall back to `index.html` (SPA routing). Caddy
 /// sorts `redir` before `handle_path`, so the exact-path redirects win first.
-const FRONTEND_STATIC: &str = r#"    redir / /app/ 302
+const FRONTEND_STATIC: &str = r#"    redir / "/app/?{query}" 302
     redir /app /app/ 308
     handle_path /app/* {
         root * /srv/frontend

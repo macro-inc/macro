@@ -42,6 +42,7 @@ pub fn resolve(
     instance: &Instance,
     no_doppler: bool,
     env_file: Option<&Path>,
+    static_frontend: bool,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
@@ -57,7 +58,7 @@ pub fn resolve(
         pull_doppler(spec.doppler_config, &mut env)?
     };
     if spec.overlay_local_env {
-        for (k, v) in local_env::LocalEnv::for_instance(mode, instance).to_env() {
+        for (k, v) in local_env::LocalEnv::for_instance(mode, instance, static_frontend).to_env() {
             env.insert(k, v);
         }
     }

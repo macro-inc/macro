@@ -21,6 +21,12 @@ use super::{Mode, identity, resources};
 pub struct LocalEnv {
     environment: &'static str,
     project_name: String,
+    /// Where the browser-facing app lives: the proxy (static bundle at
+    /// `/app`) or the bun dev server. `default_redirect_url()` in
+    /// authentication_service sends post-login browsers to
+    /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
+    /// mode or every OAuth signup dead-ends on an unused port.
+    frontend_port: u16,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -32,12 +38,17 @@ pub struct LocalEnv {
 impl LocalEnv {
     /// Build the local env for `instance` in `Local` mode (dev sources its env
     /// from Doppler, not here).
-    pub fn for_instance(mode: Mode, instance: &Instance) -> Self {
+    pub fn for_instance(mode: Mode, instance: &Instance, static_frontend: bool) -> Self {
         let name = instance.name();
         LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
+            frontend_port: if static_frontend {
+                instance.port(Port::Proxy)
+            } else {
+                instance.port(Port::Frontend)
+            },
             infra: InfraEnv::local(),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
@@ -53,6 +64,7 @@ impl LocalEnv {
         env.insert("ENVIRONMENT".into(), self.environment.into());
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
+        env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);
