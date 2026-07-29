@@ -4,16 +4,12 @@
 //! the job needs a toolchain and the wasm target. Generated into
 //! `deploy_sync_service.yml`.
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Use, Workflow, WorkflowCall,
-};
+use anyhow::Result;
+use gh_workflow::{Concurrency, Event, Expression, Job, Push, Run, Step, Use, Workflow};
 
 use crate::workflows::{runners, steps, vars};
 
-/// Push to `main` deploys dev; `release-production.yml` calling us deploys
-/// prod. A `workflow_call` run inherits the caller's `github` context, so
-/// `event_name` is the release that triggered it.
-const ENVIRONMENT: &str = "${{ github.event_name == 'release' && 'prod' || 'dev' }}";
+const ENVIRONMENT: &str = "${{ inputs.environment || 'dev' }}";
 
 pub fn deploy_sync_service() -> Workflow {
     Workflow::new("Deploy Sync Service")
@@ -31,8 +27,9 @@ pub fn deploy_sync_service() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("Cargo.toml"))
                     .add_path(xtask_paths::repo_glob!("Cargo.lock"))
                     .add_path(xtask_paths::repo_glob!("rust-toolchain.toml")),
-            )
-            .workflow_call(WorkflowCall::default()))
+            ))
+        // The `workflow_call` / `workflow_dispatch` input blocks are filled in
+        // by `patch` below.
         .concurrency(
             // Literal prefix rather than `github.workflow`: for workflow_call
             // runs that expression expands to the *caller's* name.
@@ -41,6 +38,41 @@ pub fn deploy_sync_service() -> Workflow {
             ))),
         )
         .add_job("deploy", deploy())
+}
+
+pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
+    let on = root
+        .get_mut("on")
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
+    on.insert(
+        "workflow_call".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            inputs:
+              environment:
+                required: true
+                type: string
+                description: The environment to deploy to. e.g. (dev, prod)
+            secrets:
+              CLOUDFLARE_API_TOKEN:
+                required: true
+        "#})?,
+    );
+    on.insert(
+        "workflow_dispatch".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            inputs:
+              environment:
+                required: true
+                type: choice
+                default: 'dev'
+                options:
+                  - dev
+                  - prod
+                description: The environment to deploy to
+        "#})?,
+    );
+    Ok(())
 }
 
 fn deploy() -> Job {

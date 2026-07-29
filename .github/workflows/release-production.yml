@@ -29,6 +29,8 @@ jobs:
     # The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
     needs: [deploy-cloud-storage]
     uses: ./.github/workflows/deploy_sync_service.yml
+    with:
+      environment: prod
     secrets: inherit
 
   build:
