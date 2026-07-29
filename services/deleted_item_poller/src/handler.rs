@@ -1,10 +1,18 @@
+#[cfg(test)]
+mod test;
+
 use crate::context::{self};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
+use futures::future::join_all;
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
+use macro_db_client::projects::ProjectToDelete;
+use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
+use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 use sqs_client::search::{
     SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project::RemoveProject,
 };
@@ -19,6 +27,55 @@ pub async fn handler(
         handle_documents(&ctx),
         handle_projects(&ctx)
     )?;
+
+    Ok(())
+}
+
+// This preparatory helper is wired into the poller in the Kafka follow-up.
+#[cfg_attr(not(test), allow(dead_code))]
+#[tracing::instrument(skip(event_broker, projects_to_delete), err)]
+async fn publish_project_purge_events<B: MacroEventBroker>(
+    event_broker: &B,
+    projects_to_delete: &[ProjectToDelete],
+) -> anyhow::Result<()> {
+    let events = projects_to_delete
+        .iter()
+        .map(|project| {
+            let project_id = project.project_id.clone();
+            let owner: MacroUserIdStr<'static> = MacroUserIdStr::try_from(project.user_id.clone())
+                .with_context(|| format!("invalid owner for project {}", project.project_id))?;
+
+            Ok(ProjectMacroEvent::permanently_deleted(
+                project_id.clone(),
+                ProjectPermanentlyDeletedMetadata {
+                    project_id: project_id.clone(),
+                    owner,
+                    actor_user_id: None,
+                    parent_project_id: None,
+                    purged_project_ids: vec![project_id],
+                    purged_document_ids: Vec::new(),
+                    purged_chat_ids: Vec::new(),
+                },
+            ))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let publications = events
+        .iter()
+        .map(|event| event_broker.send_event(event))
+        .collect::<Vec<_>>();
+    let publication_results = join_all(publications.into_iter().map(|publication| async move {
+        let handle = publication.context("failed to enqueue project purge event")?;
+        handle
+            .await
+            .context("project purge event publication task failed")?
+            .context("failed to publish project purge event")
+    }))
+    .await;
+
+    for result in publication_results {
+        result?;
+    }
 
     Ok(())
 }
