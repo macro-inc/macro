@@ -47,20 +47,23 @@ describe('buildEntityPropertiesSoupInput', () => {
     ['CHANNEL', 'channelFilter', { literal: { channelId: 'entity-1' } }],
     ['CALL_RECORD', 'callFilter', { literal: { callId: 'entity-1' } }],
     ['COMPANY', 'crmCompanyFilter', { literal: { id: 'entity-1' } }],
-  ] as const)('targets one %s and excludes the other Soup branches', (entityType, filterKey, expectedFilter) => {
-    const input = initialInput(entityType);
+  ] as const)(
+    'targets one %s and excludes the other Soup branches',
+    (entityType, filterKey, expectedFilter) => {
+      const input = initialInput(entityType);
 
-    expect(input).toMatchObject({
-      limit: 1,
-      expand: true,
-      sortMethod: 'UPDATED_AT',
-      emailView: 'ALL',
-    });
-    expect(input.filters).toEqual({
-      ...NIL_FILTERS,
-      [filterKey]: expectedFilter,
-    });
-  });
+      expect(input).toMatchObject({
+        limit: 1,
+        expand: true,
+        sortMethod: 'UPDATED_AT',
+        emailView: 'ALL',
+      });
+      expect(input.filters).toEqual({
+        ...NIL_FILTERS,
+        [filterKey]: expectedFilter,
+      });
+    }
+  );
 
   it('returns undefined for USER because users are not represented in Soup', () => {
     expect(buildEntityPropertiesSoupInput('USER', 'user-1')).toBeUndefined();
