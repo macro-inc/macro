@@ -111,3 +111,29 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
     assert_eq!(plain["oauth2"]["scope"], "openid profile email");
     assert!(plain["lambdaConfiguration"].is_null());
 }
+
+#[test]
+fn kickstart_adopts_the_default_tenant() {
+    let doc = build(
+        3000,
+        8080,
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+    );
+    assert_eq!(
+        doc["variables"]["defaultTenantId"],
+        identity::TENANT_ID,
+        "the built-in default tenant must be pinned to the fixed local id"
+    );
+    let tenant = doc["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["url"].as_str().unwrap() == format!("/api/tenant/{}", identity::TENANT_ID))
+        .expect("missing tenant request");
+    assert_eq!(
+        tenant["method"], "PATCH",
+        "the tenant is reconfigured in place, not created — local stays single-tenant"
+    );
+}

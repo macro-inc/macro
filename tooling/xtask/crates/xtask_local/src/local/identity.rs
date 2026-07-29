@@ -29,7 +29,9 @@ pub const POPULATE_JWT_LAMBDA_ID: &str = "a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f";
 /// create-application step fail with `[duplicate]applicationId`.
 pub const APPLICATION_ID: &str = "22222222-2222-4222-8222-222222222222";
 
-/// A fixed local tenant id (deterministic, local-only).
+/// A fixed local tenant id (deterministic, local-only). This is FusionAuth's
+/// built-in default tenant, pinned via the kickstart `defaultTenantId`
+/// variable and reconfigured in place — local is single-tenant by design.
 pub const TENANT_ID: &str = "11111111-1111-4111-8111-111111111111";
 
 /// A fixed OAuth client secret (deterministic, local-only).
