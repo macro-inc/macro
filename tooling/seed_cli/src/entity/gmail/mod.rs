@@ -265,7 +265,7 @@ impl GmailApi {
             let text = resp.text().await.unwrap_or_default();
             bail!("gmail request to {url} failed: {status}: {text}");
         }
-        unreachable!("retry loop always returns or bails")
+        bail!("gmail request to {url} failed: retries exhausted")
     }
 }
 
