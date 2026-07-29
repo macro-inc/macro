@@ -43,9 +43,9 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
         .bulk_send_message_to_search_event_queue(
             projects_to_delete
                 .iter()
-                .map(|id| {
+                .map(|project| {
                     SearchQueueMessage::RemoveProject(RemoveProject {
-                        project_id: id.to_string(),
+                        project_id: project.project_id.clone(),
                         index_override: None,
                     })
                 })
@@ -53,9 +53,14 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
         )
         .await?;
 
+    let project_ids = projects_to_delete
+        .into_iter()
+        .map(|project| project.project_id)
+        .collect::<Vec<_>>();
+
     // We can actually perform the project deletion here as we will automatically be queuing all
     // the items in the project for deletion as well
-    macro_db_client::projects::delete::delete_projects_bulk(&ctx.db, &projects_to_delete)
+    macro_db_client::projects::delete::delete_projects_bulk(&ctx.db, &project_ids)
         .await
         .context("unable to delete projects")?;
 
