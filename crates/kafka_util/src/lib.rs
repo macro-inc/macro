@@ -701,6 +701,12 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     /// This opt-in constructor installs a [`RebalanceTracker`] and pins
     /// `partition.assignment.strategy=cooperative-sticky`. Existing constructors
     /// retain librdkafka's default eager assignment strategy.
+    ///
+    /// Do not roll an existing group directly from [`Self::from_env`] to this
+    /// constructor: eager-only and cooperative-only members cannot coexist in a group.
+    /// Use a new group name, or perform Kafka's two-phase strategy rollout: first add
+    /// `cooperative-sticky` after the eager strategies on every member, then roll every
+    /// member to `cooperative-sticky` only.
     pub fn from_env_with_max_poll_interval(
         brokers: &str,
         max_poll_interval: Duration,

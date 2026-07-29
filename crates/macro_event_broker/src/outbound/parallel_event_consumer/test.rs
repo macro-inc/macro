@@ -174,7 +174,7 @@ fn elapsed_starts(starts: &Arc<Mutex<Vec<Instant>>>, initial: Instant) -> Vec<Du
 }
 
 #[test]
-fn uniform_bounded_retry_defaults_and_decisions_are_exact() {
+fn uniform_bounded_retry_defaults_and_handler_error_decisions_are_exact() {
     let policy = UniformBoundedRetry::default();
     assert_eq!(policy.max_attempts, 5);
     assert_eq!(policy.base_backoff, Duration::from_secs(1));
@@ -197,7 +197,7 @@ fn uniform_bounded_retry_defaults_and_decisions_are_exact() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn default_policy_runs_five_attempts_with_doubling_backoff_and_no_extra_attempt() {
+async fn default_policy_retries_handler_errors_with_bounded_doubling_backoff() {
     let initial = Instant::now();
     let (handler, starts) = TimedHandler::new(Duration::ZERO, None);
 
@@ -273,7 +273,30 @@ async fn timeout_does_not_start_before_the_processing_future_is_polled() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn decode_failures_use_the_same_delivery_policy_as_handler_failures() {
+async fn default_policy_drops_decode_failures_on_the_first_attempt() {
+    let subscriber = CaptureSubscriber::default();
+    let events = Arc::clone(&subscriber.events);
+    let malformed_event = message(br#"{"event_type":"example.test"}"#.to_vec());
+
+    let result = {
+        let _guard = tracing::subscriber::set_default(subscriber);
+        process_message::<TestEvents, _, _>(
+            malformed_event,
+            Arc::new(PanicHandler),
+            Arc::new(UniformBoundedRetry::default()),
+        )
+        .await
+    };
+
+    assert!(result.is_ok(), "a decode failure is dropped commit-safe");
+    let events = events.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].fields.get("attempts").unwrap(), "1");
+    assert!(events[0].fields.get("error").unwrap().contains("Decode"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn custom_policy_can_retry_decode_failures() {
     let policy = RecordingPolicy::new(DeliveryDecision::Drop);
     let decisions = Arc::clone(&policy.decisions);
     let malformed_event = message(br#"{"event_type":"example.test"}"#.to_vec());

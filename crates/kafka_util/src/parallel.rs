@@ -131,7 +131,9 @@ pub enum ParallelConsumerError<ProcessError> {
     /// A received record offset could not be converted to Kafka's next-offset convention.
     #[error("received a Kafka record with an invalid offset")]
     InvalidOffset(#[source] KafkaError),
-    /// Deliveries continued beyond the bounded pause-race allowance.
+    /// A defensive crash-on-invariant condition: deliveries exceeded the bounded
+    /// pause-race allowance. This is not an expected backpressure event and should
+    /// not be tuned away by increasing `max_outstanding`.
     #[error(
         "Kafka deliveries exceeded the pause-race hard ceiling: outstanding {outstanding}, hard limit {hard_limit}"
     )]
@@ -163,7 +165,11 @@ pub enum ParallelConsumerError<ProcessError> {
 /// record behind it.
 ///
 /// Commits use receipt order independently for each topic-partition and never
-/// assume Kafka offsets are numerically consecutive.
+/// assume Kafka offsets are numerically consecutive. [`CommitMode::Sync`]
+/// performs its broker round trip while the rebalance tracker's state lock is
+/// held, preserving atomic epoch fencing but delaying rebalance callback
+/// handling until the commit returns. Prefer [`CommitMode::Async`], which the
+/// typed parallel consumer adapter uses.
 pub async fn run_parallel_consumer<T, Process, ProcessFuture, ProcessError>(
     consumer: KafkaEventConsumer<T>,
     config: ParallelConsumerConfig,

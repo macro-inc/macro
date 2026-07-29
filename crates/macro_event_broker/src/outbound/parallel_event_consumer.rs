@@ -94,6 +94,11 @@ pub const DROP_LOG_MESSAGE: &str = "dropping event after exhausting delivery att
 /// includes both processed events and events the application intentionally
 /// ignores. Returning an error delegates the delivery decision to the
 /// configured [`DeliveryPolicy`].
+///
+/// On partition revocation, in-flight handler futures are aborted and may be
+/// dropped at any await point. Handlers must therefore be idempotent for
+/// at-least-once redelivery and cancellation-safe partway through side effects;
+/// for example, avoid dangling manual two-phase state outside a transaction.
 pub trait Handler<M: MacroEventCollection>: Send + Sync + 'static {
     /// Error returned when an event attempt fails.
     type Error: Debug + Send + Sync + 'static;
@@ -145,9 +150,11 @@ pub trait DeliveryPolicy<E: Debug>: Send + Sync + 'static {
 
 /// Uniform bounded retry with exponential backoff and commit-safe exhaustion.
 ///
-/// The default performs five total attempts, waits 1, 2, 4, then 8 seconds
-/// between them, gives every attempt a fresh 300-second timeout, and drops the
-/// event after the fifth failure. There is no deadline over the full lifecycle.
+/// Decode failures are dropped after the initial attempt because retrying the
+/// same payload cannot succeed. For handler and timeout failures, the default
+/// performs five total attempts, waits 1, 2, 4, then 8 seconds between them,
+/// gives every attempt a fresh 300-second timeout, and drops the event after
+/// the fifth failure. There is no deadline over the full lifecycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UniformBoundedRetry {
     /// Maximum total attempts, including the initial attempt.
@@ -191,8 +198,8 @@ impl<E: Debug> DeliveryPolicy<E> for UniformBoundedRetry {
         self.per_attempt_timeout
     }
 
-    fn decide(&self, attempt: usize, _error: &DeliveryError<E>) -> DeliveryDecision {
-        if attempt >= self.max_attempts.max(1) {
+    fn decide(&self, attempt: usize, error: &DeliveryError<E>) -> DeliveryDecision {
+        if matches!(error, DeliveryError::Decode(_)) || attempt >= self.max_attempts.max(1) {
             DeliveryDecision::Drop
         } else {
             DeliveryDecision::Retry(self.retry_delay(attempt))
@@ -222,6 +229,12 @@ pub enum ParallelEventConsumerError<E: Debug> {
 /// coordinator. Successful handling and policy drops are commit-safe. A
 /// [`DeliveryDecision::Fatal`] stops the coordinator without committing the
 /// failed record. Offset commits are submitted asynchronously.
+///
+/// A retrying record occupies one processing-concurrency slot for its entire
+/// attempt and backoff lifecycle. For a bounded policy, its worst-case slot
+/// occupancy is the per-attempt timeout multiplied by the number of attempts,
+/// plus total backoff. Prolonged records can fill all processing slots and then
+/// `max_outstanding`, so size parallel capacity and delivery policy together.
 ///
 /// `max_poll_interval` configures librdkafka's group-liveness limit; it is not
 /// an event processing deadline. The coordinator continues polling while
