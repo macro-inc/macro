@@ -208,7 +208,7 @@ function isTooManyPendingLinks(
 }
 
 const TOO_MANY_PENDING_LINKS_MESSAGE =
-  'Too many inbox connections in progress. Finish or wait for a pending one to expire, then try again.';
+  'Too many inbox connections in progress.';
 
 /**
  * Starts the add-inbox flow: fetches the Gmail link authorization URL and
