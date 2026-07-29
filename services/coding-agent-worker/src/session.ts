@@ -4,7 +4,7 @@ import {
   type Client,
   ClientSideConnection,
   ndJsonStream,
-} from '@zed-industries/agent-client-protocol'
+} from '@agentclientprotocol/sdk'
 import { env } from './env'
 import { WORKSPACE_DIR } from './provision'
 import { DaytonaProvider } from './providers/daytona'

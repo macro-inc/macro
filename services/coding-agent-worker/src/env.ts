@@ -12,6 +12,15 @@ export const env = envsafe({
   DAYTONA_TARGET: str({
     default: 'us',
   }),
+  MACRO_BOT_TOKEN: str({
+    desc: 'mbot_ key (Settings → Bots); the SDK also reads this from the environment itself',
+  }),
+  MACRO_USER_ID: str({
+    desc: 'Macro user ID the bot is authorized to act as',
+  }),
+  PUBLIC_URL: url({
+    desc: 'Public base url Macro webhooks can reach this worker at (e.g. an ngrok tunnel)',
+  }),
   UPSTREAM_WS_URL: url({
     devDefault: 'ws://localhost:4001',
     desc: 'Preconfigured upstream websocket; the worker adds its session id as the id query parameter',
