@@ -23,6 +23,9 @@ use clap::{Args, Subcommand};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
+#[cfg(test)]
+mod test;
+
 use crate::config::{GmailTestAccountTokens, GoogleClientId, GoogleClientSecretKey};
 use crate::entity::email::{FAKE_CONTACTS, SUBJECTS, sample_bodies};
 
@@ -381,7 +384,9 @@ fn generate_plan(account: &str, count: usize, rng_seed: u64) -> Vec<PlannedMessa
 
             plan.push(PlannedMessage {
                 message_id: message_id.clone(),
-                date,
+                // Reply offsets can walk a recent thread past current time, clamp so
+                // the fixture never contains future-dated mail.
+                date: date.min(now),
                 from,
                 to,
                 subject,
