@@ -1,9 +1,7 @@
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import {
-  createConnectionWebsocketEffect,
-  parseWebsocketPayload,
-} from '@service-connection/websocket';
+import { createConnectionWebsocketEffect } from '@service-connection/websocket';
+import { parseWebsocketPayload } from '@service-connection/websocket-payload';
 import { match } from 'ts-pattern';
 
 /**
