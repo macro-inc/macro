@@ -25,6 +25,7 @@ mod message;
 mod preview;
 mod preview_views;
 mod project;
+mod settings;
 mod thread;
 
 #[cfg(test)]
@@ -78,7 +79,7 @@ impl EmailUserRepo for EmailPgRepo {
     ) -> Result<Vec<EmailInboxDetails>, EmailErr> {
         link::inbox_details_for_macro_id(&self.pool, &macro_id)
             .await
-            .map_err(EmailErr::RepoErr)
+            .map_err(|error| EmailErr::RepoErr(error.into()))
     }
 }
 
@@ -86,13 +87,9 @@ impl EmailRepo for EmailPgRepo {
     type Err = sqlx::Error;
 
     async fn fetch_email_settings(&self, link_id: Uuid) -> Result<LinkEmailSettings, EmailErr> {
-        let settings = email_db_client::settings::fetch_settings(&self.pool, link_id)
+        settings::fetch_email_settings(&self.pool, link_id)
             .await
-            .map_err(EmailErr::RepoErr)?;
-        Ok(LinkEmailSettings {
-            signature: settings.signature,
-            signature_on_replies_forwards: settings.signature_on_replies_forwards,
-        })
+            .map_err(|error| EmailErr::RepoErr(error.into()))
     }
 
     async fn previews_for_view_cursor(
