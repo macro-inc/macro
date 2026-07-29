@@ -5592,6 +5592,7 @@
     ],
     "sync_service": [
       "crates/macro_sync_service_jwt",
+      "crates/worker-rs-otel",
       "services/sync-service",
       "services/sync-service/bebop-schema"
     ],
@@ -6070,6 +6071,9 @@
       "crates/unfurl",
       "crates/webhook",
       "crates/workspace-hack"
+    ],
+    "worker-rs-otel": [
+      "crates/worker-rs-otel"
     ],
     "worker_trigger": [
       "crates/macro_aws_config",

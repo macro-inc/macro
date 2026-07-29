@@ -38,8 +38,8 @@ DSS_INTERNAL_AUTH_KEY = "local"
 # Datadog agent's DD_ENV so the env:local trace/log views include them.
 ENVIRONMENT = "local"
 # Local jaeger/datadog-agent OTLP receiver (docker port-mapped to the host).
-# Unset in deployed envs = trace export disabled.
-OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318/v1/traces"
+# Unset in deployed envs = trace and log export disabled.
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
 
 [[kv_namespaces]]
 binding = "DOCUMENT_VERSIONING_KV"

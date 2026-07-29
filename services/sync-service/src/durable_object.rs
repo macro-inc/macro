@@ -26,7 +26,6 @@ use crate::{
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
     mutex::Mutex,
-    otel,
     state::DocumentState,
     storage::{
         SessionStorage, backends::durable_kv::DurableKVStorage, get_snapshot_storage,
@@ -671,7 +670,7 @@ impl DocumentSyncSession {
 
             // Attach the connect request's raw trace context so later
             // websocket errors (post-hibernation too) can join it.
-            if let Some(traceparent) = otel::traceparent_value(&req) {
+            if let Some(traceparent) = worker_rs_otel::traceparent_value(&req) {
                 _ = pair
                     .server
                     .serialize_attachment(WebSocketAttachment { traceparent })
@@ -957,9 +956,8 @@ impl DurableObject for DocumentSyncSession {
                 .with_cors(&cors(set_allow_origin.as_deref()))?
                 .empty());
         }
-        otel::configure(&self.env);
-        let traceparent = otel::traceparent_from_request(&req);
-        let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
+        let traceparent = worker_rs_otel::traceparent_from_request(&req);
+        let (remote_id, remote_parent) = worker_rs_otel::remote_fields(traceparent.as_ref());
         let path = req.path();
         let span = tracing::info_span!(
             "do.request",
@@ -970,8 +968,12 @@ impl DurableObject for DocumentSyncSession {
             trace.remote_parent = %remote_parent,
         );
 
-        let res = self.inner_fetch(req).instrument(span).await;
-        otel::flush_into(&self.env, |export| self.state.wait_until(export));
+        let res = worker_rs_otel::scope(
+            &self.env,
+            &self.state,
+            self.inner_fetch(req).instrument(span),
+        )
+        .await;
         res.context("DurableObject::fetch error")?
             .with_cors(&cors(set_allow_origin.as_deref()))
     }
@@ -985,81 +987,89 @@ impl DurableObject for DocumentSyncSession {
                 if message == PING {
                     ws.send_with_str(PONG).ok();
                 } else {
-                    warn!("Received unknown 'String' message: {message:?}");
+                    return worker_rs_otel::scope(&self.env, &self.state, async {
+                        warn!("Received unknown 'String' message: {message:?}");
+                        Ok(())
+                    })
+                    .await;
                 }
                 return Ok(());
             }
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
-        otel::configure(&self.env);
-        let span_checkpoint = otel::span_checkpoint();
-        let traceparent = ws
-            .deserialize_attachment::<WebSocketAttachment>()
-            .ok()
-            .flatten()
-            .and_then(|attachment| otel::TraceParent::parse(&attachment.traceparent));
-        let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
-        let message = match websocket::deserialize_message(&binary_message) {
-            Ok(message) => message,
-            Err(error) => {
+        worker_rs_otel::scope(&self.env, &self.state, async {
+            let span_checkpoint = worker_rs_otel::span_checkpoint();
+            let traceparent = ws
+                .deserialize_attachment::<WebSocketAttachment>()
+                .ok()
+                .flatten()
+                .and_then(|attachment| worker_rs_otel::parse_traceparent(&attachment.traceparent));
+            let (remote_id, remote_parent) = worker_rs_otel::remote_fields(traceparent.as_ref());
+            let message = match websocket::deserialize_message(&binary_message) {
+                Ok(message) => message,
+                Err(error) => {
+                    let span = websocket::inbound_message_error_span(
+                        "invalid",
+                        &remote_id,
+                        &remote_parent,
+                    );
+                    {
+                        let _entered = span.enter();
+                        tracing::error!(error = ?error, "failed to deserialize websocket message");
+                    }
+                    return Err(error);
+                }
+            };
+            let message_type = websocket::message_type(&message);
+
+            let res: Result<()> = async {
+                let document_id = self.document_id().await?;
+                let current = tracing::Span::current();
+                current.record("document.id", document_id.as_str());
+                if let Ok(ws_id) = get_ws_id_from_tags(&self.state.get_tags(&ws)) {
+                    current.record("ws.id", ws_id.as_str());
+                }
+                websocket::process_message(
+                    &ws,
+                    &document_id,
+                    &*self.document_state().await?,
+                    &*self.session_storage().await?,
+                    &self.awareness,
+                    message,
+                    self.msg_buffer.clone(),
+                    self,
+                )
+                .await
+                .context("failed to process websocket message")?;
+
+                bump_alarm(&self.state)
+                    .await
+                    .context("failed to keep document alive")?;
+
+                Ok(())
+            }
+            .await;
+
+            if let Err(error) = &res {
                 let span =
-                    websocket::inbound_message_error_span("invalid", &remote_id, &remote_parent);
+                    websocket::inbound_message_error_span(message_type, &remote_id, &remote_parent);
                 {
                     let _entered = span.enter();
-                    tracing::error!(error = ?error, "failed to deserialize websocket message");
+                    tracing::error!(error = ?error, "failed to process websocket message");
                 }
-                otel::flush_into(&self.env, |export| self.state.wait_until(export));
-                return Err(error);
+            } else {
+                worker_rs_otel::discard_spans_since(span_checkpoint);
             }
-        };
-        let message_type = websocket::message_type(&message);
-
-        let res: Result<()> = async {
-            let document_id = self.document_id().await?;
-            let current = tracing::Span::current();
-            current.record("document.id", document_id.as_str());
-            if let Ok(ws_id) = get_ws_id_from_tags(&self.state.get_tags(&ws)) {
-                current.record("ws.id", ws_id.as_str());
-            }
-            websocket::process_message(
-                &ws,
-                &document_id,
-                &*self.document_state().await?,
-                &*self.session_storage().await?,
-                &self.awareness,
-                message,
-                self.msg_buffer.clone(),
-                self,
-            )
-            .await
-            .context("failed to process websocket message")?;
-
-            bump_alarm(&self.state)
-                .await
-                .context("failed to keep document alive")?;
-
-            Ok(())
-        }
-        .await;
-
-        if let Err(error) = &res {
-            let span =
-                websocket::inbound_message_error_span(message_type, &remote_id, &remote_parent);
-            {
-                let _entered = span.enter();
-                tracing::error!(error = ?error, "failed to process websocket message");
-            }
-            otel::flush_into(&self.env, |export| self.state.wait_until(export));
-        } else {
-            otel::discard_spans_since(span_checkpoint);
-        }
-        res
+            res
+        })
+        .await
     }
 
     /// Save document if needed
-    #[instrument(skip_all, err)]
     async fn alarm(&self) -> Result<Response> {
-        let state = match self
+        let span = tracing::info_span!("do.alarm");
+        worker_rs_otel::scope(&self.env, &self.state, async {
+            let state = match self
             .document_state()
             .await
             .context("failed to get document_state")
@@ -1123,7 +1133,10 @@ impl DurableObject for DocumentSyncSession {
             info!("durable object has reached 0 connections")
         }
 
-        Response::ok("ok")
+            Response::ok("ok")
+        }
+        .instrument(span))
+        .await
     }
 
     async fn websocket_close(
@@ -1133,40 +1146,46 @@ impl DurableObject for DocumentSyncSession {
         _reason: String,
         _was_clean: bool,
     ) -> Result<()> {
-        let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
-        for peer_id in peer_ids {
-            self.awareness.delete(&peer_id.to_string());
-            let update = self.awareness.encode(&peer_id.to_string());
+        worker_rs_otel::scope(&self.env, &self.state, async {
+            let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
+            for peer_id in peer_ids {
+                self.awareness.delete(&peer_id.to_string());
+                let update = self.awareness.encode(&peer_id.to_string());
 
-            // Don't silently discard the error
-            websocket::broadcast_awareness(
-                &ws,
-                self.state.get_websockets().as_slice(),
-                update.as_slice(),
-                self.msg_buffer.clone(),
-            )
-            .context("failed to broadcast awareness")?;
-        }
+                // Don't silently discard the error
+                websocket::broadcast_awareness(
+                    &ws,
+                    self.state.get_websockets().as_slice(),
+                    update.as_slice(),
+                    self.msg_buffer.clone(),
+                )
+                .context("failed to broadcast awareness")?;
+            }
 
-        if self.state.get_websockets().len() == 1
-            && let Ok(document_id) = self.document_id().await
-            && let Ok(state) = self.document_state().await
-            && let Ok(snapshot) = state.export_shallow_snapshot()
-        {
-            let env = self.env.clone();
-            self.state.wait_until(async move {
-                report_new_doc_state(&document_id, &snapshot, &env).await;
-                report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
-            });
-        }
-        Ok(())
+            if self.state.get_websockets().len() == 1
+                && let Ok(document_id) = self.document_id().await
+                && let Ok(state) = self.document_state().await
+                && let Ok(snapshot) = state.export_shallow_snapshot()
+            {
+                let env = self.env.clone();
+                self.state.wait_until(async move {
+                    report_new_doc_state(&document_id, &snapshot, &env).await;
+                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
+                });
+            }
+            Ok(())
+        })
+        .await
     }
 
     async fn websocket_error(&self, ws: WebSocket, error: Error) -> Result<()> {
-        let ws_id = get_ws_id(&self.state, &ws)?;
-        error!(ws_id = ws_id, error = ?error, "websocket error");
-        // TODO update awareness stuff
-        Ok(())
+        worker_rs_otel::scope(&self.env, &self.state, async {
+            let ws_id = get_ws_id(&self.state, &ws)?;
+            error!(ws_id = ws_id, error = ?error, "websocket error");
+            // TODO update awareness stuff
+            Ok(())
+        })
+        .await
     }
 }
 

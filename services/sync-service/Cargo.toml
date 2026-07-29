@@ -40,20 +40,10 @@ bebop.workspace = true
 sync_service_bebop_schema = { path = "bebop-schema" }
 serde_json.workspace = true
 serde.workspace = true
-opentelemetry-proto = { version = "0.31.0", default-features = false, features = [
-  "gen-tonic-messages",
-  "with-serde",
-  "trace",
-] }
-opentelemetry = { workspace = true, default-features = false, features = [
-  "trace",
-] }
-opentelemetry_sdk = { workspace = true, default-features = false, features = [
-  "trace",
-] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
 loro = "1.13"
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
 matchit =  "0.8.4"
+worker-rs-otel = { path = "../../crates/worker-rs-otel" }

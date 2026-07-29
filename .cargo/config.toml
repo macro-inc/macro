@@ -17,8 +17,8 @@
 [alias]
 x = "run -p xtask --"
 
-# The sync-service Worker (wasm32-unknown-unknown) pulls getrandom 0.3 via
-# opentelemetry-proto's OTLP types; getrandom 0.3 needs its backend selected at
+# worker-rs-otel (wasm32-unknown-unknown) pulls getrandom 0.3 via OTLP types;
+# getrandom 0.3 needs its backend selected at
 # build time. Harmless for wasm crates that don't use getrandom 0.3.
 [target.wasm32-unknown-unknown]
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

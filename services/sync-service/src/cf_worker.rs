@@ -76,7 +76,7 @@ pub async fn copy_handler(env: Env, mut req: Request, document_id: &str) -> Resu
             &headers,
             MACRO_INTERNAL_AUTH_KEY_HEADER_KEY,
         )?;
-        mv_header(og_req.headers(), &headers, crate::otel::TRACEPARENT)?;
+        mv_header(og_req.headers(), &headers, worker_rs_otel::TRACEPARENT)?;
         ss_req.with_headers(headers);
 
         let mut url = og_req.url()?;

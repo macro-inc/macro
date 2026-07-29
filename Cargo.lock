@@ -14184,9 +14184,6 @@ dependencies = [
  "loro",
  "macro_sync_service_jwt",
  "matchit 0.8.4",
- "opentelemetry",
- "opentelemetry-proto",
- "opentelemetry_sdk",
  "serde",
  "serde_json",
  "sync_service_bebop_schema",
@@ -14198,6 +14195,7 @@ dependencies = [
  "wasm-bindgen",
  "web-time",
  "worker",
+ "worker-rs-otel",
 ]
 
 [[package]]
@@ -16402,6 +16400,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "worker-rs-otel"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.3.4",
+ "http 1.4.0",
+ "opentelemetry",
+ "opentelemetry-proto",
+ "opentelemetry_sdk",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "web-time",
+ "worker",
+]
+
+[[package]]
 name = "worker-sys"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16438,7 +16453,6 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "aho-corasick",
- "async-graphql",
  "aws-config",
  "aws-credential-types",
  "aws-runtime",
@@ -16500,6 +16514,7 @@ dependencies = [
  "idna",
  "indexmap 2.14.0",
  "ipnet",
+ "itertools 0.10.5",
  "lazy_static",
  "libc",
  "linux-raw-sys 0.12.1",

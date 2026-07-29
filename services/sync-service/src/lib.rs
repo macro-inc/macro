@@ -10,7 +10,6 @@ mod generated;
 pub mod keepalive;
 mod metrics;
 mod mutex;
-mod otel;
 mod secrets;
 #[cfg(feature = "search-service")]
 mod sps;
@@ -50,7 +49,7 @@ fn inner_start() {
                 performance_layer()
                     .with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default()),
             )
-            .with(otel::OtelLayer)
+            .with(worker_rs_otel::OtelLayer::new("sync-service"))
             .init();
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -70,9 +69,8 @@ async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::R
     use crate::cf_worker::router;
     use tracing::Instrument;
 
-    otel::configure(&env);
-    let traceparent = otel::traceparent_from_request(&req);
-    let (remote_id, remote_parent) = otel::remote_fields(traceparent.as_ref());
+    let traceparent = worker_rs_otel::traceparent_from_request(&req);
+    let (remote_id, remote_parent) = worker_rs_otel::remote_fields(traceparent.as_ref());
     let method = req.method().to_string();
     let path = req.path();
     let span = tracing::info_span!(
@@ -83,7 +81,5 @@ async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::R
         trace.remote_parent = %remote_parent,
     );
 
-    let res = router(env.clone(), req).instrument(span).await;
-    otel::flush_into(&env, |export| ctx.wait_until(export));
-    res
+    worker_rs_otel::scope(&env, &ctx, router(env.clone(), req).instrument(span)).await
 }

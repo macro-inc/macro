@@ -1,9 +1,10 @@
 use tracing::field::{Field, Visit};
 use tracing_subscriber::{Layer, layer::Context as LayerContext, registry::LookupSpan};
 
-use super::exporter::buffer_span;
+use super::exporter::{buffer_log, buffer_span};
 use super::model::{
-    ClosedSpan, ClosedSpanEvent, LiveSpan, now_unix_nanos, random_span_id, random_trace_id,
+    ClosedLog, ClosedSpan, ClosedSpanEvent, LiveSpan, now_unix_nanos, random_span_id,
+    random_trace_id,
 };
 use super::trace_context::{parse_span_id, parse_trace_id};
 use super::{REMOTE_PARENT_FIELD, REMOTE_TRACE_ID_FIELD};
@@ -25,7 +26,6 @@ impl FieldVisitor {
     }
 }
 
-/// Both visitors stringify every field through their `record` method.
 macro_rules! string_visit {
     ($ty:ty) => {
         impl Visit for $ty {
@@ -42,8 +42,6 @@ macro_rules! string_visit {
 
 string_visit!(FieldVisitor);
 
-/// Visitor for `tracing` events: the `message` field becomes the event name,
-/// everything else becomes an attribute.
 #[derive(Default)]
 struct EventVisitor {
     message: Option<String>,
@@ -62,9 +60,17 @@ impl EventVisitor {
 
 string_visit!(EventVisitor);
 
-/// Layer that assigns trace/span ids to `tracing` spans and buffers them on
-/// close for OTLP export via [`super::flush`].
-pub struct OtelLayer;
+/// A tracing-subscriber layer that exports closed spans through OTLP/HTTP.
+pub struct OtelLayer {
+    service_name: &'static str,
+}
+
+impl OtelLayer {
+    /// Create a layer that identifies exported resources as `service_name`.
+    pub const fn new(service_name: &'static str) -> Self {
+        Self { service_name }
+    }
+}
 
 impl<S> Layer<S> for OtelLayer
 where
@@ -107,16 +113,9 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: LayerContext<'_, S>) {
-        // Attach the event (a log line) to the span it fired in, so backend
-        // logs — errors especially — ride out with the span. Debug/trace
-        // narration stays console-only: exporting it would bloat every
-        // hot-path payload (e.g. the full decoded message per ws frame).
         if *event.metadata().level() > tracing::Level::INFO {
             return;
         }
-        let Some(span) = ctx.event_span(event) else {
-            return;
-        };
         let mut visitor = EventVisitor::default();
         event.record(&mut visitor);
         let meta = event.metadata();
@@ -124,16 +123,35 @@ where
         let name = visitor.message.unwrap_or_else(|| meta.name().to_string());
         let mut attrs = visitor.fields;
         attrs.push(("level".to_string(), level.as_str().to_string()));
-        if let Some(data) = span.extensions_mut().get_mut::<LiveSpan>() {
+        let time_ns = now_unix_nanos();
+        let trace_context = ctx.event_span(event).and_then(|span| {
+            let mut extensions = span.extensions_mut();
+            let data = extensions.get_mut::<LiveSpan>()?;
             if level == tracing::Level::ERROR && data.error_message.is_none() {
                 data.error_message = Some(name.clone());
             }
             data.events.push(ClosedSpanEvent {
-                name,
-                time_ns: now_unix_nanos(),
-                attrs,
+                name: name.clone(),
+                time_ns,
+                attrs: attrs.clone(),
             });
-        }
+            Some((data.trace_id, data.span_id))
+        });
+        let (trace_id, span_id) = trace_context
+            .map(|(trace_id, span_id)| (Some(trace_id), Some(span_id)))
+            .unwrap_or_default();
+        buffer_log(ClosedLog {
+            service_name: self.service_name,
+            time_ns,
+            level: level.as_str(),
+            body: name,
+            attrs,
+            target: meta.target(),
+            file: meta.file(),
+            line: meta.line(),
+            trace_id,
+            span_id,
+        });
     }
 
     fn on_record(
@@ -158,6 +176,7 @@ where
         let meta = span.metadata();
         buffer_span(ClosedSpan {
             data,
+            service_name: self.service_name,
             name: meta.name(),
             level: meta.level().as_str(),
             file: meta.file(),

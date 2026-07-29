@@ -47,6 +47,7 @@ members = [
   "crates/soup_realtime",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
