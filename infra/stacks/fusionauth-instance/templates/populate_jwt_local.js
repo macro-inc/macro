@@ -11,6 +11,7 @@
    BLOCK comments only in this file: FusionAuth's KickstartRunner flattens the
    lambda body to a single line, so a `//` comment swallows all the code after
    it. The Pulumi/API deploy path preserves newlines; kickstart does not. */
+/* biome-ignore lint/correctness/noUnusedVariables: FusionAuth invokes this by name. */
 function populate(jwt, user, _registration) {
   jwt.fusion_user_id = user.id;
   jwt.email = user.email;
