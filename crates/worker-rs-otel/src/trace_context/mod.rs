@@ -1,7 +1,8 @@
 use std::{collections::HashMap, hash::BuildHasher};
 
+use opentelemetry::Context;
 use opentelemetry::propagation::TextMapPropagator;
-use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceId};
+use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 
 /// W3C trace-context header and WebSocket query parameter.
@@ -37,6 +38,20 @@ pub fn parse_traceparent(value: &str) -> Option<SpanContext> {
     let context = TraceContextPropagator::new().extract(&carrier);
     let span_context = context.span().span_context().clone();
     span_context.is_valid().then_some(span_context)
+}
+
+pub(super) fn sampled_traceparent(trace_id: [u8; 16], span_id: [u8; 8]) -> Option<String> {
+    let span_context = SpanContext::new(
+        TraceId::from_bytes(trace_id),
+        SpanId::from_bytes(span_id),
+        TraceFlags::SAMPLED,
+        false,
+        TraceState::default(),
+    );
+    let context = Context::new().with_remote_span_context(span_context);
+    let mut carrier = HashMap::new();
+    TraceContextPropagator::new().inject_context(&context, &mut carrier);
+    carrier.remove(TRACEPARENT)
 }
 
 /// Extract remote trace context from a supported header collection.

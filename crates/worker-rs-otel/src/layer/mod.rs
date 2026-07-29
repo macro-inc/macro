@@ -1,12 +1,16 @@
 use tracing::field::{Field, Visit};
-use tracing_subscriber::{Layer, layer::Context as LayerContext, registry::LookupSpan};
+use tracing_subscriber::{
+    Layer,
+    layer::Context as LayerContext,
+    registry::{LookupSpan, Registry},
+};
 
 use super::exporter::{buffer_log, buffer_span};
 use super::model::{
     ClosedLog, ClosedSpan, ClosedSpanEvent, LiveSpan, now_unix_nanos, random_span_id,
     random_trace_id,
 };
-use super::trace_context::{parse_span_id, parse_trace_id};
+use super::trace_context::{parse_span_id, parse_trace_id, sampled_traceparent};
 use super::{REMOTE_PARENT_FIELD, REMOTE_TRACE_ID_FIELD};
 
 #[derive(Default)]
@@ -70,6 +74,18 @@ impl OtelLayer {
     pub const fn new(service_name: &'static str) -> Self {
         Self { service_name }
     }
+}
+
+/// Build a sampled W3C `traceparent` value for a span managed by this layer.
+pub fn traceparent_for_span(span: &tracing::Span) -> Option<String> {
+    span.with_subscriber(|(id, dispatch)| {
+        let registry = dispatch.downcast_ref::<Registry>()?;
+        let span = registry.span(id)?;
+        let extensions = span.extensions();
+        let data = extensions.get::<LiveSpan>()?;
+        sampled_traceparent(data.trace_id, data.span_id)
+    })
+    .flatten()
 }
 
 impl<S> Layer<S> for OtelLayer
@@ -185,3 +201,6 @@ where
         });
     }
 }
+
+#[cfg(test)]
+mod test;

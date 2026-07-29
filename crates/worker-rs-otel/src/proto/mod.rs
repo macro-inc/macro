@@ -68,6 +68,7 @@ fn span_proto(span: ClosedSpan) -> Span {
         } as i32,
         start_time_unix_nano: data.start_ns,
         end_time_unix_nano: span.end_ns,
+        flags: 1,
         attributes,
         events,
         status: data.error_message.map(|message| Status {
@@ -121,6 +122,7 @@ fn severity_number(level: &str) -> SeverityNumber {
 }
 
 fn log_proto(log: ClosedLog) -> LogRecord {
+    let correlated = log.trace_id.is_some();
     let mut attributes: Vec<KeyValue> = log
         .attrs
         .into_iter()
@@ -145,6 +147,7 @@ fn log_proto(log: ClosedLog) -> LogRecord {
         severity_text: log.level.to_string(),
         body: Some(string_value(&log.body)),
         attributes,
+        flags: u32::from(correlated),
         trace_id: log.trace_id.map(|id| id.to_vec()).unwrap_or_default(),
         span_id: log.span_id.map(|id| id.to_vec()).unwrap_or_default(),
         ..Default::default()

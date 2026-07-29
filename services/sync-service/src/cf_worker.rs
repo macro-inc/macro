@@ -1,5 +1,5 @@
 use bebop::{Record, SubRecord};
-use tracing::error;
+use tracing::{Instrument, error};
 use wasm_bindgen::JsValue;
 use worker::{Env, Error, Headers, Method, Request, RequestInit, Response, Result, Stub};
 
@@ -141,8 +141,13 @@ pub async fn pass_to_durable_object(
     document_id: &str,
 ) -> Result<Response> {
     let stub = get_durable_object(env, document_id)?;
+    let span = tracing::info_span!("do.fetch", document.id = %document_id);
+    if let Some(traceparent) = worker_rs_otel::traceparent_for_span(&span) {
+        req.headers()
+            .set(worker_rs_otel::TRACEPARENT, &traceparent)?;
+    }
 
-    let fut = timeout(stub.fetch_with_request(req), DEFAULT_TIMEOUT_MS);
+    let fut = timeout(stub.fetch_with_request(req), DEFAULT_TIMEOUT_MS).instrument(span);
     let res = timeit_log!("worker -> do_fetch", fut.await);
     Ok(match res {
         crate::timeout::TimeoutResult::Ok(x) => x?,
