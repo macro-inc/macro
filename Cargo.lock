@@ -12822,6 +12822,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "call",
+ "channels",
  "chrono",
  "comms_db_client",
  "document_sub_type",

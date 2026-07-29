@@ -9,6 +9,7 @@ version = "0.1.0"
 default = ["processing", "service", "pdf"]
 processing = [
   "dep:call",
+  "dep:channels",
   "dep:kafka_util",
   "dep:macro_event_broker",
   "dep:macro_event_topics",
@@ -35,6 +36,7 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 call = { path = "../../crates/call", default-features = false, optional = true }
+channels = { path = "../../crates/channels", default-features = false, optional = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email_db_client = { path = "../../crates/email_db_client" }
