@@ -44,7 +44,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use config::{Config, Environment};
@@ -676,12 +675,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
-        Arc::new(sqs_client.clone()),
-    );
     let call_service = Arc::new(
         call_service_builder
-            .with_search_indexer(call_search_indexer)
             .with_voice_repo(PgVoiceRepo::new(db.clone()))
             .with_event_broker(macro_event_broker.clone()),
     );
@@ -838,7 +833,6 @@ async fn main() -> anyhow::Result<()> {
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_bot_trigger_sender(bot_trigger_sender)

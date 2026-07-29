@@ -83,7 +83,7 @@ export function SummaryStep(props: { onContinue: () => void }) {
                   <>
                     processing your inbox —{' '}
                     {progress().completed.toLocaleString()} of{' '}
-                    {progress().total.toLocaleString()} emails
+                    {progress().total.toLocaleString()} threads
                   </>
                 )}
               </Show>

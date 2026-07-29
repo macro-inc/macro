@@ -1,8 +1,8 @@
 //! Binary record codec shared by all persistent backends (IndexedDB,
 //! SQLite). Records are stored as postcard bytes; the cache namespace embeds
-//! [`CACHE_FORMAT_VERSION`] and [`meta::SCHEMA_HASH`](crate::meta) so a
-//! format or schema change starts a fresh cache instead of attempting
-//! migration (the cache is disposable by design).
+//! [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`]. Additive
+//! GraphQL schema changes keep existing records, while incompatible schema or
+//! record-format changes start a fresh cache.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -13,6 +13,14 @@ use thiserror::Error;
 /// Bump when the stored representation of [`Record`]/[`CacheValue`]
 /// (or anything else persisted) changes incompatibly.
 pub const CACHE_FORMAT_VERSION: u32 = 2;
+
+/// Bump when a GraphQL schema change makes existing normalized records unsafe.
+///
+/// Additive fields do not require a bump: fragment reads only project selected
+/// fields, so older records remain usable until a newly selected field is
+/// fetched. Bump this epoch for incompatible changes to normalized identity,
+/// field storage shape, or other schema-derived cache semantics.
+pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 1;
 
 #[derive(Debug, Error)]
 pub enum CodecError {
@@ -70,17 +78,15 @@ pub fn decode_record_updates(bytes: &[u8]) -> Result<RecordUpdates, CodecError> 
 /// Canonical database/namespace name for a cache instance.
 /// `scope` identifies the user/workspace (host-provided).
 pub fn cache_namespace(scope: &str) -> String {
-    format!(
-        "graphql-cache:{scope}:{}:v{CACHE_FORMAT_VERSION}",
-        &crate::meta::SCHEMA_HASH[..12]
-    )
+    format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{CACHE_FORMAT_VERSION}")
 }
 
 /// Stable physical database name for a cache scope.
 ///
-/// Unlike [`cache_namespace`], this deliberately excludes the record schema
-/// and format versions. Normalized records are disposable on version changes,
-/// while queued mutations represent user intent and must remain discoverable.
+/// Unlike [`cache_namespace`], this deliberately excludes the schema
+/// compatibility epoch and cache format version. Normalized records are
+/// disposable on version changes, while queued mutations represent user intent
+/// and must remain discoverable.
 pub fn cache_database_name(scope: &str) -> String {
     format!("graphql-cache:{scope}")
 }
@@ -126,9 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn namespace_shape() {
-        let ns = cache_namespace("user-1");
-        assert!(ns.starts_with("graphql-cache:user-1:"));
-        assert!(ns.ends_with(":v2"));
+    fn namespace_uses_schema_compatibility_epoch_not_schema_hash() {
+        assert_eq!(cache_namespace("user-1"), "graphql-cache:user-1:s1:v2");
     }
 }

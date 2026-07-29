@@ -24,6 +24,15 @@ jobs:
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+  deploy-sync-service:
+    name: Deploy Sync Service
+    # The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
+    needs: [deploy-cloud-storage]
+    uses: ./.github/workflows/deploy_sync_service.yml
+    with:
+      environment: prod
+    secrets: inherit
+
   build:
     name: Build Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci

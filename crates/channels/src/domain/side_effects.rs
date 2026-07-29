@@ -16,8 +16,7 @@ use crate::domain::{
     },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
-        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSearchIndexer,
-        ChannelSideEffectContext,
+        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSideEffectContext,
     },
 };
 use bot_id::BotIdStr;
@@ -295,11 +294,10 @@ pub enum ChannelNotificationEffect {
 
 /// Domain service that derives and dispatches side effects for channel events.
 #[derive(Clone)]
-pub struct ChannelSideEffectService<C, R, N, S, K, B = NoopMacroEventBroker> {
+pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
     context: C,
     realtime: R,
     notifications: N,
-    search: S,
     contacts: K,
     bot_triggers: Option<ChannelBotTriggerSender>,
     macro_event_broker: B,
@@ -327,17 +325,16 @@ struct InviteNotificationRequest {
     metadata: ChannelMetadata,
 }
 
-impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
+impl<C, R, N, K> ChannelSideEffectService<C, R, N, K> {
     /// Create a channel side-effect service that drops broker events.
     ///
     /// Use [`Self::with_macro_event_broker`] to publish channel events to the
     /// macro event broker.
-    pub fn new(context: C, realtime: R, notifications: N, search: S, contacts: K) -> Self {
+    pub fn new(context: C, realtime: R, notifications: N, contacts: K) -> Self {
         Self {
             context,
             realtime,
             notifications,
-            search,
             contacts,
             bot_triggers: None,
             macro_event_broker: NoopMacroEventBroker,
@@ -345,7 +342,7 @@ impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
     }
 }
 
-impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
+impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
     /// Configure a sender for bot triggers derived from channel messages.
     pub fn with_bot_trigger_sender(mut self, bot_triggers: ChannelBotTriggerSender) -> Self {
         self.bot_triggers = Some(bot_triggers);
@@ -356,12 +353,11 @@ impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
     pub fn with_macro_event_broker<B2: MacroEventBroker>(
         self,
         macro_event_broker: B2,
-    ) -> ChannelSideEffectService<C, R, N, S, K, B2> {
+    ) -> ChannelSideEffectService<C, R, N, K, B2> {
         ChannelSideEffectService {
             context: self.context,
             realtime: self.realtime,
             notifications: self.notifications,
-            search: self.search,
             contacts: self.contacts,
             bot_triggers: self.bot_triggers,
             macro_event_broker,
@@ -428,12 +424,11 @@ where
     }
 }
 
-impl<C, R, N, S, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, S, K, B>
+impl<C, R, N, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
-    S: ChannelSearchIndexer + Clone,
     K: ChannelContactsDispatcher + Clone,
     B: MacroEventBroker + Clone,
 {
@@ -448,9 +443,7 @@ where
             ChannelEvent::ParticipantsRemoved { .. } => {}
             ChannelEvent::EntityMentionCreated { .. } => {}
             ChannelEvent::EntityMentionDeleted { .. } => {}
-            ChannelEvent::ChannelDeleted { channel_id, .. } => {
-                self.search.remove_message(channel_id, None).await;
-            }
+            ChannelEvent::ChannelDeleted { .. } => {}
             ChannelEvent::MessagePosted {
                 channel_id,
                 metadata,
@@ -491,7 +484,6 @@ where
                     nonce,
                 })
                 .await;
-                self.search.index_message(channel_id, message_id).await;
             }
             ChannelEvent::MessageChanged {
                 channel_id,
@@ -501,7 +493,6 @@ where
                 posted_notification,
                 ..
             } => {
-                let message_id = message.id;
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
@@ -510,7 +501,6 @@ where
                     nonce,
                 })
                 .await;
-                self.search.index_message(channel_id, message_id).await;
 
                 if let Some(notification) = posted_notification {
                     self.send_message_posted_notifications(PostedMessageNotificationInputs {
@@ -527,13 +517,11 @@ where
                 }
             }
             ChannelEvent::MessageDeleted {
-                channel_id,
                 message,
                 recipients,
                 nonce,
                 ..
             } => {
-                let message_id = message.id;
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
@@ -542,9 +530,6 @@ where
                     nonce,
                 })
                 .await;
-                self.search
-                    .remove_message(channel_id, Some(message_id))
-                    .await;
             }
             ChannelEvent::ReactionChanged {
                 channel_id,
@@ -632,12 +617,11 @@ where
     }
 }
 
-impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B>
+impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
-    S: ChannelSearchIndexer + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
     async fn handle_message_posted(&self, event: MessagePostedSideEffects) {
@@ -673,7 +657,6 @@ where
             .await;
         }
 
-        self.search.index_message(channel_id, message.id).await;
         self.dispatch_bot_triggers(channel_id, &message, &mentions);
         if notification_policy != PostMessageNotificationPolicy::Silent {
             self.send_message_posted_notifications(PostedMessageNotificationInputs {

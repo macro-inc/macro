@@ -53,8 +53,9 @@ fn main() {
         .as_ref()
         .map(|subscription| subscription.name.to_string());
 
-    // The schema hash namespaces persisted caches; key policy is derived
-    // from the schema, so hashing the schema covers it.
+    // Expose the schema hash for build diagnostics. Persisted cache
+    // compatibility is versioned separately so additive schema changes can
+    // retain existing normalized records.
     let mut hasher = Sha256::new();
     hasher.update(schema_text.as_bytes());
     let schema_hash = hex_string(&hasher.finalize());

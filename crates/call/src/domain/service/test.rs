@@ -18,13 +18,13 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ArchivedCall, Call, CallError, CallParticipant, CallRecord, CallRecordTranscriptSegment,
-    CallWebhookEvent, DeletedCallRecordStorageKeys, EditCallRecordRequest, EgressS3Config,
-    RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
+    AddParticipantError, ArchivedCall, Call, CallError, CallParticipant, CallRecord,
+    CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
+    EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
-    NoOpCallSearchIndexer, NoOpVoiceRepository,
+    NoOpVoiceRepository,
 };
 
 use super::{
@@ -267,6 +267,47 @@ impl ConnectionService for StubConnectionService {
     }
 }
 
+#[derive(Clone)]
+struct SentChannelMessage {
+    users: Vec<String>,
+    message_type: String,
+    message: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct RecordingConnectionService {
+    messages: Arc<Mutex<Vec<SentChannelMessage>>>,
+}
+
+impl RecordingConnectionService {
+    fn messages(&self) -> Vec<SentChannelMessage> {
+        self.messages.lock().unwrap().clone()
+    }
+}
+
+impl ConnectionService for RecordingConnectionService {
+    async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
+        &self,
+        _invalidation_event: InvalidationEvent<'a, T>,
+    ) -> Result<(), ConnectionError> {
+        Ok(())
+    }
+
+    async fn send_channel_message<'a>(
+        &self,
+        users: &[MacroUserIdStr<'a>],
+        message_type: &str,
+        message: serde_json::Value,
+    ) -> Result<(), ConnectionError> {
+        self.messages.lock().unwrap().push(SentChannelMessage {
+            users: users.iter().map(|u| u.as_ref().to_string()).collect(),
+            message_type: message_type.to_string(),
+            message,
+        });
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy)]
 struct StubNotificationIngress;
 
@@ -406,25 +447,26 @@ fn mock_get_or_create_repo(
     repo
 }
 
-type BaseGetOrCreateCallService = CallServiceImpl<
+type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
     MockCallRepository,
     MockRtcClient,
-    StubConnectionService,
+    Cn,
     NoOpEntityAccessService,
     StubNotificationIngress,
     StubRecordingStorage,
     NoopCallSummarizer,
 >;
 
-fn build_get_or_create_service<B: MacroEventBroker + Clone>(
+fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
     repo: MockCallRepository,
+    connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
 ) -> impl CallService {
-    let service: BaseGetOrCreateCallService = CallServiceImpl::new(
+    let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
-        StubConnectionService,
+        connection_service,
         NoOpEntityAccessService,
         StubNotificationIngress,
         StubRecordingStorage,
@@ -452,7 +494,8 @@ async fn get_or_create_call(
 ) -> Result<crate::domain::models::CallTokenResponse, CallError> {
     let call = started_event_call(created_by);
     let repo = mock_get_or_create_repo(scenario, call, recording_enabled);
-    let service = build_get_or_create_service(repo, broker, recording_enabled);
+    let service =
+        build_get_or_create_service(repo, StubConnectionService, broker, recording_enabled);
 
     service
         .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
@@ -573,6 +616,42 @@ async fn malformed_stored_creator_skips_only_started_event() {
     assert!(broker.events().is_empty());
 }
 
+#[tokio::test]
+async fn get_or_create_call_sends_call_answered_to_joining_user() {
+    let call = started_event_call(STARTED_EVENT_CREATOR);
+    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call, false);
+    let connection_service = RecordingConnectionService::default();
+    let service = build_get_or_create_service(
+        repo,
+        connection_service.clone(),
+        RecordingEventBroker::default(),
+        false,
+    );
+
+    service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await
+        .expect("joining an existing call succeeds");
+
+    let messages = connection_service.messages();
+    let [message] = messages.as_slice() else {
+        panic!("expected exactly one channel message")
+    };
+    assert_eq!(message.message_type, "call_answered");
+    assert_eq!(
+        message.users,
+        vec![user("requester@example.com").as_ref().to_string()]
+    );
+    assert_eq!(
+        message.message,
+        json!({
+            "channel_id": STARTED_EVENT_CHANNEL_ID,
+            "call_id": STARTED_EVENT_CALL_ID,
+            "user_id": user("requester@example.com").as_ref(),
+        })
+    );
+}
+
 const ARCHIVED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6d8);
 const ARCHIVED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x4f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a91);
 const ARCHIVED_EVENT_ROOM_NAME: &str = "archived-event-room";
@@ -670,10 +749,10 @@ fn webhook_rtc_client(
     rtc_client
 }
 
-type BaseWebhookCallService = CallServiceImpl<
+type BaseWebhookCallService<Cn> = CallServiceImpl<
     MockCallRepository,
     MockCallRtcClient,
-    StubConnectionService,
+    Cn,
     NoOpEntityAccessService,
     StubNotificationIngress,
     StubRecordingStorage,
@@ -685,10 +764,19 @@ fn build_webhook_service(
     rtc_client: MockCallRtcClient,
     event_broker: RecordingEventBroker,
 ) -> impl CallService {
-    let service: BaseWebhookCallService = CallServiceImpl::new(
+    build_webhook_service_with_connection(repo, rtc_client, StubConnectionService, event_broker)
+}
+
+fn build_webhook_service_with_connection<Cn: ConnectionService>(
+    repo: MockCallRepository,
+    rtc_client: MockCallRtcClient,
+    connection_service: Cn,
+    event_broker: RecordingEventBroker,
+) -> impl CallService {
+    let service: BaseWebhookCallService<Cn> = CallServiceImpl::new(
         repo,
         rtc_client,
-        StubConnectionService,
+        connection_service,
         NoOpEntityAccessService,
         StubNotificationIngress,
         StubRecordingStorage,
@@ -871,6 +959,93 @@ async fn malformed_archived_creator_skips_event_without_undoing_archival() {
         .await
         .expect("malformed creator does not undo archival");
     assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn participant_joined_webhook_sends_call_answered_to_answering_user() {
+    let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |room_name| {
+            assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
+            Box::pin(async move { Ok(Some(active_call)) })
+        });
+    repo.expect_add_participant()
+        .times(1)
+        .returning(|call_id, participant_identity| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            assert_eq!(
+                participant_identity.as_ref(),
+                user(ARCHIVED_EVENT_PARTICIPANT).as_ref()
+            );
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: participant_identity.as_ref().to_string(),
+                joined_at: archived_event_started_at(),
+            };
+            Box::pin(async move { Ok(participant) })
+        });
+
+    let rtc_client = webhook_rtc_client("participant_joined", Some(ARCHIVED_EVENT_PARTICIPANT));
+    let connection_service = RecordingConnectionService::default();
+    let service = build_webhook_service_with_connection(
+        repo,
+        rtc_client,
+        connection_service.clone(),
+        RecordingEventBroker::default(),
+    );
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("participant-joined webhook succeeds");
+
+    let messages = connection_service.messages();
+    let [message] = messages.as_slice() else {
+        panic!("expected exactly one channel message")
+    };
+    assert_eq!(message.message_type, "call_answered");
+    assert_eq!(
+        message.users,
+        vec![user(ARCHIVED_EVENT_PARTICIPANT).as_ref().to_string()]
+    );
+    assert_eq!(
+        message.message,
+        json!({
+            "channel_id": ARCHIVED_EVENT_CHANNEL_ID,
+            "call_id": ARCHIVED_EVENT_CALL_ID,
+            "user_id": user(ARCHIVED_EVENT_PARTICIPANT).as_ref(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn participant_joined_webhook_skips_call_answered_on_state_drift() {
+    let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
+    repo.expect_add_participant()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Err(AddParticipantError::UserAlreadyActive) }));
+
+    let rtc_client = webhook_rtc_client("participant_joined", Some(ARCHIVED_EVENT_PARTICIPANT));
+    let connection_service = RecordingConnectionService::default();
+    let service = build_webhook_service_with_connection(
+        repo,
+        rtc_client,
+        connection_service.clone(),
+        RecordingEventBroker::default(),
+    );
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .expect("state drift does not fail the webhook");
+
+    assert!(connection_service.messages().is_empty());
 }
 
 fn assert_recording_ready_event(event_broker: &RecordingEventBroker) {
@@ -1689,7 +1864,6 @@ type SummarizationCallService<B> = CallServiceImpl<
     StubNotificationIngress,
     StubRecordingStorage,
     StubCallSummarizer,
-    NoOpCallSearchIndexer,
     (),
     NoOpVoiceRepository,
     B,

@@ -1197,8 +1197,8 @@ impl<S: Storage> Engine<S> {
         Ok(affected)
     }
 
-    /// Drops all cached state (logout, schema-hash mismatch), including any
-    /// pending optimistic layers.
+    /// Drops all cached state (for example, on logout), including any pending
+    /// optimistic layers.
     pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
         self.hot.clear();
         self.optimistic.clear();

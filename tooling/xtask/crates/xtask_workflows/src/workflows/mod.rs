@@ -28,6 +28,7 @@ mod deploy_all_services;
 mod deploy_cloud_storage_on_push;
 mod deploy_fusionauth_instance;
 mod deploy_preview;
+mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_web_app_dev_push;
 mod path_validation;
@@ -202,6 +203,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_preview",
         file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
+    },
+    WorkflowFile {
+        slug: "deploy_sync_service",
+        file_name: "deploy_sync_service.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_sync_service::deploy_sync_service,
+                deploy_sync_service::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "deploy_web_app",
