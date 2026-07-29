@@ -8,26 +8,17 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{gen_compose, identity, kickstart, stage::Stage};
 
-/// The local populate-JWT lambda body, inlined into `kickstart.json`.
-///
-/// LOCAL-ONLY variant of the production populate-JWT lambda. Production enriches
-/// the JWT by calling authentication-service over HTTP, but Lambda HTTP Connect
-/// is a licensed FusionAuth feature that silently fails without a Reactor
-/// license. Local runs unlicensed, so we derive the claims instead: password
-/// users follow the `macro|<email>` convention (see `seed_cli`) and no Google
-/// IdP is configured locally, so every local user is a `macro|` user.
-/// Divergence from production: `root_macro_id` / `macro_organization_id` are
-/// never populated — org-scoped JWT flows need the licensed lambda + a license.
-///
-/// Inlined (not `include_str!`) because the canonical `.js` lives under
-/// `infra/` where a blanket `*.js` gitignore makes it untracked — a fresh
-/// checkout / CI / devcontainer wouldn't have it, breaking the build. Kept
-/// comment-free so it survives FusionAuth flattening the body to one line.
-const POPULATE_JWT_LAMBDA: &str = "function populate(jwt, user, _registration) {
-  jwt.fusion_user_id = user.id;
-  jwt.email = user.email;
-  jwt.macro_user_id = 'macro|' + user.email;
-}";
+/// The local populate-JWT lambda body, read from the tracked template at
+/// generation time (anchored on [`xtask_paths::repo_root`], so any cwd works).
+/// It is the unlicensed local variant — see the file's header for why local
+/// diverges from production and why it must use block comments only.
+const POPULATE_JWT_LAMBDA: xtask_paths::RepoFile<'static> =
+    xtask_paths::RepoFile::new("infra/stacks/fusionauth-instance/templates/populate_jwt_local.js");
+
+fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
+    let path = xtask_paths::repo_root().join(file.as_str());
+    std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
+}
 
 /// Generate `kickstart.json` into the instance's kickstart dir, which the
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
@@ -41,7 +32,7 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
-        POPULATE_JWT_LAMBDA,
+        &read_lambda(POPULATE_JWT_LAMBDA)?,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
