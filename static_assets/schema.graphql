@@ -2562,6 +2562,10 @@ type GraphqlSoupEmailMessage {
 	"""
 	isSent: Boolean!
 	"""
+	Whether the message is a draft.
+	"""
+	isDraft: Boolean!
+	"""
 	Whether the message has attachments.
 	"""
 	hasAttachments: Boolean!
@@ -2783,6 +2787,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+	"""
+	A page of messages in this thread, newest first.
+	"""
+	messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!
 	"""
 	The newest non-draft content message in this thread.
 	"""

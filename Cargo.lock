@@ -6241,6 +6241,7 @@ dependencies = [
  "chrono",
  "email",
  "entity_access",
+ "futures",
  "macro_user_id",
  "tokio",
  "tracing",
