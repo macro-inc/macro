@@ -348,6 +348,26 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     assert_eq!(calls.lock().expect("calls lock").len(), 2);
 }
 
+#[tokio::test]
+async fn context_loader_reports_a_missing_item() {
+    let user_id = user("macro|missing@example.com");
+    let entity = EntityType::Document.with_entity_string(Uuid::from_u128(21).to_string());
+    let loader = SoupItemDataLoader::new(SoupItemLoader::new(
+        RecordingSoupService::default(),
+        RecordingInboxReader::default(),
+    ));
+
+    let error = loader
+        .load_one((user_id, entity))
+        .await
+        .expect_err("missing item returns an error");
+
+    assert!(
+        error.to_string().contains("Soup item not found for user"),
+        "unexpected error: {error}"
+    );
+}
+
 #[test]
 fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
     let first_document = Uuid::from_u128(21);

@@ -3302,7 +3302,7 @@ type SoupUpdated {
 	"""
 	Hydrate the current Soup entity.
 	"""
-	item: GraphqlSoupEntity!
+	item: GraphqlSoupEntity
 }
 
 """

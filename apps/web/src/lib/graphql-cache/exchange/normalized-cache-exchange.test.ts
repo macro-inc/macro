@@ -9,7 +9,14 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeSubject, map, pipe, type Source, subscribe } from 'wonka';
+import {
+  makeSubject,
+  map,
+  mergeMap,
+  pipe,
+  type Source,
+  subscribe,
+} from 'wonka';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
@@ -504,6 +511,93 @@ describe('normalizedCacheExchange', () => {
         value: ['GraphqlSoupDocument:update-then-delete'],
       },
     ]);
+  });
+
+  it('serializes cache effects across separate subscription emissions', async () => {
+    const operation = makeSubscriptionOp(24);
+    const networkResults = makeSubject<OperationResult>();
+    let cacheContainsDocument = false;
+    let markWriteStarted!: () => void;
+    let releaseWrite!: () => void;
+    const writeStarted = new Promise<void>((resolve) => {
+      markWriteStarted = resolve;
+    });
+    const writeCanFinish = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    vi.spyOn(host, 'writeQuery').mockImplementation(async () => {
+      markWriteStarted();
+      await writeCanFinish;
+      cacheContainsDocument = true;
+      return { changed: [], affectedOps: [], reset: false };
+    });
+    vi.spyOn(host, 'deleteRecords').mockImplementation(async () => {
+      cacheContainsDocument = false;
+      return [];
+    });
+
+    const ops = makeSubject<Operation>();
+    const results: OperationResult[] = [];
+    const exchangeIo = normalizedCacheExchange(host)({
+      forward: (ops$) =>
+        pipe(
+          ops$,
+          mergeMap(() => networkResults.source)
+        ),
+      client: {
+        reexecuteOperation: vi.fn(),
+        mutation: vi.fn(),
+      } as never,
+      dispatchDebug: () => undefined,
+    });
+    pipe(
+      exchangeIo(ops.source),
+      subscribe((result) => results.push(result))
+    );
+
+    ops.next(operation);
+    networkResults.next({
+      operation,
+      data: {
+        soupUpdates: [
+          {
+            __typename: 'SoupUpdated',
+            item: {
+              __typename: 'GraphqlSoupDocument',
+              id: 'document-1',
+              displayName: 'Updated document',
+            },
+          },
+        ],
+      },
+      stale: false,
+      hasNext: true,
+    });
+    await writeStarted;
+    networkResults.next({
+      operation,
+      data: {
+        soupUpdates: [
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'document-1',
+          },
+        ],
+      },
+      stale: false,
+      hasNext: true,
+    });
+
+    await tick();
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+    releaseWrite();
+    await vi.waitFor(() => expect(results).toHaveLength(2));
+
+    expect(host.deleteRecords).toHaveBeenCalledWith([
+      'GraphqlSoupDocument:document-1',
+    ]);
+    expect(cacheContainsDocument).toBe(false);
   });
 
   it('reports cache failures without dropping subscription results or later patches', async () => {

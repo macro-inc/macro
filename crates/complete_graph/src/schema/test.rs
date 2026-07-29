@@ -23,7 +23,7 @@ use macro_user_id::{
 };
 use model_entity::EntityType as ModelEntityType;
 use model_user::UserContext;
-use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{document::SoupDocument, item::SoupItem};
 use rootcause::Report;
 use soup_realtime::domain::models::Patch;
@@ -59,6 +59,7 @@ impl SoupRealtimeSubscriptionService for TestRealtimeSubscriptionService {
 struct CountingSoupService {
     raw_calls: Arc<AtomicUsize>,
     raw_team_receipts: Arc<AtomicUsize>,
+    return_empty_raw: bool,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
@@ -102,6 +103,11 @@ impl SoupService for CountingSoupService {
         self.raw_calls.fetch_add(1, Ordering::SeqCst);
         if team_receipt.is_some() {
             self.raw_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
+        if self.return_empty_raw {
+            let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
+                Paginated::from_parts(Vec::new(), None);
+            return Ok(soup::domain::ports::SoupOutput::Left(page));
         }
         Err(test_soup_err())
     }
@@ -601,8 +607,13 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         receiver: Arc::new(Mutex::new(Some(receiver))),
         subscribed_user: Arc::clone(&subscribed_user),
     };
+    let soup_service = CountingSoupService {
+        return_empty_raw: true,
+        ..Default::default()
+    };
+    let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
     let schema: SoupSchema<
-        NoOpSoupService,
+        CountingSoupService,
         TestRealtimeSubscriptionService,
         NoOpEmailService,
         NoOpEntityAccessService,
@@ -615,11 +626,12 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoOpSoupEmailContentEdgeReader,
         NoOpEntityFavoriteEdgeReader,
         NoOpEntityPermissionEdgeReader,
-    > = build_schema_with_services(NoOpSoupService, realtime);
+    > = build_schema_with_services(soup_service, realtime);
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { __typename ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
+        "subscription { soupUpdates { __typename ... on SoupUpdated { item { id } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
     )
-    .data(user_id.clone());
+    .data(user_id.clone())
+    .data(loader);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 
@@ -645,6 +657,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         .expect("soupUpdates is a buffered list");
     assert_eq!(updates.len(), 2);
     assert_eq!(updates[0]["__typename"], "SoupUpdated");
+    assert!(updates[0]["item"].is_null());
     assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
     assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
     assert_eq!(updates[1]["entityId"], document_id.to_string());

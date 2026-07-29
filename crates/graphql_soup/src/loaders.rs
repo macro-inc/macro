@@ -5,6 +5,7 @@ mod test;
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     future::Future,
     sync::Arc,
 };
@@ -50,6 +51,26 @@ pub type SoupItemLoaderKey = (MacroUserIdStr<'static>, Entity<'static>);
 
 /// Cloneable error returned by the realtime Soup item loader.
 pub type SoupItemLoaderError = Report<Dynamic, Cloneable>;
+
+#[derive(Clone, Copy, Debug)]
+struct SoupItemNotFound;
+
+impl fmt::Display for SoupItemNotFound {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Soup item not found for user")
+    }
+}
+
+impl std::error::Error for SoupItemNotFound {}
+
+/// Returns whether a loader error means the requested entity is no longer visible.
+pub(crate) fn is_soup_item_not_found(error: &SoupItemLoaderError) -> bool {
+    error.iter_reports().any(|report| {
+        report
+            .downcast_current_context::<SoupItemNotFound>()
+            .is_some()
+    })
+}
 
 /// Resolves the inboxes visible to a user for email-thread Soup hydration.
 pub trait SoupInboxReader: Send + Sync + 'static {
@@ -265,7 +286,7 @@ where
         .load_one::<OwnedSoupItemLoaderKey>(key)
         .await
         .transpose()
-        .ok_or_else(|| report!("Soup item not found for user").into_cloneable())
+        .ok_or_else(|| report!(SoupItemNotFound).into_dynamic().into_cloneable())
         .flatten()
 }
 

@@ -27,7 +27,7 @@ use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::Nest
 use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
-use crate::loaders::SoupItemDataLoader;
+use crate::loaders::{SoupItemDataLoader, is_soup_item_not_found};
 
 /// Extension fields attached to every top-level Soup entity.
 ///
@@ -286,28 +286,18 @@ where
 {
     /// Return the concrete GraphQL object name associated with a Soup entity type.
     fn graphql_type_name_for(entity_type: model_entity::EntityType) -> String {
-        match entity_type {
-            model_entity::EntityType::Document => {
-                GraphqlSoupDocument::<E>::type_name().into_owned()
-            }
-            model_entity::EntityType::Chat => GraphqlSoupChat::<E>::type_name().into_owned(),
-            model_entity::EntityType::Project => GraphqlSoupProject::<E>::type_name().into_owned(),
-            model_entity::EntityType::EmailThread => {
-                GraphqlSoupEmailThread::<E>::type_name().into_owned()
-            }
-            model_entity::EntityType::Channel => GraphqlSoupChannel::<E>::type_name().into_owned(),
-            model_entity::EntityType::ChannelMessage => {
-                GraphqlSoupChannelMessage::<E>::type_name().into_owned()
-            }
-            model_entity::EntityType::Call => GraphqlSoupCall::<E>::type_name().into_owned(),
-            model_entity::EntityType::CrmCompany => {
-                GraphqlSoupCrmCompany::<E>::type_name().into_owned()
-            }
-            model_entity::EntityType::ForeignEntity => {
-                GraphqlSoupForeignEntity::<E>::type_name().into_owned()
-            }
-            unsupported => panic!("{unsupported} is not a Soup entity type"),
+        match GraphqlSoupEntityType::new(entity_type) {
+            GraphqlSoupEntityType::Document => GraphqlSoupDocument::<E>::type_name(),
+            GraphqlSoupEntityType::Chat => GraphqlSoupChat::<E>::type_name(),
+            GraphqlSoupEntityType::Project => GraphqlSoupProject::<E>::type_name(),
+            GraphqlSoupEntityType::EmailThread => GraphqlSoupEmailThread::<E>::type_name(),
+            GraphqlSoupEntityType::Channel => GraphqlSoupChannel::<E>::type_name(),
+            GraphqlSoupEntityType::ChannelMessage => GraphqlSoupChannelMessage::<E>::type_name(),
+            GraphqlSoupEntityType::Call => GraphqlSoupCall::<E>::type_name(),
+            GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
+            GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
         }
+        .into_owned()
     }
 
     /// Construct a GraphQL entity from a plain Soup item.
@@ -1797,9 +1787,13 @@ pub struct SoupUpdated<E: SoupEntityEdges> {
 #[Object]
 impl<E: SoupEntityEdges> SoupUpdated<E> {
     /// Hydrate the current Soup entity.
-    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<GraphqlSoupEntity<E>> {
+    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
         let loader = ctx.data::<SoupItemDataLoader>()?;
         let key = (self.user_id.clone(), self.entity.clone());
-        Ok(GraphqlSoupEntity::new(loader.load_one(key).await?))
+        match loader.load_one(key).await {
+            Ok(item) => Ok(Some(GraphqlSoupEntity::new(item))),
+            Err(error) if is_soup_item_not_found(&error) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
     }
 }

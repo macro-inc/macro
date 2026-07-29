@@ -1192,7 +1192,7 @@ export type SoupUpdatesSubscription = { soupUpdates: Array<
               | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
               | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
              | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
-       }
+       | null }
   > };
 
 export type SoupQueryVariables = Exact<{

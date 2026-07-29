@@ -410,6 +410,7 @@ export function normalizedCacheExchange(
           resolveRoute: (result: OperationResult | undefined) => void;
         }
       >();
+      const subscriptionEffectChains = new Map<number, Promise<void>>();
       let attemptInFlight = false;
       let drainRunning = false;
       let deferredUntil: number | undefined;
@@ -649,27 +650,40 @@ export function normalizedCacheExchange(
       ): Promise<OperationResult> {
         const op = result.operation;
         if (op.kind === 'subscription' && result.data != null) {
-          // Apply effects serially so buffered delete→write and write→delete
-          // events retain their distinct semantics. Subscribers still receive
-          // the original result below.
-          for (const effect of subscriptionCacheEffects(result.data)) {
-            try {
-              if (effect.kind === 'write') {
-                await host.writeQuery({
-                  query: queryText(op),
-                  operationName: operationName(op),
-                  variables: op.variables as
-                    | Record<string, unknown>
-                    | undefined,
-                  data: effect.data,
-                });
-              } else {
-                await host.deleteRecords([effect.key]);
+          // Serialize effects across every emission for this operation, as
+          // well as within buffered payloads, so a slower earlier write cannot
+          // overtake a later delete. Subscribers still receive each original
+          // result after its effects settle.
+          const previousEffects =
+            subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+          const effects = previousEffects.then(async () => {
+            for (const effect of subscriptionCacheEffects(result.data)) {
+              try {
+                if (effect.kind === 'write') {
+                  await host.writeQuery({
+                    query: queryText(op),
+                    operationName: operationName(op),
+                    variables: op.variables as
+                      | Record<string, unknown>
+                      | undefined,
+                    data: effect.data,
+                  });
+                } else {
+                  await host.deleteRecords([effect.key]);
+                }
+              } catch (error) {
+                // One failed cache effect must neither skip later effects nor
+                // terminate the subscription result stream.
+                options.onCacheError?.(error, op);
               }
-            } catch (error) {
-              // One failed cache effect must neither skip later effects nor
-              // terminate the subscription result stream.
-              options.onCacheError?.(error, op);
+            }
+          });
+          subscriptionEffectChains.set(op.key, effects);
+          try {
+            await effects;
+          } finally {
+            if (subscriptionEffectChains.get(op.key) === effects) {
+              subscriptionEffectChains.delete(op.key);
             }
           }
         } else if (op.kind === 'query' && result.data != null) {

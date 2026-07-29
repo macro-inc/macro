@@ -39,7 +39,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "graphqlTypeName: String!",
         "entityId: ID!",
         "type SoupUpdated {",
-        "item: GraphqlSoupEntity!",
+        "item: GraphqlSoupEntity",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type SoupSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
