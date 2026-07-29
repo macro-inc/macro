@@ -207,7 +207,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
     for decoded in [malformed, missing_key, unsupported] {
         assert!(matches!(
             handoff_decoded(&sender, decoded).await,
-            HandoffOutcome::Poison(_)
+            HandoffOutcome::MalformedRecord(_)
         ));
     }
     assert!(matches!(

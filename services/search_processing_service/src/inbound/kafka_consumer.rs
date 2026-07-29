@@ -1,7 +1,7 @@
 //! Kafka consumer for broker events that update the search index.
 //!
 //! The poll loop hands decoded events to one bounded, sequential worker and
-//! commits each offset immediately after that handoff. Poison records are
+//! commits each offset immediately after that handoff. Malformed records are
 //! committed without a handoff so they cannot wedge a partition. Processing is
 //! retried in-process; exhausted events are logged and dropped because their
 //! offsets are already committed.
@@ -45,6 +45,8 @@ macro_event_broker::declare_topics!(SearchProcessingBrokerEvent: CallMacroEvent)
 
 /// Maximum number of decoded events waiting for the sequential worker.
 const CHANNEL_CAPACITY: usize = 128;
+/// Delay before polling Kafka again after a receive error.
+const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// Total processing attempts before an event is dropped.
 const MAX_PROCESSING_ATTEMPTS: u32 = 5;
 /// Delay before the first retry; each later delay doubles.
@@ -84,13 +86,13 @@ enum EventOutcome {
 
 /// Result of decoding and attempting a channel handoff.
 ///
-/// Both successful handoffs and poison messages are safe to commit. A closed
+/// Both successful handoffs and malformed records are safe to commit. A closed
 /// worker channel must leave the current record uncommitted so supervision can
 /// restart the consumer and redeliver it.
 #[derive(Debug)]
 enum HandoffOutcome<E> {
     HandedOff,
-    Poison(E),
+    MalformedRecord(E),
     WorkerClosed,
 }
 
@@ -175,7 +177,7 @@ async fn handoff_decoded<T, E>(
 ) -> HandoffOutcome<E> {
     let event = match decoded {
         Ok(event) => event,
-        Err(error) => return HandoffOutcome::Poison(error),
+        Err(error) => return HandoffOutcome::MalformedRecord(error),
     };
 
     match sender.send(event).await {
@@ -345,8 +347,8 @@ async fn poll_events(
             result = consumer.recv() => {
                 let message = match result {
                     Ok(message) => message,
-                    Err(error) => {
-                        tracing::error!(error = ?error, "Kafka receive error for search processing events");
+                    Err(_) => { // error is logged in tracing automatically
+                        tokio::time::sleep(RECEIVE_ERROR_RETRY_DELAY).await;
                         continue;
                     }
                 };
@@ -359,7 +361,7 @@ async fn poll_events(
 
                 match handoff_decoded(&events, decoded).await {
                     HandoffOutcome::HandedOff => {}
-                    HandoffOutcome::Poison(error) => tracing::error!(
+                    HandoffOutcome::MalformedRecord(error) => tracing::error!(
                         error = ?error,
                         topic = rdkafka::Message::topic(kafka_message),
                         partition = kafka_message.partition(),

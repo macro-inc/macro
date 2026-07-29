@@ -19,6 +19,7 @@ use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use tokio_retry::{Retry, strategy::FixedInterval};
 use tokio_util::sync::CancellationToken;
 
 mod api;
@@ -75,65 +76,59 @@ async fn supervise_event_consumer(
     opensearch_client: OpensearchClient,
     shutdown_token: CancellationToken,
 ) {
-    loop {
-        if shutdown_token.is_cancelled() {
-            tracing::info!("search processing event consumer supervisor stopped");
-            return;
-        }
-
+    let _ = Retry::start(FixedInterval::new(CONSUMER_RESTART_DELAY), || {
         let consumer_brokers = brokers.clone();
         let consumer_db = db.clone();
         let consumer_opensearch_client = opensearch_client.clone();
         let consumer_shutdown_token = shutdown_token.clone();
-        let consumer_result = tokio::spawn(async move {
-            run_event_consumer(
-                &consumer_brokers,
-                consumer_db,
-                consumer_opensearch_client,
-                consumer_shutdown_token.cancelled_owned(),
-            )
-            .await
-        })
-        .await;
 
-        match consumer_result {
-            Ok(Ok(())) if shutdown_token.is_cancelled() => {
+        async move {
+            if consumer_shutdown_token.is_cancelled() {
+                return Ok(());
+            }
+
+            let task_shutdown_token = consumer_shutdown_token.clone();
+            let consumer_result = tokio::spawn(async move {
+                run_event_consumer(
+                    &consumer_brokers,
+                    consumer_db,
+                    consumer_opensearch_client,
+                    task_shutdown_token.cancelled_owned(),
+                )
+                .await
+            })
+            .await;
+
+            if consumer_shutdown_token.is_cancelled() {
                 tracing::info!("search processing event consumer stopped after shutdown");
-                return;
+                return Ok(());
             }
-            Ok(Ok(())) => {
-                tracing::error!("search processing event consumer exited unexpectedly");
-            }
-            Ok(Err(error)) => {
-                tracing::error!(error = ?error, "search processing event consumer failed");
-            }
-            Err(error) if error.is_panic() => {
-                tracing::error!(error = ?error, "search processing event consumer panicked");
-            }
-            Err(error) => {
-                tracing::error!(error = ?error, "search processing event consumer task was cancelled");
-            }
-        }
 
-        if shutdown_token.is_cancelled() {
-            tracing::info!(
-                "search processing event consumer supervisor will not restart after shutdown"
+            match consumer_result {
+                Ok(Ok(())) => {
+                    tracing::error!("search processing event consumer exited unexpectedly");
+                }
+                Ok(Err(error)) => {
+                    tracing::error!(error = ?error, "search processing event consumer failed");
+                }
+                Err(error) if error.is_panic() => {
+                    tracing::error!(error = ?error, "search processing event consumer panicked");
+                }
+                Err(error) => {
+                    tracing::error!(error = ?error, "search processing event consumer task was cancelled");
+                }
+            }
+
+            tracing::warn!(
+                restart_delay_seconds = CONSUMER_RESTART_DELAY.as_secs(),
+                "search processing event consumer stopped; waiting before restart"
             );
-            return;
+            Err(())
         }
+    })
+    .await;
 
-        tracing::warn!(
-            restart_delay_seconds = CONSUMER_RESTART_DELAY.as_secs(),
-            "search processing event consumer stopped; waiting before restart"
-        );
-        tokio::select! {
-            _ = shutdown_token.cancelled() => {
-                tracing::info!("search processing event consumer supervisor will not restart after shutdown");
-                return;
-            }
-            _ = tokio::time::sleep(CONSUMER_RESTART_DELAY) => {}
-        }
-    }
+    tracing::info!("search processing event consumer supervisor stopped");
 }
 
 #[tokio::main]
