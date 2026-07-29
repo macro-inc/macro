@@ -40,6 +40,9 @@ platforms = [
 # macro_sync_service_jwt and the sync-service packages must stay wasm-safe, so
 # they must not gain the workspace-hack dep, which pulls native-only features.
 workspace-members = [
+    # Standalone protocol library. Until a deployable service consumes it,
+    # ACP's schema features must not alter unrelated service build/codegen closures.
+    "agent_runtime_protocol",
     "xtask",
     # xtask command crates: dev-only automation split out of xtask so each
     # `cargo x <cmd>` compiles only its own dependency set.

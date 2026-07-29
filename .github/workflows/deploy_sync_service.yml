@@ -1,0 +1,81 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_sync_service.rs
+name: Deploy Sync Service
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/deploy_sync_service.yml
+    - services/sync-service/**
+    - crates/macro_sync_service_jwt/**
+    - Cargo.toml
+    - Cargo.lock
+    - rust-toolchain.toml
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to deploy to. e.g. (dev, prod)
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        default: dev
+        options:
+        - dev
+        - prod
+        description: The environment to deploy to
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |-
+          ${{ github.workspace }}/target
+          /home/runner/.cargo/bin
+          /home/runner/.cache/.wasm-pack
+      continue-on-error: true
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: Add wasm32 target
+      run: rustup target add wasm32-unknown-unknown
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Install dependencies
+      run: npm ci
+      working-directory: services/sync-service
+    - name: Apply D1 migrations
+      run: npx wrangler d1 migrations apply USER_PEER_MAPPING --env ${{ inputs.environment || 'dev' }} --remote
+      env:
+        CI: 'true'
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      working-directory: services/sync-service
+    - name: Deploy with wrangler
+      run: npx wrangler deploy --env ${{ inputs.environment || 'dev' }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      working-directory: services/sync-service
+concurrency:
+  group: deploy-sync-service-${{ inputs.environment || 'dev' }}

@@ -127,8 +127,11 @@ property definition. A future definition-edit operation can add that event as a
 forward-compatible enum variant. TAG definition creation uses
 `property.created`; there is no separate `tag_set.created` event.
 
-The launch is producer-only. No `macro.properties` consumer ships in this
-repository change.
+The `soup_realtime` consumer subscribes to `macro.properties`. It maps entity
+property updates, deletions, and clears to updated Soup entities and fans them
+out to every current accessor. Task property entities map to their document
+representation. Definition and option lifecycle events remain ignored because
+they do not identify every affected entity.
 
 ## Producer composition
 

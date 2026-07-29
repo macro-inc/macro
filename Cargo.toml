@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "crates/agent",
+  "crates/agent_runtime_protocol",
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/bot_id",
@@ -98,6 +99,7 @@ members = [
 anyhow = "1.0.100"
 apollo-compiler = "1"
 apollo-parser = "0.8"
+agent-client-protocol = "1.2.0"
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -257,7 +259,9 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
-wasm-bindgen = "0.2"
+# worker-build (see services/sync-service/wrangler.toml) refuses to build against
+# anything older than 0.2.123, so keep this floor above that.
+wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [

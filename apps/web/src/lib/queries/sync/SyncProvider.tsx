@@ -18,27 +18,16 @@ import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplica
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@queries/agent-schedule/sync';
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
+import {
+  createConnectionWebsocketEffect,
+  parseWebsocketPayload,
+} from '@service-connection/websocket';
 import type { Accessor, ParentProps } from 'solid-js';
 import { match } from 'ts-pattern';
 
 type SyncProviderProps = ParentProps<{
   userId: Accessor<string | undefined>;
 }>;
-
-function parseWebsocketPayload<T>(
-  type: string,
-  payload: unknown
-): T | undefined {
-  if (typeof payload !== 'string') return payload as T;
-
-  try {
-    return JSON.parse(payload) as T;
-  } catch (error) {
-    console.warn('Malformed websocket payload', { type, payload, error });
-    return undefined;
-  }
-}
 
 function withParsedWebsocketPayload<T>(
   type: string,

@@ -12,5 +12,3 @@ pub mod pg_channel_reference_share_permissions;
 pub mod pg_channels_repo;
 /// Postgres context adapter for channel side-effect policy.
 pub mod pg_side_effect_context;
-/// SQS search-index adapter for channel side effects.
-pub mod sqs_search_indexer;

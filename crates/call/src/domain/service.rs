@@ -43,8 +43,8 @@ use super::models::{
     RingStatusResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
-    CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
-    CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+    CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
+    NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -56,7 +56,6 @@ pub struct CallServiceImpl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer = NoopCallSummarizer,
-    I: CallSearchIndexer = NoOpCallSearchIndexer,
     V: VoipPushSender = (),
     Vr: VoiceRepository = NoOpVoiceRepository,
     B: MacroEventBroker = NoopMacroEventBroker,
@@ -67,7 +66,6 @@ pub struct CallServiceImpl<
     entity_access_service: E,
     notification_ingress: N,
     recording_storage: S,
-    search_indexer: I,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
@@ -86,7 +84,7 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, (), NoOpVoiceRepository>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, (), NoOpVoiceRepository>
 {
     /// Create a new call service.
     pub fn new(
@@ -105,7 +103,6 @@ impl<
             entity_access_service,
             notification_ingress,
             recording_storage,
-            search_indexer: NoOpCallSearchIndexer,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
@@ -126,11 +123,10 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
     B: MacroEventBroker,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
@@ -164,7 +160,7 @@ impl<
     pub fn with_voip_push_sender<V2: VoipPushSender>(
         self,
         sender: V2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2, Vr, B> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, V2, Vr, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -172,7 +168,6 @@ impl<
             entity_access_service: self.entity_access_service,
             notification_ingress: self.notification_ingress,
             recording_storage: self.recording_storage,
-            search_indexer: self.search_indexer,
             server_url: self.server_url,
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
@@ -184,35 +179,11 @@ impl<
         }
     }
 
-    /// Swap the search indexer.
-    pub fn with_search_indexer<I2: CallSearchIndexer>(
-        self,
-        indexer: I2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V, Vr, B> {
-        CallServiceImpl {
-            repo: self.repo,
-            rtc_client: self.rtc_client,
-            connection_service: self.connection_service,
-            entity_access_service: self.entity_access_service,
-            notification_ingress: self.notification_ingress,
-            recording_storage: self.recording_storage,
-            search_indexer: indexer,
-            server_url: self.server_url,
-            egress_s3_config: self.egress_s3_config,
-            internal_call_secret: self.internal_call_secret,
-            summarizer: self.summarizer,
-            voip_push_sender: self.voip_push_sender,
-            voice_repo: self.voice_repo,
-            ring_status_base_url: self.ring_status_base_url,
-            event_broker: self.event_broker,
-        }
-    }
-
     /// Swap the voice repository.
     pub fn with_voice_repo<Vr2: VoiceRepository>(
         self,
         voice_repo: Vr2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr2, B> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr2, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -220,7 +191,6 @@ impl<
             entity_access_service: self.entity_access_service,
             notification_ingress: self.notification_ingress,
             recording_storage: self.recording_storage,
-            search_indexer: self.search_indexer,
             server_url: self.server_url,
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
@@ -236,7 +206,7 @@ impl<
     pub fn with_event_broker<B2: MacroEventBroker>(
         self,
         event_broker: B2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B2> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B2> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -244,7 +214,6 @@ impl<
             entity_access_service: self.entity_access_service,
             notification_ingress: self.notification_ingress,
             recording_storage: self.recording_storage,
-            search_indexer: self.search_indexer,
             server_url: self.server_url,
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
@@ -368,6 +337,33 @@ impl<
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call participant event"));
     }
+
+    /// Notify a user's own connections that they answered a call (best-effort).
+    ///
+    /// Unlike [`Self::send_call_event`], this targets only the answering
+    /// user, across all their connected clients, so devices still showing
+    /// the incoming-call UI can dismiss it when the call is answered
+    /// elsewhere (e.g. stop the desktop ring after an iPhone pickup).
+    async fn send_call_answered_event(
+        &self,
+        channel_id: &Uuid,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) {
+        let _ = self
+            .connection_service
+            .send_channel_message(
+                &[user_id.copied()],
+                "call_answered",
+                serde_json::json!({
+                    "channel_id": channel_id,
+                    "call_id": call_id,
+                    "user_id": user_id,
+                }),
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to send call answered event"));
+    }
 }
 
 /// Decide the per-user ring status from the room's active call (if any),
@@ -474,11 +470,10 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
     B: MacroEventBroker + Clone,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -790,6 +785,11 @@ impl<
             }
         }
 
+        // Tell the user's other devices the call was answered here so they
+        // can stop showing the incoming-call UI (best-effort).
+        self.send_call_answered_event(channel_id, &call.id, user_id.copied())
+            .await;
+
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
             .rtc_client
@@ -919,10 +919,6 @@ impl<
                     self.spawn_summarize_call(archived.call_id);
                     self.spawn_process_voices_for_call(archived.call_id);
 
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&archived.call_id).await {
-                        tracing::error!(error=?e, call_id=%archived.call_id, "failed to enqueue call record for search indexing");
-                    }
-
                     self.send_call_event(
                         &archived.channel_id,
                         "call_ended",
@@ -969,6 +965,16 @@ impl<
                             participant = participant_identity.as_ref(),
                             "reconciled participant_joined via webhook"
                         );
+                        // Native answers (e.g. iPhone CallKit pickup) connect
+                        // straight to LiveKit without hitting the join API, so
+                        // this webhook is where the user's other devices learn
+                        // the ring was answered (best-effort).
+                        self.send_call_answered_event(
+                            &call.channel_id,
+                            &call.id,
+                            participant_identity.copied(),
+                        )
+                        .await;
                     }
                     Err(AddParticipantError::UserAlreadyActive) => {
                         tracing::warn!(
@@ -1032,10 +1038,6 @@ impl<
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(archived.call_id);
                     self.spawn_process_voices_for_call(archived.call_id);
-
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&archived.call_id).await {
-                        tracing::error!(error=?e, call_id=%archived.call_id, "failed to enqueue call record for search indexing");
-                    }
 
                     // Stop egress explicitly before deleting the room. DeleteRoom
                     // is expected to cascade-stop egress, but a failed or slow
@@ -1228,7 +1230,7 @@ impl<
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
         let actor_user_id = event_actor_user_id(receipt.auth());
 
-        // Look up channel_id before deletion to keep the search-remove message id unique.
+        // Look up channel_id before deletion so the deleted event includes channel context.
         let channel_id = self
             .repo
             .get_call_record_by_call_id(&call_id)
@@ -1250,15 +1252,6 @@ impl<
                 channel_id,
                 actor_user_id,
             }));
-        }
-
-        if let Some(channel_id) = channel_id
-            && let Err(e) = self
-                .search_indexer
-                .enqueue_remove(&channel_id, &call_id)
-                .await
-        {
-            tracing::error!(error=?e, call_id=%call_id, "failed to enqueue call record removal from search");
         }
 
         if let Some(storage_keys) = storage_keys {
@@ -1593,11 +1586,10 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
     B: MacroEventBroker + Clone,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr, B>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///

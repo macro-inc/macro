@@ -263,9 +263,10 @@ pub async fn build_tool_service_context_from_env(
         event_task_tracker,
     );
     // Channel messages sent by AI tools dispatch the same side effects as the
-    // document-storage channel API (realtime, notifications, search indexing,
-    // contact sync, broker events), so agent-sent messages notify mentioned
-    // users and stream to connected clients instead of landing silently.
+    // document-storage channel API (realtime, notifications, contact sync, and
+    // broker events that drive live search indexing), so agent-sent messages
+    // notify mentioned users and stream to connected clients instead of landing
+    // silently.
     let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
         pool.clone(),
         Arc::new(lexical_client.clone()),

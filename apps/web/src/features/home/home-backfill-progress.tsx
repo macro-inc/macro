@@ -59,8 +59,8 @@ export function HomeBackfillProgress() {
           </div>
           <Show when={active().length > 0}>
             <span class="shrink-0 text-xs tabular-nums text-ink-muted">
-              {totals().completed.toLocaleString()} /{' '}
-              {totals().total.toLocaleString()}
+              {totals().completed.toLocaleString()} of{' '}
+              {totals().total.toLocaleString()} threads
             </span>
           </Show>
         </div>

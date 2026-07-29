@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "agent_runtime_protocol"
+publish = false
+version = "0.1.0"
+
+[features]
+test-utils = []
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "net", "rt", "rt-multi-thread", "time"] }

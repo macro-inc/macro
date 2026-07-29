@@ -43,9 +43,10 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
 /// errors on a scope mismatch (parity with the browser worker `init`). The
-/// database lives at `{app_data_dir}/graphql-cache/cache.sqlite`; the
-/// namespace check inside `cache-sqlite` (scope + schema hash + format
-/// version) wipes and rebuilds on mismatch — the cache is disposable.
+/// database lives at `{app_data_dir}/graphql-cache/cache.sqlite`. A scope
+/// change clears all cache state; for the same scope, a schema compatibility
+/// epoch or format mismatch clears disposable records but retains queued user
+/// intent.
 #[tauri::command]
 pub async fn graphql_cache_init<R: Runtime>(
     app: AppHandle<R>,

@@ -3,11 +3,8 @@ import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
-import {
-  IncomingCallWidgetEvents,
-  SidebarActiveCallWidget,
-  useIncomingCallWidgetVisible,
-} from '@app/features/block-call/sidebar/active-call-widget';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
+import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -425,9 +422,6 @@ function LayoutInner(props: RouteSectionProps) {
               <FavoritesCommands />
               <CommandMenu />
             </Suspense>
-          </Show>
-          <Show when={isSidebarVisible()}>
-            <IncomingCallWidgetEvents />
           </Show>
           <Suspense>
             <PropertyEditorModal />
