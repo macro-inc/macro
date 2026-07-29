@@ -312,7 +312,6 @@ impl FusionAuthEnv {
             "FUSIONAUTH_API_KEY_SECRET_KEY".into(),
             identity::FUSIONAUTH_API_KEY.into(),
         );
-        env.insert("FUSIONAUTH_TENANT_ID".into(), identity::TENANT_ID.into());
         env.insert(
             "FUSIONAUTH_CLIENT_ID".into(),
             identity::APPLICATION_ID.into(),

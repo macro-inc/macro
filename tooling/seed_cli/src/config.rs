@@ -12,8 +12,6 @@ env_var! {
         pub FusionauthBaseUrl,
         /// fusionauth api key
         pub FusionauthApiKeySecretKey,
-        /// fusionauth tenant id
-        pub FusionauthTenantId,
         /// fusionauth client id
         pub FusionauthClientId,
         /// fusionauth client secret key
