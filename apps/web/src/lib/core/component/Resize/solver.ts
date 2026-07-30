@@ -146,7 +146,9 @@ function computeFractionalShares(
     if (i >= 1) {
       offsets[i] = offsets[i - 1] + clamped[i - 1] + gutter;
     }
-    shares[i] = clamped[i] / usable;
+    // A zero-measure zone (e.g. mid-boot) must not emit NaN shares into
+    // the layout result consumers read.
+    shares[i] = usable > 0 ? clamped[i] / usable : 0;
   }
 
   return {

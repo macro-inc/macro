@@ -601,6 +601,35 @@ describe('createResizeSolver', () => {
       dispose();
     });
 
+    it('emits finite shares when the zone measures zero', async () => {
+      const [size, setSize] = createSignal(1000);
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size,
+          panels: [],
+        }),
+      }));
+
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'A', minSize: 400 });
+      solver.addPanel({ id: 'B', minSize: 400 });
+
+      setSize(0);
+      for (const share of solver.solve().shares.values()) {
+        expect(Number.isFinite(share)).toBe(true);
+      }
+
+      setSize(1000);
+      expect(solver.solve().sizes.get('A')).toBe(500);
+      expect(solver.solve().sizes.get('B')).toBe(500);
+
+      dispose();
+    });
+
     it('keeps the share model through a transient too-small solve', async () => {
       const [size, setSize] = createSignal(1000);
       const { solver, dispose } = createRoot((dispose) => ({
