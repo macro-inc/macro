@@ -1,0 +1,21 @@
+import type { EventInput } from '@fullcalendar/core';
+import type { CalendarEvent } from './types';
+
+/** Maps calendar-owned event data into FullCalendar's rendering contract. */
+export function mapCalendarEventToFullCalendar(
+  event: CalendarEvent
+): EventInput {
+  return {
+    id: event.id,
+    title: event.title,
+    start: event.start,
+    end: event.end,
+    allDay: event.allDay,
+    backgroundColor: event.calendar.color,
+    borderColor: event.calendar.color,
+    display: 'block',
+    extendedProps: {
+      calendarEventId: event.id,
+    },
+  };
+}

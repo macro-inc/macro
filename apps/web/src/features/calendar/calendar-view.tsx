@@ -17,6 +17,10 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { CalendarEventContent } from './events/EventContent';
+import { EventDetailsPopover } from './events/EventDetailsPopover';
+import { mapCalendarEventToFullCalendar } from './events/event-mapper';
+import { createCalendarEventFixtures } from './events/fixtures';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import './calendar.css';
 
@@ -206,6 +210,20 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
 /** A calendar-focused workspace view backed by FullCalendar. */
 export function CalendarView() {
   const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
+  const [selectedEventId, setSelectedEventId] = createSignal<string>();
+  const [selectedEventAnchor, setSelectedEventAnchor] =
+    createSignal<HTMLElement>();
+  const calendarEvents = createCalendarEventFixtures();
+  const eventsById = new Map(calendarEvents.map((event) => [event.id, event]));
+  const fullCalendarEvents = calendarEvents.map(mapCalendarEventToFullCalendar);
+  const selectedEvent = () => {
+    const eventId = selectedEventId();
+    return eventId ? eventsById.get(eventId) : undefined;
+  };
+  const closeEventDetails = () => {
+    setSelectedEventId(undefined);
+    setSelectedEventAnchor(undefined);
+  };
 
   return (
     <FullCalendar.Root
@@ -220,6 +238,13 @@ export function CalendarView() {
       headerToolbar={false}
       scrollTime={getLocalScrollTime()}
       scrollTimeReset={false}
+      events={fullCalendarEvents}
+      eventClick={({ el, event, jsEvent }) => {
+        jsEvent.preventDefault();
+        setSelectedEventId(event.id);
+        setSelectedEventAnchor(el);
+      }}
+      datesSet={closeEventDetails}
       dayHeaderFormat={{
         weekday: useNarrowDayHeaders() ? 'narrow' : 'short',
       }}
@@ -260,6 +285,17 @@ export function CalendarView() {
         }}
       </FullCalendar.DayHeaderContent>
 
+      <FullCalendar.EventContent>
+        {(renderProps) => {
+          const event = eventsById.get(renderProps.event.id);
+          if (!event) return null;
+
+          return (
+            <CalendarEventContent event={event} renderProps={renderProps} />
+          );
+        }}
+      </FullCalendar.EventContent>
+
       <FullCalendar.NowIndicatorContent>
         {({ isAxis, view }) => {
           if (isAxis) {
@@ -274,6 +310,19 @@ export function CalendarView() {
           return <CurrentTimeAxisIndicator date={new Date()} />;
         }}
       </FullCalendar.NowIndicatorContent>
+
+      <Show when={selectedEvent()}>
+        {(event) => (
+          <EventDetailsPopover
+            anchor={selectedEventAnchor()}
+            event={event()}
+            open={selectedEventAnchor() !== undefined}
+            onOpenChange={(open) => {
+              if (!open) closeEventDetails();
+            }}
+          />
+        )}
+      </Show>
 
       <CalendarWorkspace onNarrowDayHeadersChange={setUseNarrowDayHeaders} />
     </FullCalendar.Root>
