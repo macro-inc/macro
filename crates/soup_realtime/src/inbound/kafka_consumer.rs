@@ -27,7 +27,7 @@ use models_properties::EntityType as PropertyEntityType;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
-use rdkafka::message::BorrowedMessage;
+use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
 
 /// Consumer group used for Soup-affecting entity event offsets.
@@ -440,6 +440,13 @@ impl SoupRealtimeServiceImpl {
                 result = consumer.recv() => {
                     let Ok(message) = result else { continue; };
                     let kafka_message = message.inner();
+                    let _message_span = tracing::info_span!(
+                        "realtime_soup_source_event",
+                        topic = kafka_message.topic(),
+                        partition = kafka_message.partition(),
+                        offset = kafka_message.offset(),
+                    )
+                    .entered();
                     let event = match message.decode_payload() {
                         Ok(event) => event,
                         Err(_) => {
