@@ -46,13 +46,12 @@ import {
   createMemo,
   createSignal,
   For,
-  onCleanup,
   Show,
 } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
+import { lazyRegister } from '../../plugins';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
 import { createLayoutTick } from './createLayoutTick';
-import { lazyRegister } from '../../plugins';
 
 false && clickOutside;
 false && floatWithElement;
@@ -184,25 +183,23 @@ export function TableMoveHandle() {
   });
 
   lazyRegister(editor, (e) => {
-    return (
-      mergeRegister(
-        e.registerCommand(
-          SELECTION_CHANGE_COMMAND,
-          () => {
-            trackSelection();
-            return false;
-          },
-          COMMAND_PRIORITY_LOW
-        ),
-        e.registerUpdateListener(bumpLayout),
-        e.registerCommand(
-          FOCUS_COMMAND,
-          () => {
-            setEditorFocused(true);
-            return false;
-          },
-          COMMAND_PRIORITY_LOW
-        )
+    return mergeRegister(
+      e.registerCommand(
+        SELECTION_CHANGE_COMMAND,
+        () => {
+          trackSelection();
+          return false;
+        },
+        COMMAND_PRIORITY_LOW
+      ),
+      e.registerUpdateListener(bumpLayout),
+      e.registerCommand(
+        FOCUS_COMMAND,
+        () => {
+          setEditorFocused(true);
+          return false;
+        },
+        COMMAND_PRIORITY_LOW
       ),
       e.registerCommand(
         BLUR_COMMAND,
