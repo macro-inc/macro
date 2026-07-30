@@ -3997,6 +3997,7 @@ dependencies = [
  "aws_lambda_events",
  "chat",
  "chrono",
+ "documents",
  "futures",
  "lambda_runtime",
  "macro_aws_config",

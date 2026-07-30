@@ -13,7 +13,7 @@ pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     pub database_url: String,
 
-    /// Comma-separated Kafka bootstrap servers for project and chat lifecycle events.
+    /// Comma-separated Kafka bootstrap servers for document, project, and chat lifecycle events.
     pub kafka_brokers: KafkaBrokers,
 
     /// The environment we are in

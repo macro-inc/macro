@@ -5,6 +5,7 @@ use crate::context::{self};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
 use chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
+use documents::domain::events::{DocumentMacroEvent, DocumentPurgedMetadata};
 use futures::future::join_all;
 use lambda_runtime::{
     Error, LambdaEvent,
@@ -14,7 +15,6 @@ use macro_db_client::projects::ProjectToDelete;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
-use sqs_client::search::{SearchQueueMessage, document::DocumentId};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
@@ -26,6 +26,43 @@ pub async fn handler(
         handle_documents(&ctx),
         handle_projects(&ctx)
     )?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(event_broker, document_ids), err)]
+async fn publish_document_purge_events<B: MacroEventBroker>(
+    event_broker: &B,
+    document_ids: &[String],
+) -> anyhow::Result<()> {
+    let events = document_ids
+        .iter()
+        .map(|document_id| {
+            DocumentMacroEvent::purged(
+                document_id.clone(),
+                DocumentPurgedMetadata {
+                    document_id: document_id.clone(),
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let publications = events
+        .iter()
+        .map(|event| event_broker.send_event(event))
+        .collect::<Vec<_>>();
+    let publication_results = join_all(publications.into_iter().map(|publication| async move {
+        let handle = publication.context("failed to enqueue document purge event")?;
+        handle
+            .await
+            .context("document purge event publication task failed")?
+            .context("failed to publish document purge event")
+    }))
+    .await;
+
+    for result in publication_results {
+        result?;
+    }
 
     Ok(())
 }
@@ -184,18 +221,9 @@ async fn handle_documents(ctx: &context::Context) -> anyhow::Result<()> {
 
     tracing::debug!(documents_to_delete=?documents_to_delete, "documents to delete");
 
-    ctx.sqs_client
-        .bulk_send_message_to_search_event_queue(
-            documents_to_delete
-                .iter()
-                .map(|id| {
-                    SearchQueueMessage::RemoveDocument(DocumentId {
-                        document_id: id.to_string(),
-                    })
-                })
-                .collect(),
-        )
-        .await?;
+    publish_document_purge_events(&ctx.macro_event_broker, &documents_to_delete)
+        .await
+        .context("unable to publish document purge events")?;
 
     ctx.sqs_client
         .bulk_enqueue_document_delete(documents_to_delete)

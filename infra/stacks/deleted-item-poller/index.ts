@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getSearchEventQueue, stack } from '../../packages/shared';
+import { config, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { DeleteItemPoller } from './lambda';
 
@@ -42,12 +42,10 @@ const deleteChatQueueArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('deleteChatQueueArn')
   .apply((arn) => arn as string);
 
-const { searchEventQueueArn } = getSearchEventQueue();
-
 const vpc = get_coparse_api_vpc();
 
 const deletedItemPoller = new DeleteItemPoller('deleted-item-poller', {
-  queueArns: [deleteDocumentQueueArn, deleteChatQueueArn, searchEventQueueArn],
+  queueArns: [deleteDocumentQueueArn, deleteChatQueueArn],
   vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,

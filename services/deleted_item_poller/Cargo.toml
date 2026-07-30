@@ -12,6 +12,7 @@ aws-smithy-types = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 chat = { path = "../../crates/chat", default-features = false }
 chrono = { workspace = true }
+documents = { path = "../../crates/documents", default-features = false }
 futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { path = "../../crates/macro_db_client" }
@@ -30,7 +31,6 @@ sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "chat",
   "document",
-  "search",
 ] }
 tokio = { workspace = true }
 tracing = { workspace = true }
