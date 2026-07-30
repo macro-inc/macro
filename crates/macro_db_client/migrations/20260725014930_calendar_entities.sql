@@ -4,15 +4,15 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 ALTER TABLE in_progress_user_link
-    ADD COLUMN requested_google_scopes text[] NOT NULL DEFAULT '{}',
-    ADD COLUMN granted_google_scopes text[] NOT NULL DEFAULT '{}';
+    ADD COLUMN IF NOT EXISTS requested_google_scopes text[] NOT NULL DEFAULT '{}',
+    ADD COLUMN IF NOT EXISTS granted_google_scopes text[] NOT NULL DEFAULT '{}';
 
 ALTER TABLE email_links
-    ADD COLUMN google_granted_scopes text[] NOT NULL DEFAULT '{}',
-    ADD COLUMN google_grant_version bigint NOT NULL DEFAULT 0
+    ADD COLUMN IF NOT EXISTS google_granted_scopes text[] NOT NULL DEFAULT '{}',
+    ADD COLUMN IF NOT EXISTS google_grant_version bigint NOT NULL DEFAULT 0
         CHECK (google_grant_version >= 0);
 
-CREATE TABLE calendar_accounts (
+CREATE TABLE IF NOT EXISTS calendar_accounts (
     id uuid PRIMARY KEY,
     owner_id text NOT NULL,
     email_link_id uuid NOT NULL UNIQUE
@@ -51,10 +51,10 @@ CREATE TABLE calendar_accounts (
     UNIQUE (owner_id, provider, provider_account_id)
 );
 
-CREATE INDEX calendar_accounts_owner_idx
+CREATE INDEX IF NOT EXISTS calendar_accounts_owner_idx
     ON calendar_accounts (owner_id);
 
-CREATE TABLE calendars (
+CREATE TABLE IF NOT EXISTS calendars (
     id uuid PRIMARY KEY,
     account_id uuid NOT NULL
         REFERENCES calendar_accounts(id) ON DELETE CASCADE,
@@ -68,6 +68,9 @@ CREATE TABLE calendars (
     is_selected boolean NOT NULL DEFAULT true,
     is_deleted boolean NOT NULL DEFAULT false,
     sync_token text,
+    watch_channel_id text,
+    watch_resource_id text,
+    watch_expires_at timestamptz,
     materialized_starts_at timestamptz,
     materialized_ends_at timestamptz,
     materialized_start_date date,
@@ -94,11 +97,15 @@ CREATE TABLE calendars (
     )
 );
 
-CREATE INDEX calendars_account_selected_idx
+CREATE INDEX IF NOT EXISTS calendars_account_selected_idx
     ON calendars (account_id, is_selected)
     WHERE NOT is_deleted;
 
-CREATE TABLE calendar_events (
+CREATE INDEX IF NOT EXISTS calendars_watch_expiring_idx
+    ON calendars (watch_expires_at)
+    WHERE watch_channel_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS calendar_events (
     id uuid PRIMARY KEY,
     owner_id text NOT NULL,
     source_link_id uuid NOT NULL
@@ -164,15 +171,18 @@ CREATE TABLE calendar_events (
     )
 );
 
-CREATE INDEX calendar_events_owner_updated_idx
+CREATE INDEX IF NOT EXISTS calendar_events_owner_updated_idx
     ON calendar_events (owner_id, updated_at DESC, id DESC)
     WHERE deleted_at IS NULL;
 
-CREATE INDEX calendar_events_owner_created_idx
+CREATE INDEX IF NOT EXISTS calendar_events_owner_created_idx
     ON calendar_events (owner_id, created_at DESC, id DESC)
     WHERE deleted_at IS NULL;
 
-CREATE TABLE calendar_event_sources (
+CREATE INDEX IF NOT EXISTS calendar_events_source_link_idx
+    ON calendar_events (source_link_id);
+
+CREATE TABLE IF NOT EXISTS calendar_event_sources (
     id uuid PRIMARY KEY,
     event_id uuid NOT NULL,
     source_link_id uuid NOT NULL
@@ -223,11 +233,11 @@ CREATE TABLE calendar_event_sources (
     )
 );
 
-CREATE UNIQUE INDEX calendar_event_sources_google_idx
+CREATE UNIQUE INDEX IF NOT EXISTS calendar_event_sources_google_idx
     ON calendar_event_sources (account_id, calendar_id, provider_event_id)
     WHERE source_kind = 'google';
 
-CREATE UNIQUE INDEX calendar_event_sources_email_idx
+CREATE UNIQUE INDEX IF NOT EXISTS calendar_event_sources_email_idx
     ON calendar_event_sources (
         email_link_id,
         email_message_id,
@@ -237,10 +247,25 @@ CREATE UNIQUE INDEX calendar_event_sources_email_idx
     )
     WHERE source_kind = 'email_ics';
 
-CREATE INDEX calendar_event_sources_event_idx
+CREATE INDEX IF NOT EXISTS calendar_event_sources_event_idx
     ON calendar_event_sources (event_id);
 
-CREATE TABLE calendar_event_attendees (
+CREATE INDEX IF NOT EXISTS calendar_event_sources_source_link_idx
+    ON calendar_event_sources (source_link_id);
+
+CREATE INDEX IF NOT EXISTS calendar_event_sources_email_link_idx
+    ON calendar_event_sources (email_link_id)
+    WHERE email_link_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS calendar_event_sources_account_idx
+    ON calendar_event_sources (account_id)
+    WHERE account_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS calendar_event_sources_calendar_idx
+    ON calendar_event_sources (calendar_id)
+    WHERE calendar_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS calendar_event_attendees (
     event_id uuid NOT NULL
         REFERENCES calendar_events(id) ON DELETE CASCADE,
     email text NOT NULL,
@@ -254,10 +279,10 @@ CREATE TABLE calendar_event_attendees (
     PRIMARY KEY (event_id, email)
 );
 
-CREATE INDEX calendar_event_attendees_email_idx
+CREATE INDEX IF NOT EXISTS calendar_event_attendees_email_idx
     ON calendar_event_attendees (lower(email));
 
-CREATE TABLE calendar_event_overrides (
+CREATE TABLE IF NOT EXISTS calendar_event_overrides (
     event_id uuid NOT NULL
         REFERENCES calendar_events(id) ON DELETE CASCADE,
     recurrence_id text NOT NULL,
@@ -296,7 +321,7 @@ CREATE TABLE calendar_event_overrides (
     )
 );
 
-CREATE TABLE calendar_event_occurrences (
+CREATE TABLE IF NOT EXISTS calendar_event_occurrences (
     event_id uuid NOT NULL,
     owner_id text NOT NULL,
     occurrence_key text NOT NULL,
@@ -342,24 +367,24 @@ CREATE TABLE calendar_event_occurrences (
     )
 );
 
-CREATE INDEX calendar_event_occurrences_timed_span_idx
+CREATE INDEX IF NOT EXISTS calendar_event_occurrences_timed_span_idx
     ON calendar_event_occurrences USING gist (owner_id, timed_span)
     WHERE NOT is_cancelled AND timed_span IS NOT NULL;
 
-CREATE INDEX calendar_event_occurrences_day_span_idx
+CREATE INDEX IF NOT EXISTS calendar_event_occurrences_day_span_idx
     ON calendar_event_occurrences USING gist (owner_id, day_span)
     WHERE NOT is_cancelled AND day_span IS NOT NULL;
 
-CREATE INDEX calendar_event_occurrences_event_start_idx
+CREATE INDEX IF NOT EXISTS calendar_event_occurrences_event_start_idx
     ON calendar_event_occurrences (owner_id, event_id, starts_at, start_date)
     WHERE NOT is_cancelled;
 
 ALTER TABLE email_backfill_jobs
-    ADD COLUMN init_lease_token uuid,
-    ADD COLUMN init_lease_expires_at timestamptz,
-    ADD COLUMN initialized_at timestamptz;
+    ADD COLUMN IF NOT EXISTS init_lease_token uuid,
+    ADD COLUMN IF NOT EXISTS init_lease_expires_at timestamptz,
+    ADD COLUMN IF NOT EXISTS initialized_at timestamptz;
 
-CREATE TABLE email_backfill_init_outbox (
+CREATE TABLE IF NOT EXISTS email_backfill_init_outbox (
     id uuid PRIMARY KEY,
     backfill_job_id uuid NOT NULL UNIQUE
         REFERENCES email_backfill_jobs(id) ON DELETE CASCADE,
@@ -367,11 +392,11 @@ CREATE TABLE email_backfill_init_outbox (
     published_at timestamptz
 );
 
-CREATE INDEX email_backfill_init_outbox_unpublished_idx
+CREATE INDEX IF NOT EXISTS email_backfill_init_outbox_unpublished_idx
     ON email_backfill_init_outbox (created_at, id)
     WHERE published_at IS NULL;
 
-CREATE TABLE email_backfill_completion_outbox (
+CREATE TABLE IF NOT EXISTS email_backfill_completion_outbox (
     id uuid PRIMARY KEY,
     backfill_job_id uuid NOT NULL UNIQUE
         REFERENCES email_backfill_jobs(id) ON DELETE CASCADE,
@@ -382,11 +407,11 @@ CREATE TABLE email_backfill_completion_outbox (
     effects_lease_expires_at timestamptz
 );
 
-CREATE INDEX email_backfill_completion_outbox_unpublished_idx
+CREATE INDEX IF NOT EXISTS email_backfill_completion_outbox_unpublished_idx
     ON email_backfill_completion_outbox (created_at, id)
     WHERE published_at IS NULL;
 
-CREATE TABLE calendar_backfill_jobs (
+CREATE TABLE IF NOT EXISTS calendar_backfill_jobs (
     id uuid PRIMARY KEY,
     email_link_id uuid NOT NULL
         REFERENCES email_links(id) ON DELETE CASCADE,
@@ -410,11 +435,15 @@ CREATE TABLE calendar_backfill_jobs (
     UNIQUE (email_link_id, kind, grant_version)
 );
 
-CREATE INDEX calendar_backfill_jobs_pending_idx
+CREATE INDEX IF NOT EXISTS calendar_backfill_jobs_pending_idx
     ON calendar_backfill_jobs (created_at, id)
     WHERE status IN ('pending', 'running');
 
-CREATE TABLE calendar_sync_outbox (
+CREATE INDEX IF NOT EXISTS calendar_backfill_jobs_account_idx
+    ON calendar_backfill_jobs (account_id)
+    WHERE account_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS calendar_sync_outbox (
     id uuid PRIMARY KEY,
     backfill_job_id uuid NOT NULL UNIQUE
         REFERENCES calendar_backfill_jobs(id) ON DELETE CASCADE,
@@ -422,6 +451,6 @@ CREATE TABLE calendar_sync_outbox (
     published_at timestamptz
 );
 
-CREATE INDEX calendar_sync_outbox_unpublished_idx
+CREATE INDEX IF NOT EXISTS calendar_sync_outbox_unpublished_idx
     ON calendar_sync_outbox (created_at, id)
     WHERE published_at IS NULL;
