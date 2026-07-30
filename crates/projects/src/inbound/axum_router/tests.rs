@@ -43,7 +43,7 @@ use uuid::Uuid;
 
 use super::{ProjectRouterState, projects_router};
 use crate::domain::{
-    models::{ProjectError, SoftDeleteResult},
+    models::{ProjectError, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult},
     ports::ProjectService,
 };
 
@@ -181,7 +181,7 @@ impl ProjectService for FakeProjectService {
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
         project: BasicProject,
-    ) -> Result<(), ProjectError> {
+    ) -> Result<PurgedProjectTree, ProjectError> {
         self.mutations
             .lock()
             .expect("mutation lock poisoned")
@@ -190,19 +190,28 @@ impl ProjectService for FakeProjectService {
             .lock()
             .expect("permanently deleted project lock poisoned")
             .push(project);
-        Ok(())
+        Ok(PurgedProjectTree {
+            project_ids: vec![PROJECT_ID.to_string()],
+            chat_ids: Vec::new(),
+            documents: Vec::new(),
+            bom_shas: Vec::new(),
+        })
     }
 
     async fn revert_delete_project(
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
         _project: BasicProject,
-    ) -> Result<(), ProjectError> {
+    ) -> Result<RevertDeleteResult, ProjectError> {
         self.mutations
             .lock()
             .expect("mutation lock poisoned")
             .push("revert");
-        Ok(())
+        Ok(RevertDeleteResult {
+            project_ids: vec![PROJECT_ID.to_string()],
+            document_ids: Vec::new(),
+            chat_ids: Vec::new(),
+        })
     }
 
     async fn upload_folder(

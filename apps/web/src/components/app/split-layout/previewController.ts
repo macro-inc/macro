@@ -12,11 +12,19 @@ const DEFAULT_PREVIEW_CONTROLLER_WIDTH: PreviewControllerWidth = {
   preferredPx: 440,
 };
 
+/** Copy for a controller's empty-Viewer placeholder (`preview-empty`). */
+export type PreviewEmptyState = {
+  title: string;
+  description: string;
+};
+
 type PreviewControllerContentConfig = {
   type: SplitContentType;
   /** Omit to match every block with this content type. */
   id?: string;
   redistributionWidth?: PreviewControllerWidth;
+  /** Overrides the generic "No content selected" placeholder copy. */
+  emptyState?: PreviewEmptyState;
 };
 
 /** Non-list additions and exact-content overrides for preview controllers. */
@@ -27,8 +35,21 @@ const PREVIEW_CONTROLLER_CONTENT_CONFIG: readonly PreviewControllerContentConfig
     },
     {
       type: 'component',
+      id: 'getting-started',
+      emptyState: {
+        title: 'Welcome to Macro',
+        description: 'Select an item from the list to get started.',
+      },
+    },
+    {
+      type: 'component',
+      id: LIST_VIEW_ID.channels,
+      redistributionWidth: { preferredPx: 360 },
+    },
+    {
+      type: 'component',
       id: LIST_VIEW_ID.mail,
-      redistributionWidth: { preferredPx: 1050, maxViewportFraction: 0.6 },
+      redistributionWidth: { preferredPx: 800, maxViewportFraction: 0.6 },
     },
     {
       type: 'component',
@@ -53,6 +74,13 @@ export function isPreviewControllerContent(content: SplitContent): boolean {
     (content.type === 'component' && isListViewID(content.id)) ||
     previewControllerConfig(content) !== undefined
   );
+}
+
+/** Custom empty-Viewer copy for a controller's content, if configured. */
+export function previewEmptyStateForContent(
+  content: SplitContent
+): PreviewEmptyState | undefined {
+  return previewControllerConfig(content)?.emptyState;
 }
 
 export function previewControllerWidthForContent(

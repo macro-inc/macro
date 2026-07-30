@@ -126,12 +126,26 @@ impl EntityAccessService for TestAccessService {
 
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(self.access_err())
+        if !matches!(self.mode, AccessMode::Allow) {
+            return Err(self.access_err());
+        }
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr::parse_from_str(user_id.as_ref())
+                .unwrap()
+                .into_owned(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::ChannelRole {
+                role: EntityParticipantRole::Member,
+            },
+        )
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
@@ -2345,7 +2359,7 @@ async fn missing_channel_returns_404() {
 
 #[derive(Default)]
 struct ActivityService {
-    posts: Arc<Mutex<Vec<(Sender, Uuid, ActivityType)>>>,
+    posts: Arc<Mutex<Vec<(String, Uuid, ActivityType)>>>,
 }
 
 impl ChannelService for ActivityService {
@@ -2436,17 +2450,18 @@ impl ChannelService for ActivityService {
 
     async fn post_activity(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         activity_type: ActivityType,
     ) -> Result<Activity, ChannelMutationErr> {
+        let actor = access.get_authenticated_user().unwrap().to_string();
+        let channel_id = Uuid::parse_str(&access.entity().entity_id).unwrap();
         self.posts
             .lock()
             .unwrap()
             .push((actor.clone(), channel_id, activity_type));
         Ok(Activity {
             id: Uuid::nil(),
-            user_id: actor.as_ref().to_string(),
+            user_id: actor,
             channel_id,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -2509,9 +2524,34 @@ async fn post_activity_records_and_returns_activity() {
 
     let posts = posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
+    assert_eq!(posts[0].0, "macro|test@example.com");
     assert_eq!(posts[0].1, channel_id);
     assert!(matches!(posts[0].2, ActivityType::View));
+}
+
+#[tokio::test]
+async fn post_activity_rejects_non_members() {
+    let router = channels_router(ChannelsRouterState::new(
+        ActivityService::default(),
+        TestAccessService::deny(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+    let request = Request::builder()
+        .method("POST")
+        .uri("/activity")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "channel_id": Uuid::new_v4().to_string(),
+                "activity_type": "view"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

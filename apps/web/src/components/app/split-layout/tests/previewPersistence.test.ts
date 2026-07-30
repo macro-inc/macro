@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   loadRestorablePreviewLayout,
+  remapPreviewQueryForRemovedSplit,
   serializePreviewPairs,
 } from '../previewPersistence';
 
@@ -160,5 +161,28 @@ describe('Preview Pair URL state', () => {
       contents: [{ type: 'component', id: 'mail' }],
       previewPairs: [],
     });
+  });
+});
+
+describe('remapPreviewQueryForRemovedSplit', () => {
+  it('keeps pairs before the removed split and shifts pairs after it', () => {
+    expect(remapPreviewQueryForRemovedSplit('0_3', 2)).toBe('0_2');
+  });
+
+  it('shifts a pair down when an earlier split is removed', () => {
+    expect(remapPreviewQueryForRemovedSplit('1', 0)).toBe('0');
+  });
+
+  it('drops a pair whose Controller was removed', () => {
+    expect(remapPreviewQueryForRemovedSplit('1', 1)).toBeUndefined();
+  });
+
+  it('drops a pair whose Viewer was removed', () => {
+    expect(remapPreviewQueryForRemovedSplit('1', 2)).toBeUndefined();
+  });
+
+  it('ignores absent and malformed values', () => {
+    expect(remapPreviewQueryForRemovedSplit(undefined, 0)).toBeUndefined();
+    expect(remapPreviewQueryForRemovedSplit('bad', 0)).toBeUndefined();
   });
 });

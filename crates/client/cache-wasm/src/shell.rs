@@ -136,9 +136,9 @@ pub struct CacheEngine {
     ops: Rc<RefCell<OpInterner>>,
 }
 
-/// Opens (or creates) the cache for `scope`. See
-/// [`cache_core::codec::cache_namespace`] for how scope + schema hash +
-/// format version determine the underlying database.
+/// Opens (or creates) the cache for `scope`. The physical database is selected
+/// by [`cache_core::codec::cache_database_name`] from `scope` alone; the schema
+/// compatibility epoch and format version are record-compatibility inputs.
 #[wasm_bindgen(js_name = openCache)]
 pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsError> {
     let storage = IdbStorage::open(&scope)
@@ -162,7 +162,7 @@ pub async fn destroy_cache(scope: String) -> Result<(), JsError> {
         .map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Schema hash baked into this build (namespace diagnostics).
+/// Schema hash baked into this build (build diagnostics).
 #[wasm_bindgen(js_name = schemaHash)]
 pub fn schema_hash() -> String {
     cache_core::meta::SCHEMA_HASH.to_string()
@@ -209,6 +209,22 @@ fn parse_vec<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<Vec<T>, J
 
 #[wasm_bindgen]
 impl CacheEngine {
+    /// Returns the opaque identity bound to this cache, or `null` when no
+    /// identity-bearing response has been stored yet.
+    #[wasm_bindgen(js_name = boundIdentity)]
+    pub fn bound_identity(&self) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let identity = engine
+                .lock()
+                .await
+                .current_identity()
+                .await
+                .map_err(err_js)?;
+            to_js(&identity)
+        })
+    }
+
     /// Attempts a cache read. Resolves to `{kind:"hit",data}` or
     /// `{kind:"miss"}`. When `opId` is given, the operation is registered
     /// as active for dependency-driven re-execution.
@@ -526,6 +542,24 @@ impl CacheEngine {
             let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
             let mut engine = engine.lock().await;
             let affected = engine.invalidate_keys(keys.iter());
+            to_js(&ops.borrow().names(affected))
+        })
+    }
+
+    /// Deletes stale records from memory and IndexedDB after a server-side
+    /// mutation and resolves to affected local operation ids.
+    #[wasm_bindgen(js_name = deleteKeys)]
+    pub fn delete_keys(&self, keys: Vec<String>) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+            let affected = engine
+                .lock()
+                .await
+                .delete_keys(&keys)
+                .await
+                .map_err(err_js)?;
             to_js(&ops.borrow().names(affected))
         })
     }

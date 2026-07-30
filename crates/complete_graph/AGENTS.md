@@ -1,11 +1,12 @@
 # complete_graph — schema conventions
 
 This crate composes the domain GraphQL adapter crates (`graphql_soup`,
-`graphql_properties`, `graphql_notification`, `graphql_email`, with shared plumbing in
-`graphql_common`) into the complete GraphQL schema consumed by the client's
+`graphql_properties`, `graphql_notification`, `graphql_email`,
+`graphql_entity_mutation`, with shared plumbing in `graphql_common`) into the
+complete GraphQL schema consumed by the client's
 **normalized cache** (`crates/client`, design doc:
-`apps/web/docs/graphql-normalized-cache-plan.md`). Two field-naming
-conventions in this schema are load-bearing for cache correctness. The
+`apps/web/docs/graphql-normalized-cache-plan.md`). The conventions below are
+load-bearing for cache correctness and API consistency. The
 cache's build validates *shapes* but cannot validate *semantics* — that's
 what schema review is for.
 
@@ -29,6 +30,11 @@ Clients key cache records by `__typename:id`. Consequences:
   This is correct for value objects and query-scoped wrappers. Do **not**
   add constant or synthetic ids to such types — a constant id (e.g.
   `"soup_page"`) would merge every instance into a single record globally.
+  A type without an `id` may only carry fields that are facts about the
+  edge it represents, never facts about an entity — entity facts belong on
+  the entity record where every view shares them. Soup pages therefore
+  return entities directly (there is no per-item wrapper type), and
+  per-view state is limited to list membership and order.
 - `id` fields must be exactly `ID!` (non-null, non-list); the cache build
   (`crates/client/cache-core/build.rs`) fails otherwise, and fails if
   the query root exposes an `id`.
@@ -54,6 +60,26 @@ account switches).
   authenticated request context.
 - New user-scoped root data should be added under `GraphqlUser`, not as
   new root fields.
+
+## 3. `GraphqlSoupEntity` owns the shared entity contract
+
+Every field implemented by all concrete Soup entity types belongs on the
+`GraphqlSoupEntity` interface. Today that contract is `id`, `entityType`,
+`displayName`, `metadata`, `properties`, `notifications`, `isFavorited`, and
+`viewerPermission`.
+
+`content` is deliberately not part of the interface. Content has different
+domain shapes and loading policies across documents, email threads, channels,
+messages, calls, and future entity types. Define it on the concrete entity or a
+domain-specific composed edge, with the type that domain actually owns.
+
+The interface is the public API contract; Rust crate ownership must not leak
+into it. Cross-domain resolvers remain composed by `SoupEdges` in this crate,
+while `graphql_soup`'s `SoupEntityEdges` trait declares their associated output
+types and resolver contract. Adding a field to all concrete entity types
+therefore also requires adding it to the interface and its SDL contract test.
+Expensive fields remain lazy because GraphQL only invokes resolvers selected by
+a query.
 
 ## Regenerating the SDL
 

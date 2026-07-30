@@ -44,7 +44,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use config::{Config, Environment};
@@ -85,9 +84,9 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
-};
+#[cfg(feature = "delete_document_worker")]
+use macro_service_urls::AiEditingWorkerUrl;
+use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
@@ -114,11 +113,11 @@ use soup_realtime::{
     domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
     outbound::{
         entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
-        soup_consumer::SoupTopicConsumer, soup_item_reader::SoupRepoItemReader,
+        soup_consumer::SoupTopicConsumer,
     },
 };
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
@@ -130,11 +129,21 @@ use task_dedup::{
         postgres::{PgTaskMatchRepo, PgTaskVectorDb},
     },
 };
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 mod api;
 mod config;
 mod model;
+mod outbound;
 mod service;
+
+const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
+const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
+
+fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
+    let exponent = consecutive_failures.saturating_sub(1).min(6);
+    Duration::from_secs((1_u64 << exponent).min(SOUP_CONSUMER_RESTART_MAX_DELAY_SECS))
+}
 
 maybe_env_vars! {
     struct AppleBundleId;
@@ -266,9 +275,13 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let consumer_cancellation_token = CancellationToken::new();
+    let consumer_tracker = TaskTracker::new();
+    let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
     let bots_service = BotServiceImpl::new(bots_repo, macro_event_broker.clone());
@@ -369,6 +382,7 @@ async fn main() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
+        .with_event_broker(macro_event_broker.clone())
         .with_search_indexer(Arc::new(
             crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
                 sqs_client.clone(),
@@ -438,6 +452,12 @@ async fn main() -> anyhow::Result<()> {
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
+
+    let chat_mutation_service =
+        Arc::new(chat::domain::service::ChatServiceImpl::new_without_tools(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            entity_access_management_service.clone(),
+        ));
 
     let project_service = Arc::new(ProjectServiceImpl::new(
         PgProjectRepo::new(db.clone()),
@@ -655,13 +675,10 @@ async fn main() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
-        Arc::new(sqs_client.clone()),
-    );
     let call_service = Arc::new(
         call_service_builder
-            .with_search_indexer(call_search_indexer)
-            .with_voice_repo(PgVoiceRepo::new(db.clone())),
+            .with_voice_repo(PgVoiceRepo::new(db.clone()))
+            .with_event_broker(macro_event_broker.clone()),
     );
 
     let call_state = CallRouterState::new(
@@ -730,22 +747,39 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let webhook_consumer_brokers = config.kafka_brokers.as_ref().to_string();
-    tokio::spawn(async move {
-        loop {
-            tracing::info!("starting webhook event consumer");
-            let result = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
-                &webhook_consumer_brokers,
-                webhook_ingestion_service.clone(),
-                std::future::pending::<()>(),
-            )
-            .await;
-            match result {
-                Ok(()) => tracing::error!("webhook event consumer exited unexpectedly"),
-                Err(error) => {
-                    tracing::error!(error = ?error, "webhook event consumer exited unexpectedly");
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting webhook event consumer");
+                let result = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
+                    &webhook_consumer_brokers,
+                    webhook_ingestion_service.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("webhook event consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "webhook event consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     });
 
@@ -799,7 +833,6 @@ async fn main() -> anyhow::Result<()> {
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_bot_trigger_sender(bot_trigger_sender)
@@ -819,9 +852,10 @@ async fn main() -> anyhow::Result<()> {
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.
-    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
-        .await
-        .context("failed to build Macro agent tool context")?;
+    let mut macro_agent_tool_context =
+        ai_tools::build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
+            .await
+            .context("failed to build Macro agent tool context")?;
     // Wire the agent's SendChannelMessage tool to this service's own
     // side-effect pipeline so agent-posted messages share the exact instance
     // used by the HTTP API, including the in-process bot trigger sender (the
@@ -865,52 +899,119 @@ async fn main() -> anyhow::Result<()> {
             anyhow::anyhow!("failed to create realtime Soup topic consumer: {error:?}")
         })?,
     ));
-    tokio::spawn({
+    consumer_tracker.spawn({
         let soup_realtime_service = Arc::clone(&soup_realtime_service);
+        let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
-                let _ = soup_realtime_service.run().await.inspect_err(|error| {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = soup_realtime_service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
                     tracing::error!(
                         error = ?error,
                         "realtime Soup subscription consumer stopped"
                     );
                 });
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
             }
         }
     });
 
-    tokio::spawn({
+    consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
-        let soup_pool = readonly_pool::ReadOnlyPool(readonly_db.clone());
         let macro_event_broker = macro_event_broker.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
         async move {
+            let mut consecutive_failures = 0_u32;
             loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
                 let fanout_service = SoupRealtimeServiceImpl::new(
                     EntityAccessExpander::new(entity_access_service.clone()),
-                    SoupRepoItemReader::new(PgSoupRepo::new(soup_pool.clone())),
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
-                tracing::info!("starting realtime Soup document consumer");
+                tracing::info!("starting realtime Soup entity consumer");
                 let result = fanout_service
-                    .run_document_update_consumer(&brokers, std::future::pending::<()>())
+                    .run_entity_update_consumer(&brokers, cancellation_token.cancelled())
                     .await;
-                match result {
-                    Ok(()) => {
-                        tracing::error!("realtime Soup document consumer exited unexpectedly")
-                    }
-                    Err(error) => tracing::error!(
-                        error = ?error,
-                        "realtime Soup document consumer exited unexpectedly"
-                    ),
+
+                if cancellation_token.is_cancelled() {
+                    break;
                 }
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+                let restart_delay = match result {
+                    Ok(()) => {
+                        consecutive_failures = 0;
+                        tracing::error!("realtime Soup entity consumer exited unexpectedly");
+                        soup_consumer_restart_delay(1)
+                    }
+                    Err(error) => {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        let restart_delay = soup_consumer_restart_delay(consecutive_failures);
+                        if consecutive_failures >= SOUP_CONSUMER_RESTART_ALERT_THRESHOLD {
+                            tracing::error!(
+                                error = ?error,
+                                consecutive_failures,
+                                restart_delay_secs = restart_delay.as_secs(),
+                                "realtime Soup entity consumer repeatedly failed"
+                            );
+                        } else {
+                            tracing::warn!(
+                                error = ?error,
+                                consecutive_failures,
+                                restart_delay_secs = restart_delay.as_secs(),
+                                "realtime Soup entity consumer failed; scheduling restart"
+                            );
+                        }
+                        restart_delay
+                    }
+                };
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(restart_delay) => {}
+                }
             }
         }
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+
+    let redis_sha_client = Arc::new(Redis::new(redis_client));
+
+    let graphql_entity_mutation_service =
+        Arc::new(service::entity_mutation::DssEntityMutationService::new(
+            document_service.clone(),
+            chat_mutation_service,
+            channels_service.clone(),
+            call_service.clone(),
+            Arc::new(email_service.clone()),
+            project_service.clone(),
+            entity_access_service.clone(),
+            favorites_service.clone(),
+            Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
+                db.clone(),
+                redis_sha_client.clone(),
+                sqs_client.clone(),
+            )),
+        ));
 
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
@@ -934,11 +1035,12 @@ async fn main() -> anyhow::Result<()> {
             soup_realtime_service,
         ),
         graphql_notification_reader,
+        graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
-        redis_client: Arc::new(Redis::new(redis_client)),
+        redis_client: redis_sha_client,
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
@@ -976,6 +1078,7 @@ async fn main() -> anyhow::Result<()> {
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),
+        channel_service: channels_service.clone(),
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
@@ -1017,6 +1120,7 @@ async fn main() -> anyhow::Result<()> {
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
             editing_worker_client,
+            properties_service: api_context.properties_service.clone(),
         };
 
         tokio::spawn(async move {
@@ -1024,7 +1128,28 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    api::setup_and_serve(api_context).await?;
+    let server_result = api::setup_and_serve(api_context).await;
 
-    Ok(())
+    tracing::info!("stopping event consumers");
+    consumer_cancellation_token.cancel();
+    consumer_tracker.close();
+    consumer_tracker.wait().await;
+    tracing::info!("event consumers stopped");
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
 }
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);

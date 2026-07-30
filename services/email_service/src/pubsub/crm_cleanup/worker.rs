@@ -1,6 +1,8 @@
 use crate::pubsub::context::CrmServiceType;
 use crate::pubsub::crm_cleanup::process;
+use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use futures::StreamExt;
+use tokio_util::sync::CancellationToken;
 
 /// Shared dependencies for the CRM cleanup handlers. Much smaller than the
 /// backfill `PubSubContext` — this worker only talks to the DB, SQS, and the
@@ -20,6 +22,26 @@ pub async fn run_worker(
     sqs_client: sqs_client::SQS,
     crm_service: CrmServiceType,
 ) {
+    run_worker_with_cancellation(
+        db,
+        worker,
+        sqs_client,
+        crm_service,
+        CancellationToken::new(),
+    )
+    .await;
+}
+
+/// Ingests CRM cleanup messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+pub async fn run_worker_with_cancellation(
+    db: sqlx::Pool<sqlx::Postgres>,
+    worker: sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    crm_service: CrmServiceType,
+    cancellation_token: CancellationToken,
+) {
     let ctx = CrmCleanupContext {
         db,
         sqs_worker: worker.clone(),
@@ -31,9 +53,19 @@ pub async fn run_worker(
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();
             let worker = worker.clone();
+            let cancellation_token = cancellation_token.clone();
             async move {
                 loop {
-                    match worker.receive_messages().await {
+                    let Some(receive_result) = run_until_cancelled(
+                        &cancellation_token,
+                        worker.receive_messages(),
+                    )
+                    .await
+                    else {
+                        return;
+                    };
+
+                    match receive_result {
                         Ok(messages) => {
                             if messages.is_empty() {
                                 continue;
@@ -68,6 +100,10 @@ pub async fn run_worker(
         })
         .await;
 
+        if cancellation_token.is_cancelled() {
+            return;
+        }
+
         match worker_result {
             Ok(_) => {
                 // This should never be hit
@@ -80,6 +116,14 @@ pub async fn run_worker(
 
         // Add a delay before restarting to avoid rapid restart loops
         tracing::info!("CRM CLEANUP WORKER RESTARTING...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        if run_until_cancelled(
+            &cancellation_token,
+            tokio::time::sleep(std::time::Duration::from_secs(5)),
+        )
+        .await
+        .is_none()
+        {
+            return;
+        }
     }
 }

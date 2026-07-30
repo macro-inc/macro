@@ -22,6 +22,7 @@ export function SoupFiltersBar(props: {
   variant?: 'default' | 'tag';
   hasPreviewItems: boolean;
   onPreviewEngage: () => void;
+  onPreviewOpenChange?: (open: boolean) => void;
 }) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
@@ -80,6 +81,7 @@ export function SoupFiltersBar(props: {
           disabled={!props.hasPreviewItems}
           disabledLabel="No items to preview"
           onEngage={props.onPreviewEngage}
+          onOpenChange={props.onPreviewOpenChange}
         />
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}

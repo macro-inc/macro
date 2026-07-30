@@ -9,7 +9,14 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeSubject, map, pipe, type Source, subscribe } from 'wonka';
+import {
+  makeSubject,
+  map,
+  mergeMap,
+  pipe,
+  type Source,
+  subscribe,
+} from 'wonka';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
@@ -28,7 +35,25 @@ const QUERY = gql`
   query Soup($input: SoupInput!) {
     soup(input: $input) {
       nextCursor
-      hasMore
+    }
+  }
+`;
+
+const SUBSCRIPTION = gql`
+  subscription SoupUpdates {
+    soupUpdates {
+      __typename
+      ... on SoupUpdated {
+        item {
+          __typename
+          id
+          displayName
+        }
+      }
+      ... on GraphqlCacheDeletion {
+        graphqlTypeName
+        entityId
+      }
     }
   }
 `;
@@ -37,6 +62,63 @@ const MUTATION = gql`
   mutation SetEntityProperty($input: SetEntityPropertyInput!) {
     setEntityProperty(input: $input) {
       id
+    }
+  }
+`;
+
+const RENAME_MUTATION = gql`
+  mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+    renameEntities(inputs: $inputs) {
+      results {
+        __typename
+        ... on GraphqlMutationSuccess {
+          effects {
+            __typename
+            ... on SoupUpdated {
+              item {
+                __typename
+                id
+                displayName
+              }
+            }
+            ... on GraphqlCacheDeletion {
+              graphqlTypeName
+              entityId
+            }
+          }
+        }
+        ... on GraphqlMutationError {
+          errorCode
+          message
+        }
+      }
+    }
+  }
+`;
+
+const ALIASED_RENAME_MUTATION = gql`
+  mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+    renamed: renameEntities(inputs: $inputs) {
+      __typename
+      outcomes: results {
+        __typename
+        ... on GraphqlMutationSuccess {
+          patches: effects {
+            __typename
+            ... on SoupUpdated {
+              current: item {
+                __typename
+                id
+                displayName
+              }
+            }
+            ... on GraphqlCacheDeletion {
+              graphqlTypeName
+              entityId
+            }
+          }
+        }
+      }
     }
   }
 `;
@@ -53,6 +135,8 @@ type FakeHost = CacheHost & {
   rollbacks: string[];
   defers: Array<{ transactionId: string; error: string }>;
   claims: string[];
+  invalidations: string[][];
+  cacheActions: Array<{ kind: 'write' | 'delete'; value: unknown }>;
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
   seedQueued: (args: Parameters<CacheHost['beginOptimisticWrite']>[0]) => void;
@@ -78,6 +162,8 @@ function makeFakeHost(): FakeHost {
     rollbacks: [],
     defers: [],
     claims: [],
+    invalidations: [],
+    cacheActions: [],
     teardowns: [],
     scriptRead: (r) => {
       readResult = r;
@@ -110,6 +196,7 @@ function makeFakeHost(): FakeHost {
         data: args.data,
         identity: args.identity,
       });
+      host.cacheActions.push({ kind: 'write', value: args.data });
       return { changed: [], affectedOps: [], reset: false };
     },
     async beginOptimisticWrite(args): Promise<OptimisticWriteResult> {
@@ -185,6 +272,11 @@ function makeFakeHost(): FakeHost {
     async invalidate() {
       return [];
     },
+    async deleteRecords(keys) {
+      host.invalidations.push(keys);
+      host.cacheActions.push({ kind: 'delete', value: keys });
+      return [];
+    },
     async teardown(opKey) {
       host.teardowns.push(opKey);
     },
@@ -219,6 +311,18 @@ function makeOp(
   );
 }
 
+function makeSubscriptionOp(key: number): Operation {
+  return makeOperation(
+    'subscription',
+    { key, query: SUBSCRIPTION, variables: {} },
+    {
+      requestPolicy: 'cache-first',
+      url: 'http://test',
+      suspense: false,
+    } as never
+  );
+}
+
 function teardownOf(op: Operation): Operation {
   return makeOperation('teardown', op, op.context);
 }
@@ -238,6 +342,29 @@ function makeMutationOp(key: number, optimisticResponse?: unknown): Operation {
       ...(optimisticResponse === undefined
         ? {}
         : { normalizedCacheOptimistic: { optimisticResponse } }),
+    } as never
+  );
+}
+
+function makeRenameMutationOp(key: number, aliased = false): Operation {
+  return makeOperation(
+    'mutation',
+    {
+      key,
+      query: aliased ? ALIASED_RENAME_MUTATION : RENAME_MUTATION,
+      variables: {
+        inputs: [
+          {
+            entity: { type: 'DOCUMENT', id: 'document-1' },
+            displayName: 'Renamed',
+          },
+        ],
+      },
+    },
+    {
+      requestPolicy: 'cache-first',
+      url: 'http://test',
+      suspense: false,
     } as never
   );
 }
@@ -313,6 +440,221 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it('normalizes ordinary buffered subscription data without inspecting event types', async () => {
+    const patches = ['document-1', 'document-2'].map((id) => ({
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: 'GraphqlSoupDocument',
+        id,
+        displayName: `Updated ${id}`,
+      },
+    }));
+    const data = { soupUpdates: patches };
+    const { ops, results } = harness(host, (op) =>
+      op.kind === 'subscription' ? { data } : {}
+    );
+
+    ops.next(makeSubscriptionOp(21));
+    await tick();
+
+    expect(host.writes).toHaveLength(1);
+    expect(host.writes[0]?.data).toBe(data);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data).toBe(data);
+  });
+
+  it('deletes the exact normalized key from subscription patches', async () => {
+    const data = {
+      soupUpdates: [
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'document-1',
+        },
+      ],
+    };
+    const { ops, results } = harness(host, (op) =>
+      op.kind === 'subscription' ? { data } : {}
+    );
+
+    ops.next(makeSubscriptionOp(22));
+    await tick();
+
+    expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-1']]);
+    expect(host.writes).toHaveLength(0);
+    expect(results[0]?.data).toBe(data);
+  });
+
+  it('applies buffered mixed patches in order', async () => {
+    const deleteDocument = (id: string) => ({
+      __typename: 'GraphqlCacheDeletion',
+      graphqlTypeName: 'GraphqlSoupDocument',
+      entityId: id,
+    });
+    const updateDocument = (id: string) => ({
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: 'GraphqlSoupDocument',
+        id,
+        displayName: `Document ${id}`,
+      },
+    });
+    const patches = [
+      deleteDocument('delete-then-update'),
+      updateDocument('delete-then-update'),
+      updateDocument('update-then-delete'),
+      deleteDocument('update-then-delete'),
+    ];
+    const { ops } = harness(host, (op) =>
+      op.kind === 'subscription' ? { data: { soupUpdates: patches } } : {}
+    );
+
+    ops.next(makeSubscriptionOp(23));
+    await tick();
+
+    expect(host.cacheActions).toEqual([
+      {
+        kind: 'delete',
+        value: ['GraphqlSoupDocument:delete-then-update'],
+      },
+      {
+        kind: 'write',
+        value: { soupUpdates: [patches[1]] },
+      },
+      {
+        kind: 'write',
+        value: { soupUpdates: [patches[2]] },
+      },
+      {
+        kind: 'delete',
+        value: ['GraphqlSoupDocument:update-then-delete'],
+      },
+    ]);
+  });
+
+  it('serializes cache effects across separate subscription emissions', async () => {
+    const operation = makeSubscriptionOp(24);
+    const networkResults = makeSubject<OperationResult>();
+    let cacheContainsDocument = false;
+    let markWriteStarted!: () => void;
+    let releaseWrite!: () => void;
+    const writeStarted = new Promise<void>((resolve) => {
+      markWriteStarted = resolve;
+    });
+    const writeCanFinish = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    vi.spyOn(host, 'writeQuery').mockImplementation(async () => {
+      markWriteStarted();
+      await writeCanFinish;
+      cacheContainsDocument = true;
+      return { changed: [], affectedOps: [], reset: false };
+    });
+    vi.spyOn(host, 'deleteRecords').mockImplementation(async () => {
+      cacheContainsDocument = false;
+      return [];
+    });
+
+    const ops = makeSubject<Operation>();
+    const results: OperationResult[] = [];
+    const exchangeIo = normalizedCacheExchange(host)({
+      forward: (ops$) =>
+        pipe(
+          ops$,
+          mergeMap(() => networkResults.source)
+        ),
+      client: {
+        reexecuteOperation: vi.fn(),
+        mutation: vi.fn(),
+      } as never,
+      dispatchDebug: () => undefined,
+    });
+    pipe(
+      exchangeIo(ops.source),
+      subscribe((result) => results.push(result))
+    );
+
+    ops.next(operation);
+    networkResults.next({
+      operation,
+      data: {
+        soupUpdates: [
+          {
+            __typename: 'SoupUpdated',
+            item: {
+              __typename: 'GraphqlSoupDocument',
+              id: 'document-1',
+              displayName: 'Updated document',
+            },
+          },
+        ],
+      },
+      stale: false,
+      hasNext: true,
+    });
+    await writeStarted;
+    networkResults.next({
+      operation,
+      data: {
+        soupUpdates: [
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'document-1',
+          },
+        ],
+      },
+      stale: false,
+      hasNext: true,
+    });
+
+    await tick();
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+    releaseWrite();
+    await vi.waitFor(() => expect(results).toHaveLength(2));
+
+    expect(host.deleteRecords).toHaveBeenCalledWith([
+      'GraphqlSoupDocument:document-1',
+    ]);
+    expect(cacheContainsDocument).toBe(false);
+  });
+
+  it('reports cache failures without dropping subscription results or later patches', async () => {
+    const error = new Error('subscription cache write failed');
+    vi.spyOn(host, 'writeQuery').mockRejectedValueOnce(error);
+    const onCacheError = vi.fn();
+    const patches = [
+      {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Updated document',
+        },
+      },
+      {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-2',
+      },
+    ];
+    const data = { soupUpdates: patches };
+    const { ops, results } = harness(
+      host,
+      (op) => (op.kind === 'subscription' ? { data } : {}),
+      { onCacheError }
+    );
+
+    const operation = makeSubscriptionOp(24);
+    ops.next(operation);
+    await tick();
+
+    expect(onCacheError).toHaveBeenCalledWith(error, operation);
+    expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-2']]);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data).toBe(data);
   });
 
   it('cache-first miss forwards to network and writes through', async () => {
@@ -688,6 +1030,69 @@ describe('normalizedCacheExchange', () => {
       expect(host.writes).toHaveLength(0);
     });
 
+    it('replays mixed explicit cache effects in order after an optimistic commit', async () => {
+      const deletion = {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-1',
+      };
+      const update = {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Renamed',
+        },
+      };
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [deletion, update],
+            },
+          ],
+        },
+      };
+      const base = makeRenameMutationOp(10);
+      const operation = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          optimisticResponse: {
+            renameEntities: { results: [] },
+          },
+        },
+      });
+      const { ops, results } = harness(host, (op) =>
+        op.kind === 'mutation' ? { data } : {}
+      );
+
+      ops.next(operation);
+      await tick();
+
+      expect(host.commits).toHaveLength(1);
+      expect(host.cacheActions).toEqual([
+        {
+          kind: 'delete',
+          value: ['GraphqlSoupDocument:document-1'],
+        },
+        {
+          kind: 'write',
+          value: {
+            renameEntities: {
+              results: [
+                {
+                  __typename: 'GraphqlMutationSuccess',
+                  effects: [update],
+                },
+              ],
+            },
+          },
+        },
+      ]);
+      expect(results[0]?.data).toBe(data);
+    });
+
     it('fires commit revalidations with network-only policy', async () => {
       const commit = host.commitOptimisticWrite.bind(host);
       host.commitOptimisticWrite = async (transactionId, claim, args) => ({
@@ -836,6 +1241,158 @@ describe('normalizedCacheExchange', () => {
       expect(host.writes).toHaveLength(1);
       expect(host.writes[0]?.data).toEqual({ from: 'network' });
       expect(results).toHaveLength(1);
+    });
+
+    it('normalizes update-only mutation effects without inferring deletions from inputs', async () => {
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [
+                {
+                  __typename: 'SoupUpdated',
+                  item: {
+                    __typename: 'GraphqlSoupDocument',
+                    id: 'document-1',
+                    displayName: 'Renamed',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+      const { ops } = harness(host, () => ({ data }));
+
+      ops.next(makeRenameMutationOp(9));
+      await tick();
+
+      expect(host.writes.map((write) => write.data)).toEqual([data]);
+      expect(host.invalidations).toHaveLength(0);
+    });
+
+    it('applies aliased nested mutation effects in order with ancestor typenames', async () => {
+      const deleteDocument = (id: string) => ({
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: id,
+      });
+      const updateDocument = (id: string) => ({
+        __typename: 'SoupUpdated',
+        current: {
+          __typename: 'GraphqlSoupDocument',
+          id,
+          displayName: `Document ${id}`,
+        },
+      });
+      const patches = [
+        deleteDocument('delete-then-update'),
+        updateDocument('delete-then-update'),
+        updateDocument('update-then-delete'),
+        deleteDocument('update-then-delete'),
+      ];
+      const data = {
+        renamed: {
+          __typename: 'EntityMutationPayload',
+          outcomes: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              patches,
+            },
+          ],
+        },
+      };
+      const { ops, results } = harness(host, () => ({ data }));
+
+      ops.next(makeRenameMutationOp(9, true));
+      await tick();
+
+      const wrappedWrite = (patch: unknown) => ({
+        renamed: {
+          __typename: 'EntityMutationPayload',
+          outcomes: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              patches: [patch],
+            },
+          ],
+        },
+      });
+      expect(host.cacheActions).toEqual([
+        {
+          kind: 'delete',
+          value: ['GraphqlSoupDocument:delete-then-update'],
+        },
+        { kind: 'write', value: wrappedWrite(patches[1]) },
+        { kind: 'write', value: wrappedWrite(patches[2]) },
+        {
+          kind: 'delete',
+          value: ['GraphqlSoupDocument:update-then-delete'],
+        },
+      ]);
+      expect(results[0]?.data).toBe(data);
+    });
+
+    it('reports every mutation cache failure, continues effects, and returns the original result', async () => {
+      const writeFailure = new Error('cache write failed');
+      const deleteFailure = new Error('cache deletion failed');
+      vi.spyOn(host, 'writeQuery').mockRejectedValueOnce(writeFailure);
+      vi.spyOn(host, 'deleteRecords').mockRejectedValueOnce(deleteFailure);
+      const onCacheError = vi.fn();
+      const patches = [
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'document-1',
+            displayName: 'One',
+          },
+        },
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'document-2',
+        },
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'document-3',
+            displayName: 'Three',
+          },
+        },
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'document-4',
+        },
+      ];
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: patches,
+            },
+          ],
+        },
+      };
+      const { ops, results } = harness(host, () => ({ data }), {
+        onCacheError,
+      });
+      const op = makeRenameMutationOp(9);
+
+      ops.next(op);
+      await tick();
+
+      expect(onCacheError.mock.calls).toEqual([
+        [writeFailure, op],
+        [deleteFailure, op],
+      ]);
+      expect(host.writes).toHaveLength(1);
+      expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-4']]);
+      expect(results[0]?.data).toBe(data);
     });
 
     it('degrades to a plain network mutation when the optimistic setup fails', async () => {

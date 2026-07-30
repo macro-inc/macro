@@ -36,7 +36,7 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
 const documentTextExtractorEnvVars: DocumentTextExtractorLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
   ENVIRONMENT: stack,
-  RUST_LOG: 'document_text_extractor=trace',
+  RUST_LOG: 'document_text_extractor=trace,macro_http_request=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
 };
 

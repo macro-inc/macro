@@ -13,6 +13,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use complete_graph::GraphqlRequestParts;
+use graphql_soup::soup_item_loader;
 use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
@@ -47,13 +48,15 @@ async fn graphql_handler(
     request_parts: Parts,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
+    let acting_user = auth
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user);
     let request = graphql_query_context_data(
         request.into_inner(),
         &state,
-        auth.authorization
-            .as_ref()
-            .and_then(UserOrInternalServiceAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone()),
+        acting_user.map(|user| user.macro_user_id.clone()),
+        acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
     );
     state
         .graphql_soup_schema
@@ -97,7 +100,12 @@ async fn subscription_handler(
 }
 
 fn graphql_subscription_context_data(state: ApiContext, user: MacroUserIdStr<'static>) -> Data {
+    let soup_item_loader = soup_item_loader(
+        state.soup_router_state.service(),
+        state.soup_router_state.email_service(),
+    );
     let mut data = Data::default();
+    data.insert(soup_item_loader);
     data.insert(state);
     data.insert(user);
     data
@@ -107,6 +115,7 @@ fn graphql_query_context_data(
     req: async_graphql::Request,
     state: &ApiContext,
     macro_user_id: Option<MacroUserIdStr<'static>>,
+    organization_id: Option<i64>,
 ) -> async_graphql::Request {
     let req = req.data(state.clone());
 
@@ -127,19 +136,44 @@ fn graphql_query_context_data(
         state.soup_router_state.email_service(),
         state.entity_access_service.clone(),
     );
+    let favorite_reader = state.favorites_service.clone();
+    let permission_reader = state.entity_access_service.clone();
+    let soup_item_loader = soup_item_loader(
+        state.soup_router_state.service(),
+        state.soup_router_state.email_service(),
+    );
+    let req = req
+        .data(macro_user_id.clone())
+        .data(entity_mutation::EntityMutationActor {
+            user_id: macro_user_id.clone(),
+            organization_id,
+        })
+        .data(state.graphql_entity_mutation_service.clone())
+        .data(state.channel_service.clone())
+        .data(state.graphql_notification_reader.clone())
+        .data(state.entity_access_service.clone())
+        .data(soup_item_loader);
 
-    req.data(macro_user_id.clone())
-        .data(complete_graph::entity_properties_loader(
-            macro_user_id.clone(),
-            property_reader,
-        ))
-        .data(complete_graph::email_content_loader(
-            macro_user_id.clone(),
-            email_content_reader,
-        ))
-        .data(property_writer)
-        .data(complete_graph::entity_notifications_loader(
-            macro_user_id,
-            state.graphql_notification_reader.clone(),
-        ))
+    req.data(complete_graph::entity_properties_loader(
+        macro_user_id.clone(),
+        property_reader,
+    ))
+    .data(complete_graph::email_content_loader(
+        macro_user_id.clone(),
+        email_content_reader,
+    ))
+    .data(complete_graph::entity_favorite_loader(
+        macro_user_id.clone(),
+        favorite_reader,
+    ))
+    .data(complete_graph::entity_permission_loader(
+        macro_user_id.clone(),
+        organization_id,
+        permission_reader,
+    ))
+    .data(property_writer)
+    .data(complete_graph::entity_notifications_loader(
+        macro_user_id,
+        state.graphql_notification_reader.clone(),
+    ))
 }

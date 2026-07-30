@@ -44,11 +44,22 @@ fn document_attachment(attachment_id: &str) -> NewAttachment {
 #[derive(Clone, Default)]
 struct StubMessageRepo {
     fail_create: bool,
+    fail_delete: bool,
 }
 
 impl StubMessageRepo {
     fn failing() -> Self {
-        Self { fail_create: true }
+        Self {
+            fail_create: true,
+            ..Self::default()
+        }
+    }
+
+    fn failing_delete() -> Self {
+        Self {
+            fail_delete: true,
+            ..Self::default()
+        }
     }
 }
 
@@ -62,8 +73,13 @@ impl MessageRepo for StubMessageRepo {
         Ok(MESSAGE_ID.to_string())
     }
 
-    async fn delete(&self, _message_id: &str) -> Result<()> {
-        unimplemented!("not used in these tests")
+    async fn delete(&self, _message_id: &str) -> Result<String> {
+        if self.fail_delete {
+            return Err(ChatErr::BadRequest(
+                "intentional delete failure".to_string(),
+            ));
+        }
+        Ok(CHAT_ID.to_string())
     }
 
     async fn get_messages(&self, _chat_id: &str) -> Result<Vec<ChatMessageWithAttachments>> {
@@ -276,6 +292,28 @@ async fn store_publishes_assistant_message_sent_without_actor() {
 }
 
 #[tokio::test]
+async fn delete_publishes_message_deleted_keyed_by_chat_id() {
+    let broker = RecordingEventBroker::default();
+    let service = service_with_broker(StubMessageRepo::default(), broker.clone());
+
+    service.delete(MESSAGE_ID).await.expect("delete succeeds");
+
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    let event = &events[0];
+    assert_eq!(event.topic, "macro.chats");
+    assert_eq!(event.key, CHAT_ID);
+    assert_eq!(event.envelope["event_type"], "chat.message_deleted");
+    assert_eq!(
+        event.envelope["metadata"],
+        json!({
+            "chat_id": CHAT_ID,
+            "message_id": MESSAGE_ID
+        })
+    );
+}
+
+#[tokio::test]
 async fn failed_create_publishes_no_event() {
     let broker = RecordingEventBroker::default();
     let service = service_with_broker(StubMessageRepo::failing(), broker.clone());
@@ -294,6 +332,15 @@ async fn failed_create_publishes_no_event() {
 }
 
 #[tokio::test]
+async fn failed_delete_publishes_no_event() {
+    let broker = RecordingEventBroker::default();
+    let service = service_with_broker(StubMessageRepo::failing_delete(), broker.clone());
+
+    assert!(service.delete(MESSAGE_ID).await.is_err());
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
 async fn broker_scheduling_failure_does_not_fail_the_call() {
     let service = service_with_broker(StubMessageRepo::default(), RecordingEventBroker::failing());
 
@@ -308,4 +355,9 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
         .await
         .expect("store succeeds despite broker failure");
     assert_eq!(message_id, MESSAGE_ID);
+
+    service
+        .delete(MESSAGE_ID)
+        .await
+        .expect("delete succeeds despite broker failure");
 }

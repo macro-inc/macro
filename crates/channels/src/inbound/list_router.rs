@@ -99,9 +99,10 @@ impl IntoResponse for ChannelListRouterErr {
     }
 }
 
+/// Handle channel list requests for `GET /comms/channels`.
 #[utoipa::path(
     get,
-    path = "/channels",
+    path = "/comms/channels",
     tag = "channels",
     operation_id = "get_channels",
     params(
@@ -204,7 +205,7 @@ where
 /// Participant role in API responses.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ParticipantRole {
+pub enum ApiParticipantListRole {
     /// Channel owner.
     Owner,
     /// Channel admin.
@@ -213,7 +214,7 @@ pub enum ParticipantRole {
     Member,
 }
 
-impl ParticipantRole {
+impl ApiParticipantListRole {
     fn new_from_domain(value: DomainParticipantRole) -> Self {
         match value {
             DomainParticipantRole::Owner => Self::Owner,
@@ -225,52 +226,61 @@ impl ParticipantRole {
 
 /// Channel participant in API responses.
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct ChannelParticipant {
+pub struct ApiChannelListParticipant {
     /// id of the channel
     pub channel_id: Uuid,
     /// id of the user
     pub user_id: String,
     /// type of the participant
-    pub role: ParticipantRole,
+    pub role: ApiParticipantListRole,
     /// timestamp of when the user joined the channel
     pub joined_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the user left the channel
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl ChannelParticipant {
+impl ApiChannelListParticipant {
     fn new_from_domain(value: crate::domain::models::ChannelParticipant) -> Self {
         Self {
             channel_id: value.channel_id,
             user_id: value.user_id,
-            role: ParticipantRole::new_from_domain(value.role),
+            role: ApiParticipantListRole::new_from_domain(value.role),
             joined_at: value.joined_at,
             left_at: value.left_at,
         }
     }
 }
 
-/// Channel with participants in API responses.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct ChannelWithParticipants {
-    /// Channel fields.
-    #[serde(flatten)]
-    pub channel: Channel,
-    /// Active participants.
-    pub participants: Vec<ChannelParticipant>,
-    /// Whether the requesting user is an active participant of the channel.
-    pub is_participant: bool,
-}
-
 /// Channel list response item.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApiChannelWithLatest {
-    /// Channel and participants.
-    #[serde(flatten)]
-    pub channel: ChannelWithParticipants,
-    /// Latest message fields.
-    #[serde(flatten)]
-    pub latest_message: LatestMessage,
+    /// Channel id.
+    pub id: Uuid,
+    /// Channel name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ApiChannelListType,
+    /// Organization id.
+    #[schema(value_type = Option<u32>)]
+    pub org_id: Option<u32>,
+    /// Team id.
+    pub team_id: Option<Uuid>,
+    /// Whether team members automatically join the channel.
+    pub auto_join_team: bool,
+    /// Channel creation timestamp.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Channel last-updated timestamp.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Channel owner user id.
+    pub owner_id: String,
+    /// Active participants.
+    pub participants: Vec<ApiChannelListParticipant>,
+    /// Whether the requesting user is an active participant of the channel.
+    pub is_participant: bool,
+    /// Latest message including thread replies.
+    pub latest_message: Option<ApiChannelListMessage>,
+    /// Latest top-level non-thread message.
+    pub latest_non_thread_message: Option<ApiChannelListMessage>,
     /// Last viewed timestamp for requesting user.
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Last interaction timestamp for requesting user.
@@ -290,18 +300,27 @@ pub struct ApiChannelListPage {
 
 impl ApiChannelWithLatest {
     fn new_from_domain(value: ChannelWithLatest) -> Self {
+        let ch = ApiChannelListItem::new_from_domain(value.channel.channel);
+        let latest = ApiLatestMessage::new_from_domain(value.latest_message);
         Self {
-            channel: ChannelWithParticipants {
-                channel: Channel::new_from_domain(value.channel.channel),
-                is_participant: value.channel.is_participant,
-                participants: value
-                    .channel
-                    .participants
-                    .into_iter()
-                    .map(ChannelParticipant::new_from_domain)
-                    .collect(),
-            },
-            latest_message: LatestMessage::new_from_domain(value.latest_message),
+            id: ch.id,
+            name: ch.name,
+            channel_type: ch.channel_type,
+            org_id: ch.org_id,
+            team_id: ch.team_id,
+            auto_join_team: ch.auto_join_team,
+            created_at: ch.created_at,
+            updated_at: ch.updated_at,
+            owner_id: ch.owner_id.to_string(),
+            participants: value
+                .channel
+                .participants
+                .into_iter()
+                .map(ApiChannelListParticipant::new_from_domain)
+                .collect(),
+            is_participant: value.channel.is_participant,
+            latest_message: latest.latest_message,
+            latest_non_thread_message: latest.latest_non_thread_message,
             viewed_at: value.viewed_at,
             interacted_at: value.interacted_at,
             frecency_score: map_frecency(value.frecency_score),
@@ -315,13 +334,13 @@ fn map_frecency(f: Option<AggregateFrecency>) -> Option<f64> {
 
 /// Channel fields in API responses.
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct Channel {
+pub struct ApiChannelListItem {
     /// uuid of the channel
     pub id: Uuid,
     /// string name of the channel
     pub name: Option<String>,
     /// type of the channel
-    pub channel_type: ChannelType,
+    pub channel_type: ApiChannelListType,
     /// id of the organization this channel belongs too
     #[schema(value_type = Option<u32>)]
     pub org_id: Option<u32>,
@@ -338,12 +357,12 @@ pub struct Channel {
     pub owner_id: MacroUserIdStr<'static>,
 }
 
-impl Channel {
+impl ApiChannelListItem {
     fn new_from_domain(value: ChannelListItem) -> Self {
         Self {
             id: value.id,
             name: value.name,
-            channel_type: ChannelType::new_from_domain(value.channel_type),
+            channel_type: ApiChannelListType::new_from_domain(value.channel_type),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
             auto_join_team: value.auto_join_team,
@@ -356,20 +375,22 @@ impl Channel {
 
 /// Latest-message bundle in API responses.
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct LatestMessage {
+pub struct ApiLatestMessage {
     /// Latest message including thread replies.
-    pub latest_message: Option<ChannelMessage>,
+    pub latest_message: Option<ApiChannelListMessage>,
     /// Latest non-thread top-level message.
-    pub latest_non_thread_message: Option<ChannelMessage>,
+    pub latest_non_thread_message: Option<ApiChannelListMessage>,
 }
 
-impl LatestMessage {
+impl ApiLatestMessage {
     fn new_from_domain(value: crate::domain::models::LatestMessage) -> Self {
         Self {
-            latest_message: value.latest_message.map(ChannelMessage::new_from_recent),
+            latest_message: value
+                .latest_message
+                .map(ApiChannelListMessage::new_from_recent),
             latest_non_thread_message: value
                 .latest_non_thread_message
-                .map(ChannelMessage::new_from_recent),
+                .map(ApiChannelListMessage::new_from_recent),
         }
     }
 }
@@ -377,7 +398,7 @@ impl LatestMessage {
 /// Channel type in API responses.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ChannelType {
+pub enum ApiChannelListType {
     /// Public channel.
     Public,
     /// Private channel.
@@ -388,7 +409,7 @@ pub enum ChannelType {
     Team,
 }
 
-impl ChannelType {
+impl ApiChannelListType {
     fn new_from_domain(value: DomainChannelType) -> Self {
         match value {
             DomainChannelType::Public => Self::Public,
@@ -401,7 +422,7 @@ impl ChannelType {
 
 /// Channel message in API responses.
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct ChannelMessage {
+pub struct ApiChannelListMessage {
     /// Message id.
     pub message_id: Uuid,
     /// Thread id, if the message is a reply.
@@ -420,7 +441,7 @@ pub struct ChannelMessage {
     pub mentions: Vec<String>,
 }
 
-impl ChannelMessage {
+impl ApiChannelListMessage {
     fn new_from_recent(value: RecentChannelMessage) -> Self {
         Self {
             message_id: value.message_id,

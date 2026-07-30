@@ -6,8 +6,9 @@ use entity_access::domain::models::{
     AccessError, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_mutation::{
-    DeleteEntityPermanently, DuplicateEntity, EntityMutationErrorCode, MoveEntity, RenameEntity,
-    RestoreEntity, TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest,
+    DeleteEntityPermanently, DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode,
+    MoveEntity, RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy,
+    capability::MoveEntityRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -80,10 +81,10 @@ where
 
     async fn rename_entity(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         self.patch(
             receipt,
             PatchChatArgs {
@@ -93,7 +94,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -107,15 +108,15 @@ where
     async fn move_entity(
         &self,
         request: MoveEntityRequest<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
-        let (receipt, project_id) = match request {
-            MoveEntityRequest::MoveToRoot { receipt, .. } => (receipt, None),
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let (entity, receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
             MoveEntityRequest::MoveToProject {
+                entity,
                 receipt,
                 project_id,
                 project_receipt: _,
-                ..
-            } => (receipt, Some(project_id)),
+            } => (entity, receipt, Some(project_id)),
         };
         let old_project_id = chat_project_id(self, &receipt).await;
         self.patch(
@@ -128,7 +129,13 @@ where
             },
         )
         .await?;
-        Ok(project_refs([old_project_id, project_id]))
+        Ok(std::iter::once(EntityMutationEffect::updated(entity))
+            .chain(
+                project_refs([old_project_id, project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
@@ -141,10 +148,10 @@ where
 
     async fn update_share_policy(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         self.patch(
             receipt,
             PatchChatArgs {
@@ -154,7 +161,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -167,12 +174,18 @@ where
 
     async fn trash_entity(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project_id = chat_project_id(self, &receipt).await;
         self.delete(receipt).await?;
-        Ok(project_refs([project_id]))
+        Ok(std::iter::once(EntityMutationEffect::deleted(entity))
+            .chain(
+                project_refs([project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
@@ -185,12 +198,18 @@ where
 
     async fn restore_entity(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project_id = chat_project_id(self, &receipt).await;
         self.revert_delete(receipt).await?;
-        Ok(project_refs([project_id]))
+        Ok(std::iter::once(EntityMutationEffect::updated(entity))
+            .chain(
+                project_refs([project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
@@ -203,12 +222,18 @@ where
 
     async fn delete_entity_permanently(
         &self,
-        _entity: Entity<'static>,
+        entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project_id = chat_project_id(self, &receipt).await;
         self.permanently_delete(receipt).await?;
-        Ok(project_refs([project_id]))
+        Ok(std::iter::once(EntityMutationEffect::deleted(entity))
+            .chain(
+                project_refs([project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
@@ -225,13 +250,15 @@ where
         receipt: EntityAccessReceipt<Self::Receipt>,
         _user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
-    ) -> Result<Entity<'static>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         if display_name.is_some() {
             return Err(EntityMutationErrorCode::invalid(rootcause::report!(
                 "chat duplication does not yet accept a custom display name".to_string()
             )));
         }
         let id = self.copy_chat(receipt).await?;
-        Ok(EntityType::Chat.with_entity_string(id))
+        Ok(vec![EntityMutationEffect::updated(
+            EntityType::Chat.with_entity_string(id),
+        )])
     }
 }

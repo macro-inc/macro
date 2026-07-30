@@ -16,13 +16,13 @@ use uuid::Uuid;
 use models_pagination::{CreatedAt, Query};
 
 use crate::domain::models::device::DeviceType;
-use crate::domain::models::{PatchDelete, TaggedContent, UserNotificationStatusUpdate};
+use crate::domain::models::{TaggedContent, UserNotificationStatusUpdate};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::{NotificationEntityRef, NotificationListFilters};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
+    SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -93,20 +93,20 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report>> + Send;
 
-    /// Mark notifications as seen for a user.
+    /// Mark notifications as seen and return the updated user-owned rows.
     fn mark_notifications_seen(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
-    /// Mark notifications as done or undone for a user.
+    /// Mark notifications as done or undone and return the updated user-owned rows.
     fn mark_notifications_done(
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.
     fn get_basic_notifications(
@@ -315,20 +315,10 @@ pub trait NotificationQueue: Send + Sync + 'static {
     fn receive_messages(&self)
     -> impl Future<Output = Result<Vec<RawQueueMessage>, Report>> + Send;
 
-    /// Delete a message from the queue (after successful delivery).
+    /// Delete a message from the queue after terminal processing.
     fn delete_message(
         &self,
         receipt_handle: &str,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
-
-    /// Delay a message by changing its visibility timeout.
-    ///
-    /// The message will not be redelivered to consumers until the duration elapses.
-    /// Uses SQS `ChangeMessageVisibility` under the hood.
-    fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -340,7 +330,8 @@ pub trait NotificationEgress: Send + Sync + 'static {
     /// Poll the queue and attempt to deliver notifications.
     ///
     /// Returns results for each delivery attempt across all messages received.
-    /// Messages are automatically deleted from the queue after successful delivery.
+    /// Messages are deleted from the queue after terminal outcomes, including
+    /// successful delivery and rate-limit rejection.
     fn poll_and_deliver(&self)
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 

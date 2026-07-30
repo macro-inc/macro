@@ -102,4 +102,45 @@ impl EntityMutationErrorCode {
     pub fn conflict<C, O, T>(err: rootcause::Report<C, O, T>) -> Self {
         EntityMutationErrorCode::Conflict(Sentinel(()))
     }
+
+    /// Construct a state-conflict error.
+    #[tracing::instrument(ret)]
+    pub fn unsupported<C, O, T>(err: rootcause::Report<C, O, T>) -> Self {
+        EntityMutationErrorCode::UnsupportedOperation(Sentinel(()))
+    }
+}
+
+/// One ordered cache-visible consequence of an entity mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EntityMutationEffect {
+    /// The entity still exists and its current Soup representation must be refreshed.
+    Updated(Entity<'static>),
+    /// The entity is no longer visible and its normalized record must be removed.
+    Deleted(Entity<'static>),
+}
+
+impl EntityMutationEffect {
+    /// Construct an updated-entity effect.
+    pub fn updated(entity: Entity<'static>) -> Self {
+        Self::Updated(entity)
+    }
+
+    /// Construct a deleted-entity effect.
+    pub fn deleted(entity: Entity<'static>) -> Self {
+        Self::Deleted(entity)
+    }
+
+    /// Return the canonical entity carried by this effect.
+    pub fn entity(&self) -> &Entity<'static> {
+        match self {
+            Self::Updated(entity) | Self::Deleted(entity) => entity,
+        }
+    }
+}
+
+/// Successful mutation outcome with effects in application order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityMutationSuccess {
+    /// Ordered cache effects produced by the mutation.
+    pub effects: Vec<EntityMutationEffect>,
 }

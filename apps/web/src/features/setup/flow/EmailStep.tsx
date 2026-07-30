@@ -61,11 +61,15 @@ export function EmailStep(props: {
     );
   });
 
-  const connectSlots = createMemo(() =>
-    links().length === 0
+  // Connecting more than two accounts is a premium feature, and the plan
+  // step hasn't happened yet — past two, stop offering connect slots.
+  const connectSlots = createMemo(() => {
+    const connected = links().length;
+    if (connected >= 2) return [];
+    return connected === 0
       ? ['Connect primary account', 'Connect secondary account']
-      : ['Connect another email']
-  );
+      : ['Connect another email'];
+  });
 
   // Detects a landed link via the persisted pre-redirect baseline (the
   // OAuth round-trip reloads the page, so in-memory state won't survive).

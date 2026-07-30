@@ -95,6 +95,7 @@ export const TOKENS = {
     goToLeader: 'sidebar.goToLeader',
     goTo: {
       home: 'sidebar.goTo.home',
+      gettingStarted: 'sidebar.goTo.gettingStarted',
       inbox: 'sidebar.goTo.inbox',
       activity: 'sidebar.goTo.activity',
       search: 'sidebar.goTo.search',

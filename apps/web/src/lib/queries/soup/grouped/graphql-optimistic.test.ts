@@ -32,6 +32,7 @@ function host(args?: {
   miss?: boolean;
   onInspect?: () => void;
   sourceKey?: string;
+  typename?: 'GraphqlSoupCall' | 'GraphqlSoupDocument';
 }): CacheHost {
   const value = (containsItem: boolean) => ({
     bins: [
@@ -39,7 +40,14 @@ function host(args?: {
         key: args?.sourceKey ?? 'in-progress',
         totalCount: 1,
         nextCursor: null,
-        items: containsItem ? [{ id: 'task-1' }] : [],
+        items: containsItem
+          ? [
+              {
+                __typename: args?.typename ?? 'GraphqlSoupDocument',
+                id: 'task-1',
+              },
+            ]
+          : [],
       },
       ...(args?.destination === false
         ? []
@@ -108,8 +116,8 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
 
     expect(result.updates).toHaveLength(2);
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'remove', entityKey: 'GraphqlSoupItem:task-1' },
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupItem:task-1' },
+      { kind: 'remove', entityKey: 'GraphqlSoupDocument:task-1' },
+      { kind: 'prependUnique', entityKey: 'GraphqlSoupDocument:task-1' },
     ]);
     expect(result.updates.map((update) => update.path)).toEqual([
       [
@@ -128,6 +136,21 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       ],
     ]);
     expect(result.revalidations).toHaveLength(1);
+  });
+
+  it('derives the normalized key from the inspected typename and id', async () => {
+    const result = await buildOptimisticGroupedPropertyUpdates({
+      host: host({ typename: 'GraphqlSoupCall' }),
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: ['in-progress'],
+      newGroupKeys: ['completed'],
+    });
+
+    expect(result.updates.map((patch) => patch.operation)).toEqual([
+      { kind: 'remove', entityKey: 'GraphqlSoupCall:task-1' },
+      { kind: 'prependUnique', entityKey: 'GraphqlSoupCall:task-1' },
+    ]);
   });
 
   it('does not make a partial move when the destination bin is absent', async () => {
@@ -190,7 +213,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     });
 
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupItem:task-1' },
+      { kind: 'prependUnique', entityKey: 'GraphqlSoupDocument:task-1' },
     ]);
   });
 

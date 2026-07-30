@@ -13,7 +13,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
@@ -49,8 +48,11 @@ use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
+use tokio_util::task::TaskTracker;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
+pub(crate) type AuthenticationEventBroker =
+    MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
 pub(crate) type ChannelServiceType = ChannelServiceImpl<
     PgChannelsRepo,
@@ -59,9 +61,8 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
-            SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
-            MacroEventBrokerService<KafkaEventPublisher>,
+            AuthenticationEventBroker,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessServiceType>,
@@ -79,7 +80,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<
         SqsContactsIngress<SqsContactsQueue>,
     >,
-    MacroEventBrokerService<KafkaEventPublisher>,
+    AuthenticationEventBroker,
 >;
 
 pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;

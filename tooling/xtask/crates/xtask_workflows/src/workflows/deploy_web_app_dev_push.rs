@@ -42,7 +42,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
             DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
-            DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
             SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
             POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
         "#})?,

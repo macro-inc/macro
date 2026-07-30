@@ -2,7 +2,7 @@ use super::*;
 use pollster::block_on;
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    user { id soup(input: $input) { nextCursor hasMore items { id } } }
+    user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;
 
 fn variables() -> Variables {
@@ -12,14 +12,13 @@ fn variables() -> Variables {
     vars
 }
 
-fn soup_data(has_more: bool) -> serde_json::Value {
+fn soup_data(has_next_page: bool) -> serde_json::Value {
     serde_json::json!({
         "user": {
             "id": "user-1",
             "soup": {
-                "nextCursor": null,
-                "hasMore": has_more,
-                "items": [{"id": "doc-1"}]
+                "nextCursor": has_next_page.then_some("cursor-1"),
+                "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}]
             }
         }
     })
@@ -86,17 +85,14 @@ fn record_selection_returns_native_cache_entities() {
             id
             soup(input: $input) {
                 items {
+                    __typename
                     id
-                    entity {
-                        __typename
-                        ... on GraphqlSoupDocument {
-                            id name fileType createdAt updatedAt viewedAt deletedAt
-                            subType { kind isCompleted }
-                        }
+                    ... on GraphqlSoupDocument {
+                        id name fileType createdAt updatedAt viewedAt deletedAt
+                        subType { kind isCompleted }
                     }
                 }
                 nextCursor
-                hasMore
             }
         }
     }"#;
@@ -105,21 +101,17 @@ fn record_selection_returns_native_cache_entities() {
             "id": "user-1",
             "soup": {
                 "items": [{
-                    "id": "item-1",
-                    "entity": {
-                        "__typename": "GraphqlSoupDocument",
-                        "id": "doc-1",
-                        "name": "A note",
-                        "fileType": "md",
-                        "createdAt": "1970-01-01T00:00:01Z",
-                        "updatedAt": "1970-01-01T00:00:02Z",
-                        "viewedAt": "1970-01-01T00:00:03Z",
-                        "deletedAt": null,
-                        "subType": null
-                    }
+                    "__typename": "GraphqlSoupDocument",
+                    "id": "doc-1",
+                    "name": "A note",
+                    "fileType": "md",
+                    "createdAt": "1970-01-01T00:00:01Z",
+                    "updatedAt": "1970-01-01T00:00:02Z",
+                    "viewedAt": "1970-01-01T00:00:03Z",
+                    "deletedAt": null,
+                    "subType": null
                 }],
-                "nextCursor": null,
-                "hasMore": false
+                "nextCursor": null
             }
         }
     });
@@ -140,7 +132,10 @@ fn record_selection_returns_native_cache_entities() {
         10,
     ))
     .unwrap();
-    assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1", "name": "A note"})]);
+    assert_eq!(
+        page.records,
+        vec![serde_json::json!({"id": "doc-1", "name": "A note"})]
+    );
     assert!(page.next_cursor.is_none());
 }
 
@@ -158,8 +153,8 @@ fn query_inspection_serializes_generated_variables_and_value() {
     assert_eq!(instances.len(), 1);
     assert_eq!(instances[0].variables, variables());
     assert_eq!(
-        instances[0].value.as_ref().unwrap()["hasMore"],
-        serde_json::json!(false)
+        instances[0].value.as_ref().unwrap()["nextCursor"],
+        serde_json::Value::Null
     );
     assert_eq!(
         serde_json::to_value(&instances).unwrap(),
@@ -167,8 +162,7 @@ fn query_inspection_serializes_generated_variables_and_value() {
             "variables": {"input": {"limit": 1}},
             "value": {
                 "nextCursor": null,
-                "hasMore": false,
-                "items": [{"id": "doc-1"}]
+                "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}]
             }
         }])
     );

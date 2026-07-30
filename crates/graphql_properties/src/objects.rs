@@ -29,8 +29,9 @@ pub enum GraphqlPropertyDataType {
     Link,
 }
 
-impl From<models_properties::DataType> for GraphqlPropertyDataType {
-    fn from(data_type: models_properties::DataType) -> Self {
+impl GraphqlPropertyDataType {
+    /// Construct a GraphQL data type from the properties-domain model.
+    pub fn new(data_type: models_properties::DataType) -> Self {
         match data_type {
             models_properties::DataType::Boolean => Self::Boolean,
             models_properties::DataType::Date => Self::Date,
@@ -59,14 +60,15 @@ where
         .await
         .map_err(|err| async_graphql::Error::new(err.to_string()))?
         .unwrap_or_default();
-    Ok(properties.into_iter().map(GraphqlProperty::from).collect())
+    Ok(properties.into_iter().map(GraphqlProperty::new).collect())
 }
 
 /// A property definition assigned to an entity, together with its current value.
 pub struct GraphqlProperty(EntityPropertyWithDefinition);
 
-impl From<EntityPropertyWithDefinition> for GraphqlProperty {
-    fn from(value: EntityPropertyWithDefinition) -> Self {
+impl GraphqlProperty {
+    /// Construct a GraphQL property from its properties-domain model.
+    pub fn new(value: EntityPropertyWithDefinition) -> Self {
         Self(value)
     }
 }
@@ -91,7 +93,7 @@ impl GraphqlProperty {
 
     /// The type of value accepted by the property.
     async fn data_type(&self) -> GraphqlPropertyDataType {
-        self.0.definition.data_type.into()
+        GraphqlPropertyDataType::new(self.0.definition.data_type)
     }
 
     /// Whether the property can contain more than one value.
@@ -104,7 +106,7 @@ impl GraphqlProperty {
         self.0
             .definition
             .specific_entity_type
-            .map(GraphqlPropertyEntityType::from)
+            .map(GraphqlPropertyEntityType::new)
     }
 
     /// Whether this property is managed by the system.
@@ -119,7 +121,7 @@ impl GraphqlProperty {
 
     /// The current value, represented by exactly one typed union variant.
     async fn value(&self) -> Option<GraphqlPropertyValue> {
-        self.0.value.as_ref().map(GraphqlPropertyValue::from)
+        self.0.value.as_ref().map(GraphqlPropertyValue::new)
     }
 }
 
@@ -191,8 +193,9 @@ pub struct GraphqlLinkPropertyValue {
     urls: Vec<String>,
 }
 
-impl From<&PropertyValue> for GraphqlPropertyValue {
-    fn from(value: &PropertyValue) -> Self {
+impl GraphqlPropertyValue {
+    /// Construct a GraphQL property value from its properties-domain model.
+    pub fn new(value: &PropertyValue) -> Self {
         match value {
             PropertyValue::Bool(value) => {
                 Self::Boolean(GraphqlBooleanPropertyValue { value: *value })
@@ -213,7 +216,7 @@ impl From<&PropertyValue> for GraphqlPropertyValue {
                 Self::EntityReference(GraphqlEntityReferencePropertyValue {
                     references: values
                         .iter()
-                        .map(GraphqlPropertyEntityReference::from)
+                        .map(GraphqlPropertyEntityReference::new)
                         .collect(),
                 })
             }
@@ -235,11 +238,12 @@ pub struct GraphqlPropertyEntityReference {
     specific_message_id: Option<ID>,
 }
 
-impl From<&models_properties::EntityReference> for GraphqlPropertyEntityReference {
-    fn from(value: &models_properties::EntityReference) -> Self {
+impl GraphqlPropertyEntityReference {
+    /// Construct a GraphQL entity reference from its properties-domain model.
+    pub fn new(value: &models_properties::EntityReference) -> Self {
         Self {
             entity_id: value.entity_id.clone(),
-            entity_type: value.entity_type.into(),
+            entity_type: GraphqlPropertyEntityType::new(value.entity_type),
             specific_message_id: value
                 .specific_message_id
                 .map(|message_id| ID(message_id.to_string())),

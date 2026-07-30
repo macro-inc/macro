@@ -13,16 +13,13 @@ query Soup($input: SoupInput!) {
     id
     soup(input: $input) {
       items {
+        __typename
         id
-        entity {
-          __typename
-          ... on GraphqlSoupDocument {
-            id
-            properties { id displayName }
-          }
+        ... on GraphqlSoupDocument {
+          properties { id displayName }
         }
       }
-      hasMore
+      nextCursor
     }
   }
 }
@@ -136,12 +133,12 @@ fn restart_hydration_preserves_legacy_json_with_envelope_keys() {
             unreachable!()
         };
         let base = json!({"user": {"id": "user-1", "soup": {
-            "items": [{"id": "item-1", "entity": {
+            "items": [{
                 "__typename": "GraphqlSoupDocument",
                 "id": "doc-1",
                 "properties": [{"id": "prop-1", "displayName": "Status"}]
-            }}],
-            "hasMore": false
+            }],
+            "nextCursor": null
         }}});
         let optimistic = json!({
             "version": 2,
@@ -196,7 +193,7 @@ fn restart_hydration_preserves_legacy_json_with_envelope_keys() {
             panic!("expected hydrated hit");
         };
         assert_eq!(
-            data["user"]["soup"]["items"][0]["entity"]["properties"][0]["displayName"],
+            data["user"]["soup"]["items"][0]["properties"][0]["displayName"],
             json!("Stage")
         );
     });

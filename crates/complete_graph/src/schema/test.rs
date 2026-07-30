@@ -21,10 +21,12 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
+use model_entity::EntityType as ModelEntityType;
 use model_user::UserContext;
-use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{document::SoupDocument, item::SoupItem};
 use rootcause::Report;
+use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
 use super::*;
@@ -35,8 +37,7 @@ const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone)]
 struct TestRealtimeSubscriptionService {
-    #[allow(clippy::type_complexity)]
-    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>>>>>,
+    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Patch<model_entity::Entity<'static>>>>>>,
     subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
 }
 
@@ -44,7 +45,7 @@ impl SoupRealtimeSubscriptionService for TestRealtimeSubscriptionService {
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Arc<SoupItem<()>>> {
+    ) -> tokio::sync::mpsc::Receiver<Patch<model_entity::Entity<'static>>> {
         *self.subscribed_user.lock().expect("subscribed user lock") = Some(user_id);
         self.receiver
             .lock()
@@ -58,6 +59,7 @@ impl SoupRealtimeSubscriptionService for TestRealtimeSubscriptionService {
 struct CountingSoupService {
     raw_calls: Arc<AtomicUsize>,
     raw_team_receipts: Arc<AtomicUsize>,
+    return_empty_raw: bool,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
@@ -101,6 +103,11 @@ impl SoupService for CountingSoupService {
         self.raw_calls.fetch_add(1, Ordering::SeqCst);
         if team_receipt.is_some() {
             self.raw_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
+        if self.return_empty_raw {
+            let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
+                Paginated::from_parts(Vec::new(), None);
+            return Ok(soup::domain::ports::SoupOutput::Left(page));
         }
         Err(test_soup_err())
     }
@@ -502,9 +509,14 @@ struct TestHarness {
         FakeAuthorizationService,
         TestState,
         NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
         NoOpSoupEmailContentEdgeReader,
+        graphql_favorite::NoOpEntityFavoriteEdgeReader,
+        graphql_permission::NoOpEntityPermissionEdgeReader,
     >,
     state: TestState,
     authorization_calls: Arc<AtomicUsize>,
@@ -592,45 +604,74 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 
     let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
     let subscribed_user = Arc::new(Mutex::new(None));
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    let (sender, receiver) = tokio::sync::mpsc::channel(2);
     let realtime = TestRealtimeSubscriptionService {
         receiver: Arc::new(Mutex::new(Some(receiver))),
         subscribed_user: Arc::clone(&subscribed_user),
     };
+    let soup_service = CountingSoupService {
+        return_empty_raw: true,
+        ..Default::default()
+    };
+    let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
     let schema: SoupSchema<
-        NoOpSoupService,
+        CountingSoupService,
         TestRealtimeSubscriptionService,
         NoOpEmailService,
         NoOpEntityAccessService,
         SchemaOnlyAuthorizationService,
         SchemaOnlyState,
         NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
         NoOpSoupEmailContentEdgeReader,
-    > = build_schema_with_services(NoOpSoupService, realtime);
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
+    > = build_schema_with_services(soup_service, realtime);
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { id entityType entity { __typename ... on GraphqlSoupDocument { id name } } } }",
+        "subscription { soupUpdates { __typename ... on SoupUpdated { item { id } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
     )
-    .data(user_id.clone());
+    .data(user_id.clone())
+    .data(loader);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 
     let document_id = Uuid::from_u128(42);
     sender
-        .send(Arc::new(grouped_document(document_id).map_extra(|_| ())))
+        .send(Patch::Updated(
+            ModelEntityType::Document.with_entity_string(document_id.to_string()),
+        ))
         .await
         .expect("subscription remains open");
-    let response = responses.next().await.expect("one subscription response");
+    sender
+        .send(Patch::Deleted(
+            ModelEntityType::Document.with_entity_string(document_id.to_string()),
+        ))
+        .await
+        .expect("subscription remains open");
+    let mut updates = Vec::new();
+    while updates.len() < 2 {
+        let response = responses.next().await.expect("subscription response");
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().expect("response data is JSON");
+        updates.extend(
+            data["soupUpdates"]
+                .as_array()
+                .expect("soupUpdates is a buffered list")
+                .iter()
+                .cloned(),
+        );
+    }
 
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().expect("response data is JSON");
-    assert_eq!(data["soupUpdates"]["id"], document_id.to_string());
-    assert_eq!(data["soupUpdates"]["entityType"], "DOCUMENT");
-    assert_eq!(
-        data["soupUpdates"]["entity"]["name"],
-        format!("Document {document_id}")
-    );
+    assert_eq!(updates.len(), 2);
+    assert_eq!(updates[0]["__typename"], "SoupUpdated");
+    assert!(updates[0]["item"].is_null());
+    assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
+    assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
+    assert_eq!(updates[1]["entityId"], document_id.to_string());
     assert_eq!(
         subscribed_user
             .lock()
@@ -682,7 +723,7 @@ async fn soup_passes_team_receipt_to_raw_path() {
     let harness = harness();
 
     let _response = harness
-        .execute("{ user { soup(input: {initial: {}}) { hasMore } } }")
+        .execute("{ user { soup(input: {initial: {}}) { nextCursor } } }")
         .await;
 
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
@@ -702,7 +743,7 @@ async fn soup_input_rejects_initial_and_continuation_together() {
 
     let response = harness
         .execute(
-            r#"{ user { soup(input: {initial: {}, continuation: {cursor: "invalid"}}) { hasMore } } }"#,
+            r#"{ user { soup(input: {initial: {}, continuation: {cursor: "invalid"}}) { nextCursor } } }"#,
         )
         .await;
 
@@ -772,7 +813,7 @@ async fn crm_scoped_soup_resolves_team_membership_lazily() {
     // input still receives the always-resolved team receipt.
     let response = harness
         .execute(
-            r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { hasMore } } }"#,
+            r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { nextCursor } } }"#,
         )
         .await;
 

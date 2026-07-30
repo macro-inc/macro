@@ -1,5 +1,6 @@
 [
   "macro.bots",
+  "macro.calls",
   "macro.channels",
   "macro.chats",
   "macro.documents",
@@ -7,6 +8,7 @@
   "macro.example",
   "macro.mentions",
   "macro.projects",
+  "macro.properties",
   "macro.soup",
   "macro.teams",
   "macro.webhooks"

@@ -16,6 +16,20 @@ type InnerVal<'a> = Either<BotIdStr<'a>, MacroUserIdStr<'a>>;
 #[serde(try_from = "String", into = "String")]
 pub struct ChannelSender<'a>(pub InnerVal<'a>);
 
+#[cfg(feature = "schema")]
+impl<'a> utoipa::ToSchema for ChannelSender<'a> {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("ChannelSender")
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<'a> utoipa::PartialSchema for ChannelSender<'a> {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        String::schema()
+    }
+}
+
 impl<'a> TryFrom<&'a str> for ChannelSender<'a> {
     type Error = ParseErr;
 

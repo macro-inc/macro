@@ -145,8 +145,16 @@ where
             } => {
                 let channel_id = mention.channel_id;
                 let sender_id = mention.sender.as_user().cloned();
-                let secondary_notification_entity =
-                    secondary_channel_thread_entity(mention.thread_id);
+                // A mention's thread row is keyed by its thread root: the
+                // containing thread for a reply, the message itself for a
+                // top-level mention. Without the fallback a top-level mention
+                // carries no secondary entity, and the inbox's channel-thread
+                // query (which matches notifications by secondary entity)
+                // can never surface it — the channel row deliberately leaves
+                // mentions to thread rows, so the mention would show nowhere.
+                let secondary_notification_entity = secondary_channel_thread_entity(Some(
+                    mention.thread_id.unwrap_or(mention.message_id),
+                ));
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
@@ -171,8 +179,13 @@ where
             } => {
                 let channel_id = mention.channel_id;
                 let sender_id = mention.sender.as_user().cloned();
-                let secondary_notification_entity =
-                    secondary_channel_thread_entity(mention.thread_id);
+                // Same thread-root fallback as UserMention above: a top-level
+                // mention's thread row is keyed by the message itself, so
+                // without it the inbox's channel-thread query could never
+                // surface the mention.
+                let secondary_notification_entity = secondary_channel_thread_entity(Some(
+                    mention.thread_id.unwrap_or(mention.message_id),
+                ));
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {

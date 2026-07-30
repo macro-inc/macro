@@ -124,7 +124,7 @@ struct OptimisticLayer {
 /// `__meta:` prefix can never collide with entity keys (typenames can't
 /// contain `:`).
 const IDENTITY_META_KEY: &str = "__meta:identity";
-const IDENTITY_FIELD: &str = "userId";
+const IDENTITY_VALUE_FIELD: &str = "identity";
 
 /// Hydration/binding state of the session identity tag for this cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,30 +291,40 @@ impl<S: Storage> Engine<S> {
                 .await
                 .map_err(EngineError::Storage)?;
             let stored = fetched.into_iter().next().flatten().and_then(|record| {
-                match record.fields.get(IDENTITY_FIELD) {
+                match record.fields.get(IDENTITY_VALUE_FIELD) {
                     Some(crate::value::CacheValue::String(s)) => Some(s.clone()),
                     _ => None,
                 }
             });
             self.identity = match stored {
-                Some(user_id) => IdentityState::Bound(user_id),
+                Some(identity) => IdentityState::Bound(identity),
                 None => IdentityState::Missing,
             };
         }
         Ok(self.identity.clone())
     }
 
-    async fn bind_identity(&mut self, user_id: &str) -> Result<(), EngineError<S::Error>> {
+    /// Returns the opaque identity currently bound to this cache, hydrating
+    /// it from persistent storage when necessary.
+    pub async fn current_identity(&mut self) -> Result<Option<String>, EngineError<S::Error>> {
+        match self.bound_identity().await? {
+            IdentityState::NotHydrated => unreachable!("bound_identity hydrates"),
+            IdentityState::Missing => Ok(None),
+            IdentityState::Bound(identity) => Ok(Some(identity)),
+        }
+    }
+
+    async fn bind_identity(&mut self, identity: &str) -> Result<(), EngineError<S::Error>> {
         let mut record = Record::default();
         record.fields.insert(
-            IDENTITY_FIELD.to_string(),
-            crate::value::CacheValue::String(user_id.to_string()),
+            IDENTITY_VALUE_FIELD.to_string(),
+            crate::value::CacheValue::String(identity.to_string()),
         );
         self.storage
             .put_batch(vec![(EntityKey(IDENTITY_META_KEY.to_string()), record)])
             .await
             .map_err(EngineError::Storage)?;
-        self.identity = IdentityState::Bound(user_id.to_string());
+        self.identity = IdentityState::Bound(identity.to_string());
         Ok(())
     }
 
@@ -333,7 +343,10 @@ impl<S: Storage> Engine<S> {
         let op = doc.operation(operation_name)?;
         if op.kind != OperationKind::Query {
             return Err(EngineError::Document(
-                DocumentError::UnsupportedOperationType("mutation (reads are query-only)".into()),
+                DocumentError::UnsupportedOperationType(format!(
+                    "{:?} (cache reads are query-only)",
+                    op.kind
+                )),
             ));
         }
 
@@ -1162,8 +1175,30 @@ impl<S: Storage> Engine<S> {
         affected
     }
 
-    /// Drops all cached state (logout, schema-hash mismatch), including any
-    /// pending optimistic layers.
+    /// Deletes locally stale records from both durable and hot tiers and
+    /// returns active operations that traversed those records.
+    ///
+    /// Use this for an explicit server-provided cache-deletion effect.
+    /// Cross-engine notifications for records already written to shared
+    /// storage should use
+    /// [`Self::invalidate_keys`] instead.
+    pub async fn delete_keys(
+        &mut self,
+        keys: &[EntityKey],
+    ) -> Result<BTreeSet<OpId>, EngineError<S::Error>> {
+        let affected = self.deps.ops_for_keys(keys.iter());
+        self.storage
+            .delete_batch(keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        for key in keys {
+            self.hot.pop(key);
+        }
+        Ok(affected)
+    }
+
+    /// Drops all cached state (for example, on logout), including any pending
+    /// optimistic layers.
     pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
         self.hot.clear();
         self.optimistic.clear();

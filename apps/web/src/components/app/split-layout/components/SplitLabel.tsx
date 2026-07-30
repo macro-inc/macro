@@ -69,7 +69,7 @@ export function StaticSplitLabel(props: {
       >
         <div
           class={cn(
-            'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
+            'z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink',
             props.class
           )}
         >
@@ -226,7 +226,7 @@ export function BlockItemSplitLabel(props: {
         class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
         onClick={openTitleFileMenu}
       >
-        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
+        <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
           <Show when={props.badges}>{props.badges}</Show>
           <SplitLabel

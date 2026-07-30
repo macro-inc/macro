@@ -20,7 +20,7 @@ pub enum DocumentError {
     NoOperation,
     #[error("operation `{0}` not found")]
     UnknownOperation(String),
-    #[error("only queries and mutations are supported (got {0})")]
+    #[error("unsupported operation type: {0}")]
     UnsupportedOperationType(String),
     #[error("fragment `{0}` is not defined")]
     UnknownFragment(String),
@@ -59,11 +59,12 @@ pub enum Selection {
     },
 }
 
-/// Kind of an executable operation. Subscriptions are rejected at parse.
+/// Kind of an executable operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperationKind {
     Query,
     Mutation,
+    Subscription,
 }
 
 #[derive(Debug, Clone)]
@@ -135,7 +136,7 @@ impl Document {
                 None => OperationKind::Query,
                 Some(ty) if ty.query_token().is_some() => OperationKind::Query,
                 Some(ty) if ty.mutation_token().is_some() => OperationKind::Mutation,
-                // Subscriptions are not cacheable.
+                Some(ty) if ty.subscription_token().is_some() => OperationKind::Subscription,
                 Some(ty) => {
                     let label = ty.syntax().text().to_string();
                     return Err(DocumentError::UnsupportedOperationType(label));
@@ -422,17 +423,15 @@ mod tests {
         query Soup($input: SoupInput!) {
           soup(input: $input) {
             items {
+              __typename
               id
-              entity {
-                __typename
-                ... on GraphqlSoupDocument { id docName: name }
-                ...ChatFields
-              }
+              ... on GraphqlSoupDocument { docName: name }
+              ...ChatFields
             }
             nextCursor
           }
         }
-        fragment ChatFields on GraphqlSoupChat { id chatName: name }
+        fragment ChatFields on GraphqlSoupChat { chatName: name }
     "#;
 
     #[test]
@@ -450,10 +449,7 @@ mod tests {
         let Selection::Field(items) = &soup.selection_set[0] else {
             panic!()
         };
-        let Selection::Field(entity) = &items.selection_set[1] else {
-            panic!()
-        };
-        let conditions: Vec<_> = entity
+        let conditions: Vec<_> = items
             .selection_set
             .iter()
             .filter_map(|s| match s {
@@ -500,15 +496,15 @@ mod tests {
             OperationKind::Mutation
         );
 
+        let doc = Document::parse("subscription S { soupUpdates { __typename } }").unwrap();
+        assert_eq!(
+            doc.operation(Some("S")).unwrap().kind,
+            OperationKind::Subscription
+        );
+
         // Shorthand operations are queries.
         let doc = Document::parse("{ user { id } }").unwrap();
         assert_eq!(doc.operation(None).unwrap().kind, OperationKind::Query);
-    }
-
-    #[test]
-    fn rejects_subscriptions() {
-        let err = Document::parse("subscription S { doThing }").unwrap_err();
-        assert!(matches!(err, DocumentError::UnsupportedOperationType(_)));
     }
 
     #[test]

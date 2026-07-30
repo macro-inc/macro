@@ -60,14 +60,10 @@ fn deploy() -> Job {
         .name("Deploy to Cloudflare")
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false))
-        .add_step(setup_bun())
+        .add_step(steps::setup_bun())
         .add_step(setup_node())
         .add_step(install_deps())
         .add_step(deploy_step())
-}
-
-fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun").uses("oven-sh", "setup-bun", "v2")
 }
 
 fn setup_node() -> Step<Use> {

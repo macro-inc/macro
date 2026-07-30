@@ -115,6 +115,15 @@ pub const QUEUES: &[Queue] = &[
         bindings: &[("BACKFILL_QUEUE", Name), ("EMAIL_BACKFILL_QUEUE", Url)],
     },
     Queue {
+        // Consumed by email_service's nightly CRM-cleanup workers; without the
+        // queue existing in LocalStack they tight-loop on receive errors.
+        name: macro_queues::EmailCrmCleanupQueue::LOCAL,
+        bindings: &[(
+            macro_queues::EmailCrmCleanupQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
         name: macro_queues::ChatDeleteQueue::LOCAL,
         bindings: &[("CHAT_DELETE_QUEUE", Name)],
     },

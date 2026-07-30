@@ -327,7 +327,7 @@ pub struct CloudFrontConfig {
 
 /// Represents a file type update: either set to a specific type or clear to null.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum FileTypeUpdate {
     /// Set the file type to a specific value.

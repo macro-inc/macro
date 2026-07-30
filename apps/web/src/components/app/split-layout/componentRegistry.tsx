@@ -1,3 +1,4 @@
+import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
@@ -8,6 +9,7 @@ import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-m
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
@@ -32,6 +34,7 @@ import { EmptyStatePanel } from '@ui';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
+import { previewEmptyStateForContent } from './previewController';
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
@@ -141,6 +144,14 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('home');
     return <Home />;
+  })
+);
+
+registerComponent(
+  'getting-started',
+  withAuth(() => {
+    usePageViewTracking('getting-started');
+    return <GettingStarted />;
   })
 );
 
@@ -384,15 +395,31 @@ registerComponent(
 
 registerComponent('loading', () => <LoadingBlock />);
 // Placeholder a Preview Pair's Viewer opens before its Controller has
-// navigated anywhere (see layoutManager engagePreviewMode).
+// navigated anywhere (see layoutManager engagePreviewMode). Controllers can
+// override the copy via `emptyState` in previewController.ts; resolving it
+// from the live pair (rather than params) keeps the override across URL
+// restore.
 registerComponent('preview-empty', () => {
   const panel = useSplitPanelOrThrow();
   onMount(() => panel.handle.setDisplayName('Preview'));
+  const emptyState = () => {
+    const manager = globalSplitManager();
+    const controllerId = manager?.controllerOf(panel.handle.id);
+    const controllerContent = controllerId
+      ? manager?.getSplit(controllerId)?.content()
+      : undefined;
+    return controllerContent
+      ? previewEmptyStateForContent(controllerContent)
+      : undefined;
+  };
   return (
     <EmptyStatePanel
       graphic={EmptyStatePreviewIcon}
-      title="No content selected"
-      description="Select an item from the connected list to preview it here"
+      title={emptyState()?.title ?? 'No content selected'}
+      description={
+        emptyState()?.description ??
+        'Select an item from the connected list to preview it here'
+      }
       centered
     />
   );

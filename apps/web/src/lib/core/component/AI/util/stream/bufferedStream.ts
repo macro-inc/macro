@@ -2,11 +2,7 @@ import type {
   AssistantMessagePart,
   ChatStream,
 } from '@service-cognition/generated/schemas';
-import {
-  type ChatMessageStream,
-  type ChatStreamController,
-  createStreamController,
-} from '@service-connection/stream';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { createEffect, createSignal, on } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { createMentionBufferPlugin } from './mentionPlugin';
@@ -52,7 +48,6 @@ interface ConsumerHandle {
 
 type BufferedStream = {
   source: ChatMessageStream;
-  controller: ChatStreamController;
   dispatch: (event: BufferEvent) => void;
   /* emit units to the output, routed through the plugin chain */
   emit: (parts: ChatStream[]) => void;
@@ -451,9 +446,19 @@ export function bufferedStream(
   source: ChatMessageStream,
   plugins: StreamPlugin[] = [createMentionBufferPlugin()]
 ): BufferedChatMessageStream {
-  const controller = createStreamController<'chat'>(source.id);
+  /*
+   `equals: false` so pushing the same (mutated) array reference still
+   notifies subscribers. Emitting one unit per character means push() runs
+   once per character of the whole message; rebuilding the array each time
+   (the previous `setData((p) => [...p, ...parts])`) copied everything
+   emitted so far on every call — O(n) per unit, O(n^2) over a message,
+   and the reason long streams got progressively slower to render.
+  */
+  const [data, setData] = createSignal<ChatStream[]>([], { equals: false });
+  const [isDone, setIsDone] = createSignal(false);
   const [isHolding, setIsHolding] = createSignal(false);
 
+  const buffer: ChatStream[] = [];
   let holdFlushTimeout: ReturnType<typeof setTimeout> | undefined;
 
   function updateHolding() {
@@ -462,7 +467,8 @@ export function bufferedStream(
 
   function push(parts: ChatStream[]) {
     if (parts.length === 0) return;
-    controller.setData((p) => [...p, ...parts]);
+    buffer.push(...parts);
+    setData(buffer);
   }
 
   function forceFlushHeld() {
@@ -492,7 +498,7 @@ export function bufferedStream(
     if (holdFlushTimeout) clearTimeout(holdFlushTimeout);
     push(flushPlugins(plugins));
     updateHolding();
-    controller.setDone();
+    setIsDone(true);
   }
 
   let state: BufferState;
@@ -500,7 +506,7 @@ export function bufferedStream(
     state = transition(state, event);
   });
 
-  const stream: BufferedStream = { source, controller, dispatch, emit, finish };
+  const stream: BufferedStream = { source, dispatch, emit, finish };
   state = { type: 'waiting', stream };
 
   /* Solid only bridges the reactive inputs into the queue */
@@ -521,7 +527,9 @@ export function bufferedStream(
   );
 
   return {
-    ...controller.stream,
+    id: source.id,
+    data,
+    isDone,
     isHolding,
   };
 }

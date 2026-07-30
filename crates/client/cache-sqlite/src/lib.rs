@@ -1,7 +1,7 @@
 //! SQLite [`Storage`] backend for the Tauri native host.
 //!
 //! One database file per cache; the `meta` table pins the cache namespace
-//! (scope + schema hash + format version, see
+//! (scope + schema compatibility epoch + format version, see
 //! [`cache_core::codec::cache_namespace`]). On mismatch the store is wiped
 //! and rebuilt — the cache is disposable by design, never migrated.
 //!
@@ -116,9 +116,10 @@ impl SqliteStorage {
             tx.execute("DELETE FROM mutation_queue", [])?;
             tx.execute("DELETE FROM records", [])?;
         } else if stored_namespace.as_deref() != Some(expected_namespace.as_str()) {
-            // Record schema/format changes only invalidate disposable records.
-            // The queue retains source GraphQL + optimistic JSON so the engine
-            // can re-normalize it against the current schema.
+            // Incompatible schema/cache-format changes only invalidate
+            // disposable records. The queue retains source GraphQL +
+            // optimistic JSON so the engine can re-normalize it against the
+            // current schema.
             tx.execute("DELETE FROM records", [])?;
         }
         tx.execute(
@@ -650,7 +651,28 @@ mod tests {
     }
 
     #[test]
-    fn namespace_change_wipes() {
+    fn compatibility_epoch_change_wipes_records() {
+        block_on(async {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("cache.db");
+
+            let mut s = SqliteStorage::open(&path, "user-1").unwrap();
+            s.put_batch(vec![(key("A:1"), record("a"))]).await.unwrap();
+            s.conn()
+                .execute(
+                    "UPDATE meta SET v = 'graphql-cache:user-1:s0:v2' WHERE k = 'namespace'",
+                    [],
+                )
+                .unwrap();
+            drop(s);
+
+            let s = SqliteStorage::open(&path, "user-1").unwrap();
+            assert_eq!(s.record_count().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn scope_change_wipes() {
         block_on(async {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("cache.db");
@@ -672,13 +694,13 @@ mod tests {
             let storage = SqliteStorage::open_in_memory("user-1").unwrap();
             let mut engine = Engine::new(storage);
             let query = r#"query Soup($input: SoupInput!) {
-                user { id soup(input: $input) { nextCursor hasMore items { id } } }
+                user { id soup(input: $input) { nextCursor items { __typename id } } }
             }"#;
             let serde_json::Value::Object(vars) = serde_json::json!({"input": {"limit": 1}}) else {
                 unreachable!()
             };
             let data = serde_json::json!({
-                "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
+                "user": { "id": "user-1", "soup": { "nextCursor": null, "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}] } }
             });
             engine
                 .write_query(None, query, Some("Soup"), &vars, &data, None)

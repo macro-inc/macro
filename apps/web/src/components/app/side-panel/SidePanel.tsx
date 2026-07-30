@@ -27,7 +27,6 @@ import {
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
-import { splitPanelLayer } from '../split-layout/layers';
 import {
   SidePanelContext,
   type SidePanelContextType,
@@ -175,7 +174,7 @@ function SidePanelLayoutInner(
           maxSize={SIDE_MAX_PX}
           index={1}
         >
-          <div class={cn('relative size-full', splitPanelLayer.controls)}>
+          <div class={'relative size-full z-split-panel-chrome'}>
             <SidePanelOutlet
               sections={props.sections}
               openIds={props.openIds}
@@ -187,8 +186,7 @@ function SidePanelLayoutInner(
       <Show when={showOverlay()}>
         <div
           class={cn(
-            'absolute inset-0 flex flex-col bg-surface',
-            splitPanelLayer.controls
+            'absolute inset-0 flex flex-col bg-surface z-split-panel-chrome'
           )}
         >
           <Scroll>

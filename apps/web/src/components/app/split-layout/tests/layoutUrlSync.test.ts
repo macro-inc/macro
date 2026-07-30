@@ -190,6 +190,45 @@ describe('layout URL synchronization', () => {
     harness.dispose();
   });
 
+  it('restores a Preview Pair across a settings clobber round trip', async () => {
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: 'mail' }],
+      urlSegments: ['component', 'mail'],
+    });
+    await flushUrlSync();
+
+    // Engage preview and give the viewer real content, like opening an item.
+    const controllerId = harness.manager.splits()[0].id;
+    harness.manager.engagePreviewMode(controllerId);
+    const viewerId = harness.manager.viewerOf(controllerId)!;
+    harness.manager.getSplit(viewerId)!.replace({
+      next: { type: 'md', id: 'doc-1' },
+      mergeHistory: true,
+    });
+    await flushUrlSync();
+    harness.setUrl(['component', 'mail', 'md', 'doc-1'], '0', '?preview=0');
+    await flushUrlSync();
+
+    // Open settings: clobber down to a lone settings split
+    // (collapseToSoloSettings), then apply the URL the sync emitted.
+    harness.manager.replaceAllSplits({ type: 'component', id: 'settings' });
+    await flushUrlSync();
+    harness.setUrl(['settings', 'account'], undefined, '');
+    await flushUrlSync();
+
+    // Close settings: navigate back to the captured return URL.
+    harness.setUrl(['component', 'mail', 'md', 'doc-1'], '0', '?preview=0');
+    await flushUrlSync();
+
+    const [controller, viewer] = harness.manager.splits();
+    expect(controller.content).toMatchObject({
+      type: 'component',
+      id: 'mail',
+    });
+    expect(viewer.content).toMatchObject({ type: 'md', id: 'doc-1' });
+    expect(harness.manager.viewerOf(controller.id)).toBe(viewer.id);
+  });
+
   it('uses replace navigation and clears location state for replace-caused path changes', async () => {
     const harness = createHarness({
       managerContent: [{ type: 'component', id: 'inbox' }],

@@ -175,13 +175,13 @@ async fn engine_over_idb() {
     let mut engine = Engine::new(storage);
 
     let query = r#"query Soup($input: SoupInput!) {
-        user { id soup(input: $input) { nextCursor hasMore items { id } } }
+        user { id soup(input: $input) { nextCursor items { __typename id } } }
     }"#;
     let serde_json::Value::Object(vars) = serde_json::json!({"input": {"limit": 1}}) else {
         unreachable!()
     };
     let data = serde_json::json!({
-        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
+        "user": { "id": "user-1", "soup": { "nextCursor": null, "items": [{"__typename": "GraphqlSoupDocument", "id": "doc-1"}] } }
     });
 
     engine
@@ -198,7 +198,7 @@ async fn engine_over_idb() {
     assert_eq!(cached, data);
 
     let selection =
-        RecordSelection::parse("fragment Item on GraphqlSoupItem { id }", "Item").unwrap();
+        RecordSelection::parse("fragment Item on GraphqlSoupDocument { id }", "Item").unwrap();
     let page = engine.read_records(&selection, None, 10).await.unwrap();
     assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1"})]);
     assert!(page.next_cursor.is_none());

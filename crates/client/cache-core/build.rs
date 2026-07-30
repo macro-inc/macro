@@ -47,9 +47,15 @@ fn main() {
         .mutation
         .as_ref()
         .map(|m| m.name.to_string());
+    let subscription_root = schema
+        .schema_definition
+        .subscription
+        .as_ref()
+        .map(|subscription| subscription.name.to_string());
 
-    // The schema hash namespaces persisted caches; key policy is derived
-    // from the schema, so hashing the schema covers it.
+    // Expose the schema hash for build diagnostics. Persisted cache
+    // compatibility is versioned separately so additive schema changes can
+    // retain existing normalized records.
     let mut hasher = Sha256::new();
     hasher.update(schema_text.as_bytes());
     let schema_hash = hex_string(&hasher.finalize());
@@ -77,7 +83,9 @@ fn main() {
         }
         match ty {
             ExtendedType::Object(obj) => {
-                let is_operation_root = name == query_root || Some(&name) == mutation_root.as_ref();
+                let is_operation_root = name == query_root
+                    || Some(&name) == mutation_root.as_ref()
+                    || Some(&name) == subscription_root.as_ref();
                 let key_literal =
                     key_literal(&name, is_operation_root, obj.fields.iter(), &mut errors);
                 let fields = fields_literal(&schema, obj.fields.iter(), &mut errors);
@@ -130,6 +138,18 @@ fn main() {
         )
         .unwrap(),
         None => writeln!(out, "pub static MUTATION_ROOT_TYPE: Option<&str> = None;").unwrap(),
+    }
+    match &subscription_root {
+        Some(name) => writeln!(
+            out,
+            "pub static SUBSCRIPTION_ROOT_TYPE: Option<&str> = Some({name:?});"
+        )
+        .unwrap(),
+        None => writeln!(
+            out,
+            "pub static SUBSCRIPTION_ROOT_TYPE: Option<&str> = None;"
+        )
+        .unwrap(),
     }
     writeln!(out, "pub static SCHEMA_HASH: &str = {schema_hash:?};").unwrap();
     writeln!(out, "pub static TYPES: &[TypeMeta] = &[").unwrap();

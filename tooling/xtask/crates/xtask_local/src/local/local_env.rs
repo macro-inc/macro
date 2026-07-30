@@ -21,6 +21,12 @@ use super::{Mode, identity, resources};
 pub struct LocalEnv {
     environment: &'static str,
     project_name: String,
+    /// Where the browser-facing app lives: the proxy (static bundle at
+    /// `/app`) or the bun dev server. `default_redirect_url()` in
+    /// authentication_service sends post-login browsers to
+    /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
+    /// mode or every OAuth signup dead-ends on an unused port.
+    frontend_port: u16,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -32,12 +38,17 @@ pub struct LocalEnv {
 impl LocalEnv {
     /// Build the local env for `instance` in `Local` mode (dev sources its env
     /// from Doppler, not here).
-    pub fn for_instance(mode: Mode, instance: &Instance) -> Self {
+    pub fn for_instance(mode: Mode, instance: &Instance, static_frontend: bool) -> Self {
         let name = instance.name();
         LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
+            frontend_port: if static_frontend {
+                instance.port(Port::Proxy)
+            } else {
+                instance.port(Port::Frontend)
+            },
             infra: InfraEnv::local(),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
@@ -53,6 +64,7 @@ impl LocalEnv {
         env.insert("ENVIRONMENT".into(), self.environment.into());
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
+        env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);
@@ -105,6 +117,29 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
             "http://connection-gateway:8080".into(),
+        );
+        // Same trap for document storage: the Environment::Local default is
+        // http://localhost:8086, the *host* port mapping, which resolves to
+        // the calling container. Callers like the authentication service's
+        // signup hook (starter docs) then fail with a connection error.
+        // `DOCUMENT_STORAGE_SERVICE_URL` (from Doppler) only covers the older
+        // call sites that read that var directly, not `macro_service_urls`.
+        env.insert(
+            "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
+            "http://document-storage-service:8080".into(),
+        );
+        // Same failure mode for the email connect flows: without these,
+        // first-inbox provisioning (auth-service → `/email/init`) and Gmail
+        // token fetches (email-service → `/internal/google_access_token`)
+        // fail with connection errors. (Plain `EMAIL_SERVICE_URL` in Doppler
+        // is ignored — macro_service_urls only honors the `OVERRIDE_` prefix.)
+        env.insert(
+            "OVERRIDE_EMAIL_SERVICE_URL".into(),
+            "http://email-service:8080".into(),
+        );
+        env.insert(
+            "OVERRIDE_AUTH_SERVICE_URL".into(),
+            "http://authentication-service:8080".into(),
         );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
@@ -190,7 +225,6 @@ impl MailEnv {
 /// container (services, sync, lexical) agrees. `INTERNAL_API_SECRET_KEY` is the
 /// literal `"local"` to match the FusionAuth webhook's `x-internal-auth-key`.
 struct ServiceAuthEnv {
-    service_internal: String,
     dss_auth: String,
     doc_perm_jwt: String,
     internal_call: String,
@@ -200,7 +234,6 @@ struct ServiceAuthEnv {
 impl ServiceAuthEnv {
     fn for_instance(name: &str) -> Self {
         ServiceAuthEnv {
-            service_internal: identity::instance_secret("service-internal", name),
             dss_auth: identity::instance_secret("dss-auth", name),
             // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
             // ("local") so locally-minted tokens verify. This is ONLY for local
@@ -225,10 +258,12 @@ impl ServiceAuthEnv {
             "SYNC_SERVICE_AUTH_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
-        env.insert(
-            "SERVICE_INTERNAL_AUTH_KEY".into(),
-            self.service_internal.clone(),
-        );
+        // The key the authentication service presents to document storage on
+        // internal calls (e.g. seeding starter docs at signup). In dev/prod
+        // Doppler points it at the *same* secret as DSS's own auth key
+        // (document-storage-service-auth-key-*), so locally the two must be
+        // one value or DSS 401s every auth-service internal call.
+        env.insert("SERVICE_INTERNAL_AUTH_KEY".into(), self.dss_auth.clone());
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
             self.dss_auth.clone(),
@@ -277,7 +312,6 @@ impl FusionAuthEnv {
             "FUSIONAUTH_API_KEY_SECRET_KEY".into(),
             identity::FUSIONAUTH_API_KEY.into(),
         );
-        env.insert("FUSIONAUTH_TENANT_ID".into(), identity::TENANT_ID.into());
         env.insert(
             "FUSIONAUTH_CLIENT_ID".into(),
             identity::APPLICATION_ID.into(),

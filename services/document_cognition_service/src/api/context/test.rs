@@ -7,6 +7,7 @@ use stream::domain::{
     ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
 };
 use tokio::sync::broadcast::{self, Receiver};
+use tokio_util::task::TaskTracker;
 
 pub struct MockConnectionRepo;
 
@@ -257,6 +258,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new("localhost:9092")
             .expect("kafka producer config is valid"),
+        TaskTracker::new(),
     );
 
     let document_service = documents::domain::service::DocumentServiceImpl::new(

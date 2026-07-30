@@ -5,12 +5,13 @@
 mod http_validator_test;
 
 use crate::domain::{
-    models::{Webhook, WebhookEndpointSchemePolicy, WebhookValidationResult},
+    models::{
+        Webhook, WebhookEndpointSchemePolicy, WebhookValidationResult, WebhookValidationTestEvent,
+    },
     ports::WebhookValidationClient,
 };
 use hmac::{Hmac, Mac};
 use reqwest::{Client, StatusCode, Url, redirect::Policy};
-use serde_json::json;
 use sha2::Sha256;
 use std::{net::IpAddr, time::Duration};
 use tokio::net::lookup_host;
@@ -116,11 +117,11 @@ fn new_validation_event_id() -> String {
 }
 
 fn validation_body(webhook_id: &str, event_id: &str) -> Result<Vec<u8>, serde_json::Error> {
-    serde_json::to_vec(&json!({
-        "id": event_id,
-        "event": EVENT_NAME,
-        "webhook_id": webhook_id,
-    }))
+    serde_json::to_vec(&WebhookValidationTestEvent {
+        id: event_id.to_owned(),
+        event: EVENT_NAME.to_owned(),
+        webhook_id: webhook_id.to_owned(),
+    })
 }
 
 pub(super) fn signature_header(

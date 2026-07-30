@@ -2908,6 +2908,161 @@ export const postChannelBotWebhookResponse = zod
   .describe('Response returned after posting a channel webhook message.');
 
 /**
+ * @summary Handle channel list requests for `GET /comms/channels`.
+ */
+export const getChannelsQueryLimitMin = 0;
+
+export const getChannelsQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getChannelsQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 100)'),
+  cursor: zod.string().optional().describe('Opaque cursor for the next page'),
+});
+
+export const getChannelsResponseItemsItemOrgIdMin = 0;
+
+export const getChannelsResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            auto_join_team: zod
+              .boolean()
+              .describe('Whether team members automatically join the channel.'),
+            channel_type: zod
+              .enum(['public', 'private', 'direct_message', 'team'])
+              .describe('Channel type in API responses.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('Channel creation timestamp.'),
+            frecency_score: zod
+              .number()
+              .nullish()
+              .describe('Aggregate frecency score.'),
+            id: zod.uuid().describe('Channel id.'),
+            interacted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last interaction timestamp for requesting user.'),
+            is_participant: zod
+              .boolean()
+              .describe(
+                'Whether the requesting user is an active participant of the channel.'
+              ),
+            latest_message: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    content: zod.string().describe('Message content.'),
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('Creation timestamp.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Deletion timestamp, if deleted.'),
+                    mentions: zod
+                      .array(zod.string())
+                      .describe(
+                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                      ),
+                    message_id: zod.uuid().describe('Message id.'),
+                    sender_id: zod.string().describe('Sender user id.'),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe('Thread id, if the message is a reply.'),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Update timestamp.'),
+                  })
+                  .describe('Channel message in API responses.'),
+              ])
+              .optional(),
+            latest_non_thread_message: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    content: zod.string().describe('Message content.'),
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('Creation timestamp.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Deletion timestamp, if deleted.'),
+                    mentions: zod
+                      .array(zod.string())
+                      .describe(
+                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                      ),
+                    message_id: zod.uuid().describe('Message id.'),
+                    sender_id: zod.string().describe('Sender user id.'),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe('Thread id, if the message is a reply.'),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Update timestamp.'),
+                  })
+                  .describe('Channel message in API responses.'),
+              ])
+              .optional(),
+            name: zod.string().nullish().describe('Channel name.'),
+            org_id: zod
+              .number()
+              .min(getChannelsResponseItemsItemOrgIdMin)
+              .nullish()
+              .describe('Organization id.'),
+            owner_id: zod.string().describe('Channel owner user id.'),
+            participants: zod
+              .array(
+                zod
+                  .object({
+                    channel_id: zod.uuid().describe('id of the channel'),
+                    joined_at: zod.iso
+                      .datetime({})
+                      .describe(
+                        'timestamp of when the user joined the channel'
+                      ),
+                    left_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('timestamp of when the user left the channel'),
+                    role: zod
+                      .enum(['owner', 'admin', 'member'])
+                      .describe('Participant role in API responses.'),
+                    user_id: zod.string().describe('id of the user'),
+                  })
+                  .describe('Channel participant in API responses.')
+              )
+              .describe('Active participants.'),
+            team_id: zod.uuid().nullish().describe('Team id.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('Channel last-updated timestamp.'),
+            viewed_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last viewed timestamp for requesting user.'),
+          })
+          .describe('Channel list response item.')
+      )
+      .describe('Channels in this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Opaque cursor for the next page, if one exists.'),
+  })
+  .describe('A cursor-paginated channel list response.');
+
+/**
  * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it
 was the thread's last live comment, the thread is soft-deleted too
 (reported via `threadDeleted`).
@@ -4918,6 +5073,17 @@ export const getDocumentByTeamSlugResponse = zod.object({
 });
 
 /**
+ * @summary Resolves the current user's starter documents.
+ */
+export const handlerResponse = zod
+  .object({
+    how_to_guide_id: zod
+      .string()
+      .describe('Id of the user\'s \"Macro how to guide\".'),
+  })
+  .describe('The deterministic starter document ids for the current user.');
+
+/**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/{document_id}`.
  */
@@ -4928,147 +5094,148 @@ export const getDocumentParams = zod.object({
 export const getDocumentResponse = zod.object({
   data: zod
     .object({
-      items: zod
-        .array(
-          zod.union([
-            zod.object({
-              branchedFromId: zod
-                .string()
-                .nullish()
-                .describe('The id of the document this document branched from'),
-              branchedFromVersionId: zod
-                .number()
-                .nullish()
+      documentMetadata: zod
+        .object({
+          branchedFromId: zod
+            .string()
+            .nullish()
+            .describe('The id of the document this document branched from'),
+          branchedFromVersionId: zod
+            .number()
+            .nullish()
+            .describe(
+              'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+            ),
+          createdAt: zod.iso
+            .datetime({})
+            .nullish()
+            .describe('The time the document was created'),
+          deletedAt: zod.iso
+            .datetime({})
+            .nullish()
+            .describe('The time the document was deleted'),
+          documentBom: zod
+            .array(
+              zod.object({
+                id: zod.string().describe('The uuid of the bom part'),
+                path: zod
+                  .string()
+                  .describe('The file path of the bom part content'),
+                sha: zod
+                  .string()
+                  .describe(
+                    'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
+                  ),
+              })
+            )
+            .nullish()
+            .describe(
+              'If the document is a DOCX document and unzipped, the document_bom will be present'
+            ),
+          documentFamilyId: zod
+            .number()
+            .nullish()
+            .describe('The id of the document family this document belongs to'),
+          documentId: zod.string().describe('The document id'),
+          documentName: zod.string().describe('The name of the document'),
+          documentVersionId: zod
+            .number()
+            .describe(
+              'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+            ),
+          fileType: zod
+            .string()
+            .nullish()
+            .describe('The file type of the document (file extension)'),
+          modificationData: zod
+            .unknown()
+            .optional()
+            .describe(
+              'The modification data for the document instance.\nThis is only used for PDF documents.'
+            ),
+          owner: zod.string().describe('The owner of the document'),
+          projectId: zod
+            .string()
+            .nullish()
+            .describe('The id of the project that this document belongs to'),
+          projectName: zod
+            .string()
+            .nullish()
+            .describe('The name of the project that this document belongs to'),
+          sha: zod
+            .string()
+            .nullish()
+            .describe(
+              'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+            ),
+          subType: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['task', 'snippet'])
                 .describe(
-                  'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+                  'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                 ),
-              createdAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the document was created'),
-              deletedAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the document was deleted'),
-              documentFamilyId: zod
-                .number()
-                .nullish()
-                .describe(
-                  'The id of the document family this document belongs to'
-                ),
-              documentVersionId: zod
-                .number()
-                .describe(
-                  'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-                ),
-              fileType: zod
-                .string()
-                .nullish()
-                .describe('The file type of the document (e.g. pdf, docx)'),
-              id: zod.string().describe('The document id'),
-              name: zod.string().describe('The name of the document'),
-              owner: zod.string().describe('The owner of the document'),
-              projectId: zod
-                .string()
-                .nullish()
-                .describe(
-                  'The id of the project that this document belongs to'
-                ),
-              sha: zod
-                .string()
-                .nullish()
-                .describe(
-                  'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-                ),
-              subType: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .union([
-                      zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
-                            .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                            ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        ),
-                      zod
-                        .object({
-                          type: zod.enum(['snippet']),
-                        })
-                        .describe('A snippet document — reusable markdown'),
-                    ])
-                    .describe(
-                      'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                    ),
-                ])
-                .optional(),
-              updatedAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe(
-                  'The time the document instance \/ document BOM was updated'
-                ),
-              type: zod.enum(['document']),
-            }),
-            zod.object({
-              createdAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the chat was created'),
-              deletedAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the chat was deleted'),
-              id: zod.string().describe('The chat uuid'),
-              isPersistent: zod.boolean(),
-              model: zod
-                .string()
-                .nullish()
-                .describe('The model used to generate the chat'),
-              name: zod.string().describe('The name of the chat'),
-              projectId: zod
-                .string()
-                .nullish()
-                .describe('The project id of the chat'),
-              tokenCount: zod.number().nullish(),
-              updatedAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the chat was last updated'),
-              userId: zod.string().describe('Who the chat belongs to'),
-              type: zod.enum(['chat']),
-            }),
-            zod.object({
-              createdAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the project was created'),
-              deletedAt: zod.iso.datetime({}).nullish(),
-              id: zod.string().describe('The id of the project'),
-              name: zod.string().describe('The name of the project'),
-              parentId: zod
-                .string()
-                .nullish()
-                .describe('The parent project id'),
-              updatedAt: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('The time the project was updated'),
-              userId: zod
-                .string()
-                .describe('The user id of who created the project'),
-              type: zod.enum(['project']),
-            }),
-          ])
+            ])
+            .optional(),
+          updatedAt: zod.iso
+            .datetime({})
+            .nullish()
+            .describe(
+              'The time the document instance \/ document BOM was updated'
+            ),
+        })
+        .and(
+          zod.object({
+            content: zod
+              .object({
+                location: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'object_storage',
+                        'sync_service',
+                        'docx_bom_parts',
+                        'converted_pdf',
+                        'unknown',
+                      ])
+                      .describe(
+                        'Where document content is, or is expected to be, read from.'
+                      ),
+                  ])
+                  .optional(),
+                state: zod
+                  .enum(['unknown', 'pending', 'ready'])
+                  .describe(
+                    'API-visible content lifecycle state derived from current document metadata.'
+                  ),
+              })
+              .describe('API-visible content lifecycle and location metadata.'),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The team this task number is scoped to, for task documents.'
+              ),
+            teamTaskId: zod
+              .number()
+              .nullish()
+              .describe(
+                'The task number assigned within the team, for task documents.'
+              ),
+          })
         )
-        .describe('The items returned from the call'),
+        .describe('Full document metadata plus content lifecycle metadata.'),
+      userAccessLevel: zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+      viewLocation: zod
+        .string()
+        .nullish()
+        .describe("The user's view location if there is one."),
     })
+    .describe('Get document response data with content lifecycle metadata.')
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
@@ -22143,6 +22310,69 @@ export const editProjectV2Response = zod.object({
 });
 
 /**
+ * @summary List the caller's webhooks.
+ */
+export const listWebhooksResponse = zod
+  .object({
+    webhooks: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+            created_by_user_id: zod
+              .string()
+              .describe('User that created the webhook.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Soft-delete timestamp.'),
+            endpoint_url: zod
+              .string()
+              .describe(
+                'Endpoint URL. HTTPS is required outside local environments.'
+              ),
+            filters: zod.array(
+              zod
+                .object({
+                  events: zod
+                    .array(zod.string())
+                    .describe('Event names matched by this filter.'),
+                  ids: zod
+                    .array(zod.string())
+                    .nullish()
+                    .describe(
+                      'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+                    ),
+                })
+                .describe(
+                  'Event and optional entity-id constraints used to match webhook deliveries.'
+                )
+            ),
+            headers: zod.record(zod.string(), zod.string()),
+            id: zod.string(),
+            is_valid: zod
+              .boolean()
+              .describe(
+                'Whether the current endpoint configuration has passed validation.'
+              ),
+            name: zod.string().describe('Display name.'),
+            status: zod
+              .enum(['active', 'paused', 'disabled'])
+              .describe('Webhook lifecycle status.'),
+            updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+            workspace_id: zod.string().describe('Owning workspace id.'),
+          })
+          .describe('Webhook row returned by application APIs.')
+      )
+      .describe(
+        "The caller's webhooks, newest first. Signing secrets are omitted."
+      ),
+  })
+  .describe(
+    'Webhooks visible to the caller across their personal and team workspaces.'
+  );
+
+/**
  * @summary Create a webhook.
  */
 export const createWebhookBody = zod
@@ -22176,6 +22406,57 @@ export const createWebhookBody = zod
       .describe('Scope that owns a newly-created webhook.'),
   })
   .describe('Request to create a webhook.');
+
+/**
+ * @summary Get a webhook.
+ */
+export const getWebhookParams = zod.object({
+  webhook_id: zod.string().describe('Webhook id'),
+});
+
+export const getWebhookResponse = zod
+  .object({
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by_user_id: zod.string().describe('User that created the webhook.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    endpoint_url: zod
+      .string()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
+    filters: zod.array(
+      zod
+        .object({
+          events: zod
+            .array(zod.string())
+            .describe('Event names matched by this filter.'),
+          ids: zod
+            .array(zod.string())
+            .nullish()
+            .describe(
+              'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+            ),
+        })
+        .describe(
+          'Event and optional entity-id constraints used to match webhook deliveries.'
+        )
+    ),
+    headers: zod.record(zod.string(), zod.string()),
+    id: zod.string(),
+    is_valid: zod
+      .boolean()
+      .describe(
+        'Whether the current endpoint configuration has passed validation.'
+      ),
+    name: zod.string().describe('Display name.'),
+    status: zod
+      .enum(['active', 'paused', 'disabled'])
+      .describe('Webhook lifecycle status.'),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+    workspace_id: zod.string().describe('Owning workspace id.'),
+  })
+  .describe('Webhook row returned by application APIs.');
 
 /**
  * @summary Delete a webhook.

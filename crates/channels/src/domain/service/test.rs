@@ -298,6 +298,8 @@ struct FakeMutationRepoState {
     attachments: Vec<MutatedAttachment>,
     patched_content: Option<String>,
     activity_upserts: usize,
+    touched_channel_ids: Vec<Uuid>,
+    fail_channel_touches: bool,
     removed_participants: Vec<String>,
     channel_patches: Vec<(PatchChannelRequest, Option<Uuid>)>,
     created_mentions: Vec<SimpleMention>,
@@ -353,6 +355,8 @@ impl FakeMutationRepo {
                 attachments: vec![],
                 patched_content: None,
                 activity_upserts: 0,
+                touched_channel_ids: vec![],
+                fail_channel_touches: false,
                 removed_participants: vec![],
                 channel_patches: vec![],
                 created_mentions: vec![],
@@ -684,7 +688,12 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(state.message.clone())
     }
 
-    async fn touch_channel_updated_at(&self, _channel_id: Uuid) -> Result<(), Self::Err> {
+    async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state.touched_channel_ids.push(channel_id);
+        if state.fail_channel_touches {
+            anyhow::bail!("channel touch failed");
+        }
         Ok(())
     }
 
@@ -1037,6 +1046,44 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
         "doc-1",
         ReferencedShareItemType::Document
     )));
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
+}
+
+#[tokio::test]
+async fn post_message_ignores_channel_touch_errors() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    repo.state.lock().unwrap().fail_channel_touches = true;
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let result = svc
+        .post_message(
+            sender("macro|sender@test.com"),
+            channel_id,
+            PostMessageRequest {
+                content: "hello world".to_string(),
+                mentions: vec![],
+                thread_id: None,
+                attachments: vec![],
+                nonce: None,
+                notification_policy: Default::default(),
+                triggered_by: None,
+            },
+        )
+        .await;
+
+    assert!(result.is_ok());
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
 }
 
 #[tokio::test]
@@ -1304,6 +1351,155 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
     assert_eq!(nonce.as_deref(), Some("edit-nonce"));
     assert_eq!(recipients.len(), 1);
     assert_eq!(recipients[0].as_ref(), "macro|thread@test.com");
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
+}
+
+#[tokio::test]
+async fn patch_message_attachment_only_touches_channel_once() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_message(
+        sender("macro|sender@test.com"),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            content: None,
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: Some(vec![NewChannelAttachment {
+                entity_type: "document".to_string(),
+                entity_id: "doc-1".to_string(),
+                width: None,
+                height: None,
+            }]),
+            nonce: None,
+            notification_policy: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.touched_channel_ids, vec![channel_id]);
+    assert!(state.patched_content.is_none());
+}
+
+#[tokio::test]
+async fn patch_message_content_and_attachments_touch_channel_once() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_message(
+        sender("macro|sender@test.com"),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            content: Some("edited".to_string()),
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: Some(vec![NewChannelAttachment {
+                entity_type: "document".to_string(),
+                entity_id: "doc-1".to_string(),
+                width: None,
+                height: None,
+            }]),
+            nonce: None,
+            notification_policy: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
+}
+
+#[tokio::test]
+async fn patch_message_without_content_or_attachment_changes_does_not_touch_channel() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_message(
+        sender("macro|sender@test.com"),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            content: None,
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: None,
+            nonce: None,
+            notification_policy: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(repo.state.lock().unwrap().touched_channel_ids.is_empty());
+}
+
+#[tokio::test]
+async fn patch_message_propagates_channel_touch_errors() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    repo.state.lock().unwrap().fail_channel_touches = true;
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let error = svc
+        .patch_message(
+            sender("macro|sender@test.com"),
+            ParticipantRole::Member,
+            channel_id,
+            message_id,
+            PatchMessageRequest {
+                content: Some("edited".to_string()),
+                mentions: None,
+                attachment_ids_to_delete: None,
+                attachments_to_add: None,
+                nonce: None,
+                notification_policy: Default::default(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ChannelMutationErr::Repo(_)));
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
 }
 
 #[tokio::test]
@@ -1428,6 +1624,7 @@ async fn member_can_delete_bot_authored_message() {
     let emitted = events.events.lock().unwrap();
     assert_eq!(emitted.len(), 1);
     assert!(matches!(&emitted[0], ChannelEvent::MessageDeleted { .. }));
+    assert!(repo.state.lock().unwrap().touched_channel_ids.is_empty());
 }
 
 #[tokio::test]
@@ -1869,6 +2066,91 @@ async fn thread_replies_resolve_and_hydrate() {
 }
 
 #[tokio::test]
+async fn add_participants_touches_channel_once_when_any_membership_changes() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.add_participants(
+        sender("macro|sender@test.com"),
+        channel_id,
+        AddParticipantsRequest {
+            participants: HashSet::from([
+                macro_id("macro|recipient@test.com"),
+                macro_id("macro|new@test.com"),
+            ]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.participant_additions, 1);
+    assert_eq!(state.touched_channel_ids, vec![channel_id]);
+}
+
+#[tokio::test]
+async fn add_participants_does_not_touch_channel_when_memberships_are_already_active() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.add_participants(
+        sender("macro|sender@test.com"),
+        channel_id,
+        AddParticipantsRequest {
+            participants: HashSet::from([
+                macro_id("macro|sender@test.com"),
+                macro_id("macro|recipient@test.com"),
+            ]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.participant_additions, 0);
+    assert!(state.touched_channel_ids.is_empty());
+}
+
+#[tokio::test]
+async fn add_participants_propagates_channel_touch_errors() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    repo.state.lock().unwrap().fail_channel_touches = true;
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let error = svc
+        .add_participants(
+            sender("macro|sender@test.com"),
+            channel_id,
+            AddParticipantsRequest {
+                participants: HashSet::from([macro_id("macro|new@test.com")]),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ChannelMutationErr::Repo(_)));
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
+}
+
+#[tokio::test]
 async fn remove_participants_rejects_removing_channel_owner() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
@@ -1916,10 +2198,12 @@ async fn remove_participants_allows_removing_non_owner() {
     .await
     .unwrap();
 
+    let state = repo.state.lock().unwrap();
     assert_eq!(
-        repo.state.lock().unwrap().removed_participants,
+        state.removed_participants,
         vec!["macro|recipient@test.com".to_string()]
     );
+    assert!(state.touched_channel_ids.is_empty());
 }
 
 #[tokio::test]
@@ -2048,6 +2332,23 @@ async fn create_channel_rejects_auto_join_for_non_team_channel() {
 }
 
 #[tokio::test]
+async fn auto_join_by_team_id_does_not_touch_channel_recency() {
+    let channel_id = Uuid::new_v4();
+    let team_id = Uuid::new_v4();
+    let user_id = macro_id("macro|member@test.com");
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.auto_join_by_team_id(&team_id, &user_id).await.unwrap();
+
+    assert!(repo.state.lock().unwrap().touched_channel_ids.is_empty());
+}
+
+#[tokio::test]
 async fn team_membership_operations_delegate_to_repo() {
     let team_id = Uuid::new_v4();
     let channel_ids = vec![Uuid::new_v4(), Uuid::new_v4()];
@@ -2162,7 +2463,11 @@ async fn noop_patch_channel_dispatches_nothing() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     let events = FakeEvents::default();
-    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
 
     svc.patch_channel(
         sender("macro|sender@test.com"),
@@ -2177,6 +2482,9 @@ async fn noop_patch_channel_dispatches_nothing() {
     .unwrap();
 
     assert!(events.events.lock().unwrap().is_empty());
+    let state = repo.state.lock().unwrap();
+    assert!(state.channel_patches.is_empty());
+    assert!(state.touched_channel_ids.is_empty());
 }
 
 #[tokio::test]
@@ -2516,6 +2824,57 @@ async fn patch_message_attachments_event_carries_deltas() {
 }
 
 #[tokio::test]
+async fn join_channel_touches_channel_when_membership_changes() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.join_channel(sender("macro|new@test.com"), channel_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
+    assert!(matches!(
+        events.events.lock().unwrap().as_slice(),
+        [ChannelEvent::ParticipantJoined { channel_id: event_channel_id, .. }]
+            if event_channel_id == &channel_id
+    ));
+}
+
+#[tokio::test]
+async fn join_channel_propagates_channel_touch_errors() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    repo.state.lock().unwrap().fail_channel_touches = true;
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let error = svc
+        .join_channel(sender("macro|new@test.com"), channel_id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ChannelMutationErr::Repo(_)));
+    assert_eq!(
+        repo.state.lock().unwrap().touched_channel_ids,
+        vec![channel_id]
+    );
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn private_channel_join_code_is_reused() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
@@ -2603,6 +2962,7 @@ async fn join_by_code_adds_participant_and_dispatches_event() {
 
     let state = repo.state.lock().unwrap();
     assert_eq!(state.participant_additions, 1);
+    assert_eq!(state.touched_channel_ids, vec![channel_id]);
     assert!(
         state
             .participants
@@ -2634,6 +2994,8 @@ async fn join_by_code_is_idempotent_for_active_participant() {
         .await
         .unwrap();
 
-    assert_eq!(repo.state.lock().unwrap().participant_additions, 0);
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.participant_additions, 0);
+    assert!(state.touched_channel_ids.is_empty());
     assert!(events.events.lock().unwrap().is_empty());
 }

@@ -1,22 +1,16 @@
-import { useCallContextOptional } from '@channel/Call/CallContext';
-import { stopCallRinger } from '@channel/Call/CallStartedNotifier';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { DEV_MODE_ENV, ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import PhoneIcon from '@icon/wide-call.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import XIcon from '@phosphor/x.svg';
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar, Button, cn, Tooltip } from '@ui';
 import {
-  type Accessor,
-  createEffect,
   createMemo,
   createSignal,
   type FlowComponent,
@@ -24,46 +18,9 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { dismissIncomingCall, useVisibleIncomingCalls } from './incoming-calls';
 
 const SLIM_MAX = 4;
-const MAX_RING_DURATION_MS = 30_000;
-
-type IncomingCall = {
-  channelId: string;
-  callId: string;
-  createdAt: string;
-  createdBy: string | null;
-};
-
-type CallStartedPayload = {
-  channel_id?: string;
-  call_id?: string;
-  created_by?: string | null;
-};
-
-type CallEndedPayload = {
-  channel_id?: string;
-  call_id?: string;
-};
-
-type DebugIncomingCallOptions = {
-  channelId?: string;
-  callId?: string;
-  createdAt?: string;
-  createdBy?: string | null;
-};
-
-declare global {
-  interface Window {
-    macroDebugIncomingCall?: (
-      options?: DebugIncomingCallOptions
-    ) => IncomingCall | null;
-    macroClearDebugIncomingCalls?: () => void;
-  }
-}
-
-const [incomingCalls, setIncomingCalls] = createSignal<IncomingCall[]>([]);
-const incomingCallTimeouts = new Map<string, number>();
 
 function displayName(channel: ApiChannelWithLatest | undefined) {
   if (!channel) return 'Channel';
@@ -151,25 +108,6 @@ function formatDuration(startedAt: string | undefined, nowMs: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function safeJsonParse(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
-}
-
-function parsePayload(raw: unknown): CallStartedPayload | null {
-  const obj =
-    typeof raw === 'string'
-      ? safeJsonParse(raw)
-      : typeof raw === 'object'
-        ? raw
-        : null;
-  if (!obj || typeof obj !== 'object') return null;
-  return obj as CallStartedPayload;
-}
-
 type IncomingCallContextMenuProps = {
   callId: string;
   channelId: string;
@@ -197,169 +135,6 @@ const IncomingCallContextMenu: FlowComponent<IncomingCallContextMenuProps> = (
     </ContextMenu>
   );
 };
-
-function clearIncomingCallTimeouts() {
-  for (const timeoutId of incomingCallTimeouts.values()) {
-    window.clearTimeout(timeoutId);
-  }
-  incomingCallTimeouts.clear();
-}
-
-function dismissIncomingCall(callId: string) {
-  stopCallRinger(callId);
-  const timeoutId = incomingCallTimeouts.get(callId);
-  if (timeoutId !== undefined) {
-    window.clearTimeout(timeoutId);
-    incomingCallTimeouts.delete(callId);
-  }
-  setIncomingCalls((calls) => calls.filter((call) => call.callId !== callId));
-}
-
-function addIncomingCall(call: IncomingCall) {
-  const existingTimeoutId = incomingCallTimeouts.get(call.callId);
-  if (existingTimeoutId !== undefined) {
-    window.clearTimeout(existingTimeoutId);
-  }
-  incomingCallTimeouts.set(
-    call.callId,
-    window.setTimeout(
-      () => dismissIncomingCall(call.callId),
-      MAX_RING_DURATION_MS
-    )
-  );
-
-  setIncomingCalls((calls) => {
-    const withoutDuplicate = calls.filter(
-      (candidate) =>
-        candidate.callId !== call.callId &&
-        candidate.channelId !== call.channelId
-    );
-    return [call, ...withoutDuplicate].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  });
-}
-
-function useVisibleIncomingCalls(): Accessor<IncomingCall[]> {
-  const channelsCtx = useChannelsContext();
-  const callCtx = useCallContextOptional();
-
-  return createMemo(() => {
-    const channelsById = channelsCtx.channelsById();
-    const joinedChannelId = callCtx?.isInCall()
-      ? callCtx.activeChannelId()
-      : null;
-    const joinedCallId = callCtx?.isInCall() ? callCtx.activeCallId() : null;
-
-    return incomingCalls()
-      .filter((call) => {
-        if (!channelsById[call.channelId]) return false;
-        return (
-          call.channelId !== joinedChannelId && call.callId !== joinedCallId
-        );
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  });
-}
-
-export function useIncomingCallWidgetVisible() {
-  const visibleIncomingCalls = useVisibleIncomingCalls();
-  return createMemo(() => visibleIncomingCalls().length > 0);
-}
-
-export function IncomingCallWidgetEvents() {
-  const callCtx = useCallContextOptional();
-  const channelsCtx = useChannelsContext();
-  const userId = useUserId();
-
-  createEffect(() => {
-    if (!DEV_MODE_ENV) return;
-
-    window.macroDebugIncomingCall = (options = {}) => {
-      const channelsById = channelsCtx.channelsById();
-      const channelId = options.channelId ?? Object.keys(channelsById)[0];
-
-      if (!channelId || !channelsById[channelId]) {
-        console.warn(
-          '[incoming-call-widget] No cached channel found for debug call',
-          options
-        );
-        return null;
-      }
-
-      const call = {
-        channelId,
-        callId:
-          options.callId ??
-          `debug-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-        createdAt: options.createdAt ?? new Date().toISOString(),
-        createdBy: options.createdBy ?? 'debug',
-      };
-      addIncomingCall(call);
-      return call;
-    };
-
-    window.macroClearDebugIncomingCalls = () => {
-      clearIncomingCallTimeouts();
-      setIncomingCalls([]);
-    };
-
-    onCleanup(() => {
-      delete window.macroDebugIncomingCall;
-      delete window.macroClearDebugIncomingCalls;
-    });
-  });
-
-  onCleanup(() => {
-    clearIncomingCallTimeouts();
-    setIncomingCalls([]);
-  });
-
-  createEffect(() => {
-    const activeCallId = callCtx?.activeCallId();
-    if (activeCallId) dismissIncomingCall(activeCallId);
-  });
-
-  createConnectionWebsocketEffect((data) => {
-    if (!ENABLE_CALLS()) return;
-
-    const payload = parsePayload(data.data);
-    if (!payload) return;
-
-    if (data.type === 'call_ended') {
-      const { channel_id: channelId, call_id: callId } =
-        payload as CallEndedPayload;
-      if (!channelId || !callId) return;
-
-      dismissIncomingCall(callId);
-      return;
-    }
-
-    if (data.type !== 'call_started') return;
-
-    const {
-      channel_id: channelId,
-      call_id: callId,
-      created_by: createdBy,
-    } = payload;
-    if (!channelId || !callId) return;
-    if (callCtx?.activeCallId() === callId) return;
-    if (createdBy && createdBy === userId()) return;
-
-    addIncomingCall({
-      channelId,
-      callId,
-      createdAt: new Date().toISOString(),
-      createdBy: createdBy ?? null,
-    });
-  });
-
-  return null;
-}
 
 export function SidebarActiveCallWidget(props: {
   sidebarState: SidebarState;

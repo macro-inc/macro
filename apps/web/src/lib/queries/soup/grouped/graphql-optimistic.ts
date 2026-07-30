@@ -125,7 +125,6 @@ export async function buildOptimisticGroupedPropertyUpdates(
   );
   const { removed, added } = changes;
   const updates: OptimisticUpdate[] = [];
-  const itemEntityKey = `GraphqlSoupItem:${args.entityId}`;
   for (const pages of views.values()) {
     const sourceGroupKeys = removed.length > 0 ? removed : args.oldGroupKeys;
     const sourcePages = pages.filter((page) =>
@@ -136,6 +135,19 @@ export async function buildOptimisticGroupedPropertyUpdates(
       )
     );
     if (sourcePages.length === 0) continue;
+
+    const sourceItems = sourcePages.flatMap((page) =>
+      page.bins
+        .filter((bin) => sourceGroupKeys.includes(bin.key))
+        .flatMap((bin) => bin.items.filter((item) => item.id === args.entityId))
+    );
+    const entity = sourceItems[0];
+    if (
+      !entity ||
+      sourceItems.some((item) => item.__typename !== entity.__typename)
+    ) {
+      continue;
+    }
 
     const destinationPages = pages.filter(
       (page) =>
@@ -158,7 +170,7 @@ export async function buildOptimisticGroupedPropertyUpdates(
           .field('bins')
           .item('key', key)
           .field('items');
-        updates.push(update(items, remove(itemEntityKey)));
+        updates.push(update(items, remove(entity)));
       }
     }
     for (const page of destinationPages) {
@@ -171,7 +183,7 @@ export async function buildOptimisticGroupedPropertyUpdates(
           .field('bins')
           .item('key', key)
           .field('items');
-        updates.push(update(items, prependUnique(itemEntityKey)));
+        updates.push(update(items, prependUnique(entity)));
       }
     }
   }

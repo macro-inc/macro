@@ -1,13 +1,13 @@
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { AFTER_SETUP_ROUTE, DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { createOnboardingCheckoutSession } from '@app/features/onboarding/use-onboarding-checkout';
 import type { PaidPlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useUserInfoQuery } from '@queries/auth/user-info';
+import type { UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useCompleteOnboardingMutation } from '@queries/onboarding';
-import { stripeServiceClient } from '@service-stripe/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createEffect, createSignal } from 'solid-js';
 import { FLOW_NEXT_STORAGE_KEY, FLOW_STEP_STORAGE_KEY } from './shared';
@@ -15,8 +15,8 @@ import { FLOW_NEXT_STORAGE_KEY, FLOW_STEP_STORAGE_KEY } from './shared';
 /**
  * The "leave onboarding" workflow: mark onboarding + the legacy tutorial
  * complete, then land in the app (the preserved `?next=` deep link, or
- * home). Imports never block the exit; auto-import keeps landing rows
- * server-side.
+ * the Getting Started checklist). Imports never block the exit;
+ * auto-import keeps landing rows server-side.
  */
 export function createFlowFinish(options?: {
   /** Extra analytics context stamped onto `onboarding_v4_completed`. */
@@ -27,7 +27,6 @@ export function createFlowFinish(options?: {
 }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const userInfoQuery = useUserInfoQuery();
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
   const analytics = useAnalytics();
@@ -43,11 +42,14 @@ export function createFlowFinish(options?: {
     });
   };
 
-  // Same-app relative paths only.
+  // Same-app relative paths only. A `next` at the default route is not a
+  // real deep link — fall through to the Getting Started checklist.
   const sanitizeNext = (value: unknown): string | undefined =>
     typeof value === 'string' &&
     value.startsWith('/') &&
-    !value.startsWith('//')
+    !value.startsWith('//') &&
+    !value.includes('\\') &&
+    !value.startsWith(DEFAULT_ROUTE)
       ? value
       : undefined;
 
@@ -61,7 +63,7 @@ export function createFlowFinish(options?: {
   const afterTarget = () =>
     sanitizeNext(searchParams.next) ??
     sanitizeNext(sessionStorage.getItem(FLOW_NEXT_STORAGE_KEY)) ??
-    '/';
+    AFTER_SETUP_ROUTE;
 
   /**
    * Mark the flow complete and verify it stuck: NewOnboardingRedirect keys
@@ -82,7 +84,13 @@ export function createFlowFinish(options?: {
     await queryClient
       .refetchQueries({ queryKey: authKeys.userInfo.queryKey })
       .catch(() => {});
-    if (userInfoQuery.data?.tutorialComplete !== true) {
+    // Read the cache, not the query observer: observer stores flush on a
+    // scheduled task, so right after the await they still hold the
+    // pre-PATCH value and the guard would fail on a fresh success.
+    const userInfo = queryClient.getQueryData<UserInfoData>(
+      authKeys.userInfo.queryKey
+    );
+    if (userInfo?.tutorialComplete !== true) {
       toast.failure("Couldn't finish setup — please try again");
       return false;
     }
@@ -106,28 +114,33 @@ export function createFlowFinish(options?: {
   };
 
   /**
-   * Finish on a paid tier: complete the flow FIRST (the checkout round-trip
-   * must not bounce back into onboarding), then hand the page to Stripe.
+   * Hand the page to Stripe WITHOUT completing the flow: the onboarding
+   * redirect plus the persisted step bring both checkout legs (success and
+   * cancel) back to the plan step, which finishes only once payment is
+   * confirmed. On failure the user stays on the plan step and can retry or
+   * pick free.
    */
-  const finishPremium = async (tier: PaidPlanTier) => {
+  const startPremiumCheckout = async (tier: PaidPlanTier) => {
     if (finishing()) return;
     setFinishing(true);
     try {
-      if (!(await completeFlow())) return;
-      trackCompleted('premium', false);
-      try {
-        // /welcome bounces authenticated users into the app.
-        const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
-        const checkoutUrl = await stripeServiceClient.createCheckoutSession({
-          tier,
-          successUrl,
-        });
-        if (!checkoutUrl) throw new Error('No checkout URL returned');
-        window.location.href = checkoutUrl;
-      } catch {
-        toast.failure(
-          "Couldn't start checkout — you can upgrade anytime from settings"
-        );
+      const { checkoutUrl } = await createOnboardingCheckoutSession(tier);
+      // Deliberately leave `finishing` set: the page is navigating away,
+      // and re-enabling the buttons mid-unload invites a double checkout.
+      window.location.href = checkoutUrl;
+    } catch {
+      toast.failure("Couldn't start checkout — please try again");
+      setFinishing(false);
+    }
+  };
+
+  /** Finish after checkout confirmed payment (or an existing license). */
+  const finishPremium = async () => {
+    if (finishing()) return;
+    setFinishing(true);
+    try {
+      if (await completeFlow()) {
+        trackCompleted('premium', false);
         navigate(afterTarget(), { replace: true });
       }
     } finally {
@@ -135,5 +148,11 @@ export function createFlowFinish(options?: {
     }
   };
 
-  return { finishing, finishFree, finishPremium, afterTarget };
+  return {
+    finishing,
+    finishFree,
+    startPremiumCheckout,
+    finishPremium,
+    afterTarget,
+  };
 }

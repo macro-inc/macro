@@ -2,12 +2,13 @@
 
 use super::properties_pg_repo::PropertiesPgRepo;
 use crate::PropertiesServiceImpl;
-use crate::domain::model::{EditReceipt, canonical_entity_type};
+use crate::domain::model::{EditReceipt, EntityPropertyMutationSnapshot, canonical_entity_type};
 use crate::domain::ports::{MockNotificationService, MockPermissionService, PropertiesRepo};
 use crate::domain::service::PropertiesService;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
+use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use system_properties::SystemPropertyKey;
@@ -747,6 +748,26 @@ async fn read_select_value(
     .expect("read value")
 }
 
+fn assert_option_mutation(
+    mutation: &EntityPropertyMutationSnapshot,
+    entity_id: &str,
+    property_definition_id: Uuid,
+    option_ids: Vec<Uuid>,
+) {
+    assert_ne!(mutation.property.id, Uuid::nil());
+    assert_eq!(mutation.property.entity_id, entity_id);
+    assert_eq!(mutation.property.entity_type, EntityType::Document);
+    assert_eq!(
+        mutation.property.property_definition_id,
+        property_definition_id
+    );
+    assert!(mutation.property.created_at <= mutation.property.updated_at);
+    assert_eq!(
+        mutation.value,
+        Some(PropertyValue::SelectOption(option_ids))
+    );
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties_seed"))
@@ -758,15 +779,29 @@ async fn add_option_attaches_appends_and_dedupes(pool: Pool<Postgres>) -> anyhow
     let opt_a = macro_uuid::generate_uuid_v7();
     let opt_b = macro_uuid::generate_uuid_v7();
 
-    // First add attaches the property and creates the value.
-    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
+    // First add attaches the property and returns its complete persisted state.
+    let first = repo
+        .add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
         .await?;
-    // Second add appends to the current stored value.
-    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
+    assert_option_mutation(&first, entity_id, def_id, vec![opt_a]);
+
+    // Second add appends to the current stored value while preserving row identity.
+    let second = repo
+        .add_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
         .await?;
-    // Re-adding a present option is a no-op.
-    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
+    assert_option_mutation(&second, entity_id, def_id, vec![opt_a, opt_b]);
+    assert_eq!(second.property.id, first.property.id);
+    assert_eq!(second.property.created_at, first.property.created_at);
+    assert!(second.property.updated_at >= first.property.updated_at);
+
+    // Re-adding a present option is deduped in both storage and the snapshot.
+    let duplicate = repo
+        .add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
         .await?;
+    assert_option_mutation(&duplicate, entity_id, def_id, vec![opt_a, opt_b]);
+    assert_eq!(duplicate.property.id, first.property.id);
+    assert_eq!(duplicate.property.created_at, first.property.created_at);
+    assert!(duplicate.property.updated_at >= second.property.updated_at);
 
     assert_eq!(
         read_select_value(&pool, entity_id, def_id).await,
@@ -788,33 +823,63 @@ async fn remove_option_strips_and_is_tolerant(pool: Pool<Postgres>) -> anyhow::R
     let opt_b = macro_uuid::generate_uuid_v7();
     let opt_c = macro_uuid::generate_uuid_v7();
 
-    for opt in [opt_a, opt_b, opt_c] {
-        repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt)
-            .await?;
-    }
-
-    // Remove a middle option.
-    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
+    let attached = repo
+        .add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
         .await?;
-    assert_eq!(
-        read_select_value(&pool, entity_id, def_id).await,
-        serde_json::json!({"type": "SelectOption", "value": [opt_a, opt_c]})
-    );
+    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
+        .await?;
+    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_c)
+        .await?;
 
-    // Removing an absent option is a no-op.
+    // Remove a middle option and return the full remaining value.
+    let removed_middle = repo
+        .remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
+        .await?
+        .expect("present option should produce a mutation snapshot");
+    assert_option_mutation(&removed_middle, entity_id, def_id, vec![opt_a, opt_c]);
+    assert_eq!(removed_middle.property.id, attached.property.id);
+    assert_eq!(
+        removed_middle.property.created_at,
+        attached.property.created_at
+    );
+    assert!(removed_middle.property.updated_at >= attached.property.updated_at);
+
+    // Removing an absent option reports no mutation and leaves the value unchanged.
     let absent = macro_uuid::generate_uuid_v7();
-    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, absent)
+    let absent_result = repo
+        .remove_entity_property_option(entity_id, EntityType::Document, def_id, absent)
         .await?;
+    assert!(absent_result.is_none());
     assert_eq!(
         read_select_value(&pool, entity_id, def_id).await,
         serde_json::json!({"type": "SelectOption", "value": [opt_a, opt_c]})
     );
+
+    // Removing from an unattached property is also represented as no mutation.
+    let unattached_result = repo
+        .remove_entity_property_option(
+            "entity-tags-remove-unattached",
+            EntityType::Document,
+            def_id,
+            absent,
+        )
+        .await?;
+    assert!(unattached_result.is_none());
 
     // Removing the rest leaves an empty array, not NULL.
-    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
-        .await?;
-    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_c)
-        .await?;
+    let removed_a = repo
+        .remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
+        .await?
+        .expect("present option should produce a mutation snapshot");
+    assert_option_mutation(&removed_a, entity_id, def_id, vec![opt_c]);
+    let removed_c = repo
+        .remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_c)
+        .await?
+        .expect("present option should produce a mutation snapshot");
+    assert_option_mutation(&removed_c, entity_id, def_id, Vec::new());
+    assert_eq!(removed_c.property.id, attached.property.id);
+    assert_eq!(removed_c.property.created_at, attached.property.created_at);
+    assert!(removed_c.property.updated_at >= removed_a.property.updated_at);
     assert_eq!(
         read_select_value(&pool, entity_id, def_id).await,
         serde_json::json!({"type": "SelectOption", "value": []})
@@ -872,6 +937,11 @@ async fn bulk_update_options_composes_and_returns_finals(
     assert_eq!(first.len(), 1);
     assert_eq!(first[0].property_definition_id, def_id);
     assert_eq!(first[0].option_ids, vec![opt_a, opt_b]);
+    let first_mutation = first[0]
+        .mutation
+        .as_ref()
+        .expect("attached property should carry a mutation snapshot");
+    assert_option_mutation(first_mutation, entity_id, def_id, vec![opt_a, opt_b]);
 
     // Second bulk update removes A and adds C, composing with the stored value.
     let second = repo
@@ -882,6 +952,17 @@ async fn bulk_update_options_composes_and_returns_finals(
         )
         .await?;
     assert_eq!(second[0].option_ids, vec![opt_b, opt_c]);
+    let second_mutation = second[0]
+        .mutation
+        .as_ref()
+        .expect("updated property should carry a mutation snapshot");
+    assert_option_mutation(second_mutation, entity_id, def_id, vec![opt_b, opt_c]);
+    assert_eq!(second_mutation.property.id, first_mutation.property.id);
+    assert_eq!(
+        second_mutation.property.created_at,
+        first_mutation.property.created_at
+    );
+    assert!(second_mutation.property.updated_at >= first_mutation.property.updated_at);
     assert_eq!(
         read_select_value(&pool, entity_id, def_id).await,
         serde_json::json!({"type": "SelectOption", "value": [opt_b, opt_c]})
@@ -1023,6 +1104,10 @@ async fn bulk_update_options_removal_only_on_unattached_is_noop(
         .await?;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].option_ids, Vec::<Uuid>::new());
+    assert!(
+        result[0].mutation.is_none(),
+        "unattached removal-only update must not report a mutation"
+    );
 
     let row_count: i64 = sqlx::query_scalar(
         r#"

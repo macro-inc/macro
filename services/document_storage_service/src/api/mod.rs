@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, PropertiesHandlerState};
 use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
@@ -9,7 +9,6 @@ use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
-use properties_service::PropertiesHandlerState;
 use search_service::SearchHandlerState;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -20,7 +19,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Utilities
 pub(crate) mod context;
 mod saved_views;
-mod util;
+pub(crate) mod util;
 
 // Middleware
 mod middleware;
@@ -76,6 +75,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         &state.config.port
     );
     axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
 }
@@ -182,7 +182,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/properties",
-            properties_service::properties_router()
+            properties::inbound::axum_router::router()
                 .with_state(PropertiesHandlerState::from_ref(&state)),
         )
         .nest(

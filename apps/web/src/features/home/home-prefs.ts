@@ -1,10 +1,11 @@
 import { useUserId } from '@core/context/user';
+import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import { createEffect, createSignal, on } from 'solid-js';
 
 /** Dismissible home surfaces. Dismissals persist in localStorage. */
 export type HomeCard = 'examples' | 'setup';
 
-const STORAGE_KEY = 'macro:home:dismissed';
+const storage = createUserScopedStorage('macro:home:dismissed');
 const HOME_CARDS: readonly HomeCard[] = ['examples', 'setup'];
 
 export function parseDismissedCards(raw: string | null): HomeCard[] {
@@ -21,27 +22,14 @@ export function parseDismissedCards(raw: string | null): HomeCard[] {
   }
 }
 
-function storageKey(userId: string): string {
-  return `${STORAGE_KEY}:${encodeURIComponent(userId)}`;
-}
-
 function load(userId: string | undefined): HomeCard[] {
   if (!userId) return [];
-  if (typeof localStorage === 'undefined') return [];
-  try {
-    return parseDismissedCards(localStorage.getItem(storageKey(userId)));
-  } catch {
-    return [];
-  }
+  return parseDismissedCards(storage.read(userId));
 }
 
 function persist(userId: string | undefined, cards: Set<HomeCard>): void {
-  if (!userId || typeof localStorage === 'undefined') return;
-  try {
-    localStorage.setItem(storageKey(userId), JSON.stringify([...cards]));
-  } catch {
-    // Storage may be unavailable or full. The in-memory preference still works.
-  }
+  if (!userId) return;
+  storage.write(userId, JSON.stringify([...cards]));
 }
 
 export type HomePreferences = ReturnType<typeof createHomePreferences>;

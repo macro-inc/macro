@@ -69,10 +69,16 @@ export type Selection<T> = SelectionState & {
 /** A generated selection whose current value is a list. */
 export type ListSelection<TItem extends object> = Selection<readonly TItem[]>;
 
+/** The only fields used to identify a normalized GraphQL entity. */
+export type NormalizedEntityIdentity = {
+  __typename: string;
+  id: string;
+};
+
 /** An idempotent change to a normalized-link list. */
 export type LinkDiff =
-  | { kind: 'remove'; entityKey: string }
-  | { kind: 'prependUnique'; entityKey: string };
+  | { kind: 'remove'; entity: NormalizedEntityIdentity }
+  | { kind: 'prependUnique'; entity: NormalizedEntityIdentity };
 
 /** Opaque serializable cache update produced only by {@link update}. */
 export type OptimisticUpdate = OptimisticLinkPatchWire & {
@@ -200,14 +206,19 @@ export function select<TData, TVariables extends AnyVariables>(
   });
 }
 
+/** Construct the wire key for one normalized `id: ID!` GraphQL entity. */
+export function normalizedEntityKey(entity: NormalizedEntityIdentity): string {
+  return `${entity.__typename}:${entity.id}`;
+}
+
 /** Removes every occurrence of one normalized entity from a selected list. */
-export function remove(entityKey: string): LinkDiff {
-  return { kind: 'remove', entityKey };
+export function remove(entity: NormalizedEntityIdentity): LinkDiff {
+  return { kind: 'remove', entity };
 }
 
 /** Uniquely prepends one normalized entity to a selected list. */
-export function prependUnique(entityKey: string): LinkDiff {
-  return { kind: 'prependUnique', entityKey };
+export function prependUnique(entity: NormalizedEntityIdentity): LinkDiff {
+  return { kind: 'prependUnique', entity };
 }
 
 /** Compiles a generated graph selection and list diff into a durable update. */
@@ -220,7 +231,10 @@ export function update<TItem extends object>(
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
-    operation,
+    operation: {
+      kind: operation.kind,
+      entityKey: normalizedEntityKey(operation.entity),
+    },
   } as OptimisticUpdate;
 }
 

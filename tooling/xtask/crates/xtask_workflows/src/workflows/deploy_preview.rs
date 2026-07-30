@@ -74,8 +74,6 @@ fn build() -> Step<Run> {
     Step::new("Build")
         .run("just build-dev")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("VITE_DD_WEB_APP_TOKEN", vars::DD_WEB_APP_TOKEN))
-        .add_env(Env::new("VITE_DD_HASH", "${{ github.sha }}"))
         .add_env(Env::new(
             "VITE_SEGMENT_WRITE_KEY",
             vars::SEGMENT_WRITE_KEY_PRODUCTION,

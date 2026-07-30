@@ -38,4 +38,10 @@ pub struct User {
     pub username: Option<String>,
     /// If the user's email is verified
     pub verified: bool,
+    /// Given name, set by the identity provider reconcile lambda on SSO signup
+    pub first_name: Option<String>,
+    /// Family name, set by the identity provider reconcile lambda on SSO signup
+    pub last_name: Option<String>,
+    /// Display name, set by the identity provider reconcile lambda on SSO signup
+    pub full_name: Option<String>,
 }

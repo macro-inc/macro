@@ -5,13 +5,14 @@
 //! [`TopicEvent`](domain::models::TopicEvent) enums, the
 //! [`MacroEvent`](domain::models::MacroEvent) event abstraction, the inbound
 //! [`MacroEventBroker`](domain::ports::MacroEventBroker) API, the outbound
-//! [`EventPublisher`](domain::ports::EventPublisher) port, the producing
+//! [`EventPublisher`](domain::ports::EventPublisher) and
+//! [`Spawner`](domain::ports::Spawner) ports, the producing
 //! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService), and the
 //! typed [`MacroEventConsumerService`](domain::service::MacroEventConsumerService),
 //! which receives messages through the [`EventConsumer`](domain::ports::EventConsumer) port.
 //! Kafka topic definitions live in the `macro_event_topics` crate. Shared Kafka
 //! producer and consumer transports live in `kafka_util`, while the [`outbound`]
-//! layer adapts its producer to [`EventPublisher`](domain::ports::EventPublisher).
+//! layer provides Kafka and Tokio adapters for the domain ports.
 
 /// Domain layer: models, ports, and service.
 pub mod domain;
@@ -23,7 +24,7 @@ pub use macro_event_topics::{
 };
 
 pub use domain::ports::{
-    EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection, MessageParts,
+    EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection, MessageParts, Spawner,
 };
 pub use domain::service::{
     MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
@@ -31,6 +32,7 @@ pub use domain::service::{
 #[cfg(feature = "outbound")]
 pub use outbound::{
     kafka_event_consumer::KafkaConsumerAdapter, kafka_event_publisher::KafkaEventPublisher,
+    spawner::GlobalSpawner,
 };
 
 /// Outbound adapters for the macro event broker's required ports.

@@ -2,8 +2,9 @@
 //! host (wasm module in a SharedWorker / dedicated worker).
 //!
 //! One stable IndexedDB database per cache scope. Disposable normalized
-//! records are versioned through metadata, while queued mutations and their
-//! optimistic layers remain discoverable across record-schema changes.
+//! records are versioned by schema compatibility epoch and cache format,
+//! while queued mutations and their optimistic layers remain discoverable
+//! across incompatible record-schema changes.
 //! Postcard payloads are stored in indexable record envelopes whose `value`
 //! property is a `Uint8Array`.
 //!

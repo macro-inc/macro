@@ -6,5 +6,6 @@ export const authKeys = createQueryKeys('auth', {
   userName: (userId: string) => ({
     queryKey: [userId],
   }),
+  userNameSelf: null,
   userQuota: null,
 });

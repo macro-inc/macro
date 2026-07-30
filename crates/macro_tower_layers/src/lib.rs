@@ -12,6 +12,7 @@ use std::{
 };
 
 use http::{HeaderValue, Request, Response};
+use opentelemetry::trace::TraceContextExt;
 use tokio::time::MissedTickBehavior;
 use tower::{
     ServiceBuilder,
@@ -24,6 +25,27 @@ use tower_http::{
     trace::{MakeSpan, OnFailure, OnResponse, TraceLayer},
 };
 use tracing::Span;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+/// Creates a safe HTTP request span and adopts an incoming W3C trace context.
+///
+/// A valid `traceparent` makes the request span a child of that remote span.
+/// The global text-map propagator is registered by `macro_entrypoint`.
+#[derive(Debug, Clone, Default)]
+pub struct MakeSpanWithRemoteParent;
+
+impl<B> MakeSpan<B> for MakeSpanWithRemoteParent {
+    fn make_span(&mut self, request: &Request<B>) -> Span {
+        let span = MakeHttpRequestSpan.make_span(request);
+        let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.extract(&opentelemetry_http::HeaderExtractor(request.headers()))
+        });
+        if parent.span().span_context().is_valid() {
+            let _ = span.set_parent(parent);
+        }
+        span
+    }
+}
 
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
@@ -56,9 +78,12 @@ impl CustomOnResponse {
     }
 }
 
+const HTTP_REQUEST_SPAN_TARGET: &str = "macro_http_request";
+
 /// Creates INFO-level HTTP server spans with safe OpenTelemetry attributes.
 ///
-/// Request and response headers are intentionally excluded.
+/// Request and response headers are intentionally excluded. Add
+/// `macro_http_request=info` to `RUST_LOG` when log events should include these span fields.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MakeHttpRequestSpan;
 
@@ -71,6 +96,7 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             .unwrap_or_default();
 
         tracing::info_span!(
+            target: HTTP_REQUEST_SPAN_TARGET,
             "http.request",
             otel.kind = "server",
             "http.request.method" = %request.method(),
@@ -139,7 +165,7 @@ type ServiceBuilderAlias = ServiceBuilder<
         Stack<
             TraceLayer<
                 SharedClassifier<ServerErrorsAsFailures>,
-                MakeHttpRequestSpan,
+                MakeSpanWithRemoteParent,
                 (),
                 CustomOnResponse,
                 tower_http::trace::DefaultOnBodyChunk,
@@ -196,7 +222,7 @@ impl MacroRequestIdAndTracingLayer {
             .set_x_request_id(RequestIdBuilder::default())
             .layer(
                 TraceLayer::new_for_http()
-                    .make_span_with(MakeHttpRequestSpan)
+                    .make_span_with(MakeSpanWithRemoteParent)
                     .on_request(())
                     .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
                     .on_failure(CustomOnFailure),

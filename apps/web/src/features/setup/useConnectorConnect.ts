@@ -8,12 +8,13 @@ import type { StartAuthResponse } from '@service-cognition/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 
 /**
- * The connect-a-tool workflow shared by the setup surfaces: add the MCP
- * server if needed, then run OAuth in a popup. The popup opens synchronously,
- * while the click's transient activation is still live — opening after the
- * awaited mutations gets rejected by strict popup blockers. The OAuth URL is
- * assigned once it's known; severing `opener` keeps the provider page from
- * reaching back into the app (reverse tabnabbing).
+ * The connect-a-tool workflow used by onboarding's connector steps: add the
+ * MCP server if needed, then run OAuth in a popup. The popup opens
+ * synchronously, while the click's transient activation is still live —
+ * opening after the awaited mutations gets rejected by strict popup
+ * blockers. The OAuth URL is assigned once it's known; severing `opener`
+ * keeps the provider page from reaching back into the app (reverse
+ * tabnabbing).
  *
  * Completion is observed, not returned: the server reconciles the moment
  * OAuth completes, and the caller's polled servers query flips the state.

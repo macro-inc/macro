@@ -21,9 +21,11 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroDocumentsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroSoupRealtimeTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroProjectsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroPropertiesTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroTeamsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroChannelsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroBotsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroCallsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroWebhooksTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroMentionsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroChatsTopic::TOPIC_STR));

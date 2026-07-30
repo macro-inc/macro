@@ -27,7 +27,7 @@ use macro_user_id::{
     email::{Email, ReadEmailParts},
     user_id::MacroUserIdStr,
 };
-use model::authentication::webhooks::FusionAuthUserWebhook;
+use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
 use model_entity::EntityType;
 use std::collections::HashSet;
 use teams::domain::team_repo::TeamService;
@@ -38,6 +38,39 @@ const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
     format!("Macro Support x {}", email.local_part())
 }
+
+/// Name the identity provider gave us, as (first, last).
+///
+/// Google SSO fills firstName/lastName via the IdP reconcile lambda; fall back to
+/// splitting fullName at the first space for providers that only send a display
+/// name. Passwordless signups have none of these and yield (None, None).
+fn identity_provider_name(user: &FusionAuthWebhookUser) -> (Option<String>, Option<String>) {
+    fn trimmed(value: &Option<String>) -> Option<String> {
+        value
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
+    let first_name = trimmed(&user.first_name);
+    let last_name = trimmed(&user.last_name);
+    if first_name.is_some() || last_name.is_some() {
+        return (first_name, last_name);
+    }
+
+    match trimmed(&user.full_name) {
+        Some(full_name) => match full_name.split_once(' ') {
+            Some((first, last)) => (
+                Some(first.to_string()),
+                Some(last.trim().to_string()).filter(|last| !last.is_empty()),
+            ),
+            None => (Some(full_name), None),
+        },
+        None => (None, None),
+    }
+}
+
 /// FusionAuth create user webhook
 #[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
@@ -116,6 +149,7 @@ async fn create_user_webhook_complete(
 async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> anyhow::Result<()> {
     let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
+    let (first_name, last_name) = identity_provider_name(&req.event.user);
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
 
@@ -185,12 +219,30 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // ("macro|{email}") the app identifies with. Fire-and-forget.
     tokio::spawn({
         let analytics_client = ctx.analytics_client.clone();
+        let db = ctx.db.clone();
+        let fusionauth_user_id = fusionauth_user_id.clone();
         let user_id = user_id.clone();
         let email = email.clone();
         let ip_address = ip_address.clone();
         let verified = req.event.user.verified;
         let has_organization = organization_id.is_some();
         async move {
+            // Seed the profile with the name the identity provider gave us (Google
+            // SSO). Keyed on the FusionAuth id, which is macro_user.id — `user_id`
+            // here is the "macro|{email}" User profile id.
+            if first_name.is_some() || last_name.is_some() {
+                let _ = macro_db_client::user::update_user_name::update_user_name(
+                    &db,
+                    &fusionauth_user_id,
+                    first_name,
+                    last_name,
+                )
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "unable to set user name from identity provider"),
+                );
+            }
+
             let _ = analytics_client
                 .track_posthog(
                     &user_id,
@@ -259,33 +311,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Seed the "Macro how to guide" document and pin it to the new user's
-    // sidebar favorites. Fire-and-forget with retries — signup must not fail
-    // if document storage is temporarily unavailable.
-    tokio::spawn({
-        let document_storage_service_client = ctx.document_storage_service_client.clone();
-        let user_id = user_id.clone();
-        async move {
-            const MAX_ATTEMPTS: u32 = 3;
-            const RETRY_DELAY_SECS: u64 = 2;
-            for attempt in 1..=MAX_ATTEMPTS {
-                match document_storage_service_client
-                    .initialize_how_to_guide(&user_id)
-                    .await
-                {
-                    Ok(()) => return,
-                    Err(e) if attempt < MAX_ATTEMPTS => {
-                        tracing::warn!(error=?e, attempt, "failed to initialize how to guide, retrying");
-                        tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
-                    }
-                    Err(e) => {
-                        tracing::error!(error=?e, "failed to initialize how to guide after {MAX_ATTEMPTS} attempts");
-                    }
-                }
-            }
-        }
-    });
-
     // Automatically add the new user to a team whose auto-join domain
     // matches their email domain. Fire-and-forget: a failed auto-join must
     // never block user creation.
@@ -312,16 +337,23 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Create a private support channel connecting the new user with the
-    // Macro support team. Fire-and-forget: a failed channel creation must
-    // never block user creation.
+    // Seed the starter documents (the "Macro how to guide" and the starter
+    // tasks it links to, with the guide pinned to the new user's sidebar
+    // favorites), then create a private support channel connecting the new
+    // user with the Macro support team and post the welcome script — which
+    // mentions the guide, so seeding runs first. Fire-and-forget: neither a
+    // failed seeding (retried, then skipped) nor a failed channel creation
+    // may block user creation.
     tokio::spawn({
+        let document_storage_service_client = ctx.document_storage_service_client.clone();
         let channel_service = ctx.channel_service.clone();
         let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
         let email = email.clone();
         let support_channel_name = support_channel_name.clone();
         async move {
+            initialize_starter_docs_with_retries(&document_storage_service_client, &user_id).await;
+
             let owner_id = match MacroUserIdStr::try_from(user_id) {
                 Ok(owner_id) => owner_id,
                 Err(e) => {
@@ -371,13 +403,9 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
 
-            let _ = post_support_channel_welcome(
-                channel_service.as_ref(),
-                &channel.id,
-                owner_id,
-            )
-            .await
-            .inspect_err(|e| {
+            let _ = post_support_channel_welcome(channel_service.as_ref(), &channel.id, owner_id)
+                .await
+                .inspect_err(|e| {
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");
             });
         }
@@ -393,6 +421,27 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
 
     Ok(())
+}
+
+/// Seed the starter documents with retries.
+async fn initialize_starter_docs_with_retries(
+    client: &document_storage_service_client::DocumentStorageServiceClient,
+    user_id: &str,
+) {
+    const MAX_ATTEMPTS: u32 = 3;
+    const RETRY_DELAY_SECS: u64 = 2;
+    for attempt in 1..=MAX_ATTEMPTS {
+        match client.initialize_starter_docs(user_id).await {
+            Ok(_) => return,
+            Err(e) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+            }
+            Err(e) => {
+                tracing::error!(error=?e, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
+            }
+        }
+    }
 }
 
 /// Initializes the experiments for a provided user

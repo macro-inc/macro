@@ -1,3 +1,6 @@
+/// Kafka event contracts for call lifecycle events.
+pub mod events;
+
 /// Domain models for calls.
 pub mod models;
 

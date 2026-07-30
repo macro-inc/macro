@@ -17,7 +17,6 @@ secret!(CACHIX_AUTH_TOKEN);
 secret!(CLOUDFLARE_API_TOKEN);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
-secret!(DD_WEB_APP_TOKEN);
 secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
 secret!(FLY_API_TOKEN);
@@ -76,6 +75,11 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
+
+/// Namespace cache tag for the sync-service worker deploy. Its own pool: this
+/// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
+/// volumes ([`CI_CACHE_TAG`]) would serve it anyway.
+pub const SYNC_SERVICE_CACHE_TAG: &str = "sync-service-deploy";
 
 /// Bun's global package cache. Mounted explicitly because Bun is supplied by
 /// the Nix dev shell and is not available to Namespace's cache planner yet.

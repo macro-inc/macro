@@ -26,6 +26,7 @@ const unauthenticatedUserInfo: UserInfoData = {
   hasTrialed: false,
   aiDataConsent: false,
   referralCode: '',
+  createdAt: undefined,
 };
 
 export async function clearLocalAuthSession() {

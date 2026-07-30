@@ -4,7 +4,7 @@ import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { Layer } from '@ui';
 import { createEffect, createMemo, Show } from 'solid-js';
-import { ConnectorRow } from '../ConnectorsSection';
+import { ConnectorRow } from '../ConnectorRow';
 import { ContinueButton, FeatureList, SkipButton } from './shared';
 
 /** One connector per page. OAuth runs in a popup; the polled servers query

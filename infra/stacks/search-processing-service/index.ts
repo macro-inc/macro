@@ -1,6 +1,10 @@
 import * as pulumi from '@pulumi/pulumi';
 import { DynamoDBTable } from '../../packages/resources';
-import { getSearchEventQueue, stack } from '../../packages/shared';
+import {
+  getKafkaClusterPolicy,
+  getSearchEventQueue,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { SearchProcessingService } from './service';
 
@@ -43,7 +47,10 @@ const BASE_NAME = 'search-processing-service';
 const searchProcessingService = new SearchProcessingService(
   `${BASE_NAME}-${stack}`,
   {
-    extraManagedPolicyArns: [backfillJobsTable.policy.arn],
+    extraManagedPolicyArns: [
+      backfillJobsTable.policy.arn,
+      getKafkaClusterPolicy(),
+    ],
     searchEventQueueArn,
     ecsClusterArn: cloudStorageClusterArn,
     documentStorageBucketArn,

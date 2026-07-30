@@ -1,0 +1,23 @@
+[package]
+name = "worker-rs-otel"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+getrandom = { workspace = true, features = ["wasm_js"] }
+http.workspace = true
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry-proto = { version = "0.31.0", default-features = false, features = [
+  "gen-tonic-messages",
+  "logs",
+  "with-serde",
+  "trace",
+] }
+opentelemetry_sdk = { workspace = true, features = ["trace"] }
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid = { workspace = true, features = ["js"] }
+web-time.workspace = true
+worker.workspace = true

@@ -3,7 +3,9 @@
 use entity_access::domain::models::{
     AdminParticipantRole, EntityAccessReceipt, OwnerParticipantRole, RequiredPermission,
 };
-use entity_mutation::{DeleteEntityPermanently, EntityMutationErrorCode, RenameEntity};
+use entity_mutation::{
+    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
+};
 use model_entity::Entity;
 use uuid::Uuid;
 
@@ -54,7 +56,7 @@ where
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let channel_id = channel_uuid(&entity)?;
         let sender = sender_from_receipt(&receipt)?;
         self.patch_channel(
@@ -67,7 +69,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -81,10 +83,10 @@ where
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let channel_id = channel_uuid(&entity)?;
         let sender = sender_from_receipt(&receipt)?;
         self.delete_channel(sender, channel_id).await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::deleted(entity)])
     }
 }

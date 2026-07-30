@@ -1,5 +1,5 @@
 //! Schema metadata: static tables generated at build time from
-//! `static_assets/schema.graphql` + `key_config.toml` (see `build.rs`).
+//! `static_assets/schema.graphql` (see `build.rs`).
 //!
 //! The cache never parses SDL at runtime — everything type-related is
 //! resolved through these tables.
@@ -47,7 +47,8 @@ pub struct TypeMeta {
     pub name: &'static str,
     pub kind: TypeKind,
     /// `Some(fields)` when the type is a normalized entity; `None` when it is
-    /// embedded inline in its parent record. Policy from `key_config.toml`.
+    /// embedded inline in its parent record. Derived from the schema's
+    /// `id: ID!` convention.
     pub key_fields: Option<&'static [&'static str]>,
     /// Field definitions (objects/interfaces only; empty for unions).
     pub fields: &'static [FieldMeta],
@@ -111,9 +112,18 @@ mod tests {
     }
 
     #[test]
-    fn union_possible_types() {
-        let entity = type_meta("GraphqlSoupEntity").expect("entity union");
-        assert_eq!(entity.kind, TypeKind::Union);
+    fn subscription_root_is_present() {
+        let name = SUBSCRIPTION_ROOT_TYPE.expect("schema has a subscription root");
+        let root = type_meta(name).expect("subscription root type");
+        assert_eq!(root.kind, TypeKind::Object);
+        assert!(root.key_fields.is_none());
+        assert!(root.fields.iter().any(|field| field.name == "soupUpdates"));
+    }
+
+    #[test]
+    fn interface_possible_types() {
+        let entity = type_meta("GraphqlSoupEntity").expect("entity interface");
+        assert_eq!(entity.kind, TypeKind::Interface);
         assert!(entity.possible_types.contains(&"GraphqlSoupDocument"));
         assert!(entity.possible_types.contains(&"GraphqlSoupForeignEntity"));
         assert_eq!(entity.possible_types.len(), 9);
@@ -162,15 +172,17 @@ mod tests {
         assert_eq!(f.ty.kind, FieldKind::Leaf);
         assert!(f.ty.nullable && !f.ty.list);
 
-        // metadata: JSON! (opaque scalar)
-        let f = field_meta("GraphqlSoupForeignEntity", "metadata").unwrap();
+        // sourceMetadata: JSON! (opaque scalar); metadata is now the shared
+        // structured interface field.
+        let f = field_meta("GraphqlSoupForeignEntity", "sourceMetadata").unwrap();
         assert_eq!(f.ty.kind, FieldKind::OpaqueScalar);
         assert!(!f.ty.nullable);
 
-        // entity: GraphqlSoupEntity! (composite link to a union)
-        let f = field_meta("GraphqlSoupItem", "entity").unwrap();
+        // items: [GraphqlSoupEntity!]! (composite link to the entity interface)
+        let f = field_meta("SoupPage", "items").unwrap();
         assert_eq!(f.ty.kind, FieldKind::Composite);
         assert_eq!(f.ty.name, "GraphqlSoupEntity");
+        assert!(f.ty.list);
     }
 
     #[test]

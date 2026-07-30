@@ -9,7 +9,7 @@ use non_empty::NonEmpty;
 #[tracing::instrument(skip(db))]
 pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Result<UserName> {
     let macro_user_id = macro_uuid::string_to_uuid(macro_user_id)?;
-    let name: UserName = sqlx::query!(
+    let name: Option<UserName> = sqlx::query!(
         r#"
             SELECT macro_user_id, first_name, last_name FROM macro_user_info WHERE macro_user_id = $1
         "#,
@@ -20,10 +20,17 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
         first_name: row.first_name,
         last_name: row.last_name,
     })
-    .fetch_one(db)
+    .fetch_optional(db)
     .await?;
 
-    Ok(name)
+    // The row is created lazily by the first name write (put_name upserts),
+    // so a user who never set their name has none — that's "no name yet",
+    // not an error.
+    Ok(name.unwrap_or_else(|| UserName {
+        id: macro_user_id.to_string(),
+        first_name: None,
+        last_name: None,
+    }))
 }
 
 #[tracing::instrument(skip(db))]

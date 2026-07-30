@@ -1544,6 +1544,12 @@ impl<
             return Err(DocumentError::Internal(e.into()));
         }
 
+        if let Some(project_id) = &new_metadata.project_id {
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
         let document_response_metadata =
             DocumentResponseMetadata::from_document_metadata(&new_metadata).map_err(|e| {
                 tracing::error!(error=?e, "unable to convert document metadata");
@@ -1622,6 +1628,13 @@ impl<
         document_id: &str,
         reason: InteractionReason,
     ) -> anyhow::Result<()> {
+        if reason == InteractionReason::Edited {
+            self.repo
+                .update_document_modified(document_id)
+                .await
+                .map_err(Into::into)?;
+        }
+
         self.publish_document_event(&DocumentMacroEvent::interaction(
             document_id,
             DocumentInteractionMetadata {

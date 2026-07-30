@@ -121,6 +121,16 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
         uri strip_prefix /sync
         reverse_proxy sync-service:8787
     }
+    # Analytics/telemetry proxy worker (PostHog and OTLP traces/logs).
+    # No prefix strip: the worker itself routes on the /i/{ph,dd,otlp} prefix,
+    # and it listens on 8098, not the :8080 the generated routes assume.
+    # Set CF-Connecting-IP (absent without Cloudflare's edge in front) so the
+    # worker's rate-limit keying has a client IP instead of erroring.
+    handle /i/* {
+        reverse_proxy analytics-proxy:8098 {
+            header_up CF-Connecting-IP {http.request.remote.host}
+        }
+    }
     handle_path /lexical/* {
         reverse_proxy lexical-service:8096
     }
@@ -158,7 +168,7 @@ const STATIC_FILE_DEV: &str = r#"    handle_path /static-file/* {
 /// with `base: /app`, so URL space `/app/*` maps onto the dist root after the
 /// prefix strip; unknown paths fall back to `index.html` (SPA routing). Caddy
 /// sorts `redir` before `handle_path`, so the exact-path redirects win first.
-const FRONTEND_STATIC: &str = r#"    redir / /app/ 302
+const FRONTEND_STATIC: &str = r#"    redir / "/app/?{query}" 302
     redir /app /app/ 308
     handle_path /app/* {
         root * /srv/frontend

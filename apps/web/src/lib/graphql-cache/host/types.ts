@@ -89,6 +89,8 @@ export interface CacheHost {
   ): Promise<WriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<string[]>;
+  /** Apply explicit server-provided cache-deletion effects. */
+  deleteRecords(keys: string[]): Promise<string[]>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */

@@ -40,6 +40,7 @@ axum = [
   "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
+  "schema",
 ]
 backfill_binary = [
   "dep:clap",
@@ -63,6 +64,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:tokio", "dep:tokio-retry"]
+schema = ["dep:utoipa", "macro_user_id/schema"]
 service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]

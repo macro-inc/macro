@@ -427,7 +427,7 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
     ENVIRONMENT: stack,
-    RUST_LOG: 'email_refresh_handler=info',
+    RUST_LOG: 'email_refresh_handler=info,macro_http_request=info',
     DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
     DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
     INBOX_HEALTH_POLL_INTERVAL_HOURS: pulumi.interpolate`${INBOX_HEALTH_POLL_INTERVAL_HOURS}`,
@@ -443,7 +443,7 @@ const emailScheduledHandler = new EmailScheduledHandler(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'email_scheduled_handler=info',
+      RUST_LOG: 'email_scheduled_handler=info,macro_http_request=info',
     },
     tags,
   }

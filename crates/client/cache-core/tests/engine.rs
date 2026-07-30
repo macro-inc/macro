@@ -12,15 +12,57 @@ query Soup($input: SoupInput!) {
     id
     soup(input: $input) {
       items {
+        __typename
         id
-        entity {
-          __typename
-          ... on GraphqlSoupDocument { id documentName: name ownerId }
+        ... on GraphqlSoupDocument { documentName: name ownerId }
+      }
+      nextCursor
+    }
+  }
+}
+"#;
+
+const CHANNEL_NOTIFICATIONS_QUERY: &str = r#"
+query ChannelNotifications($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        ... on GraphqlSoupChannel {
+          notifications {
+            __typename
+            id
+            seen
+            viewedAt
+          }
         }
       }
       nextCursor
-      hasMore
     }
+  }
+}
+"#;
+
+const RECORD_CHANNEL_ACTIVITY_MUTATION: &str = r#"
+mutation RecordChannelActivity($input: RecordChannelActivityInput!) {
+  recordChannelActivity(input: $input) {
+    __typename
+    id
+    channelId
+    viewedAt
+  }
+}
+"#;
+
+const UPDATE_NOTIFICATIONS_MUTATION: &str = r#"
+mutation UpdateNotifications($input: UpdateNotificationsInput!) {
+  updateNotifications(input: $input) {
+    __typename
+    id
+    seen
+    viewedAt
   }
 }
 "#;
@@ -42,16 +84,12 @@ fn page_for_user(user: &str, names: &[(&str, &str)]) -> Json {
             "id": user,
             "soup": {
                 "items": names.iter().map(|(id, name)| json!({
+                    "__typename": "GraphqlSoupDocument",
                     "id": id,
-                    "entity": {
-                        "__typename": "GraphqlSoupDocument",
-                        "id": id,
-                        "documentName": name,
-                        "ownerId": user
-                    }
+                    "documentName": name,
+                    "ownerId": user
                 })).collect::<Vec<_>>(),
-                "nextCursor": null,
-                "hasMore": false
+                "nextCursor": null
             }
         }
     })
@@ -133,10 +171,7 @@ fn cross_operation_invalidation() {
         else {
             panic!("expected hit");
         };
-        assert_eq!(
-            data["user"]["soup"]["items"][0]["entity"]["documentName"],
-            json!("B")
-        );
+        assert_eq!(data["user"]["soup"]["items"][0]["documentName"], json!("B"));
 
         // Identical rewrite changes nothing → nobody re-executes.
         let write = engine
@@ -168,6 +203,127 @@ fn cross_operation_invalidation() {
             .unwrap();
         assert!(!write.changed.is_empty());
         assert!(write.affected_ops.is_empty());
+    });
+}
+
+#[test]
+fn channel_activity_and_notification_status_update_separate_normalized_records() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let query_variables = vars(10);
+        let initial = json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupChannel",
+                        "id": "channel-1",
+                        "notifications": [{
+                            "__typename": "GraphqlSoupNotification",
+                            "id": "notification-1",
+                            "seen": false,
+                            "viewedAt": null
+                        }]
+                    }],
+                    "nextCursor": null
+                }
+            }
+        });
+        engine
+            .write_query(
+                Some(1),
+                CHANNEL_NOTIFICATIONS_QUERY,
+                Some("ChannelNotifications"),
+                &query_variables,
+                &initial,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let Json::Object(activity_variables) = json!({
+            "input": { "channelId": "channel-1", "activityType": "VIEW" }
+        }) else {
+            unreachable!()
+        };
+        engine
+            .write_query(
+                Some(2),
+                RECORD_CHANNEL_ACTIVITY_MUTATION,
+                Some("RecordChannelActivity"),
+                &activity_variables,
+                &json!({
+                    "recordChannelActivity": {
+                        "__typename": "GraphqlChannelActivity",
+                        "id": "activity-1",
+                        "channelId": "channel-1",
+                        "viewedAt": "2025-01-01T00:00:01Z"
+                    }
+                }),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let ReadResult::Hit { data } = engine
+            .read_query(
+                Some(1),
+                CHANNEL_NOTIFICATIONS_QUERY,
+                Some("ChannelNotifications"),
+                &query_variables,
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected cached channel after activity mutation");
+        };
+        assert_eq!(
+            data["user"]["soup"]["items"][0]["notifications"][0]["seen"],
+            json!(false)
+        );
+
+        let Json::Object(notification_variables) = json!({
+            "input": {
+                "notificationIds": ["notification-1"],
+                "operation": "MARK_SEEN"
+            }
+        }) else {
+            unreachable!()
+        };
+        engine
+            .write_query(
+                Some(3),
+                UPDATE_NOTIFICATIONS_MUTATION,
+                Some("UpdateNotifications"),
+                &notification_variables,
+                &json!({
+                    "updateNotifications": [{
+                        "__typename": "GraphqlSoupNotification",
+                        "id": "notification-1",
+                        "seen": true,
+                        "viewedAt": "2025-01-01T00:00:02Z"
+                    }]
+                }),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let ReadResult::Hit { data } = engine
+            .read_query(
+                Some(1),
+                CHANNEL_NOTIFICATIONS_QUERY,
+                Some("ChannelNotifications"),
+                &query_variables,
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected cached channel after notification mutation");
+        };
+        let notification = &data["user"]["soup"]["items"][0]["notifications"][0];
+        assert_eq!(notification["seen"], json!(true));
+        assert_eq!(notification["viewedAt"], json!("2025-01-01T00:00:02Z"));
     });
 }
 
@@ -329,14 +485,11 @@ fn capacity_constrained_rewrite_preserves_fields() {
             id
             soup(input: $input) {
               items {
+                __typename
                 id
-                entity {
-                  __typename
-                  ... on GraphqlSoupDocument { id documentName: name }
-                }
+                ... on GraphqlSoupDocument { documentName: name }
               }
               nextCursor
-              hasMore
             }
           }
         }
@@ -346,12 +499,11 @@ fn capacity_constrained_rewrite_preserves_fields() {
                 "id": "user-1",
                 "soup": {
                     "items": [
-                        { "id": "doc-1", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-1", "documentName": "A2" } },
-                        { "id": "doc-2", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-2", "documentName": "B2" } },
-                        { "id": "doc-3", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-3", "documentName": "C2" } }
+                        { "__typename": "GraphqlSoupDocument", "id": "doc-1", "documentName": "A2" },
+                        { "__typename": "GraphqlSoupDocument", "id": "doc-2", "documentName": "B2" },
+                        { "__typename": "GraphqlSoupDocument", "id": "doc-3", "documentName": "C2" }
                     ],
-                    "nextCursor": null,
-                    "hasMore": false
+                    "nextCursor": null
                 }
             }
         });
@@ -372,8 +524,8 @@ fn capacity_constrained_rewrite_preserves_fields() {
         let items = data["user"]["soup"]["items"].as_array().unwrap();
         assert_eq!(items.len(), 3);
         for (item, name) in items.iter().zip(["A2", "B2", "C2"]) {
-            assert_eq!(item["entity"]["documentName"], json!(name));
-            assert_eq!(item["entity"]["ownerId"], json!("user-1"));
+            assert_eq!(item["documentName"], json!(name));
+            assert_eq!(item["ownerId"], json!("user-1"));
         }
     });
 }

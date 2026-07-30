@@ -129,6 +129,25 @@ describe('safeFetch', () => {
       }
     });
 
+    test('keeps an expected 404 as a NOT_FOUND result', async () => {
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+        } as Response)
+      );
+
+      const result = await safeFetch<{ data: string }>(
+        'https://localhost/data',
+        { trace: { expectedStatusCodes: [404] } }
+      );
+
+      expect(result).toMatchObject({
+        error: [{ code: 'NOT_FOUND' }],
+      });
+      expect(mockFetch.mock.calls[0]?.[1]).not.toHaveProperty('trace');
+    });
+
     test('handle 401 Unauthorized', async () => {
       mockFetch.mockImplementationOnce(() =>
         Promise.resolve({

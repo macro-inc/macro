@@ -8,7 +8,8 @@ import {
   type SafeFetchInit,
   safeFetch,
 } from '@core/util/safeFetch';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
 import { makePersisted } from '@solid-primitives/storage';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -124,7 +125,7 @@ async function getAccessToken(): Promise<string | null> {
           return null;
         }
       } catch (error) {
-        logger.error('Error refreshing access token', { error });
+        Telemetry.error('Error refreshing access token', { error });
         return null;
       } finally {
         // Clear the ongoing refresh promise so future calls can start a new refresh
@@ -336,7 +337,7 @@ export const authServiceClient = {
   async macroApiToken() {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      logger.warn('No access token found, fetching with cookies');
+      Telemetry.warn('No access token found, fetching with cookies');
       return authApiFetch<MacroApiTokenResponse>('/jwt/macro_api_token');
     }
 
@@ -407,6 +408,7 @@ export const authServiceClient = {
       hasTrialed: data.hasTrialed,
       aiDataConsent: data.aiDataConsent,
       referralCode: data.referralCode,
+      createdAt: data.createdAt,
     }));
   },
 
@@ -460,31 +462,6 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
-  async createCheckoutSession(args: {
-    successUrl: string;
-    cancelUrl: string;
-    discount?: string | null;
-    metadata?: {
-      gaClientId?: string | null;
-      fbp?: string | null;
-      fbc?: string | null;
-    };
-    tier?: string;
-  }) {
-    return (
-      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
-        method: 'POST',
-        body: JSON.stringify({
-          successUrl: args.successUrl,
-          cancelUrl: args.cancelUrl,
-          discount: args.discount ?? undefined,
-          metadata: args.metadata,
-          tier: args.tier ?? undefined,
-        }),
-      })
-    ).map((result) => result.url);
-  },
-
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;
@@ -572,18 +549,30 @@ export const authServiceClient = {
       ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
       : `${authHost}/link/gmail`;
     return (
-      await fetchWithAuth<InitGmailLinkResponse, 'PAYMENT_REQUIRED'>(url, {
+      await fetchWithAuth<
+        InitGmailLinkResponse,
+        'PAYMENT_REQUIRED' | 'TOO_MANY_PENDING_LINKS'
+      >(url, {
         method: 'POST',
         // The backend returns 402 when the user isn't entitled to additional
-        // inboxes; surface it as a distinct code so the add-inbox flow can open
-        // the paywall instead of showing a generic failure.
-        errorResponseHandler: async (response) =>
-          response.status === 402
-            ? { code: 'PAYMENT_REQUIRED', message: 'Payment required' }
-            : {
-                code: 'HTTP_ERROR',
-                message: `HTTP error! status: ${response.status}`,
-              },
+        // inboxes, and 429 when they have too many incomplete link attempts in
+        // flight. Surface each as a distinct code so the add-inbox flow can open
+        // the paywall or explain the wait instead of a generic failure.
+        errorResponseHandler: async (response) => {
+          if (response.status === 402) {
+            return { code: 'PAYMENT_REQUIRED', message: 'Payment required' };
+          }
+          if (response.status === 429) {
+            return {
+              code: 'TOO_MANY_PENDING_LINKS',
+              message: 'Too many pending inbox connections',
+            };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
       })
     ).map((result) => result);
   },

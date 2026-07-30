@@ -49,12 +49,16 @@ topics! {
     MacroExampleTopic => "macro.example",
     /// Bot lifecycle events (created / updated / deleted).
     MacroBotsTopic => "macro.bots",
+    /// Call lifecycle and recording events.
+    MacroCallsTopic => "macro.calls",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
     /// User-scoped full Soup items produced from entity updates.
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
     MacroProjectsTopic => "macro.projects",
+    /// Property definition, option, and entity property value mutation events.
+    MacroPropertiesTopic => "macro.properties",
     /// Team lifecycle, invite, and membership events.
     MacroTeamsTopic => "macro.teams",
     /// Channel lifecycle, message, participant, and attachment events.
@@ -65,6 +69,6 @@ topics! {
     MacroWebhooksTopic => "macro.webhooks",
     /// Entity mention events (created / deleted) across channels and docs.
     MacroMentionsTopic => "macro.mentions",
-    /// AI chat lifecycle events (created / updated / deleted / restored / copied).
+    /// AI chat lifecycle and message events.
     MacroChatsTopic => "macro.chats",
 }

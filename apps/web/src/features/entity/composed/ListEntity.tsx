@@ -45,6 +45,7 @@ import {
   filterValidNotifications,
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
+import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
 import {
@@ -57,7 +58,10 @@ import {
 } from './list-entity/shared';
 import { WideLayout } from './list-entity/wide-layout';
 
-export { ListLayoutProvider } from './list-entity/shared';
+export {
+  ListLayoutProvider,
+  type NarrowLayoutVariant,
+} from './list-entity/shared';
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
@@ -153,7 +157,10 @@ export function ListEntity(props: ListEntityProps) {
     splitId: useSplitPanel()?.handle?.id,
   });
 
-  const isWide = useListLayout()?.isWide ?? (() => true);
+  const listLayout = useListLayout();
+  const isWide = listLayout?.isWide ?? (() => true);
+  const usesCondensedNarrowLayout = () =>
+    !isWide() && listLayout?.narrowLayout() === 'condensed';
 
   const mobileStacks = createMemo(() => {
     if (!isMobile()) return [];
@@ -203,7 +210,8 @@ export function ListEntity(props: ListEntityProps) {
       class={cn(
         'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
-          'min-h-10 mx-1': !isMobile(),
+          'min-h-10 mx-1': !isMobile() && !usesCondensedNarrowLayout(),
+          'min-h-9 mx-1': !isMobile() && usesCondensedNarrowLayout(),
           'bg-accent/8': props.checked,
           'bg-accent/16': props.checked && props.highlighted,
           'bg-hover/30':
@@ -244,6 +252,14 @@ export function ListEntity(props: ListEntityProps) {
             config={props.entityRowConfig}
           >
             <NarrowInboxLayout {...layoutProps()} />
+          </MaybeEntityRow>
+        </Match>
+        <Match when={usesCondensedNarrowLayout()}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowCondensedLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
         <Match when={true}>

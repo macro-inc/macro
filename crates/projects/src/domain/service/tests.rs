@@ -6,6 +6,7 @@ use entity_access::domain::models::{
 };
 use entity_access_management::domain::models::EntityAccessManagementError;
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use entity_mutation::{EntityMutationEffect, RestoreEntity};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentMetadata, FileType};
@@ -1407,6 +1408,8 @@ async fn revert_upserts_every_restored_project() {
             Box::pin(async move {
                 Ok(crate::domain::models::RevertDeleteResult {
                     project_ids: restored_ids,
+                    document_ids: Vec::new(),
+                    chat_ids: Vec::new(),
                 })
             })
         });
@@ -1444,6 +1447,70 @@ async fn revert_upserts_every_restored_project() {
     assert_eq!(
         metadata["restored_project_ids"],
         serde_json::json!(expected_ids)
+    );
+}
+
+#[tokio::test]
+async fn restore_entity_returns_document_and_chat_effects() {
+    let project_id = Uuid::new_v4();
+    let child_project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let document_id = "restored-document".to_string();
+    let chat_id = "restored-chat".to_string();
+    let restored_project_ids = vec![project_id.to_string(), child_project_id.to_string()];
+
+    let mut repo = MockProjectRepo::new();
+    let project = basic_project(project_id, Some(parent_id), true);
+    repo.expect_get_basic_project()
+        .withf(move |id| id == project_id.to_string())
+        .return_once(move |_| Box::pin(async move { Ok(Some(project)) }));
+    let returned_project_ids = restored_project_ids.clone();
+    let returned_document_id = document_id.clone();
+    let returned_chat_id = chat_id.clone();
+    repo.expect_revert_delete_project()
+        .return_once(move |_, _| {
+            Box::pin(async move {
+                Ok(crate::domain::models::RevertDeleteResult {
+                    project_ids: returned_project_ids,
+                    document_ids: vec![returned_document_id],
+                    chat_ids: vec![returned_chat_id],
+                })
+            })
+        });
+    let indexer = RecordingIndexer::default();
+    let index_calls = indexer.calls.clone();
+    let service = mutation_service(repo, RecordingEam::default(), indexer);
+    let entity = EntityType::Project.with_entity_string(project_id.to_string());
+
+    let effects = service
+        .restore_entity(
+            entity.clone(),
+            mutation_receipt_with_auth::<OwnerAccessLevel>(
+                project_id,
+                AccessLevel::Owner,
+                EntityAccessAuth::Internal,
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        effects,
+        vec![
+            EntityMutationEffect::updated(entity),
+            EntityMutationEffect::updated(
+                EntityType::Project.with_entity_string(child_project_id.to_string()),
+            ),
+            EntityMutationEffect::updated(EntityType::Document.with_entity_string(document_id),),
+            EntityMutationEffect::updated(EntityType::Chat.with_entity_string(chat_id)),
+            EntityMutationEffect::updated(
+                EntityType::Project.with_entity_string(parent_id.to_string()),
+            ),
+        ]
+    );
+    assert_eq!(
+        *index_calls.lock().unwrap(),
+        vec![IndexCall::Upsert(restored_project_ids)]
     );
 }
 
