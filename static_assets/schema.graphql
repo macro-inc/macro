@@ -95,6 +95,16 @@ input DuplicateEntityInput {
 }
 
 """
+Input for fetching one email thread by its canonical identifier.
+"""
+input EmailThreadInput {
+	"""
+	The canonical email thread identifier.
+	"""
+	threadId: ID!
+}
+
+"""
 Results for a batch mutation, preserving the input order.
 """
 type EntityMutationPayload {
@@ -2562,6 +2572,10 @@ type GraphqlSoupEmailMessage {
 	"""
 	isSent: Boolean!
 	"""
+	Whether the message is a draft.
+	"""
+	isDraft: Boolean!
+	"""
 	Whether the message has attachments.
 	"""
 	hasAttachments: Boolean!
@@ -2783,6 +2797,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+	"""
+	A page of messages in this thread, newest first.
+	"""
+	messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!
 	"""
 	The newest non-draft content message in this thread.
 	"""
@@ -3123,6 +3141,10 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	Fetch one accessible email thread by its canonical identifier.
+	"""
+	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
 	"""
 	Fetch Soup items nested into grouping bins.
 	"""

@@ -61,6 +61,7 @@ import {
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
+import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
@@ -117,6 +118,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { TaskRoute } from './TaskRoute';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -248,9 +250,8 @@ function BasePathComponent() {
   });
 
   // check session storage for redirect url
-  const redirectUrl = sessionStorage.getItem('redirectUrl');
+  const redirectUrl = consumePostLoginRedirect();
   if (redirectUrl) {
-    sessionStorage.removeItem('redirectUrl');
     const relativeUrl = redirectUrl.replace(window.location.origin, '');
     window.location.href = relativeUrl;
     return;
@@ -342,6 +343,10 @@ function OnboardingRoute() {
 }
 
 const ROUTES: RouteDefinition[] = [
+  {
+    path: '/task-slug/:taskSlug',
+    component: TaskRoute,
+  },
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {

@@ -3,7 +3,7 @@ mod test;
 
 use std::{marker::PhantomData, sync::Arc};
 
-use async_graphql::{Context, MergedObject, Object, Schema, Subscription};
+use async_graphql::{Context, ID, MergedObject, Object, Schema, Subscription};
 use axum::extract::FromRef;
 use email::{
     domain::ports::{EmailService, NoOpEmailService},
@@ -15,7 +15,7 @@ use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
 };
-use graphql_common::require_authorized_user;
+use graphql_common::{parse_id, require_authorized_user};
 use graphql_email::{NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader};
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{EntityFavoriteEdgeReader, NoOpEntityFavoriteEdgeReader};
@@ -29,8 +29,8 @@ use graphql_properties::{
     PropertiesMutationRoot,
 };
 use graphql_soup::{
-    GroupedSoup, GroupedSoupInput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
-    resolve_grouped_soup, resolve_soup, resolve_soup_updates,
+    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEntityEdges, SoupInput, SoupPage,
+    SoupPatch, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -206,6 +206,13 @@ pub struct GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER, FR, AR> {
     _marker: ServicesMarker<E, EAS, Auth, St, NR, PR, ER, FR, AR>,
     /// The [MacroUserIdStr] of the resolving user
     user_id: MacroUserIdStr<'static>,
+}
+
+/// Input for fetching one email thread by its canonical identifier.
+#[derive(async_graphql::InputObject)]
+pub struct EmailThreadInput {
+    /// The canonical email thread identifier.
+    thread_id: ID,
 }
 
 /// Build a GraphQL schema for Soup suitable for SDL export or introspection.
@@ -443,6 +450,21 @@ where
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// Fetch one accessible email thread by its canonical identifier.
+    async fn email_thread(
+        &self,
+        ctx: &Context<'_>,
+        input: EmailThreadInput,
+    ) -> async_graphql::Result<Option<GraphqlSoupEmailThread<SoupEdges<NR, PR, ER, FR, AR>>>> {
+        let thread_id = parse_id(input.thread_id, "threadId")?;
+        resolve_soup_email_thread::<SoupEdges<NR, PR, ER, FR, AR>>(
+            ctx,
+            self.user_id.clone(),
+            thread_id,
+        )
+        .await
     }
 
     /// Fetch Soup items nested into grouping bins.

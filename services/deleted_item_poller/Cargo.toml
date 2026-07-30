@@ -10,6 +10,7 @@ aws-sdk-sqs = { workspace = true }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 aws-smithy-types = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+chat = { path = "../../crates/chat", default-features = false }
 chrono = { workspace = true }
 futures = { workspace = true }
 lambda_runtime = { workspace = true }

@@ -6,6 +6,11 @@ use ::call::domain::events::{
     CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
     CallStartedMetadata, CallTopicEvent,
 };
+use ::chat::domain::events::{
+    ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMessageDeletedMetadata,
+    ChatMessageRole, ChatMessageSentMetadata, ChatPermanentlyDeletedMetadata, ChatRestoredMetadata,
+    ChatTopicEvent, ChatUpdatedMetadata,
+};
 use channels::domain::{
     broker_events::{
         ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMessageAttachmentCreatedMetadata,
@@ -18,7 +23,9 @@ use channels::domain::{
 };
 use chrono::Utc;
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
-use macro_event_topics::{MacroCallsTopic, MacroChannelsTopic, MacroProjectsTopic, Topic as _};
+use macro_event_topics::{
+    MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroProjectsTopic, Topic as _,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use projects::domain::events::{
     ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
@@ -29,6 +36,7 @@ use uuid::Uuid;
 use super::{
     call::{CallEventDescription, CallIndexAction, describe_call_event},
     channel::{ChannelEventDescription, ChannelIndexAction, describe_channel_event},
+    chat::{ChatEventDescription, ChatIndexAction, describe_chat_event},
     project::{
         ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
     },
@@ -38,6 +46,9 @@ use super::{
 const CALL_ID: Uuid = Uuid::from_u128(1);
 const CHANNEL_ID: Uuid = Uuid::from_u128(2);
 const MESSAGE_ID: Uuid = Uuid::from_u128(3);
+const CHAT_ID: &str = "chat-id";
+const SECOND_CHAT_ID: &str = "second-chat-id";
+const CHAT_MESSAGE_ID: &str = "chat-message-id";
 const PROJECT_ID: &str = "project-root";
 const CHILD_PROJECT_ID: &str = "project-child";
 const PARENT_PROJECT_ID: &str = "project-parent";
@@ -138,6 +149,122 @@ fn encoded_message<E: serde::Serialize>(
         key: Some(key.to_string()),
         payload: Some(serde_json::to_vec(&event).expect("serializable broker event")),
     }
+}
+
+fn chat_event_cases() -> Vec<(ChatTopicEvent, ChatEventDescription<'static>)> {
+    let owner = user_id();
+
+    vec![
+        (
+            ChatTopicEvent::Created(ChatCreatedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                owner: owner.clone(),
+                name: "Chat".to_string(),
+                project_id: Some(PROJECT_ID.to_string()),
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::Ignore,
+                chat_id: CHAT_ID,
+                event_type: "chat.created",
+            },
+        ),
+        (
+            ChatTopicEvent::Updated(ChatUpdatedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                actor_user_id: owner.clone(),
+                name: Some("Renamed chat".to_string()),
+                previous_project_id: Some(PROJECT_ID.to_string()),
+                project_id: Some(PARENT_PROJECT_ID.to_string()),
+                share_permission_updated: true,
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::Ignore,
+                chat_id: CHAT_ID,
+                event_type: "chat.updated",
+            },
+        ),
+        (
+            ChatTopicEvent::Deleted(ChatDeletedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                actor_user_id: Some(owner.clone()),
+                project_id: Some(PROJECT_ID.to_string()),
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::Ignore,
+                chat_id: CHAT_ID,
+                event_type: "chat.deleted",
+            },
+        ),
+        (
+            ChatTopicEvent::PermanentlyDeleted(ChatPermanentlyDeletedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                actor_user_id: Some(owner.clone()),
+                project_id: Some(PROJECT_ID.to_string()),
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::RemoveChat { chat_id: CHAT_ID },
+                chat_id: CHAT_ID,
+                event_type: "chat.permanently_deleted",
+            },
+        ),
+        (
+            ChatTopicEvent::Restored(ChatRestoredMetadata {
+                chat_id: CHAT_ID.to_string(),
+                actor_user_id: Some(owner.clone()),
+                project_id: Some(PROJECT_ID.to_string()),
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::Ignore,
+                chat_id: CHAT_ID,
+                event_type: "chat.restored",
+            },
+        ),
+        (
+            ChatTopicEvent::Copied(ChatCopiedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                source_chat_id: "source-chat-id".to_string(),
+                owner: owner.clone(),
+                name: "Copied chat".to_string(),
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::Ignore,
+                chat_id: CHAT_ID,
+                event_type: "chat.copied",
+            },
+        ),
+        (
+            ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+                chat_id: CHAT_ID.to_string(),
+                message_id: CHAT_MESSAGE_ID.to_string(),
+                role: ChatMessageRole::User,
+                model: "chat-model".to_string(),
+                actor_user_id: Some(owner),
+                attachment_count: 1,
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::UpsertMessage {
+                    chat_id: CHAT_ID,
+                    message_id: CHAT_MESSAGE_ID,
+                },
+                chat_id: CHAT_ID,
+                event_type: "chat.message_sent",
+            },
+        ),
+        (
+            ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
+                chat_id: CHAT_ID.to_string(),
+                message_id: CHAT_MESSAGE_ID.to_string(),
+            }),
+            ChatEventDescription {
+                action: ChatIndexAction::RemoveMessage {
+                    chat_id: CHAT_ID,
+                    message_id: CHAT_MESSAGE_ID,
+                },
+                chat_id: CHAT_ID,
+                event_type: "chat.message_deleted",
+            },
+        ),
+    ]
 }
 
 fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
@@ -318,6 +445,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
             ProjectEventDescription {
                 action: ProjectIndexAction::Reconcile {
                     project_ids: vec![PROJECT_ID.to_string(), PARENT_PROJECT_ID.to_string()],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.created",
@@ -340,6 +468,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         PARENT_PROJECT_ID.to_string(),
                         NEW_PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.updated",
@@ -358,6 +487,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
             ProjectEventDescription {
                 action: ProjectIndexAction::Reconcile {
                     project_ids: vec![PROJECT_ID.to_string(), PARENT_PROJECT_ID.to_string()],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.updated",
@@ -385,6 +515,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.deleted",
@@ -405,6 +536,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.restored",
@@ -418,7 +550,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                 parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
                 purged_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
                 purged_document_ids: vec!["document-id".to_string()],
-                purged_chat_ids: vec!["chat-id".to_string()],
+                purged_chat_ids: vec![CHAT_ID.to_string(), SECOND_CHAT_ID.to_string()],
             }),
             ProjectEventDescription {
                 action: ProjectIndexAction::Reconcile {
@@ -427,6 +559,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: vec![CHAT_ID.to_string(), SECOND_CHAT_ID.to_string()],
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.permanently_deleted",
@@ -447,6 +580,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.uploaded",
@@ -462,8 +596,10 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
         "search-processing-service"
     );
     let topics = DeclaredMacroEvent::topics();
+    assert_eq!(MacroChatsTopic::TOPIC_STR, "macro.chats");
     assert!(topics.contains(&MacroCallsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroChatsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
 }
 
@@ -523,6 +659,18 @@ fn maps_all_call_lifecycle_events_to_index_actions() {
 }
 
 #[test]
+fn maps_all_chat_lifecycle_events_to_index_actions() {
+    let cases = chat_event_cases();
+    assert_eq!(cases.len(), 8);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable chat event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_chat_event(&event), expected);
+    }
+}
+
+#[test]
 fn maps_all_channel_lifecycle_events_to_index_actions() {
     let cases = channel_event_cases();
     assert_eq!(cases.len(), 10);
@@ -558,6 +706,30 @@ fn project_id_collection_is_stable_and_drops_missing_or_empty_ids() {
         ]),
         vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()]
     );
+}
+
+#[test]
+fn chat_envelope_decodes_round_trip() {
+    let event = ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+        chat_id: CHAT_ID.to_string(),
+        message_id: CHAT_MESSAGE_ID.to_string(),
+        role: ChatMessageRole::Assistant,
+        model: "chat-model".to_string(),
+        actor_user_id: None,
+        attachment_count: 0,
+    });
+    let message = encoded_message(
+        MacroChatsTopic::TOPIC_STR,
+        CHAT_ID,
+        Event::new(event.clone()),
+    );
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable chat event");
+    let DeclaredMacroEvent::ChatMacroEvent(decoded_event) = decoded else {
+        panic!("expected chat event");
+    };
+    assert_eq!(decoded_event.key(), CHAT_ID);
+    assert_eq!(decoded_event.event().event, event);
 }
 
 #[test]
@@ -601,6 +773,50 @@ fn project_envelope_decodes_round_trip_with_string_key() {
     };
     assert_eq!(decoded_event.key(), PROJECT_ID);
     assert_eq!(decoded_event.event().event, event);
+}
+
+#[tokio::test]
+async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
+    let malformed = TestMessage {
+        topic: MacroChatsTopic::TOPIC_STR,
+        key: Some(CHAT_ID.to_string()),
+        payload: Some(b"not json".to_vec()),
+    };
+    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 5, 40);
+    let (sender, mut receiver) = mpsc::channel(1);
+
+    assert!(matches!(
+        handoff_decoded(&sender, malformed).await,
+        HandoffOutcome::MalformedRecord(EventBrokerError::Serialization(_))
+    ));
+
+    let unsupported_event = ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
+        chat_id: CHAT_ID.to_string(),
+        message_id: CHAT_MESSAGE_ID.to_string(),
+    });
+    let unsupported = encoded_message(
+        MacroChatsTopic::TOPIC_STR,
+        CHAT_ID,
+        Event::with_schema_version(unsupported_event, 2),
+    );
+    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 5, 41);
+    match handoff_decoded(&sender, unsupported).await {
+        HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected,
+            actual,
+        }) => {
+            assert_eq!(topic, MacroChatsTopic::TOPIC_STR);
+            assert_eq!(expected, 1);
+            assert_eq!(actual, 2);
+        }
+        outcome => panic!("expected malformed chat record, got {outcome:?}"),
+    }
+
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
 }
 
 #[tokio::test]

@@ -354,6 +354,14 @@ pub trait EmailContentService: Send + Sync + 'static {
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, ParsedMessage>, EmailErr>> + Send;
+
+    /// Fetch one page of parsed messages for an authorized thread.
+    fn get_messages_parsed(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> impl Future<Output = Result<Option<Vec<ParsedMessage>>, EmailErr>> + Send;
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
@@ -691,6 +699,15 @@ impl EmailContentService for NoOpEmailService {
         &self,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_messages_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
         Err(no_op_email_err())
     }
 }

@@ -28,4 +28,6 @@ pub use objects::{
     GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupEntityEdges, SoupPage,
     SoupPatch, SoupUpdated,
 };
-pub use resolvers::{resolve_grouped_soup, resolve_soup, resolve_soup_updates};
+pub use resolvers::{
+    resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
+};

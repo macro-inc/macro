@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
@@ -12,6 +13,7 @@ import { Select } from '@kobalte/core/select';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import LinkIcon from '@phosphor/link.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -68,7 +70,11 @@ import {
   canRemoveTeamMember,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
-import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
+import {
+  buildTeamTaskAutolinkTargetUrl,
+  getTeamSlugError,
+  normalizeTeamSlugInput,
+} from './teamSlug';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -1035,6 +1041,20 @@ function TeamManagement(props: {
     setTeamSlugError(undefined);
   };
 
+  const handleCopyGithubAutolinkUrl = async () => {
+    const targetUrl = buildTeamTaskAutolinkTargetUrl(
+      props.teamSlug,
+      getWebOrigin()
+    );
+    try {
+      await navigator.clipboard.writeText(targetUrl);
+      toast.success('GitHub autolink URL copied');
+    } catch (error) {
+      console.error('Failed to copy GitHub autolink URL', error);
+      toast.failure('Failed to copy GitHub autolink URL');
+    }
+  };
+
   const handleDeleteTeam = () => {
     if (!props.teamId) return;
 
@@ -1230,6 +1250,27 @@ function TeamManagement(props: {
                   </Show>
                 </div>
               </Show>
+            </SettingsRow>
+
+            <SettingsRow
+              label="GitHub autolink"
+              description={
+                <>
+                  Use <code>{props.teamSlug}-</code> as the reference prefix in
+                  GitHub, then paste this target URL.
+                </>
+              }
+              hideDescriptionOnMobile
+            >
+              <Button
+                variant="base"
+                size="sm"
+                class="rounded-xs"
+                onClick={handleCopyGithubAutolinkUrl}
+              >
+                <CopyIcon class="size-4" />
+                Copy target URL
+              </Button>
             </SettingsRow>
 
             <Show when={isAdminOrOwner()}>

@@ -1,4 +1,5 @@
 import type { PermissionId } from '@core/constant/permissions';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
@@ -34,6 +35,14 @@ export const [UserContextProvider, useUserContext] =
 
     const isAuthenticated = createMemo((): boolean | undefined => {
       if (query.isLoading) return undefined;
+      if (query.isError) {
+        // Only a 401 proves the user is signed out; a transient failure
+        // (network blip, 5xx) leaves the auth state unknown so consumers
+        // don't bounce an authenticated user to login.
+        return thrownResultErrorHasCode(query.error, 'UNAUTHORIZED')
+          ? false
+          : undefined;
+      }
       if (!query.data) return false;
       return query.data.authenticated ?? false;
     });
