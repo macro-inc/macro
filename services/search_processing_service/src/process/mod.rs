@@ -10,7 +10,6 @@ mod user;
 pub mod worker;
 
 use anyhow::Context;
-use models_properties::EntityType;
 use sqs_client::search::SearchQueueMessage;
 use uuid::Uuid;
 
@@ -99,19 +98,6 @@ pub async fn process_message(
                 &ctx.document_storage_bucket,
                 &ctx.lexical_client,
                 &message,
-            )
-            .await?;
-        }
-        SearchQueueMessage::UpdateDocumentProperties(message) => {
-            let entity_type = message
-                .entity_type
-                .parse::<EntityType>()
-                .with_context(|| format!("invalid entity_type '{}'", message.entity_type))?;
-            properties::process_entity_property_update(
-                &ctx.opensearch_client,
-                &ctx.db,
-                &message.document_id,
-                entity_type,
             )
             .await?;
         }
