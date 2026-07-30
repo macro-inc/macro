@@ -15,6 +15,7 @@ const SERVICE_NAMES = [
   'mcp-server',
   'email-service',
   'document-cognition',
+  'agent-proxy-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {

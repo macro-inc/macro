@@ -3,14 +3,15 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    // 14 distinct binaries (the bundled set, including the local-only
-    // search_processing_service and the seed_cli shipped for the
-    // gmail_forwarder sidecar).
-    assert_eq!(bins.len(), 14, "{bins:?}");
+    // 15 distinct binaries (the bundled set, including the local-only
+    // search_processing_service, agent_proxy_service, and the seed_cli
+    // shipped for the gmail_forwarder sidecar).
+    assert_eq!(bins.len(), 15, "{bins:?}");
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"seed_cli"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));
     assert!(bins.contains(&"search_processing_service"));
+    assert!(bins.contains(&"agent_proxy_service"));
     let mut sorted = bins.clone();
     sorted.dedup();
     assert_eq!(sorted.len(), bins.len(), "binaries must be deduplicated");

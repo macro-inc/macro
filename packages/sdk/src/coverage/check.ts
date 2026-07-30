@@ -17,6 +17,7 @@ const ROOT = join(import.meta.dir, '..', '..');
 // How each service is reached from MacroClient (client.storage, client.email,
 // ...). A service that is not wired into MacroClient cannot be wrapped.
 const ACCESSORS: Partial<Record<(typeof services)[number], string>> = {
+  'agent-proxy': 'agentProxy',
   auth: 'auth',
   cognition: 'cognition',
   contacts: 'contacts',

@@ -94,6 +94,9 @@ pub enum Port {
     Unfurl = 8095,
     ImageProxy = 8097,
     Kafka = 9092,
+    // Appended (not slotted by number) so existing per-instance port offsets,
+    // which come from declaration order, stay stable.
+    AgentProxy = 8091,
 }
 
 impl Port {

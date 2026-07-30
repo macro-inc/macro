@@ -3,13 +3,48 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// What kind of agent backs a chat.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
+pub enum ChatAgentKind {
+    /// A native Macro agent chat.
+    #[default]
+    MacroChat,
+    /// A chat backed by an external ACP agent runtime.
+    External,
+}
+
+impl ChatAgentKind {
+    /// Storage representation (the `Chat."agentKind"` column value).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MacroChat => "MacroChat",
+            Self::External => "External",
+        }
+    }
+}
+
+impl std::str::FromStr for ChatAgentKind {
+    type Err = String;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        match value {
+            "MacroChat" => Ok(Self::MacroChat),
+            "External" => Ok(Self::External),
+            other => Err(format!("unknown chat agent kind: {other}")),
+        }
+    }
+}
+
 /// Arguments for creating a new chat.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CreateChatArgs {
     /// The name of the chat.
     pub name: String,
     /// The project to associate the chat with.
     pub project_id: Option<String>,
+    /// What kind of agent backs the chat.
+    pub kind: ChatAgentKind,
 }
 
 /// Arguments for copying a chat.

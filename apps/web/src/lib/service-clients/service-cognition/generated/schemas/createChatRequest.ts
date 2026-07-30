@@ -4,6 +4,7 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateChatRequestKind } from './createChatRequestKind';
 import type { CreateChatRequestName } from './createChatRequestName';
 import type { CreateChatRequestProjectId } from './createChatRequestProjectId';
 
@@ -11,6 +12,7 @@ import type { CreateChatRequestProjectId } from './createChatRequestProjectId';
  * Request body for creating a chat.
  */
 export interface CreateChatRequest {
+  kind?: CreateChatRequestKind;
   /** Optional name for the chat. */
   name?: CreateChatRequestName;
   /** Optional project to associate the chat with. */
