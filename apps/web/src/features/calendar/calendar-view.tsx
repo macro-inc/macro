@@ -42,11 +42,23 @@ const formatWeekdayHeader = {
 const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
+const formatCurrentTime = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+}).format;
 
 const isSameLocalDate = (first: Date, second: Date) =>
   first.getFullYear() === second.getFullYear() &&
   first.getMonth() === second.getMonth() &&
   first.getDate() === second.getDate();
+
+function CurrentTimeAxisIndicator(props: { date: Date }) {
+  return (
+    <span class="calendar-now-axis-indicator">
+      <span class="calendar-now-time">{formatCurrentTime(props.date)}</span>
+    </span>
+  );
+}
 
 function getLocalScrollTime() {
   const now = new Date();
@@ -89,6 +101,55 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
         });
         resizeObserver.observe(calendarElement);
 
+        const resetPointerTimeIndicator = () => {
+          for (const frame of calendarElement.querySelectorAll<HTMLElement>(
+            '.fc-timegrid-col-frame'
+          )) {
+            frame.style.removeProperty('--calendar-pointer-time-top');
+            frame.removeAttribute('data-pointer-time');
+          }
+        };
+
+        const handlePointerMove = (event: PointerEvent) => {
+          const frames = calendarElement.querySelectorAll<HTMLElement>(
+            '.fc-timegrid-col-frame'
+          );
+          let targetFrame: HTMLElement | undefined;
+
+          if (event.pointerType === 'mouse') {
+            for (const frame of frames) {
+              const frameBounds = frame.getBoundingClientRect();
+              const scrollerBounds = frame
+                .closest<HTMLElement>('.fc-scroller')
+                ?.getBoundingClientRect();
+              if (
+                scrollerBounds &&
+                event.clientX >= frameBounds.left &&
+                event.clientX <= frameBounds.right &&
+                event.clientY >= scrollerBounds.top &&
+                event.clientY <= scrollerBounds.bottom
+              ) {
+                targetFrame = frame;
+                break;
+              }
+            }
+          }
+
+          for (const frame of frames) {
+            frame.style.removeProperty('--calendar-pointer-time-top');
+            frame.removeAttribute('data-pointer-time');
+          }
+
+          if (targetFrame) {
+            const frameBounds = targetFrame.getBoundingClientRect();
+            targetFrame.style.setProperty(
+              '--calendar-pointer-time-top',
+              `${event.clientY - frameBounds.top}px`
+            );
+            targetFrame.setAttribute('data-pointer-time', '');
+          }
+        };
+
         const handleCalendarScroll = (event: Event) => {
           const scroller = event.target;
           if (!(scroller instanceof HTMLElement)) return;
@@ -102,8 +163,14 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
             'data-scrolled-from-top',
             scroller.scrollTop > 1
           );
+          resetPointerTimeIndicator();
         };
         calendarElement.addEventListener('scroll', handleCalendarScroll, true);
+        calendarElement.addEventListener('pointermove', handlePointerMove);
+        calendarElement.addEventListener(
+          'pointerleave',
+          resetPointerTimeIndicator
+        );
 
         onCleanup(() => {
           resizeObserver.disconnect();
@@ -111,6 +178,11 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
             'scroll',
             handleCalendarScroll,
             true
+          );
+          calendarElement.removeEventListener('pointermove', handlePointerMove);
+          calendarElement.removeEventListener(
+            'pointerleave',
+            resetPointerTimeIndicator
           );
           if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
         });
@@ -182,6 +254,21 @@ export function CalendarView() {
           return text;
         }}
       </FullCalendar.DayHeaderContent>
+
+      <FullCalendar.NowIndicatorContent>
+        {({ isAxis, view }) => {
+          if (isAxis) {
+            return view.type === 'timeGridWeek' ? (
+              <span
+                aria-hidden="true"
+                class="calendar-now-axis-indicator calendar-now-axis-indicator-gutter"
+              />
+            ) : null;
+          }
+
+          return <CurrentTimeAxisIndicator date={new Date()} />;
+        }}
+      </FullCalendar.NowIndicatorContent>
 
       <CalendarWorkspace onNarrowDayHeadersChange={setUseNarrowDayHeaders} />
     </FullCalendar.Root>
