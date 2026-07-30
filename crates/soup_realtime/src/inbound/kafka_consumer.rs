@@ -7,8 +7,13 @@
 #[cfg(test)]
 mod test;
 
-use std::{future::Future, time::Duration};
+use std::future::Future;
 
+use crate::domain::{
+    models::{Patch, SoupRealtimePatch},
+    ports::SoupRealtimeService,
+    service::SoupRealtimeServiceImpl,
+};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
@@ -22,15 +27,8 @@ use models_properties::EntityType as PropertyEntityType;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
-use rdkafka::message::{BorrowedMessage, Message as _};
+use rdkafka::message::BorrowedMessage;
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio_retry::strategy::ExponentialBackoff;
-
-use crate::domain::{
-    models::{Patch, SoupRealtimePatch},
-    ports::{SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
-    service::SoupRealtimeServiceImpl,
-};
 
 /// Consumer group used for Soup-affecting entity event offsets.
 struct SoupRealtimeConsumerGroup;
@@ -52,17 +50,6 @@ macro_event_broker::declare_topics!(
         ChannelMacroEvent,
         PropertyMacroEvent,
 );
-
-/// Total service attempts before returning for supervisor-driven redelivery.
-const MAX_SERVICE_ATTEMPTS: u32 = 5;
-/// Delay before the first retry; each subsequent delay doubles.
-const SERVICE_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
-
-fn service_retry_strategy() -> impl Iterator<Item = Duration> {
-    ExponentialBackoff::from_millis(2)
-        .factor(500)
-        .take((MAX_SERVICE_ATTEMPTS - 1) as usize)
-}
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
     entity_type.with_entity_string(entity_id.to_string())
@@ -397,7 +384,7 @@ enum EventOutcome {
     Ignored,
 }
 
-#[tracing::instrument(skip(service, event), fields(partition, offset), err)]
+#[tracing::instrument(skip(service, event), err)]
 fn process_event<S: SoupRealtimeService>(
     service: &S,
     event: &DeclaredMacroEvent,

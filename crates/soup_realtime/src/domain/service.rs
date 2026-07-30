@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, marker::PhantomData, num::NonZeroUsize, time::Duration};
+use std::{collections::HashSet, num::NonZeroUsize, time::Duration};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
 use futures::{StreamExt as _, stream};
@@ -113,7 +113,7 @@ const PUBLISH_CONCURRENCY: usize = 16;
 /// Domain service that expands entity access and fans out lightweight patches.
 pub struct SoupRealtimeServiceImpl {
     sender: tokio::sync::mpsc::Sender<SoupRealtimePatch>,
-    bg: JoinHandle<()>,
+    _bg: JoinHandle<()>,
 }
 
 struct Worker<A, P> {
@@ -188,7 +188,7 @@ impl SoupRealtimeServiceImpl {
 
         Self {
             sender: tx,
-            bg: task,
+            _bg: task,
         }
     }
 }
