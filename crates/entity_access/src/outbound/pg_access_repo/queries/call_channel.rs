@@ -1,10 +1,13 @@
 //! Queries for resolving a call to its channel ID and share permission ID.
 
+#[cfg(not(test))]
+use cached::proc_macro::cached;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Row returned by call channel queries.
-#[derive(sqlx::FromRow)]
+#[derive(Clone, sqlx::FromRow)]
 pub struct CallChannelRow {
     /// The channel the call belongs to.
     pub channel_id: Uuid,
@@ -43,6 +46,15 @@ pub async fn get_call_channel(
 /// Checks both active calls and archived call records.
 /// Active calls are checked first.
 #[tracing::instrument(err, skip(pool))]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 10,
+        result = true,
+        key = "String",
+        convert = r#"{format!("{}", channel_id)}"#
+    )
+)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_call_channel_by_channel_id(
     pool: &PgPool,

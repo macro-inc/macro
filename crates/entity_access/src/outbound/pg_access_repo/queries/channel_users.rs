@@ -1,11 +1,23 @@
 //! Query for users in a channel via comms_channel_participants.
 
+#[cfg(not(test))]
+use cached::proc_macro::cached;
+
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Get all user IDs that are active participants in a channel.
 #[tracing::instrument(err, skip(pool))]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 10,
+        result = true,
+        key = "String",
+        convert = r#"{format!("{}", channel_id)}"#
+    )
+)]
 pub async fn get_channel_users(
     pool: &PgPool,
     channel_id: &Uuid,
