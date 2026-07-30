@@ -1134,7 +1134,7 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
     #[tracing::instrument(skip(self), err)]
     async fn schedule_due_google_syncs(&self, due_before: DateTime<Utc>) -> Result<usize, Report> {
         let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
-        let result = sqlx::query!(
+        let due_count = sqlx::query_scalar!(
             r#"
             WITH due AS (
                 UPDATE calendar_backfill_jobs job
@@ -1159,19 +1159,22 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
                   AND account.sync_status = 'ready'
                   AND account.last_synced_at <= $1
                 RETURNING job.id
+            ),
+            republished AS (
+                UPDATE calendar_sync_outbox outbox
+                SET published_at = NULL
+                FROM due
+                WHERE outbox.backfill_job_id = due.id
             )
-            UPDATE calendar_sync_outbox outbox
-            SET published_at = NULL
-            FROM due
-            WHERE outbox.backfill_job_id = due.id
+            SELECT count(*) AS "due_count!" FROM due
             "#,
             due_before,
             &required_scopes,
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(report)?;
-        Ok(result.rows_affected() as usize)
+        Ok(due_count as usize)
     }
 }
 
