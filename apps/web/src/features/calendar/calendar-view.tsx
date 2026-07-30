@@ -581,8 +581,8 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
         )}
       </Show>
       <main class="calendar-view flex size-full min-h-0 bg-surface">
-        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
-          <div class="mb-3 flex min-w-0 items-center gap-3 border-b border-edge-muted pb-3">
+        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col gap-3">
+          <div class="flex min-w-0 items-center gap-3">
             <div class="flex shrink-0 items-center gap-1">
               <Button
                 variant={isTodayVisible() ? 'base' : 'active'}

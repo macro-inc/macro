@@ -19,7 +19,7 @@
 
 .calendar-view-content {
 	box-sizing: border-box;
-	padding: 1.25rem;
+	padding: 0 1.25rem 1.25rem;
 }
 
 .calendar-view .fc {
@@ -467,7 +467,7 @@
 
 @media (max-width: 639px) {
 	html[data-touch-device="true"] .calendar-view-content {
-		padding-top: calc(var(--mobile-content-inset-top, 0px) + 0.75rem);
+		padding-top: var(--mobile-content-inset-top, 0px);
 		padding-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 0.75rem);
 	}
 }
