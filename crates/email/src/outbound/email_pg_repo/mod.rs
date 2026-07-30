@@ -329,7 +329,7 @@ impl EmailRepo for EmailPgRepo {
         thread_id: Uuid,
     ) -> Result<(), Self::Err> {
         let mut connection = self.pool.acquire().await?;
-        thread::upsert_user_history(&mut connection, link_id, thread_id).await
+        thread::upsert_user_history(&mut *connection, link_id, thread_id).await
     }
 
     async fn update_message_starred_status_batch(

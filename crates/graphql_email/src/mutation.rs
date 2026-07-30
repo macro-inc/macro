@@ -105,6 +105,17 @@ pub struct UpdateEmailThreadLabelInput {
     pub value: bool,
 }
 
+fn mutation_error(error: &EmailErr) -> async_graphql::Error {
+    let message = match error {
+        EmailErr::ThreadNotFound | EmailErr::ThreadEmpty => "email thread not found",
+        EmailErr::LabelNotFound => "email label not found",
+        EmailErr::EmptyProviderLabelId => "email label is invalid",
+        EmailErr::Unauthorized => "not authorized to update email thread",
+        _ => "email thread mutation failed",
+    };
+    async_graphql::Error::new(message)
+}
+
 async fn reload_thread<O: EmailThreadMutationOutput>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -143,7 +154,7 @@ where
                     %thread_id,
                     "failed to mark email thread seen"
                 );
-                async_graphql::Error::new(error.to_string())
+                mutation_error(&error)
             })?;
 
         reload_thread::<O>(ctx, user_id, thread_id).await
@@ -173,7 +184,7 @@ where
                     value = input.value,
                     "failed to update email thread label"
                 );
-                async_graphql::Error::new(error.to_string())
+                mutation_error(&error)
             })?;
 
         reload_thread::<O>(ctx, user_id, thread_id).await
