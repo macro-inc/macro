@@ -7,13 +7,14 @@
 //! offsets are already committed.
 //!
 //! Per-entity event mapping and processing live in the [`call`], [`channel`],
-//! and [`project`] submodules; this module owns the poll loop, worker, retry
-//! policy, and commit semantics.
+//! [`chat`], and [`project`] submodules; this module owns the poll loop, worker,
+//! retry policy, and commit semantics.
 
 #![allow(clippy::enum_variant_names)]
 
 mod call;
 mod channel;
+mod chat;
 mod project;
 #[cfg(test)]
 mod test;
@@ -21,6 +22,7 @@ mod test;
 use std::{future::Future, time::Duration};
 
 use ::call::domain::events::CallMacroEvent;
+use ::chat::domain::events::ChatMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
@@ -36,7 +38,8 @@ use tokio::sync::mpsc;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use self::{
-    call::process_call_event, channel::process_channel_event, project::process_project_event,
+    call::process_call_event, channel::process_channel_event, chat::process_chat_event,
+    project::process_project_event,
 };
 
 /// Consumer group used for live search-index event offsets.
@@ -55,6 +58,7 @@ macro_event_broker::declare_topics!(
     DeclaredMacroEvent:
         CallMacroEvent,
         ChannelMacroEvent,
+        ChatMacroEvent,
         ProjectMacroEvent,
 );
 
@@ -169,6 +173,9 @@ async fn process_event(
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             process_channel_event(db, opensearch_client, event, partition, offset).await
+        }
+        DeclaredMacroEvent::ChatMacroEvent(event) => {
+            process_chat_event(db, opensearch_client, event, partition, offset).await
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await

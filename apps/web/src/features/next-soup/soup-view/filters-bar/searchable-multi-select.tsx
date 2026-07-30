@@ -279,7 +279,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
               <Combobox.Input
-                class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+                class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
                 placeholder={props.placeholder ?? 'Search...'}
               />
             </div>
@@ -404,7 +404,7 @@ export const SearchableMultiSelectInline = (
         <Combobox.Input
           ref={props.inputRef}
           onKeyDown={handleInputKeyDown}
-          class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+          class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
           placeholder={props.placeholder ?? 'Search...'}
         />
       </div>

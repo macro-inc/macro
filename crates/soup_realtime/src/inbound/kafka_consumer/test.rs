@@ -79,7 +79,7 @@ struct FlakyService {
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+    fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
         self.patches.lock().expect("patches lock").push(patch);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if attempt <= self.failures {
@@ -390,8 +390,8 @@ fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
 }
 
-#[tokio::test]
-async fn updated_payload_maps_to_document_patch() {
+#[test]
+fn updated_payload_maps_to_document_patch() {
     let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
         DOCUMENT_ID,
         updated_event(),
@@ -399,9 +399,7 @@ async fn updated_payload_maps_to_document_patch() {
     let service = flaky_service(0);
 
     assert!(matches!(
-        process_event(&service, &event, 0, 0)
-            .await
-            .expect("processing succeeds"),
+        process_event(&service, &event).expect("processing succeeds"),
         EventOutcome::Notified
     ));
 
@@ -425,34 +423,16 @@ fn malformed_and_unknown_events_are_rejected_by_the_declared_collection() {
     assert!(decode_payload(payload).is_err());
 }
 
-#[tokio::test(start_paused = true)]
-async fn transient_service_failures_retry_then_succeed() {
-    let service = flaky_service(2);
-    let patch = SoupRealtimePatch::for_entity(Patch::Updated(
-        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
+#[test]
+fn service_failure_is_returned_without_retry() {
+    let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
+        DOCUMENT_ID,
+        updated_event(),
     ));
+    let service = flaky_service(1);
 
-    notify_with_retry(&service, patch, 2, 17)
-        .await
-        .expect("eventual success");
+    assert!(process_event(&service, &event).is_err());
 
-    assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
-    assert_eq!(service.patches.lock().expect("patches lock").len(), 3);
-}
-
-#[tokio::test(start_paused = true)]
-async fn exhausted_retries_return_for_redelivery() {
-    let service = flaky_service(u32::MAX);
-    let patch = SoupRealtimePatch::for_entity(Patch::Updated(
-        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
-    ));
-
-    notify_with_retry(&service, patch, 2, 17)
-        .await
-        .expect_err("persistent failure returns without a commit");
-
-    assert_eq!(
-        service.attempts.load(Ordering::SeqCst),
-        MAX_SERVICE_ATTEMPTS
-    );
+    assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(service.patches.lock().expect("patches lock").len(), 1);
 }

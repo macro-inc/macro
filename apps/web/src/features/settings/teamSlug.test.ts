@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildTeamTaskAutolinkTargetUrl,
   getTeamSlugError,
+  isValidTeamTaskSlug,
   normalizeTeamSlugInput,
   TEAM_SLUG_ALLOWED_INPUT_REGEX,
   TEAM_SLUG_MAX_LENGTH,
@@ -71,5 +73,34 @@ describe('team slug validation', function () {
     expect(getTeamSlugError('AAAAA_BBBBB_CCCCC_DDD')).toBe(
       `team slug cannot be longer than ${TEAM_SLUG_MAX_LENGTH} characters`
     );
+  });
+});
+
+describe('GitHub autolink target URL', function () {
+  it('builds the numeric target template for the team slug', function () {
+    expect(buildTeamTaskAutolinkTargetUrl('ENG', 'https://macro.com/')).toBe(
+      'https://macro.com/app/task-slug/ENG-<num>'
+    );
+  });
+});
+
+describe('team task slug validation', function () {
+  it('accepts slugs the backend parser accepts', function () {
+    expect(isValidTeamTaskSlug('ENG-42')).toBe(true);
+    expect(isValidTeamTaskSlug('MY_TEAM-1')).toBe(true);
+    expect(isValidTeamTaskSlug('A-B-7')).toBe(true);
+  });
+
+  it('rejects slugs without a positive task number', function () {
+    expect(isValidTeamTaskSlug('ENG')).toBe(false);
+    expect(isValidTeamTaskSlug('ENG-')).toBe(false);
+    expect(isValidTeamTaskSlug('ENG-0')).toBe(false);
+    expect(isValidTeamTaskSlug('ENG-4a')).toBe(false);
+    expect(isValidTeamTaskSlug('ENG-9999999999')).toBe(false);
+  });
+
+  it('rejects empty prefix segments', function () {
+    expect(isValidTeamTaskSlug('-42')).toBe(false);
+    expect(isValidTeamTaskSlug('ENG--42')).toBe(false);
   });
 });

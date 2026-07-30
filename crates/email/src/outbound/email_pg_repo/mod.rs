@@ -1,11 +1,12 @@
 use crate::domain::{
     models::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-        EmailFilter, EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel,
-        MessageRow, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage,
-        SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        EmailFilter, EmailInboxDetails, EmailThreadPreview, Label, Link, LinkLabel,
+        MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, PreviewCursorQuery,
+        ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
+        UpsertedContacts, UserProvider,
     },
-    ports::{EmailRepo, LinkEmailSettings, RecipientsByMessageId},
+    ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -24,6 +25,7 @@ mod message;
 mod preview;
 mod preview_views;
 mod project;
+mod settings;
 mod thread;
 
 #[cfg(test)]
@@ -55,17 +57,39 @@ impl EmailPgRepo {
     }
 }
 
+impl EmailUserRepo for EmailPgRepo {
+    async fn user_accessible_inboxes(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Link>, EmailErr> {
+        link::inboxes_for_macro_id(&self.pool, macro_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+
+    async fn user_labels_for_link(&self, link_id: Uuid) -> Result<Vec<LinkLabel>, EmailErr> {
+        label::list_labels_by_link_id(&self.pool, link_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+
+    async fn user_inbox_details(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<EmailInboxDetails>, EmailErr> {
+        link::inbox_details_for_macro_id(&self.pool, &macro_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+}
+
 impl EmailRepo for EmailPgRepo {
     type Err = sqlx::Error;
 
     async fn fetch_email_settings(&self, link_id: Uuid) -> Result<LinkEmailSettings, EmailErr> {
-        let settings = email_db_client::settings::fetch_settings(&self.pool, link_id)
+        settings::fetch_email_settings(&self.pool, link_id)
             .await
-            .map_err(EmailErr::RepoErr)?;
-        Ok(LinkEmailSettings {
-            signature: settings.signature,
-            signature_on_replies_forwards: settings.signature_on_replies_forwards,
-        })
+            .map_err(|error| EmailErr::RepoErr(error.into()))
     }
 
     async fn previews_for_view_cursor(

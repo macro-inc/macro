@@ -277,7 +277,7 @@ export function CompanyViewsMenu() {
                 placeholder="View name"
                 class={cn(
                   'w-full rounded-md border border-edge-muted bg-transparent px-2 py-1 text-sm',
-                  'outline-none focus:border-accent placeholder:text-ink-faint'
+                  'outline-none focus:border-accent placeholder:text-ink-placeholder'
                 )}
               />
               <div class="flex items-center justify-between gap-1.5">

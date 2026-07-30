@@ -4,6 +4,7 @@ mod test;
 use crate::context::{self};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
+use chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
 use futures::future::join_all;
 use lambda_runtime::{
     Error, LambdaEvent,
@@ -13,7 +14,7 @@ use macro_db_client::projects::ProjectToDelete;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
-use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
+use sqs_client::search::{SearchQueueMessage, document::DocumentId};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
@@ -76,6 +77,42 @@ async fn publish_project_purge_events<B: MacroEventBroker>(
     Ok(())
 }
 
+#[tracing::instrument(skip(event_broker, chat_ids), err)]
+async fn publish_chat_purge_events<B: MacroEventBroker>(
+    event_broker: &B,
+    chat_ids: &[String],
+) -> anyhow::Result<()> {
+    let events = chat_ids
+        .iter()
+        .map(|chat_id| {
+            ChatMacroEvent::permanently_deleted(ChatPermanentlyDeletedMetadata {
+                chat_id: chat_id.clone(),
+                actor_user_id: None,
+                project_id: None,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let publications = events
+        .iter()
+        .map(|event| event_broker.send_event(event))
+        .collect::<Vec<_>>();
+    let publication_results = join_all(publications.into_iter().map(|publication| async move {
+        let handle = publication.context("failed to enqueue chat purge event")?;
+        handle
+            .await
+            .context("chat purge event publication task failed")?
+            .context("failed to publish chat purge event")
+    }))
+    .await;
+
+    for result in publication_results {
+        result?;
+    }
+
+    Ok(())
+}
+
 #[tracing::instrument(skip(ctx), err)]
 async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
     let date = chrono::Utc::now().naive_utc() - chrono::Duration::days(30);
@@ -121,20 +158,9 @@ async fn handle_chats(ctx: &context::Context) -> anyhow::Result<()> {
 
     tracing::debug!(chats_to_delete=?chats_to_delete, "chats to delete");
 
-    ctx.sqs_client
-        .bulk_send_message_to_search_event_queue(
-            chats_to_delete
-                .iter()
-                .map(|id| {
-                    SearchQueueMessage::RemoveChatMessage(RemoveChatMessage {
-                        chat_id: id.to_string(),
-                        message_id: None,
-                        index_override: None,
-                    })
-                })
-                .collect(),
-        )
-        .await?;
+    publish_chat_purge_events(&ctx.macro_event_broker, &chats_to_delete)
+        .await
+        .context("unable to publish chat purge events")?;
 
     ctx.sqs_client
         .bulk_enqueue_chat_delete(chats_to_delete)

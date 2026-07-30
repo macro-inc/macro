@@ -153,10 +153,6 @@ impl EntityAccessManagementService for NullPort {
 }
 
 impl ProjectSearchIndexer for NullPort {
-    async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
-        unreachable!()
-    }
-
     async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
         unreachable!()
     }
@@ -224,10 +220,6 @@ struct RecordingIndexer {
 }
 
 impl ProjectSearchIndexer for RecordingIndexer {
-    async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
-        unreachable!()
-    }
-
     async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
         unreachable!()
     }
@@ -1574,10 +1566,6 @@ impl OrderedIndexer {
 }
 
 impl ProjectSearchIndexer for OrderedIndexer {
-    async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
-        self.record("chats")
-    }
-
     async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
         self.record("documents")
     }
@@ -1740,7 +1728,7 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
 
     assert_eq!(
         *events.lock().unwrap(),
-        vec!["repo", "sha", "chats", "documents", "document_deletes"]
+        vec!["repo", "sha", "documents", "document_deletes"]
     );
     let published = published.lock().unwrap();
     assert_eq!(published.len(), 1);

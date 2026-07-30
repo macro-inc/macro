@@ -61,6 +61,11 @@ impl GraphqlSoupEmailMessage {
         self.0.is_sent
     }
 
+    /// Whether the message is a draft.
+    async fn is_draft(&self) -> bool {
+        self.0.is_draft
+    }
+
     /// Whether the message has attachments.
     async fn has_attachments(&self) -> bool {
         self.0.has_attachments
@@ -186,20 +191,38 @@ impl GraphqlSoupEmailMessageLabel {
     }
 }
 
-/// Load the newest non-draft content message for an email thread.
-pub async fn load_latest_email_message<R>(
+/// Load a paginated parsed-message page for an email thread.
+pub async fn load_email_messages<R>(
     ctx: &Context<'_>,
     key: EmailContentKey,
-) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>>
+) -> async_graphql::Result<Vec<GraphqlSoupEmailMessage>>
 where
     R: SoupEmailContentEdgeReader,
 {
     let loader = ctx.data::<DataLoader<EmailContentLoader<R>>>()?;
     let value = loader.load_one(key).await?;
     Ok(match value {
-        Some(EmailContentLoad::Found(message)) => Some(GraphqlSoupEmailMessage(*message)),
-        Some(EmailContentLoad::Missing | EmailContentLoad::Failed) | None => None,
+        Some(EmailContentLoad::Found(messages)) => {
+            messages.into_iter().map(GraphqlSoupEmailMessage).collect()
+        }
+        Some(EmailContentLoad::Missing | EmailContentLoad::Failed) | None => Vec::new(),
     })
+}
+
+/// Load the newest non-draft content message for an email thread.
+pub async fn load_latest_email_message<R>(
+    ctx: &Context<'_>,
+    thread_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>>
+where
+    R: SoupEmailContentEdgeReader,
+{
+    Ok(
+        load_email_messages::<R>(ctx, EmailContentKey::latest(thread_id))
+            .await?
+            .into_iter()
+            .next(),
+    )
 }
 
 #[cfg(test)]
@@ -222,11 +245,16 @@ mod tests {
             &self,
             ctx: &Context<'_>,
         ) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
-            load_latest_email_message::<ContentReader>(
+            load_latest_email_message::<ContentReader>(ctx, Uuid::from_u128(2)).await
+        }
+
+        async fn messages(
+            &self,
+            ctx: &Context<'_>,
+        ) -> async_graphql::Result<Vec<GraphqlSoupEmailMessage>> {
+            load_email_messages::<ContentReader>(
                 ctx,
-                EmailContentKey {
-                    thread_id: Uuid::from_u128(2),
-                },
+                EmailContentKey::page(Uuid::from_u128(2), 3, 2),
             )
             .await
         }
@@ -241,12 +269,7 @@ mod tests {
             keys: Vec<EmailContentKey>,
         ) -> HashMap<EmailContentKey, EmailContentLoad> {
             keys.into_iter()
-                .map(|key| {
-                    (
-                        key,
-                        EmailContentLoad::Found(Box::new(message(key.thread_id))),
-                    )
-                })
+                .map(|key| (key, EmailContentLoad::Found(vec![message(key.thread_id)])))
                 .collect()
         }
     }
@@ -279,6 +302,24 @@ mod tests {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    #[tokio::test]
+    async fn executes_paginated_messages_with_request_scoped_loader() {
+        let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+        let schema = Schema::build(ContentQuery, EmptyMutation, EmptySubscription)
+            .data(email_content_loader(user_id, ContentReader))
+            .finish();
+
+        let response = schema
+            .execute("{ messages { id threadId bodyParsed } }")
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.to_string(),
+            r#"{messages: [{id: "00000000-0000-0000-0000-000000000001", threadId: "00000000-0000-0000-0000-000000000002", bodyParsed: "Hello from the edge"}]}"#
+        );
     }
 
     #[tokio::test]

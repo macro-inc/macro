@@ -278,7 +278,7 @@ function CrmEnablementSection() {
           value={disableConfirmation()}
           onInput={(e) => setDisableConfirmation(e.currentTarget.value)}
           placeholder={DISABLE_CRM_PHRASE}
-          class="w-full px-3 py-2 text-sm border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
+          class="settings-input w-full"
         />
       </ConfirmDialog>
     </SettingsSection>

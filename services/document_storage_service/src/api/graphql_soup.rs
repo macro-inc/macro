@@ -73,11 +73,10 @@ async fn subscription_handler(
     protocol: GraphQLProtocol,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let Some(macro_user_id) = auth
+    let Some(acting_user) = auth
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user)
-        .map(|user| user.macro_user_id.clone())
     else {
         return (
             StatusCode::UNAUTHORIZED,
@@ -85,9 +84,11 @@ async fn subscription_handler(
         )
             .into_response();
     };
+    let macro_user_id = acting_user.macro_user_id.clone();
+    let organization_id = acting_user.user_context.organization_id.map(i64::from);
 
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_subscription_context_data(state, macro_user_id);
+    let data = graphql_subscription_context_data(&state, macro_user_id, organization_id);
     upgrade
         .protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
@@ -99,28 +100,36 @@ async fn subscription_handler(
         .into_response()
 }
 
-fn graphql_subscription_context_data(state: ApiContext, user: MacroUserIdStr<'static>) -> Data {
-    let soup_item_loader = soup_item_loader(
-        state.soup_router_state.service(),
-        state.soup_router_state.email_service(),
-    );
+fn graphql_subscription_context_data(
+    state: &ApiContext,
+    user: MacroUserIdStr<'static>,
+    organization_id: Option<i64>,
+) -> Data {
     let mut data = Data::default();
-    data.insert(soup_item_loader);
-    data.insert(state);
-    data.insert(user);
+    insert_graphql_context_data(&mut data, state, Some(user), organization_id);
     data
 }
 
 fn graphql_query_context_data(
-    req: async_graphql::Request,
+    mut req: async_graphql::Request,
     state: &ApiContext,
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
 ) -> async_graphql::Request {
-    let req = req.data(state.clone());
+    insert_graphql_context_data(&mut req.data, state, macro_user_id, organization_id);
+    req
+}
+
+fn insert_graphql_context_data(
+    data: &mut Data,
+    state: &ApiContext,
+    macro_user_id: Option<MacroUserIdStr<'static>>,
+    organization_id: Option<i64>,
+) {
+    data.insert(state.clone());
 
     let Some(macro_user_id) = macro_user_id else {
-        return req;
+        return;
     };
 
     let property_reader = complete_graph::PropertiesEntityPropertyReader::new(
@@ -136,44 +145,41 @@ fn graphql_query_context_data(
         state.soup_router_state.email_service(),
         state.entity_access_service.clone(),
     );
-    let favorite_reader = state.favorites_service.clone();
-    let permission_reader = state.entity_access_service.clone();
     let soup_item_loader = soup_item_loader(
         state.soup_router_state.service(),
         state.soup_router_state.email_service(),
     );
-    let req = req
-        .data(macro_user_id.clone())
-        .data(entity_mutation::EntityMutationActor {
-            user_id: macro_user_id.clone(),
-            organization_id,
-        })
-        .data(state.graphql_entity_mutation_service.clone())
-        .data(state.channel_service.clone())
-        .data(state.graphql_notification_reader.clone())
-        .data(state.entity_access_service.clone())
-        .data(soup_item_loader);
 
-    req.data(complete_graph::entity_properties_loader(
+    data.insert(macro_user_id.clone());
+    data.insert(entity_mutation::EntityMutationActor {
+        user_id: macro_user_id.clone(),
+        organization_id,
+    });
+    data.insert(state.graphql_entity_mutation_service.clone());
+    data.insert(state.channel_service.clone());
+    data.insert(state.graphql_notification_reader.clone());
+    data.insert(state.entity_access_service.clone());
+    data.insert(soup_item_loader);
+    data.insert(complete_graph::entity_properties_loader(
         macro_user_id.clone(),
         property_reader,
-    ))
-    .data(complete_graph::email_content_loader(
+    ));
+    data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
         email_content_reader,
-    ))
-    .data(complete_graph::entity_favorite_loader(
+    ));
+    data.insert(complete_graph::entity_favorite_loader(
         macro_user_id.clone(),
-        favorite_reader,
-    ))
-    .data(complete_graph::entity_permission_loader(
+        state.favorites_service.clone(),
+    ));
+    data.insert(complete_graph::entity_permission_loader(
         macro_user_id.clone(),
         organization_id,
-        permission_reader,
-    ))
-    .data(property_writer)
-    .data(complete_graph::entity_notifications_loader(
+        state.entity_access_service.clone(),
+    ));
+    data.insert(property_writer);
+    data.insert(complete_graph::entity_notifications_loader(
         macro_user_id,
         state.graphql_notification_reader.clone(),
-    ))
+    ));
 }

@@ -9,11 +9,14 @@ use sqlx::PgPool;
 use sqs_client::search::project::UpsertProject;
 
 use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::project::upsert_project;
+use crate::process::{chat::remove_chat_message, project::upsert_project};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ProjectIndexAction {
-    Reconcile { project_ids: Vec<String> },
+    Reconcile {
+        project_ids: Vec<String>,
+        purged_chat_ids: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +49,7 @@ pub(super) fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventD
                     Some(metadata.project_id.as_str()),
                     metadata.parent_project_id.as_deref(),
                 ]),
+                purged_chat_ids: Vec::new(),
             },
             project_id: &metadata.project_id,
             event_type: "project.created",
@@ -57,6 +61,7 @@ pub(super) fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventD
                     metadata.previous_parent_id.as_deref(),
                     metadata.parent_id.as_deref(),
                 ]),
+                purged_chat_ids: Vec::new(),
             },
             project_id: &metadata.project_id,
             event_type: "project.updated",
@@ -70,6 +75,7 @@ pub(super) fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventD
                         .map(|project_id| Some(project_id.as_str()))
                         .chain([metadata.parent_project_id.as_deref()]),
                 ),
+                purged_chat_ids: Vec::new(),
             },
             project_id: &metadata.project_id,
             event_type: "project.deleted",
@@ -83,6 +89,7 @@ pub(super) fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventD
                         .map(|project_id| Some(project_id.as_str()))
                         .chain([metadata.parent_project_id.as_deref()]),
                 ),
+                purged_chat_ids: Vec::new(),
             },
             project_id: &metadata.project_id,
             event_type: "project.restored",
@@ -96,6 +103,7 @@ pub(super) fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventD
                         .map(|project_id| Some(project_id.as_str()))
                         .chain([metadata.parent_project_id.as_deref()]),
                 ),
+                purged_chat_ids: metadata.purged_chat_ids.clone(),
             },
             project_id: &metadata.project_id,
             event_type: "project.permanently_deleted",
@@ -109,6 +117,7 @@ pub(super) fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventD
                         .map(|project_id| Some(project_id.as_str()))
                         .chain([metadata.parent_project_id.as_deref()]),
                 ),
+                purged_chat_ids: Vec::new(),
             },
             project_id: &metadata.root_project_id,
             event_type: "project.uploaded",
@@ -122,7 +131,10 @@ async fn process_project_index_action(
     action: ProjectIndexAction,
 ) -> anyhow::Result<()> {
     match action {
-        ProjectIndexAction::Reconcile { project_ids } => {
+        ProjectIndexAction::Reconcile {
+            project_ids,
+            purged_chat_ids,
+        } => {
             for project_id in project_ids {
                 upsert_project(
                     opensearch_client,
@@ -134,6 +146,11 @@ async fn process_project_index_action(
                 )
                 .await?;
             }
+
+            for chat_id in purged_chat_ids {
+                remove_chat_message(opensearch_client, &chat_id, None, None).await?;
+            }
+
             Ok(())
         }
     }

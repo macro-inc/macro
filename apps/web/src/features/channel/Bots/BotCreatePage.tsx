@@ -11,7 +11,6 @@ import {
   useAddBotToChannelsMutation,
   useCreateChannelScopedBotMutation,
 } from '@queries/channel/channel-bots';
-import { ChannelTypeEnum } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
@@ -19,6 +18,7 @@ import { createStore } from 'solid-js/store';
 import { BotCreationResult } from './BotCreationResult';
 import { BotFormSection } from './BotFormSection';
 import { BotProfileFields } from './BotProfileFields';
+import { botAssignableChannelOptions } from './botChannelOptions';
 import {
   type BotFormErrors,
   EMPTY_BOT_FORM,
@@ -52,14 +52,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   );
 
   const channelOptions = createMemo(() =>
-    channelsContext
-      .channels()
-      .filter((channel) => channel.channel_type === ChannelTypeEnum.Private)
-      .map((channel) => ({
-        id: channel.id,
-        name: channel.name?.trim() || 'Unnamed channel',
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    botAssignableChannelOptions(channelsContext.channels())
   );
   const resultChannels = createMemo(() => {
     const selected = new Set(createdChannelIds());

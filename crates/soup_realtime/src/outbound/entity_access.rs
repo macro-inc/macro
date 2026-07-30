@@ -55,11 +55,7 @@ impl<S> UserAccessExpander for EntityAccessExpander<S>
 where
     S: EntityAccessUserLookup,
 {
-    #[tracing::instrument(
-        skip(self),
-        fields(entity_type = %entity.entity_type, entity_id = %entity.entity_id),
-        err
-    )]
+    #[tracing::instrument(skip(self), err)]
     async fn expand_user_access(
         &self,
         entity: &Entity<'static>,

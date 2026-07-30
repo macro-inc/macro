@@ -24,7 +24,7 @@ use channels::domain::{
 };
 use entity_access::{
     domain::{
-        models::{AdminParticipantRole, EntityAccessReceipt},
+        models::{EntityAccessReceipt, MemberParticipantRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
@@ -212,7 +212,7 @@ where
 }
 
 fn caller_from_receipt(
-    receipt: &EntityAccessReceipt<AdminParticipantRole>,
+    receipt: &EntityAccessReceipt<MemberParticipantRole>,
 ) -> Result<MacroUserIdStr<'static>, ChannelBotWebhookHandlerErr> {
     receipt
         .get_authenticated_user()
@@ -241,7 +241,7 @@ fn caller_from_receipt(
 #[tracing::instrument(err, skip_all)]
 pub async fn create_channel_scoped_bot_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
-    access: ChannelAccessLevelExtractor<AdminParticipantRole, AccessSvc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, AccessSvc, Auth>,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>

@@ -4,6 +4,7 @@ use async_graphql::{
     Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
 };
 use graphql_common::{GraphqlCacheDeletion, GraphqlEntity, GraphqlSoupEntityType};
+use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -15,8 +16,8 @@ use models_soup::{
     crm_company::SoupCrmCompany,
     document::{SoupDocument, SoupDocumentSubType},
     email_thread::{
-        SoupAttachment, SoupContact, SoupEnrichedEmailThreadPreview, SoupLabel,
-        SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
+        SoupAttachment, SoupContact, SoupEnrichedEmailThreadPreview, SoupLabelListVisibility,
+        SoupLabelType, SoupMessageListVisibility,
     },
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
@@ -707,54 +708,6 @@ impl GraphqlSoupEmailParticipant {
     }
 }
 
-/// GraphQL representation of the soup email label.
-#[derive(SimpleObject)]
-pub struct GraphqlSoupEmailLabel {
-    /// The unique identifier.
-    id: ID,
-    /// The identifier of the link.
-    link_id: ID,
-    /// The identifier of the provider label.
-    provider_label_id: String,
-    /// The name.
-    name: String,
-    /// The created timestamp in RFC 3339 format.
-    created_at: String,
-    /// The message list visibility.
-    message_list_visibility: &'static str,
-    /// The label list visibility.
-    label_list_visibility: &'static str,
-    /// The type.
-    #[graphql(name = "type")]
-    type_: &'static str,
-}
-
-impl GraphqlSoupEmailLabel {
-    /// Construct a GraphQL email label from the Soup model.
-    pub fn new(value: &SoupLabel) -> Self {
-        Self {
-            id: ID(value.id.to_string()),
-            link_id: ID(value.link_id.to_string()),
-            provider_label_id: value.provider_label_id.clone(),
-            name: value.name.clone(),
-            created_at: value.created_at.to_rfc3339(),
-            message_list_visibility: match value.message_list_visibility {
-                SoupMessageListVisibility::Show => "show",
-                SoupMessageListVisibility::Hide => "hide",
-            },
-            label_list_visibility: match value.label_list_visibility {
-                SoupLabelListVisibility::LabelShow => "label_show",
-                SoupLabelListVisibility::LabelShowIfUnread => "label_show_if_unread",
-                SoupLabelListVisibility::LabelHide => "label_hide",
-            },
-            type_: match value.type_ {
-                SoupLabelType::System => "system",
-                SoupLabelType::User => "user",
-            },
-        }
-    }
-}
-
 /// GraphQL representation of the soup email attachment.
 #[derive(SimpleObject)]
 pub struct GraphqlSoupEmailAttachment {
@@ -956,11 +909,42 @@ where
     }
 
     /// The labels.
-    async fn labels(&self) -> Vec<GraphqlSoupEmailLabel> {
+    async fn labels(&self) -> Vec<GraphqlEmailLabel> {
         self.0
             .labels
             .iter()
-            .map(GraphqlSoupEmailLabel::new)
+            .map(|label| {
+                GraphqlEmailLabel::new(
+                    label.id,
+                    label.link_id,
+                    label.provider_label_id.clone(),
+                    label.name.clone(),
+                    label.created_at,
+                    match label.message_list_visibility {
+                        SoupMessageListVisibility::Show => {
+                            email::domain::models::MessageListVisibility::Show
+                        }
+                        SoupMessageListVisibility::Hide => {
+                            email::domain::models::MessageListVisibility::Hide
+                        }
+                    },
+                    match label.label_list_visibility {
+                        SoupLabelListVisibility::LabelShow => {
+                            email::domain::models::LabelListVisibility::LabelShow
+                        }
+                        SoupLabelListVisibility::LabelShowIfUnread => {
+                            email::domain::models::LabelListVisibility::LabelShowIfUnread
+                        }
+                        SoupLabelListVisibility::LabelHide => {
+                            email::domain::models::LabelListVisibility::LabelHide
+                        }
+                    },
+                    match label.type_ {
+                        SoupLabelType::System => email::domain::models::LabelType::System,
+                        SoupLabelType::User => email::domain::models::LabelType::User,
+                    },
+                )
+            })
             .collect()
     }
 
