@@ -267,8 +267,13 @@ async fn populate_merges_into_manual_contact(pool: PgPool) -> anyhow::Result<()>
     // The populate attached a source row; tearing that link down again
     // must keep the manual contact (manually_created shields it from
     // the no-sources orphan cleanup).
-    repo.depopulate_contact(&team_id, &link_id, "acme.com", "jane@acme.com")
+    let outcome = repo
+        .depopulate_contact(&team_id, &link_id, "acme.com", "jane@acme.com")
         .await?;
+    // Only the source row goes; the manual contact and its company stay.
+    assert!(outcome.source_deleted);
+    assert!(!outcome.contact_deleted);
+    assert!(!outcome.company_deleted);
     assert_eq!(count_contacts(&pool, company_id).await?, 1);
     assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
     Ok(())

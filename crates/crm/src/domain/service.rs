@@ -11,7 +11,7 @@ use crate::domain::{
     generic_email_domains::is_generic_email_domain,
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch,
+        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, Utc};
@@ -103,12 +103,15 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// it through the retry path. The caller is expected to gate this
     /// call on a prior check that the link has no other sent messages to
     /// `email`.
+    ///
+    /// Returns which rows the cascade actually deleted; a malformed email
+    /// yields the default (nothing removed).
     fn depopulate_contact(
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         email: &str,
-    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+    ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
 
     /// Bulk teardown for one user's email link within one team: drops
     /// the team's `crm_contact_sources` rows owned by `link_id`, then
@@ -620,21 +623,21 @@ where
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
             tracing::debug!(
                 email,
                 "depopulate_contact: skipping malformed email (no '@')"
             );
-            return Ok(());
+            return Ok(DepopulateContactOutcome::default());
         };
         if local_part.is_empty() || domain.is_empty() || domain.contains('@') {
             tracing::debug!(
                 email,
                 "depopulate_contact: skipping malformed email (empty part or multiple '@')"
             );
-            return Ok(());
+            return Ok(DepopulateContactOutcome::default());
         }
         self.companies_repository
             .depopulate_contact(team_id, link_id, domain, email)
@@ -1050,7 +1053,7 @@ impl CrmService for NoOpCrmService {
         _team_id: &uuid::Uuid,
         _link_id: &uuid::Uuid,
         _email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         unimplemented!("NoOpCrmService.depopulate_contact")
     }
 
