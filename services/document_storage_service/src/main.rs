@@ -984,7 +984,7 @@ async fn main() -> anyhow::Result<()> {
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
     let calendar_state = CalendarRouterState::new(
         Arc::new(calendar_events::domain::service::CalendarService::new(
-            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
         )),
         authorization_state.clone(),
     );
