@@ -40,12 +40,10 @@ switch (command) {
 
 async function register(): Promise<void> {
   const env = parseEnv(values.env) ?? fail('--env is required');
-  const endpointUrl =
-    values.url ??
-    ask('Webhook endpoint URL', env === 'local' ? localEndpoint : undefined);
-  const name = values.name ?? ask('Webhook name', 'macro-sdk-webhook');
+  const endpointUrl = required(values.url, '--url');
+  const name = required(values.name, '--name');
   const events = parseEvents(values.events ?? fail('--events is required'));
-  const scope = parseScope(values.scope) ?? askScope();
+  const scope = parseScope(values.scope) ?? fail('--scope is required');
   if (events.length === 0) fail('at least one event is required');
 
   const macro = new Macro({ env });
@@ -73,7 +71,8 @@ MACRO_WEBHOOK_SECRET=<the value above> bun run webhook receive ${webhook.id} --e
 async function receive(id: string): Promise<void> {
   const env = parseEnv(values.env) ?? fail('--env is required');
   const secret =
-    process.env.MACRO_WEBHOOK_SECRET ?? ask('Webhook signing secret');
+    process.env.MACRO_WEBHOOK_SECRET ??
+    fail('MACRO_WEBHOOK_SECRET is required');
   const port = parsePort(values.port ?? '8787');
   const macro = new Macro({ env, webhookSecret: secret });
   const events = macro.events;
@@ -110,31 +109,20 @@ function printHelp(): void {
   console.log(`
 Register a webhook or receive and print its events.
 
-  webhook register --env <dev|prod|local> [--url <endpoint URL>]
-                   [--name <webhook name>] --events <event,event>
-                   [--scope <user|team>]
+  webhook register --env <dev|prod|local> --url <endpoint URL>
+                   --name <webhook name> --events <event,event>
+                   --scope <user|team>
 
   webhook receive <webhook-id> --env <dev|prod|local> [--port <port>]
 
-For just run_local, register ${localEndpoint}. Run receive on the Docker host
-with MACRO_WEBHOOK_SECRET set to the value printed by register.
+For just run_local, use ${localEndpoint} for --url. Run receive on the Docker
+host with MACRO_WEBHOOK_SECRET set to the value printed by register.
 `);
 }
 
-function ask(label: string, defaultValue?: string): string {
-  const suffix = defaultValue ? ` [${defaultValue}]` : '';
-  const answer = prompt(`${label}${suffix}:`);
-  if (answer === null) process.exit(1);
-  const value = answer.trim() || defaultValue;
-  if (!value) fail(`${label} is required`);
-  return value;
-}
-
-function askScope(): 'user' | 'team' {
-  return (
-    parseScope(ask('Webhook scope (user, team)', 'user')) ??
-    fail('Webhook scope is required')
-  );
+function required(value: string | undefined, option: string): string {
+  if (value?.trim()) return value;
+  fail(`${option} is required`);
 }
 
 function parseEnv(value: string | undefined): Env | undefined {
