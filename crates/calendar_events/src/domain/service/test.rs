@@ -232,6 +232,7 @@ struct FakeLifecycle {
     completions: Arc<Mutex<Vec<usize>>>,
     failures: Arc<Mutex<Vec<CalendarBackfillFailureDisposition>>>,
     failure_outcome: CalendarBackfillFailureOutcome,
+    lease_lost: bool,
 }
 
 impl FakeLifecycle {
@@ -247,6 +248,14 @@ impl FakeLifecycle {
                 job_transitioned: true,
                 link_reauth_transitioned: false,
             },
+            lease_lost: false,
+        }
+    }
+
+    fn lease_lost() -> Self {
+        Self {
+            lease_lost: true,
+            ..Self::claimed()
         }
     }
 }
@@ -281,6 +290,9 @@ impl CalendarBackfillRepository for FakeLifecycle {
         _key: CalendarBackfillJobKey,
         _lease_token: Uuid,
     ) -> Result<(), Report> {
+        if self.lease_lost {
+            return Ok(());
+        }
         std::future::pending().await
     }
 
@@ -330,6 +342,53 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
 
     assert_eq!(count, 0);
     assert_eq!(lifecycle.completions.lock().unwrap().as_slice(), &[0]);
+}
+
+#[derive(Clone)]
+struct HangingGoogleProvider;
+
+impl GoogleCalendarProvider for HangingGoogleProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        std::future::pending().await
+    }
+
+    async fn sync_events(
+        &self,
+        _access_token: &str,
+        _context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        unreachable!("provider hangs before syncing events")
+    }
+}
+
+#[tokio::test]
+async fn google_coordinator_surfaces_lease_loss_while_work_is_running() {
+    let lifecycle = FakeLifecycle::lease_lost();
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        FakeRepo::default(),
+        HangingGoogleProvider,
+        lifecycle.clone(),
+    );
+
+    let error = coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::historical_sync(Utc::now()),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, GoogleCalendarBackfillRunError::LeaseLost));
+    assert!(lifecycle.completions.lock().unwrap().is_empty());
+    assert!(lifecycle.failures.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
