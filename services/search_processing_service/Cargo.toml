@@ -20,7 +20,13 @@ processing = [
   "dep:rootcause",
   "dep:tokio-retry",
 ]
-service = ["macro_db_client", "models_properties", "properties"]
+service = [
+  "dep:documents",
+  "dep:macro_event_broker",
+  "macro_db_client",
+  "models_properties",
+  "properties",
+]
 pdf = ["dep:pdfium-render"]
 
 [[bin]]
@@ -99,7 +105,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal", "sync", "time"] }
 tokio-retry = { workspace = true, optional = true }
-tokio-util = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

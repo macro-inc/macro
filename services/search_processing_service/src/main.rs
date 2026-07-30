@@ -1,7 +1,5 @@
 #![recursion_limit = "256"]
-use std::sync::Arc;
-#[cfg(feature = "processing")]
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
 use crate::inbound::kafka_consumer::{KafkaProcessingContext, run_event_consumer};
@@ -17,6 +15,7 @@ use config::{Config, Environment};
 use lexical_client::LexicalClient;
 use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
 use macro_entrypoint::MacroEntrypoint;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use opensearch_client::OpensearchClient;
 #[cfg(feature = "pdf")]
 use rust_embed::RustEmbed;
@@ -24,7 +23,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 #[cfg(feature = "processing")]
 use tokio_retry::{Retry, strategy::FixedInterval};
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 mod api;
 mod config;
@@ -74,6 +73,7 @@ struct PdfiumLib;
 
 #[cfg(feature = "processing")]
 const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(feature = "processing")]
 async fn supervise_event_consumer(
@@ -214,6 +214,12 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let shutdown_token = CancellationToken::new();
+    let event_broker_tracker = TaskTracker::new();
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
 
     #[cfg(feature = "processing")]
     let consumer_supervisor = {
@@ -277,11 +283,11 @@ async fn main() -> anyhow::Result<()> {
         ApiContext {
             db,
             authorization_state,
-            sqs_client,
             opensearch_client,
             config: Arc::new(config),
             backfill_service,
             backfill_jobs,
+            macro_event_broker,
         },
         shutdown_token.clone(),
     )
@@ -289,9 +295,24 @@ async fn main() -> anyhow::Result<()> {
 
     shutdown_token.cancel();
     #[cfg(feature = "processing")]
-    consumer_supervisor
+    let consumer_result = consumer_supervisor
         .await
-        .context("search processing event consumer supervisor failed")?;
+        .context("search processing event consumer supervisor failed");
 
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    #[cfg(feature = "processing")]
+    consumer_result?;
     api_result
 }
