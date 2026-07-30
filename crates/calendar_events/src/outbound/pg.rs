@@ -651,7 +651,7 @@ impl CalendarRepository for PgCalendarRepository {
         Ok(event_id)
     }
 
-    #[tracing::instrument(skip(self, range), err)]
+    #[tracing::instrument(skip(self, requester_id, range), err)]
     async fn list_occurrences(
         &self,
         requester_id: &str,

@@ -218,7 +218,7 @@ where
     }
 
     /// Query a bounded occurrence viewport.
-    #[tracing::instrument(skip(self, range), err)]
+    #[tracing::instrument(skip(self, requester_id, range), err)]
     pub async fn list_occurrences(
         &self,
         requester_id: &str,
@@ -378,7 +378,7 @@ where
     }
 
     /// Execute one idempotent queue delivery under a fenced renewable lease.
-    #[tracing::instrument(skip(self, access_token, range), fields(job_id = %key.job_id), err)]
+    #[tracing::instrument(skip(self, owner_id, access_token, range), fields(job_id = %key.job_id), err)]
     pub async fn run(
         &self,
         key: CalendarBackfillJobKey,
@@ -513,7 +513,7 @@ where
     }
 
     /// Fetch and reconcile calendars and events for a connected inbox.
-    #[tracing::instrument(skip(self, access_token, range), err)]
+    #[tracing::instrument(skip(self, owner_id, access_token, range), err)]
     pub async fn backfill(
         &self,
         key: CalendarBackfillJobKey,
