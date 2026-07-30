@@ -15,6 +15,7 @@
 mod call;
 mod channel;
 mod chat;
+mod context;
 mod project;
 #[cfg(test)]
 mod test;
@@ -26,14 +27,12 @@ use ::chat::domain::events::ChatMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
-use opensearch_client::OpensearchClient;
 use projects::domain::events::ProjectMacroEvent;
 use rdkafka::{
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
-use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
@@ -41,6 +40,8 @@ use self::{
     call::process_call_event, channel::process_channel_event, chat::process_chat_event,
     project::process_project_event,
 };
+
+pub(crate) use self::context::KafkaProcessingContext;
 
 /// Consumer group used for live search-index event offsets.
 pub(crate) struct SearchProcessingConsumerGroup;
@@ -159,14 +160,16 @@ fn attach_event_coordinates<E>(
     })
 }
 
-#[tracing::instrument(skip(db, opensearch_client, event), fields(partition, offset))]
+#[tracing::instrument(skip(context, event), fields(partition, offset))]
 async fn process_event(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
+    context: &KafkaProcessingContext,
     event: &DeclaredMacroEvent,
     partition: i32,
     offset: i64,
 ) -> EventOutcome {
+    let db = &context.db;
+    let opensearch_client = context.opensearch_client.as_ref();
+
     match event {
         DeclaredMacroEvent::CallMacroEvent(event) => {
             process_call_event(db, opensearch_client, event, partition, offset).await
@@ -184,14 +187,12 @@ async fn process_event(
 }
 
 async fn run_event_worker(
-    db: PgPool,
-    opensearch_client: OpensearchClient,
+    context: KafkaProcessingContext,
     mut events: mpsc::Receiver<ReceivedEvent>,
 ) {
     while let Some(received) = events.recv().await {
         let _ = process_event(
-            &db,
-            &opensearch_client,
+            &context,
             &received.event,
             received.partition,
             received.offset,
@@ -287,11 +288,10 @@ async fn poll_events(
 /// channel returns an error without committing the current Kafka message. On
 /// normal shutdown the sender is dropped and all buffered events are processed
 /// before this function returns.
-#[tracing::instrument(skip(db, opensearch_client, shutdown), fields(brokers), err)]
+#[tracing::instrument(skip(context, shutdown), fields(brokers), err)]
 pub(crate) async fn run_event_consumer(
     brokers: &str,
-    db: PgPool,
-    opensearch_client: OpensearchClient,
+    context: KafkaProcessingContext,
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), Report> {
     let consumer = KafkaEventConsumer::<SearchProcessingConsumerGroup>::from_env(brokers)?;
@@ -306,7 +306,7 @@ pub(crate) async fn run_event_consumer(
     );
 
     let (events_tx, events_rx) = mpsc::channel(CHANNEL_CAPACITY);
-    let worker = tokio::spawn(run_event_worker(db, opensearch_client, events_rx));
+    let worker = tokio::spawn(run_event_worker(context, events_rx));
     let poll_result = poll_events(&consumer, events_tx, shutdown).await;
     let worker_result = worker.await;
 
