@@ -86,6 +86,7 @@ pub struct CalendarOccurrenceQuery {
     /// Exclusive local date boundary for all-day events.
     end_date: Option<NaiveDate>,
     /// Maximum number of occurrences, from 1 through 2,000.
+    #[param(minimum = 1, maximum = 2000)]
     limit: Option<u16>,
     /// Opaque continuation cursor returned by the previous page.
     cursor: Option<String>,

@@ -2136,7 +2136,6 @@ fn db_sequence(sequence: u32) -> Result<i32, Report> {
         rootcause::report!(
             "calendar event sequence {sequence} overflows the database representation"
         )
-        .into()
     })
 }
 

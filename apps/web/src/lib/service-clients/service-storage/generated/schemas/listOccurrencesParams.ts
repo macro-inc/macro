@@ -24,7 +24,8 @@ export type ListOccurrencesParams = {
   endDate?: string;
   /**
    * Maximum number of occurrences, from 1 through 2,000.
-   * @minimum 0
+   * @minimum 1
+   * @maximum 2000
    */
   limit?: number;
   /**

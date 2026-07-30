@@ -896,7 +896,7 @@ export const removeBotFromChannelByBotParams = zod.object({
 /**
  * @summary Return calendar occurrences visible to the authenticated requester.
  */
-export const listOccurrencesQueryLimitMin = 0;
+export const listOccurrencesQueryLimitMax = 2000;
 
 export const listOccurrencesQueryParams = zod.object({
   start: zod.iso.datetime({}).describe('Inclusive UTC viewport start.'),
@@ -911,7 +911,8 @@ export const listOccurrencesQueryParams = zod.object({
     .describe('Exclusive local date boundary for all-day events.'),
   limit: zod
     .number()
-    .min(listOccurrencesQueryLimitMin)
+    .min(1)
+    .max(listOccurrencesQueryLimitMax)
     .optional()
     .describe('Maximum number of occurrences, from 1 through 2,000.'),
   cursor: zod
@@ -1017,14 +1018,14 @@ export const listOccurrencesResponse = zod
                 .union([
                   zod
                     .object({
-                      ends_at: zod.iso
+                      endsAt: zod.iso
                         .datetime({})
                         .describe('Exclusive end instant.'),
                       kind: zod.enum(['timed']),
-                      starts_at: zod.iso
+                      startsAt: zod.iso
                         .datetime({})
                         .describe('Inclusive start instant.'),
-                      time_zone: zod
+                      timeZone: zod
                         .string()
                         .nullish()
                         .describe(
@@ -1034,11 +1035,11 @@ export const listOccurrencesResponse = zod
                     .describe('An event with absolute instants.'),
                   zod
                     .object({
-                      end_date: zod.iso
+                      endDate: zod.iso
                         .date()
                         .describe('Exclusive local end date.'),
                       kind: zod.enum(['allDay']),
-                      start_date: zod.iso
+                      startDate: zod.iso
                         .date()
                         .describe('Inclusive local start date.'),
                     })
@@ -1047,7 +1048,7 @@ export const listOccurrencesResponse = zod
                     ),
                 ])
                 .describe(
-                  'The mutually exclusive time shape of a calendar event.'
+                  'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
                 ),
               title: zod.string().describe('Display title.'),
               transparency: zod
@@ -1076,14 +1077,14 @@ export const listOccurrencesResponse = zod
                 .union([
                   zod
                     .object({
-                      ends_at: zod.iso
+                      endsAt: zod.iso
                         .datetime({})
                         .describe('Exclusive end instant.'),
                       kind: zod.enum(['timed']),
-                      starts_at: zod.iso
+                      startsAt: zod.iso
                         .datetime({})
                         .describe('Inclusive start instant.'),
-                      time_zone: zod
+                      timeZone: zod
                         .string()
                         .nullish()
                         .describe(
@@ -1093,11 +1094,11 @@ export const listOccurrencesResponse = zod
                     .describe('An event with absolute instants.'),
                   zod
                     .object({
-                      end_date: zod.iso
+                      endDate: zod.iso
                         .date()
                         .describe('Exclusive local end date.'),
                       kind: zod.enum(['allDay']),
-                      start_date: zod.iso
+                      startDate: zod.iso
                         .date()
                         .describe('Inclusive local start date.'),
                     })
@@ -1106,7 +1107,7 @@ export const listOccurrencesResponse = zod
                     ),
                 ])
                 .describe(
-                  'The mutually exclusive time shape of a calendar event.'
+                  'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
                 ),
             })
             .describe(

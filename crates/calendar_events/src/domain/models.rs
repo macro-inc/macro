@@ -56,15 +56,16 @@ impl GoogleScopeSet {
 }
 
 /// The mutually exclusive time shape of a calendar event.
+///
+/// Fields are renamed per variant rather than with `rename_all_fields`
+/// because utoipa only honors variant-level serde renames when it
+/// derives the OpenAPI schema.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[serde(
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    tag = "kind"
-)]
+#[serde(rename_all = "camelCase", tag = "kind")]
 pub enum EventTime {
     /// An event with absolute instants.
+    #[serde(rename_all = "camelCase")]
     Timed {
         /// Inclusive start instant.
         starts_at: DateTime<Utc>,
@@ -74,6 +75,7 @@ pub enum EventTime {
         time_zone: Option<String>,
     },
     /// An all-day event using RFC 5545's exclusive end date.
+    #[serde(rename_all = "camelCase")]
     AllDay {
         /// Inclusive local start date.
         start_date: NaiveDate,

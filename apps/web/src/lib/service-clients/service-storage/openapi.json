@@ -833,7 +833,8 @@
             "schema": {
               "type": "integer",
               "format": "int32",
-              "minimum": 0
+              "maximum": 2000,
+              "minimum": 1
             }
           },
           {
@@ -16950,9 +16951,9 @@
           {
             "type": "object",
             "description": "An event with absolute instants.",
-            "required": ["starts_at", "ends_at", "kind"],
+            "required": ["startsAt", "endsAt", "kind"],
             "properties": {
-              "ends_at": {
+              "endsAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "Exclusive end instant."
@@ -16961,12 +16962,12 @@
                 "type": "string",
                 "enum": ["timed"]
               },
-              "starts_at": {
+              "startsAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "Inclusive start instant."
               },
-              "time_zone": {
+              "timeZone": {
                 "type": ["string", "null"],
                 "description": "Original IANA time-zone identifier, when supplied."
               }
@@ -16975,9 +16976,9 @@
           {
             "type": "object",
             "description": "An all-day event using RFC 5545's exclusive end date.",
-            "required": ["start_date", "end_date", "kind"],
+            "required": ["startDate", "endDate", "kind"],
             "properties": {
-              "end_date": {
+              "endDate": {
                 "type": "string",
                 "format": "date",
                 "description": "Exclusive local end date."
@@ -16986,7 +16987,7 @@
                 "type": "string",
                 "enum": ["allDay"]
               },
-              "start_date": {
+              "startDate": {
                 "type": "string",
                 "format": "date",
                 "description": "Inclusive local start date."
@@ -16994,7 +16995,7 @@
             }
           }
         ],
-        "description": "The mutually exclusive time shape of a calendar event."
+        "description": "The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema."
       },
       "EventTransparency": {
         "type": "string",

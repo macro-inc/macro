@@ -11,8 +11,8 @@ import type { EventTimeOneOfFourKind } from './eventTimeOneOfFourKind';
  */
 export type EventTimeOneOfFour = {
   /** Exclusive local end date. */
-  end_date: string;
+  endDate: string;
   kind: EventTimeOneOfFourKind;
   /** Inclusive local start date. */
-  start_date: string;
+  startDate: string;
 };

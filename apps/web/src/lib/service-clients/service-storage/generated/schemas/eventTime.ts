@@ -9,5 +9,9 @@ import type { EventTimeOneOfFour } from './eventTimeOneOfFour';
 
 /**
  * The mutually exclusive time shape of a calendar event.
+
+Fields are renamed per variant rather than with `rename_all_fields`
+because utoipa only honors variant-level serde renames when it
+derives the OpenAPI schema.
  */
 export type EventTime = EventTimeOneOf | EventTimeOneOfFour;

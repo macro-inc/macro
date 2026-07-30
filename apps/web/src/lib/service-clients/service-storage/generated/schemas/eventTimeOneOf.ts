@@ -12,10 +12,10 @@ import type { EventTimeOneOfTimeZone } from './eventTimeOneOfTimeZone';
  */
 export type EventTimeOneOf = {
   /** Exclusive end instant. */
-  ends_at: string;
+  endsAt: string;
   kind: EventTimeOneOfKind;
   /** Inclusive start instant. */
-  starts_at: string;
+  startsAt: string;
   /** Original IANA time-zone identifier, when supplied. */
-  time_zone?: EventTimeOneOfTimeZone;
+  timeZone?: EventTimeOneOfTimeZone;
 };
