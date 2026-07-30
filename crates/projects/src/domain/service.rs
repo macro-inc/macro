@@ -77,7 +77,7 @@ where
     pub sha_counter: Sha,
     /// Entity-access inheritance manager.
     pub entity_access_management_service: Eam,
-    /// Search and deletion queue publisher.
+    /// Document search and deletion queue publisher.
     pub search_indexer: Idx,
     /// Project lifecycle event broker.
     pub macro_event_broker: B,
@@ -534,13 +534,6 @@ where
             .map(|(document_id, _)| document_id.clone())
             .collect::<Vec<_>>();
 
-        if !purged.chat_ids.is_empty() {
-            let _ = self
-                .search_indexer
-                .remove_chats(purged.chat_ids)
-                .await
-                .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged chats for search"));
-        }
         if !purged.documents.is_empty() {
             let _ = self
                 .search_indexer
