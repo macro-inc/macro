@@ -13,8 +13,7 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isMobile } from '@core/mobile/isMobile';
-
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
@@ -168,11 +167,11 @@ export function MessageContainer(props: MessageContainerProps) {
     });
     if (response.isErr()) {
       toast.failure('Failed to get attachment. Please try again.');
-      return logger.error('Failed to get or create attachment document id', {
-        error: new Error(
+      return Telemetry.error(
+        new Error(
           'Failed to get or create attachment document id: ' + response.error
-        ),
-      });
+        )
+      );
     }
     const { document_id } = response.value;
 
@@ -182,14 +181,11 @@ export function MessageContainer(props: MessageContainerProps) {
       });
     if (maybeDocumentMetadata.isErr()) {
       toast.failure('Failed to get attachment. Please try again.');
-      return logger.error(
-        'Failed to get or create attachment document metadata',
-        {
-          error: new Error(
-            'Failed to get or create attachment document metadata: ' +
-              maybeDocumentMetadata.error
-          ),
-        }
+      return Telemetry.error(
+        new Error(
+          'Failed to get or create attachment document metadata: ' +
+            maybeDocumentMetadata.error
+        )
       );
     }
 

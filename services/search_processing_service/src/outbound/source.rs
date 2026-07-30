@@ -396,6 +396,8 @@ impl BackfillSource for PgBackfillSource {
             })
         });
         let rows_consumed = batch.len();
+        // This SQS message is intentionally limited to backfills, which may
+        // target an alternate OpenSearch index through `index_override`.
         let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
             .map(|p| {

@@ -126,44 +126,6 @@ pub async fn get_latest_backfill_job_by_link_id(
     Ok(record.map(Into::into))
 }
 
-/// Retrieves all backfill jobs created in the last 24 hours for a given macro ID
-#[tracing::instrument(skip(pool), err)]
-pub async fn get_recent_jobs_by_fusionauth_user_id(
-    pool: &PgPool,
-    fusionauth_user_id: &str,
-) -> anyhow::Result<Vec<service::backfill::BackfillJob>> {
-    // Jobs created in the last 24h for this user, excluding terminal (Cancelled/Failed)
-    // statuses, used for the connect rate limit.
-    let records = sqlx::query_as!(
-        db::backfill::BackfillJob,
-        r#"
-        SELECT
-            id,
-            link_id,
-            fusionauth_user_id,
-            threads_requested_limit,
-            total_threads,
-            threads_retrieved_count,
-            status as "status: db::backfill::BackfillJobStatus",
-            created_at,
-            updated_at
-        FROM email_backfill_jobs
-        WHERE fusionauth_user_id = $1
-        AND created_at > NOW() - INTERVAL '24 hours'
-        AND status NOT IN ('Cancelled', 'Failed')
-        ORDER BY created_at DESC
-        "#,
-        fusionauth_user_id
-    )
-    .fetch_all(pool)
-    .await?;
-
-    // Convert all database records to service models
-    let jobs = records.into_iter().map(Into::into).collect();
-
-    Ok(jobs)
-}
-
 /// Retrieves a user's most recent backfill jobs, newest first. Spans all of the
 /// user's links and all statuses; `link_id` is intentionally not used so jobs
 /// survive a link being deleted and recreated. Capped at 100 so frequent

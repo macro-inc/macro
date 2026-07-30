@@ -118,6 +118,48 @@ pub struct RunArgs {
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
+    /// Start a local OTLP trace collector and wire services to export to it.
+    /// Omit to leave tracing off (the default) — see `docker/docker-compose.yml`
+    /// for what each backend does.
+    #[arg(long)]
+    pub traces: Option<TracesBackend>,
+}
+
+/// Which OTLP trace collector `--traces` should bring up.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TracesBackend {
+    /// Fully local trace viewer at http://localhost:16686, no account needed.
+    Jaeger,
+    /// Forwards to Datadog APM (us5); requires `DD_API_KEY`.
+    Datadog,
+}
+
+impl TracesBackend {
+    /// The compose service name gated by this backend's profile.
+    pub fn compose_service(self) -> &'static str {
+        match self {
+            TracesBackend::Jaeger => "jaeger",
+            TracesBackend::Datadog => "datadog-agent",
+        }
+    }
+
+    /// The compose profile gating this backend's service.
+    pub fn compose_profile(self) -> &'static str {
+        match self {
+            TracesBackend::Jaeger => "jaeger",
+            TracesBackend::Datadog => "datadog",
+        }
+    }
+
+    /// Env var the backend needs to forward telemetry, if any. Checked
+    /// before starting the collector so a missing key fails loud instead of
+    /// silently dropping everything at the intake.
+    pub fn required_env(self) -> Option<&'static str> {
+        match self {
+            TracesBackend::Jaeger => None,
+            TracesBackend::Datadog => Some("DD_API_KEY"),
+        }
+    }
 }
 
 #[derive(Args, Clone, Default)]

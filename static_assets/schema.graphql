@@ -1,4 +1,18 @@
 """
+Channel activity operation exposed by GraphQL.
+"""
+enum ChannelActivityType {
+	"""
+	Record that the user viewed the channel.
+	"""
+	VIEW
+	"""
+	Record that the user interacted with the channel.
+	"""
+	INTERACT
+}
+
+"""
 Channel-specific entry inside the otherwise common share-policy model.
 """
 input ChannelSharePolicyInput {
@@ -17,8 +31,7 @@ input ChannelSharePolicyInput {
 }
 
 """
-Mutation root combining property-specific and capability-oriented entity
-mutations without coupling either domain adapter to the other.
+Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
 	"""
@@ -57,6 +70,14 @@ type CompleteMutationRoot {
 	Add or remove an entity from the actor's favorites.
 	"""
 	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+	"""
+	Record a view or interaction in the authenticated user's channel activity.
+	"""
+	recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!
+	"""
+	Update authenticated user-owned notifications and return authoritative rows.
+	"""
+	updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!
 }
 
 """
@@ -227,6 +248,40 @@ enum GraphqlCallStatus {
 	The unattended option.
 	"""
 	UNATTENDED
+}
+
+"""
+GraphQL fields for authoritative channel activity.
+"""
+type GraphqlChannelActivity {
+	"""
+	Stable activity row identifier.
+	"""
+	id: ID!
+	"""
+	User who owns this activity row.
+	"""
+	userId: String!
+	"""
+	Channel associated with the activity.
+	"""
+	channelId: ID!
+	"""
+	Activity row creation time in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Activity row update time in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Most recent channel view time in RFC 3339 format.
+	"""
+	viewedAt: String
+	"""
+	Most recent channel interaction time in RFC 3339 format.
+	"""
+	interactedAt: String
 }
 
 """
@@ -3162,6 +3217,38 @@ input MoveEntityInput {
 }
 
 """
+Explicit notification status operation exposed by GraphQL.
+"""
+enum NotificationUpdateOperation {
+	"""
+	Mark notifications as seen.
+	"""
+	MARK_SEEN
+	"""
+	Mark notifications as done.
+	"""
+	MARK_DONE
+	"""
+	Mark notifications as not done.
+	"""
+	MARK_UNDONE
+}
+
+"""
+Input for recording authenticated channel activity.
+"""
+input RecordChannelActivityInput {
+	"""
+	Channel receiving the activity update.
+	"""
+	channelId: ID!
+	"""
+	Kind of activity to record.
+	"""
+	activityType: ChannelActivityType!
+}
+
+"""
 One entity rename in a batch.
 """
 input RenameEntityInput {
@@ -3317,6 +3404,20 @@ input UpdateEntitySharePolicyInput {
 	New public/channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
+}
+
+"""
+Input for updating notification statuses.
+"""
+input UpdateNotificationsInput {
+	"""
+	User notification identifiers to update.
+	"""
+	notificationIds: [ID!]!
+	"""
+	Status operation applied to every requested notification.
+	"""
+	operation: NotificationUpdateOperation!
 }
 
 """

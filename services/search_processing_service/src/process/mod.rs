@@ -4,7 +4,7 @@ mod chat;
 pub mod context;
 mod document;
 mod email;
-mod project;
+pub(crate) mod project;
 mod properties;
 mod user;
 pub mod worker;
@@ -152,9 +152,6 @@ pub async fn process_message(
         }
         SearchQueueMessage::UpsertProject(message) => {
             project::upsert_project(&ctx.opensearch_client, &ctx.db, &message).await?;
-        }
-        SearchQueueMessage::RemoveProject(message) => {
-            project::remove_project(&ctx.opensearch_client, &message).await?;
         }
     }
 

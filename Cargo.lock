@@ -3025,6 +3025,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_mutation",
+ "graphql_channel",
  "graphql_common",
  "graphql_email",
  "graphql_entity_mutation",
@@ -3236,6 +3237,18 @@ checksum = "be8aed40e4edbf4d3b4431ab260b63fdc40f5780a4766824329ea0f1eefe3c0f"
 dependencies = [
  "log",
  "web-sys",
+]
+
+[[package]]
+name = "const-hex"
+version = "1.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33e2a781ebdf4467d1428dc4593067825fb646f6871475098d8577421af73558"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "proptest",
+ "serde_core",
 ]
 
 [[package]]
@@ -3990,9 +4003,12 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_queues",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "projects",
  "serde",
  "serde_json",
  "sqlx",
@@ -6185,6 +6201,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_channel"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "channels",
+ "chrono",
+ "entity_access",
+ "graphql_common",
+ "macro_user_id",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_common"
 version = "0.1.0"
 dependencies = [
@@ -6256,6 +6287,7 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "chrono",
  "graphql_common",
  "macro_user_id",
  "model-entity",
@@ -6263,6 +6295,7 @@ dependencies = [
  "rootcause",
  "serde_json",
  "tokio",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -8785,10 +8818,15 @@ name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
  "http 1.4.0",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry_sdk",
  "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -10511,9 +10549,13 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7175df06de5eaee9909d4805a3d07e28bb752c34cab57fa9cff549da596b30f"
 dependencies = [
+ "base64 0.22.1",
+ "const-hex",
  "opentelemetry",
  "opentelemetry_sdk",
  "prost 0.14.3",
+ "serde",
+ "serde_json",
  "tonic",
  "tonic-prost",
 ]
@@ -11486,6 +11528,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "proptest"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744"
+dependencies = [
+ "bitflags 2.11.1",
+ "num-traits",
+ "rand 0.9.4",
+ "rand_chacha 0.9.0",
+ "rand_xorshift",
+ "regex-syntax",
+ "unarray",
+]
+
+[[package]]
 name = "prost"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11792,6 +11849,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
+dependencies = [
+ "rand_core 0.9.5",
 ]
 
 [[package]]
@@ -12857,6 +12923,7 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
+ "projects",
  "properties",
  "rdkafka",
  "rootcause",
@@ -13032,6 +13099,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "base64 0.22.1",
  "channels",
  "chrono",
  "clap",
@@ -13041,6 +13109,7 @@ dependencies = [
  "entity_access_db_utils",
  "fusionauth",
  "futures",
+ "jsonwebtoken 10.3.0",
  "lexical_client",
  "macro_aws_config",
  "macro_db_client",
@@ -14338,6 +14407,7 @@ name = "sync_service"
 version = "0.1.0"
 dependencies = [
  "bebop",
+ "getrandom 0.3.4",
  "loro",
  "macro_sync_service_jwt",
  "matchit 0.8.4",
@@ -14352,6 +14422,7 @@ dependencies = [
  "wasm-bindgen",
  "web-time",
  "worker",
+ "worker-rs-otel",
 ]
 
 [[package]]
@@ -15293,6 +15364,12 @@ name = "ucd-trie"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
+
+[[package]]
+name = "unarray"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
 name = "unfurl"
@@ -16551,6 +16628,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "worker-rs-otel"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.3.4",
+ "http 1.4.0",
+ "opentelemetry",
+ "opentelemetry-proto",
+ "opentelemetry_sdk",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "web-time",
+ "worker",
+]
+
+[[package]]
 name = "worker-sys"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16660,6 +16754,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry_sdk",
  "percent-encoding",
  "phf 0.13.1",
@@ -16715,6 +16810,8 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-core",
+ "tracing-log",
+ "tracing-subscriber",
  "triomphe",
  "tungstenite 0.28.0",
  "typenum",

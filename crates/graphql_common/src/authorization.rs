@@ -12,6 +12,16 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::extract_part;
 
+/// Require the authenticated user inserted into the GraphQL request context
+/// by the mounting inbound HTTP adapter.
+pub fn require_authenticated_user(
+    ctx: &Context<'_>,
+) -> async_graphql::Result<MacroUserIdStr<'static>> {
+    ctx.data_opt::<MacroUserIdStr<'static>>()
+        .cloned()
+        .ok_or_else(|| async_graphql::Error::new("authentication required"))
+}
+
 /// Extract the authorized caller (reusing the `Cached` entry primed by the
 /// mounting HTTP handler) and require an authenticated user.
 pub async fn require_authorized_user<Auth, St>(

@@ -63,6 +63,7 @@
 	"workspaces": {
 		"packages": [
 			"apps/web",
+			"packages/observability",
 			"packages/collaboration",
 			"packages/loro-mirror",
 			"packages/lexical-core",

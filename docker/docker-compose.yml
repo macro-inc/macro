@@ -406,6 +406,11 @@ services:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
       - DSS_INTERNAL_AUTH_KEY=${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}
+      # This worker exports OTLP/JSON over HTTP, so it needs the
+      # HTTP intake (:4318) — NOT the gRPC :4317 endpoint the
+      # shared env (env_layer) injects for the .with_tonic() Rust services.
+      # Pinning it here overrides the shared env_file value for this service.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     networks:
       services:
         aliases:
@@ -440,6 +445,28 @@ services:
       services:
         aliases:
           - ai-editing-worker
+
+  # ============================================================================
+  # analytics_proxy (Port 8098)
+  # First-party analytics/telemetry proxy (Cloudflare Worker, local wrangler
+  # dev). Fronts PostHog and OTLP telemetry so ad blockers don't drop them and
+  # the browser never holds the Datadog API key. Locally the
+  # /i/otlp route forwards to the otel-collector alias (jaeger/datadog profile);
+  # if neither profile is up, trace exports just fail harmlessly.
+  # ============================================================================
+  analytics_proxy:
+    <<: *common-env
+    build:
+      context: .
+      dockerfile: docker/analytics-proxy.Dockerfile
+    ports:
+      - "8098:8098"
+    volumes:
+      - .:/app
+    networks:
+      services:
+        aliases:
+          - analytics-proxy
 
   # ============================================================================
   # lexical_service (Port 8096)
@@ -481,6 +508,65 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ============================================================================
+  # jaeger (UI port 16686, OTLP 4317/4318) — profile: jaeger
+  # Fully local trace viewer, no account needed. UI at http://localhost:16686.
+  # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d jaeger
+  # ============================================================================
+  jaeger:
+    profiles:
+      - jaeger
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    # Browser -> collector requests need CORS on the OTLP HTTP receiver.
+    # allowed-headers must include Content-Type: jaeger's default rejects the
+    # preflight the browser OTLP exporter sends, even with origins=*.
+    command:
+      [
+        "--collector.otlp.http.cors.allowed-origins=*",
+        "--collector.otlp.http.cors.allowed-headers=*",
+      ]
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      services:
+        aliases:
+          - otel-collector
+
+  # ============================================================================
+  # datadog-agent (OTLP 4317/4318) — profile: datadog
+  # Forwards OTLP traces to Datadog (us5); no local UI. View at
+  # us5.datadoghq.com -> APM -> Traces, filtered by env:local (DD_ENV).
+  # Binds the same OTLP ports as jaeger — run one or the other, not both.
+  # Start: DD_API_KEY=<key> docker compose --project-directory . -f docker/docker-compose.yml up -d datadog-agent
+  # ============================================================================
+  datadog-agent:
+    profiles:
+      - datadog
+    image: gcr.io/datadoghq/agent:7
+    environment:
+      # Default-empty (not :?) so the var is only required when this profile
+      # actually runs; the agent itself fails fast without a key.
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: us5.datadoghq.com
+      DD_ENV: ${DD_ENV:-local}
+      DD_HOSTNAME: local-dev
+      DD_APM_ENABLED: "true"
+    volumes:
+      # Mounted config exists to enable CORS on the OTLP HTTP receiver
+      # (browser -> agent); that setting has no env-var form.
+      - ./docker/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      services:
+        aliases:
+          - otel-collector
 
 networks:
   services:

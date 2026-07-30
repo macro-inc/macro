@@ -11,7 +11,7 @@
  */
 
 import { createQuerySignal } from '@graphql-cache/solid/create-query-signal';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
   SoupDocument,
@@ -124,7 +124,7 @@ export function useReactiveSoupAstItemsQuery(
   createComputed(
     on(error, (queryError) => {
       if (queryError) {
-        logger.error(queryError, { graphqlOperation: 'Soup' });
+        Telemetry.error(queryError, { graphqlOperation: 'Soup' });
       }
     })
   );

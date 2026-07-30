@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use call::domain::events::{
+use ::call::domain::events::{
     CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
     CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
-    CallStartedMetadata,
+    CallStartedMetadata, CallTopicEvent,
 };
 use channels::domain::{
     broker_events::{
@@ -18,14 +18,30 @@ use channels::domain::{
 };
 use chrono::Utc;
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
-use macro_event_topics::{MacroCallsTopic, MacroChannelsTopic, Topic as _};
+use macro_event_topics::{MacroCallsTopic, MacroChannelsTopic, MacroProjectsTopic, Topic as _};
 use macro_user_id::user_id::MacroUserIdStr;
+use projects::domain::events::{
+    ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
+    ProjectRestoredMetadata, ProjectTopicEvent, ProjectUpdatedMetadata, ProjectUploadedMetadata,
+};
+use uuid::Uuid;
 
-use super::*;
+use super::{
+    call::{CallEventDescription, CallIndexAction, describe_call_event},
+    channel::{ChannelEventDescription, ChannelIndexAction, describe_channel_event},
+    project::{
+        ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
+    },
+    *,
+};
 
 const CALL_ID: Uuid = Uuid::from_u128(1);
 const CHANNEL_ID: Uuid = Uuid::from_u128(2);
 const MESSAGE_ID: Uuid = Uuid::from_u128(3);
+const PROJECT_ID: &str = "project-root";
+const CHILD_PROJECT_ID: &str = "project-child";
+const PARENT_PROJECT_ID: &str = "project-parent";
+const NEW_PARENT_PROJECT_ID: &str = "project-new-parent";
 
 struct TestMessage {
     topic: &'static str,
@@ -114,7 +130,7 @@ fn recording_ready_event() -> CallTopicEvent {
 
 fn encoded_message<E: serde::Serialize>(
     topic: &'static str,
-    key: Uuid,
+    key: impl ToString,
     event: Event<E>,
 ) -> TestMessage {
     TestMessage {
@@ -287,15 +303,168 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
     ]
 }
 
+fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'static>)> {
+    let owner = user_id();
+
+    vec![
+        (
+            ProjectTopicEvent::Created(ProjectCreatedMetadata {
+                project_id: PROJECT_ID.to_string(),
+                owner: owner.clone(),
+                name: "Project".to_string(),
+                parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
+                created_at: Some(Utc::now()),
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![PROJECT_ID.to_string(), PARENT_PROJECT_ID.to_string()],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.created",
+            },
+        ),
+        (
+            ProjectTopicEvent::Updated(ProjectUpdatedMetadata {
+                project_id: PROJECT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(user_id()),
+                name: Some("Renamed project".to_string()),
+                previous_parent_id: Some(PARENT_PROJECT_ID.to_string()),
+                parent_id: Some(NEW_PARENT_PROJECT_ID.to_string()),
+                share_permission_updated: false,
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![
+                        PROJECT_ID.to_string(),
+                        PARENT_PROJECT_ID.to_string(),
+                        NEW_PARENT_PROJECT_ID.to_string(),
+                    ],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.updated",
+            },
+        ),
+        (
+            ProjectTopicEvent::Updated(ProjectUpdatedMetadata {
+                project_id: PROJECT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(user_id()),
+                name: None,
+                previous_parent_id: Some(PARENT_PROJECT_ID.to_string()),
+                parent_id: Some(String::new()),
+                share_permission_updated: true,
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![PROJECT_ID.to_string(), PARENT_PROJECT_ID.to_string()],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.updated",
+            },
+        ),
+        (
+            ProjectTopicEvent::Deleted(ProjectDeletedMetadata {
+                project_id: PROJECT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(user_id()),
+                parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
+                deleted_project_ids: vec![
+                    PROJECT_ID.to_string(),
+                    CHILD_PROJECT_ID.to_string(),
+                    CHILD_PROJECT_ID.to_string(),
+                    PARENT_PROJECT_ID.to_string(),
+                ],
+                deleted_document_ids: vec!["document-id".to_string()],
+                deleted_chat_ids: vec!["chat-id".to_string()],
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![
+                        PROJECT_ID.to_string(),
+                        CHILD_PROJECT_ID.to_string(),
+                        PARENT_PROJECT_ID.to_string(),
+                    ],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.deleted",
+            },
+        ),
+        (
+            ProjectTopicEvent::Restored(ProjectRestoredMetadata {
+                project_id: PROJECT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(user_id()),
+                parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
+                restored_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![
+                        PROJECT_ID.to_string(),
+                        CHILD_PROJECT_ID.to_string(),
+                        PARENT_PROJECT_ID.to_string(),
+                    ],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.restored",
+            },
+        ),
+        (
+            ProjectTopicEvent::PermanentlyDeleted(ProjectPermanentlyDeletedMetadata {
+                project_id: PROJECT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(user_id()),
+                parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
+                purged_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
+                purged_document_ids: vec!["document-id".to_string()],
+                purged_chat_ids: vec!["chat-id".to_string()],
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![
+                        PROJECT_ID.to_string(),
+                        CHILD_PROJECT_ID.to_string(),
+                        PARENT_PROJECT_ID.to_string(),
+                    ],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.permanently_deleted",
+            },
+        ),
+        (
+            ProjectTopicEvent::Uploaded(ProjectUploadedMetadata {
+                root_project_id: PROJECT_ID.to_string(),
+                owner,
+                name: "Uploaded project".to_string(),
+                parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
+                project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
+            }),
+            ProjectEventDescription {
+                action: ProjectIndexAction::Reconcile {
+                    project_ids: vec![
+                        PROJECT_ID.to_string(),
+                        CHILD_PROJECT_ID.to_string(),
+                        PARENT_PROJECT_ID.to_string(),
+                    ],
+                },
+                project_id: PROJECT_ID,
+                event_type: "project.uploaded",
+            },
+        ),
+    ]
+}
+
 #[test]
 fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert_eq!(
         SearchProcessingConsumerGroup::GROUP_NAME,
         "search-processing-service"
     );
-    let topics = SearchProcessingBrokerEvent::topics();
+    let topics = DeclaredMacroEvent::topics();
     assert!(topics.contains(&MacroCallsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
 }
 
 #[test]
@@ -366,6 +535,32 @@ fn maps_all_channel_lifecycle_events_to_index_actions() {
 }
 
 #[test]
+fn maps_all_project_lifecycle_events_to_reconciliation_actions() {
+    let cases = project_event_cases();
+    assert_eq!(cases.len(), 7);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable project event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_project_event(&event), expected);
+    }
+}
+
+#[test]
+fn project_id_collection_is_stable_and_drops_missing_or_empty_ids() {
+    assert_eq!(
+        collect_project_ids([
+            Some(PROJECT_ID),
+            None,
+            Some(""),
+            Some(CHILD_PROJECT_ID),
+            Some(PROJECT_ID),
+        ]),
+        vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()]
+    );
+}
+
+#[test]
 fn channel_envelope_decodes_round_trip() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
@@ -377,12 +572,70 @@ fn channel_envelope_decodes_round_trip() {
         Event::new(event.clone()),
     );
 
-    let decoded = SearchProcessingBrokerEvent::decode(&message).expect("decodable channel event");
-    let SearchProcessingBrokerEvent::ChannelMacroEvent(decoded_event) = decoded else {
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable channel event");
+    let DeclaredMacroEvent::ChannelMacroEvent(decoded_event) = decoded else {
         panic!("expected channel event");
     };
     assert_eq!(decoded_event.key(), CHANNEL_ID.to_string());
     assert_eq!(decoded_event.event().event, event);
+}
+
+#[test]
+fn project_envelope_decodes_round_trip_with_string_key() {
+    let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
+        project_id: PROJECT_ID.to_string(),
+        owner: user_id(),
+        actor_user_id: Some(user_id()),
+        parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
+        restored_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
+    });
+    let message = encoded_message(
+        MacroProjectsTopic::TOPIC_STR,
+        PROJECT_ID,
+        Event::new(event.clone()),
+    );
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable project event");
+    let DeclaredMacroEvent::ProjectMacroEvent(decoded_event) = decoded else {
+        panic!("expected project event");
+    };
+    assert_eq!(decoded_event.key(), PROJECT_ID);
+    assert_eq!(decoded_event.event().event, event);
+}
+
+#[tokio::test]
+async fn unsupported_project_schema_message_is_commit_safe() {
+    let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
+        project_id: PROJECT_ID.to_string(),
+        owner: user_id(),
+        actor_user_id: Some(user_id()),
+        parent_project_id: None,
+        restored_project_ids: vec![PROJECT_ID.to_string()],
+    });
+    let message = encoded_message(
+        MacroProjectsTopic::TOPIC_STR,
+        PROJECT_ID,
+        Event::with_schema_version(event, 2),
+    );
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 4, 30);
+    let (sender, mut receiver) = mpsc::channel(1);
+
+    match handoff_decoded(&sender, decoded).await {
+        HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected,
+            actual,
+        }) => {
+            assert_eq!(topic, MacroProjectsTopic::TOPIC_STR);
+            assert_eq!(expected, 1);
+            assert_eq!(actual, 2);
+        }
+        outcome => panic!("expected malformed project record, got {outcome:?}"),
+    }
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
 }
 
 #[tokio::test]
@@ -396,7 +649,7 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         CHANNEL_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 2, 20);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 2, 20);
     let (sender, mut receiver) = mpsc::channel(1);
 
     match handoff_decoded(&sender, decoded).await {
@@ -424,8 +677,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         key: Some(CALL_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed =
-        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&malformed), 1, 10);
+    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 1, 10);
     assert!(matches!(malformed, Err(EventBrokerError::Serialization(_))));
 
     let missing_key = TestMessage {
@@ -438,8 +690,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         )
         .payload,
     };
-    let missing_key =
-        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&missing_key), 1, 11);
+    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 1, 11);
     assert!(matches!(
         missing_key,
         Err(EventBrokerError::MissingMessageKey)
@@ -450,8 +701,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         CALL_ID,
         Event::with_schema_version(archived_event(), 2),
     );
-    let unsupported =
-        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&unsupported), 1, 12);
+    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 1, 12);
     assert!(matches!(
         unsupported,
         Err(EventBrokerError::UnsupportedSchemaVersion {
@@ -482,7 +732,7 @@ async fn successful_handoff_carries_event_partition_and_offset() {
         CALL_ID,
         Event::new(event.clone()),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
     let (sender, mut receiver) = mpsc::channel(1);
 
     assert!(matches!(
@@ -493,7 +743,7 @@ async fn successful_handoff_carries_event_partition_and_offset() {
     let received = receiver.recv().await.expect("handed-off event");
     assert_eq!(received.partition, 3);
     assert_eq!(received.offset, 42);
-    let SearchProcessingBrokerEvent::CallMacroEvent(received_event) = received.event else {
+    let DeclaredMacroEvent::CallMacroEvent(received_event) = received.event else {
         panic!("expected call event");
     };
     assert_eq!(received_event.event().event, event);
@@ -506,7 +756,7 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
         CALL_ID,
         Event::new(archived_event()),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
     let (sender, receiver) = mpsc::channel(1);
     drop(receiver);
 

@@ -8,7 +8,7 @@ use crate::local::instance::Instance;
 #[test]
 fn key_is_deterministic_and_kickstart_sensitive() {
     let instance = Instance::derive(None, None).unwrap();
-    crate::local::fusionauth::write_kickstart(&instance).unwrap();
+    crate::local::fusionauth::write_kickstart(&instance, None).unwrap();
 
     let a = Plan::compute(&instance).unwrap();
     let b = Plan::compute(&instance).unwrap();
@@ -17,7 +17,7 @@ fn key_is_deterministic_and_kickstart_sensitive() {
 
     // A named instance generates a kickstart with different ports → new key.
     let other = Instance::derive(Some("snapshot-key-test"), None).unwrap();
-    crate::local::fusionauth::write_kickstart(&other).unwrap();
+    crate::local::fusionauth::write_kickstart(&other, None).unwrap();
     let c = Plan::compute(&other).unwrap();
     assert_ne!(
         a.key, c.key,

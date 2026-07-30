@@ -1,13 +1,19 @@
+#[cfg(test)]
+mod test;
+
 use crate::context::{self};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
+use futures::future::join_all;
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use sqs_client::search::{
-    SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project::RemoveProject,
-};
+use macro_db_client::projects::ProjectToDelete;
+use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
+use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
+use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
@@ -19,6 +25,53 @@ pub async fn handler(
         handle_documents(&ctx),
         handle_projects(&ctx)
     )?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(event_broker, projects_to_delete), err)]
+async fn publish_project_purge_events<B: MacroEventBroker>(
+    event_broker: &B,
+    projects_to_delete: &[ProjectToDelete],
+) -> anyhow::Result<()> {
+    let events = projects_to_delete
+        .iter()
+        .map(|project| {
+            let project_id = project.project_id.clone();
+            let owner: MacroUserIdStr<'static> = MacroUserIdStr::try_from(project.user_id.clone())
+                .with_context(|| format!("invalid owner for project {}", project.project_id))?;
+
+            Ok(ProjectMacroEvent::permanently_deleted(
+                project_id.clone(),
+                ProjectPermanentlyDeletedMetadata {
+                    project_id: project_id.clone(),
+                    owner,
+                    actor_user_id: None,
+                    parent_project_id: None,
+                    purged_project_ids: vec![project_id],
+                    purged_document_ids: Vec::new(),
+                    purged_chat_ids: Vec::new(),
+                },
+            ))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let publications = events
+        .iter()
+        .map(|event| event_broker.send_event(event))
+        .collect::<Vec<_>>();
+    let publication_results = join_all(publications.into_iter().map(|publication| async move {
+        let handle = publication.context("failed to enqueue project purge event")?;
+        handle
+            .await
+            .context("project purge event publication task failed")?
+            .context("failed to publish project purge event")
+    }))
+    .await;
+
+    for result in publication_results {
+        result?;
+    }
 
     Ok(())
 }
@@ -37,25 +90,18 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
 
     tracing::debug!(projects_to_delete=?projects_to_delete, "projects to delete");
 
-    // Idempotent safety net — the soft delete already removed these from the
-    // search index.
-    ctx.sqs_client
-        .bulk_send_message_to_search_event_queue(
-            projects_to_delete
-                .iter()
-                .map(|id| {
-                    SearchQueueMessage::RemoveProject(RemoveProject {
-                        project_id: id.to_string(),
-                        index_override: None,
-                    })
-                })
-                .collect(),
-        )
-        .await?;
+    publish_project_purge_events(&ctx.macro_event_broker, &projects_to_delete)
+        .await
+        .context("unable to publish project purge events")?;
+
+    let project_ids = projects_to_delete
+        .into_iter()
+        .map(|project| project.project_id)
+        .collect::<Vec<String>>();
 
     // We can actually perform the project deletion here as we will automatically be queuing all
     // the items in the project for deletion as well
-    macro_db_client::projects::delete::delete_projects_bulk(&ctx.db, &projects_to_delete)
+    macro_db_client::projects::delete::delete_projects_bulk(&ctx.db, &project_ids)
         .await
         .context("unable to delete projects")?;
 

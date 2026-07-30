@@ -43,6 +43,13 @@ fn soup_response_schema_exposes_frontend_fields() {
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
+        "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!",
+        "enum ChannelActivityType {",
+        "enum NotificationUpdateOperation {",
+        "MARK_SEEN",
+        "MARK_DONE",
+        "MARK_UNDONE",
         "type SoupSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
     ] {

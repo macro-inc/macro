@@ -1,17 +1,12 @@
-//! SQS adapter for project search indexing and document deletion.
+//! SQS adapter for cross-family search cleanup and document deletion.
 
 use std::sync::Arc;
 
-use sqs_client::search::{
-    SearchQueueMessage,
-    chat::RemoveChatMessage,
-    document::DocumentId,
-    project::{RemoveProject, UpsertProject},
-};
+use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
 
 use crate::domain::ports::ProjectSearchIndexer;
 
-/// SQS-backed project search-index and document-deletion adapter.
+/// SQS-backed cross-family search cleanup and document-deletion adapter.
 #[derive(Clone)]
 pub struct SqsProjectSearchIndexer {
     sqs: Arc<sqs_client::SQS>,
@@ -25,40 +20,6 @@ impl SqsProjectSearchIndexer {
 }
 
 impl ProjectSearchIndexer for SqsProjectSearchIndexer {
-    #[tracing::instrument(skip(self), err)]
-    async fn upsert_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = project_ids
-            .into_iter()
-            .map(|project_id| {
-                SearchQueueMessage::UpsertProject(UpsertProject {
-                    project_id,
-                    index_override: None,
-                })
-            })
-            .collect();
-
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn remove_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = project_ids
-            .into_iter()
-            .map(|project_id| {
-                SearchQueueMessage::RemoveProject(RemoveProject {
-                    project_id,
-                    index_override: None,
-                })
-            })
-            .collect();
-
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
-    }
-
     #[tracing::instrument(skip(self), err)]
     async fn remove_chats(&self, chat_ids: Vec<String>) -> anyhow::Result<()> {
         let messages = chat_ids

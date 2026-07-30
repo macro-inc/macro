@@ -416,7 +416,6 @@ async fn build_auth_proxy(
         .unwrap_or(config.fusionauth_base_url.as_ref())
         .to_owned();
     let fusionauth_client = fusionauth::FusionAuthClient::new(
-        config.fusionauth_tenant_id.as_ref().to_owned(),
         fusionauth_api_key.as_ref().to_owned(),
         config.fusionauth_client_id.as_ref().to_owned(),
         fusionauth_client_secret.as_ref().to_owned(),

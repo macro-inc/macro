@@ -1,5 +1,5 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
-//! `graphql_properties`, `graphql_notification`, `graphql_email`,
+//! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
 //! `graphql_entity_mutation`) into the complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
@@ -13,6 +13,11 @@ mod schema;
 mod sdl_test;
 
 pub use edges::{SoupEdges, SoupEmailThreadEdges};
+pub use graphql_channel::{
+    ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
+    GraphqlChannelActivity, GraphqlChannelActivityType, NoOpChannelActivityMutationService,
+    RecordChannelActivityInput,
+};
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailServiceEmailContentReader,
@@ -29,7 +34,9 @@ pub use graphql_favorite::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,
 };
 pub use graphql_notification::{
-    EntityNotificationsLoader, SoupNotificationEdgeReader, entity_notifications_loader,
+    EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,
+    NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
+    UpdateNotificationsInput, entity_notifications_loader,
 };
 pub use graphql_permission::{
     EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,

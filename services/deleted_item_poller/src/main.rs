@@ -12,6 +12,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_event_broker::{GlobalSpawner, KafkaEventPublisher};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
@@ -23,6 +24,12 @@ async fn main() -> Result<(), Error> {
     let config = Config::from_env().context("all necessary env vars should be available")?;
 
     tracing::trace!("initialized config");
+
+    let macro_event_broker = context::PollerEventBroker::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        GlobalSpawner,
+    );
 
     // We should only ever need 1 connection
     let db = PgPoolOptions::new()
@@ -44,6 +51,7 @@ async fn main() -> Result<(), Error> {
 
     let ctx = context::Context {
         db,
+        macro_event_broker,
         sqs_client: Arc::new(sqs_client),
     };
 

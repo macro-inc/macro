@@ -1,4 +1,3 @@
-import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@phosphor/caret-left.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -26,7 +25,7 @@ export function LightboxChrome(props: LightboxChromeProps) {
         <Show when={!props.navigationHidden}>
           <button
             class={cn(navButtonClass, 'left-4')}
-            style={{ 'z-index': stackingContext.zModal + 1 }}
+            style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
             onClick={props.onPrevious}
             disabled={!props.onPrevious}
             aria-label="Previous image"
@@ -36,7 +35,7 @@ export function LightboxChrome(props: LightboxChromeProps) {
 
           <button
             class={cn(navButtonClass, 'right-4')}
-            style={{ 'z-index': stackingContext.zModal + 1 }}
+            style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
             onClick={props.onNext}
             disabled={!props.onNext}
             aria-label="Next image"
@@ -50,7 +49,7 @@ export function LightboxChrome(props: LightboxChromeProps) {
       <Show when={props.indexLabel}>
         <div
           class="absolute top-4 left-4 bg-surface backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300"
-          style={{ 'z-index': stackingContext.zModal + 1 }}
+          style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
         >
           <span class="text-sm text-ink font-medium">
             {props.indexLabel?.()}

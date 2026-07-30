@@ -40,9 +40,6 @@ pub enum InitError {
     #[error("No Gmail grant available to provision from")]
     NoGmailGrant,
 
-    #[error("Job limit exceeded")]
-    TooManyJobs,
-
     #[error("Failed to enqueue backfill message")]
     EnqueueError,
 
@@ -89,7 +86,6 @@ impl InitError {
             | InitError::NoGmailGrant
             | InitError::BadRequest(_)
             | InitError::Parse(_) => StatusCode::BAD_REQUEST,
-            InitError::TooManyJobs => StatusCode::TOO_MANY_REQUESTS,
             InitError::EnqueueError | InitError::DatabaseError(_) | InitError::GmailError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -201,18 +197,46 @@ pub async fn handler(
     // Init runs on every authentication, so its expected no-op outcomes (400s)
     // must not error-log. The span skips the auto err event and the result is
     // classified here, inside the span, where user fields still attach.
+    let link_id = query.link_id;
+    let db = ctx.db.clone();
     let result = init_user(ctx, query, authorization).await;
     if let Err(e) = &result {
         let status = e.status_code();
         if status.is_server_error() {
             tracing::error!(error = ?e, "init failed");
-        } else if status == StatusCode::TOO_MANY_REQUESTS {
-            tracing::warn!(error = %e, "init rate limited");
         } else {
             tracing::debug!(error = %e, "init declined");
         }
+        cleanup_in_progress_link_on_failure(&db, link_id, e).await;
     }
     result
+}
+
+/// Whether a failed `/email/init` should delete its `in_progress_user_link` row. True for
+/// every terminal failure except `SharedInboxConflict`, which is held open on purpose so the
+/// `force_share` retry can reuse the same `link_id`.
+fn should_clean_up_in_progress_link(error: &InitError) -> bool {
+    !matches!(error, InitError::SharedInboxConflict { .. })
+}
+
+/// A failed `/email/init` otherwise leaves the `in_progress_user_link` row behind — only the
+/// success paths delete it — where it counts toward the `/link/gmail` start cap and can lock
+/// the user out of further attempts.
+async fn cleanup_in_progress_link_on_failure(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    link_id: Option<Uuid>,
+    error: &InitError,
+) {
+    if let Some(link_id) = link_id
+        && should_clean_up_in_progress_link(error)
+    {
+        macro_db_client::in_progress_user_link::delete_in_progress_user_link(db, &link_id)
+            .await
+            .inspect_err(|del_err| {
+                tracing::warn!(error = ?del_err, ?link_id, "Failed to clean up in_progress_user_link after failed init");
+            })
+            .ok();
+    }
 }
 
 async fn init_user(
@@ -338,8 +362,6 @@ async fn init_user(
                     .context("Failed to look up child's fusion id for self-link bootstrap")?
                     .context("child macro user disappeared before self-link bootstrap")?
                     .to_string();
-
-            enforce_backfill_rate_limit(&ctx.db, &child_fusion_id, &linked_email).await?;
 
             let gmail_token =
                 fetch_gmail_token_for_email(&ctx, &child_fusion_id, &linked_email).await?;
@@ -517,9 +539,6 @@ async fn init_user(
                     .into_response());
             }
 
-            enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &linked_email)
-                .await?;
-
             let gmail_token =
                 fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
                     .await?;
@@ -569,8 +588,6 @@ async fn init_user(
 
         let email = extract_email_with_response(&user_context.user_id)
             .map_err(|_| InitError::BadRequest("Failed to extract email".to_string()))?;
-
-        enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &email).await?;
 
         let gmail_token =
             fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &email).await?;
@@ -718,28 +735,6 @@ async fn init_user(
         }),
     )
         .into_response())
-}
-
-/// Rejects a connect when this Gmail identity already has 10+ recent backfill jobs in
-/// the last 24h (`@macro.com` is exempt). Enforced before the link and Gmail watch are
-/// created so a rejected connect never has to tear down a half-provisioned inbox.
-async fn enforce_backfill_rate_limit(
-    db: &sqlx::PgPool,
-    fusion_user_id: &str,
-    email_address: &str,
-) -> Result<(), InitError> {
-    let recent_jobs = email_db_client::backfill::job::get::get_recent_jobs_by_fusionauth_user_id(
-        db,
-        fusion_user_id,
-    )
-    .await
-    .context("Failed to fetch recent backfill jobs")?;
-
-    if recent_jobs.len() >= 10 && !email_address.ends_with("@macro.com") {
-        return Err(InitError::TooManyJobs);
-    }
-
-    Ok(())
 }
 
 /// Registers a Gmail watch, recovering from the one-watch-per-mailbox limit. A watch

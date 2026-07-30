@@ -5,15 +5,16 @@ use axum::{
 };
 use futures::StreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
 use model::{
     document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
 use models_permissions::share_permission::SharePermissionV2;
+use projects_hex::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};
 use reqwest::StatusCode;
 use s3_key::build_cloud_storage_bucket_document_key;
-use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 
 const ONBOARDING_FOLDER_NAME: &str = "ONBOARDING_DOCUMENTS";
 const PROJECT_NAME: &str = "Starter Docs";
@@ -246,23 +247,26 @@ pub async fn handler(
             .into_response()
     })?;
 
-    tokio::spawn({
-        let sqs_client = state.sqs_client.clone();
-        let project_id = project.id.clone();
-        async move {
-            let _ = sqs_client
-                .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(
-                    UpsertProject {
-                        project_id: project_id.clone(),
-                        index_override: None,
-                    },
-                ))
-                .await
-                .inspect_err(
-                    |e| tracing::error!(error=?e, project_id=?project_id, "unable to enqueue project search upsert"),
-                );
-        }
-    });
+    let project_event = ProjectMacroEvent::created(
+        project.id.clone(),
+        ProjectCreatedMetadata {
+            project_id: project.id.clone(),
+            owner: user_context.authorization.user.macro_user_id.clone(),
+            name: PROJECT_NAME.to_string(),
+            parent_project_id: None,
+            created_at: project.created_at,
+        },
+    );
+    let _ = state
+        .macro_event_broker
+        .send_event(&project_event)
+        .inspect_err(|error| {
+            tracing::error!(
+                error=?error,
+                project_id = %project.id,
+                "unable to enqueue project created event"
+            );
+        });
 
     Ok((StatusCode::OK, Json(GenericSuccessResponse::default())).into_response())
 }

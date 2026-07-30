@@ -1,4 +1,5 @@
 import shortuuid from 'short-uuid';
+import { isTauri } from './platform';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -46,6 +47,14 @@ export function openExternalUrl(url: string) {
   for (const interceptor of externalUrlInterceptors) {
     if (interceptor(url)) return;
   }
+
+  if (isTauri()) {
+    // A same-window navigation reaches the native navigation plugin, which
+    // cancels the webview navigation and opens the URL in the system browser.
+    window.open(url, '_self')?.focus();
+    return;
+  }
+
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 

@@ -1,4 +1,6 @@
+import { initializeBrowserObservability } from './observability/browser';
 import './index.css';
+
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '@fontsource-variable/playfair-display';
@@ -85,21 +87,13 @@ const renderApp = () => {
   render(() => <Root />, root);
 };
 
-function main() {
+async function main() {
+  await initializeBrowserObservability();
+
   console.log('App Version ', import.meta.env.__APP_VERSION__);
 
   // during `vite dev` (but not dev builds), don't inject analytics/observability
   if (!import.meta.hot) {
-    const scheduleIdleTask =
-      window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1));
-
-    // Lazy load and init observability (Datadog) to reduce initial bundle
-    scheduleIdleTask(() => {
-      import('@observability').then((Observability) => {
-        Observability.init(import.meta.env.__APP_VERSION__);
-      });
-    });
-
     // this event is emitted when dynamically loading a module fails
     // for example when you're using the app and a new version is deployed
     window.addEventListener('vite:preloadError', () =>
@@ -110,4 +104,5 @@ function main() {
   renderApp();
 }
 
+// unawaited
 main();

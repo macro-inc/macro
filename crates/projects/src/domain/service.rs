@@ -10,7 +10,7 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::folder::{UploadFolderRequest, UploadFolderResponseData};
+use model::folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData};
 use model::item::{Item, ItemWithUserAccessLevel};
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
@@ -139,17 +139,6 @@ where
                     error = ?error,
                     project_id,
                     "unable to update project modified date"
-                );
-            });
-        let _ = self
-            .search_indexer
-            .upsert_projects(vec![project_id.to_string()])
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    project_id,
-                    "unable to enqueue project search upsert"
                 );
             });
     }
@@ -341,17 +330,6 @@ where
             .project_parent_id
             .map(|_| parse_internal_uuid(&project.id, "created project ID"))
             .transpose()?;
-        let _ = self
-            .search_indexer
-            .upsert_projects(vec![project.id.clone()])
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    project_id = %project.id,
-                    "unable to enqueue project search upsert"
-                );
-            });
 
         if let Some((parent_id, entity_id)) = args.project_parent_id.zip(entity_id) {
             let _ = self
@@ -508,15 +486,6 @@ where
             .await
             .map_err(|error| internal_error(error, "unable to delete project"))?;
 
-        if !deleted.project_ids.is_empty() {
-            let _ = self
-                .search_indexer
-                .remove_projects(deleted.project_ids.clone())
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(error = ?error, "unable to enqueue deleted projects for search");
-                });
-        }
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
         }
@@ -565,13 +534,6 @@ where
             .map(|(document_id, _)| document_id.clone())
             .collect::<Vec<_>>();
 
-        if !purged.project_ids.is_empty() {
-            let _ = self
-                .search_indexer
-                .remove_projects(purged.project_ids)
-                .await
-                .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged projects for search"));
-        }
         if !purged.chat_ids.is_empty() {
             let _ = self
                 .search_indexer
@@ -624,16 +586,6 @@ where
             .map_err(|error| internal_error(error, "unable to revert project"))?;
         let result = restored.clone();
 
-        if !restored.project_ids.is_empty() {
-            let _ = self
-                .search_indexer
-                .upsert_projects(restored.project_ids.clone())
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(error = ?error, "unable to enqueue restored projects for search");
-                });
-        }
-
         let project_id = receipt.entity().entity_id.clone();
         self.publish_project_event(&ProjectMacroEvent::restored(
             project_id.clone(),
@@ -655,6 +607,9 @@ where
         internal: bool,
         args: UploadFolderRequest,
     ) -> Result<UploadFolderResponseData, ProjectError> {
+        let event_owner = actor.clone();
+        let event_name = args.root_folder_name.clone();
+        let event_parent_project_id = args.parent_id.clone();
         let root_folder = build_root_folder(&args.root_folder_name, args.content)
             .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
         let uploaded = self
@@ -699,13 +654,26 @@ where
             };
 
         if !uploaded.project_ids.is_empty() {
-            let _ = self
-                .search_indexer
-                .upsert_projects(uploaded.project_ids)
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(error = ?error, "unable to enqueue uploaded projects for search");
-                });
+            match &uploaded.file_system {
+                FileSystemNodeWithIds::Folder {
+                    project_id: root_project_id,
+                    ..
+                } => {
+                    self.publish_project_event(&ProjectMacroEvent::uploaded(
+                        root_project_id.clone(),
+                        ProjectUploadedMetadata {
+                            root_project_id: root_project_id.clone(),
+                            owner: event_owner,
+                            name: event_name,
+                            parent_project_id: event_parent_project_id,
+                            project_ids: uploaded.project_ids,
+                        },
+                    ));
+                }
+                FileSystemNodeWithIds::File { .. } => {
+                    tracing::error!("unable to publish folder upload event: root node is a file");
+                }
+            }
         }
 
         Ok(UploadFolderResponseData {

@@ -6,7 +6,7 @@ use crate::{
         chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
-        project::{RemoveProject, UpsertProject},
+        project::UpsertProject,
     },
 };
 use anyhow::Context;
@@ -90,7 +90,6 @@ pub enum SearchQueueMessage {
     RemoveCallRecord(RemoveCallRecord),
     // Project
     UpsertProject(UpsertProject),
-    RemoveProject(RemoveProject),
 
     // User
     RemoveUserProfile(String),
@@ -122,7 +121,6 @@ impl PrimaryId for SearchQueueMessage {
                 message.call_id.clone().unwrap_or_default()
             ),
             SearchQueueMessage::UpsertProject(message) => message.project_id.clone(),
-            SearchQueueMessage::RemoveProject(message) => message.project_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
         }
@@ -154,7 +152,6 @@ impl SearchQueueMessage {
             SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
             // Projects
             SearchQueueMessage::UpsertProject(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::RemoveProject(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
         }

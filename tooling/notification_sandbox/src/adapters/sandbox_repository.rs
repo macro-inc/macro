@@ -3,8 +3,8 @@ use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
 use notification::domain::models::request::{NotificationEntityRef, NotificationListFilters};
 use notification::domain::models::{
-    DeviceEndpoint, NotificationIdAndCollapseKey, NotificationStatusPatch,
-    SendNotificationRequestBuilder, UserNotificationRow, device::DeviceType,
+    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
+    UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
 use notification::outbound::repository::DbNotificationRepository;
@@ -89,8 +89,7 @@ impl NotificationRepository for SandboxNotificationRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<notification::domain::models::PatchDelete<Uuid, NotificationStatusPatch>>, Report>
-    {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.inner
             .mark_notifications_seen(user_id, notification_ids)
             .await
@@ -101,8 +100,7 @@ impl NotificationRepository for SandboxNotificationRepository {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<notification::domain::models::PatchDelete<Uuid, NotificationStatusPatch>>, Report>
-    {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.inner
             .mark_notifications_done(user_id, notification_ids, done)
             .await

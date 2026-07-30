@@ -39,7 +39,6 @@ env_vars! {
     /// FusionAuth client id.
     pub struct FusionauthClientId;
     /// FusionAuth tenant id.
-    pub struct FusionauthTenantId;
     /// Secrets Manager secret name for the FusionAuth API key.
     pub struct FusionauthApiKeySecretKey;
     /// Secrets Manager secret name for the FusionAuth client secret.
@@ -86,7 +85,6 @@ pub struct Config {
     /// Browser-reachable FusionAuth URL. Falls back to the API base URL when unset.
     pub fusionauth_public_url: FusionauthPublicUrl,
     pub fusionauth_client_id: FusionauthClientId,
-    pub fusionauth_tenant_id: FusionauthTenantId,
     pub fusionauth_api_key_secret_key: FusionauthApiKeySecretKey,
     pub fusionauth_client_secret_key: FusionauthClientSecretKey,
     pub google_client_id: GoogleClientId,

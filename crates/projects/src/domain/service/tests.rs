@@ -153,14 +153,6 @@ impl EntityAccessManagementService for NullPort {
 }
 
 impl ProjectSearchIndexer for NullPort {
-    async fn upsert_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
-        unreachable!()
-    }
-
-    async fn remove_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
-        unreachable!()
-    }
-
     async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
         unreachable!()
     }
@@ -226,34 +218,12 @@ impl EntityAccessManagementService for RecordingEam {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum IndexCall {
-    Upsert(Vec<String>),
-    Remove(Vec<String>),
-}
-
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 struct RecordingIndexer {
-    calls: Arc<Mutex<Vec<IndexCall>>>,
+    _unused: (),
 }
 
 impl ProjectSearchIndexer for RecordingIndexer {
-    async fn upsert_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(IndexCall::Upsert(project_ids));
-        Ok(())
-    }
-
-    async fn remove_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(IndexCall::Remove(project_ids));
-        Ok(())
-    }
-
     async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
         unreachable!()
     }
@@ -705,9 +675,7 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
         .return_once(|_| Box::pin(async { Ok(()) }));
     let eam = RecordingEam::default();
     let eam_calls = eam.calls.clone();
-    let indexer = RecordingIndexer::default();
-    let index_calls = indexer.calls.clone();
-    let service = mutation_service(repo, eam, indexer);
+    let service = mutation_service(repo, eam, RecordingIndexer::default());
 
     service
         .create_project(
@@ -734,13 +702,6 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
     assert_eq!(
         *eam_calls.lock().unwrap(),
         vec![EamCall::Add(project_id, parent_id)]
-    );
-    assert_eq!(
-        *index_calls.lock().unwrap(),
-        vec![
-            IndexCall::Upsert(vec![project_id.to_string()]),
-            IndexCall::Upsert(vec![parent_id.to_string()]),
-        ]
     );
 }
 
@@ -1168,7 +1129,7 @@ async fn edit_project_succeeds_when_event_publication_fails() {
 }
 
 #[tokio::test]
-async fn owner_edit_propagates_move_and_pairs_every_bump_with_an_upsert() {
+async fn owner_edit_propagates_move_and_updates_all_modified_timestamps() {
     let project_id = Uuid::new_v4();
     let old_parent_id = Uuid::new_v4();
     let new_parent_id = Uuid::new_v4();
@@ -1200,9 +1161,7 @@ async fn owner_edit_propagates_move_and_pairs_every_bump_with_an_upsert() {
         });
     let eam = RecordingEam::default();
     let eam_calls = eam.calls.clone();
-    let indexer = RecordingIndexer::default();
-    let index_calls = indexer.calls.clone();
-    let service = mutation_service(repo, eam, indexer);
+    let service = mutation_service(repo, eam, RecordingIndexer::default());
 
     service
         .edit_project(
@@ -1221,17 +1180,14 @@ async fn owner_edit_propagates_move_and_pairs_every_bump_with_an_upsert() {
             Some(new_parent_id)
         )]
     );
-    let bumps = bumped.lock().unwrap().clone();
-    let indexed = index_calls
-        .lock()
-        .unwrap()
-        .iter()
-        .filter_map(|call| match call {
-            IndexCall::Upsert(ids) if ids.len() == 1 => Some(ids[0].clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(bumps, indexed);
+    assert_eq!(
+        *bumped.lock().unwrap(),
+        vec![
+            project_id.to_string(),
+            old_parent_id.to_string(),
+            new_parent_id.to_string(),
+        ]
+    );
 }
 
 #[tokio::test]
@@ -1314,25 +1270,19 @@ async fn edit_name_limit_counts_unicode_graphemes() {
 }
 
 #[tokio::test]
-async fn failed_database_bump_still_runs_the_paired_index_upsert() {
+async fn failed_project_modified_update_is_non_fatal() {
     let project_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
     repo.expect_update_project_modified()
+        .withf(move |id| id == project_id.to_string())
         .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
-    let indexer = RecordingIndexer::default();
-    let calls = indexer.calls.clone();
-    let service = mutation_service(repo, RecordingEam::default(), indexer);
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
 
     service.bump_project_modified(&project_id.to_string()).await;
-
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec![IndexCall::Upsert(vec![project_id.to_string()])]
-    );
 }
 
 #[tokio::test]
-async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
+async fn soft_delete_updates_parent_timestamp_and_publishes_event() {
     let project_id = Uuid::new_v4();
     let parent_id = Uuid::new_v4();
     let deleted_ids = vec![project_id.to_string(), Uuid::new_v4().to_string()];
@@ -1350,12 +1300,14 @@ async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
     repo.expect_update_project_modified()
         .withf(move |id| id == parent_id.to_string())
         .return_once(|_| Box::pin(async { Ok(()) }));
-    let indexer = RecordingIndexer::default();
-    let calls = indexer.calls.clone();
     let event_broker = TestEventBroker::default();
     let published = event_broker.published();
-    let service =
-        mutation_service_with_event_broker(repo, RecordingEam::default(), indexer, event_broker);
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
 
     service
         .soft_delete_project(
@@ -1366,13 +1318,6 @@ async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
         .await
         .unwrap();
 
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec![
-            IndexCall::Remove(expected_deleted_ids.clone()),
-            IndexCall::Upsert(vec![parent_id.to_string()]),
-        ]
-    );
     let published = published.lock().unwrap();
     assert_eq!(published.len(), 1);
     assert_project_event(&published[0], project_id, "project.deleted");
@@ -1393,7 +1338,7 @@ async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
 }
 
 #[tokio::test]
-async fn revert_upserts_every_restored_project() {
+async fn revert_publishes_every_restored_project_in_event() {
     let project_id = Uuid::new_v4();
     let parent_id = Uuid::new_v4();
     let restored_ids = vec![project_id.to_string(), Uuid::new_v4().to_string()];
@@ -1413,12 +1358,14 @@ async fn revert_upserts_every_restored_project() {
                 })
             })
         });
-    let indexer = RecordingIndexer::default();
-    let calls = indexer.calls.clone();
     let event_broker = TestEventBroker::default();
     let published = event_broker.published();
-    let service =
-        mutation_service_with_event_broker(repo, RecordingEam::default(), indexer, event_broker);
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
 
     service
         .revert_delete_project(
@@ -1432,10 +1379,6 @@ async fn revert_upserts_every_restored_project() {
         .await
         .unwrap();
 
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec![IndexCall::Upsert(expected_ids.clone())]
-    );
     let published = published.lock().unwrap();
     assert_eq!(published.len(), 1);
     assert_project_event(&published[0], project_id, "project.restored");
@@ -1477,9 +1420,7 @@ async fn restore_entity_returns_document_and_chat_effects() {
                 })
             })
         });
-    let indexer = RecordingIndexer::default();
-    let index_calls = indexer.calls.clone();
-    let service = mutation_service(repo, RecordingEam::default(), indexer);
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
     let entity = EntityType::Project.with_entity_string(project_id.to_string());
 
     let effects = service
@@ -1507,10 +1448,6 @@ async fn restore_entity_returns_document_and_chat_effects() {
                 EntityType::Project.with_entity_string(parent_id.to_string()),
             ),
         ]
-    );
-    assert_eq!(
-        *index_calls.lock().unwrap(),
-        vec![IndexCall::Upsert(restored_project_ids)]
     );
 }
 
@@ -1637,14 +1574,6 @@ impl OrderedIndexer {
 }
 
 impl ProjectSearchIndexer for OrderedIndexer {
-    async fn upsert_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
-        self.record("upsert")
-    }
-
-    async fn remove_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
-        self.record("projects")
-    }
-
     async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
         self.record("chats")
     }
@@ -1811,14 +1740,7 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
 
     assert_eq!(
         *events.lock().unwrap(),
-        vec![
-            "repo",
-            "sha",
-            "projects",
-            "chats",
-            "documents",
-            "document_deletes"
-        ]
+        vec!["repo", "sha", "chats", "documents", "document_deletes"]
     );
     let published = published.lock().unwrap();
     assert_eq!(published.len(), 1);
@@ -2071,6 +1993,123 @@ async fn mark_projects_uploaded_publication_failure_is_non_fatal() {
 }
 
 #[tokio::test]
+async fn upload_folder_publishes_uploaded_event() {
+    let project_ids = vec!["root-project".to_string(), "child-project".to_string()];
+    let expected_project_ids = project_ids.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_upload_folder()
+        .withf(|args| {
+            args.user_id.as_ref() == "macro|owner@example.com"
+                && args.root_folder_name == "Uploaded tree"
+                && args.upload_request_id == "request"
+                && args.parent_id.as_deref() == Some("parent-project")
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(UploadFolderWithIdsResponse {
+                    file_system: FileSystemNodeWithIds::Folder {
+                        content: Default::default(),
+                        project_id: "root-project".to_string(),
+                    },
+                    project_ids,
+                    documents: vec![upload_document("document", FileType::Pdf)],
+                })
+            })
+        });
+    let upload_urls = RecordingUploadUrls {
+        calls: Arc::new(Mutex::new(Vec::new())),
+        fail_document: false,
+    };
+    let upload_url_calls = upload_urls.calls.clone();
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = ProjectServiceImpl::new(
+        repo,
+        upload_urls,
+        RecordingBulkUpload::default(),
+        NullPort,
+        NullPort,
+        RecordingIndexer::default(),
+        None,
+        event_broker,
+    );
+
+    service
+        .upload_folder(
+            user_id("macro|owner@example.com"),
+            false,
+            UploadFolderRequest {
+                content: vec![FolderItem {
+                    name: "document".to_string(),
+                    full_name: "document.pdf".to_string(),
+                    file_type: Some(FileType::Pdf),
+                    relative_path: "Uploaded tree".to_string(),
+                    sha: "0123456789abcdef".to_string(),
+                }],
+                root_folder_name: "Uploaded tree".to_string(),
+                upload_request_id: "request".to_string(),
+                parent_id: Some("parent-project".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(upload_url_calls.lock().unwrap().len(), 1);
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.projects");
+    assert_eq!(published[0].key, "root-project");
+    assert_eq!(published[0].payload["schema_version"], 1);
+    assert_eq!(published[0].payload["event_type"], "project.uploaded");
+    assert_eq!(
+        published[0].payload["metadata"],
+        serde_json::json!({
+            "root_project_id": "root-project",
+            "owner": "macro|owner@example.com",
+            "name": "Uploaded tree",
+            "parent_project_id": "parent-project",
+            "project_ids": expected_project_ids,
+        })
+    );
+}
+
+#[tokio::test]
+async fn upload_folder_with_no_project_ids_publishes_no_event() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_upload_folder().return_once(|_| {
+        Box::pin(async {
+            Ok(UploadFolderWithIdsResponse {
+                file_system: FileSystemNodeWithIds::Folder {
+                    content: Default::default(),
+                    project_id: "root-project".to_string(),
+                },
+                project_ids: Vec::new(),
+                documents: Vec::new(),
+            })
+        })
+    });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
+
+    service
+        .upload_folder(
+            user_id("macro|owner@example.com"),
+            false,
+            UploadFolderRequest {
+                content: Vec::new(),
+                root_folder_name: "Uploaded tree".to_string(),
+                upload_request_id: "request".to_string(),
+                parent_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn upload_folder_compensates_after_destination_failure() {
     let mut repo = MockProjectRepo::new();
     repo.expect_upload_folder().return_once(|_| {
@@ -2088,6 +2127,8 @@ async fn upload_folder_compensates_after_destination_failure() {
     repo.expect_delete_uploaded_tree()
         .withf(|projects, documents| projects == ["project"] && documents == ["document"])
         .return_once(|_, _| Box::pin(async { Ok(()) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
     let service = ProjectServiceImpl::new(
         repo,
         RecordingUploadUrls {
@@ -2099,7 +2140,7 @@ async fn upload_folder_compensates_after_destination_failure() {
         NullPort,
         NullPort,
         None,
-        TestEventBroker::default(),
+        event_broker,
     );
 
     let result = service
@@ -2122,6 +2163,7 @@ async fn upload_folder_compensates_after_destination_failure() {
         .await;
 
     assert!(matches!(result, Err(ProjectError::Internal(_))));
+    assert!(published.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
