@@ -3,6 +3,5 @@ pub mod conn_gateway;
 pub mod delete_document_worker;
 pub mod document_event_publisher;
 pub mod entity_mutation;
-pub mod property_search_indexer;
 pub mod s3;
 pub mod soup_favorites_reader;

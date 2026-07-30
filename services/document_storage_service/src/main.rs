@@ -382,12 +382,7 @@ async fn main() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone())
-        .with_search_indexer(Arc::new(
-            crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
-                sqs_client.clone(),
-            ),
-        )),
+        .with_event_broker(macro_event_broker.clone()),
     );
 
     // Create the channel list service used by soup.
