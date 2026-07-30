@@ -302,6 +302,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "skills",
  "soup",
  "sqlx",
  "sqs_client",
@@ -13786,6 +13787,28 @@ checksum = "16d69225bde7a69b235da73377861095455d298f2b970996eec25ddbb42b3d1e"
 dependencies = [
  "bitmaps",
  "typenum",
+]
+
+[[package]]
+name = "skills"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "document_sub_type",
+ "item_filters",
+ "macro_user_id",
+ "models_search",
+ "schemars 1.2.1",
+ "search_service_client",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

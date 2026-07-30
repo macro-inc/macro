@@ -173,9 +173,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     if (blockName === 'pdf') fileType = 'pdf';
     else if (blockName === 'write') fileType = 'docx';
     else if (blockName === 'md') fileType = 'md';
-    // task/snippet aliases are markdown documents
+    // task/snippet/skill aliases are markdown documents
     else if (blockName === 'task') fileType = 'md';
     else if (blockName === 'snippet') fileType = 'md';
+    else if (blockName === 'skill') fileType = 'md';
     else if (blockName === 'csv') fileType = 'csv';
     else if (blockName === 'canvas') fileType = 'canvas';
     else if (blockName === 'code') {

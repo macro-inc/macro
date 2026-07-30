@@ -7,10 +7,16 @@ import {
   useIsConnectedSecondaryInbox,
 } from '@core/user';
 import type { DateValue } from '@core/util/date';
-import type { ChannelEntity, CrmCompanyEntity, SnippetEntity } from '@entity';
+import type {
+  ChannelEntity,
+  CrmCompanyEntity,
+  SkillEntity,
+  SnippetEntity,
+} from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
+import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
@@ -129,6 +135,7 @@ function getBucketForHistoryItem(item: HistoryItem): EntityBucket {
     case 'document': {
       if (item.subType?.type === 'task') return 'task';
       if (item.subType?.type === 'snippet') return 'snippet';
+      if (item.subType?.type === 'skill') return 'skill';
       if (item.fileType === 'md') return 'note';
       return 'document';
     }
@@ -184,6 +191,10 @@ function getSnippetVersion(snippet: SnippetEntity, viewedAt?: string): string {
   return `${snippet.name}|${snippet.updatedAt}|${viewedAt}`;
 }
 
+function getSkillVersion(skill: SkillEntity, viewedAt?: string): string {
+  return `${skill.name}|${skill.updatedAt}|${viewedAt}`;
+}
+
 /**
  * Merge two *already* sorted index arrays into a single sorted array.
  */
@@ -236,6 +247,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     useQuickAccessCrmCompaniesQuery();
   const { query: snippetsQuery, snippets: snippetsAccessor } =
     useQuickAccessSnippetsQuery();
+  const { query: skillsQuery, skills: skillsAccessor } =
+    useQuickAccessSkillsQuery();
 
   // globally hidden ids
   const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
@@ -578,6 +591,68 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    // Process skills (live soup list, complements the history feed which
+    // only has skills the user has opened). Widens the pool to shared
+    // skills so the `/` menu lists skills the user has never opened.
+    // History-fed entries win for skills the user has already opened.
+    const skillData = skillsAccessor();
+    for (const skill of skillData) {
+      if (hidden.has(skill.id)) continue;
+      if (seenIds.has(skill.id)) continue;
+      seenIds.add(skill.id);
+
+      const viewedAt = viewedAtMap.get(skill.id) ?? skill.viewedAt ?? undefined;
+
+      const version = getSkillVersion(skill, viewedAt as string | undefined);
+      const cached = itemCache.get(skill.id);
+
+      if (!cached || cached.version !== version) {
+        const reason = !cached
+          ? 'new'
+          : `changed (${cached.version} -> ${version})`;
+        transformedItems.push({
+          id: skill.id,
+          name: skill.name,
+          type: 'skill',
+          reason,
+        });
+        const entity: SkillEntity = {
+          ...skill,
+          viewedAt: (viewedAt ?? skill.viewedAt) as DateValue | null,
+        };
+        const viewedAtMs = toTimestamp(viewedAt);
+        const updatedAtMs = toTimestamp(skill.updatedAt);
+        const sortTimestamp = viewedAtMs || updatedAtMs;
+
+        const quickAccessItem: QuickAccessItem = {
+          kind: 'entity',
+          id: skill.id,
+          bucket: 'skill',
+          searchText: getEntitySearchText(entity),
+          sortTimestamp,
+          timestamps: {
+            viewedAt,
+            updatedAt: skill.updatedAt,
+            createdAt: skill.createdAt,
+          },
+          data: entity,
+        };
+
+        itemCache.set(skill.id, { item: quickAccessItem, version });
+        allEntries.push({
+          id: skill.id,
+          bucket: 'skill',
+          sortTimestamp,
+        });
+      } else {
+        allEntries.push({
+          id: skill.id,
+          bucket: cached.item.bucket,
+          sortTimestamp: cached.item.sortTimestamp,
+        });
+      }
+    }
+
     // Clean up stale cache entries (items that no longer exist)
     for (const id of itemCache.keys()) {
       if (!seenIds.has(id)) {
@@ -645,6 +720,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         indices.get('note') ?? [],
         indices.get('task') ?? [],
         indices.get('snippet') ?? [],
+        indices.get('skill') ?? [],
         indices.get('chat') ?? [],
         indices.get('project') ?? [],
       ]),
@@ -725,6 +801,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     historyQuery.refetch();
     crmCompaniesQuery.refetch();
     snippetsQuery.refetch();
+    skillsQuery.refetch();
   };
 
   return {

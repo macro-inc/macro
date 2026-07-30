@@ -880,6 +880,10 @@ enum GraphqlDocumentSubType {
 	The snippet option.
 	"""
 	SNIPPET
+	"""
+	The skill option.
+	"""
+	SKILL
 }
 
 """
@@ -2084,6 +2088,16 @@ enum GraphqlSimpleSortMethod {
 }
 
 """
+represents the skill subtype fields
+"""
+type GraphqlSkillSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 represents the snippet subtype fields
 """
 type GraphqlSnippetSubType {
@@ -2804,7 +2818,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
 
 """
 GraphQL representation of the soup email attachment.

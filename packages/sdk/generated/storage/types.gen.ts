@@ -984,6 +984,8 @@ export type BasicDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type BomPart = {
@@ -2858,6 +2860,36 @@ export type CreateReminderRequest = {
 };
 
 /**
+ * Request body for creating a skill — a markdown document containing
+ * instructions that AI reads and follows when the skill is referenced in an
+ * AI input.
+ */
+export type CreateSkillRequest = {
+    /**
+     * Markdown source text. Defaults to an empty skill document.
+     */
+    markdown?: string | null;
+    /**
+     * Optional project ID to associate the skill with.
+     */
+    projectId?: string | null;
+    /**
+     * The name of the skill.
+     */
+    skillName: string;
+};
+
+/**
+ * Response for creating a skill.
+ */
+export type CreateSkillResponse = {
+    /**
+     * The document ID of the created skill.
+     */
+    documentId: string;
+};
+
+/**
  * Request body for creating a snippet — a reusable markdown document that can
  * be inserted into any markdown area.
  */
@@ -3810,6 +3842,8 @@ export type DocumentPreviewDataSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -3922,7 +3956,7 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -6974,6 +7008,8 @@ export type SoupDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -10332,6 +10368,35 @@ export type CreateMarkdownHandlerResponses = {
 };
 
 export type CreateMarkdownHandlerResponse = CreateMarkdownHandlerResponses[keyof CreateMarkdownHandlerResponses];
+
+export type CreateSkillHandlerData = {
+    body: CreateSkillRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_skill';
+};
+
+export type CreateSkillHandlerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSkillHandlerError = CreateSkillHandlerErrors[keyof CreateSkillHandlerErrors];
+
+export type CreateSkillHandlerResponses = {
+    /**
+     * Response for creating a skill.
+     */
+    200: {
+        /**
+         * The document ID of the created skill.
+         */
+        documentId: string;
+    };
+};
+
+export type CreateSkillHandlerResponse = CreateSkillHandlerResponses[keyof CreateSkillHandlerResponses];
 
 export type CreateSnippetHandlerData = {
     body: CreateSnippetRequest;

@@ -156,6 +156,9 @@ pub async fn create_comment_handler(
                         document_sub_type::DocumentSubType::Snippet => {
                             NotificationDocumentSubType::Snippet
                         }
+                        document_sub_type::DocumentSubType::Skill => {
+                            NotificationDocumentSubType::Skill
+                        }
                     }),
                     sender_id: sender_id.clone(),
                     sender_profile_picture_url,

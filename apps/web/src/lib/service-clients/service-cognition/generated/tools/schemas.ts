@@ -282,7 +282,11 @@ export const SearchToolResponse = z.object({
                 sub_type: z
                   .union([
                     z.any().superRefine((x, ctx) => {
-                      const schemas = [z.literal('task'), z.literal('snippet')];
+                      const schemas = [
+                        z.literal('task'),
+                        z.literal('snippet'),
+                        z.literal('skill'),
+                      ];
                       const errors = schemas.reduce<z.ZodError[]>(
                         (errors, schema) =>
                           ((result) =>
@@ -2962,7 +2966,11 @@ export const ReadMetadataResponse = z.object({
     subType: z
       .union([
         z.any().superRefine((x, ctx) => {
-          const schemas = [z.literal('task'), z.literal('snippet')];
+          const schemas = [
+            z.literal('task'),
+            z.literal('snippet'),
+            z.literal('skill'),
+          ];
           const errors = schemas.reduce<z.ZodError[]>(
             (errors, schema) =>
               ((result) => (result.error ? [...errors, result.error] : errors))(
@@ -3040,6 +3048,43 @@ export const RenameDocumentResponse = z.object({
   documentId: z.string().uuid(),
   message: z.string(),
   success: z.boolean(),
+});
+
+export const SearchSkills = z.object({
+  matchType: z
+    .any()
+    .superRefine((x, ctx) => {
+      const schemas = [z.literal('partial'), z.literal('exact')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
+    .optional(),
+  name: z.string(),
+});
+
+export const SearchSkillsResponse = z.object({
+  results: z.array(
+    z.object({
+      documentId: z.string().uuid(),
+      name: z.string(),
+      updatedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+    })
+  ),
 });
 
 export const SearchTools = z.object({ query: z.string() });

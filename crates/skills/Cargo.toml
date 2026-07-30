@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "skills"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:serde", "ports"]
+default = ["ai_tools", "outbound", "ports"]
+outbound = [
+  "dep:document_sub_type",
+  "dep:item_filters",
+  "dep:models_search",
+  "dep:search_service_client",
+  "ports",
+]
+ports = []
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# AI toolset dependencies
+ai_toolset = { path = "../ai_toolset", optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+
+# Outbound dependencies
+document_sub_type = { path = "../document_sub_type", optional = true }
+item_filters = { path = "../item_filters", optional = true }
+models_search = { path = "../models_search", optional = true }
+search_service_client = { path = "../search_service_client", optional = true }
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -142,7 +142,8 @@ pub enum EntityItem {
         /// The document's file type (e.g. md, pdf, docx), when known.
         #[serde(skip_serializing_if = "Option::is_none")]
         file_type: Option<String>,
-        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets,
+        /// "skill" for skills.
         #[serde(skip_serializing_if = "Option::is_none")]
         sub_type: Option<String>,
         /// Tags on the document visible to the user.
@@ -256,6 +257,7 @@ impl EntityItem {
                     match sub_type {
                         SoupDocumentSubType::Task { .. } => "task",
                         SoupDocumentSubType::Snippet {} => "snippet",
+                        SoupDocumentSubType::Skill {} => "skill",
                     }
                     .to_string()
                 }),
@@ -396,7 +398,7 @@ pub struct ListEntities {
 
     /// Document entity AST filter.
     #[schemars(
-        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}; for skills, {\"l\":{\"dst\":\"skill\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "df")]

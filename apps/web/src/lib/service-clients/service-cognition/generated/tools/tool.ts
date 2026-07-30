@@ -122,6 +122,10 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  SearchSkills: {
+    call: types.SearchSkills;
+    response: types.SearchSkillsResponse;
+  };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SelfKnowledge: {
     call: types.SelfKnowledge;
@@ -282,6 +286,10 @@ const toolParserMap = {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
   },
+  SearchSkills: {
+    call: schemas.SearchSkills,
+    response: schemas.SearchSkillsResponse,
+  },
   SearchTools: {
     call: schemas.SearchTools,
     response: schemas.SearchToolsResponse,
@@ -434,6 +442,10 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  SearchSkills: {
+    call: types.SearchSkills;
+    response: types.SearchSkillsResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SelfKnowledge: {

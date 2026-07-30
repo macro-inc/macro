@@ -29,6 +29,15 @@ export class DocumentNamespace {
     return Document.createSnippet(this.client, opts);
   }
 
+  /** Create a skill: markdown instructions that AI reads and follows. */
+  createSkill(opts: {
+    name: string;
+    markdown?: string;
+    project?: Project;
+  }): Promise<Document> {
+    return Document.createSkill(this.client, opts);
+  }
+
   /** Search documents by name and content, most relevant first, auto-paginated. */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Document> {
     return Document.search(this.client, query, opts);

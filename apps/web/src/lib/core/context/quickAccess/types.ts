@@ -8,6 +8,7 @@ import type {
   EmailEntity,
   EntityData,
   ProjectEntity,
+  SkillEntity,
   SnippetEntity,
   TaskEntity,
 } from '@entity';
@@ -24,6 +25,7 @@ export type Bucket =
   | 'document'
   | 'task'
   | 'snippet'
+  | 'skill'
   | 'note'
   | 'chat'
   | 'project'
@@ -39,6 +41,7 @@ const ALL_BUCKETS: Bucket[] = [
   'document',
   'task',
   'snippet',
+  'skill',
   'note',
   'chat',
   'project',
@@ -51,7 +54,15 @@ export type BucketCombination = 'all' | 'channels' | 'documents';
 export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
   all: ALL_BUCKETS,
   channels: ['dm', 'channel'],
-  documents: ['document', 'note', 'task', 'snippet', 'chat', 'project'],
+  documents: [
+    'document',
+    'note',
+    'task',
+    'snippet',
+    'skill',
+    'chat',
+    'project',
+  ],
 };
 
 type ItemTimestamps = {
@@ -114,6 +125,7 @@ export type BucketItemMap = {
   document: EntityItem<DocumentEntity>;
   task: EntityItem<TaskEntity>;
   snippet: EntityItem<SnippetEntity>;
+  skill: EntityItem<SkillEntity>;
   note: EntityItem<DocumentEntity>;
   chat: EntityItem<ChatEntity>;
   project: EntityItem<ProjectEntity>;

@@ -11,6 +11,7 @@
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `POST /create_snippet` — create and initialize a snippet document
+//! - `POST /create_skill` — create and initialize a skill document
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -21,6 +22,8 @@ pub mod copy_document;
 pub mod create_document;
 #[cfg(feature = "document_create")]
 pub mod create_markdown;
+#[cfg(feature = "document_create")]
+pub mod create_skill;
 #[cfg(feature = "document_create")]
 pub mod create_snippet;
 pub mod create_task;
@@ -58,6 +61,8 @@ use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
 use self::create_markdown::create_markdown_handler;
+#[cfg(feature = "document_create")]
+use self::create_skill::create_skill_handler;
 #[cfg(feature = "document_create")]
 use self::create_snippet::create_snippet_handler;
 use self::{
@@ -300,6 +305,10 @@ where
         .route(
             "/create_snippet",
             axum::routing::post(create_snippet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/create_skill",
+            axum::routing::post(create_skill_handler::<T, Svc, Auth>),
         );
 
     router.with_state(state)

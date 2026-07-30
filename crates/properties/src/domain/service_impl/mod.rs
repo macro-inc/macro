@@ -251,7 +251,9 @@ where
                         .and_then(|document_id| document_sub_types.get(&document_id))
                         .map_or(EntityType::Document, |sub_type| match sub_type {
                             DocumentSubType::Task => EntityType::Task,
-                            DocumentSubType::Snippet => EntityType::Document,
+                            DocumentSubType::Snippet | DocumentSubType::Skill => {
+                                EntityType::Document
+                            }
                         }),
                     AccessEntityType::EmailThread => EntityType::Thread,
                     AccessEntityType::Call => EntityType::CallRecord,

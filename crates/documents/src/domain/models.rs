@@ -506,6 +506,30 @@ pub struct CreateSnippetResponse {
     pub document_id: String,
 }
 
+/// Request body for creating a skill — a markdown document containing
+/// instructions that AI reads and follows when the skill is referenced in an
+/// AI input.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillRequest {
+    /// The name of the skill.
+    pub skill_name: String,
+    /// Markdown source text. Defaults to an empty skill document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the skill with.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// Response for creating a skill.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillResponse {
+    /// The document ID of the created skill.
+    pub document_id: String,
+}
+
 /// The team-share state of a document. The team is resolved from the document
 /// owner's team membership.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

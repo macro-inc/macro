@@ -31,6 +31,7 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
+  createSkill,
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
@@ -48,6 +49,7 @@ import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
 import WideFolder from '@icon/wide-folder.svg';
+import WideGear from '@icon/wide-gear.svg';
 import { AnimatedSnippetIcon } from '@icon/wide-snippet';
 import WideSnippet from '@icon/wide-snippet.svg';
 import { AnimatedStarIcon } from '@icon/wide-star';
@@ -245,6 +247,19 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'skill':
+      createBlock({
+        blockName: 'skill',
+        loading: true,
+        createFn: () =>
+          createSkill({
+            title: '',
+            content: '',
+            source,
+          }),
+        shouldInsert,
+      });
+      return;
     case 'email':
       // Focus the "To" field within this gesture so the iOS keyboard opens;
       // the compose mounts asynchronously, so this waits for the input.
@@ -391,6 +406,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 's' as const,
     keyDownHandler: () => {
       runCreateAction('snippet', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Skill',
+    icon: WideGear,
+    description: 'Create skill',
+    keywords: ['new', 'make', 'add', 'ai', 'instructions'],
+    blockName: 'skill',
+    hotkeyToken: TOKENS.create.skill,
+    altHotkeyToken: TOKENS.create.skillNewSplit,
+    hotkey: 'l' as const,
+    keyDownHandler: () => {
+      runCreateAction('skill', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
