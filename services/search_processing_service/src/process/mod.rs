@@ -5,11 +5,12 @@ pub mod context;
 pub(crate) mod document;
 mod email;
 pub(crate) mod project;
-mod properties;
+pub(crate) mod properties;
 mod user;
 pub mod worker;
 
 use anyhow::Context;
+use models_properties::EntityType;
 use sqs_client::search::SearchQueueMessage;
 use uuid::Uuid;
 
@@ -102,8 +103,17 @@ pub async fn process_message(
             .await?;
         }
         SearchQueueMessage::UpdateDocumentProperties(message) => {
-            properties::process_entity_property_update(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
+            let entity_type = message
+                .entity_type
+                .parse::<EntityType>()
+                .with_context(|| format!("invalid entity_type '{}'", message.entity_type))?;
+            properties::process_entity_property_update(
+                &ctx.opensearch_client,
+                &ctx.db,
+                &message.document_id,
+                entity_type,
+            )
+            .await?;
         }
         SearchQueueMessage::ChatMessage(message) => {
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;
