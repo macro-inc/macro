@@ -223,6 +223,11 @@ export function CalendarView() {
       dayHeaderFormat={{
         weekday: useNarrowDayHeaders() ? 'narrow' : 'short',
       }}
+      dayCellClassNames={({ date, view }) =>
+        isSameLocalDate(date, view.calendar.getDate())
+          ? ['calendar-day-selected']
+          : []
+      }
     >
       <FullCalendar.DayHeaderContent>
         {({ date, text, view }) => {
