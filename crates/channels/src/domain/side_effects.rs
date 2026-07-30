@@ -2,9 +2,10 @@
 
 use crate::domain::{
     broker_events::{
-        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelEventAttachment, ChannelMacroEvent,
-        ChannelMessageAttachmentCreatedMetadata, ChannelMessageAttachmentRemovedMetadata,
-        ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
+        ChannelBotMentionedMetadata, ChannelCreatedMetadata, ChannelDeletedMetadata,
+        ChannelEventAttachment, ChannelMacroEvent, ChannelMessageAttachmentCreatedMetadata,
+        ChannelMessageAttachmentRemovedMetadata, ChannelMessageDeletedMetadata,
+        ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
@@ -1286,6 +1287,26 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                             .collect(),
                     },
                 ));
+            }
+            // Only user-authored messages emit bot-mention events, mirroring
+            // dispatch_bot_triggers: bot-authored mentions would let
+            // webhook-driven bots trigger each other in a loop.
+            if message.sender_id.as_user().is_some() {
+                for bot in bot_mention_ids(mentions) {
+                    events.push(ChannelMacroEvent::bot_mentioned(
+                        ChannelBotMentionedMetadata {
+                            channel_id: *channel_id,
+                            message_id: message.id,
+                            thread_id: message.thread_id,
+                            sender: message.sender_id.clone(),
+                            channel_type: metadata.channel_type,
+                            content: message.content.clone(),
+                            mentions: mentions.clone(),
+                            bot_id: BotIdStr::from(bot),
+                            created_at: message.created_at,
+                        },
+                    ));
+                }
             }
             events
         }

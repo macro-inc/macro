@@ -326,6 +326,9 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Deleted(metadata) => {
             vec![delete(EntityType::Channel, metadata.channel_id)]
         }
+        // Bot mentions carry no entity change beyond the message_posted event
+        // emitted alongside them.
+        ChannelTopicEvent::BotMentioned(_) => Vec::new(),
     }
 }
 

@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod test;
 
+use bot_id::BotIdStr;
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -104,6 +105,31 @@ pub struct ChannelMessagePostedMetadata {
     pub mentions: Vec<SimpleMention>,
     /// Attachments persisted with the message.
     pub attachments: Vec<ChannelEventAttachment>,
+    /// Creation timestamp reported by the repository.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Metadata for [`ChannelTopicEvent::BotMentioned`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelBotMentionedMetadata {
+    /// Channel containing the message.
+    pub channel_id: Uuid,
+    /// The id of the message that mentioned the bot.
+    pub message_id: Uuid,
+    /// Thread parent id when the message is a thread reply.
+    pub thread_id: Option<Uuid>,
+    /// Message author. Always a user: bot-authored messages never emit this event.
+    pub sender: ChannelSender<'static>,
+    /// Type of channel containing the message.
+    pub channel_type: ChannelType,
+    /// Message body.
+    pub content: String,
+    /// All mentions attached to the message.
+    pub mentions: Vec<SimpleMention>,
+    /// Canonical principal id (`bot|<uuid>`) of the mentioned bot.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub bot_id: BotIdStr<'static>,
     /// Creation timestamp reported by the repository.
     pub created_at: DateTime<Utc>,
 }
@@ -219,6 +245,9 @@ pub enum ChannelTopicEvent {
     /// A message was posted.
     #[serde(rename = "channel.message_posted")]
     MessagePosted(ChannelMessagePostedMetadata),
+    /// A bot was `@`-mentioned in a user-authored message.
+    #[serde(rename = "channel.bot_mentioned")]
+    BotMentioned(ChannelBotMentionedMetadata),
     /// A message's content was patched.
     #[serde(rename = "channel.message_patched")]
     MessagePatched(ChannelMessagePatchedMetadata),
@@ -272,6 +301,14 @@ impl ChannelMacroEvent {
         Self::new(
             metadata.channel_id,
             ChannelTopicEvent::MessagePosted(metadata),
+        )
+    }
+
+    /// Build a bot mentioned event keyed by the containing channel id.
+    pub fn bot_mentioned(metadata: ChannelBotMentionedMetadata) -> Self {
+        Self::new(
+            metadata.channel_id,
+            ChannelTopicEvent::BotMentioned(metadata),
         )
     }
 

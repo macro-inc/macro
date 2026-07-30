@@ -597,9 +597,13 @@ async fn load_active_participant_ids(
     )
     .fetch_all(pool)
     .await?;
-    rows.into_iter()
-        .map(|row| MacroUserIdStr::try_from(row.user_id).map_err(Into::into))
-        .collect()
+    // Channels can contain bot participants (`bot|<uuid>` rows); only user
+    // principals contribute to display names, so skip everything else instead
+    // of failing the caller.
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| MacroUserIdStr::try_from(row.user_id).ok())
+        .collect())
 }
 
 async fn load_user_display_names(

@@ -15957,6 +15957,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "bot_id",
  "channel_sender",
  "channels",
  "chrono",

@@ -1431,6 +1431,148 @@ fn broker_events_map_channel_updated() {
     assert_eq!(envelope["metadata"]["channel_name"], "new");
 }
 
+/// Build a MessagePosted event from the given sender carrying the given
+/// mentions.
+fn message_posted_with_mentions(
+    sender: Sender,
+    channel_id: Uuid,
+    message_id: Uuid,
+    mentions: Vec<SimpleMention>,
+) -> ChannelEvent {
+    let now = Utc::now();
+    ChannelEvent::MessagePosted {
+        channel_id,
+        metadata: ChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "Project".to_string(),
+        },
+        participants: Vec::new(),
+        message: MutatedMessage {
+            id: message_id,
+            channel_id,
+            thread_id: None,
+            sender_id: sender,
+            triggered_by: None,
+            content: "hello bots".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: None,
+            deleted_at: None,
+        },
+        mentions,
+        has_attachments: false,
+        attachments: Vec::new(),
+        nonce: None,
+        notification_policy: PostMessageNotificationPolicy::Default,
+    }
+}
+
+#[test]
+fn broker_events_map_message_posted_bot_mentions() {
+    use macro_event_broker::MacroEvent as _;
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let bot_principal = BotId::new_from_uuid(Uuid::new_v4())
+        .into_storage_id()
+        .to_string();
+    let macro_ai_principal = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+
+    let events = broker_events_for_event(&message_posted_with_mentions(
+        Sender::new_from_user(user("alice@example.com")),
+        channel_id,
+        message_id,
+        vec![
+            mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
+            // Duplicate mentions of one bot emit a single event.
+            mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
+            // Macro AI surfaced through the user-mention UI still counts.
+            mention("user", &macro_ai_principal),
+            // Real user mentions emit no bot event.
+            mention("user", "macro|bob@example.com"),
+        ],
+    ));
+
+    assert_eq!(events.len(), 3);
+    let posted = serde_json::to_value(events[0].event()).unwrap();
+    assert_eq!(posted["event_type"], "channel.message_posted");
+
+    let first = serde_json::to_value(events[1].event()).unwrap();
+    assert_eq!(first["event_type"], "channel.bot_mentioned");
+    assert_eq!(first["metadata"]["bot_id"], bot_principal);
+    assert_eq!(first["metadata"]["channel_id"], channel_id.to_string());
+    assert_eq!(first["metadata"]["message_id"], message_id.to_string());
+    assert_eq!(first["metadata"]["sender"], "macro|alice@example.com");
+    assert_eq!(first["metadata"]["mentions"].as_array().unwrap().len(), 4);
+    assert_eq!(events[1].key(), channel_id.to_string());
+
+    let second = serde_json::to_value(events[2].event()).unwrap();
+    assert_eq!(second["event_type"], "channel.bot_mentioned");
+    assert_eq!(second["metadata"]["bot_id"], macro_ai_principal);
+}
+
+#[test]
+fn broker_events_skip_bot_mentions_from_bot_senders() {
+    use macro_event_broker::MacroEvent as _;
+    let bot_principal = BotId::new_from_uuid(Uuid::new_v4())
+        .into_storage_id()
+        .to_string();
+
+    let events = broker_events_for_event(&message_posted_with_mentions(
+        Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        vec![mention(BOT_MENTION_ENTITY_TYPE, &bot_principal)],
+    ));
+
+    assert_eq!(events.len(), 1);
+    let envelope = serde_json::to_value(events[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "channel.message_posted");
+}
+
+#[test]
+fn broker_events_skip_bot_mentions_on_message_changed() {
+    use macro_event_broker::MacroEvent as _;
+    let channel_id = Uuid::new_v4();
+    let now = Utc::now();
+
+    let events = broker_events_for_event(&ChannelEvent::MessageChanged {
+        channel_id,
+        actor: Sender::new_from_user(user("alice@example.com")),
+        message: MutatedMessage {
+            id: Uuid::new_v4(),
+            channel_id,
+            thread_id: None,
+            sender_id: Sender::new_from_user(user("alice@example.com")),
+            triggered_by: None,
+            content: "edited to mention a bot".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: Some(now),
+            deleted_at: None,
+        },
+        recipients: Vec::new(),
+        nonce: None,
+        posted_notification: Some(MessageChangedNotificationContext {
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Team,
+                channel_name: "Project".to_string(),
+            },
+            participants: Vec::new(),
+            mentions: vec![mention(
+                BOT_MENTION_ENTITY_TYPE,
+                &BotId::new_from_uuid(Uuid::new_v4())
+                    .into_storage_id()
+                    .to_string(),
+            )],
+            has_attachments: false,
+        }),
+    });
+
+    assert_eq!(events.len(), 1);
+    let envelope = serde_json::to_value(events[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "channel.message_patched");
+}
+
 #[test]
 fn broker_events_skip_reaction_changes() {
     let events = broker_events_for_event(&ChannelEvent::ReactionChanged {

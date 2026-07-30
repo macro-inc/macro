@@ -10,6 +10,7 @@ import {
   type InputHandle,
 } from '../Input';
 import type { MessageData } from '../Message';
+import { useChannelBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { MessageEditor } from './create-message-editor';
 
 type MessageEditorContentProps = {
@@ -31,6 +32,9 @@ type MessageEditorContentProps = {
  */
 export function MessageEditorContent(props: MessageEditorContentProps) {
   const snapshot = () => props.messageEditor.state()?.snapshot;
+  const channelBotMentionUsers = useChannelBotMentionUsers(
+    () => props.channelId
+  );
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: snapshot()?.attachments,
   });
@@ -63,6 +67,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         autofocus={props.autofocus}
         attachmentTracker={attachmentTracker}
         participants={props.participants}
+        bots={channelBotMentionUsers}
         markdownNamespace={`edit-message-${props.channelId}-${props.message.id}`}
         onReady={props.onReady}
         onChange={(nextSnapshot) =>

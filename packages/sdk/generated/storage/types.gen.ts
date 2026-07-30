@@ -1452,6 +1452,48 @@ export type Channel = {
 };
 
 /**
+ * Metadata for [`ChannelTopicEvent::BotMentioned`].
+ */
+export type ChannelBotMentionedMetadata = {
+    /**
+     * Canonical principal id (`bot|<uuid>`) of the mentioned bot.
+     */
+    bot_id: string;
+    /**
+     * Channel containing the message.
+     */
+    channel_id: string;
+    /**
+     * Type of channel containing the message.
+     */
+    channel_type: ChannelType;
+    /**
+     * Message body.
+     */
+    content: string;
+    /**
+     * Creation timestamp reported by the repository.
+     */
+    created_at: string;
+    /**
+     * All mentions attached to the message.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * The id of the message that mentioned the bot.
+     */
+    message_id: string;
+    /**
+     * Message author. Always a user: bot-authored messages never emit this event.
+     */
+    sender: ChannelSender;
+    /**
+     * Thread parent id when the message is a thread reply.
+     */
+    thread_id?: string | null;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -1967,6 +2009,12 @@ export type ChannelTopicEvent = {
      * A message was posted.
      */
     metadata: ChannelMessagePostedMetadata;
+} | {
+    event_type: 'channel.bot_mentioned';
+    /**
+     * A bot was `@`-mentioned in a user-authored message.
+     */
+    metadata: ChannelBotMentionedMetadata;
 } | {
     event_type: 'channel.message_patched';
     /**

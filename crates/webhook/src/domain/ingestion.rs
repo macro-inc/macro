@@ -29,6 +29,7 @@ use uuid::Uuid;
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
+const BOT_ENTITY_TYPE: &str = "bot";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -145,6 +146,7 @@ where
             event_name = %event.event_name,
             entity_type = %event.entity_type,
             entity_id = %event.entity_id,
+            access_entity_id = %access_entity_id,
             accessor_count = tracing::field::Empty,
             workspace_count = tracing::field::Empty,
         ),
@@ -153,10 +155,11 @@ where
     async fn resolve_entity_access_and_enqueue(
         &self,
         event: NormalizedWebhookEvent,
-        entity_type: EntityType,
+        access_entity_id: String,
+        access_entity_type: EntityType,
     ) -> Result<(), WebhookEventIngestionError> {
         let accessors = self
-            .users_with_access(&event.entity_id, entity_type)
+            .users_with_access(&access_entity_id, access_entity_type)
             .await?;
         tracing::Span::current().record("accessor_count", accessors.len());
 
@@ -247,19 +250,44 @@ fn normalized_document_event(
         event_name,
         DOCUMENT_ENTITY_TYPE,
         entity_id,
+        entity_id,
         broker_envelope,
     ))
 }
 
+/// Normalize a channel event, returning the event alongside the channel id
+/// used for entity-access resolution.
+///
+/// For most events the matching entity is the channel itself. For
+/// `channel.bot_mentioned` the matching entity (and so the `ids` filter
+/// namespace) is the mentioned bot principal, while access still resolves via
+/// the channel the mention happened in.
 fn normalized_channel_event(
     event: &Event<ChannelTopicEvent>,
-) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
+) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
     let (event_name, channel_id) = match &event.event {
         ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
         ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
         ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
         ChannelTopicEvent::MessagePosted(metadata) => {
             ("channel.message_posted", metadata.channel_id)
+        }
+        ChannelTopicEvent::BotMentioned(metadata) => {
+            let access_entity_id = metadata.channel_id.to_string();
+            let ordering_key = access_entity_id.clone();
+            let broker_envelope = serde_json::to_value(event)?;
+            return Ok((
+                normalized_event(
+                    event.event_id,
+                    event.schema_version,
+                    "channel.bot_mentioned",
+                    BOT_ENTITY_TYPE,
+                    metadata.bot_id.as_ref(),
+                    &ordering_key,
+                    broker_envelope,
+                ),
+                access_entity_id,
+            ));
         }
         ChannelTopicEvent::MessagePatched(metadata) => {
             ("channel.message_patched", metadata.channel_id)
@@ -283,13 +311,17 @@ fn normalized_channel_event(
     let entity_id = channel_id.to_string();
 
     let broker_envelope = serde_json::to_value(event)?;
-    Ok(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        CHANNEL_ENTITY_TYPE,
-        &entity_id,
-        broker_envelope,
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            CHANNEL_ENTITY_TYPE,
+            &entity_id,
+            &entity_id,
+            broker_envelope,
+        ),
+        entity_id,
     ))
 }
 
@@ -333,6 +365,7 @@ fn normalized_webhook_event(
         event_name,
         WEBHOOK_ENTITY_TYPE,
         webhook_id,
+        webhook_id,
         broker_envelope,
     );
     Ok((normalized, workspace_id.clone()))
@@ -344,6 +377,7 @@ fn normalized_event(
     event_name: &str,
     entity_type: &str,
     entity_id: &str,
+    ordering_key: &str,
     broker_envelope: serde_json::Value,
 ) -> NormalizedWebhookEvent {
     NormalizedWebhookEvent {
@@ -352,7 +386,7 @@ fn normalized_event(
         event_name: event_name.to_string(),
         entity_type: entity_type.to_string(),
         entity_id: entity_id.to_string(),
-        ordering_key: entity_id.to_string(),
+        ordering_key: ordering_key.to_string(),
         occurred_at: Utc::now(),
         broker_envelope,
     }
@@ -370,7 +404,8 @@ where
         event: Event<DocumentTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         let event = normalized_document_event(&event)?;
-        self.resolve_entity_access_and_enqueue(event, EntityType::Document)
+        let access_entity_id = event.entity_id.clone();
+        self.resolve_entity_access_and_enqueue(event, access_entity_id, EntityType::Document)
             .await
     }
 
@@ -379,8 +414,8 @@ where
         &self,
         event: Event<ChannelTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let event = normalized_channel_event(&event)?;
-        self.resolve_entity_access_and_enqueue(event, EntityType::Channel)
+        let (event, access_entity_id) = normalized_channel_event(&event)?;
+        self.resolve_entity_access_and_enqueue(event, access_entity_id, EntityType::Channel)
             .await
     }
 

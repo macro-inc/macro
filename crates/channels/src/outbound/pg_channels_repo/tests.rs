@@ -1874,6 +1874,55 @@ async fn participants_roles_parsed_correctly(pool: Pool<Postgres>) -> anyhow::Re
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn channel_metadata_skips_bot_participants_in_display_name(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // An unnamed private channel resolves its display name from its
+    // participants; a bot participant row must be skipped, not fail the call.
+    let channel_id = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c31);
+    sqlx::query(
+        "INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at)
+         VALUES ($1, NULL, 'private', $2, now(), now())",
+    )
+    .bind(channel_id)
+    .bind(USER_A)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES
+         ($1, $2, 'owner'),
+         ($1, $3, 'member'),
+         ($1, 'bot|00000000-0000-0000-0000-00000000b0b0', 'member')",
+    )
+    .bind(channel_id)
+    .bind(USER_A)
+    .bind(USER_B)
+    .execute(&pool)
+    .await?;
+
+    let repo = repo(pool);
+    let metadata = repo
+        .get_channel_metadata(channel_id, MacroUserIdStr::try_from(USER_A.to_string())?)
+        .await?;
+
+    assert_eq!(metadata.channel_type, ChannelType::Private);
+    assert!(
+        !metadata.channel_name.contains("bot|"),
+        "bot principals must not appear in the channel display name: {}",
+        metadata.channel_name
+    );
+    assert!(
+        metadata.channel_name.contains("user-b"),
+        "user participants should appear in the channel display name: {}",
+        metadata.channel_name
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn thread_participants_exclude_departed_senders(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     // ch3 thread parent (msg id 0x..31) was authored by an active participant,
