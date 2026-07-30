@@ -3,7 +3,7 @@
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use model::document::FileType;
-use sqs_client::search::document::{DocumentId, SearchExtractorMessage};
+use sqs_client::search::document::SearchExtractorMessage;
 
 use super::{
     EventOutcome, KafkaProcessingContext, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY,
@@ -162,24 +162,9 @@ async fn process_document_index_action(
             .await
         }
         DocumentIndexAction::RefreshName => {
-            process_update_name_message(
-                opensearch_client,
-                &context.db,
-                &DocumentId {
-                    document_id: document_id.to_string(),
-                },
-            )
-            .await
+            process_update_name_message(opensearch_client, &context.db, document_id).await
         }
-        DocumentIndexAction::Remove => {
-            process_remove_message(
-                opensearch_client,
-                &DocumentId {
-                    document_id: document_id.to_string(),
-                },
-            )
-            .await
-        }
+        DocumentIndexAction::Remove => process_remove_message(opensearch_client, document_id).await,
         DocumentIndexAction::Ignore => Ok(()),
     }
 }
