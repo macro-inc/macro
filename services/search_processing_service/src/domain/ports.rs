@@ -1,12 +1,14 @@
 //! Outbound trait contracts for the backfill domain.
 //!
-//! Two ports:
+//! Three ports:
 //!
 //! - [`BackfillSource`] — entity-aware reader. One method per searchable
 //!   entity, each producing a [`SourcePage`] (messages + rows consumed) for
 //!   a given offset. The orchestrator drives sources through these methods.
 //! - [`SearchEventPublisher`] — entity-agnostic batch publisher onto the
 //!   search-event queue.
+//! - [`PropertyBackfillIndexer`] — directly reindexes one typed entity's
+//!   denormalized properties.
 //!
 //! Splitting reads (source) from the queue write (publisher) keeps each
 //! adapter single-concern and lets the application-level pagination loop be
@@ -14,6 +16,7 @@
 
 use std::future::Future;
 
+use models_properties::EntityType;
 use sqs_client::search::SearchQueueMessage;
 
 use super::models::{
@@ -28,6 +31,16 @@ pub trait SearchEventPublisher: Send + Sync + 'static {
     fn publish(
         &self,
         messages: Vec<SearchQueueMessage>,
+    ) -> impl Future<Output = Result<(), BackfillError>> + Send;
+}
+
+/// Directly reindexes denormalized properties for one typed entity.
+pub trait PropertyBackfillIndexer: Send + Sync + 'static {
+    /// Refetch and overwrite the indexed properties for an entity.
+    fn reindex(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> impl Future<Output = Result<(), BackfillError>> + Send;
 }
 

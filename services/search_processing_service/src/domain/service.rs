@@ -10,15 +10,16 @@
 use std::future::Future;
 use std::sync::Arc;
 
+use futures::{StreamExt, TryStreamExt, stream};
 use tokio_util::sync::CancellationToken;
 
 use super::jobs::JobProgress;
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
-    PropertiesBackfillRequest, SourcePage,
+    PropertiesBackfillRequest, PropertySourcePage, SourcePage,
 };
-use super::ports::{BackfillSource, SearchEventPublisher};
+use super::ports::{BackfillSource, PropertyBackfillIndexer, SearchEventPublisher};
 
 /// Drive a source by repeatedly calling `fetch(cursor)`, publishing each
 /// page's messages, and stopping when the source reports zero rows
@@ -162,6 +163,53 @@ where
         enqueued += page.rows_consumed;
         offset += page.rows_consumed;
         progress.add(page.rows_consumed).await;
+    }
+
+    Ok(BackfillReceipt { enqueued })
+}
+
+/// Drain typed property pages with a bounded number of direct reindexes.
+/// Cancellation is observed only at page boundaries so each started page is
+/// either completed and counted or fails without updating progress.
+async fn drain_property_source<Fut, I>(
+    indexer: &I,
+    progress: &JobProgress,
+    cancel: &CancellationToken,
+    fetch: impl Fn(usize) -> Fut,
+) -> Result<BackfillReceipt, BackfillError>
+where
+    Fut: Future<Output = Result<PropertySourcePage, BackfillError>>,
+    I: PropertyBackfillIndexer,
+{
+    let mut offset = 0usize;
+    let mut enqueued = 0usize;
+
+    loop {
+        if cancel.is_cancelled() {
+            tracing::info!(enqueued, "property backfill cancelled between pages");
+            break;
+        }
+
+        let page = fetch(offset).await?;
+        if page.rows_consumed == 0 {
+            break;
+        }
+
+        let PropertySourcePage {
+            entity_ids,
+            entity_type,
+            rows_consumed,
+        } = page;
+
+        stream::iter(entity_ids)
+            .map(|entity_id| async move { indexer.reindex(&entity_id, entity_type).await })
+            .buffer_unordered(20)
+            .try_collect::<Vec<()>>()
+            .await?;
+
+        enqueued += rows_consumed;
+        offset += rows_consumed;
+        progress.add(rows_consumed).await;
     }
 
     Ok(BackfillReceipt { enqueued })
