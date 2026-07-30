@@ -7,7 +7,10 @@ use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
     domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
-    outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
+    outbound::{
+        property_search_indexer::DirectPropertyBackfillIndexer, publisher::SqsSearchEventPublisher,
+        source::PgBackfillSource,
+    },
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
 };
 use anyhow::Context;
@@ -35,10 +38,11 @@ mod outbound;
 mod parsers;
 mod process;
 
-/// Concrete [`BackfillOrchestrator`] wired to the production Postgres source
-/// and the SQS publisher. Lives in the wiring module so the domain stays
-/// agnostic of which adapters back it.
-pub type BackfillServiceImpl = BackfillOrchestrator<PgBackfillSource, SqsSearchEventPublisher>;
+/// Concrete [`BackfillOrchestrator`] wired to the production Postgres source,
+/// SQS publisher, and direct property indexer. Lives in the wiring module so
+/// the domain stays agnostic of which adapters back it.
+pub type BackfillServiceImpl =
+    BackfillOrchestrator<PgBackfillSource, SqsSearchEventPublisher, DirectPropertyBackfillIndexer>;
 
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
@@ -211,6 +215,7 @@ async fn main() -> anyhow::Result<()> {
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
+        DirectPropertyBackfillIndexer::new(db.clone(), opensearch_client.clone()),
     ));
 
     let shutdown_token = CancellationToken::new();

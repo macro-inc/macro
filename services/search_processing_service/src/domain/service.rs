@@ -1,11 +1,11 @@
 //! Application-level backfill service.
 //!
 //! [`BackfillService`] is the inbound contract the HTTP layer talks to. The
-//! [`BackfillOrchestrator`] holds one [`BackfillSource`] (which knows about
-//! every entity type) and one [`SearchEventPublisher`], and runs the shared
-//! paginate-and-publish loop that drains a source onto the publisher. The
-//! loop lives here (in the domain) so it can be tested with in-memory fakes
-//! — adapters stay single-concern.
+//! [`BackfillOrchestrator`] holds a [`BackfillSource`], a
+//! [`SearchEventPublisher`] for queue-backed families, and a
+//! [`PropertyBackfillIndexer`] for direct property indexing. The orchestration
+//! loops live here so they can be tested with in-memory fakes while adapters
+//! stay single-concern.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -113,18 +113,24 @@ pub trait BackfillService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
 }
 
-pub struct BackfillOrchestrator<S, P> {
+pub struct BackfillOrchestrator<S, P, I> {
     source: S,
     publisher: P,
+    property_indexer: I,
 }
 
-impl<S, P> BackfillOrchestrator<S, P>
+impl<S, P, I> BackfillOrchestrator<S, P, I>
 where
     S: BackfillSource,
     P: SearchEventPublisher,
+    I: PropertyBackfillIndexer,
 {
-    pub fn new(source: S, publisher: P) -> Self {
-        Self { source, publisher }
+    pub fn new(source: S, publisher: P, property_indexer: I) -> Self {
+        Self {
+            source,
+            publisher,
+            property_indexer,
+        }
     }
 }
 
@@ -215,10 +221,11 @@ where
     Ok(BackfillReceipt { enqueued })
 }
 
-impl<S, P> BackfillService for BackfillOrchestrator<S, P>
+impl<S, P, I> BackfillService for BackfillOrchestrator<S, P, I>
 where
     S: BackfillSource,
     P: SearchEventPublisher,
+    I: PropertyBackfillIndexer,
 {
     async fn backfill_calls(
         &self,
@@ -286,7 +293,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
+        drain_property_source(&self.property_indexer, &progress, &cancel, |offset| {
             self.source.fetch_entity_properties(&req, offset)
         })
         .await
