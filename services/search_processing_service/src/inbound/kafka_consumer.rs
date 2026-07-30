@@ -7,8 +7,8 @@
 //! offsets are already committed.
 //!
 //! Per-entity event mapping and processing live in the [`call`], [`channel`],
-//! [`chat`], and [`project`] submodules; this module owns the poll loop, worker,
-//! retry policy, and commit semantics.
+//! [`chat`], [`document`], and [`project`] submodules; this module owns the poll
+//! loop, worker, retry policy, and commit semantics.
 
 #![allow(clippy::enum_variant_names)]
 
@@ -16,6 +16,7 @@ mod call;
 mod channel;
 mod chat;
 mod context;
+mod document;
 mod project;
 #[cfg(test)]
 mod test;
@@ -25,6 +26,7 @@ use std::{future::Future, time::Duration};
 use ::call::domain::events::CallMacroEvent;
 use ::chat::domain::events::ChatMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
+use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
 use projects::domain::events::ProjectMacroEvent;
@@ -38,7 +40,7 @@ use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use self::{
     call::process_call_event, channel::process_channel_event, chat::process_chat_event,
-    project::process_project_event,
+    document::process_document_event, project::process_project_event,
 };
 
 pub(crate) use self::context::KafkaProcessingContext;
@@ -60,6 +62,7 @@ macro_event_broker::declare_topics!(
         CallMacroEvent,
         ChannelMacroEvent,
         ChatMacroEvent,
+        DocumentMacroEvent,
         ProjectMacroEvent,
 );
 
@@ -179,6 +182,9 @@ async fn process_event(
         }
         DeclaredMacroEvent::ChatMacroEvent(event) => {
             process_chat_event(db, opensearch_client, event, partition, offset).await
+        }
+        DeclaredMacroEvent::DocumentMacroEvent(event) => {
+            process_document_event(context, event, partition, offset).await
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await

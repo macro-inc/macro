@@ -2,7 +2,7 @@ pub(crate) mod call;
 pub(crate) mod channel;
 pub(crate) mod chat;
 pub mod context;
-mod document;
+pub(crate) mod document;
 mod email;
 pub(crate) mod project;
 mod properties;

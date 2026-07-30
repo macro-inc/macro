@@ -12893,6 +12893,7 @@ dependencies = [
  "chrono",
  "comms_db_client",
  "document_sub_type",
+ "documents",
  "doppler-config",
  "email_db_client",
  "ensure_exists",
