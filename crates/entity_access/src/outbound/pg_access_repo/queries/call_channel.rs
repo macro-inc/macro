@@ -55,25 +55,25 @@ pub async fn get_call_channel(
         convert = r#"{format!("{}", channel_id)}"#
     )
 )]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_call_channel_by_channel_id(
     pool: &PgPool,
     channel_id: &Uuid,
 ) -> Result<Option<CallChannelRow>, sqlx::Error> {
-    sqlx::query_as::<_, CallChannelRow>(
+    sqlx::query_as!(
+        CallChannelRow,
         r#"
-        SELECT channel_id, share_permission_id
+        SELECT channel_id AS "channel_id!", share_permission_id AS "share_permission_id!"
         FROM calls
         WHERE channel_id = $1
         UNION ALL
         SELECT channel_id, share_permission_id
         FROM call_records
         WHERE channel_id = $1
-        ORDER BY channel_id
+        ORDER BY 1
         LIMIT 1
         "#,
+        channel_id
     )
-    .bind(channel_id)
     .fetch_optional(pool)
     .await
 }
