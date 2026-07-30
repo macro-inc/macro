@@ -10,9 +10,11 @@
  * and fall back to the TanStack path otherwise.
  */
 
+import { deepEqual } from '@core/util/compareUtils';
 import { createQuerySignal } from '@graphql-cache/solid/create-query-signal';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
   SoupDocument,
   type SoupQuery,
@@ -107,10 +109,19 @@ export function useReactiveSoupAstItemsQuery(
         return input === undefined ? undefined : { input };
       },
     });
-    const page = createMemo(() => {
-      const data = query.data();
-      return data == null ? undefined : mapGraphqlSoupPage(data);
-    });
+    const page = createMemo<SoupPage | undefined>(
+      () => {
+        const data = query.data();
+        return data == null ? undefined : mapGraphqlSoupPage(data);
+      },
+      undefined,
+      {
+        // Cache writes for unrelated backfill arguments can re-execute this
+        // operation with identical data. Retain the prior page so Solid's
+        // keyed list does not remount every row and dismiss open editors.
+        equals: deepEqual,
+      }
+    );
     return { query, page };
   });
 
