@@ -12887,6 +12887,7 @@ dependencies = [
  "axum",
  "call",
  "channels",
+ "chat",
  "chrono",
  "comms_db_client",
  "document_sub_type",
