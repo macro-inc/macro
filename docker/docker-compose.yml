@@ -147,6 +147,8 @@ services:
     command: ["/app/out/document_storage_service"]
     ports:
       - "8086:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # - OVERRIDE_SYNC_SERVICE_URL=https://sync-service-playground.macroverse.workers.dev
       # uncomment above, and comment out below, for when you want to use the playground sync service. also use

@@ -24,3 +24,8 @@ check:
 coverage:
     bun install
     bun run coverage
+
+# Interactively create and verify a webhook. In `local` mode, start the
+# receiver first and use http://host.docker.internal:<port>/<path> as its URL.
+webhook *ARGS:
+    bun run webhook -- {{ ARGS }}
