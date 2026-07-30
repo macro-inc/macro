@@ -6,7 +6,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Button, Dropdown, Calendar as MiniCalendar } from '@ui';
+import { Button, Dropdown, Layer, Calendar as MiniCalendar } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -42,6 +42,11 @@ const formatWeekdayHeader = {
 const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
+
+const isSameLocalDate = (first: Date, second: Date) =>
+  first.getFullYear() === second.getFullYear() &&
+  first.getMonth() === second.getMonth() &&
+  first.getDate() === second.getDate();
 
 function getLocalScrollTime() {
   const now = new Date();
@@ -114,13 +119,15 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
   );
 
   return (
-    <FullCalendar.Host
-      ref={(calendarElement) => {
-        setElement(calendarElement);
-        props.onNarrowDayHeadersChange(calendarElement.clientWidth < 520);
-      }}
-      class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl border border-edge-muted"
-    />
+    <Layer depth={2}>
+      <FullCalendar.Host
+        ref={(calendarElement) => {
+          setElement(calendarElement);
+          props.onNarrowDayHeadersChange(calendarElement.clientWidth < 520);
+        }}
+        class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl bg-surface"
+      />
+    </Layer>
   );
 }
 
@@ -136,6 +143,7 @@ export function CalendarView() {
       expandRows
       fixedWeekCount={false}
       handleWindowResize={false}
+      allDayText="All day"
       nowIndicator
       headerToolbar={false}
       scrollTime={getLocalScrollTime()}
@@ -157,7 +165,15 @@ export function CalendarView() {
             return (
               <>
                 <span class="calendar-day-header-weekday">{weekday}</span>{' '}
-                <span class="calendar-day-header-date">
+                <span
+                  class="calendar-day-header-date"
+                  classList={{
+                    'calendar-day-header-date-selected': isSameLocalDate(
+                      date,
+                      view.calendar.getDate()
+                    ),
+                  }}
+                >
                   {formatDayNumber(date)}
                 </span>
               </>
