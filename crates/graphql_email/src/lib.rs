@@ -13,8 +13,8 @@ pub use loaders::{
     NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, email_content_loader,
 };
 pub use mutation::{
-    EmailMutationService, EmailThreadMutationOutput, GraphqlEmailMutation,
-    MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
+    EmailMutationService, EmailThreadMutationLoadFuture, EmailThreadMutationOutput,
+    GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
 };
 pub use objects::{GraphqlSoupEmailMessage, load_email_messages, load_latest_email_message};
 pub use user_objects::{

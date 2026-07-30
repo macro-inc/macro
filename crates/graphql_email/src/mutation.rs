@@ -55,6 +55,10 @@ where
     }
 }
 
+/// Boxed future that reloads an email thread after a mutation.
+pub type EmailThreadMutationLoadFuture<'ctx, T> =
+    Pin<Box<dyn Future<Output = async_graphql::Result<Option<T>>> + Send + 'ctx>>;
+
 /// Supplies the canonical email-thread GraphQL object returned after a mutation.
 ///
 /// The complete schema implements this boundary with its Soup email-thread type,
@@ -68,7 +72,7 @@ pub trait EmailThreadMutationOutput: Send + Sync + 'static {
         ctx: &'ctx Context<'_>,
         user_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>;
+    ) -> EmailThreadMutationLoadFuture<'ctx, Self::Thread>;
 }
 
 /// Root GraphQL adapter for email mutations.
