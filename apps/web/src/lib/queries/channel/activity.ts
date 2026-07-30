@@ -4,6 +4,7 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { ActivityType } from '@service-storage/generated/schemas/activityType';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
+import { recordChannelActivity } from '@service-storage/graphql-channel-activity';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
 
@@ -29,13 +30,7 @@ export function useUpdateChannelsActivityMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: UpdateChannelActivityMutationVars) =>
-      await throwOnErr(
-        async () =>
-          await storageServiceClient.postActivity({
-            channel_id: vars.channelId,
-            activity_type: vars.activityType,
-          })
-      ),
+      await recordChannelActivity(vars),
     ...withCallbacks<
       ChannelsActivity,
       Error,

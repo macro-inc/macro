@@ -302,6 +302,12 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
+    /**
+     * Network-bound queries whose initial cache read could not register their
+     * complete normalized dependencies. Refresh these after write-through so
+     * later optimistic entity writes can affect the active operation.
+     */
+    const dependencyRefreshOps = new Set<number>();
 
     const unsubscribePush = host.onOpsAffected((opKeys) => {
       for (const key of opKeys) {
@@ -473,6 +479,7 @@ export function normalizedCacheExchange(
       ): Promise<OperationResult | undefined> {
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
+          dependencyRefreshOps.add(op.key);
           enqueueForward(op);
           return undefined;
         }
@@ -491,6 +498,7 @@ export function normalizedCacheExchange(
           if (policy === 'cache-only') {
             return cacheResult(op, undefined, false);
           }
+          dependencyRefreshOps.add(op.key);
         } catch (error) {
           options.onCacheError?.(error, op);
           // `cache-only` must never touch the network, even when the cache
@@ -616,14 +624,23 @@ export function normalizedCacheExchange(
           }
         } else if (op.kind === 'query' && result.data != null) {
           try {
-            await host.writeQuery({
+            const args = {
               opKey: op.key,
               query: queryText(op),
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
+            };
+            await host.writeQuery({
+              ...args,
               data: result.data,
               identity: options.extractIdentity?.(result.data),
             });
+            if (dependencyRefreshOps.delete(op.key) && activeOps.has(op.key)) {
+              // A miss only records dependencies reached before the missing
+              // record. Re-read the now-populated query to register its full
+              // entity graph for push-driven optimistic updates.
+              await host.readQuery(args);
+            }
           } catch (error) {
             options.onCacheError?.(error, op);
           }
@@ -763,6 +780,7 @@ export function normalizedCacheExchange(
         tap((op) => {
           if (op.kind === 'teardown') {
             activeOps.delete(op.key);
+            dependencyRefreshOps.delete(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
         })

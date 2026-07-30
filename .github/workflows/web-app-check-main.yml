@@ -12,7 +12,7 @@ name: Web App Pr Checks
     - main
 jobs:
   path-check:
-    runs-on: namespace-profile-linux-small
+    runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       api_changed: ${{ steps.filter.outputs.api_changed }}
@@ -121,7 +121,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -147,7 +147,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -171,7 +171,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -195,7 +195,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -219,7 +219,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -247,7 +247,7 @@ jobs:
     - build
     if: always()
     name: Web App Status Check
-    runs-on: namespace-profile-linux-small
+    runs-on: namespace-profile-linux-tiny-no-cache
     steps:
     - name: Check job results
       run: |

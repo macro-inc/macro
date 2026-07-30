@@ -71,7 +71,7 @@ entity_mutation = [
   "entity_access/ports",
   "ports",
 ]
-ports = ["dep:tokio"]
+ports = ["dep:entity_access", "dep:tokio", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]

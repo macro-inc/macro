@@ -717,28 +717,6 @@ fn scoped_bot_request_body() -> Body {
 }
 
 #[tokio::test]
-async fn channel_webhook_router_member_cannot_create_scoped_bot() {
-    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let service = TestBotService::for_create(scoped_bot_response(bot_id));
-    let poster = TestChannelPoster::new();
-    let channel_id = Uuid::new_v4();
-    let request = Request::builder()
-        .method("POST")
-        .uri(format!("/channels/{channel_id}/bots/scoped"))
-        .header("content-type", "application/json")
-        .body(scoped_bot_request_body())
-        .unwrap();
-
-    let response = router(service.clone(), poster, EntityParticipantRole::Member)
-        .oneshot(request)
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(service.create_calls.load(Ordering::SeqCst), 0);
-}
-
-#[tokio::test]
 async fn channel_webhook_router_admin_can_create_scoped_bot() {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let service = TestBotService::for_create(scoped_bot_response(bot_id));

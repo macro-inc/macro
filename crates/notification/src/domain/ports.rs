@@ -16,13 +16,13 @@ use uuid::Uuid;
 use models_pagination::{CreatedAt, Query};
 
 use crate::domain::models::device::DeviceType;
-use crate::domain::models::{PatchDelete, TaggedContent, UserNotificationStatusUpdate};
+use crate::domain::models::{TaggedContent, UserNotificationStatusUpdate};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::{NotificationEntityRef, NotificationListFilters};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
+    SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -93,20 +93,20 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report>> + Send;
 
-    /// Mark notifications as seen for a user.
+    /// Mark notifications as seen and return the updated user-owned rows.
     fn mark_notifications_seen(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
-    /// Mark notifications as done or undone for a user.
+    /// Mark notifications as done or undone and return the updated user-owned rows.
     fn mark_notifications_done(
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.
     fn get_basic_notifications(

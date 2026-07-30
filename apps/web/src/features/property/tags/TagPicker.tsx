@@ -81,10 +81,23 @@ export function TagPicker(props: TagPickerProps) {
   const [createSuccessHandler, setCreateSuccessHandler] =
     createSignal<CreateTagSuccessHandler>();
   let saveAndClose: (() => Promise<void>) | undefined;
+  let triggerRef: HTMLButtonElement | undefined;
 
-  const setOpenState = (value: boolean) => {
+  const restoreFocusToTrigger = () => {
+    setTimeout(() => {
+      triggerRef?.isConnected && triggerRef.focus();
+    }, 0);
+  };
+
+  const setOpenState = (
+    value: boolean,
+    options?: { restoreFocus?: boolean }
+  ) => {
     setOpen(value);
     props.onOpenChange?.(value);
+    if (!value && options?.restoreFocus) {
+      restoreFocusToTrigger();
+    }
   };
 
   const handleOpenChange = (value: boolean) => {
@@ -96,7 +109,7 @@ export function TagPicker(props: TagPickerProps) {
     if (saveAndClose) {
       void saveAndClose();
     } else {
-      setOpenState(false);
+      setOpenState(false, { restoreFocus: true });
     }
   };
 
@@ -109,6 +122,7 @@ export function TagPicker(props: TagPickerProps) {
     >
       <Popover.Trigger
         type="button"
+        ref={triggerRef}
         class={props.triggerClass}
         aria-label={props.triggerLabel}
       >
@@ -120,7 +134,7 @@ export function TagPicker(props: TagPickerProps) {
           createDocTags={props.createDocTags}
           open={open}
           editorMode={editorMode}
-          onClose={() => setOpenState(false)}
+          onClose={() => setOpenState(false, { restoreFocus: true })}
           onOpenCreateEditor={(mode, onCreateSuccess) => {
             setCreateSuccessHandler(() => onCreateSuccess);
             setEditorMode(mode);
@@ -137,6 +151,7 @@ export function TagPicker(props: TagPickerProps) {
           onEditorClose={() => {
             setEditorMode(null);
             setCreateSuccessHandler(undefined);
+            restoreFocusToTrigger();
           }}
         />
       </Show>
@@ -433,6 +448,8 @@ function TagPickerBody(props: {
     createLabel().length > 0 && !exactTagMatchExists();
   const showClearAllRow = () =>
     selectedIds().size > 0 && !search().trim() && !createStep();
+  const showCreateRowDivider = () =>
+    showCreateRow() && (filteredItems().length > 0 || showClearAllRow());
   const itemIndex = (item: TagOptionItem) => filteredItems().indexOf(item);
   const clearAllRowIndex = () => filteredItems().length;
   const createRowIndex = () =>
@@ -747,7 +764,12 @@ function TagPickerBody(props: {
                     </Show>
                   </div>
                   <Show when={showCreateRow()}>
-                    <div class="mt-1 border-t border-edge-muted pt-1">
+                    <div
+                      classList={{
+                        'mt-1 border-t border-edge-muted pt-1':
+                          showCreateRowDivider(),
+                      }}
+                    >
                       <CreateTagRow
                         index={createRowIndex()}
                         label={createLabel()}

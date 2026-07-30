@@ -167,7 +167,7 @@ function FindBarInput(props: { placeholder?: string; autofocus?: boolean }) {
     <input
       ref={inputEl}
       type="text"
-      class="min-w-0 flex-1 bg-transparent border-0 px-1 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-0"
+      class="min-w-0 flex-1 bg-transparent border-0 px-1 text-sm text-ink placeholder:text-ink-placeholder focus:outline-none focus:ring-0"
       placeholder={props.placeholder ?? 'Find'}
       value={controller.query()}
       onInput={(e) => controller.setQuery(e.currentTarget.value)}

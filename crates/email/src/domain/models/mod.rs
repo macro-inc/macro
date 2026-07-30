@@ -25,7 +25,10 @@ pub use label::{
     Label, LabelListVisibility, LabelType, LinkLabel, MessageLabel, MessageListVisibility,
     UpdateThreadLabelsResult,
 };
-pub use link::{Link, UserProvider};
+pub use link::{
+    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, UserEmailLink,
+    UserEmailLinkSettings, UserProvider,
+};
 pub use message::{Message, MessageRow, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};
 pub use preview::{

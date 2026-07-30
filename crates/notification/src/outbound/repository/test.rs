@@ -309,9 +309,16 @@ async fn test_mark_notifications_seen(pool: Pool<Postgres>) {
     let user = test_user("user@test.com");
     let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
 
-    pool.mark_notifications_seen(&user, &[notification_id])
+    let updated = pool
+        .mark_notifications_seen(&user, &[notification_id])
         .await
         .unwrap();
+
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].owner_id, user);
+    assert_eq!(updated[0].notification_id, notification_id);
+    assert_eq!(updated[0].entity.entity_id, "item-1");
+    assert!(updated[0].viewed_at.is_some());
 
     let row = sqlx::query!(
         "SELECT seen_at FROM user_notification WHERE notification_id = $1 AND user_id = $2",
@@ -348,9 +355,13 @@ async fn test_mark_notifications_seen_does_not_affect_other_users(pool: Pool<Pos
     .unwrap();
 
     // Mark seen only for the first user
-    pool.mark_notifications_seen(&user, &[notification_id])
+    let updated = pool
+        .mark_notifications_seen(&user, &[notification_id])
         .await
         .unwrap();
+
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].owner_id, user);
 
     // Other user's notification should still be unseen
     let row = sqlx::query!(
@@ -363,6 +374,50 @@ async fn test_mark_notifications_seen_does_not_affect_other_users(pool: Pool<Pos
     .unwrap();
 
     assert!(row.seen_at.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("notifications_with_collapse_keys")
+    )
+)]
+async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool: Pool<Postgres>) {
+    let user = test_user("user@test.com");
+    let other_user = test_user("other@test.com");
+    let first = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let second = uuid::Uuid::parse_str("0193b1ea-b642-7589-893b-2b4a509c1e76").unwrap();
+    let other_only = uuid::Uuid::new_v4();
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-other"),
+        secondary_notification_entity: None,
+        notification: TaggedContent::new(TestNotification {
+            message: "other".to_string(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([other_user]),
+    };
+    pool.create_notification(request, other_only, "test_service", None)
+        .await
+        .unwrap();
+
+    let rows = pool
+        .mark_notifications_done(&user, &[second, other_only, first], true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        rows.iter()
+            .map(|notification| notification.notification_id)
+            .collect::<Vec<_>>(),
+        vec![second, first]
+    );
+    assert!(
+        rows.iter()
+            .all(|notification| notification.owner_id == user)
+    );
+    assert!(rows.iter().all(|notification| notification.done));
 }
 
 #[sqlx::test(

@@ -167,7 +167,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(config.fusionauth_base_url.as_ref())
         .to_owned();
     let auth_client = fusionauth::FusionAuthClient::new(
-        config.fusionauth_tenant_id.to_string(),
         fusionauth_api_key,
         config.fusionauth_client_id.to_string().clone(),
         fusionauth_client_secret,

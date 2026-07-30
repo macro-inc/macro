@@ -22,6 +22,7 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
@@ -1627,10 +1628,20 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn post_activity(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         activity_type: ActivityType,
     ) -> Result<Activity, ChannelMutationErr> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".to_string(),
+            ));
+        }
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
+        let actor = access.get_authenticated_user().map_err(|_| {
+            ChannelMutationErr::Unauthorized("authenticated user required".to_string())
+        })?;
+
         let activity = self
             .repo
             .set_activity(actor.as_ref().to_string(), channel_id, activity_type)

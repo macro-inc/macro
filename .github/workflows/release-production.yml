@@ -59,10 +59,10 @@ jobs:
         working-directory: apps/web
         run: just build-prod
         env:
-          VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
-          VITE_DD_HASH: ${{ github.sha }}
           VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
           VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+          VITE_OTEL_ENV: production
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:

@@ -23,7 +23,11 @@ class FakeSocket implements SyncSocket {
   reconnects = 0;
   closed = false;
   private msg = new Set<AnyListener>();
+  private openListeners = new Set<AnyListener>();
   private recon = new Set<AnyListener>();
+  private closeListeners = new Set<AnyListener>();
+  private retryListeners = new Set<AnyListener>();
+  private heartbeatMissedListeners = new Set<AnyListener>();
 
   send(message: IFromPeer) {
     this.sent.push(message);
@@ -43,15 +47,27 @@ class FakeSocket implements SyncSocket {
     listener: WebsocketEventListener<K, IFromPeer, FromRemote>
   ) {
     if (type === WebsocketEvent.Message) this.msg.add(listener as AnyListener);
+    else if (type === WebsocketEvent.Open)
+      this.openListeners.add(listener as AnyListener);
     else if (type === WebsocketEvent.Reconnect)
       this.recon.add(listener as AnyListener);
+    else if (type === WebsocketEvent.Close)
+      this.closeListeners.add(listener as AnyListener);
+    else if (type === WebsocketEvent.retry)
+      this.retryListeners.add(listener as AnyListener);
+    else if (type === WebsocketEvent.HeartbeatMissed)
+      this.heartbeatMissedListeners.add(listener as AnyListener);
   }
   removeEventListener<K extends WebsocketEvent>(
     _type: K,
     listener: WebsocketEventListener<K, IFromPeer, FromRemote>
   ) {
     this.msg.delete(listener as AnyListener);
+    this.openListeners.delete(listener as AnyListener);
     this.recon.delete(listener as AnyListener);
+    this.closeListeners.delete(listener as AnyListener);
+    this.retryListeners.delete(listener as AnyListener);
+    this.heartbeatMissedListeners.delete(listener as AnyListener);
   }
 
   // test drivers
@@ -63,6 +79,28 @@ class FakeSocket implements SyncSocket {
     this.connectionState = WebsocketConnectionState.Open;
     const event = {} as Parameters<AnyListener>[1];
     for (const listener of [...this.recon]) listener(this as never, event);
+  }
+  fireOpen() {
+    this.connectionState = WebsocketConnectionState.Open;
+    const event = {} as Parameters<AnyListener>[1];
+    for (const listener of [...this.openListeners])
+      listener(this as never, event);
+  }
+  fireClose(code: number, reason: string) {
+    const event = {
+      code,
+      reason,
+      wasClean: false,
+    } as Parameters<AnyListener>[1];
+    for (const listener of [...this.closeListeners])
+      listener(this as never, event);
+  }
+  fireRetry(retries: number, backoff: number) {
+    const event = {
+      detail: { retries, backoff },
+    } as Parameters<AnyListener>[1];
+    for (const listener of [...this.retryListeners])
+      listener(this as never, event);
   }
 }
 

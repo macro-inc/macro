@@ -1,3 +1,4 @@
+import { resumeDocumentSpan } from '@block-md/observability';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
@@ -27,8 +28,16 @@ export function createSyncServiceSocket(
   documentId: string,
   initialToken: string
 ): SyncWebsocket {
-  const connectUrl = (token: string) =>
-    `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
+  const connectUrl = (token: string) => {
+    const url = `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
+    // Browsers can't set websocket headers, so the trace context rides a
+    // query param; the sync service joins its spans to the active
+    // transaction's trace.
+    const traceparent = resumeDocumentSpan(documentId)?.traceparent();
+    return traceparent
+      ? `${url}&traceparent=${encodeURIComponent(traceparent)}`
+      : url;
+  };
   let initialUrl: string | undefined = connectUrl(initialToken);
   let fallbackUrl = initialUrl;
 

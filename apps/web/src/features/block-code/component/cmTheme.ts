@@ -106,7 +106,7 @@ const theme = EditorView.theme({
     },
   // Make sure selection appears above active line
   '.cm-selectionLayer': {
-    zIndex: 100,
+    zIndex: 2,
   },
   '.cm-selectionMatch': {
     backgroundColor: base.selection,

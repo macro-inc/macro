@@ -11,11 +11,15 @@ use crate::workflows::{
     vars,
 };
 
-/// All the real web jobs share one mid-size Namespace profile with a dedicated
-/// cache tag, so the frontend's Nix/Bun/Cargo state lives on its own volume.
-/// The `gen-api` Rust objects use [`vars::WEB_SCCACHE_NAME`] through Namespace's
-/// official remote sccache.
+/// Frontend-only jobs share one small Namespace profile with a dedicated cache
+/// tag, so their Nix/Bun state lives on its own volume.
 fn web_runner() -> String {
+    runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
+}
+
+/// Typechecking can compile the Rust binaries used by `gen-api`, so retain the
+/// mid-size profile while sharing the web CI cache volume and remote sccache.
+fn typecheck_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
@@ -48,7 +52,7 @@ pub fn web_app_check_main() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output("api_changed", "${{ steps.filter.outputs.api_changed }}")
         .add_step(checkout("Checkout Repo", false))
@@ -62,7 +66,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'",
         ))
         .name("Typecheck")
-        .runs_on(web_runner())
+        .runs_on(typecheck_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(true))
         .add_step(steps::setup_nix())
@@ -139,7 +143,7 @@ fn status_check() -> Job {
             "cycles".to_string(),
             "build".to_string(),
         ])
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_step(check_job_results())
 }
 

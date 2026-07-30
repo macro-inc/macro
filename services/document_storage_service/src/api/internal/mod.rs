@@ -59,6 +59,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
+            "/documents/{document_id}/content-uploaded",
+            post(
+                documents_hex::inbound::axum_router::content_uploaded::content_uploaded_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
+        )
+        .route(
             "/documents/{document_id}/export",
             get(export_document::handler),
         )

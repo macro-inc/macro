@@ -10,11 +10,14 @@ describe('throwOnErr', () => {
   });
 
   it('throws a ThrownResultError for err values', async () => {
-    const error = [{ code: 'ERROR', message: 'Test error' }];
+    const error = [
+      { code: 'ERROR', message: 'First error' },
+      { code: 'ERROR', message: 'Second error' },
+    ];
 
     await expect(throwOnErr(async () => err(error))).rejects.toMatchObject({
       errors: error,
-      message: 'Test error',
+      message: 'First error, Second error',
     });
   });
 });

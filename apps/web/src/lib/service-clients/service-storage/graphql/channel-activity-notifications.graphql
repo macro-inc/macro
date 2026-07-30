@@ -1,0 +1,19 @@
+mutation RecordChannelActivity($input: RecordChannelActivityInput!) {
+	recordChannelActivity(input: $input) {
+		__typename
+		id
+		userId
+		channelId
+		createdAt
+		updatedAt
+		viewedAt
+		interactedAt
+	}
+}
+
+mutation UpdateNotifications($input: UpdateNotificationsInput!) {
+	updateNotifications(input: $input) {
+		__typename
+		...SoupNotificationFields
+	}
+}

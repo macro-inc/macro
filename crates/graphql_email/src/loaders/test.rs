@@ -1,6 +1,6 @@
 use entity_access::domain::models::TeamRole;
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
 
@@ -149,7 +149,9 @@ impl EntityAccessService for TestAccessService {
 
 #[derive(Default)]
 struct RecordingContentService {
-    calls: AtomicUsize,
+    latest_calls: AtomicUsize,
+    page_calls: AtomicUsize,
+    pagination: Mutex<Vec<(i64, i64)>>,
 }
 
 impl EmailContentService for RecordingContentService {
@@ -157,15 +159,24 @@ impl EmailContentService for RecordingContentService {
         &self,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.latest_calls.fetch_add(1, Ordering::SeqCst);
         Ok(HashMap::new())
+    }
+
+    async fn get_messages_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
+        self.page_calls.fetch_add(1, Ordering::SeqCst);
+        self.pagination.lock().unwrap().push((offset, limit));
+        Ok(Some(Vec::new()))
     }
 }
 
 fn key(index: usize) -> EmailContentKey {
-    EmailContentKey {
-        thread_id: Uuid::from_u128(index as u128),
-    }
+    EmailContentKey::latest(Uuid::from_u128(index as u128))
 }
 
 #[tokio::test]
@@ -199,7 +210,23 @@ async fn rejects_oversized_batches_without_calling_the_reader() {
     let error = loader.load(&keys).await.unwrap_err();
 
     assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
-    assert!(error.to_string().contains("at most 20 threads"));
+    assert!(error.to_string().contains("at most 20 requests"));
+}
+
+#[tokio::test]
+async fn rejects_excessive_requested_messages_without_calling_the_reader() {
+    let reader = RecordingReader::default();
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let loader = EmailContentLoader::new(user_id, reader.clone());
+    let keys = vec![
+        EmailContentKey::page(Uuid::from_u128(1), 0, 51),
+        EmailContentKey::page(Uuid::from_u128(2), 0, 50),
+    ];
+
+    let error = loader.load(&keys).await.unwrap_err();
+
+    assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
+    assert!(error.to_string().contains("at most 100 requested messages"));
 }
 
 #[tokio::test]
@@ -214,10 +241,31 @@ async fn authorized_keys_reach_the_email_domain() {
 
     let loaded = reader.get_email_content(&user_id, vec![requested]).await;
 
-    assert_eq!(content.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(content.latest_calls.load(Ordering::SeqCst), 1);
     assert!(matches!(
         loaded.get(&requested),
         Some(EmailContentLoad::Missing)
+    ));
+}
+
+#[tokio::test]
+async fn paginated_keys_forward_offset_and_limit_to_the_email_domain() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: true }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let requested = EmailContentKey::page(Uuid::from_u128(1), 7, 9);
+
+    let loaded = reader.get_email_content(&user_id, vec![requested]).await;
+
+    assert_eq!(content.latest_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.page_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(*content.pagination.lock().unwrap(), vec![(7, 9)]);
+    assert!(matches!(
+        loaded.get(&requested),
+        Some(EmailContentLoad::Found(messages)) if messages.is_empty()
     ));
 }
 
@@ -233,7 +281,8 @@ async fn unauthorized_keys_do_not_reach_the_email_domain() {
 
     let loaded = reader.get_email_content(&user_id, vec![requested]).await;
 
-    assert_eq!(content.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.latest_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.page_calls.load(Ordering::SeqCst), 0);
     assert!(matches!(
         loaded.get(&requested),
         Some(EmailContentLoad::Missing)

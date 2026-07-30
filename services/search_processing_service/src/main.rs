@@ -1,10 +1,8 @@
 #![recursion_limit = "256"]
-use std::sync::Arc;
-#[cfg(feature = "processing")]
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
-use crate::inbound::kafka_consumer::run_event_consumer;
+use crate::inbound::kafka_consumer::{KafkaProcessingContext, run_event_consumer};
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -17,6 +15,7 @@ use config::{Config, Environment};
 use lexical_client::LexicalClient;
 use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
 use macro_entrypoint::MacroEntrypoint;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use opensearch_client::OpensearchClient;
 #[cfg(feature = "pdf")]
 use rust_embed::RustEmbed;
@@ -24,7 +23,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 #[cfg(feature = "processing")]
 use tokio_retry::{Retry, strategy::FixedInterval};
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 mod api;
 mod config;
@@ -74,18 +73,17 @@ struct PdfiumLib;
 
 #[cfg(feature = "processing")]
 const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(feature = "processing")]
 async fn supervise_event_consumer(
     brokers: String,
-    db: PgPool,
-    opensearch_client: OpensearchClient,
+    context: KafkaProcessingContext,
     shutdown_token: CancellationToken,
 ) {
     let _ = Retry::start(FixedInterval::new(CONSUMER_RESTART_DELAY), || {
         let consumer_brokers = brokers.clone();
-        let consumer_db = db.clone();
-        let consumer_opensearch_client = opensearch_client.clone();
+        let consumer_context = context.clone();
         let consumer_shutdown_token = shutdown_token.clone();
 
         async move {
@@ -97,8 +95,7 @@ async fn supervise_event_consumer(
             let consumer_result = tokio::spawn(async move {
                 run_event_consumer(
                     &consumer_brokers,
-                    consumer_db,
-                    consumer_opensearch_client,
+                    consumer_context,
                     task_shutdown_token.cancelled_owned(),
                 )
                 .await
@@ -159,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue);
 
-    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
+    let s3_client = Arc::new(s3_client::S3::new(macro_aws_config::s3_client().await));
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 50),
@@ -180,12 +177,14 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let opensearch_client = OpensearchClient::new(
-        config.opensearch_url.to_string(),
-        config.opensearch_username.to_string(),
-        config.opensearch_password.as_ref().to_string(),
-    )
-    .context("unable to create opensearch client")?;
+    let opensearch_client = Arc::new(
+        OpensearchClient::new(
+            config.opensearch_url.to_string(),
+            config.opensearch_username.to_string(),
+            config.opensearch_password.as_ref().to_string(),
+        )
+        .context("unable to create opensearch client")?,
+    );
 
     if let Err(e) = opensearch_client.health().await {
         tracing::error!(error=?e, "error connecting to opensearch");
@@ -215,11 +214,15 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let shutdown_token = CancellationToken::new();
+    let event_broker_tracker = TaskTracker::new();
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
 
     #[cfg(feature = "processing")]
     let consumer_supervisor = {
-        use std::sync::Arc;
-
         // Ensures that pdfium binary exists so we can kill the container early on failure
         #[cfg(feature = "pdf")]
         if !std::fs::exists("./pdfium-lib/linux/libpdfium.so").expect("able to find file") {
@@ -228,10 +231,10 @@ async fn main() -> anyhow::Result<()> {
             tracing::trace!("libpdfium is present");
         }
 
-        let lexical_client = LexicalClient::new(
+        let lexical_client = Arc::new(LexicalClient::new(
             config.internal_api_key.to_string(),
             config.lexical_service_url.clone(),
-        );
+        ));
 
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
@@ -239,20 +242,26 @@ async fn main() -> anyhow::Result<()> {
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
-        let ctx = SearchProcessingContext {
+        let search_processing_context = SearchProcessingContext {
             db: db.clone(),
             worker: Arc::new(worker.clone()),
             document_storage_bucket: config.document_storage_bucket.to_string(),
-            s3_client: Arc::new(s3_client),
-            opensearch_client: Arc::new(opensearch_client.clone()),
-            lexical_client: Arc::new(lexical_client),
+            s3_client: s3_client.clone(),
+            opensearch_client: opensearch_client.clone(),
+            lexical_client: lexical_client.clone(),
         };
-        run_search_processing_workers(ctx, config.worker_count);
+        run_search_processing_workers(search_processing_context, config.worker_count);
 
+        let kafka_processing_context = KafkaProcessingContext {
+            db: db.clone(),
+            opensearch_client: opensearch_client.clone(),
+            s3_client: s3_client.clone(),
+            document_storage_bucket: config.document_storage_bucket.to_string(),
+            lexical_client,
+        };
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
-            db.clone(),
-            opensearch_client.clone(),
+            kafka_processing_context,
             shutdown_token.clone(),
         ))
     };
@@ -274,11 +283,11 @@ async fn main() -> anyhow::Result<()> {
         ApiContext {
             db,
             authorization_state,
-            sqs_client,
-            opensearch_client: Arc::new(opensearch_client),
+            opensearch_client,
             config: Arc::new(config),
             backfill_service,
             backfill_jobs,
+            macro_event_broker,
         },
         shutdown_token.clone(),
     )
@@ -286,9 +295,24 @@ async fn main() -> anyhow::Result<()> {
 
     shutdown_token.cancel();
     #[cfg(feature = "processing")]
-    consumer_supervisor
+    let consumer_result = consumer_supervisor
         .await
-        .context("search processing event consumer supervisor failed")?;
+        .context("search processing event consumer supervisor failed");
 
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    #[cfg(feature = "processing")]
+    consumer_result?;
     api_result
 }

@@ -1,8 +1,7 @@
 @import "tailwindcss";
 
-@plugin '../tailwind-plugins/zIndex.ts';
-
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
+@source inline("z-{popup-viewer,viewer-definition-lookup}");
 @source './lib/core/component/LexicalMarkdown/theme.ts';
 @source '../**/*.tsx';
 
@@ -219,13 +218,75 @@
   --animate-swipe-out: swipeOut 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
 
+  /* Z-index scale — the single source of truth for stacking. Classes come
+     from these tokens (`--z-index-foo` -> `z-foo`).
+
+     Bands:
+       0- 99  in-page — viewer internals (0-19), app chrome (20-30),
+              floating widgets (90)
+     100-199  modal stack, drag previews, menus
+     200-299  always on top — tooltips, toasts
+
+     Raw `z-{n}` classes are only for elements inside a local stacking
+     context (an ancestor with its own z-index/isolate/transform), where the
+     value is relative to siblings and can't leak into this scale. Anything
+     stacking at page scope must use a token; don't add new raw page-scope
+     values. For a component family with internal layering, wrap the family
+     in one positioned `z-<token>` container: the wrapper slots the whole
+     family into this scale, and the inner raw z-{n} values become contained,
+     local ordering. */
+
+  /* ---- 0-99: in-page --------------------------------------------------- */
+  --z-index-main-view-layout: 0;
+  --z-index-user-highlight:   1;
+  --z-index-annotation-layer: 2;
+  /* Split-view header title strip. Local to the header's own stacking
+     context (Panel.Header is `z-split-panel-chrome` + relative), so a small
+     value suffices. */
+  --z-index-split-header-content: 3;
+  --z-index-placeable:        4;
+  --z-index-highlight-menu:   5;
+  --z-index-viewer-definition-lookup: 6;
+  --z-index-popup-viewer:             7;
+  --z-index-simple-search:    8;
+  --z-index-sign-up-banner:  18;
+  --z-index-viewer-document-loading-spinner: 19;
+
+  /* In-page app chrome (20-30). */
+  /* Content-anchored floating controls (markdown table handles/menus/bars):
+     above the content they annotate, below app chrome. They mount in the
+     editor's local portal so its scroll and overflow clipping carry them
+     under the split header with the content; the family layers internally
+     with raw z-{n}. */
+  --z-index-anchored-controls: 20;
+  --z-index-item-options-menu: 22;
+  /* Full-frame mobile search results sit below the mobile nav bar / float
+     host, so the search input and category tabs float over them. */
+  --z-index-mobile-search:     23;
+  --z-index-mobile-nav-bar:    24;
+  /* Split panel header/side-panel chrome: above the panel's content and the
+     rest of the in-page chrome, below floating widgets. */
+  --z-index-split-panel-chrome: 30;
+
+  /* App-level floating widgets (`z-float`: draggable call controls, incoming
+     calls). Above all other in-page content, below the modal stack. */
+  --z-index-float:          90;
+
+  /* ---- 100-199: modal stack, drag previews, menus ----------------------- */
+  /* Anchored at 100 so nothing in-page can ever cover a modal. */
   --z-index-modal-overlay: 100;
   --z-index-modal:         110;
   --z-index-modal-content: 120;
+  /* Drag previews render above whatever surface the drag started from. */
+  --z-index-drag:          130;
   /* Dropdowns/popovers (`z-action-menu`). Above modal content so menus opened
      from inside a modal render on top of it, below tooltips. */
   --z-index-action-menu:   150;
+
+  /* ---- 200-299: always on top ------------------------------------------ */
   --z-index-tool-tip:      200;
+  /* The PDF custom cursor dot must never hide under a hover tooltip. */
+  --z-index-custom-cursor-tooltip: 210;
   /* Toasts sit above everything (incl. full-screen modals) so they stay visible. */
   --z-index-toast-region:  250;
 
@@ -504,8 +565,10 @@ a {
    Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
 @utility settings-input {
   @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-sm text-ink outline-none transition-colors;
+  /* Matches the composer/chat placeholder token so hint text reads the same
+     faintness everywhere, rather than settings sitting more prominent. */
   &::placeholder {
-    @apply text-ink-extra-muted;
+    @apply text-ink-placeholder;
   }
   &:hover {
     @apply border-edge;

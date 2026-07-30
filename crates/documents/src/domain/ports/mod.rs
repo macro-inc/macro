@@ -13,7 +13,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{ContentType, DocumentBasic, DocumentMetadata};
+use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -334,19 +334,15 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// Port for refreshing a document's denormalized name in the search index.
-///
-/// A rename only changes the `document_name` on the parent doc, and nothing
-/// else re-indexes parent-only file types, so the rename must publish a
-/// targeted metadata refresh. Best-effort — callers log and continue on error.
-/// Boxed future so the port stays object-safe and can be held as
-/// `Arc<dyn DocumentSearchIndexer>` without adding a service generic.
-pub trait DocumentSearchIndexer: Send + Sync + std::fmt::Debug {
-    /// Enqueue a refresh of the document's indexed name.
-    fn enqueue_name_update(
+/// Use case for relaying document content-upload events.
+pub trait DocumentContentEventService: Send + Sync + 'static {
+    /// Load the document owner and publish a content-uploaded event.
+    fn publish_content_uploaded(
         &self,
-        document_id: String,
-    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>>;
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
 /// Service interface for document operations.

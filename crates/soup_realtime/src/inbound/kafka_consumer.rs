@@ -7,8 +7,13 @@
 #[cfg(test)]
 mod test;
 
-use std::{future::Future, time::Duration};
+use std::future::Future;
 
+use crate::domain::{
+    models::{Patch, SoupRealtimePatch},
+    ports::SoupRealtimeService,
+    service::SoupRealtimeServiceImpl,
+};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
@@ -24,13 +29,6 @@ use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio_retry::{Retry, strategy::ExponentialBackoff};
-
-use crate::domain::{
-    models::{Patch, SoupRealtimePatch},
-    ports::{SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
-    service::SoupRealtimeServiceImpl,
-};
 
 /// Consumer group used for Soup-affecting entity event offsets.
 struct SoupRealtimeConsumerGroup;
@@ -52,17 +50,6 @@ macro_event_broker::declare_topics!(
         ChannelMacroEvent,
         PropertyMacroEvent,
 );
-
-/// Total service attempts before returning for supervisor-driven redelivery.
-const MAX_SERVICE_ATTEMPTS: u32 = 5;
-/// Delay before the first retry; each subsequent delay doubles.
-const SERVICE_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
-
-fn service_retry_strategy() -> impl Iterator<Item = Duration> {
-    ExponentialBackoff::from_millis(2)
-        .factor(500)
-        .take((MAX_SERVICE_ATTEMPTS - 1) as usize)
-}
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
     entity_type.with_entity_string(entity_id.to_string())
@@ -135,7 +122,10 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
-        DocumentTopicEvent::Interaction(_) => {}
+        DocumentTopicEvent::Interaction(_)
+        | DocumentTopicEvent::ContentUploaded(_)
+        | DocumentTopicEvent::SyncContentUpdated(_)
+        | DocumentTopicEvent::Purged(_) => {}
     }
     updates
 }
@@ -397,12 +387,10 @@ enum EventOutcome {
     Ignored,
 }
 
-#[tracing::instrument(skip(service, event), fields(partition, offset), err)]
-async fn process_event<S: SoupRealtimeService>(
+#[tracing::instrument(skip(service, event), err)]
+fn process_event<S: SoupRealtimeService>(
     service: &S,
     event: &DeclaredMacroEvent,
-    partition: i32,
-    offset: i64,
 ) -> Result<EventOutcome, Report> {
     let patches = patches_from_event(event);
     if patches.is_empty() {
@@ -411,84 +399,16 @@ async fn process_event<S: SoupRealtimeService>(
     }
 
     for patch in patches {
-        notify_with_retry(service, patch, partition, offset).await?;
+        service.notify_users(patch)?;
     }
     Ok(EventOutcome::Notified)
 }
 
-#[tracing::instrument(
-    skip(service, patch),
-    fields(
-        entity_type = %patch.patch.value().entity_type,
-        entity_id = %patch.patch.value().entity_id,
-        access_source_type = %patch.access_source.entity_type,
-        access_source_id = %patch.access_source.entity_id,
-        partition,
-        offset,
-    ),
-    err
-)]
-async fn notify_with_retry<S: SoupRealtimeService>(
-    service: &S,
-    patch: SoupRealtimePatch,
-    partition: i32,
-    offset: i64,
-) -> Result<(), Report> {
-    let mut attempt = 0u32;
-    Retry::start(service_retry_strategy(), || {
-        attempt += 1;
-        let patch = patch.clone();
-        async move {
-            tracing::trace!(attempt, "notifying realtime Soup recipients");
-            let result = service.notify_users(patch).await;
-            match &result {
-                Ok(()) => tracing::trace!(attempt, "realtime Soup recipients notified"),
-                Err(error) if attempt < MAX_SERVICE_ATTEMPTS => {
-                    let delay = SERVICE_RETRY_BASE_DELAY * 2u32.pow(attempt - 1);
-                    tracing::warn!(
-                        error = ?error,
-                        attempt,
-                        delay_secs = delay.as_secs_f32(),
-                        "realtime Soup fan-out failed, retrying"
-                    );
-                }
-                Err(_) => {}
-            }
-            result
-        }
-    })
-    .await
-    .map_err(|error| {
-        error
-            .context(format!(
-                "realtime Soup fan-out failed after {MAX_SERVICE_ATTEMPTS} attempts \
-                 (partition {partition} offset {offset})"
-            ))
-            .into_dynamic()
-    })
-}
-
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
-    match consumer.inner().commit_message(message, CommitMode::Async) {
-        Ok(()) => tracing::trace!(
-            partition = message.partition(),
-            offset = message.offset(),
-            "committed realtime Soup input offset"
-        ),
-        Err(error) => tracing::error!(
-            error = ?error,
-            partition = message.partition(),
-            offset = message.offset(),
-            "failed to commit realtime Soup input offset"
-        ),
-    }
+    let _ = consumer.inner().commit_message(message, CommitMode::Async);
 }
 
-impl<A, P> SoupRealtimeServiceImpl<A, P>
-where
-    A: UserAccessExpander,
-    P: SoupRealtimePublisher,
-{
+impl SoupRealtimeServiceImpl {
     /// Runs the Soup-affecting entity event consumer until `shutdown` resolves.
     ///
     /// The consumer subscribes to every existing entity topic with events that
@@ -521,51 +441,24 @@ where
                     break;
                 }
                 result = consumer.recv() => {
-                    let message = match result {
-                        Ok(message) => message,
-                        Err(error) => {
-                            tracing::error!(error = ?error, "Kafka receive error");
-                            continue;
-                        }
-                    };
+                    let Ok(message) = result else { continue; };
                     let kafka_message = message.inner();
+                    let _message_span = tracing::info_span!(
+                        "realtime_soup_source_event",
+                        topic = kafka_message.topic(),
+                        partition = kafka_message.partition(),
+                        offset = kafka_message.offset(),
+                    )
+                    .entered();
                     let event = match message.decode_payload() {
                         Ok(event) => event,
-                        Err(error) => {
-                            tracing::error!(
-                                error = ?error,
-                                topic = kafka_message.topic(),
-                                partition = kafka_message.partition(),
-                                offset = kafka_message.offset(),
-                                "dropping malformed Soup source event"
-                            );
+                        Err(_) => {
                             commit_logged(&consumer, kafka_message);
                             continue;
                         }
                     };
 
-                    match process_event(
-                        self,
-                        &event,
-                        kafka_message.partition(),
-                        kafka_message.offset(),
-                    )
-                    .await
-                    {
-                        Ok(EventOutcome::Notified | EventOutcome::Ignored) => {}
-                        Err(error) => {
-                            tracing::error!(
-                                error = ?error,
-                                topic = kafka_message.topic(),
-                                partition = kafka_message.partition(),
-                                offset = kafka_message.offset(),
-                                "realtime Soup fan-out retries exhausted; restarting consumer for redelivery"
-                            );
-                            return Err(error
-                                .context("realtime Soup entity consumer requires restart for redelivery")
-                                .into_dynamic());
-                        }
-                    }
+                    let _ = process_event(self,&event);
 
                     commit_logged(&consumer, kafka_message);
                 }

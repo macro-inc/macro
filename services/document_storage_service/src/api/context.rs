@@ -166,6 +166,8 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
     DssEntityMutationService,
+    DssChannelService,
+    ai_tools::ToolNotificationService,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
@@ -284,7 +286,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     DynamoBulkUploadAdapter,
     ShaCountAdapter,
     EntityAccessManagementService,
-    SqsProjectSearchIndexer,
+    SqsProjectSearchIndexer<DssEventBroker>,
     DssEventBroker,
 >;
 
@@ -389,7 +391,7 @@ pub(crate) type DssEntityMutationService =
         ProjectService,
         EntityAccessService,
         FavoritesServiceType,
-        crate::outbound::entity_mutation::DssEntityLifecycleAdapter,
+        crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
 
 /// Type alias for the favorites service.
@@ -449,6 +451,7 @@ pub(crate) struct ApiContext {
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,
+    pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,

@@ -1,5 +1,5 @@
 import type { Maybe } from '@core/types';
-import { type ResultError, throwOnErr } from '@core/util/result';
+import { throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import {
   hasSoupEntity,
@@ -11,13 +11,13 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
+import { updateNotifications } from '@service-storage/graphql-notifications';
 import {
   type InfiniteData,
   type MutationFunction,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import type { Result } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { queryClient } from '../client';
@@ -289,28 +289,18 @@ export function invalidateUserNotifications() {
   });
 }
 
-/** Plain-async wrapper around `bulkMarkNotificationAsDone`. Throws on failure. */
+/** Mark notifications done through the shared GraphQL mutation. Throws on failure. */
 export async function bulkMarkNotificationsAsDone(
   notificationIds: string[]
 ): Promise<void> {
-  await throwOnErr(
-    async () =>
-      await notificationServiceClient.bulkMarkNotificationAsDone({
-        notificationIds,
-      })
-  );
+  await updateNotifications({ notificationIds, operation: 'MARK_DONE' });
 }
 
-/** Plain-async wrapper around `bulkMarkNotificationAsUndone`. Throws on failure. */
+/** Mark notifications undone through the shared GraphQL mutation. Throws on failure. */
 export async function bulkMarkNotificationsAsUndone(
   notificationIds: string[]
 ): Promise<void> {
-  await throwOnErr(
-    async () =>
-      await notificationServiceClient.bulkMarkNotificationAsUndone({
-        notificationIds,
-      })
-  );
+  await updateNotifications({ notificationIds, operation: 'MARK_UNDONE' });
 }
 
 /**
@@ -386,7 +376,7 @@ type NotificationsMutationCallbacks<T> = MutationCallbacks<
 >;
 
 type NotificationsMutationFn<T> = MutationFunction<
-  Result<T, ResultError<string>[]>,
+  T,
   NotificationsMutationParams
 >;
 
@@ -440,8 +430,7 @@ function createNotificationsMutation<T>(
 ) {
   return (callbacks?: NotificationsMutationCallbacks<T>) => {
     return useMutation(() => ({
-      mutationFn: async (params, ctx) =>
-        await throwOnErr(async () => await mutationFn(params, ctx)),
+      mutationFn,
       ...withCallbacks<
         T,
         Error,
@@ -492,8 +481,9 @@ const mapNotificationsAsSeen = (
 /** Marks notifications as seen with optimistic update. */
 export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
-    await notificationServiceClient.bulkMarkNotificationAsSeen({
+    await updateNotifications({
       notificationIds: params.notificationIds,
+      operation: 'MARK_SEEN',
     }),
   {
     onMutate: createNotificationsMutateFn(mapNotificationsAsSeen),
@@ -523,8 +513,9 @@ const markNotificationsAsDoneMutateFn = createNotificationsMutateFn(
 /** Marks notifications as done (removes from list) with optimistic update. */
 export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
-    await notificationServiceClient.bulkMarkNotificationAsDone({
+    await updateNotifications({
       notificationIds: params.notificationIds,
+      operation: 'MARK_DONE',
     }),
   {
     onMutate: async (params) => {

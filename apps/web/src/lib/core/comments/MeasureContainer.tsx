@@ -1,4 +1,3 @@
-import * as stackingContext from '@core/constant/stackingContext';
 import {
   createEffect,
   createMemo,
@@ -71,7 +70,9 @@ export const MeasureContainer = (props: ParentProps<MeasureContainerProps>) => {
         top: `${props.top}px`,
         'max-height': props.maxHeight ? `${props.maxHeight}px` : undefined,
         'min-width': props.forceWidth ? `${props.forceWidth}px` : undefined,
-        'z-index': stackingContext.zPlaceable + (props.isActive ? 1 : 0),
+        'z-index': props.isActive
+          ? 'calc(var(--z-index-placeable) + 1)'
+          : 'var(--z-index-placeable)',
       }}
       class="absolute w-full"
       ref={(el) => {

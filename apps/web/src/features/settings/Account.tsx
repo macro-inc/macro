@@ -587,7 +587,7 @@ function NameInput(props: {
     <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-extra-muted"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-placeholder"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {

@@ -2,11 +2,6 @@
 use model::document::{BackfillSearchDocumentInformation, FileType};
 use s3_key::CONVERTED_DOCUMENT_FILE_NAME;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
-pub struct DocumentId {
-    pub document_id: String,
-}
-
 /// A request to refresh only the indexed properties of a document (e.g. after
 /// a status / assignee / tag change), without re-extracting its content.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]

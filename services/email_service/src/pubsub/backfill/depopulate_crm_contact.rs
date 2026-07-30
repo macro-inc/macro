@@ -71,7 +71,8 @@ pub async fn depopulate_crm_contact(
         return Ok(());
     }
 
-    ctx.crm_service
+    let outcome = ctx
+        .crm_service
         .depopulate_contact(&team_id, &link.id, &p.contact_email)
         .await
         .map_err(|e| {
@@ -80,6 +81,16 @@ pub async fn depopulate_crm_contact(
                 source: anyhow::Error::from(e).context("Failed to depopulate CRM contact"),
             })
         })?;
+
+    if outcome.removed_anything() {
+        tracing::info!(
+            team_id = %team_id,
+            source_deleted = outcome.source_deleted,
+            contact_deleted = outcome.contact_deleted,
+            company_deleted = outcome.company_deleted,
+            "Depopulated CRM contact"
+        );
+    }
 
     Ok(())
 }
