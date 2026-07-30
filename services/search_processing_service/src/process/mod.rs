@@ -115,15 +115,6 @@ pub async fn process_message(
         SearchQueueMessage::ChatMessage(message) => {
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;
         }
-        SearchQueueMessage::RemoveChatMessage(message) => {
-            chat::remove_chat_message(
-                &ctx.opensearch_client,
-                message.chat_id.as_str(),
-                message.message_id.as_deref(),
-                message.index_override.as_deref(),
-            )
-            .await?;
-        }
         SearchQueueMessage::CallRecord(message) => {
             let call_id = message
                 .call_id
