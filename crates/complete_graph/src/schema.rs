@@ -17,7 +17,8 @@ use graphql_channel::{
 };
 use graphql_common::{parse_id, require_authorized_user};
 use graphql_email::{
-    GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader,
+    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader,
+    SoupEmailContentEdgeReader,
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{EntityFavoriteEdgeReader, NoOpEntityFavoriteEdgeReader};
@@ -31,8 +32,9 @@ use graphql_properties::{
     PropertiesMutationRoot,
 };
 use graphql_soup::{
-    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEntityEdges, SoupInput, SoupPage,
-    SoupPatch, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
+    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
+    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
+    resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -55,11 +57,13 @@ pub struct CompleteMutationRoot<
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
+    ES: EmailService,
 >(
     PropertiesMutationRoot<W>,
     EntityMutationRoot<M, E>,
     ChannelMutationRoot<C, A>,
     NotificationMutationRoot<N>,
+    GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
 );
 
 impl<
@@ -69,7 +73,8 @@ impl<
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
-> CompleteMutationRoot<W, M, E, C, N, A>
+    ES: EmailService,
+> CompleteMutationRoot<W, M, E, C, N, A, ES>
 {
     /// Construct the composed mutation root.
     fn new() -> Self {
@@ -78,6 +83,7 @@ impl<
             EntityMutationRoot::<M, E>::new(),
             ChannelMutationRoot::<C, A>::new(),
             NotificationMutationRoot::<N>::new(),
+            GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
         )
     }
 }
@@ -93,7 +99,7 @@ impl<
 /// `FR` the favorite edge reader, and `AR` the access edge reader.
 pub type SoupSchema<S, R, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR> = Schema<
     SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR>,
-    CompleteMutationRoot<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS>,
+    CompleteMutationRoot<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS, E>,
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR>,
 >;
 
@@ -293,7 +299,7 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS>::new(),
+        CompleteMutationRoot::<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS, E>::new(),
         SoupSubscriptionRoot::new(realtime_service),
     )
     .finish()

@@ -222,9 +222,11 @@ async fn main() -> anyhow::Result<()> {
     let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
-        .document_delete_queue(&document_delete_queue);
+        .document_delete_queue(&document_delete_queue)
+        .gmail_ops_queue(&gmail_ops_queue);
     let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
         Arc::new(sqs_client.clone()),
         macro_queues::WebhookEventQueue::new().to_string(),
@@ -322,23 +324,27 @@ async fn main() -> anyhow::Result<()> {
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
-        email::domain::ports::NoOpEnqueuer,
+        sqs_client.clone(),
         crm_service.clone(),
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
         0,
+    )
+    .with_macro_event_broker(macro_event_broker.clone());
+    let readonly_email_service = ReadonlyEmailPreviewAdapter(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(readonly_db.clone()),
+            frecency_service.clone(),
+            sqs_client.clone(),
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
     );
-    let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
-        EmailPgRepo::new(readonly_db.clone()),
-        frecency_service.clone(),
-        email::domain::ports::NoOpEnqueuer,
-        crm_service.clone(),
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
-        ),
-        0,
-    ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(

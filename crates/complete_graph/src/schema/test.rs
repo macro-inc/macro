@@ -736,6 +736,7 @@ impl TestHarness {
         let request = async_graphql::Request::new(query)
             .data(GraphqlRequestParts::new(parts))
             .data(self.state.clone())
+            .data(self.state.email.service())
             .data(graphql_soup::soup_item_loader(
                 self.soup_service.clone(),
                 Arc::new(self.email_service.clone()),

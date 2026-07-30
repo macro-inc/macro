@@ -130,9 +130,10 @@ pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
 pub(crate) type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
-    email::domain::ports::NoOpEnqueuer,
+    sqs_client::SQS,
     DssCrmService,
     EntityAccessManagementService,
+    DssEventBroker,
 >;
 
 /// CRM router state.
