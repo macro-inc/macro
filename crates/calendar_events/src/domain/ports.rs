@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::models::{
     AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
     CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEvent, CalendarEventUpsert,
-    CalendarOccurrence, CalendarOccurrenceCursor, EmailCalendarBackfillState,
+    CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EmailCalendarBackfillState,
     EmailCalendarScanAssociation, EmailCalendarScanJob, GoogleCalendarSnapshot,
     GoogleEventSyncBatch, GoogleScopeSet, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
 };
@@ -102,6 +102,12 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+
+    /// Return the aggregate ingestion state of the requester's visible accounts.
+    fn sync_status(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<CalendarSyncStatus, Report>> + Send;
 }
 
 /// Persistence operations used by calendar business logic.
@@ -128,6 +134,12 @@ pub trait CalendarRepository: Send + Sync + 'static {
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+
+    /// Return the aggregate ingestion state across the requester's visible accounts.
+    fn sync_status(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<CalendarSyncStatus, Report>> + Send;
 
     /// Upsert one provider calendar while holding the current backfill fence.
     fn upsert_google_calendar(

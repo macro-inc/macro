@@ -422,6 +422,7 @@ use utoipa::OpenApi;
             SyncServiceVersionID,
             calendar_events::inbound::axum_router::CalendarOccurrenceItem,
             calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
             SoupDocument<SoupPropertiesField>,

@@ -12468,7 +12468,7 @@
       "CalendarOccurrenceResponse": {
         "type": "object",
         "description": "Paginated calendar occurrence viewport response.",
-        "required": ["items", "hasMore"],
+        "required": ["items", "hasMore", "syncStatus"],
         "properties": {
           "hasMore": {
             "type": "boolean"
@@ -12481,8 +12481,17 @@
           },
           "nextCursor": {
             "type": ["string", "null"]
+          },
+          "syncStatus": {
+            "$ref": "#/components/schemas/CalendarSyncStatus",
+            "description": "Aggregate ingestion state; clients render a skeleton while `syncing`."
           }
         }
+      },
+      "CalendarSyncStatus": {
+        "type": "string",
+        "description": "Aggregate ingestion state across every calendar account visible to a\nrequester, letting clients render progressively while sources build.",
+        "enum": ["syncing", "ready"]
       },
       "CallActiveResponse": {
         "type": "object",

@@ -159,7 +159,6 @@ fn timed_upsert(
                 is_cancelled: false,
             },
         ],
-        materialized_range: OccurrenceRange::historical_sync(starts_at),
     }
 }
 
@@ -424,7 +423,6 @@ async fn completed_google_job_is_rearmed_and_reuses_calendar_sync_state(pool: Pg
                 observed_provider_event_ids: Some(Vec::new()),
                 materialized_range: Some(range.clone()),
             }],
-            requested_range: range.clone(),
         },
     )
     .await
@@ -764,12 +762,6 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
         calendar_ids: Vec::new(),
         event_sources: Vec::new(),
         calendar_syncs: Vec::new(),
-        requested_range: OccurrenceRange {
-            starts_at: Utc.with_ymd_and_hms(2026, 7, 1, 0, 0, 0).unwrap(),
-            ends_at: Utc.with_ymd_and_hms(2026, 8, 1, 0, 0, 0).unwrap(),
-            start_date: chrono::NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
-            end_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
-        },
     };
 
     assert!(
@@ -813,7 +805,7 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
 
     let outside_start = Utc.with_ymd_and_hms(2026, 8, 2, 0, 0, 0).unwrap();
     let outside_end = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap();
-    let error = repo
+    let occurrences = repo
         .list_occurrences(
             owner_id,
             OccurrenceRange {
@@ -826,12 +818,11 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
             100,
         )
         .await
-        .unwrap_err();
-    assert!(
-        error
-            .as_ref()
-            .downcast_current_context::<CalendarOccurrenceCoverageError>()
-            .is_some()
+        .unwrap();
+    assert!(occurrences.is_empty());
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Syncing
     );
 }
 
@@ -926,7 +917,6 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
             calendar_ids: Vec::new(),
             event_sources: Vec::new(),
             calendar_syncs: Vec::new(),
-            requested_range: OccurrenceRange::historical_sync(Utc::now()),
         },
     )
     .await
@@ -1069,7 +1059,6 @@ async fn google_snapshot_deletion_restores_the_surviving_email_source(pool: PgPo
                 observed_provider_event_ids: Some(Vec::new()),
                 materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
             }],
-            requested_range: OccurrenceRange::historical_sync(Utc::now()),
         },
     )
     .await
@@ -1169,145 +1158,34 @@ async fn occurrence_cursor_is_stable_when_occurrences_share_a_start(pool: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn unmaterialized_recurring_event_does_not_poison_other_calendar_results(pool: PgPool) {
-    let owner_id = "macro|calendar-coverage@example.com";
-    let link_id = insert_link(&pool, owner_id).await;
-    let repo = PgCalendarRepository::new(pool);
-    let mut upsert = timed_upsert(
-        owner_id,
-        link_id,
-        "coverage@example.com",
-        "Coverage test",
-        1,
-    );
-    let coverage_end = Utc.with_ymd_and_hms(2026, 7, 25, 0, 0, 0).unwrap();
-    upsert.materialized_range.ends_at = coverage_end;
-    upsert.materialized_range.end_date = coverage_end.date_naive();
-    repo.upsert_event_fixture(upsert).await.unwrap();
-    repo.upsert_event_fixture(timed_upsert(
-        owner_id,
-        link_id,
-        "covered@example.com",
-        "Covered event",
-        1,
-    ))
-    .await
-    .unwrap();
-
-    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
-    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
-    let range = OccurrenceRange {
-        starts_at,
-        ends_at,
-        start_date: starts_at.date_naive(),
-        end_date: ends_at.date_naive(),
-    };
-    let results = repo
-        .list_occurrences(owner_id, range.clone(), None, 100)
-        .await
-        .unwrap();
-    assert!(!results.is_empty());
-    assert!(
-        results
-            .iter()
-            .all(|(event, _)| event.title == "Covered event")
-    );
-    let cursor = CalendarOccurrenceCursor::from_occurrence(&results.last().unwrap().1);
-    assert!(
-        repo.list_occurrences(owner_id, range, Some(cursor), 100)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn recurring_google_instance_fallback_participates_in_coverage_checks(pool: PgPool) {
-    let owner_id = "macro|calendar-instance-coverage@example.com";
-    let link_id = insert_link(&pool, owner_id).await;
+async fn sync_status_reflects_visible_account_ingestion_state(pool: PgPool) {
+    let owner_id = "macro|calendar-sync-status@example.com";
     let repo = PgCalendarRepository::new(pool.clone());
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Ready
+    );
+
+    let link_id = insert_link(&pool, owner_id).await;
     repo.apply_google_grant(link_id, complete_grant())
         .await
         .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
-    let calendar_id = repo
-        .upsert_calendar_fixture(
-            account_id,
-            ProviderCalendar {
-                provider_calendar_id: "primary".to_string(),
-                name: "Primary".to_string(),
-                description: None,
-                time_zone: Some("UTC".to_string()),
-                color: None,
-                access_role: Some("owner".to_string()),
-                is_primary: true,
-                is_selected: true,
-            },
-        )
-        .await
-        .unwrap();
-    let wide = OccurrenceRange::historical_sync(Utc::now());
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Syncing
+    );
+
     sqlx::query!(
-        r#"
-        UPDATE calendar_accounts
-        SET materialized_starts_at = $2,
-            materialized_ends_at = $3,
-            materialized_start_date = $4,
-            materialized_end_date = $5
-        WHERE id = $1
-        "#,
+        "UPDATE calendar_accounts SET sync_status = 'ready' WHERE id = $1",
         account_id,
-        wide.starts_at,
-        wide.ends_at,
-        wide.start_date,
-        wide.end_date,
     )
     .execute(&pool)
     .await
     .unwrap();
-
-    let mut fallback = timed_upsert(
-        owner_id,
-        link_id,
-        "instance-fallback@example.com",
-        "Recurring instance fallback",
-        1,
-    );
-    fallback.event.recurrence_lines.clear();
-    fallback.materialized_range.ends_at = Utc.with_ymd_and_hms(2026, 7, 25, 0, 0, 0).unwrap();
-    fallback.materialized_range.end_date = chrono::NaiveDate::from_ymd_opt(2026, 7, 25).unwrap();
-    fallback.source = CalendarEventSource::Google(GoogleEventSource {
-        email_link_id: link_id,
-        account_id,
-        calendar_id,
-        provider_event_id: "instance-id".to_string(),
-        provider_recurring_event_id: Some("master-id".to_string()),
-        provider_etag: Some("\"etag\"".to_string()),
-        raw_payload: serde_json::json!({}),
-    });
-    repo.upsert_event_fixture(fallback).await.unwrap();
-
-    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
-    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
-    let error = repo
-        .list_occurrences(
-            owner_id,
-            OccurrenceRange {
-                starts_at,
-                ends_at,
-                start_date: starts_at.date_naive(),
-                end_date: ends_at.date_naive(),
-            },
-            None,
-            100,
-        )
-        .await
-        .unwrap_err();
-    assert!(
-        error
-            .as_ref()
-            .downcast_current_context::<CalendarOccurrenceCoverageError>()
-            .is_some()
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Ready
     );
 }
 
@@ -1595,7 +1473,6 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
                     materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
                 },
             ],
-            requested_range: OccurrenceRange::historical_sync(Utc::now()),
         },
     )
     .await

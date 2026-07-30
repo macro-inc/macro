@@ -23,31 +23,10 @@ CREATE TABLE IF NOT EXISTS calendar_accounts (
         CHECK (sync_status IN (
             'pending', 'syncing', 'ready', 'error', 'reauth_required', 'disabled'
         )),
-    materialized_starts_at timestamptz,
-    materialized_ends_at timestamptz,
-    materialized_start_date date,
-    materialized_end_date date,
     last_synced_at timestamptz,
     last_sync_error text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT calendar_accounts_materialized_range CHECK (
-        (
-            materialized_starts_at IS NULL
-            AND materialized_ends_at IS NULL
-            AND materialized_start_date IS NULL
-            AND materialized_end_date IS NULL
-        )
-        OR
-        (
-            materialized_starts_at IS NOT NULL
-            AND materialized_ends_at IS NOT NULL
-            AND materialized_start_date IS NOT NULL
-            AND materialized_end_date IS NOT NULL
-            AND materialized_ends_at > materialized_starts_at
-            AND materialized_end_date > materialized_start_date
-        )
-    ),
     UNIQUE (owner_id, provider, provider_account_id)
 );
 
@@ -126,14 +105,6 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     end_date date,
     time_zone text,
     recurrence_lines text[] NOT NULL DEFAULT '{}',
-    materialized_starts_at timestamptz NOT NULL
-        DEFAULT (now() - interval '365 days'),
-    materialized_ends_at timestamptz NOT NULL
-        DEFAULT (now() + interval '730 days'),
-    materialized_start_date date NOT NULL
-        DEFAULT (CURRENT_DATE - 365),
-    materialized_end_date date NOT NULL
-        DEFAULT (CURRENT_DATE + 730),
     organizer_email text,
     organizer_name text,
     conference_url text,
@@ -164,10 +135,6 @@ CREATE TABLE IF NOT EXISTS calendar_events (
             AND end_date IS NOT NULL
             AND end_date > start_date
         )
-    ),
-    CONSTRAINT calendar_events_materialized_range CHECK (
-        materialized_ends_at > materialized_starts_at
-        AND materialized_end_date > materialized_start_date
     )
 );
 

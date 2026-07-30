@@ -176,6 +176,7 @@ export * from './calendarOccurrenceItem';
 export * from './calendarOccurrenceRecurrenceId';
 export * from './calendarOccurrenceResponse';
 export * from './calendarOccurrenceResponseNextCursor';
+export * from './calendarSyncStatus';
 export * from './callActiveResponse';
 export * from './callFilters';
 export * from './callFiltersAttended';

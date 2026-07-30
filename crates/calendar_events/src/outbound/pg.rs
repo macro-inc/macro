@@ -13,11 +13,10 @@ use crate::domain::{
         AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarEvent, CalendarEventOverride,
-        CalendarEventSource, CalendarEventUpsert, CalendarOccurrence,
-        CalendarOccurrenceCoverageError, CalendarOccurrenceCursor, EventStart, EventStatus,
-        EventTime, EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSnapshot, GoogleScopeSet, OccurrenceRange, ProviderCalendar,
-        StoredGoogleCalendar,
+        CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, CalendarOccurrenceCursor,
+        CalendarSyncStatus, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSnapshot, GoogleScopeSet, OccurrenceRange,
+        ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
@@ -310,7 +309,6 @@ struct StoredSourceProjection {
     event: CalendarEvent,
     overrides: Vec<CalendarEventOverride>,
     occurrences: Vec<CalendarOccurrence>,
-    materialized_range: OccurrenceRange,
 }
 
 impl From<&CalendarEventUpsert> for StoredSourceProjection {
@@ -319,7 +317,6 @@ impl From<&CalendarEventUpsert> for StoredSourceProjection {
             event: upsert.event.clone(),
             overrides: upsert.overrides.clone(),
             occurrences: upsert.occurrences.clone(),
-            materialized_range: upsert.materialized_range.clone(),
         }
     }
 }
@@ -518,8 +515,6 @@ impl CalendarRepository for PgCalendarRepository {
                 recurrence_lines, organizer_email, organizer_name,
                 conference_url, sequence, is_read_only, canonical_source_kind,
                 canonical_source_updated_at,
-                materialized_starts_at, materialized_ends_at,
-                materialized_start_date, materialized_end_date,
                 created_at, updated_at
             )
             VALUES (
@@ -527,9 +522,8 @@ impl CalendarRepository for PgCalendarRepository {
                 $8, $9, $10,
                 $11, $12, $13, $14, $15,
                 $16, $17, $18,
-                $19, $20, $21, $22, $28,
-                $23, $24, $25, $26,
-                $27, $28
+                $19, $20, $21, $22, $24,
+                $23, $24
             )
             ON CONFLICT (owner_id, source_link_id, ical_uid) DO UPDATE SET
                 title = EXCLUDED.title,
@@ -551,15 +545,11 @@ impl CalendarRepository for PgCalendarRepository {
                 is_read_only = EXCLUDED.is_read_only,
                 canonical_source_kind = EXCLUDED.canonical_source_kind,
                 canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
-                materialized_starts_at = EXCLUDED.materialized_starts_at,
-                materialized_ends_at = EXCLUDED.materialized_ends_at,
-                materialized_start_date = EXCLUDED.materialized_start_date,
-                materialized_end_date = EXCLUDED.materialized_end_date,
                 updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at),
                 deleted_at = NULL
             WHERE
                 (
-                    $29 = 'google'
+                    $25 = 'google'
                     AND (
                         EXCLUDED.sequence > calendar_events.sequence
                         OR (
@@ -571,7 +561,7 @@ impl CalendarRepository for PgCalendarRepository {
                     )
                 )
                 OR (
-                    $29 = 'email_ics'
+                    $25 = 'email_ics'
                     AND calendar_events.canonical_source_kind <> 'google'
                     AND (
                         EXCLUDED.sequence > calendar_events.sequence
@@ -606,10 +596,6 @@ impl CalendarRepository for PgCalendarRepository {
             db_sequence(upsert.event.sequence)?,
             upsert.event.is_read_only,
             source_kind,
-            upsert.materialized_range.starts_at,
-            upsert.materialized_range.ends_at,
-            upsert.materialized_range.start_date,
-            upsert.materialized_range.end_date,
             upsert.event.created_at,
             upsert.event.updated_at,
             source_kind,
@@ -659,137 +645,6 @@ impl CalendarRepository for PgCalendarRepository {
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
     ) -> Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report> {
-        let missing_coverage = sqlx::query_scalar!(
-            r#"
-            SELECT (
-              EXISTS (
-                SELECT 1
-                FROM calendar_events event
-                WHERE event.owner_id IN (
-                        SELECT $1::text
-                        UNION
-                        SELECT link.child_macro_id
-                        FROM macro_user_links link
-                        WHERE link.primary_macro_id = $1
-                  )
-                  AND event.deleted_at IS NULL
-                  AND event.status <> 'cancelled'
-                  AND (
-                        cardinality(event.recurrence_lines) > 0
-                        OR EXISTS (
-                            SELECT 1
-                            FROM calendar_event_sources source
-                            WHERE source.event_id = event.id
-                              AND source.source_kind = 'google'
-                              AND source.provider_recurring_event_id IS NOT NULL
-                        )
-                  )
-                  AND (
-                        event.owner_id = $1
-                        OR EXISTS (
-                            SELECT 1
-                            FROM macro_user_links link
-                            WHERE link.link_id = event.source_link_id
-                              AND link.primary_macro_id = $1
-                        )
-                  )
-                  AND (
-                        event.materialized_starts_at > $2
-                        OR event.materialized_ends_at < $3
-                        OR event.materialized_start_date > $4
-                        OR event.materialized_end_date < $5
-                  )
-              )
-              OR EXISTS (
-                SELECT 1
-                FROM calendar_accounts account
-                WHERE account.owner_id IN (
-                        SELECT $1::text
-                        UNION
-                        SELECT link.child_macro_id
-                        FROM macro_user_links link
-                        WHERE link.primary_macro_id = $1
-                  )
-                  AND (
-                        account.owner_id = $1
-                        OR EXISTS (
-                            SELECT 1
-                            FROM macro_user_links link
-                            WHERE link.link_id = account.email_link_id
-                              AND link.primary_macro_id = $1
-                        )
-                  )
-                  AND account.sync_status <> 'disabled'
-                  AND (
-                        account.materialized_starts_at IS NULL
-                        OR account.materialized_ends_at IS NULL
-                        OR account.materialized_start_date IS NULL
-                        OR account.materialized_end_date IS NULL
-                        OR account.materialized_starts_at > $2
-                        OR account.materialized_ends_at < $3
-                        OR account.materialized_start_date > $4
-                        OR account.materialized_end_date < $5
-                  )
-              )
-            ) AS "missing_coverage!"
-            "#,
-            requester_id,
-            range.starts_at,
-            range.ends_at,
-            range.start_date,
-            range.end_date,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(report)?;
-        if missing_coverage {
-            let has_covered_occurrence = sqlx::query_scalar!(
-                r#"
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM calendar_event_occurrences occurrence
-                    JOIN calendar_events event ON event.id = occurrence.event_id
-                    WHERE occurrence.owner_id IN (
-                            SELECT $1::text
-                            UNION
-                            SELECT link.child_macro_id
-                            FROM macro_user_links link
-                            WHERE link.primary_macro_id = $1
-                      )
-                      AND event.deleted_at IS NULL
-                      AND event.materialized_starts_at <= $2
-                      AND event.materialized_ends_at >= $3
-                      AND event.materialized_start_date <= $4
-                      AND event.materialized_end_date >= $5
-                      AND NOT occurrence.is_cancelled
-                      AND (
-                            event.owner_id = $1
-                            OR EXISTS (
-                                SELECT 1
-                                FROM macro_user_links link
-                                WHERE link.link_id = event.source_link_id
-                                  AND link.primary_macro_id = $1
-                            )
-                      )
-                      AND (
-                            occurrence.timed_span && tstzrange($2, $3, '[)')
-                            OR occurrence.day_span && daterange($4, $5, '[)')
-                      )
-                ) AS "has_covered_occurrence!"
-                "#,
-                requester_id,
-                range.starts_at,
-                range.ends_at,
-                range.start_date,
-                range.end_date,
-            )
-            .fetch_one(&self.pool)
-            .await
-            .map_err(report)?;
-            if !has_covered_occurrence {
-                return Err(rootcause::report!(CalendarOccurrenceCoverageError).into());
-            }
-        }
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
@@ -837,10 +692,6 @@ impl CalendarRepository for PgCalendarRepository {
               )
               AND event.deleted_at IS NULL
               AND event.status <> 'cancelled'
-              AND event.materialized_starts_at <= $2
-              AND event.materialized_ends_at >= $3
-              AND event.materialized_start_date <= $4
-              AND event.materialized_end_date >= $5
               AND NOT occurrence.is_cancelled
               AND (
                     event.owner_id = $1
@@ -896,6 +747,37 @@ impl CalendarRepository for PgCalendarRepository {
                 Ok((event, occurrence))
             })
             .collect()
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn sync_status(&self, requester_id: &str) -> Result<CalendarSyncStatus, Report> {
+        let is_syncing = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM calendar_accounts account
+                WHERE account.sync_status IN ('pending', 'syncing')
+                  AND (
+                        account.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = account.email_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+            ) AS "is_syncing!"
+            "#,
+            requester_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(if is_syncing {
+            CalendarSyncStatus::Syncing
+        } else {
+            CalendarSyncStatus::Ready
+        })
     }
 
     #[tracing::instrument(skip(self, calendar), fields(job_id = %key.job_id), err)]
@@ -1068,60 +950,6 @@ impl CalendarRepository for PgCalendarRepository {
             "#,
             snapshot.account_id,
             &snapshot.calendar_ids,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(report)?;
-
-        sqlx::query!(
-            r#"
-            WITH coverage AS (
-                SELECT
-                    count(*) AS calendar_count,
-                    count(*) FILTER (
-                        WHERE materialized_starts_at IS NOT NULL
-                          AND materialized_ends_at IS NOT NULL
-                          AND materialized_start_date IS NOT NULL
-                          AND materialized_end_date IS NOT NULL
-                    ) AS covered_count,
-                    max(materialized_starts_at) AS starts_at,
-                    min(materialized_ends_at) AS ends_at,
-                    max(materialized_start_date) AS start_date,
-                    min(materialized_end_date) AS end_date
-                FROM calendars
-                WHERE account_id = $1
-                  AND NOT is_deleted
-            )
-            UPDATE calendar_accounts
-            SET materialized_starts_at = CASE
-                    WHEN coverage.calendar_count = 0 THEN $2
-                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.starts_at
-                    ELSE NULL
-                END,
-                materialized_ends_at = CASE
-                    WHEN coverage.calendar_count = 0 THEN $3
-                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.ends_at
-                    ELSE NULL
-                END,
-                materialized_start_date = CASE
-                    WHEN coverage.calendar_count = 0 THEN $4
-                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.start_date
-                    ELSE NULL
-                END,
-                materialized_end_date = CASE
-                    WHEN coverage.calendar_count = 0 THEN $5
-                    WHEN coverage.covered_count = coverage.calendar_count THEN coverage.end_date
-                    ELSE NULL
-                END,
-                updated_at = now()
-            FROM coverage
-            WHERE calendar_accounts.id = $1
-            "#,
-            snapshot.account_id,
-            snapshot.requested_range.starts_at,
-            snapshot.requested_range.ends_at,
-            snapshot.requested_range.start_date,
-            snapshot.requested_range.end_date,
         )
         .execute(&mut *tx)
         .await
@@ -1607,10 +1435,6 @@ async fn disable_google_calendar_capability_tx(
         r#"
         UPDATE calendar_accounts
         SET sync_status = 'disabled',
-            materialized_starts_at = NULL,
-            materialized_ends_at = NULL,
-            materialized_start_date = NULL,
-            materialized_end_date = NULL,
             last_sync_error = 'Google Calendar permission is no longer granted',
             updated_at = now()
         WHERE email_link_id = $1
@@ -1955,12 +1779,8 @@ async fn restore_best_source_or_delete(
             is_read_only = $18,
             canonical_source_kind = $19,
             canonical_source_updated_at = $20,
-            materialized_starts_at = $21,
-            materialized_ends_at = $22,
-            materialized_start_date = $23,
-            materialized_end_date = $24,
-            created_at = $25,
-            updated_at = GREATEST(calendar_events.updated_at, $26),
+            created_at = $21,
+            updated_at = GREATEST(calendar_events.updated_at, $22),
             deleted_at = NULL
         WHERE id = $1
         "#,
@@ -1984,10 +1804,6 @@ async fn restore_best_source_or_delete(
         projection.event.is_read_only,
         &source.source_kind,
         source.source_updated_at,
-        projection.materialized_range.starts_at,
-        projection.materialized_range.ends_at,
-        projection.materialized_range.start_date,
-        projection.materialized_range.end_date,
         projection.event.created_at,
         projection.event.updated_at,
     )

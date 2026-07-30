@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::{
     models::{
-        CalendarEvent, CalendarOccurrence, CalendarOccurrenceCoverageError,
-        CalendarOccurrenceCursor, OccurrenceRange,
+        CalendarEvent, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
+        OccurrenceRange,
     },
     ports::CalendarOccurrenceService,
     service::CalendarValidationError,
@@ -106,6 +106,8 @@ pub struct CalendarOccurrenceResponse {
     items: Vec<CalendarOccurrenceItem>,
     has_more: bool,
     next_cursor: Option<String>,
+    /// Aggregate ingestion state; clients render a skeleton while `syncing`.
+    sync_status: CalendarSyncStatus,
 }
 
 /// HTTP error returned by the calendar occurrence adapter.
@@ -179,20 +181,28 @@ where
         )
         .await
         .map_err(|error| {
-            let error_context = error.as_ref();
-            if error_context
+            if error
+                .as_ref()
                 .downcast_current_context::<CalendarValidationError>()
                 .is_some()
-                || error_context
-                    .downcast_current_context::<CalendarOccurrenceCoverageError>()
-                    .is_some()
             {
                 return CalendarApiError {
                     status: StatusCode::BAD_REQUEST,
-                    message: "calendar range must be positive, at most 370 days, inside persisted one-year-history/two-year-future recurrence coverage, with limit 1–2000",
+                    message: "calendar range must be positive, at most 370 days, inside the maintained one-year-history/two-year-future window, with limit 1–2000",
                 };
             }
             tracing::error!(error = ?error, "failed to query calendar occurrences");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to query calendar occurrences",
+            }
+        })?;
+    let sync_status = state
+        .service
+        .sync_status(user.authorization.user.macro_user_id.as_ref())
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "failed to query calendar sync status");
             CalendarApiError {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 message: "unable to query calendar occurrences",
@@ -216,6 +226,7 @@ where
         items,
         has_more,
         next_cursor,
+        sync_status,
     }))
 }
 

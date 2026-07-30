@@ -6,6 +6,7 @@
  */
 import type { CalendarOccurrenceItem } from './calendarOccurrenceItem';
 import type { CalendarOccurrenceResponseNextCursor } from './calendarOccurrenceResponseNextCursor';
+import type { CalendarSyncStatus } from './calendarSyncStatus';
 
 /**
  * Paginated calendar occurrence viewport response.
@@ -14,4 +15,6 @@ export interface CalendarOccurrenceResponse {
   hasMore: boolean;
   items: CalendarOccurrenceItem[];
   nextCursor?: CalendarOccurrenceResponseNextCursor;
+  /** Aggregate ingestion state; clients render a skeleton while `syncing`. */
+  syncStatus: CalendarSyncStatus;
 }

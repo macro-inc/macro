@@ -1118,6 +1118,11 @@ export const listOccurrencesResponse = zod
         )
     ),
     nextCursor: zod.string().nullish(),
+    syncStatus: zod
+      .enum(['syncing', 'ready'])
+      .describe(
+        'Aggregate ingestion state across every calendar account visible to a\nrequester, letting clients render progressively while sources build.'
+      ),
   })
   .describe('Paginated calendar occurrence viewport response.');
 

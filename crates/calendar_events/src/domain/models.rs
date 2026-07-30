@@ -388,11 +388,17 @@ pub struct OccurrenceRange {
     pub end_date: NaiveDate,
 }
 
-/// A requested range has no usable projections because every matching source
-/// is still outside its persisted recurrence coverage.
-#[derive(Debug, thiserror::Error)]
-#[error("calendar occurrence range is outside persisted recurrence coverage")]
-pub struct CalendarOccurrenceCoverageError;
+/// Aggregate ingestion state across every calendar account visible to a
+/// requester, letting clients render progressively while sources build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum CalendarSyncStatus {
+    /// At least one visible calendar account is still ingesting.
+    Syncing,
+    /// Every visible calendar account has finished its latest sync.
+    Ready,
+}
 
 impl OccurrenceRange {
     /// Construct the bounded history/future window maintained by sync jobs.
@@ -493,8 +499,6 @@ pub struct CalendarEventUpsert {
     pub overrides: Vec<CalendarEventOverride>,
     /// Materialized instances within the maintained horizon.
     pub occurrences: Vec<CalendarOccurrence>,
-    /// Exact range covered by the materialized recurrence projection.
-    pub materialized_range: OccurrenceRange,
 }
 
 /// Provider event identity observed during one complete Google snapshot.
@@ -573,8 +577,6 @@ pub struct GoogleCalendarSnapshot {
     pub event_sources: Vec<GoogleEventSnapshotKey>,
     /// Durable continuation and recurrence coverage state for each calendar.
     pub calendar_syncs: Vec<GoogleCalendarSyncSnapshot>,
-    /// Requested occurrence window, used as complete empty-account coverage.
-    pub requested_range: OccurrenceRange,
 }
 
 /// Kind of idempotent historical work triggered by a Google grant.

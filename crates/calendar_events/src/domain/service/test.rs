@@ -3,7 +3,7 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarEvent,
-        CalendarEventSource, CalendarOccurrence, EmailCalendarBackfillState,
+        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EmailCalendarBackfillState,
         EmailCalendarScanAssociation, EmailCalendarScanJob, EmailCalendarScanStatus,
         EmailIcsSource, EventStatus, EventTime, EventTransparency, EventVisibility,
         GOOGLE_CALENDAR_SCOPES, GoogleCalendarSnapshot, GoogleEventSyncBatch, ProviderCalendar,
@@ -51,6 +51,10 @@ impl CalendarRepository for FakeRepo {
         _limit: u16,
     ) -> Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report> {
         Ok(Vec::new())
+    }
+
+    async fn sync_status(&self, _requester_id: &str) -> Result<CalendarSyncStatus, Report> {
+        Ok(CalendarSyncStatus::Ready)
     }
 
     async fn upsert_google_calendar(
@@ -135,7 +139,6 @@ fn valid_upsert() -> CalendarEventUpsert {
             },
             is_cancelled: false,
         }],
-        materialized_range: OccurrenceRange::historical_sync(starts_at),
     }
 }
 
@@ -161,17 +164,6 @@ async fn rejects_invalid_occurrence_time() {
         ends_at: starts_at,
         time_zone: None,
     };
-
-    assert!(service.upsert_email_event(upsert).await.is_err());
-    assert!(repo.upserts.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn rejects_invalid_materialized_range() {
-    let repo = FakeRepo::default();
-    let service = CalendarService::new(repo.clone());
-    let mut upsert = valid_upsert();
-    upsert.materialized_range.ends_at = upsert.materialized_range.starts_at;
 
     assert!(service.upsert_email_event(upsert).await.is_err());
     assert!(repo.upserts.lock().unwrap().is_empty());

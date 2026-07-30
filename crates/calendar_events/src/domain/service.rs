@@ -237,6 +237,15 @@ where
             .list_occurrences(requester_id, range, cursor, limit)
             .await
     }
+
+    /// Return the aggregate ingestion state of the requester's visible accounts.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn sync_status(
+        &self,
+        requester_id: &str,
+    ) -> Result<super::models::CalendarSyncStatus, Report> {
+        self.repository.sync_status(requester_id).await
+    }
 }
 
 impl<R> CalendarOccurrenceService for CalendarService<R>
@@ -259,6 +268,13 @@ where
         >,
     > + Send {
         CalendarService::list_occurrences(self, requester_id, range, cursor, limit)
+    }
+
+    fn sync_status(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<super::models::CalendarSyncStatus, Report>> + Send {
+        CalendarService::sync_status(self, requester_id)
     }
 }
 
@@ -614,7 +630,6 @@ where
                     calendar_ids,
                     event_sources,
                     calendar_syncs,
-                    requested_range: range,
                 },
             )
             .await?;
@@ -628,7 +643,6 @@ fn validate_upsert(upsert: &CalendarEventUpsert) -> Result<(), Report> {
         return Err(rootcause::report!(CalendarValidationError::MissingIdentity).into());
     }
     if !upsert.event.time.is_valid()
-        || !upsert.materialized_range.is_valid_for_backfill()
         || upsert
             .occurrences
             .iter()
