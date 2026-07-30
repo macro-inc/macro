@@ -29,9 +29,10 @@ export class WebhooksNamespace {
 
   /**
    * Register a webhook that delivers `channel.bot_mentioned` events for THIS
-   * bot — "notify me when I am @-mentioned". Bot auth only: the bot's own id
-   * is resolved automatically and baked into the filter, so with a user API
-   * key this throws (there is no user-mention webhook event).
+   * bot — "notify me when I am @-mentioned". Bot auth with `requestedAs` is
+   * required: the bot's own id is resolved automatically and baked into the
+   * filter, while webhook registration is owned by the acting user's
+   * workspace.
    *
    * Handle deliveries with `macro.events.on('channel.bot_mentioned', …)`, and
    * save the returned handle's `signingSecret` (only ever returned here) as
@@ -48,6 +49,11 @@ export class WebhooksNamespace {
     if (this.client.authConfig.type !== 'bot') {
       throw new MacroError(
         'subscribeToSelfMentions requires bot auth — only bots have a mention webhook event (channel.bot_mentioned)',
+      );
+    }
+    if (!this.client.hasActingUser()) {
+      throw new MacroError(
+        'subscribeToSelfMentions requires an acting user — call requestedAs(userId) on the bot-authenticated client first',
       );
     }
     const bot = await new BotsNamespace(this.client).me();

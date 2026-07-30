@@ -1874,7 +1874,7 @@ async fn participants_roles_parsed_correctly(pool: Pool<Postgres>) -> anyhow::Re
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn channel_metadata_skips_bot_participants_in_display_name(
+async fn channel_participant_readers_handle_bot_principals(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     // An unnamed private channel resolves its display name from its
@@ -1904,6 +1904,7 @@ async fn channel_metadata_skips_bot_participants_in_display_name(
     let metadata = repo
         .get_channel_metadata(channel_id, MacroUserIdStr::try_from(USER_A.to_string())?)
         .await?;
+    let participants = repo.get_participants(channel_id).await?;
 
     assert_eq!(metadata.channel_type, ChannelType::Private);
     assert!(
@@ -1915,6 +1916,12 @@ async fn channel_metadata_skips_bot_participants_in_display_name(
         metadata.channel_name.contains("user-b"),
         "user participants should appear in the channel display name: {}",
         metadata.channel_name
+    );
+    assert!(
+        participants
+            .iter()
+            .any(|participant| participant.user_id == "bot|00000000-0000-0000-0000-00000000b0b0"),
+        "the mutation-time participant snapshot must retain installed bots"
     );
     Ok(())
 }

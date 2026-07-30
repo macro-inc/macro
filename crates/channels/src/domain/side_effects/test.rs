@@ -838,6 +838,13 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
                     joined_at: now,
                     left_at: None,
                 },
+                ChannelParticipant {
+                    channel_id,
+                    user_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+                    role: ParticipantRole::Member,
+                    joined_at: now,
+                    left_at: None,
+                },
             ],
             message: MutatedMessage {
                 id: message_id,
@@ -868,6 +875,61 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
     assert_eq!(trigger.channel_id, channel_id);
     assert_eq!(trigger.message.id, message_id);
     assert_eq!(trigger.bot_ids, vec![bot_id::MACRO_AI_BOT_ID]);
+    assert!(bot_trigger_receiver.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn user_message_with_uninstalled_bot_mention_does_not_enqueue_bot_trigger() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeSearch::default(),
+        FakeContacts::default(),
+    )
+    .with_bot_trigger_sender(bot_trigger_sender);
+    let now = Utc::now();
+
+    service
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Project".to_string(),
+            },
+            participants: vec![ChannelParticipant {
+                channel_id,
+                user_id: "macro|sender@example.com".to_string(),
+                role: ParticipantRole::Member,
+                joined_at: now,
+                left_at: None,
+            }],
+            message: MutatedMessage {
+                id: Uuid::new_v4(),
+                channel_id,
+                thread_id: None,
+                sender_id: Sender::new_from_user(user("sender@example.com")),
+                triggered_by: None,
+                content: "@bot help".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: vec![mention(
+                BOT_MENTION_ENTITY_TYPE,
+                &bot_id.into_storage_id().to_string(),
+            )],
+            has_attachments: false,
+            attachments: Vec::new(),
+            nonce: None,
+            notification_policy: PostMessageNotificationPolicy::Default,
+        })
+        .await;
+
     assert!(bot_trigger_receiver.try_recv().is_err());
 }
 
@@ -1438,6 +1500,7 @@ fn message_posted_with_mentions(
     channel_id: Uuid,
     message_id: Uuid,
     mentions: Vec<SimpleMention>,
+    participant_principals: &[&str],
 ) -> ChannelEvent {
     let now = Utc::now();
     ChannelEvent::MessagePosted {
@@ -1446,7 +1509,16 @@ fn message_posted_with_mentions(
             channel_type: ChannelType::Team,
             channel_name: "Project".to_string(),
         },
-        participants: Vec::new(),
+        participants: participant_principals
+            .iter()
+            .map(|principal| ChannelParticipant {
+                channel_id,
+                user_id: principal.to_string(),
+                role: ParticipantRole::Member,
+                joined_at: now,
+                left_at: None,
+            })
+            .collect(),
         message: MutatedMessage {
             id: message_id,
             channel_id,
@@ -1476,6 +1548,9 @@ fn broker_events_map_message_posted_bot_mentions() {
         .into_storage_id()
         .to_string();
     let macro_ai_principal = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+    let uninstalled_bot_principal = BotId::new_from_uuid(Uuid::new_v4())
+        .into_storage_id()
+        .to_string();
 
     let events = broker_events_for_event(&message_posted_with_mentions(
         Sender::new_from_user(user("alice@example.com")),
@@ -1487,9 +1562,12 @@ fn broker_events_map_message_posted_bot_mentions() {
             mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
             // Macro AI surfaced through the user-mention UI still counts.
             mention("user", &macro_ai_principal),
+            // A valid bot principal that is not installed emits no bot event.
+            mention(BOT_MENTION_ENTITY_TYPE, &uninstalled_bot_principal),
             // Real user mentions emit no bot event.
             mention("user", "macro|bob@example.com"),
         ],
+        &[bot_principal.as_str(), macro_ai_principal.as_str()],
     ));
 
     assert_eq!(events.len(), 3);
@@ -1502,7 +1580,7 @@ fn broker_events_map_message_posted_bot_mentions() {
     assert_eq!(first["metadata"]["channel_id"], channel_id.to_string());
     assert_eq!(first["metadata"]["message_id"], message_id.to_string());
     assert_eq!(first["metadata"]["sender"], "macro|alice@example.com");
-    assert_eq!(first["metadata"]["mentions"].as_array().unwrap().len(), 4);
+    assert_eq!(first["metadata"]["mentions"].as_array().unwrap().len(), 5);
     assert_eq!(events[1].key(), channel_id.to_string());
 
     let second = serde_json::to_value(events[2].event()).unwrap();
@@ -1522,6 +1600,7 @@ fn broker_events_skip_bot_mentions_from_bot_senders() {
         Uuid::new_v4(),
         Uuid::new_v4(),
         vec![mention(BOT_MENTION_ENTITY_TYPE, &bot_principal)],
+        &[bot_principal.as_str()],
     ));
 
     assert_eq!(events.len(), 1);

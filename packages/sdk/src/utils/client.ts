@@ -75,6 +75,11 @@ export class MacroClient {
     }
   }
 
+  /** Whether requests have a user identity accepted by acting-user endpoints. */
+  hasActingUser(): boolean {
+    return this.authConfig.type === 'user' || this.requestedAs !== undefined;
+  }
+
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {

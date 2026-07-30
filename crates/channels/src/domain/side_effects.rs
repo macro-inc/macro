@@ -68,6 +68,30 @@ fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
         .collect()
 }
 
+/// Collect mentioned bots that are active participants in the channel.
+///
+/// Mention payloads are client-controlled, so a syntactically valid bot id is
+/// not sufficient to dispatch a trigger or publish a bot-mention event.
+fn active_bot_mention_ids(
+    mentions: &[SimpleMention],
+    participants: &[ChannelParticipant],
+) -> Vec<BotId> {
+    let active_bot_ids: HashSet<_> = participants
+        .iter()
+        .filter(|participant| participant.left_at.is_none())
+        .filter_map(|participant| {
+            BotIdStr::parse_from_str(&participant.user_id)
+                .ok()
+                .map(|id| id.bot_id())
+        })
+        .collect();
+
+    bot_mention_ids(mentions)
+        .into_iter()
+        .filter(|bot_id| active_bot_ids.contains(bot_id))
+        .collect()
+}
+
 /// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
 fn mention_bot_id(entity_id: &str) -> Option<BotId> {
     BotIdStr::parse_from_str(entity_id)
@@ -375,13 +399,14 @@ impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
         channel_id: Uuid,
         message: &MutatedMessage,
         mentions: &[SimpleMention],
+        participants: &[ChannelParticipant],
     ) {
         // Only user-authored messages can trigger bots; this prevents bots
         // (including Macro AI) from triggering each other in a loop.
         if message.sender_id.as_user().is_none() {
             return;
         }
-        let bot_ids = bot_mention_ids(mentions);
+        let bot_ids = active_bot_mention_ids(mentions, participants);
         if bot_ids.is_empty() {
             return;
         }
@@ -675,7 +700,7 @@ where
         }
 
         self.search.index_message(channel_id, message.id).await;
-        self.dispatch_bot_triggers(channel_id, &message, &mentions);
+        self.dispatch_bot_triggers(channel_id, &message, &mentions, &participants);
         if notification_policy != PostMessageNotificationPolicy::Silent {
             self.send_message_posted_notifications(PostedMessageNotificationInputs {
                 channel_id,
@@ -1253,6 +1278,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         ChannelEvent::MessagePosted {
             channel_id,
             metadata,
+            participants,
             message,
             mentions,
             attachments,
@@ -1292,7 +1318,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             // dispatch_bot_triggers: bot-authored mentions would let
             // webhook-driven bots trigger each other in a loop.
             if message.sender_id.as_user().is_some() {
-                for bot in bot_mention_ids(mentions) {
+                for bot in active_bot_mention_ids(mentions, participants) {
                     events.push(ChannelMacroEvent::bot_mentioned(
                         ChannelBotMentionedMetadata {
                             channel_id: *channel_id,

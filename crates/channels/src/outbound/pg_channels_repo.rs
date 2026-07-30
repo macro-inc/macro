@@ -3560,15 +3560,12 @@ impl ChannelRepo for PgChannelsRepo {
 
         Ok(rows
             .into_iter()
-            .filter_map(|row| {
-                let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
-                Some(ChannelParticipant {
-                    channel_id: row.channel_id,
-                    user_id: user_id.as_ref().to_string(),
-                    role: row.role,
-                    joined_at: row.joined_at,
-                    left_at: row.left_at,
-                })
+            .map(|row| ChannelParticipant {
+                channel_id: row.channel_id,
+                user_id: row.user_id,
+                role: row.role,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
             })
             .collect())
     }
