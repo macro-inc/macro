@@ -11,12 +11,12 @@ use crate::workflows::{
     vars,
 };
 
-/// All the real web jobs share one mid-size Namespace profile with a dedicated
+/// All the real web jobs share one small Namespace profile with a dedicated
 /// cache tag, so the frontend's Nix/Bun/Cargo state lives on its own volume.
 /// The `gen-api` Rust objects use [`vars::WEB_SCCACHE_NAME`] through Namespace's
 /// official remote sccache.
 fn web_runner() -> String {
-    runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
+    runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
 /// Build the workflow.
@@ -48,7 +48,7 @@ pub fn web_app_check_main() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output("api_changed", "${{ steps.filter.outputs.api_changed }}")
         .add_step(checkout("Checkout Repo", false))
@@ -139,7 +139,7 @@ fn status_check() -> Job {
             "cycles".to_string(),
             "build".to_string(),
         ])
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_step(check_job_results())
 }
 
