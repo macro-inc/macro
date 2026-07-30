@@ -3995,6 +3995,7 @@ dependencies = [
  "aws-sdk-sqs",
  "aws-smithy-types",
  "aws_lambda_events",
+ "chat",
  "chrono",
  "futures",
  "lambda_runtime",
