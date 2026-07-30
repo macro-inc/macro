@@ -566,7 +566,7 @@ export const MobileFilterDrawer = () => {
                               setAssigneeSearch(e.currentTarget.value)
                             }
                             placeholder="Search assignees..."
-                            class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-muted"
+                            class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
                           />
                         </div>
                         <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
