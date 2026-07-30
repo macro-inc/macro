@@ -6,7 +6,7 @@ use crate::domain::{
         CalendarEventSource, CalendarOccurrence, EmailCalendarBackfillState,
         EmailCalendarScanAssociation, EmailCalendarScanJob, EmailCalendarScanStatus,
         EmailIcsSource, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_EVENTS_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSnapshot,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSnapshot,
         GoogleEventSyncBatch, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
@@ -178,11 +178,12 @@ async fn rejects_invalid_materialized_range() {
 }
 
 #[test]
-fn complete_scope_capability_requires_all_three_scopes() {
+fn complete_scope_capability_requires_top_level_scope() {
     let complete = GoogleScopeSet::parse(&GOOGLE_CALENDAR_SCOPES.join(" "));
     assert!(complete.has_calendar_capability());
 
-    let partial = GoogleScopeSet::parse(GOOGLE_CALENDAR_EVENTS_SCOPE);
+    let partial =
+        GoogleScopeSet::parse("https://www.googleapis.com/auth/calendar.events");
     assert!(!partial.has_calendar_capability());
 }
 

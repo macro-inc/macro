@@ -388,12 +388,7 @@ new FusionAuthIdpOpenIdConnect(
 const enableGoogleCalendarIntegration = config.requireBoolean(
   'enable-google-calendar'
 );
-const GOOGLE_CALENDAR_SCOPES = [
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  'https://www.googleapis.com/auth/calendar.events.freebusy',
-];
+const GOOGLE_CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar'];
 
 const GOOGLE_GMAIL_OAUTH_SCOPES = [
   'openid',
@@ -408,8 +403,6 @@ const GOOGLE_GMAIL_OAUTH_SCOPES = [
 let googleOauth2Scope = GOOGLE_GMAIL_OAUTH_SCOPES.join(' ');
 
 if (enableGoogleCalendarIntegration) {
-  console.log('Google calendar integration enabled, adjusting oauth2Scope');
-
   googleOauth2Scope = `${googleOauth2Scope} ${GOOGLE_CALENDAR_SCOPES.join(' ')}`;
 }
 

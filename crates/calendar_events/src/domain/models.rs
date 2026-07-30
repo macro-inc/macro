@@ -6,21 +6,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Google scope required to read and write event bodies.
-pub const GOOGLE_CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
-/// Google scope required to enumerate a user's calendars.
-pub const GOOGLE_CALENDAR_LIST_SCOPE: &str =
-    "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
-/// Google scope required to query attendee availability without broader read access.
-pub const GOOGLE_CALENDAR_FREE_BUSY_SCOPE: &str =
-    "https://www.googleapis.com/auth/calendar.events.freebusy";
+/// Top-level Google scope granting the complete calendar capability,
+/// mirroring how email requests the single broad `gmail.modify` scope.
+pub const GOOGLE_CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
 
 /// The Google Calendar scopes Macro requests for the calendar capability.
-pub const GOOGLE_CALENDAR_SCOPES: [&str; 3] = [
-    GOOGLE_CALENDAR_EVENTS_SCOPE,
-    GOOGLE_CALENDAR_LIST_SCOPE,
-    GOOGLE_CALENDAR_FREE_BUSY_SCOPE,
-];
+pub const GOOGLE_CALENDAR_SCOPES: [&str; 1] = [GOOGLE_CALENDAR_SCOPE];
 /// Build the space-delimited calendar scope fragment for an OAuth authorization URL.
 pub fn google_calendar_scope_parameter() -> String {
     GOOGLE_CALENDAR_SCOPES.join(" ")
