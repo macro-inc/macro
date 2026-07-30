@@ -31,13 +31,21 @@ use documents::domain::events::{
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
     MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic, MacroProjectsTopic,
-    Topic as _,
+    MacroPropertiesTopic, Topic as _,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use models_properties::{
+    DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
+};
 use projects::domain::events::{
     ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
     ProjectRestoredMetadata, ProjectTopicEvent, ProjectUpdatedMetadata, ProjectUploadedMetadata,
+};
+use properties::domain::events::{
+    EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
+    PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyOptionCreatedMetadata,
+    PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata, PropertyTopicEvent,
 };
 use uuid::Uuid;
 
@@ -52,6 +60,7 @@ use super::{
     project::{
         ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
     },
+    property::{PropertyEventDescription, PropertyIndexAction, describe_property_event},
     *,
 };
 
@@ -67,6 +76,10 @@ const PROJECT_ID: &str = "project-root";
 const CHILD_PROJECT_ID: &str = "project-child";
 const PARENT_PROJECT_ID: &str = "project-parent";
 const NEW_PARENT_PROJECT_ID: &str = "project-new-parent";
+const PROPERTY_ENTITY_ID: &str = "property-entity-id";
+const PROPERTY_DEFINITION_ID: Uuid = Uuid::from_u128(4);
+const PROPERTY_OPTION_ID: Uuid = Uuid::from_u128(5);
+const ENTITY_PROPERTY_ID: Uuid = Uuid::from_u128(6);
 
 struct TestMessage {
     topic: &'static str,
@@ -742,6 +755,130 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
     ]
 }
 
+fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'static>)> {
+    let actor_user_id = Some(user_id());
+
+    vec![
+        (
+            PropertyTopicEvent::Created(PropertyCreatedMetadata {
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                owner: PropertyOwner::System,
+                display_name: "Status".to_string(),
+                data_type: DataType::String,
+                is_multi_select: false,
+                specific_entity_type: None,
+                created_at: Utc::now(),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property.created",
+            },
+        ),
+        (
+            PropertyTopicEvent::Deleted(PropertyDeletedMetadata {
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                owner: PropertyOwner::System,
+                display_name: "Status".to_string(),
+                data_type: DataType::String,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property.deleted",
+            },
+        ),
+        (
+            PropertyTopicEvent::OptionCreated(PropertyOptionCreatedMetadata {
+                option_id: PROPERTY_OPTION_ID,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: PropertyOptionValue::String("Open".to_string()),
+                color: None,
+                display_order: 0,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property_option.created",
+            },
+        ),
+        (
+            PropertyTopicEvent::OptionUpdated(PropertyOptionUpdatedMetadata {
+                option_id: PROPERTY_OPTION_ID,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: PropertyOptionValue::String("Done".to_string()),
+                color: Some("#ffffff".to_string()),
+                display_order: 1,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property_option.updated",
+            },
+        ),
+        (
+            PropertyTopicEvent::OptionDeleted(PropertyOptionDeletedMetadata {
+                option_id: PROPERTY_OPTION_ID,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: PropertyOptionValue::String("Done".to_string()),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property_option.deleted",
+            },
+        ),
+        (
+            PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                entity_property_id: ENTITY_PROPERTY_ID,
+                entity_id: PROPERTY_ENTITY_ID.to_string(),
+                entity_type: EntityType::Document,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: None,
+                updated_at: Utc::now(),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Reindex {
+                    entity_id: PROPERTY_ENTITY_ID,
+                    entity_type: EntityType::Document,
+                },
+                event_type: "entity_property.updated",
+            },
+        ),
+        (
+            PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
+                entity_property_id: ENTITY_PROPERTY_ID,
+                entity_id: PROPERTY_ENTITY_ID.to_string(),
+                entity_type: EntityType::Chat,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Reindex {
+                    entity_id: PROPERTY_ENTITY_ID,
+                    entity_type: EntityType::Chat,
+                },
+                event_type: "entity_property.deleted",
+            },
+        ),
+        (
+            PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+                entity_id: PROPERTY_ENTITY_ID.to_string(),
+                entity_type: EntityType::Thread,
+                actor_user_id,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Reindex {
+                    entity_id: PROPERTY_ENTITY_ID,
+                    entity_type: EntityType::Thread,
+                },
+                event_type: "entity_properties.cleared",
+            },
+        ),
+    ]
+}
+
 #[test]
 fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert_eq!(
@@ -755,6 +892,7 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert!(topics.contains(&MacroChatsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroDocumentsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroPropertiesTopic::TOPIC_STR));
 }
 
 #[test]
@@ -915,6 +1053,18 @@ fn maps_all_project_lifecycle_events_to_reconciliation_actions() {
 }
 
 #[test]
+fn maps_all_property_lifecycle_events_to_index_actions() {
+    let cases = property_event_cases();
+    assert_eq!(cases.len(), 8);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable property event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_property_event(&event), expected);
+    }
+}
+
+#[test]
 fn project_id_collection_is_stable_and_drops_missing_or_empty_ids() {
     assert_eq!(
         collect_project_ids([
@@ -992,6 +1142,27 @@ fn project_envelope_decodes_round_trip_with_string_key() {
         panic!("expected project event");
     };
     assert_eq!(decoded_event.key(), PROJECT_ID);
+    assert_eq!(decoded_event.event().event, event);
+}
+
+#[test]
+fn property_envelope_decodes_round_trip_with_entity_key() {
+    let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: PROPERTY_ENTITY_ID.to_string(),
+        entity_type: EntityType::Document,
+        actor_user_id: Some(user_id()),
+    });
+    let message = encoded_message(
+        MacroPropertiesTopic::TOPIC_STR,
+        PROPERTY_ENTITY_ID,
+        Event::new(event.clone()),
+    );
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable property event");
+    let DeclaredMacroEvent::PropertyMacroEvent(decoded_event) = decoded else {
+        panic!("expected property event");
+    };
+    assert_eq!(decoded_event.key(), PROPERTY_ENTITY_ID);
     assert_eq!(decoded_event.event().event, event);
 }
 
@@ -1144,6 +1315,39 @@ async fn unsupported_project_schema_message_is_commit_safe() {
             assert_eq!(actual, 2);
         }
         outcome => panic!("expected malformed project record, got {outcome:?}"),
+    }
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[tokio::test]
+async fn unsupported_property_schema_message_is_commit_safe() {
+    let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: PROPERTY_ENTITY_ID.to_string(),
+        entity_type: EntityType::Document,
+        actor_user_id: Some(user_id()),
+    });
+    let message = encoded_message(
+        MacroPropertiesTopic::TOPIC_STR,
+        PROPERTY_ENTITY_ID,
+        Event::with_schema_version(event, 2),
+    );
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 6, 50);
+    let (sender, mut receiver) = mpsc::channel(1);
+
+    match handoff_decoded(&sender, decoded).await {
+        HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected,
+            actual,
+        }) => {
+            assert_eq!(topic, MacroPropertiesTopic::TOPIC_STR);
+            assert_eq!(expected, 1);
+            assert_eq!(actual, 2);
+        }
+        outcome => panic!("expected malformed property record, got {outcome:?}"),
     }
     assert!(matches!(
         receiver.try_recv(),

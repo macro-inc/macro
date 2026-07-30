@@ -7,8 +7,8 @@
 //! offsets are already committed.
 //!
 //! Per-entity event mapping and processing live in the [`call`], [`channel`],
-//! [`chat`], [`document`], and [`project`] submodules; this module owns the poll
-//! loop, worker, retry policy, and commit semantics.
+//! [`chat`], [`document`], [`project`], and [`property`] submodules; this module
+//! owns the poll loop, worker, retry policy, and commit semantics.
 
 #![allow(clippy::enum_variant_names)]
 
@@ -18,6 +18,7 @@ mod chat;
 mod context;
 mod document;
 mod project;
+mod property;
 #[cfg(test)]
 mod test;
 
@@ -30,6 +31,7 @@ use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
 use projects::domain::events::ProjectMacroEvent;
+use properties::domain::events::PropertyMacroEvent;
 use rdkafka::{
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
@@ -41,6 +43,7 @@ use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use self::{
     call::process_call_event, channel::process_channel_event, chat::process_chat_event,
     document::process_document_event, project::process_project_event,
+    property::process_property_event,
 };
 
 pub(crate) use self::context::KafkaProcessingContext;
@@ -64,6 +67,7 @@ macro_event_broker::declare_topics!(
         ChatMacroEvent,
         DocumentMacroEvent,
         ProjectMacroEvent,
+        PropertyMacroEvent,
 );
 
 /// Maximum number of decoded events waiting for the sequential worker.
@@ -188,6 +192,9 @@ async fn process_event(
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await
+        }
+        DeclaredMacroEvent::PropertyMacroEvent(event) => {
+            process_property_event(db, opensearch_client, event, partition, offset).await
         }
     }
 }
