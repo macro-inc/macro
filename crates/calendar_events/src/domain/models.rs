@@ -527,8 +527,8 @@ impl StoredGoogleCalendar {
         self.sync_token.is_none()
             || materialized.starts_at > requested.starts_at
             || materialized.start_date > requested.start_date
-            || materialized.ends_at < requested.ends_at - chrono::Duration::days(1)
-            || materialized.end_date < requested.end_date - chrono::Days::new(1)
+            || materialized.ends_at < requested.ends_at
+            || materialized.end_date < requested.end_date
     }
 }
 

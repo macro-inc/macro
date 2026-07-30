@@ -38,7 +38,7 @@ fn materialized_range_rejects_viewports_outside_the_sync_horizon() {
 }
 
 #[test]
-fn provider_calendar_refreshes_only_when_the_horizon_nears_its_edge() {
+fn provider_calendar_requires_full_snapshot_for_any_uncovered_tail() {
     let now = Utc.with_ymd_and_hms(2026, 7, 25, 12, 0, 0).unwrap();
     let materialized = OccurrenceRange::historical_sync(now);
     let stored = StoredGoogleCalendar {
@@ -47,14 +47,10 @@ fn provider_calendar_refreshes_only_when_the_horizon_nears_its_edge() {
         materialized_range: Some(materialized.clone()),
     };
 
-    assert!(
-        !stored.requires_full_snapshot(&OccurrenceRange::historical_sync(
-            now + chrono::Duration::hours(12)
-        ))
-    );
+    assert!(!stored.requires_full_snapshot(&OccurrenceRange::historical_sync(now)));
     assert!(
         stored.requires_full_snapshot(&OccurrenceRange::historical_sync(
-            now + chrono::Duration::days(2)
+            now + chrono::Duration::hours(12)
         ))
     );
 
