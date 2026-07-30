@@ -47,6 +47,7 @@ const CALL_ID: Uuid = Uuid::from_u128(1);
 const CHANNEL_ID: Uuid = Uuid::from_u128(2);
 const MESSAGE_ID: Uuid = Uuid::from_u128(3);
 const CHAT_ID: &str = "chat-id";
+const SECOND_CHAT_ID: &str = "second-chat-id";
 const CHAT_MESSAGE_ID: &str = "chat-message-id";
 const PROJECT_ID: &str = "project-root";
 const CHILD_PROJECT_ID: &str = "project-child";
@@ -444,6 +445,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
             ProjectEventDescription {
                 action: ProjectIndexAction::Reconcile {
                     project_ids: vec![PROJECT_ID.to_string(), PARENT_PROJECT_ID.to_string()],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.created",
@@ -466,6 +468,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         PARENT_PROJECT_ID.to_string(),
                         NEW_PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.updated",
@@ -484,6 +487,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
             ProjectEventDescription {
                 action: ProjectIndexAction::Reconcile {
                     project_ids: vec![PROJECT_ID.to_string(), PARENT_PROJECT_ID.to_string()],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.updated",
@@ -511,6 +515,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.deleted",
@@ -531,6 +536,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.restored",
@@ -544,7 +550,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                 parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
                 purged_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
                 purged_document_ids: vec!["document-id".to_string()],
-                purged_chat_ids: vec!["chat-id".to_string()],
+                purged_chat_ids: vec![CHAT_ID.to_string(), SECOND_CHAT_ID.to_string()],
             }),
             ProjectEventDescription {
                 action: ProjectIndexAction::Reconcile {
@@ -553,6 +559,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: vec![CHAT_ID.to_string(), SECOND_CHAT_ID.to_string()],
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.permanently_deleted",
@@ -573,6 +580,7 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
                         CHILD_PROJECT_ID.to_string(),
                         PARENT_PROJECT_ID.to_string(),
                     ],
+                    purged_chat_ids: Vec::new(),
                 },
                 project_id: PROJECT_ID,
                 event_type: "project.uploaded",
