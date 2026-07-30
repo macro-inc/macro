@@ -603,7 +603,7 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.organizer_email.as_deref(),
             upsert.event.organizer_name.as_deref(),
             upsert.event.conference_url.as_deref(),
-            i32::try_from(upsert.event.sequence).unwrap_or(i32::MAX),
+            db_sequence(upsert.event.sequence)?,
             upsert.event.is_read_only,
             source_kind,
             upsert.materialized_range.starts_at,
@@ -1512,7 +1512,11 @@ impl CalendarBackfillRepository for PgCalendarRepository {
               )
             "#,
             key.job_id,
-            i64::try_from(extracted_count).unwrap_or(i64::MAX),
+            i64::try_from(extracted_count).map_err(|_| {
+                rootcause::report!(
+                    "calendar backfill extracted count overflows the database representation"
+                )
+            })?,
             key.email_link_id,
             lease_token,
             &required_scopes,
@@ -1808,7 +1812,7 @@ async fn persist_source(
                 source.provider_recurring_event_id.as_deref(),
                 source.provider_etag.as_deref(),
                 &source.raw_payload,
-                i32::try_from(upsert.event.sequence).unwrap_or(i32::MAX),
+                db_sequence(upsert.event.sequence)?,
                 upsert.event.updated_at,
                 &normalized_payload,
             )
@@ -1856,7 +1860,7 @@ async fn persist_source(
                 source.email_attachment_id.as_deref(),
                 &source.content_hash,
                 &source.raw_payload,
-                i32::try_from(upsert.event.sequence).unwrap_or(i32::MAX),
+                db_sequence(upsert.event.sequence)?,
                 upsert.event.updated_at,
                 &normalized_payload,
             )
@@ -1972,7 +1976,7 @@ async fn restore_best_source_or_delete(
         projection.event.organizer_email.as_deref(),
         projection.event.organizer_name.as_deref(),
         projection.event.conference_url.as_deref(),
-        i32::try_from(projection.event.sequence).unwrap_or(i32::MAX),
+        db_sequence(projection.event.sequence)?,
         projection.event.is_read_only,
         &source.source_kind,
         source.source_updated_at,
@@ -2305,6 +2309,15 @@ fn attendee_status(value: &str) -> AttendeeResponseStatus {
 
 fn report(error: impl std::error::Error + Send + Sync + 'static) -> Report {
     rootcause::report!(error).into()
+}
+
+fn db_sequence(sequence: u32) -> Result<i32, Report> {
+    i32::try_from(sequence).map_err(|_| {
+        rootcause::report!(
+            "calendar event sequence {sequence} overflows the database representation"
+        )
+        .into()
+    })
 }
 
 fn event_reconciliation_lock(source_link_id: Uuid, ical_uid: &str) -> i64 {
