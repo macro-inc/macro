@@ -7589,6 +7589,28 @@ export type CreateCommentResponses = {
 
 export type CreateCommentResponse2 = CreateCommentResponses[keyof CreateCommentResponses];
 
+export type GetSelfBotData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots/me';
+};
+
+export type GetSelfBotErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSelfBotError = GetSelfBotErrors[keyof GetSelfBotErrors];
+
+export type GetSelfBotResponses = {
+    200: Bot;
+};
+
+export type GetSelfBotResponse = GetSelfBotResponses[keyof GetSelfBotResponses];
+
 export type ListBotChannelsData = {
     body?: never;
     path: {
