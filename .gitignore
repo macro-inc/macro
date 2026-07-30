@@ -16,6 +16,8 @@ run-local.fish
 **/test-results
 **/playwright-report
 **/coverage
+!packages/sdk/src/coverage/
+!packages/sdk/src/coverage/**
 **/.nyc_output
 **/.cache
 **/.vite
