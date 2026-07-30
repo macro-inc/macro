@@ -34,7 +34,7 @@ import { splitPanelLayer } from '../layers';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { createHeaderCollapser } from '../utils/createHeaderCollapser';
+import { createOverflowCollapser } from '../utils/createOverflowCollapser';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -70,8 +70,12 @@ export function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const headerCollapser = createHeaderCollapser(
+  const headerCollapser = createOverflowCollapser(
     () => layoutRefs.headerLeft,
+    () => panelSize.width
+  );
+  const toolbarCollapser = createOverflowCollapser(
+    () => layoutRefs.toolbarLeft,
     () => panelSize.width
   );
 
@@ -235,6 +239,7 @@ export function SplitPanel(props: SplitPanelProps) {
             };
           },
           headerCollapser,
+          toolbarCollapser,
           layoutRefs,
           titleFileMenuRef,
           setTitleFileMenuRef,

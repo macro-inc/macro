@@ -116,7 +116,7 @@ const EmptyViewsHint = (props: { children: JSX.Element }) => (
  * list/board mode, stage/owner sub-filters, tab), plus share links that
  * encode the same state into the URL (see `@companies/crm/saved-views`).
  */
-export function CompanyViewsMenu() {
+export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
   const {
     soup,
     queryFilters,
@@ -190,9 +190,16 @@ export function CompanyViewsMenu() {
 
   return (
     <Dropdown open={open()} onOpenChange={handleOpenChange}>
-      <Dropdown.Trigger depth={2} class="bg-surface">
+      <Dropdown.Trigger
+        depth={2}
+        class="bg-surface"
+        label={props.hideLabel ? 'Views' : undefined}
+        aria-label={props.hideLabel ? 'Views' : undefined}
+      >
         <StackIcon />
-        <span>Views</span>
+        <Show when={!props.hideLabel}>
+          <span>Views</span>
+        </Show>
       </Dropdown.Trigger>
 
       <Dropdown.Content class="w-64 shadow-menu">

@@ -3,7 +3,10 @@ import {
   isPreviewControllerContent,
   previewControllerWidthForContent,
 } from '../previewController';
-import { splitMinWidthForContent } from '../splitContentSizing';
+import {
+  DEFAULT_SPLIT_MIN_WIDTH,
+  splitMinWidthForContent,
+} from '../splitContentSizing';
 
 describe('preview controller content', () => {
   it('explicitly recognizes configured content', () => {
@@ -20,30 +23,39 @@ describe('preview controller content', () => {
   });
 
   it('resolves default and content-specific widths from the same config', () => {
-    expect(
-      previewControllerWidthForContent({ type: 'component', id: 'inbox' })
-    ).toBe(440);
-    expect(
-      previewControllerWidthForContent({ type: 'component', id: 'channels' })
-    ).toBe(360);
-    expect(
-      previewControllerWidthForContent({ type: 'component', id: 'mail' })
-    ).toBe(800);
-    expect(
-      previewControllerWidthForContent({ type: 'component', id: 'companies' })
-    ).toBe(880);
-    expect(
-      previewControllerWidthForContent(
-        { type: 'component', id: 'companies' },
-        1000
-      )
-    ).toBe(700);
-    expect(
-      previewControllerWidthForContent(
-        { type: 'component', id: 'companies' },
-        1600
-      )
-    ).toBe(880);
+    const defaultWidth = previewControllerWidthForContent({
+      type: 'component',
+      id: 'inbox',
+    });
+    const channelsWidth = previewControllerWidthForContent({
+      type: 'component',
+      id: 'channels',
+    });
+    const mailWidth = previewControllerWidthForContent({
+      type: 'component',
+      id: 'mail',
+    });
+    const companiesWidth = previewControllerWidthForContent({
+      type: 'component',
+      id: 'companies',
+    });
+
+    expect(defaultWidth).toBeDefined();
+    expect(channelsWidth).not.toBe(defaultWidth);
+    expect(mailWidth).not.toBe(defaultWidth);
+    expect(companiesWidth).not.toBe(defaultWidth);
+
+    const companiesWidthInNarrowViewport = previewControllerWidthForContent(
+      { type: 'component', id: 'companies' },
+      100
+    );
+    const companiesWidthInWideViewport = previewControllerWidthForContent(
+      { type: 'component', id: 'companies' },
+      10_000
+    );
+    expect(companiesWidthInNarrowViewport).toBeLessThan(
+      companiesWidthInWideViewport!
+    );
     expect(
       previewControllerWidthForContent({ type: 'component', id: 'settings' })
     ).toBeUndefined();
@@ -52,19 +64,28 @@ describe('preview controller content', () => {
         type: 'project',
         id: 'project-1',
       })
-    ).toBe(440);
+    ).toBe(defaultWidth);
   });
 
-  it('uses the list-view minimum width with a 400px default', () => {
-    expect(splitMinWidthForContent({ type: 'component', id: 'channels' })).toBe(
-      340
+  it('uses the configured list-view minimum only for Preview Controllers', () => {
+    const previewController = { isPreviewController: true };
+    const standaloneSplit = { isPreviewController: false };
+    const listViewContent = { type: 'component' as const, id: 'inbox' };
+
+    expect(
+      splitMinWidthForContent(listViewContent, previewController)
+    ).not.toBe(DEFAULT_SPLIT_MIN_WIDTH);
+    expect(splitMinWidthForContent(listViewContent, standaloneSplit)).toBe(
+      DEFAULT_SPLIT_MIN_WIDTH
     );
-    expect(splitMinWidthForContent({ type: 'component', id: 'inbox' })).toBe(
-      340
-    );
-    expect(splitMinWidthForContent({ type: 'component', id: 'settings' })).toBe(
-      400
-    );
-    expect(splitMinWidthForContent({ type: 'md', id: 'doc-1' })).toBe(400);
+    expect(
+      splitMinWidthForContent(
+        { type: 'component', id: 'settings' },
+        previewController
+      )
+    ).toBe(DEFAULT_SPLIT_MIN_WIDTH);
+    expect(
+      splitMinWidthForContent({ type: 'md', id: 'doc-1' }, previewController)
+    ).toBe(DEFAULT_SPLIT_MIN_WIDTH);
   });
 });

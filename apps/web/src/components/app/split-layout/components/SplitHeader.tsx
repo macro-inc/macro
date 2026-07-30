@@ -121,7 +121,7 @@ function SidebarExpandButton() {
     <div
       class={cn(
         'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible() ? 'w-8 opacity-100 mr-1' : 'w-0 opacity-0 mr-0'
+        visible() ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0' : 'w-0 opacity-0 mr-0'
       )}
       aria-hidden={!visible()}
     >

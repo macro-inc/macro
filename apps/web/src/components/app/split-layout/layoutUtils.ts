@@ -173,8 +173,9 @@ function _createIsActiveSplitContentMemo(
   });
 }
 
-export function useRegisterCollapsibleHeaderItem(
-  input: CollapsibleItemInput
+function useRegisterCollapsibleItem(
+  input: CollapsibleItemInput,
+  region: 'header' | 'toolbar'
 ): Accessor<boolean> {
   const [collapsed, setCollapsedInner] = createSignal(false);
   const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
@@ -183,11 +184,25 @@ export function useRegisterCollapsibleHeaderItem(
   };
   input.onCollapsedChange?.(false);
   const ctx = useSplitPanelOrThrow();
-  const cleanup = ctx.headerCollapser.register({
+  const collapser =
+    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
+  const cleanup = collapser.register({
     ...input,
     collapsed,
     setCollapsed,
   });
   onCleanup(cleanup);
   return collapsed;
+}
+
+export function useRegisterCollapsibleHeaderItem(
+  input: CollapsibleItemInput
+): Accessor<boolean> {
+  return useRegisterCollapsibleItem(input, 'header');
+}
+
+export function useRegisterCollapsibleToolbarItem(
+  input: CollapsibleItemInput
+): Accessor<boolean> {
+  return useRegisterCollapsibleItem(input, 'toolbar');
 }

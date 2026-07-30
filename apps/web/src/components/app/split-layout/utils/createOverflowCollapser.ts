@@ -1,6 +1,6 @@
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
-import type { CollapsibleRegistration, HeaderCollapser } from '../context';
+import type { CollapsibleRegistration, OverflowCollapser } from '../context';
 
 const OVERFLOW_EPSILON_PX = 2;
 const RETRY_PANEL_GROWTH_PX = 12;
@@ -28,10 +28,22 @@ function getContentWidth(container: HTMLElement): number {
   );
 }
 
-export function createHeaderCollapser(
-  getContainer: Accessor<HTMLElement | undefined>,
+/**
+ * Collapse registered controls when a split row's flexing left region can no
+ * longer fit them.
+ *
+ * This is tailored to the SplitHeader/SplitToolbar DOM structure, not a
+ * general-purpose overflow observer:
+ * - `getLeftContainer` must return the row's left flex region, whose
+ *   `offsetWidth` is the space remaining after the non-shrinking right region.
+ * - Measured controls must be direct children of that region or children of
+ *   one `display: contents` portal wrapper. `getContentWidth` intentionally
+ *   flattens exactly that structure.
+ */
+export function createOverflowCollapser(
+  getLeftContainer: Accessor<HTMLElement | undefined>,
   panelSizeWidth: Accessor<number | null | undefined>
-): HeaderCollapser {
+): OverflowCollapser {
   const [items, setItems] = createStore<CollapsibleRegistration[]>([]);
   let observer: ResizeObserver | null = null;
   let rafId: number | null = null;
@@ -49,22 +61,23 @@ export function createHeaderCollapser(
     });
   };
 
-  const overflows = (headerLeft: HTMLElement) =>
-    getContentWidth(headerLeft) - headerLeft.offsetWidth > OVERFLOW_EPSILON_PX;
+  const overflows = (leftContainer: HTMLElement) =>
+    getContentWidth(leftContainer) - leftContainer.offsetWidth >
+    OVERFLOW_EPSILON_PX;
 
   const evaluate = () => {
-    const headerLeft = getContainer();
-    if (!headerLeft) return;
+    const leftContainer = getLeftContainer();
+    if (!leftContainer) return;
 
     if (!observer) {
       observer = new ResizeObserver(() => scheduleEvaluate());
-      observer.observe(headerLeft);
+      observer.observe(leftContainer);
     }
 
     if (items.length === 0) return;
 
-    const contentWidth = getContentWidth(headerLeft);
-    const availableWidth = headerLeft.offsetWidth;
+    const contentWidth = getContentWidth(leftContainer);
+    const availableWidth = leftContainer.offsetWidth;
     const panelWidth = panelSizeWidth() ?? availableWidth;
 
     if (contentWidth - availableWidth > OVERFLOW_EPSILON_PX) {
@@ -73,10 +86,10 @@ export function createHeaderCollapser(
         .sort((a, b) => a.priority - b.priority);
       for (const item of byCollapseOrder) {
         item.setCollapsed(true);
-        if (!overflows(headerLeft)) break;
+        if (!overflows(leftContainer)) break;
       }
       lastFailedExpand = {
-        contentWidth: getContentWidth(headerLeft),
+        contentWidth: getContentWidth(leftContainer),
         panelWidth,
       };
       return;
@@ -99,10 +112,10 @@ export function createHeaderCollapser(
     // never visible; silent keeps onCollapsedChange from firing for it.
     for (const item of byExpandOrder) {
       item.setCollapsed(false, { silent: true });
-      if (overflows(headerLeft)) {
+      if (overflows(leftContainer)) {
         item.setCollapsed(true, { silent: true });
         lastFailedExpand = {
-          contentWidth: getContentWidth(headerLeft),
+          contentWidth: getContentWidth(leftContainer),
           panelWidth,
         };
         break;

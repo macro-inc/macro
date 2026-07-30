@@ -135,7 +135,9 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                       <Suspense>
                         <Resize.Panel
                           id={id}
-                          minSize={splitMinWidthForContent(handle().content())}
+                          minSize={splitMinWidthForContent(handle().content(), {
+                            isPreviewController: handle().isControllerSplit(),
+                          })}
                           // Automatic redistribution targets an engaged
                           // Controller at its configured preferred width.
                           // This is not a hard max: the gutter can still be

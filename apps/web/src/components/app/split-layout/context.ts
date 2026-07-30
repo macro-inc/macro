@@ -14,8 +14,7 @@ export type CollapsibleRegistration = {
   collapsed: Accessor<boolean>;
   // silent skips onCollapsedChange — used for pre-paint trial measurements
   setCollapsed: (value: boolean, opts?: { silent?: boolean }) => void;
-  ref: Accessor<HTMLElement | null | undefined>; // uncollapsed element — measured before collapse
-  collapsedRef?: Accessor<HTMLElement | null | undefined>; // collapsed element — measured while collapsed
+  ref: Accessor<HTMLElement | null | undefined>;
 };
 
 export type CollapsibleItemInput = Omit<
@@ -25,7 +24,7 @@ export type CollapsibleItemInput = Omit<
   onCollapsedChange?: (isCollapsed: boolean) => void;
 };
 
-export type HeaderCollapser = {
+export type OverflowCollapser = {
   register: (reg: CollapsibleRegistration) => () => void; // returns cleanup
 };
 
@@ -93,7 +92,8 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
-  headerCollapser: HeaderCollapser;
+  headerCollapser: OverflowCollapser;
+  toolbarCollapser: OverflowCollapser;
 };
 
 export const SplitPanelContext = createContext<SplitPanelContextType>();
