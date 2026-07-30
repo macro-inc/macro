@@ -333,6 +333,11 @@ export const ChannelsRecentWidget = (props: {
       if (list) list.push(notification);
       else map.set(notification.entity_id, [notification]);
     }
+    // `unread[0]` must be the newest notification (it aims open-at-unread and
+    // the hover previews); don't rely on the source list's ordering.
+    for (const list of map.values()) {
+      list.sort((a, b) => compareDateDesc(a.created_at, b.created_at));
+    }
     return map;
   });
 
@@ -440,6 +445,7 @@ export const ChannelsRecentWidget = (props: {
       <Show when={recentChannels().length > 0}>
         <CollapsibleSidebarSection
           label="Channels"
+          persistKey="recent-channels"
           items={sectionItems()}
           onOpenChange={() => props.onSectionOpenChange?.()}
         />

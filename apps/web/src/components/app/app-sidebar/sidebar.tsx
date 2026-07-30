@@ -1444,6 +1444,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         >
           <CollapsibleSidebarSection
             label="Workspace"
+            persistKey="workspace"
             items={workspaceItems()}
             headerMenu={() => (
               <SidebarSectionMenu
@@ -1466,6 +1467,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <Show when={tryItems().length > 0}>
             <CollapsibleSidebarSection
               label="Try"
+              persistKey="try"
               items={tryItems()}
               onOpenChange={scheduleMiddleScrollUpdate}
             />
@@ -1497,11 +1499,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <InCallPanel isSlim={() => false} />
           </div>
         </Show>
-        <ChannelsRecentWidget
-          sidebarState={sidebarDisplayState()}
-          onSectionOpenChange={scheduleMiddleScrollUpdate}
-          onDropdownOpenChange={handleOverlayDropdownOpenChange}
-        />
+        <Suspense>
+          <ChannelsRecentWidget
+            sidebarState={sidebarDisplayState()}
+            onSectionOpenChange={scheduleMiddleScrollUpdate}
+            onDropdownOpenChange={handleOverlayDropdownOpenChange}
+          />
+        </Suspense>
         <Show keyed when={isExpandedView() ? firstTeamInvite() : undefined}>
           {(invite) => <TeamInviteSidebarPromo invite={invite} />}
         </Show>
