@@ -461,7 +461,7 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
         SearchProcessingConsumerGroup::GROUP_NAME,
         "search-processing-service"
     );
-    let topics = SearchProcessingBrokerEvent::topics();
+    let topics = DeclaredMacroEvent::topics();
     assert!(topics.contains(&MacroCallsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
@@ -572,8 +572,8 @@ fn channel_envelope_decodes_round_trip() {
         Event::new(event.clone()),
     );
 
-    let decoded = SearchProcessingBrokerEvent::decode(&message).expect("decodable channel event");
-    let SearchProcessingBrokerEvent::ChannelMacroEvent(decoded_event) = decoded else {
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable channel event");
+    let DeclaredMacroEvent::ChannelMacroEvent(decoded_event) = decoded else {
         panic!("expected channel event");
     };
     assert_eq!(decoded_event.key(), CHANNEL_ID.to_string());
@@ -595,8 +595,8 @@ fn project_envelope_decodes_round_trip_with_string_key() {
         Event::new(event.clone()),
     );
 
-    let decoded = SearchProcessingBrokerEvent::decode(&message).expect("decodable project event");
-    let SearchProcessingBrokerEvent::ProjectMacroEvent(decoded_event) = decoded else {
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable project event");
+    let DeclaredMacroEvent::ProjectMacroEvent(decoded_event) = decoded else {
         panic!("expected project event");
     };
     assert_eq!(decoded_event.key(), PROJECT_ID);
@@ -617,7 +617,7 @@ async fn unsupported_project_schema_message_is_commit_safe() {
         PROJECT_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 4, 30);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 4, 30);
     let (sender, mut receiver) = mpsc::channel(1);
 
     match handoff_decoded(&sender, decoded).await {
@@ -649,7 +649,7 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         CHANNEL_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 2, 20);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 2, 20);
     let (sender, mut receiver) = mpsc::channel(1);
 
     match handoff_decoded(&sender, decoded).await {
@@ -677,8 +677,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         key: Some(CALL_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed =
-        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&malformed), 1, 10);
+    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 1, 10);
     assert!(matches!(malformed, Err(EventBrokerError::Serialization(_))));
 
     let missing_key = TestMessage {
@@ -691,8 +690,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         )
         .payload,
     };
-    let missing_key =
-        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&missing_key), 1, 11);
+    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 1, 11);
     assert!(matches!(
         missing_key,
         Err(EventBrokerError::MissingMessageKey)
@@ -703,8 +701,7 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         CALL_ID,
         Event::with_schema_version(archived_event(), 2),
     );
-    let unsupported =
-        attach_event_coordinates(SearchProcessingBrokerEvent::decode(&unsupported), 1, 12);
+    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 1, 12);
     assert!(matches!(
         unsupported,
         Err(EventBrokerError::UnsupportedSchemaVersion {
@@ -735,7 +732,7 @@ async fn successful_handoff_carries_event_partition_and_offset() {
         CALL_ID,
         Event::new(event.clone()),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
     let (sender, mut receiver) = mpsc::channel(1);
 
     assert!(matches!(
@@ -746,7 +743,7 @@ async fn successful_handoff_carries_event_partition_and_offset() {
     let received = receiver.recv().await.expect("handed-off event");
     assert_eq!(received.partition, 3);
     assert_eq!(received.offset, 42);
-    let SearchProcessingBrokerEvent::CallMacroEvent(received_event) = received.event else {
+    let DeclaredMacroEvent::CallMacroEvent(received_event) = received.event else {
         panic!("expected call event");
     };
     assert_eq!(received_event.event().event, event);
@@ -759,7 +756,7 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
         CALL_ID,
         Event::new(archived_event()),
     );
-    let decoded = attach_event_coordinates(SearchProcessingBrokerEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
     let (sender, receiver) = mpsc::channel(1);
     drop(receiver);
 

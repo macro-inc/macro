@@ -23,9 +23,7 @@ use std::{future::Future, time::Duration};
 use ::call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_event_broker::{
-    KafkaConsumerAdapter, MacroEventCollection as _, MacroEventConsumerService,
-};
+use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
 use opensearch_client::OpensearchClient;
 use projects::domain::events::ProjectMacroEvent;
 use rdkafka::{
@@ -49,12 +47,15 @@ impl GroupName for SearchProcessingConsumerGroup {
 }
 
 type SearchProcessingKafkaAdapter =
-    KafkaConsumerAdapter<SearchProcessingConsumerGroup, SearchProcessingBrokerEvent>;
+    KafkaConsumerAdapter<SearchProcessingConsumerGroup, DeclaredMacroEvent>;
 type SearchProcessingKafkaConsumer =
-    MacroEventConsumerService<SearchProcessingBrokerEvent, SearchProcessingKafkaAdapter>;
+    MacroEventConsumerService<DeclaredMacroEvent, SearchProcessingKafkaAdapter>;
 
 macro_event_broker::declare_topics!(
-    SearchProcessingBrokerEvent: CallMacroEvent, ChannelMacroEvent, ProjectMacroEvent
+    DeclaredMacroEvent:
+        CallMacroEvent,
+        ChannelMacroEvent,
+        ProjectMacroEvent,
 );
 
 /// Maximum number of decoded events waiting for the sequential worker.
@@ -68,7 +69,7 @@ const PROCESSING_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
 /// A decoded search-processing event and its Kafka coordinates.
 struct ReceivedEvent {
-    event: SearchProcessingBrokerEvent,
+    event: DeclaredMacroEvent,
     partition: i32,
     offset: i64,
 }
@@ -143,7 +144,7 @@ async fn handoff_decoded<T, E>(
 }
 
 fn attach_event_coordinates<E>(
-    decoded: Result<SearchProcessingBrokerEvent, E>,
+    decoded: Result<DeclaredMacroEvent, E>,
     partition: i32,
     offset: i64,
 ) -> Result<ReceivedEvent, E> {
@@ -158,18 +159,18 @@ fn attach_event_coordinates<E>(
 async fn process_event(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
-    event: &SearchProcessingBrokerEvent,
+    event: &DeclaredMacroEvent,
     partition: i32,
     offset: i64,
 ) -> EventOutcome {
     match event {
-        SearchProcessingBrokerEvent::CallMacroEvent(event) => {
+        DeclaredMacroEvent::CallMacroEvent(event) => {
             process_call_event(db, opensearch_client, event, partition, offset).await
         }
-        SearchProcessingBrokerEvent::ChannelMacroEvent(event) => {
+        DeclaredMacroEvent::ChannelMacroEvent(event) => {
             process_channel_event(db, opensearch_client, event, partition, offset).await
         }
-        SearchProcessingBrokerEvent::ProjectMacroEvent(event) => {
+        DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await
         }
     }
@@ -288,11 +289,11 @@ pub(crate) async fn run_event_consumer(
 ) -> Result<(), Report> {
     let consumer = KafkaEventConsumer::<SearchProcessingConsumerGroup>::from_env(brokers)?;
     let consumer = KafkaConsumerAdapter::<SearchProcessingConsumerGroup, ()>::new(consumer)
-        .subscribe::<SearchProcessingBrokerEvent>()
+        .subscribe::<DeclaredMacroEvent>()
         .context("failed to subscribe to search processing event topics")?;
     let consumer = SearchProcessingKafkaConsumer::new(consumer);
     tracing::info!(
-        topics = ?SearchProcessingBrokerEvent::topics(),
+        topics = ?DeclaredMacroEvent::topics(),
         group = SearchProcessingConsumerGroup::GROUP_NAME,
         "search processing event consumer listening"
     );
