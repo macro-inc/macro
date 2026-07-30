@@ -19,7 +19,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{AdminParticipantRole, EntityAccessReceipt},
+        models::{EntityAccessReceipt, MemberParticipantRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
@@ -167,7 +167,7 @@ where
 }
 
 fn caller_from_receipt(
-    receipt: &EntityAccessReceipt<AdminParticipantRole>,
+    receipt: &EntityAccessReceipt<MemberParticipantRole>,
 ) -> Result<MacroUserIdStr<'static>, BotsHandlerErr> {
     receipt
         .get_authenticated_user()
@@ -396,7 +396,7 @@ async fn list_channel_bots_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
-    _access: ChannelAccessLevelExtractor<AdminParticipantRole, Svc, Auth>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     Path(path): Path<ChannelPath>,
 ) -> Result<Json<Vec<Bot>>, BotsHandlerErr> {
     Ok(Json(
@@ -410,7 +410,7 @@ async fn add_channel_bot_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractor<AdminParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     Path(path): Path<ChannelPath>,
     Json(req): Json<AddChannelBotRequest>,
 ) -> Result<StatusCode, BotsHandlerErr> {
@@ -428,7 +428,7 @@ async fn remove_channel_bot_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractor<AdminParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     Path(path): Path<ChannelBotPath>,
 ) -> Result<StatusCode, BotsHandlerErr> {
     let caller = caller_from_receipt(&access.entity_access_receipt)?;
