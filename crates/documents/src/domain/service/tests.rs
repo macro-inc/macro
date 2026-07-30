@@ -5,11 +5,11 @@ use foreign_entity::domain::models::{
 use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
-use model::document::DocumentMetadata;
+use model::document::{DocumentMetadata, FileType};
 use std::sync::{Arc, Mutex};
 
 use crate::domain::models::GithubPullRequest;
-use crate::domain::ports::MockDocumentRepo;
+use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
 use super::*;
 
@@ -343,9 +343,17 @@ struct PublishedEvent {
 #[derive(Clone, Default)]
 struct TestEventBroker {
     published: Arc<Mutex<Vec<PublishedEvent>>>,
+    fail_send: bool,
 }
 
 impl TestEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail_send: true,
+            ..Self::default()
+        }
+    }
+
     fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
         Arc::clone(&self.published)
     }
@@ -356,6 +364,10 @@ impl MacroEventBroker for TestEventBroker {
         &self,
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail_send {
+            return Err(EventBrokerError::Publish("test broker failure".to_string()));
+        }
+
         self.published.lock().unwrap().push(PublishedEvent {
             topic: event.topic(),
             key: event.key().to_string(),
@@ -476,7 +488,13 @@ fn make_test_service_with_search_indexer(
 fn make_test_service_with_event_broker(
     repo: MockDocumentRepo,
 ) -> (TestDocumentService, TestEventBroker) {
-    let event_broker = TestEventBroker::default();
+    make_test_service_with_configured_event_broker(repo, TestEventBroker::default())
+}
+
+fn make_test_service_with_configured_event_broker(
+    repo: MockDocumentRepo,
+    event_broker: TestEventBroker,
+) -> (TestDocumentService, TestEventBroker) {
     let service = DocumentServiceImpl::new(
         repo,
         test_cloudfront_config(),
@@ -1535,6 +1553,92 @@ fn edit_receipt(document_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
         document_id,
         EntityType::Document,
     )
+}
+
+#[tokio::test]
+async fn content_uploaded_publishes_document_event_with_owner_and_version() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .withf(|document_id| document_id == "doc-1")
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .publish_content_uploaded("doc-1", FileType::Pdf, Some("convert".to_string()))
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.documents");
+    assert_eq!(event.key, "doc-1");
+    assert_eq!(event.payload["event_type"], "document.content_uploaded");
+    assert_eq!(event.payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(event.payload["metadata"]["owner"], "macro|owner@user.com");
+    assert_eq!(event.payload["metadata"]["file_type"], "pdf");
+    assert_eq!(event.payload["metadata"]["document_version_id"], "convert");
+}
+
+#[tokio::test]
+async fn content_uploaded_preserves_an_absent_version() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .publish_content_uploaded("doc-1", FileType::Pdf, None)
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(
+        published[0].payload["metadata"]["document_version_id"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn content_uploaded_maps_a_missing_document_to_not_found() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document().return_once(|_| {
+        Box::pin(std::future::ready(Err(anyhow!(
+            "no rows returned by a query that expected to return at least one row"
+        ))))
+    });
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let result = service
+        .publish_content_uploaded("missing-doc", FileType::Pdf, None)
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(DocumentError::NotFound(document_id)) if document_id == "missing-doc"
+    ));
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+    let event_broker = TestEventBroker::failing();
+    let (service, event_broker) =
+        make_test_service_with_configured_event_broker(repo, event_broker);
+
+    let result = service
+        .publish_content_uploaded("doc-1", FileType::Pdf, None)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Internal(_))));
+    assert!(event_broker.published().lock().unwrap().is_empty());
 }
 
 #[tokio::test]

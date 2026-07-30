@@ -13,7 +13,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{ContentType, DocumentBasic, DocumentMetadata};
+use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -347,6 +347,17 @@ pub trait DocumentSearchIndexer: Send + Sync + std::fmt::Debug {
         &self,
         document_id: String,
     ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>>;
+}
+
+/// Use case for relaying document content-upload events.
+pub trait DocumentContentEventService: Send + Sync + 'static {
+    /// Load the document owner and publish a content-uploaded event.
+    fn publish_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
 /// Service interface for document operations.

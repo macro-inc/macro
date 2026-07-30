@@ -42,8 +42,9 @@ use crate::domain::models::{
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
+    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
+    DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
+    DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -54,8 +55,8 @@ use super::models::{
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
 use super::ports::{
-    DocumentRepo, DocumentSearchIndexer, DocumentService, PresignedUploadUrlPort,
-    TaskPropertiesPort,
+    DocumentContentEventService, DocumentRepo, DocumentSearchIndexer, DocumentService,
+    PresignedUploadUrlPort, TaskPropertiesPort,
 };
 use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
@@ -157,6 +158,17 @@ fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
 
 fn invalid_team_task_slug() -> DocumentError {
     DocumentError::BadRequest("invalid team task slug".to_string())
+}
+
+fn map_basic_document_error(document_id: &str, error: anyhow::Error) -> DocumentError {
+    if error
+        .to_string()
+        .contains("no rows returned by a query that expected to return at least one row")
+    {
+        DocumentError::NotFound(document_id.to_string())
+    } else {
+        DocumentError::Internal(error)
+    }
 }
 
 fn team_task_number_from_slug(slug: &str) -> Result<i32, DocumentError> {
@@ -617,6 +629,44 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
+> DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn publish_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        let document = self
+            .repo
+            .get_basic_document(document_id)
+            .await
+            .map_err(|error| map_basic_document_error(document_id, error.into()))?;
+
+        self.macro_event_broker
+            .send_event(&DocumentMacroEvent::content_uploaded(
+                document_id,
+                DocumentContentUploadedMetadata {
+                    document_id: document_id.to_string(),
+                    owner: document.owner,
+                    file_type,
+                    document_version_id,
+                },
+            ))
+            .map(|_| ())
+            .map_err(|error| DocumentError::Internal(error.into()))
+    }
+}
+
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
+    B: MacroEventBroker,
 > DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
 {
     #[tracing::instrument(err, skip(self, team_receipt))]
@@ -838,16 +888,7 @@ impl<
         self.repo
             .get_basic_document(document_id)
             .await
-            .map_err(|e| {
-                let err: anyhow::Error = e.into();
-                if err.to_string().contains(
-                    "no rows returned by a query that expected to return at least one row",
-                ) {
-                    DocumentError::NotFound(document_id.to_string())
-                } else {
-                    DocumentError::Internal(err)
-                }
-            })
+            .map_err(|error| map_basic_document_error(document_id, error.into()))
     }
 
     async fn get_document_text(
