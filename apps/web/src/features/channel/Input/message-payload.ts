@@ -1,9 +1,9 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
 import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
 import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { match } from 'ts-pattern';
 import type { InputAttachmentData, InputSnapshot } from './types';
 
