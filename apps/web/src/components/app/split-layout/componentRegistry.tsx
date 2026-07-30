@@ -191,6 +191,20 @@ registerComponent(
   })
 );
 
+const CalendarView = lazy(() =>
+  import('@app/features/calendar/calendar-view').then((module) => ({
+    default: module.CalendarView,
+  }))
+);
+
+registerComponent(
+  'calendar',
+  withAuth(() => {
+    usePageViewTracking('calendar');
+    return <CalendarView />;
+  })
+);
+
 // The Activity tab briefly shipped as two separate views; restored splits
 // may still reference their ids.
 registerComponent('firehose', () => (

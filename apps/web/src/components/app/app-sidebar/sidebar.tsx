@@ -68,6 +68,7 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { tryMacroId, useDisplayName } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
+import WideCalendarIcon from '@icon/wide-calendar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
@@ -136,6 +137,7 @@ type SidebarSectionLinkId =
   | 'calls'
   | 'documents'
   | 'tasks'
+  | 'calendar'
   | 'agents'
   | 'companies';
 
@@ -149,6 +151,7 @@ const COMMUNICATIONS_LINK_IDS = ['mail', 'channels', 'calls'] as const;
 const WORKSPACE_LINK_IDS = [
   'documents',
   'tasks',
+  'calendar',
   'agents',
   'companies',
 ] as const;
@@ -159,6 +162,7 @@ const DEFAULT_SECTION_VISIBILITY: SidebarSectionVisibility = {
   calls: true,
   documents: true,
   tasks: true,
+  calendar: true,
   agents: true,
   companies: true,
 };
@@ -237,6 +241,14 @@ const SIDEBAR_LINKS = [
     icon: AnimatedTaskIcon,
     hotkey: 't',
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
+  },
+  {
+    id: 'calendar',
+    label: 'Calendar',
+    href: '/calendar',
+    icon: WideCalendarIcon,
+    hotkey: 'r',
+    hotkeyToken: TOKENS.sidebar.goTo.calendar,
   },
   {
     id: 'channels',
@@ -1056,7 +1068,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const userInvitesQuery = useUserInvitesQuery();
   const firstTeamInvite = () => userInvitesQuery.data?.invites.at(0);
   const [sectionVisibility, setSectionVisibility] = makePersisted(
-    createSignal<SidebarSectionVisibility>(DEFAULT_SECTION_VISIBILITY),
+    createSignal<Partial<SidebarSectionVisibility>>(DEFAULT_SECTION_VISIBILITY),
     { name: 'sidebar-section-visibility' }
   );
   const [tryVisibility, setTryVisibility] = makePersisted(
@@ -1252,9 +1264,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       .filter((link): link is SidebarItem => link !== undefined)
   );
 
+  const isSectionVisible = (id: SidebarSectionLinkId) =>
+    sectionVisibility()[id] ?? DEFAULT_SECTION_VISIBILITY[id];
+
   const sectionItemsFor = (ids: readonly SidebarSectionLinkId[]) =>
     ids
-      .filter((id) => sectionVisibility()[id])
+      .filter(isSectionVisible)
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
       .map(toSectionItem);
@@ -1267,7 +1282,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const toggleSectionVisibility = (id: SidebarSectionLinkId) => {
     setSectionVisibility({
       ...sectionVisibility(),
-      [id]: !sectionVisibility()[id],
+      [id]: !isSectionVisible(id),
     });
     scheduleMiddleScrollUpdate();
   };
@@ -1284,7 +1299,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       .map((link) => ({
         id: link.id as SidebarSectionLinkId,
         label: link.label,
-        checked: sectionVisibility()[link.id as SidebarSectionLinkId],
+        checked: isSectionVisible(link.id as SidebarSectionLinkId),
       }));
 
   const tryItems = createMemo<CollapsibleSidebarSectionItem[]>(() => {
