@@ -251,7 +251,7 @@ async fn send_chat_message_inner(
     };
 
     // Store the incoming user message and resolve its attachments
-    let resolved = store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, &model, &payload)
+    let resolved = store_incoming_message(ctx.clone(), user_id.0.as_ref(), &model, &payload)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, "failed to store incoming message");
@@ -674,7 +674,6 @@ fn stream_and_save_message(
 
         if let Err(err) = store_conversation_messages(
             ctx.clone(),
-            user_id.0.as_ref(),
             &chat_id,
             new_messages,
             &model,
