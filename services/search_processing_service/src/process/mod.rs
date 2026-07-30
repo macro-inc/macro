@@ -1,6 +1,6 @@
 pub(crate) mod call;
 pub(crate) mod channel;
-mod chat;
+pub(crate) mod chat;
 pub mod context;
 mod document;
 mod email;
@@ -116,7 +116,13 @@ pub async fn process_message(
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;
         }
         SearchQueueMessage::RemoveChatMessage(message) => {
-            chat::remove_chat_message(&ctx.opensearch_client, &message).await?;
+            chat::remove_chat_message(
+                &ctx.opensearch_client,
+                message.chat_id.as_str(),
+                message.message_id.as_deref(),
+                message.index_override.as_deref(),
+            )
+            .await?;
         }
         SearchQueueMessage::CallRecord(message) => {
             let call_id = message
