@@ -2790,6 +2790,7 @@
       "crates/entity_mutation",
       "crates/filter_ast",
       "crates/frecency",
+      "crates/graphql_common",
       "crates/graphql_email",
       "crates/invite_email",
       "crates/item_filters",
