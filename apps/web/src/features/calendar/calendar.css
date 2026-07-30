@@ -13,10 +13,6 @@
 	--fc-now-indicator-color: var(--color-accent);
 }
 
-.calendar-view-sidebar {
-	display: none;
-}
-
 .calendar-view-content {
 	box-sizing: border-box;
 	padding: 1.25rem;
@@ -452,12 +448,6 @@
 		color-mix(in oklch, var(--color-ink-extra-muted) 40%, transparent);
 	pointer-events: none;
 	content: "";
-}
-
-@container calendar-view (min-width: 880px) {
-	.calendar-view-sidebar {
-		display: flex;
-	}
 }
 
 @container calendar-view (max-width: 700px) {

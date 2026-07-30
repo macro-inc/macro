@@ -1,12 +1,14 @@
+import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TabsInset } from '@core/component/TabsInset';
+import type { DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Button, Dropdown, Layer, Calendar as MiniCalendar } from '@ui';
+import { Button, Dropdown, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -17,10 +19,11 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { CalendarSidePanelSections } from './CalendarSidePanelSections';
 import { CalendarEventContent } from './events/EventContent';
-import { EventDetailsPopover } from './events/EventDetailsPopover';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
 import { createCalendarEventFixtures } from './events/fixtures';
+import type { CalendarEvent, CalendarSource } from './events/types';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import './calendar.css';
 
@@ -79,6 +82,14 @@ function getLocalScrollTime() {
 
 interface ResponsiveCalendarHostProps {
   onNarrowDayHeadersChange: (useNarrowDayHeaders: boolean) => void;
+}
+
+interface CalendarWorkspaceProps extends ResponsiveCalendarHostProps {
+  selectedEvent: CalendarEvent | undefined;
+  sources: CalendarSource[];
+  isSourceVisible: (sourceId: string) => boolean;
+  onCloseEvent: () => void;
+  onSourceVisibilityChange: (sourceId: string, visible: boolean) => void;
 }
 
 function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
@@ -211,18 +222,45 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
 export function CalendarView() {
   const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
   const [selectedEventId, setSelectedEventId] = createSignal<string>();
-  const [selectedEventAnchor, setSelectedEventAnchor] =
-    createSignal<HTMLElement>();
   const calendarEvents = createCalendarEventFixtures();
   const eventsById = new Map(calendarEvents.map((event) => [event.id, event]));
-  const fullCalendarEvents = calendarEvents.map(mapCalendarEventToFullCalendar);
+  const calendarSources = Array.from(
+    new Map(
+      calendarEvents.map((event) => [event.calendar.id, event.calendar])
+    ).values()
+  );
+  const [visibleSourceIds, setVisibleSourceIds] = createSignal(
+    new Set(calendarSources.map((source) => source.id))
+  );
+  const visibleEvents = createMemo(() =>
+    calendarEvents.filter((event) => visibleSourceIds().has(event.calendar.id))
+  );
+  const fullCalendarEvents = createMemo(() =>
+    visibleEvents().map(mapCalendarEventToFullCalendar)
+  );
   const selectedEvent = () => {
     const eventId = selectedEventId();
     return eventId ? eventsById.get(eventId) : undefined;
   };
-  const closeEventDetails = () => {
-    setSelectedEventId(undefined);
-    setSelectedEventAnchor(undefined);
+  const closeEventDetails = () => setSelectedEventId(undefined);
+  const setSourceVisibility = (sourceId: string, visible: boolean) => {
+    setVisibleSourceIds((current) => {
+      const next = new Set(current);
+      if (visible) next.add(sourceId);
+      else next.delete(sourceId);
+      return next;
+    });
+    if (!visible && selectedEvent()?.calendar.id === sourceId) {
+      closeEventDetails();
+    }
+  };
+  let visibleRangeKey: string | undefined;
+  const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
+    const nextRangeKey = `${view.type}:${start.toISOString()}:${end.toISOString()}`;
+    if (visibleRangeKey !== undefined && visibleRangeKey !== nextRangeKey) {
+      closeEventDetails();
+    }
+    visibleRangeKey = nextRangeKey;
   };
 
   return (
@@ -238,13 +276,12 @@ export function CalendarView() {
       headerToolbar={false}
       scrollTime={getLocalScrollTime()}
       scrollTimeReset={false}
-      events={fullCalendarEvents}
-      eventClick={({ el, event, jsEvent }) => {
+      events={fullCalendarEvents()}
+      eventClick={({ event, jsEvent }) => {
         jsEvent.preventDefault();
         setSelectedEventId(event.id);
-        setSelectedEventAnchor(el);
       }}
-      datesSet={closeEventDetails}
+      datesSet={handleDatesSet}
       dayHeaderFormat={{
         weekday: useNarrowDayHeaders() ? 'narrow' : 'short',
       }}
@@ -311,25 +348,21 @@ export function CalendarView() {
         }}
       </FullCalendar.NowIndicatorContent>
 
-      <Show when={selectedEvent()}>
-        {(event) => (
-          <EventDetailsPopover
-            anchor={selectedEventAnchor()}
-            event={event()}
-            open={selectedEventAnchor() !== undefined}
-            onOpenChange={(open) => {
-              if (!open) closeEventDetails();
-            }}
-          />
-        )}
-      </Show>
-
-      <CalendarWorkspace onNarrowDayHeadersChange={setUseNarrowDayHeaders} />
+      <SidePanel.Layout>
+        <CalendarWorkspace
+          onNarrowDayHeadersChange={setUseNarrowDayHeaders}
+          selectedEvent={selectedEvent()}
+          sources={calendarSources}
+          isSourceVisible={(sourceId) => visibleSourceIds().has(sourceId)}
+          onCloseEvent={closeEventDetails}
+          onSourceVisibilityChange={setSourceVisibility}
+        />
+      </SidePanel.Layout>
     </FullCalendar.Root>
   );
 }
 
-function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
+function CalendarWorkspace(props: CalendarWorkspaceProps) {
   const panel = useSplitPanelOrThrow();
   const calendar = useFullCalendar();
   const [isTodayVisible, setIsTodayVisible] = createSignal(true);
@@ -422,90 +455,91 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
   });
 
   return (
-    <main class="calendar-view flex size-full min-h-0 bg-surface">
-      <aside class="calendar-view-sidebar w-60 shrink-0 flex-col border-r border-edge-muted bg-panel p-3">
-        <MiniCalendar
-          required
-          fixedWeeks
-          startOfWeek={0}
-          value={currentDate()}
-          month={currentDate()}
-          focusedDay={miniCalendarFocusedDay()}
-          highlightedRange={miniCalendarHighlightedRange()}
-          onMonthChange={navigateMiniCalendarMonth}
-          onFocusedDayChange={setMiniCalendarFocusedDay}
-          onValueChange={selectMiniCalendarDate}
-        />
-      </aside>
-      <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
-        <div class="mb-3 flex min-w-0 items-center gap-3 border-b border-edge-muted pb-3">
-          <div class="flex shrink-0 items-center gap-1">
-            <Button
-              variant={isTodayVisible() ? 'base' : 'active'}
-              size="md"
-              class={
-                isTodayVisible()
-                  ? 'rounded-lg bg-surface px-3'
-                  : 'rounded-lg px-3'
-              }
-              depth={2}
-              label="Go to today"
-              onClick={() => calendar.api()?.today()}
-            >
-              Today
-            </Button>
-            {renderPeriodNavigation()}
-          </div>
-          <div class="min-w-0 flex-1 truncate text-xl font-bold leading-tight tracking-tight text-ink">
-            {dateTitle()}
-          </div>
-          <div class="ml-auto shrink-0">
-            <Show
-              when={usePeriodDropdown()}
-              fallback={
-                <TabsInset
-                  class="h-7 shrink-0"
-                  list={CALENDAR_VIEW_TABS}
-                  value={activeView()}
-                  onChange={changeView}
-                />
-              }
-            >
-              <Dropdown placement="bottom-start">
-                <Dropdown.Trigger
-                  aria-label="Choose calendar view"
-                  class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-surface px-2 text-xs font-medium text-ink"
-                >
-                  {CALENDAR_VIEW_TABS.find(
-                    (view) => view.value === activeView()
-                  )?.label ?? 'Month'}
-                  <CaretDownIcon class="size-3 text-ink-muted" />
-                </Dropdown.Trigger>
-                <Dropdown.Content class="min-w-28 p-1">
-                  <Dropdown.RadioGroup
+    <>
+      <CalendarSidePanelSections
+        currentDate={currentDate()}
+        focusedDay={miniCalendarFocusedDay()}
+        highlightedRange={miniCalendarHighlightedRange()}
+        selectedEvent={props.selectedEvent}
+        sources={props.sources}
+        isSourceVisible={props.isSourceVisible}
+        onCloseEvent={props.onCloseEvent}
+        onFocusedDayChange={setMiniCalendarFocusedDay}
+        onMonthChange={navigateMiniCalendarMonth}
+        onSelectDate={selectMiniCalendarDate}
+        onSourceVisibilityChange={props.onSourceVisibilityChange}
+      />
+      <main class="calendar-view flex size-full min-h-0 bg-surface">
+        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
+          <div class="mb-3 flex min-w-0 items-center gap-3 border-b border-edge-muted pb-3">
+            <div class="flex shrink-0 items-center gap-1">
+              <Button
+                variant={isTodayVisible() ? 'base' : 'active'}
+                size="md"
+                class={
+                  isTodayVisible()
+                    ? 'rounded-lg bg-surface px-3'
+                    : 'rounded-lg px-3'
+                }
+                depth={2}
+                label="Go to today"
+                onClick={() => calendar.api()?.today()}
+              >
+                Today
+              </Button>
+              {renderPeriodNavigation()}
+            </div>
+            <div class="min-w-0 flex-1 truncate text-xl font-bold leading-tight tracking-tight text-ink">
+              {dateTitle()}
+            </div>
+            <div class="ml-auto shrink-0">
+              <Show
+                when={usePeriodDropdown()}
+                fallback={
+                  <TabsInset
+                    class="h-7 shrink-0"
+                    list={CALENDAR_VIEW_TABS}
                     value={activeView()}
                     onChange={changeView}
+                  />
+                }
+              >
+                <Dropdown placement="bottom-start">
+                  <Dropdown.Trigger
+                    aria-label="Choose calendar view"
+                    class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-surface px-2 text-xs font-medium text-ink"
                   >
-                    <For each={CALENDAR_VIEW_TABS}>
-                      {(view) => (
-                        <Dropdown.RadioItem closeOnSelect value={view.value}>
-                          {view.label}
-                          <Dropdown.ItemIndicator class="ml-auto">
-                            <CheckIcon class="size-3.5 text-accent" />
-                          </Dropdown.ItemIndicator>
-                        </Dropdown.RadioItem>
-                      )}
-                    </For>
-                  </Dropdown.RadioGroup>
-                </Dropdown.Content>
-              </Dropdown>
-            </Show>
+                    {CALENDAR_VIEW_TABS.find(
+                      (view) => view.value === activeView()
+                    )?.label ?? 'Month'}
+                    <CaretDownIcon class="size-3 text-ink-muted" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Content class="min-w-28 p-1">
+                    <Dropdown.RadioGroup
+                      value={activeView()}
+                      onChange={changeView}
+                    >
+                      <For each={CALENDAR_VIEW_TABS}>
+                        {(view) => (
+                          <Dropdown.RadioItem closeOnSelect value={view.value}>
+                            {view.label}
+                            <Dropdown.ItemIndicator class="ml-auto">
+                              <CheckIcon class="size-3.5 text-accent" />
+                            </Dropdown.ItemIndicator>
+                          </Dropdown.RadioItem>
+                        )}
+                      </For>
+                    </Dropdown.RadioGroup>
+                  </Dropdown.Content>
+                </Dropdown>
+              </Show>
+            </div>
           </div>
+          <ResponsiveCalendarHost
+            onNarrowDayHeadersChange={props.onNarrowDayHeadersChange}
+          />
         </div>
-        <ResponsiveCalendarHost
-          onNarrowDayHeadersChange={props.onNarrowDayHeadersChange}
-        />
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
