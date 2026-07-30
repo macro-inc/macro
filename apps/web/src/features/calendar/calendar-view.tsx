@@ -43,6 +43,19 @@ const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
 
+function getLocalScrollTime() {
+  const now = new Date();
+  const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+  const scrollMinutes = Math.max(
+    0,
+    Math.floor((minutesSinceMidnight - 60) / 30) * 30
+  );
+  const hours = Math.floor(scrollMinutes / 60);
+  const minutes = scrollMinutes % 60;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+}
+
 interface ResponsiveCalendarHostProps {
   onNarrowDayHeadersChange: (useNarrowDayHeaders: boolean) => void;
 }
@@ -71,8 +84,29 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
         });
         resizeObserver.observe(calendarElement);
 
+        const handleCalendarScroll = (event: Event) => {
+          const scroller = event.target;
+          if (!(scroller instanceof HTMLElement)) return;
+
+          const harness = scroller.closest(
+            '.fc-scroller-harness-liquid'
+          ) as HTMLElement | null;
+          if (!harness || scroller.parentElement !== harness) return;
+
+          harness.toggleAttribute(
+            'data-scrolled-from-top',
+            scroller.scrollTop > 1
+          );
+        };
+        calendarElement.addEventListener('scroll', handleCalendarScroll, true);
+
         onCleanup(() => {
           resizeObserver.disconnect();
+          calendarElement.removeEventListener(
+            'scroll',
+            handleCalendarScroll,
+            true
+          );
           if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
         });
       }
@@ -85,7 +119,7 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
         setElement(calendarElement);
         props.onNarrowDayHeadersChange(calendarElement.clientWidth < 520);
       }}
-      class="min-w-0 min-h-0 flex-1"
+      class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl border border-edge-muted"
     />
   );
 }
@@ -104,18 +138,33 @@ export function CalendarView() {
       handleWindowResize={false}
       nowIndicator
       headerToolbar={false}
+      scrollTime={getLocalScrollTime()}
+      scrollTimeReset={false}
       dayHeaderFormat={{
         weekday: useNarrowDayHeaders() ? 'narrow' : 'short',
       }}
     >
       <FullCalendar.DayHeaderContent>
-        {({ date, text, view }) =>
-          view.type === 'timeGridWeek'
-            ? `${formatWeekdayHeader[
-                useNarrowDayHeaders() ? 'narrow' : 'short'
-              ](date)} ${formatDayNumber(date)}`
-            : text
-        }
+        {({ date, text, view }) => {
+          if (view.type === 'timeGridWeek' || view.type === 'timeGridDay') {
+            const weekday =
+              view.type === 'timeGridDay'
+                ? formatWeekdayHeader.short(date)
+                : formatWeekdayHeader[
+                    useNarrowDayHeaders() ? 'narrow' : 'short'
+                  ](date);
+
+            return (
+              <>
+                <span class="calendar-day-header-weekday">{weekday}</span>{' '}
+                <span class="calendar-day-header-date">
+                  {formatDayNumber(date)}
+                </span>
+              </>
+            );
+          }
+          return text;
+        }}
       </FullCalendar.DayHeaderContent>
 
       <CalendarWorkspace onNarrowDayHeadersChange={setUseNarrowDayHeaders} />
@@ -137,14 +186,7 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
   const currentDate = () =>
     calendar.dateInfo()?.view.calendar.getDate() ?? initialDate;
   const activeView = () => calendar.dateInfo()?.view.type ?? 'dayGridMonth';
-  const dateTitle = () => {
-    const dateInfo = calendar.dateInfo();
-    if (!dateInfo) return formatMonthTitle(initialDate);
-
-    return dateInfo.view.type === 'timeGridWeek'
-      ? formatMonthTitle(dateInfo.view.calendar.getDate())
-      : dateInfo.view.title;
-  };
+  const dateTitle = () => formatMonthTitle(currentDate());
   const visibleRange = () => {
     const dateInfo = calendar.dateInfo();
     return dateInfo ? { end: dateInfo.end, start: dateInfo.start } : undefined;
@@ -176,22 +218,24 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
   };
 
   const renderPeriodNavigation = () => (
-    <div class="flex shrink-0 items-center gap-0.5">
+    <div class="flex shrink-0 items-center gap-1">
       <Button
-        size="icon-sm"
-        class="rounded-lg [&_svg]:size-3!"
+        variant="ghost"
+        size="icon-md"
+        class="rounded-lg [&_svg]:size-4!"
         label="Previous period"
         onClick={() => calendar.api()?.prev()}
       >
-        <CaretLeftIcon class="size-3" />
+        <CaretLeftIcon class="size-4" />
       </Button>
       <Button
-        size="icon-sm"
-        class="rounded-lg [&_svg]:size-3!"
+        variant="ghost"
+        size="icon-md"
+        class="rounded-lg [&_svg]:size-4!"
         label="Next period"
         onClick={() => calendar.api()?.next()}
       >
-        <CaretRightIcon class="size-3" />
+        <CaretRightIcon class="size-4" />
       </Button>
     </div>
   );
@@ -237,12 +281,17 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
         />
       </aside>
       <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
-        <div class="mb-4 flex min-w-0 items-center gap-3">
+        <div class="mb-3 flex min-w-0 items-center gap-3 border-b border-edge-muted pb-3">
           <div class="flex shrink-0 items-center gap-1">
             <Button
               variant={isTodayVisible() ? 'base' : 'active'}
-              size="sm"
-              class={isTodayVisible() ? 'rounded-lg bg-surface' : 'rounded-lg'}
+              size="md"
+              class={
+                isTodayVisible()
+                  ? 'rounded-lg bg-surface px-3'
+                  : 'rounded-lg px-3'
+              }
+              depth={2}
               label="Go to today"
               onClick={() => calendar.api()?.today()}
             >
@@ -250,7 +299,7 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
             </Button>
             {renderPeriodNavigation()}
           </div>
-          <div class="min-w-0 truncate text-xl font-bold leading-tight text-ink">
+          <div class="min-w-0 flex-1 truncate text-xl font-bold leading-tight tracking-tight text-ink">
             {dateTitle()}
           </div>
           <div class="ml-auto shrink-0">
