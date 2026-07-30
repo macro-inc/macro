@@ -2,7 +2,11 @@
  * @vitest-environment jsdom
  */
 
-import { Calendar, type EventContentArg } from '@fullcalendar/core';
+import {
+  Calendar,
+  type DatesSetArg,
+  type EventContentArg,
+} from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import { render, screen, waitFor } from '@solidjs/testing-library';
 import {
@@ -13,11 +17,7 @@ import {
   useContext,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  FullCalendar,
-  type FullCalendarRef,
-  useFullCalendar,
-} from './FullCalendar';
+import { FullCalendar, useFullCalendar } from './FullCalendar';
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -43,7 +43,7 @@ describe('FullCalendar Solid connector', () => {
 
       return (
         <span data-testid="event-content">
-          {appValue}: {calendar.getApi().view.type}: {prefix()}:{' '}
+          {appValue}: {calendar.api()?.view.type}: {prefix()}:{' '}
           {props.event.event.title}
         </span>
       );
@@ -84,20 +84,25 @@ describe('FullCalendar Solid connector', () => {
     );
   });
 
-  it('reacts to root options and exposes the calendar API', async () => {
+  it('reacts to root options and exposes the calendar API through context', async () => {
     const [events, setEvents] = createSignal([
       { id: 'first', title: 'First', start: '2025-01-15' },
     ]);
-    const [calendarRef, setCalendarRef] = createSignal<FullCalendarRef>();
+    let calendarContext: ReturnType<typeof useFullCalendar> | undefined;
+
+    function CalendarContextCapture() {
+      calendarContext = useFullCalendar();
+      return null;
+    }
+
     const getCalendar = () => {
-      const ref = calendarRef();
-      if (!ref) throw new Error('Calendar ref was not set');
-      return ref.getApi();
+      const api = calendarContext?.api();
+      if (!api) throw new Error('Calendar API was not set');
+      return api;
     };
 
     render(() => (
       <FullCalendar.Root
-        ref={setCalendarRef}
         plugins={[dayGridPlugin]}
         initialView="dayGridMonth"
         initialDate="2025-01-15"
@@ -105,6 +110,7 @@ describe('FullCalendar Solid connector', () => {
         handleWindowResize={false}
         events={events()}
       >
+        <CalendarContextCapture />
         <FullCalendar.Host />
       </FullCalendar.Root>
     ));
@@ -124,6 +130,48 @@ describe('FullCalendar Solid connector', () => {
           .map((event) => event.title)
       ).toEqual(['Updated']);
     });
+  });
+
+  it('exposes date info before invoking the datesSet callback', () => {
+    let calendarContext: ReturnType<typeof useFullCalendar> | undefined;
+
+    function CalendarContextCapture() {
+      calendarContext = useFullCalendar();
+      return null;
+    }
+
+    const datesSet = vi.fn((dateInfo: DatesSetArg) => {
+      expect(calendarContext?.dateInfo()).toBe(dateInfo);
+    });
+
+    const { unmount } = render(() => (
+      <FullCalendar.Root
+        plugins={[dayGridPlugin]}
+        initialView="dayGridMonth"
+        initialDate="2025-01-15"
+        headerToolbar={false}
+        handleWindowResize={false}
+        datesSet={datesSet}
+      >
+        <CalendarContextCapture />
+        <FullCalendar.Host />
+      </FullCalendar.Root>
+    ));
+
+    expect(datesSet).toHaveBeenCalledOnce();
+    expect(calendarContext?.dateInfo()?.view.type).toBe('dayGridMonth');
+    expect(calendarContext?.api()?.view.type).toBe('dayGridMonth');
+
+    const initialStart = calendarContext?.dateInfo()?.start.getTime();
+    calendarContext?.api()?.next();
+
+    expect(datesSet).toHaveBeenCalledTimes(2);
+    expect(calendarContext?.dateInfo()?.start.getTime()).not.toBe(initialStart);
+
+    unmount();
+
+    expect(calendarContext?.api()).toBeUndefined();
+    expect(calendarContext?.dateInfo()).toBeUndefined();
   });
 
   it('reacts to content children and dynamically registers them', async () => {

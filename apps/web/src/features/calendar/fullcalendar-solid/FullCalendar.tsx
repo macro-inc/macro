@@ -3,6 +3,7 @@ import {
   Calendar,
   type CalendarApi,
   type CalendarOptions,
+  type DatesSetArg,
   type DayCellContentArg,
   type DayHeaderContentArg,
   type EventContentArg,
@@ -72,8 +73,6 @@ export type FullCalendarOptions = Omit<
 export type FullCalendarRootProps = FullCalendarOptions & {
   /** Calendar controls, content registrations, and a `FullCalendar.Host`. */
   children?: JSX.Element;
-  /** Receives the connector API after a host has mounted. */
-  ref?: (component: FullCalendarRef) => void;
 };
 
 /** Props for the DOM element owned by FullCalendar. */
@@ -85,18 +84,12 @@ export type FullCalendarHostProps = Omit<
   ref?: (element: HTMLDivElement) => void;
 };
 
-/** Imperative API exposed by a `FullCalendar.Root` ref. */
-export interface FullCalendarRef {
-  /** Returns FullCalendar's imperative calendar API. */
-  getApi(): CalendarApi;
-}
-
 /** Public state and API available to descendants of `FullCalendar.Root`. */
 export interface FullCalendarContextValue {
   /** The mounted FullCalendar API, or `undefined` before a host mounts. */
   api: Accessor<CalendarApi | undefined>;
-  /** Returns the mounted FullCalendar API. */
-  getApi(): CalendarApi;
+  /** The latest date information emitted by FullCalendar. */
+  dateInfo: Accessor<DatesSetArg | undefined>;
 }
 
 interface SolidRenderingMeta {
@@ -156,11 +149,8 @@ const FullCalendarContext = createContext<FullCalendarController>();
  * options. Descendants determine where the calendar and custom content render.
  */
 export function FullCalendarRoot(props: FullCalendarRootProps) {
-  const [local, options] = splitProps(props, ['children', 'ref']);
-  const controller = createFullCalendarController(
-    () => ({ ...options }),
-    () => local.ref
-  );
+  const [local, options] = splitProps(props, ['children']);
+  const controller = createFullCalendarController(() => ({ ...options }));
 
   onCleanup(() => controller.destroy());
 
@@ -269,10 +259,10 @@ function useFullCalendarController(): FullCalendarController {
 }
 
 function createFullCalendarController(
-  getOptions: Accessor<FullCalendarOptions>,
-  getRef: Accessor<FullCalendarRootProps['ref']>
+  getOptions: Accessor<FullCalendarOptions>
 ): FullCalendarController {
   const [calendar, setCalendar] = createSignal<Calendar>();
+  const [dateInfo, setDateInfo] = createSignal<DatesSetArg>();
   const [hostElement, setHostElement] = createSignal<HTMLDivElement>();
   const [resizeFrame, setResizeFrame] = createSignal<number>();
   const [isUnmounting, setIsUnmounting] = createSignal(false);
@@ -301,19 +291,12 @@ function createFullCalendarController(
     customRenderingManager.handle(rendering);
   };
 
-  const getApi = () => {
-    const calendarInstance = calendar();
-    if (!calendarInstance) throw new Error('FullCalendar has not mounted');
-    return calendarInstance;
-  };
-
-  const componentRef: FullCalendarRef = { getApi };
-
   const buildOptions = () =>
     buildCalendarOptions(
       getOptions(),
       contentRegistrations,
-      handleCustomRendering
+      handleCustomRendering,
+      setDateInfo
     );
 
   const resetOptions = () => {
@@ -338,18 +321,19 @@ function createFullCalendarController(
     }
     calendar()?.destroy();
     setCalendar(undefined);
+    setDateInfo(undefined);
     setHostElement(undefined);
     customRenderingManager.destroy();
   };
 
   return {
     api: calendar,
+    dateInfo,
     destroy() {
       const mountedHostElement = hostElement();
       if (mountedHostElement) unmount(mountedHostElement);
       contentRegistrations.clear();
     },
-    getApi,
     mount(element) {
       if (hostElement()) {
         throw new Error('FullCalendar.Root can only contain one mounted host');
@@ -364,7 +348,6 @@ function createFullCalendarController(
       const calendarInstance = new Calendar(element, initialOptions.options);
       setCalendar(calendarInstance);
       calendarInstance.render();
-      mergeRefs(getRef())(componentRef);
     },
     registerContent(optionName, generator, owner) {
       if (contentRegistrations.has(optionName)) {
@@ -401,10 +384,17 @@ function createFullCalendarController(
 function buildCalendarOptions(
   rootOptions: FullCalendarOptions,
   contentRegistrations: Map<SolidContentOptionName, ContentRegistration>,
-  handleCustomRendering: (rendering: AnyCustomRendering) => void
+  handleCustomRendering: (rendering: AnyCustomRendering) => void,
+  setDateInfo: (dateInfo: DatesSetArg) => void
 ): BuiltCalendarOptions {
   const options = { ...rootOptions } as Record<string, unknown>;
+  const externalDatesSet = rootOptions.datesSet;
   const customRenderingMetaMap: Record<string, SolidRenderingMeta> = {};
+
+  options.datesSet = (dateInfo: DatesSetArg) => {
+    setDateInfo(dateInfo);
+    externalDatesSet?.(dateInfo);
+  };
 
   for (const [optionName, registration] of contentRegistrations) {
     customRenderingMetaMap[optionName] = createSolidRenderingMeta(

@@ -10,7 +10,6 @@ export {
   FullCalendarMoreLinkContent,
   FullCalendarNowIndicatorContent,
   type FullCalendarOptions,
-  type FullCalendarRef,
   FullCalendarRoot,
   type FullCalendarRootProps,
   FullCalendarSlotLabelContent,
