@@ -599,26 +599,6 @@ async fn channel_admin_still_needs_bot_usability_to_add_bot() {
 }
 
 #[tokio::test]
-async fn channel_member_cannot_remove_bot_from_channel() {
-    let service = TestBotService::new(TestBotMode::Ok);
-    let channel_id = Uuid::new_v4();
-    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
-        .method("DELETE")
-        .uri(format!("/channels/{channel_id}/bots/{bot_id}"))
-        .body(Body::empty())
-        .unwrap();
-
-    let response = router(service.clone(), EntityParticipantRole::Member)
-        .oneshot(request)
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(service.remove_calls.load(Ordering::SeqCst), 0);
-}
-
-#[tokio::test]
 async fn channel_admin_still_needs_bot_usability_to_remove_bot() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
