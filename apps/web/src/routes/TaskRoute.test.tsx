@@ -32,6 +32,11 @@ vi.mock('@service-storage/client', () => ({
 }));
 
 vi.mock('@solidjs/router', () => ({
+  // Mirrors the real Navigate component: a replace navigation on render.
+  Navigate: (props: { href: string }) => {
+    mocks.navigate(props.href, { replace: true });
+    return null;
+  },
   useNavigate: () => mocks.navigate,
   useParams: () => ({
     get taskSlug() {

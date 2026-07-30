@@ -4,7 +4,7 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { useTeamTaskQuery } from '@queries/storage/team-task';
-import { useNavigate, useParams } from '@solidjs/router';
+import { Navigate, useNavigate, useParams } from '@solidjs/router';
 import { Button } from '@ui';
 import { createEffect, createMemo, Match, on, Show, Switch } from 'solid-js';
 
@@ -40,12 +40,6 @@ export function TaskRoute() {
     })
   );
 
-  createEffect(
-    on(documentId, (id) => {
-      if (id) navigate(`/task/${id}`, { replace: true });
-    })
-  );
-
   return (
     <Switch fallback={<LoadingBlock />}>
       <Match when={isAuthenticated() !== true}>
@@ -54,13 +48,16 @@ export function TaskRoute() {
       <Match when={!isValidSlug()}>
         <TaskRouteError notFound />
       </Match>
+      <Match when={documentId()}>
+        {(id) => <Navigate href={`/task/${id()}`} />}
+      </Match>
       <Match when={taskQuery.isError && !taskQuery.isFetching}>
         <TaskRouteError
           notFound={taskNotFound()}
           onRetry={() => void taskQuery.refetch()}
         />
       </Match>
-      <Match when={taskQuery.isSuccess && !documentId()}>
+      <Match when={taskQuery.isSuccess}>
         <TaskRouteError
           notFound={false}
           onRetry={() => void taskQuery.refetch()}
