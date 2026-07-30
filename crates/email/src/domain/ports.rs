@@ -524,8 +524,8 @@ pub trait EmailService: Send + Sync + 'static {
     /// Mark a caller-accessible thread as seen and read.
     fn mark_thread_seen(
         &self,
-        macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
@@ -533,10 +533,10 @@ pub trait EmailService: Send + Sync + 'static {
     /// Add or remove a label from a caller-accessible thread.
     fn update_thread_labels_for_user(
         &self,
-        macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
-        label_id: Uuid,
-        add: bool,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+        _label_id: Uuid,
+        _add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
