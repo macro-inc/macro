@@ -237,11 +237,23 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
         />
       </aside>
       <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
-        <div class="mb-6 flex min-w-0 items-center gap-3">
+        <div class="mb-4 flex min-w-0 items-center gap-3">
+          <div class="flex shrink-0 items-center gap-1">
+            <Button
+              variant={isTodayVisible() ? 'base' : 'active'}
+              size="sm"
+              class={isTodayVisible() ? 'rounded-lg bg-surface' : 'rounded-lg'}
+              label="Go to today"
+              onClick={() => calendar.api()?.today()}
+            >
+              Today
+            </Button>
+            {renderPeriodNavigation()}
+          </div>
           <div class="min-w-0 truncate text-xl font-bold leading-tight text-ink">
             {dateTitle()}
           </div>
-          <div class="ml-auto flex shrink-0 items-center gap-1">
+          <div class="ml-auto shrink-0">
             <Show
               when={usePeriodDropdown()}
               fallback={
@@ -282,16 +294,6 @@ function CalendarWorkspace(props: ResponsiveCalendarHostProps) {
                 </Dropdown.Content>
               </Dropdown>
             </Show>
-            <Button
-              variant={isTodayVisible() ? 'base' : 'active'}
-              size="sm"
-              class={isTodayVisible() ? 'rounded-lg bg-surface' : 'rounded-lg'}
-              label="Go to today"
-              onClick={() => calendar.api()?.today()}
-            >
-              Today
-            </Button>
-            {renderPeriodNavigation()}
           </div>
         </div>
         <ResponsiveCalendarHost

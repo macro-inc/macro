@@ -193,6 +193,20 @@ function MonthMenu(props: { month: Date; onChange: (month: Date) => void }) {
   );
 }
 
+type HighlightedRange = { start: Date; end: Date };
+
+const isDateInRange = (date: Date, range: HighlightedRange | undefined) =>
+  range !== undefined && date >= range.start && date < range.end;
+
+const offsetDate = (date: Date, days: number) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
+const isRangeStart = (date: Date, range: HighlightedRange | undefined) =>
+  isDateInRange(date, range) && !isDateInRange(offsetDate(date, -1), range);
+
+const isRangeEnd = (date: Date, range: HighlightedRange | undefined) =>
+  isDateInRange(date, range) && !isDateInRange(offsetDate(date, 1), range);
+
 export type CalendarProps = Omit<
   CorvuCalendarRootSingleProps,
   'children' | 'mode'
@@ -200,7 +214,7 @@ export type CalendarProps = Omit<
   /** Additional classes applied to the calendar container. */
   class?: string;
   /** Optional end-exclusive date range to highlight. */
-  highlightedRange?: { start: Date; end: Date };
+  highlightedRange?: HighlightedRange;
 };
 
 /** An accessible, single-date calendar styled with the app's semantic tokens. */
@@ -279,17 +293,32 @@ export function Calendar(props: CalendarProps) {
                   <tr>
                     <Index each={week()}>
                       {(day) => (
-                        <CorvuCalendar.Cell class="p-0 text-center">
+                        <CorvuCalendar.Cell
+                          class="p-0 text-center data-highlighted-range:bg-active data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
+                          data-highlighted-range={
+                            isDateInRange(day(), local.highlightedRange)
+                              ? ''
+                              : undefined
+                          }
+                          data-highlighted-range-end={
+                            isRangeEnd(day(), local.highlightedRange)
+                              ? ''
+                              : undefined
+                          }
+                          data-highlighted-range-start={
+                            isRangeStart(day(), local.highlightedRange)
+                              ? ''
+                              : undefined
+                          }
+                        >
                           <CorvuCalendar.CellTrigger
                             day={day()}
                             data-highlighted-range={
-                              local.highlightedRange &&
-                              day() >= local.highlightedRange.start &&
-                              day() < local.highlightedRange.end
+                              isDateInRange(day(), local.highlightedRange)
                                 ? ''
                                 : undefined
                             }
-                            class="mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:font-semibold data-highlighted-range:bg-active data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
+                            class="mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:font-semibold data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
                           >
                             {day().getDate()}
                           </CorvuCalendar.CellTrigger>

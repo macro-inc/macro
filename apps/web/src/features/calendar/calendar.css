@@ -94,6 +94,13 @@
   color: var(--color-ink-disabled);
 }
 
+.calendar-view .fc .fc-daygrid-day.fc-day-sat,
+.calendar-view .fc .fc-daygrid-day.fc-day-sun,
+.calendar-view .fc .fc-timegrid-col.fc-day-sat,
+.calendar-view .fc .fc-timegrid-col.fc-day-sun {
+  background: color-mix(in oklch, var(--color-hover) 45%, transparent);
+}
+
 .calendar-view .fc .fc-daygrid-day-frame {
   min-height: 4rem;
 }
@@ -102,6 +109,28 @@
 .calendar-view .fc .fc-timegrid-slot-label-cushion {
   color: var(--color-ink-extra-muted);
   font-size: 0.6875rem;
+}
+
+.calendar-view .fc .fc-timegrid-now-indicator-line {
+  border-top-width: 1px;
+  opacity: 0.9;
+}
+
+.calendar-view .fc .fc-timegrid-now-indicator-arrow {
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-accent);
+}
+
+.calendar-view .fc-direction-ltr .fc-timegrid-now-indicator-arrow {
+  left: -0.25rem;
+}
+
+.calendar-view .fc-direction-rtl .fc-timegrid-now-indicator-arrow {
+  right: -0.25rem;
 }
 
 @container calendar-view (min-width: 880px) {
