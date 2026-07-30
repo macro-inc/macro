@@ -50,10 +50,6 @@ function $testSelectionPosition(
  * Returns true if the selection is at the start of an element that matches
  * `isMatchingElement`, or is directly preceded by a line break.
  *
- * `isMatchingElement` is used in place of a hard-coded paragraph check so the
- * same start-of-element logic can be reused across different element node
- * types (e.g. paragraphs, headings).
- *
  * When `emptyOnly` is true (the default), the element must also be empty for
  * this to return true. Pass `false` to match the start of the element
  * regardless of whether it has content (e.g. Enter from the 0th char of a
