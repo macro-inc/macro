@@ -11,7 +11,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
-import { createEffect, createSignal, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
@@ -31,10 +31,65 @@ import type {
 export function Discussion() {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
+  let sectionRef: HTMLElement | undefined;
 
   // Deep-linking to a comment expands the discussion.
   createEffect(() => {
     if (source.targetCommentId() !== null) setIsExpanded(true);
+  });
+
+  createEffect(() => {
+    const targetCommentId = source.targetCommentId();
+    if (!targetCommentId) return;
+
+    const targetThread = source
+      .threads()
+      .find((thread) =>
+        thread.comments.some((comment) => comment.id === targetCommentId)
+      );
+    if (!targetThread) return;
+
+    setIsExpanded(true);
+
+    const startedAt = performance.now();
+    let firstFoundAt: number | undefined;
+    let frame: number | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    const scrollToTarget = (behavior: ScrollBehavior) => {
+      const target = sectionRef?.querySelector<HTMLElement>(
+        `[data-discussion-comment-id="${targetCommentId}"]`
+      );
+      if (!target) return false;
+
+      target.scrollIntoView({ behavior, block: 'center' });
+      return true;
+    };
+
+    const queueScroll = () => {
+      frame = requestAnimationFrame(() => {
+        const now = performance.now();
+        const found = scrollToTarget(
+          firstFoundAt === undefined ? 'smooth' : 'auto'
+        );
+        if (found && firstFoundAt === undefined) firstFoundAt = now;
+
+        const shouldKeepTrying =
+          firstFoundAt === undefined
+            ? now - startedAt < 2000
+            : now - firstFoundAt < 500;
+        if (!shouldKeepTrying) return;
+
+        timeout = setTimeout(queueScroll, found ? 80 : 50);
+      });
+    };
+
+    queueScroll();
+
+    onCleanup(() => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      if (timeout) clearTimeout(timeout);
+    });
   });
 
   let newThreadInputHandle: { clear: () => void } | undefined;
@@ -47,7 +102,7 @@ export function Discussion() {
   };
 
   return (
-    <section class="mt-3 pb-12">
+    <section ref={sectionRef} class="mt-3 pb-12">
       <div class="flex items-center gap-2">
         <div class="w-6 border-t border-edge-muted" />
         <button
@@ -283,14 +338,18 @@ function DiscussionMessageView(props: {
   const messageData = () => discussionCommentToMessageData(props.comment);
 
   let containerRef: HTMLDivElement | undefined;
-  onMount(() => {
-    if (props.isHighlighted) {
+
+  createEffect(() => {
+    if (!props.isHighlighted) return;
+
+    const frame = requestAnimationFrame(() => {
       containerRef?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
   });
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} data-discussion-comment-id={props.comment.id}>
       <Show
         when={!isEditing()}
         fallback={

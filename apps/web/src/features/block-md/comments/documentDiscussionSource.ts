@@ -75,7 +75,19 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const threads = createMemo(() =>
     (discussionThreads() ?? []).map(toViewThread)
   );
-  const targetCommentId = createMemo(() => urlParams.commentId() ?? null);
+  const targetCommentId = createMemo(
+    () => {
+      const commentId = urlParams.commentId();
+      if (!commentId) return null;
+
+      const hasDiscussionComment = threads().some((thread) =>
+        thread.comments.some((comment) => comment.id === commentId)
+      );
+      return hasDiscussionComment ? commentId : null;
+    },
+    undefined,
+    { equals: false }
+  );
 
   return {
     threads,
