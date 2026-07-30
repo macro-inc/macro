@@ -5,9 +5,13 @@
 	--fc-neutral-bg-color: var(--color-hover);
 	--fc-neutral-text-color: var(--color-ink-muted);
 	--fc-border-color: var(--color-edge-muted);
-	--fc-event-bg-color: var(--color-calendar);
+	--fc-event-bg-color: color-mix(
+		in oklch,
+		var(--color-calendar) 5%,
+		var(--color-surface)
+	);
 	--fc-event-border-color: var(--color-calendar);
-	--fc-event-text-color: var(--color-surface);
+	--fc-event-text-color: var(--color-calendar);
 	--fc-highlight-color: var(--color-accent-bg);
 	--fc-today-bg-color: transparent;
 	--fc-now-indicator-color: var(--color-accent);

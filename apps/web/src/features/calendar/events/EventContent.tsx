@@ -18,7 +18,7 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
     <Show
       when={!isCompact()}
       fallback={
-        <div class="flex min-w-0 items-center gap-1 overflow-hidden px-1 py-0.5 text-[0.6875rem] leading-tight text-surface">
+        <div class="flex min-w-0 items-center gap-1 overflow-hidden px-1 py-0.5 text-[0.6875rem] leading-tight">
           <Show when={props.renderProps.timeText}>
             {(timeText) => (
               <span class="shrink-0 font-semibold tabular-nums">
@@ -30,7 +30,7 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
         </div>
       }
     >
-      <div class="flex size-full min-h-0 flex-col overflow-hidden p-1 text-surface">
+      <div class="flex size-full min-h-0 flex-col overflow-hidden p-1">
         <span class="truncate text-xs font-semibold leading-tight">
           {props.event.title}
         </span>
