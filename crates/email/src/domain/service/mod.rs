@@ -464,13 +464,14 @@ where
     }
 }
 
-impl<T, U, E, CS, Eam> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam>
+impl<T, U, E, CS, Eam, B> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
     CS: CrmService,
     Eam: EntityAccessManagementService,
+    B: MacroEventBroker,
     anyhow::Error: From<T::Err>,
 {
     async fn get_latest_messages_parsed(
