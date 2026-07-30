@@ -4,7 +4,6 @@ import type { EventName } from '../src/events/types';
 import { Macro } from '../src/macro';
 
 const localEndpoint = 'http://host.docker.internal:8787/macro-events';
-const defaultEvents = 'channel.message_posted';
 
 const { positionals, values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -40,17 +39,12 @@ switch (command) {
 }
 
 async function register(): Promise<void> {
-  const env = parseEnv(values.env) ?? askEnv();
+  const env = parseEnv(values.env) ?? fail('--env is required');
   const endpointUrl =
     values.url ??
     ask('Webhook endpoint URL', env === 'local' ? localEndpoint : undefined);
   const name = values.name ?? ask('Webhook name', 'macro-sdk-webhook');
-  const events = (
-    values.events ?? ask('Events, comma separated', defaultEvents)
-  )
-    .split(',')
-    .map((event) => event.trim())
-    .filter(Boolean) as EventName[];
+  const events = parseEvents(values.events ?? fail('--events is required'));
   const scope = parseScope(values.scope) ?? askScope();
   if (events.length === 0) fail('at least one event is required');
 
@@ -77,7 +71,7 @@ MACRO_WEBHOOK_SECRET=<the value above> bun run webhook receive ${webhook.id} --e
 }
 
 async function receive(id: string): Promise<void> {
-  const env = parseEnv(values.env) ?? askEnv();
+  const env = parseEnv(values.env) ?? fail('--env is required');
   const secret =
     process.env.MACRO_WEBHOOK_SECRET ?? ask('Webhook signing secret');
   const port = parsePort(values.port ?? '8787');
@@ -116,11 +110,11 @@ function printHelp(): void {
   console.log(`
 Register a webhook or receive and print its events.
 
-  webhook register [--env <dev|prod|local>] [--url <endpoint URL>]
-                   [--name <webhook name>] [--events <event,event>]
+  webhook register --env <dev|prod|local> [--url <endpoint URL>]
+                   [--name <webhook name>] --events <event,event>
                    [--scope <user|team>]
 
-  webhook receive <webhook-id> [--env <dev|prod|local>] [--port <port>]
+  webhook receive <webhook-id> --env <dev|prod|local> [--port <port>]
 
 For just run_local, register ${localEndpoint}. Run receive on the Docker host
 with MACRO_WEBHOOK_SECRET set to the value printed by register.
@@ -136,17 +130,6 @@ function ask(label: string, defaultValue?: string): string {
   return value;
 }
 
-function askEnv(): Env {
-  return (
-    parseEnv(
-      ask(
-        'Macro environment (dev, prod, local)',
-        process.env.MACRO_ENV ?? 'dev',
-      ),
-    ) ?? fail('Macro environment is required')
-  );
-}
-
 function askScope(): 'user' | 'team' {
   return (
     parseScope(ask('Webhook scope (user, team)', 'user')) ??
@@ -158,6 +141,15 @@ function parseEnv(value: string | undefined): Env | undefined {
   if (value === undefined) return undefined;
   if (value === 'dev' || value === 'prod' || value === 'local') return value;
   fail('Macro environment must be dev, prod, or local');
+}
+
+function parseEvents(value: string): EventName[] {
+  const events = value
+    .split(',')
+    .map((event) => event.trim())
+    .filter(Boolean) as EventName[];
+  if (events.length === 0) fail('--events must contain at least one event');
+  return events;
 }
 
 function parsePort(value: string): number {
