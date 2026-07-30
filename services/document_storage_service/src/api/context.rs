@@ -286,7 +286,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     DynamoBulkUploadAdapter,
     ShaCountAdapter,
     EntityAccessManagementService,
-    SqsProjectSearchIndexer,
+    SqsProjectSearchIndexer<DssEventBroker>,
     DssEventBroker,
 >;
 
