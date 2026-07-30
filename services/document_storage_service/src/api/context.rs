@@ -391,7 +391,7 @@ pub(crate) type DssEntityMutationService =
         ProjectService,
         EntityAccessService,
         FavoritesServiceType,
-        crate::outbound::entity_mutation::DssEntityLifecycleAdapter,
+        crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
 
 /// Type alias for the favorites service.

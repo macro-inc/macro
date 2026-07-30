@@ -1010,6 +1010,7 @@ async fn main() -> anyhow::Result<()> {
                 db.clone(),
                 redis_sha_client.clone(),
                 sqs_client.clone(),
+                macro_event_broker.clone(),
             )),
         ));
 

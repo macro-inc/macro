@@ -5,14 +5,17 @@ use std::sync::Arc;
 
 use crate::{
     api::util::count_occurrences,
-    service::entity_mutation::{EntityLifecycleService, LifecycleError},
+    service::{
+        document_event_publisher::publish_document_purged_event,
+        entity_mutation::{EntityLifecycleService, LifecycleError},
+    },
 };
 use entity_mutation::EntityMutationActor;
+use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::PgPool;
-use sqs_client::search::{SearchQueueMessage, document::DocumentId};
 
 /// Wrap a legacy client failure as an internal lifecycle error.
 macro_rules! internal {
@@ -30,20 +33,26 @@ fn row_error(error: sqlx::Error) -> LifecycleError {
 }
 
 /// Production lifecycle adapter backed by the legacy persistence clients.
-pub struct DssEntityLifecycleAdapter {
+pub struct DssEntityLifecycleAdapter<B: MacroEventBroker> {
     db: PgPool,
     redis: Arc<Redis>,
     sqs: Arc<sqs_client::SQS>,
+    event_broker: B,
 }
 
-impl DssEntityLifecycleAdapter {
+impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
     /// Construct the adapter from concrete outbound dependencies.
-    pub fn new(db: PgPool, redis: Arc<Redis>, sqs: Arc<sqs_client::SQS>) -> Self {
-        Self { db, redis, sqs }
+    pub fn new(db: PgPool, redis: Arc<Redis>, sqs: Arc<sqs_client::SQS>, event_broker: B) -> Self {
+        Self {
+            db,
+            redis,
+            sqs,
+            event_broker,
+        }
     }
 }
 
-impl EntityLifecycleService for DssEntityLifecycleAdapter {
+impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B> {
     async fn update_thread_share_policy(
         &self,
         _actor: &EntityMutationActor,
@@ -133,11 +142,7 @@ impl EntityLifecycleService for DssEntityLifecycleAdapter {
             .enqueue_document_delete(document.owner.as_ref(), &entity.entity_id)
             .await
             .map_err(|error| internal!(error))?;
-        self.sqs
-            .send_message_to_search_event_queue(SearchQueueMessage::RemoveDocument(DocumentId {
-                document_id: entity.entity_id.to_string(),
-            }))
-            .await
+        publish_document_purged_event(&self.event_broker, &entity.entity_id)
             .map_err(|error| internal!(error))?;
         Ok(document
             .project_id
