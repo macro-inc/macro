@@ -1,6 +1,7 @@
 use crate::api::context::ApiContext;
 use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::api::util::count_occurrences;
+use crate::service::document_event_publisher::publish_document_purged_event;
 use axum::Json;
 use axum::extract::State;
 use axum::response::Response;
@@ -15,7 +16,6 @@ use model::response::{
 };
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use serde::Deserialize;
-use sqs_client::search::{SearchQueueMessage, document::DocumentId};
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -130,22 +130,16 @@ pub async fn permanently_delete_document_handler(
                 .into_response()
         })?;
 
-    state
-        .sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::RemoveDocument(DocumentId {
-            document_id,
-        }))
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to send message to search extractor queue");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to send message to search extractor queue".into(),
-                }),
-            )
-                .into_response()
-        })?;
+    publish_document_purged_event(&state.macro_event_broker, &document_id).map_err(|e| {
+        tracing::error!(error=?e, "unable to publish document purged event");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "unable to publish document purged event".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let response_data = GenericSuccessResponse { success: true };
 
