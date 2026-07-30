@@ -21,7 +21,8 @@ use channels::domain::{
 };
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
+    DocumentDeletedMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
     DocumentUpdatedMetadata,
 };
 use entity_access::domain::models::{
@@ -493,6 +494,38 @@ fn document_event_cases() -> Vec<EventCase> {
     ]
 }
 
+fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicEvent>)> {
+    vec![
+        (
+            "document.content_uploaded",
+            Event::new(DocumentTopicEvent::ContentUploaded(
+                DocumentContentUploadedMetadata {
+                    document_id: DOCUMENT_ID.to_string(),
+                    owner: user_id("macro|owner@example.com"),
+                    file_type: "pdf".parse().expect("valid file type"),
+                    document_version_id: Some("convert".to_string()),
+                },
+            )),
+        ),
+        (
+            "document.sync_content_updated",
+            Event::new(DocumentTopicEvent::SyncContentUpdated(
+                DocumentSyncContentUpdatedMetadata {
+                    document_id: DOCUMENT_ID.to_string(),
+                    file_type: "md".parse().expect("valid file type"),
+                    document_version_id: None,
+                },
+            )),
+        ),
+        (
+            "document.purged",
+            Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+            })),
+        ),
+    ]
+}
+
 fn channel_event_cases() -> Vec<EventCase> {
     let channel_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
     let message_id = Uuid::parse_str("55555555-5555-5555-5555-555555555555").unwrap();
@@ -823,6 +856,45 @@ async fn normalizes_and_matches_all_fourteen_event_variants() {
         assert!(message.event.occurred_at >= before_ingestion);
         assert!(message.event.occurred_at <= after_ingestion);
     }
+}
+
+#[tokio::test]
+async fn search_only_document_events_skip_webhook_delivery() {
+    let access = MockAccessService {
+        users: vec![user_id(PERSONAL_WORKSPACE_ID)],
+        failure: Some(AccessFailure::Internal),
+        calls: Arc::default(),
+    };
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
+    );
+    {
+        let mut state = lock(&repository.state);
+        state.fail_workspace_resolution = true;
+        state.fail_matching = true;
+    }
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    for (event_name, event) in search_only_document_event_cases() {
+        assert!(
+            normalized_document_event(&event)
+                .unwrap_or_else(|error| panic!("{event_name} normalization failed: {error}"))
+                .is_none(),
+            "{event_name} should not normalize to a public webhook event"
+        );
+        service
+            .ingest_document_event(event)
+            .await
+            .unwrap_or_else(|error| panic!("{event_name} ingestion failed: {error}"));
+    }
+
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert!(repository_state.workspace_calls.is_empty());
+    assert!(repository_state.match_calls.is_empty());
+    assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
 
 #[tokio::test]

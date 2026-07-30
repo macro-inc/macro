@@ -222,7 +222,7 @@ where
 
 fn normalized_document_event(
     event: &Event<DocumentTopicEvent>,
-) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
+) -> Result<Option<NormalizedWebhookEvent>, WebhookEventIngestionError> {
     let (event_name, entity_id) = match &event.event {
         DocumentTopicEvent::Created(metadata) => ("document.created", &metadata.document_id),
         DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
@@ -231,6 +231,9 @@ fn normalized_document_event(
         DocumentTopicEvent::Interaction(metadata) => {
             ("document.interaction", &metadata.document_id)
         }
+        DocumentTopicEvent::ContentUploaded(_)
+        | DocumentTopicEvent::SyncContentUpdated(_)
+        | DocumentTopicEvent::Purged(_) => return Ok(None),
     };
 
     if Uuid::parse_str(entity_id).is_err() {
@@ -241,14 +244,14 @@ fn normalized_document_event(
     }
 
     let broker_envelope = serde_json::to_value(event)?;
-    Ok(normalized_event(
+    Ok(Some(normalized_event(
         event.event_id,
         event.schema_version,
         event_name,
         DOCUMENT_ENTITY_TYPE,
         entity_id,
         broker_envelope,
-    ))
+    )))
 }
 
 fn normalized_channel_event(
@@ -369,7 +372,9 @@ where
         &self,
         event: Event<DocumentTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let event = normalized_document_event(&event)?;
+        let Some(event) = normalized_document_event(&event)? else {
+            return Ok(());
+        };
         self.resolve_entity_access_and_enqueue(event, EntityType::Document)
             .await
     }

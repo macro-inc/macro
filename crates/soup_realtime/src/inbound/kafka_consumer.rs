@@ -122,7 +122,10 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
-        DocumentTopicEvent::Interaction(_) => {}
+        DocumentTopicEvent::Interaction(_)
+        | DocumentTopicEvent::ContentUploaded(_)
+        | DocumentTopicEvent::SyncContentUpdated(_)
+        | DocumentTopicEvent::Purged(_) => {}
     }
     updates
 }
