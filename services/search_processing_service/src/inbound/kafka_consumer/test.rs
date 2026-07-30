@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use call::domain::events::{
+use ::call::domain::events::{
     CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
     CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
-    CallStartedMetadata,
+    CallStartedMetadata, CallTopicEvent,
 };
 use channels::domain::{
     broker_events::{
@@ -24,8 +24,16 @@ use projects::domain::events::{
     ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
     ProjectRestoredMetadata, ProjectTopicEvent, ProjectUpdatedMetadata, ProjectUploadedMetadata,
 };
+use uuid::Uuid;
 
-use super::*;
+use super::{
+    call::{CallEventDescription, CallIndexAction, describe_call_event},
+    channel::{ChannelEventDescription, ChannelIndexAction, describe_channel_event},
+    project::{
+        ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
+    },
+    *,
+};
 
 const CALL_ID: Uuid = Uuid::from_u128(1);
 const CHANNEL_ID: Uuid = Uuid::from_u128(2);

@@ -5,37 +5,40 @@
 //! committed without a handoff so they cannot wedge a partition. Processing is
 //! retried in-process; exhausted events are logged and dropped because their
 //! offsets are already committed.
+//!
+//! Per-entity event mapping and processing live in the [`call`], [`channel`],
+//! and [`project`] submodules; this module owns the poll loop, worker, retry
+//! policy, and commit semantics.
 
 #![allow(clippy::enum_variant_names)]
 
+mod call;
+mod channel;
+mod project;
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, future::Future, time::Duration};
+use std::{future::Future, time::Duration};
 
-use call::domain::events::{CallMacroEvent, CallTopicEvent};
-use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
+use ::call::domain::events::CallMacroEvent;
+use channels::domain::broker_events::ChannelMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
-    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
+    KafkaConsumerAdapter, MacroEventCollection as _, MacroEventConsumerService,
 };
 use opensearch_client::OpensearchClient;
-use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
+use projects::domain::events::ProjectMacroEvent;
 use rdkafka::{
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
 use sqlx::PgPool;
-use sqs_client::search::project::UpsertProject;
 use tokio::sync::mpsc;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
-use uuid::Uuid;
 
-use crate::process::{
-    call::{process_call_record, process_remove_call_record},
-    channel::{process_channel_message_update, process_remove_channel_message},
-    project::upsert_project,
+use self::{
+    call::process_call_event, channel::process_channel_event, project::process_project_event,
 };
 
 /// Consumer group used for live search-index event offsets.
@@ -70,47 +73,6 @@ struct ReceivedEvent {
     offset: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CallIndexAction {
-    Upsert { call_id: Uuid },
-    Remove { call_id: Uuid, channel_id: Uuid },
-    Ignore,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CallEventDescription {
-    action: CallIndexAction,
-    call_id: Uuid,
-    event_type: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ChannelIndexAction {
-    UpsertMessage { channel_id: Uuid, message_id: Uuid },
-    RemoveMessage { channel_id: Uuid, message_id: Uuid },
-    RemoveChannel { channel_id: Uuid },
-    Ignore,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ChannelEventDescription {
-    action: ChannelIndexAction,
-    channel_id: Uuid,
-    event_type: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum ProjectIndexAction {
-    Reconcile { project_ids: Vec<String> },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ProjectEventDescription<'a> {
-    action: ProjectIndexAction,
-    project_id: &'a str,
-    event_type: &'static str,
-}
-
 /// Outcome after the worker handles one decoded broker event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EventOutcome {
@@ -132,213 +94,6 @@ enum HandoffOutcome<E> {
     HandedOff,
     MalformedRecord(E),
     WorkerClosed,
-}
-
-fn describe_call_event(event: &CallTopicEvent) -> CallEventDescription {
-    match event {
-        CallTopicEvent::Started(metadata) => CallEventDescription {
-            action: CallIndexAction::Ignore,
-            call_id: metadata.call_id,
-            event_type: "call.started",
-        },
-        CallTopicEvent::RecordArchived(metadata) => CallEventDescription {
-            action: CallIndexAction::Upsert {
-                call_id: metadata.call_id,
-            },
-            call_id: metadata.call_id,
-            event_type: "call.record_archived",
-        },
-        CallTopicEvent::RecordUpdated(metadata) => CallEventDescription {
-            action: CallIndexAction::Upsert {
-                call_id: metadata.call_id,
-            },
-            call_id: metadata.call_id,
-            event_type: "call.record_updated",
-        },
-        CallTopicEvent::RecordDeleted(metadata) => CallEventDescription {
-            action: CallIndexAction::Remove {
-                call_id: metadata.call_id,
-                channel_id: metadata.channel_id,
-            },
-            call_id: metadata.call_id,
-            event_type: "call.record_deleted",
-        },
-        CallTopicEvent::RecordSummarized(metadata) => CallEventDescription {
-            action: CallIndexAction::Upsert {
-                call_id: metadata.call_id,
-            },
-            call_id: metadata.call_id,
-            event_type: "call.record_summarized",
-        },
-        CallTopicEvent::RecordingReady(metadata) => CallEventDescription {
-            action: CallIndexAction::Ignore,
-            call_id: metadata.call_id,
-            event_type: "call.recording_ready",
-        },
-    }
-}
-
-fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventDescription {
-    match event {
-        ChannelTopicEvent::Created(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::Ignore,
-            channel_id: metadata.channel_id,
-            event_type: "channel.created",
-        },
-        ChannelTopicEvent::Updated(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::Ignore,
-            channel_id: metadata.channel_id,
-            event_type: "channel.updated",
-        },
-        ChannelTopicEvent::Deleted(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::RemoveChannel {
-                channel_id: metadata.channel_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.deleted",
-        },
-        ChannelTopicEvent::MessagePosted(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_posted",
-        },
-        ChannelTopicEvent::MessagePatched(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_patched",
-        },
-        ChannelTopicEvent::MessageDeleted(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::RemoveMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_deleted",
-        },
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_attachment_created",
-        },
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_attachment_removed",
-        },
-        ChannelTopicEvent::ParticipantAdded(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::Ignore,
-            channel_id: metadata.channel_id,
-            event_type: "channel.participant_added",
-        },
-        ChannelTopicEvent::ParticipantRemoved(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::Ignore,
-            channel_id: metadata.channel_id,
-            event_type: "channel.participant_removed",
-        },
-    }
-}
-
-fn collect_project_ids<'a>(project_ids: impl IntoIterator<Item = Option<&'a str>>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut collected = Vec::new();
-
-    for project_id in project_ids.into_iter().flatten() {
-        if !project_id.is_empty() && seen.insert(project_id) {
-            collected.push(project_id.to_string());
-        }
-    }
-
-    collected
-}
-
-fn describe_project_event(event: &ProjectTopicEvent) -> ProjectEventDescription<'_> {
-    match event {
-        ProjectTopicEvent::Created(metadata) => ProjectEventDescription {
-            action: ProjectIndexAction::Reconcile {
-                project_ids: collect_project_ids([
-                    Some(metadata.project_id.as_str()),
-                    metadata.parent_project_id.as_deref(),
-                ]),
-            },
-            project_id: &metadata.project_id,
-            event_type: "project.created",
-        },
-        ProjectTopicEvent::Updated(metadata) => ProjectEventDescription {
-            action: ProjectIndexAction::Reconcile {
-                project_ids: collect_project_ids([
-                    Some(metadata.project_id.as_str()),
-                    metadata.previous_parent_id.as_deref(),
-                    metadata.parent_id.as_deref(),
-                ]),
-            },
-            project_id: &metadata.project_id,
-            event_type: "project.updated",
-        },
-        ProjectTopicEvent::Deleted(metadata) => ProjectEventDescription {
-            action: ProjectIndexAction::Reconcile {
-                project_ids: collect_project_ids(
-                    metadata
-                        .deleted_project_ids
-                        .iter()
-                        .map(|project_id| Some(project_id.as_str()))
-                        .chain([metadata.parent_project_id.as_deref()]),
-                ),
-            },
-            project_id: &metadata.project_id,
-            event_type: "project.deleted",
-        },
-        ProjectTopicEvent::Restored(metadata) => ProjectEventDescription {
-            action: ProjectIndexAction::Reconcile {
-                project_ids: collect_project_ids(
-                    metadata
-                        .restored_project_ids
-                        .iter()
-                        .map(|project_id| Some(project_id.as_str()))
-                        .chain([metadata.parent_project_id.as_deref()]),
-                ),
-            },
-            project_id: &metadata.project_id,
-            event_type: "project.restored",
-        },
-        ProjectTopicEvent::PermanentlyDeleted(metadata) => ProjectEventDescription {
-            action: ProjectIndexAction::Reconcile {
-                project_ids: collect_project_ids(
-                    metadata
-                        .purged_project_ids
-                        .iter()
-                        .map(|project_id| Some(project_id.as_str()))
-                        .chain([metadata.parent_project_id.as_deref()]),
-                ),
-            },
-            project_id: &metadata.project_id,
-            event_type: "project.permanently_deleted",
-        },
-        ProjectTopicEvent::Uploaded(metadata) => ProjectEventDescription {
-            action: ProjectIndexAction::Reconcile {
-                project_ids: collect_project_ids(
-                    metadata
-                        .project_ids
-                        .iter()
-                        .map(|project_id| Some(project_id.as_str()))
-                        .chain([metadata.parent_project_id.as_deref()]),
-                ),
-            },
-            project_id: &metadata.root_project_id,
-            event_type: "project.uploaded",
-        },
-    }
 }
 
 fn processing_retry_strategy() -> impl Iterator<Item = Duration> {
@@ -397,263 +152,6 @@ fn attach_event_coordinates<E>(
         partition,
         offset,
     })
-}
-
-async fn process_call_index_action(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    action: CallIndexAction,
-) -> anyhow::Result<()> {
-    match action {
-        CallIndexAction::Upsert { call_id } => {
-            process_call_record(opensearch_client, db, call_id, None).await
-        }
-        CallIndexAction::Remove {
-            call_id,
-            channel_id,
-        } => process_remove_call_record(opensearch_client, channel_id, Some(call_id), None).await,
-        CallIndexAction::Ignore => Ok(()),
-    }
-}
-
-async fn process_channel_index_action(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    action: ChannelIndexAction,
-) -> anyhow::Result<()> {
-    match action {
-        ChannelIndexAction::UpsertMessage {
-            channel_id,
-            message_id,
-        } => {
-            process_channel_message_update(opensearch_client, db, channel_id, message_id, None)
-                .await
-        }
-        ChannelIndexAction::RemoveMessage {
-            channel_id,
-            message_id,
-        } => {
-            process_remove_channel_message(opensearch_client, channel_id, Some(message_id), None)
-                .await
-        }
-        ChannelIndexAction::RemoveChannel { channel_id } => {
-            process_remove_channel_message(opensearch_client, channel_id, None, None).await
-        }
-        ChannelIndexAction::Ignore => Ok(()),
-    }
-}
-
-async fn process_project_index_action(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    action: ProjectIndexAction,
-) -> anyhow::Result<()> {
-    match action {
-        ProjectIndexAction::Reconcile { project_ids } => {
-            for project_id in project_ids {
-                upsert_project(
-                    opensearch_client,
-                    db,
-                    &UpsertProject {
-                        project_id,
-                        index_override: None,
-                    },
-                )
-                .await?;
-            }
-            Ok(())
-        }
-    }
-}
-
-async fn process_call_event(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    event: &CallMacroEvent,
-    partition: i32,
-    offset: i64,
-) -> EventOutcome {
-    let description = describe_call_event(&event.event().event);
-    if description.action == CallIndexAction::Ignore {
-        tracing::trace!(
-            call_id = %description.call_id,
-            event_type = description.event_type,
-            partition,
-            offset,
-            "ignoring call event without a search-index action"
-        );
-        return EventOutcome::Ignored;
-    }
-
-    let result = retry_processing(|attempt| async move {
-        tracing::trace!(
-            call_id = %description.call_id,
-            event_type = description.event_type,
-            partition,
-            offset,
-            attempt,
-            "processing call search-index event"
-        );
-        process_call_index_action(db, opensearch_client, description.action)
-            .await
-            .inspect_err(|error| {
-                if attempt < MAX_PROCESSING_ATTEMPTS {
-                    let retry_delay =
-                        PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                    tracing::warn!(
-                        error = ?error,
-                        call_id = %description.call_id,
-                        event_type = description.event_type,
-                        partition,
-                        offset,
-                        attempt,
-                        delay_secs = retry_delay.as_secs(),
-                        "call search-index processing failed, retrying"
-                    );
-                }
-            })
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                call_id = %description.call_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping call event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
-}
-
-async fn process_channel_event(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    event: &ChannelMacroEvent,
-    partition: i32,
-    offset: i64,
-) -> EventOutcome {
-    let description = describe_channel_event(&event.event().event);
-    if description.action == ChannelIndexAction::Ignore {
-        tracing::trace!(
-            channel_id = %description.channel_id,
-            event_type = description.event_type,
-            partition,
-            offset,
-            "ignoring channel event without a search-index action"
-        );
-        return EventOutcome::Ignored;
-    }
-
-    let result = retry_processing(|attempt| async move {
-        tracing::trace!(
-            channel_id = %description.channel_id,
-            event_type = description.event_type,
-            partition,
-            offset,
-            attempt,
-            "processing channel search-index event"
-        );
-        process_channel_index_action(db, opensearch_client, description.action)
-            .await
-            .inspect_err(|error| {
-                if attempt < MAX_PROCESSING_ATTEMPTS {
-                    let retry_delay =
-                        PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                    tracing::warn!(
-                        error = ?error,
-                        channel_id = %description.channel_id,
-                        event_type = description.event_type,
-                        partition,
-                        offset,
-                        attempt,
-                        delay_secs = retry_delay.as_secs(),
-                        "channel search-index processing failed, retrying"
-                    );
-                }
-            })
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                channel_id = %description.channel_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping channel event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
-}
-
-async fn process_project_event(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    event: &ProjectMacroEvent,
-    partition: i32,
-    offset: i64,
-) -> EventOutcome {
-    let description = describe_project_event(&event.event().event);
-    let result = retry_processing(|attempt| {
-        let action = description.action.clone();
-        async move {
-            tracing::trace!(
-                project_id = description.project_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempt,
-                "processing project search-index event"
-            );
-            process_project_index_action(db, opensearch_client, action)
-                .await
-                .inspect_err(|error| {
-                    if attempt < MAX_PROCESSING_ATTEMPTS {
-                        let retry_delay =
-                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                        tracing::warn!(
-                            error = ?error,
-                            project_id = description.project_id,
-                            event_type = description.event_type,
-                            partition,
-                            offset,
-                            attempt,
-                            delay_secs = retry_delay.as_secs(),
-                            "project search-index processing failed, retrying"
-                        );
-                    }
-                })
-        }
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                project_id = description.project_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping project event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
 }
 
 #[tracing::instrument(skip(db, opensearch_client, event), fields(partition, offset))]
