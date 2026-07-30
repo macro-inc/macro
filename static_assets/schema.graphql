@@ -78,6 +78,14 @@ type CompleteMutationRoot {
 	Update authenticated user-owned notifications and return authoritative rows.
 	"""
 	updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!
+	"""
+	Mark an accessible email thread as seen and return its authoritative cache record.
+	"""
+	markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!
+	"""
+	Add or remove one label from an accessible email thread and return its authoritative cache record.
+	"""
+	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
 }
 
 """
@@ -3502,6 +3510,16 @@ A scalar that can represent any JSON value.
 scalar JSON
 
 """
+Input for marking an email thread as seen.
+"""
+input MarkEmailThreadSeenInput {
+	"""
+	Email thread to mark as seen.
+	"""
+	threadId: ID!
+}
+
+"""
 One entity move in a batch.
 """
 input MoveEntityInput {
@@ -3689,6 +3707,24 @@ type SoupUpdated {
 	Hydrate the current Soup entity.
 	"""
 	item: GraphqlSoupEntity
+}
+
+"""
+Input for adding or removing a label from an email thread.
+"""
+input UpdateEmailThreadLabelInput {
+	"""
+	Email thread whose label assignment will change.
+	"""
+	threadId: ID!
+	"""
+	Label to add or remove.
+	"""
+	labelId: ID!
+	"""
+	Whether the label should be present after the mutation.
+	"""
+	value: Boolean!
 }
 
 """
