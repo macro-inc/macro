@@ -1,3 +1,9 @@
+/** Supported first day of the calendar week. */
+export type CalendarWeekStart = 0 | 1;
+
+/** Supported calendar time display formats. */
+export type CalendarTimeFormat = '12-hour' | '24-hour';
+
 /** A calendar source used to group and style events. */
 export interface CalendarSource {
   /** Stable source identifier. */

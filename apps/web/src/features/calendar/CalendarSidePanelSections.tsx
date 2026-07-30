@@ -4,7 +4,12 @@ import { Button, Calendar as MiniCalendar } from '@ui';
 import { createEffect, on, Show } from 'solid-js';
 import { CalendarControls } from './events/CalendarControls';
 import { EventDetails } from './events/EventDetails';
-import type { CalendarEvent, CalendarSource } from './events/types';
+import type {
+  CalendarEvent,
+  CalendarSource,
+  CalendarTimeFormat,
+  CalendarWeekStart,
+} from './events/types';
 
 interface CalendarSidePanelSectionsProps {
   currentDate: Date;
@@ -12,6 +17,8 @@ interface CalendarSidePanelSectionsProps {
   highlightedRange: { start: Date; end: Date } | undefined;
   selectedEvent: CalendarEvent | undefined;
   sources: CalendarSource[];
+  timeFormat: CalendarTimeFormat;
+  weekStartsOn: CalendarWeekStart;
   isSourceVisible: (sourceId: string) => boolean;
   onCloseEvent: () => void;
   onFocusedDayChange: (date: Date) => void;
@@ -28,9 +35,9 @@ export function CalendarSidePanelSections(
 
   createEffect(
     on(
-      () => props.selectedEvent?.id,
-      (eventId) => {
-        if (!eventId || !sidePanel) return;
+      () => [props.selectedEvent?.id, sidePanel?.isNarrow()] as const,
+      ([eventId, isNarrow]) => {
+        if (!eventId || !sidePanel || isNarrow) return;
 
         sidePanel.setIsOpen(true);
         if (!sidePanel.openSectionIds().includes('calendar-event')) {
@@ -44,7 +51,7 @@ export function CalendarSidePanelSections(
   );
 
   return (
-    <>
+    <Show when={!sidePanel?.isNarrow()}>
       <Show when={props.selectedEvent}>
         {(event) => (
           <SidePanel.Section
@@ -63,7 +70,7 @@ export function CalendarSidePanelSections(
               </Button>
             }
           >
-            <EventDetails event={event()} />
+            <EventDetails event={event()} timeFormat={props.timeFormat} />
           </SidePanel.Section>
         )}
       </Show>
@@ -77,7 +84,7 @@ export function CalendarSidePanelSections(
         <MiniCalendar
           required
           fixedWeeks
-          startOfWeek={0}
+          startOfWeek={props.weekStartsOn}
           value={props.currentDate}
           month={props.currentDate}
           focusedDay={props.focusedDay}
@@ -100,6 +107,6 @@ export function CalendarSidePanelSections(
           onVisibilityChange={props.onSourceVisibilityChange}
         />
       </SidePanel.Section>
-    </>
+    </Show>
   );
 }

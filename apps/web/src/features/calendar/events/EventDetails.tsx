@@ -2,7 +2,8 @@ import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
 import { Show } from 'solid-js';
-import type { CalendarEvent } from './types';
+import { formatCalendarTime } from '../time-format';
+import type { CalendarEvent, CalendarTimeFormat } from './types';
 
 const formatDate = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
@@ -13,11 +14,6 @@ const formatShortDate = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
 });
-const formatTime = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
 const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 function parseCalendarDate(value: string) {
@@ -32,7 +28,10 @@ const isSameLocalDate = (first: Date, second: Date) =>
   first.getMonth() === second.getMonth() &&
   first.getDate() === second.getDate();
 
-function formatEventSchedule(event: CalendarEvent) {
+function formatEventSchedule(
+  event: CalendarEvent,
+  timeFormat: CalendarTimeFormat
+) {
   const start = parseCalendarDate(event.start);
   const end = parseCalendarDate(event.end);
 
@@ -45,12 +44,15 @@ function formatEventSchedule(event: CalendarEvent) {
   }
 
   return isSameLocalDate(start, end)
-    ? `${formatDate.format(start)} · ${formatTime.format(start)}–${formatTime.format(end)}`
-    : `${formatDate.format(start)}, ${formatTime.format(start)}–${formatDate.format(end)}, ${formatTime.format(end)}`;
+    ? `${formatDate.format(start)} · ${formatCalendarTime(start, timeFormat)}–${formatCalendarTime(end, timeFormat)}`
+    : `${formatDate.format(start)}, ${formatCalendarTime(start, timeFormat)}–${formatDate.format(end)}, ${formatCalendarTime(end, timeFormat)}`;
 }
 
 /** Displays read-only details for a selected calendar event. */
-export function EventDetails(props: { event: CalendarEvent }) {
+export function EventDetails(props: {
+  event: CalendarEvent;
+  timeFormat: CalendarTimeFormat;
+}) {
   return (
     <div class="min-w-0 p-1 text-ink">
       <div class="flex items-start gap-2">
@@ -73,7 +75,7 @@ export function EventDetails(props: { event: CalendarEvent }) {
               >
                 <CalendarIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
               </Show>
-              <span>{formatEventSchedule(props.event)}</span>
+              <span>{formatEventSchedule(props.event, props.timeFormat)}</span>
             </div>
             <Show when={props.event.location}>
               {(location) => (

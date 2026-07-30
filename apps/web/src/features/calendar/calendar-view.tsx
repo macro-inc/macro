@@ -1,14 +1,14 @@
-import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { TabsInset } from '@core/component/TabsInset';
 import type { DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Button, Dropdown, Layer } from '@ui';
+import { Button, Dropdown, Layer, Calendar as MiniCalendar } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -19,12 +19,24 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { CalendarSettingsDropdown } from './CalendarSettingsDropdown';
 import { CalendarSidePanelSections } from './CalendarSidePanelSections';
 import { CalendarEventContent } from './events/EventContent';
+import { EventDetailsPopover } from './events/EventDetailsPopover';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
 import { createCalendarEventFixtures } from './events/fixtures';
-import type { CalendarEvent, CalendarSource } from './events/types';
+import type {
+  CalendarEvent,
+  CalendarSource,
+  CalendarTimeFormat,
+  CalendarWeekStart,
+} from './events/types';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
+import {
+  CALENDAR_TIME_FORMAT_OPTIONS,
+  formatCalendarTime,
+  getDefaultCalendarTimeFormat,
+} from './time-format';
 import './calendar.css';
 
 const CALENDAR_VIEW_TABS = [
@@ -49,20 +61,20 @@ const formatWeekdayHeader = {
 const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
-const formatCurrentTime = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-}).format;
-
 const isSameLocalDate = (first: Date, second: Date) =>
   first.getFullYear() === second.getFullYear() &&
   first.getMonth() === second.getMonth() &&
   first.getDate() === second.getDate();
 
-function CurrentTimeAxisIndicator(props: { date: Date }) {
+function CurrentTimeAxisIndicator(props: {
+  date: Date;
+  timeFormat: CalendarTimeFormat;
+}) {
   return (
     <span class="calendar-now-axis-indicator">
-      <span class="calendar-now-time">{formatCurrentTime(props.date)}</span>
+      <span class="calendar-now-time">
+        {formatCalendarTime(props.date, props.timeFormat)}
+      </span>
     </span>
   );
 }
@@ -86,10 +98,17 @@ interface ResponsiveCalendarHostProps {
 
 interface CalendarWorkspaceProps extends ResponsiveCalendarHostProps {
   selectedEvent: CalendarEvent | undefined;
+  selectedEventAnchor: HTMLElement | undefined;
   sources: CalendarSource[];
+  showWeekends: boolean;
+  timeFormat: CalendarTimeFormat;
+  weekStartsOn: CalendarWeekStart;
   isSourceVisible: (sourceId: string) => boolean;
   onCloseEvent: () => void;
+  onShowWeekendsChange: (showWeekends: boolean) => void;
   onSourceVisibilityChange: (sourceId: string, visible: boolean) => void;
+  onTimeFormatChange: (timeFormat: CalendarTimeFormat) => void;
+  onWeekStartsOnChange: (weekStartsOn: CalendarWeekStart) => void;
 }
 
 function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
@@ -222,6 +241,13 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
 export function CalendarView() {
   const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
   const [selectedEventId, setSelectedEventId] = createSignal<string>();
+  const [selectedEventAnchor, setSelectedEventAnchor] =
+    createSignal<HTMLElement>();
+  const [showWeekends, setShowWeekends] = createSignal(true);
+  const [weekStartsOn, setWeekStartsOn] = createSignal<CalendarWeekStart>(0);
+  const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
+    getDefaultCalendarTimeFormat()
+  );
   const calendarEvents = createCalendarEventFixtures();
   const eventsById = new Map(calendarEvents.map((event) => [event.id, event]));
   const calendarSources = Array.from(
@@ -242,7 +268,10 @@ export function CalendarView() {
     const eventId = selectedEventId();
     return eventId ? eventsById.get(eventId) : undefined;
   };
-  const closeEventDetails = () => setSelectedEventId(undefined);
+  const closeEventDetails = () => {
+    setSelectedEventId(undefined);
+    setSelectedEventAnchor(undefined);
+  };
   const setSourceVisibility = (sourceId: string, visible: boolean) => {
     setVisibleSourceIds((current) => {
       const next = new Set(current);
@@ -276,10 +305,15 @@ export function CalendarView() {
       headerToolbar={false}
       scrollTime={getLocalScrollTime()}
       scrollTimeReset={false}
+      weekends={showWeekends()}
+      firstDay={weekStartsOn()}
+      slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
+      eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
       events={fullCalendarEvents()}
-      eventClick={({ event, jsEvent }) => {
+      eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         setSelectedEventId(event.id);
+        setSelectedEventAnchor(el);
       }}
       datesSet={handleDatesSet}
       dayHeaderFormat={{
@@ -344,7 +378,12 @@ export function CalendarView() {
             ) : null;
           }
 
-          return <CurrentTimeAxisIndicator date={new Date()} />;
+          return (
+            <CurrentTimeAxisIndicator
+              date={new Date()}
+              timeFormat={timeFormat()}
+            />
+          );
         }}
       </FullCalendar.NowIndicatorContent>
 
@@ -352,10 +391,17 @@ export function CalendarView() {
         <CalendarWorkspace
           onNarrowDayHeadersChange={setUseNarrowDayHeaders}
           selectedEvent={selectedEvent()}
+          selectedEventAnchor={selectedEventAnchor()}
           sources={calendarSources}
+          showWeekends={showWeekends()}
+          timeFormat={timeFormat()}
+          weekStartsOn={weekStartsOn()}
           isSourceVisible={(sourceId) => visibleSourceIds().has(sourceId)}
           onCloseEvent={closeEventDetails}
+          onShowWeekendsChange={setShowWeekends}
           onSourceVisibilityChange={setSourceVisibility}
+          onTimeFormatChange={setTimeFormat}
+          onWeekStartsOnChange={setWeekStartsOn}
         />
       </SidePanel.Layout>
     </FullCalendar.Root>
@@ -364,15 +410,18 @@ export function CalendarView() {
 
 function CalendarWorkspace(props: CalendarWorkspaceProps) {
   const panel = useSplitPanelOrThrow();
+  const sidePanel = useSidePanel();
   const calendar = useFullCalendar();
   const [isTodayVisible, setIsTodayVisible] = createSignal(true);
   const initialDate = new Date();
   const [miniCalendarFocusedDay, setMiniCalendarFocusedDay] =
     createSignal(initialDate);
+  const [customDateMonth, setCustomDateMonth] = createSignal(initialDate);
+  const [customDateFocusedDay, setCustomDateFocusedDay] =
+    createSignal(initialDate);
+  const [viewDropdownOpen, setViewDropdownOpen] = createSignal(false);
   let todayRefreshTimer: number | undefined;
-  const usePeriodDropdown = createMemo(
-    () => (panel.panelSize.width ?? 0) < 600
-  );
+  const isNarrow = () => sidePanel?.isNarrow() ?? false;
   const currentDate = () =>
     calendar.dateInfo()?.view.calendar.getDate() ?? initialDate;
   const activeView = () => calendar.dateInfo()?.view.type ?? 'dayGridMonth';
@@ -402,6 +451,7 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
   };
 
   const changeView = (view: string) => {
+    setViewDropdownOpen(false);
     const calendarApi = calendar.api();
     if (calendarApi?.view.type === view) return;
     calendarApi?.changeView(view);
@@ -447,6 +497,52 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
     calendar.api()?.gotoDate(targetDate);
   };
 
+  const syncCustomDatePicker = () => {
+    const date = currentDate();
+    setCustomDateMonth(date);
+    setCustomDateFocusedDay(date);
+  };
+
+  const navigateCustomDateMonth = (month: Date) => {
+    const focusedDay = customDateFocusedDay();
+    const targetDate =
+      focusedDay.getFullYear() === month.getFullYear() &&
+      focusedDay.getMonth() === month.getMonth()
+        ? focusedDay
+        : month;
+    setCustomDateMonth(month);
+    setCustomDateFocusedDay(targetDate);
+  };
+
+  const selectCustomDate = (date: Date | null) => {
+    if (!date) return;
+    setCustomDateMonth(date);
+    setCustomDateFocusedDay(date);
+    setMiniCalendarFocusedDay(date);
+    calendar.api()?.gotoDate(date);
+    setViewDropdownOpen(false);
+  };
+
+  const changeNarrowSourceVisibility = (sourceId: string, visible: boolean) => {
+    props.onCloseEvent();
+    props.onSourceVisibilityChange(sourceId, visible);
+  };
+
+  const changeShowWeekends = (showWeekends: boolean) => {
+    props.onCloseEvent();
+    props.onShowWeekendsChange(showWeekends);
+  };
+
+  const changeWeekStartsOn = (weekStartsOn: CalendarWeekStart) => {
+    props.onCloseEvent();
+    props.onWeekStartsOnChange(weekStartsOn);
+  };
+
+  const changeTimeFormat = (timeFormat: CalendarTimeFormat) => {
+    props.onCloseEvent();
+    props.onTimeFormatChange(timeFormat);
+  };
+
   createEffect(on(calendar.dateInfo, refreshTodayVisibility));
   createEffect(on(currentDate, setMiniCalendarFocusedDay));
   onMount(() => panel.handle.setDisplayName('Calendar'));
@@ -462,6 +558,8 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
         highlightedRange={miniCalendarHighlightedRange()}
         selectedEvent={props.selectedEvent}
         sources={props.sources}
+        timeFormat={props.timeFormat}
+        weekStartsOn={props.weekStartsOn}
         isSourceVisible={props.isSourceVisible}
         onCloseEvent={props.onCloseEvent}
         onFocusedDayChange={setMiniCalendarFocusedDay}
@@ -469,6 +567,19 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
         onSelectDate={selectMiniCalendarDate}
         onSourceVisibilityChange={props.onSourceVisibilityChange}
       />
+      <Show when={isNarrow() ? props.selectedEvent : undefined}>
+        {(event) => (
+          <EventDetailsPopover
+            anchor={props.selectedEventAnchor}
+            event={event()}
+            open={props.selectedEventAnchor !== undefined}
+            timeFormat={props.timeFormat}
+            onOpenChange={(open) => {
+              if (!open) props.onCloseEvent();
+            }}
+          />
+        )}
+      </Show>
       <main class="calendar-view flex size-full min-h-0 bg-surface">
         <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
           <div class="mb-3 flex min-w-0 items-center gap-3 border-b border-edge-muted pb-3">
@@ -492,29 +603,24 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
             <div class="min-w-0 flex-1 truncate text-xl font-bold leading-tight tracking-tight text-ink">
               {dateTitle()}
             </div>
-            <div class="ml-auto shrink-0">
-              <Show
-                when={usePeriodDropdown()}
-                fallback={
-                  <TabsInset
-                    class="h-7 shrink-0"
-                    list={CALENDAR_VIEW_TABS}
-                    value={activeView()}
-                    onChange={changeView}
-                  />
-                }
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <Dropdown
+                open={viewDropdownOpen()}
+                onOpenChange={setViewDropdownOpen}
+                placement="bottom-end"
               >
-                <Dropdown placement="bottom-start">
-                  <Dropdown.Trigger
-                    aria-label="Choose calendar view"
-                    class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-surface px-2 text-xs font-medium text-ink"
-                  >
-                    {CALENDAR_VIEW_TABS.find(
-                      (view) => view.value === activeView()
-                    )?.label ?? 'Month'}
-                    <CaretDownIcon class="size-3 text-ink-muted" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Content class="min-w-28 p-1">
+                <Dropdown.Trigger
+                  depth={2}
+                  aria-label="Choose calendar view"
+                  class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-panel px-2 text-xs font-medium text-ink"
+                >
+                  {CALENDAR_VIEW_TABS.find(
+                    (view) => view.value === activeView()
+                  )?.label ?? 'Month'}
+                  <CaretDownIcon class="size-3 text-ink-muted" />
+                </Dropdown.Trigger>
+                <Dropdown.Content class="min-w-36">
+                  <Dropdown.Group>
                     <Dropdown.RadioGroup
                       value={activeView()}
                       onChange={changeView}
@@ -522,17 +628,61 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
                       <For each={CALENDAR_VIEW_TABS}>
                         {(view) => (
                           <Dropdown.RadioItem closeOnSelect value={view.value}>
-                            {view.label}
-                            <Dropdown.ItemIndicator class="ml-auto">
+                            <span class="flex-1">{view.label}</span>
+                            <Dropdown.ItemIndicator>
                               <CheckIcon class="size-3.5 text-accent" />
                             </Dropdown.ItemIndicator>
                           </Dropdown.RadioItem>
                         )}
                       </For>
                     </Dropdown.RadioGroup>
-                  </Dropdown.Content>
-                </Dropdown>
-              </Show>
+                  </Dropdown.Group>
+                  <Show when={isNarrow()}>
+                    <Dropdown.Group>
+                      <Dropdown.Sub
+                        onOpenChange={(open) => {
+                          if (open) syncCustomDatePicker();
+                        }}
+                      >
+                        <Dropdown.SubTrigger>
+                          <CalendarIcon class="size-3.5 text-ink-muted" />
+                          <span class="flex-1">Custom date…</span>
+                          <CaretRightIcon class="size-3 text-ink-muted" />
+                        </Dropdown.SubTrigger>
+                        <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">
+                          <Dropdown.Group class="p-3">
+                            <MiniCalendar
+                              required
+                              fixedWeeks
+                              startOfWeek={props.weekStartsOn}
+                              value={currentDate()}
+                              month={customDateMonth()}
+                              focusedDay={customDateFocusedDay()}
+                              highlightedRange={miniCalendarHighlightedRange()}
+                              onMonthChange={navigateCustomDateMonth}
+                              onFocusedDayChange={setCustomDateFocusedDay}
+                              onValueChange={selectCustomDate}
+                            />
+                          </Dropdown.Group>
+                        </Dropdown.SubContent>
+                      </Dropdown.Sub>
+                    </Dropdown.Group>
+                  </Show>
+                </Dropdown.Content>
+              </Dropdown>
+
+              <CalendarSettingsDropdown
+                sources={props.sources}
+                showCalendarVisibility={isNarrow()}
+                showWeekends={props.showWeekends}
+                timeFormat={props.timeFormat}
+                weekStartsOn={props.weekStartsOn}
+                isSourceVisible={props.isSourceVisible}
+                onShowWeekendsChange={changeShowWeekends}
+                onSourceVisibilityChange={changeNarrowSourceVisibility}
+                onTimeFormatChange={changeTimeFormat}
+                onWeekStartsOnChange={changeWeekStartsOn}
+              />
             </div>
           </div>
           <ResponsiveCalendarHost
