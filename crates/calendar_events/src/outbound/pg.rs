@@ -836,6 +836,7 @@ impl CalendarRepository for PgCalendarRepository {
                     WHERE link.primary_macro_id = $1
               )
               AND event.deleted_at IS NULL
+              AND event.status <> 'cancelled'
               AND event.materialized_starts_at <= $2
               AND event.materialized_ends_at >= $3
               AND event.materialized_start_date <= $4
