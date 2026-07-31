@@ -322,8 +322,6 @@ struct StubSyncRepo {
     installation_source_rows: Mutex<HashMap<String, HashSet<GithubAppInstallationSource>>>,
     /// Recorded installation source upserts: (installation_id, sources).
     installation_sources: Mutex<Vec<(String, Vec<GithubAppInstallationSource>)>>,
-    /// Installer github user id keyed by installation id.
-    installation_installers: Mutex<HashMap<String, String>>,
 }
 
 impl StubSyncRepo {
@@ -337,7 +335,6 @@ impl StubSyncRepo {
             team_members: Mutex::new(HashMap::new()),
             installation_source_rows: Mutex::new(HashMap::new()),
             installation_sources: Mutex::new(Vec::new()),
-            installation_installers: Mutex::new(HashMap::new()),
         }
     }
 
@@ -417,18 +414,6 @@ impl StubSyncRepo {
 
     fn installation_sources(&self) -> Vec<(String, Vec<GithubAppInstallationSource>)> {
         self.installation_sources.lock().unwrap().clone()
-    }
-
-    fn with_installation_installer(self, installation_id: &str, github_user_id: &str) -> Self {
-        self.installation_installers
-            .lock()
-            .unwrap()
-            .insert(installation_id.to_string(), github_user_id.to_string());
-        self
-    }
-
-    fn installation_installers(&self) -> HashMap<String, String> {
-        self.installation_installers.lock().unwrap().clone()
     }
 }
 
@@ -592,44 +577,8 @@ impl GithubSyncRepo for StubSyncRepo {
         Ok(())
     }
 
-    async fn upsert_installation_installer(
-        &self,
-        installation_id: &str,
-        github_user_id: &str,
-    ) -> Result<(), Self::Err> {
-        self.installation_installers
-            .lock()
-            .unwrap()
-            .insert(installation_id.to_string(), github_user_id.to_string());
-        Ok(())
-    }
-
-    async fn get_installation_ids_by_installer(
-        &self,
-        github_user_id: &str,
-    ) -> Result<Vec<String>, Self::Err> {
-        let mut installation_ids: Vec<String> = self
-            .installation_installers
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(_, installer)| installer.as_str() == github_user_id)
-            .map(|(installation_id, _)| installation_id.clone())
-            .collect();
-        installation_ids.sort();
-        Ok(installation_ids)
-    }
-
     async fn delete_installation_sources(&self, installation_id: &str) -> Result<(), Self::Err> {
         self.installation_source_rows
-            .lock()
-            .unwrap()
-            .remove(installation_id);
-        Ok(())
-    }
-
-    async fn delete_installation_installer(&self, installation_id: &str) -> Result<(), Self::Err> {
-        self.installation_installers
             .lock()
             .unwrap()
             .remove(installation_id);
@@ -3990,188 +3939,17 @@ fn installation_created_event(sender_id: u64, installation_id: u64) -> Validated
 }
 
 #[tokio::test]
-async fn installation_created_associates_teams() {
-    let team_a: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
-    let team_b: uuid::Uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap();
-
-    let repo = StubSyncRepo::new()
-        .with_github_link("12345", "macro|user@user.com")
-        .with_user_teams("macro|user@user.com", vec![team_a, team_b]);
-
-    let service = make_sync_service_with_repo(repo);
-    let event = installation_created_event(12345, 99999);
-
-    service.process_webhook_event(&event).await.unwrap();
-
-    let sources = service.repo.installation_sources();
-    assert_eq!(
-        sources,
-        vec![(
-            "99999".to_string(),
-            vec![
-                GithubAppInstallationSource::Team(team_a),
-                GithubAppInstallationSource::Team(team_b),
-            ],
-        )]
-    );
-}
-
-#[tokio::test]
-async fn installation_created_backfills_open_pr_for_single_source() {
-    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
-
-    let service = make_sync_service_with_repo(repo);
-    let doc_service = service.document_service.clone();
-    let foreign_entity_service = service.foreign_entity_service.clone();
-    let pull_request = backfilled_pull_request("fixes MACRO-2BuyvtY3aeEvHx4uG8iD51");
-    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
-    service.client.set_open_pull_requests(vec![pull_request]);
-    let event = installation_created_event(12345, 99999);
-
-    service.process_webhook_event(&event).await.unwrap();
-
-    assert_eq!(
-        service.client.list_open_pull_requests_calls(),
-        vec!["test-token".to_string()]
-    );
-
-    let foreign_entities = foreign_entity_service.foreign_entities();
-    assert_eq!(foreign_entities.len(), 1);
-
-    let foreign_entity = &foreign_entities[0];
-    assert_eq!(foreign_entity.foreign_entity_id, "my-org/my-repo/pull/42");
-    assert_eq!(
-        foreign_entity.foreign_entity_source,
-        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
-    );
-    assert_eq!(foreign_entity.stored_for_id, "macro|user@user.com");
-    assert_eq!(foreign_entity.stored_for_auth_entity, "user");
-    assert_eq!(foreign_entity.metadata, expected_metadata);
-    assert_eq!(foreign_entity_service.create_calls().len(), 1);
-    assert!(foreign_entity_service.patch_calls().is_empty());
-    assert!(service.client.pr_comments().is_empty());
-    assert!(doc_service.task_status_calls().is_empty());
-}
-
-#[tokio::test]
-async fn installation_created_backfills_open_pr_for_multiple_sources() {
-    let team_a: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
-    let team_b: uuid::Uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap();
-    let repo = StubSyncRepo::new()
-        .with_github_link("12345", "macro|user@user.com")
-        .with_user_teams("macro|user@user.com", vec![team_a, team_b]);
-
-    let service = make_sync_service_with_repo(repo);
-    let doc_service = service.document_service.clone();
-    let foreign_entity_service = service.foreign_entity_service.clone();
-    let pull_request = backfilled_pull_request("backfilled PR");
-    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
-    service.client.set_open_pull_requests(vec![pull_request]);
-    let event = installation_created_event(12345, 99999);
-
-    service.process_webhook_event(&event).await.unwrap();
-
-    assert_eq!(
-        service.client.list_open_pull_requests_calls(),
-        vec!["test-token".to_string()]
-    );
-
-    let mut foreign_entities = foreign_entity_service.foreign_entities();
-    foreign_entities.sort_by(|left, right| left.stored_for_id.cmp(&right.stored_for_id));
-    assert_eq!(foreign_entities.len(), 2);
-
-    for foreign_entity in &foreign_entities {
-        assert_eq!(foreign_entity.foreign_entity_id, "my-org/my-repo/pull/42");
-        assert_eq!(
-            foreign_entity.foreign_entity_source,
-            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
-        );
-        assert_eq!(foreign_entity.stored_for_auth_entity, "team");
-        assert_eq!(foreign_entity.metadata, expected_metadata);
-    }
-
-    assert_eq!(foreign_entities[0].stored_for_id, team_a.to_string());
-    assert_eq!(foreign_entities[1].stored_for_id, team_b.to_string());
-    assert_eq!(foreign_entity_service.create_calls().len(), 2);
-    assert!(foreign_entity_service.patch_calls().is_empty());
-    assert!(service.client.pr_comments().is_empty());
-    assert!(doc_service.task_status_calls().is_empty());
-}
-
-#[tokio::test]
-async fn installation_created_backfill_is_idempotent() {
-    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
-    let repo = StubSyncRepo::new()
-        .with_github_link("12345", "macro|user@user.com")
-        .with_user_teams("macro|user@user.com", vec![team_id]);
-
-    let service = make_sync_service_with_repo(repo);
-    let doc_service = service.document_service.clone();
-    let foreign_entity_service = service.foreign_entity_service.clone();
-    let pull_request = backfilled_pull_request("fixes MACRO-2BuyvtY3aeEvHx4uG8iD51");
-    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
-    service.client.set_open_pull_requests(vec![pull_request]);
-    let event = installation_created_event(12345, 99999);
-
-    service.process_webhook_event(&event).await.unwrap();
-    service.process_webhook_event(&event).await.unwrap();
-
-    assert_eq!(
-        service.client.list_open_pull_requests_calls(),
-        vec!["test-token".to_string(), "test-token".to_string()]
-    );
-
-    let foreign_entities = foreign_entity_service.foreign_entities();
-    assert_eq!(foreign_entities.len(), 1);
-    assert_eq!(
-        foreign_entities[0].foreign_entity_id,
-        "my-org/my-repo/pull/42"
-    );
-    assert_eq!(foreign_entities[0].stored_for_id, team_id.to_string());
-    assert_eq!(foreign_entities[0].stored_for_auth_entity, "team");
-    assert_eq!(foreign_entities[0].metadata, expected_metadata);
-    assert_eq!(foreign_entity_service.create_calls().len(), 1);
-
-    let patch_calls = foreign_entity_service.patch_calls();
-    assert_eq!(patch_calls.len(), 1);
-    assert_eq!(patch_calls[0].0, foreign_entities[0].id);
-    assert_eq!(patch_calls[0].1.metadata, Some(expected_metadata));
-    assert!(service.client.pr_comments().is_empty());
-    assert!(doc_service.task_status_calls().is_empty());
-}
-
-#[tokio::test]
-async fn installation_created_no_github_link() {
+async fn installation_created_is_noop() {
     let service = make_sync_service();
-    let event = installation_created_event(99999, 11111);
+    let event = installation_created_event(12345, 99999);
 
-    // No github link for sender — should succeed without inserting any sources
     service.process_webhook_event(&event).await.unwrap();
 
     assert!(service.repo.installation_sources().is_empty());
+    assert!(service.client.setup_code_exchange_calls().is_empty());
+    assert!(service.client.user_installation_list_calls().is_empty());
     assert!(service.client.list_open_pull_requests_calls().is_empty());
-
-    // The installer is still recorded so a later link can associate the
-    // installation retroactively.
-    assert_eq!(
-        service.repo.installation_installers(),
-        HashMap::from([("11111".to_string(), "99999".to_string())])
-    );
-}
-
-#[tokio::test]
-async fn installation_created_records_installer_with_github_link() {
-    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
-
-    let service = make_sync_service_with_repo(repo);
-    let event = installation_created_event(12345, 11111);
-
-    service.process_webhook_event(&event).await.unwrap();
-
-    assert_eq!(
-        service.repo.installation_installers(),
-        HashMap::from([("11111".to_string(), "12345".to_string())])
-    );
+    assert!(service.foreign_entity_service.foreign_entities().is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -4190,7 +3968,7 @@ fn installation_deleted_event(sender_id: u64, installation_id: u64) -> Validated
 }
 
 #[tokio::test]
-async fn installation_deleted_removes_sources_and_installer() {
+async fn installation_deleted_removes_only_installation_sources() {
     let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
 
     let repo = StubSyncRepo::new()
@@ -4200,9 +3978,7 @@ async fn installation_deleted_removes_sources_and_installer() {
             vec![GithubAppInstallationSource::User(
                 "macro|user@user.com".to_string(),
             )],
-        )
-        .with_installation_installer("99999", "12345")
-        .with_installation_installer("88888", "67890");
+        );
 
     let service = make_sync_service_with_repo(repo);
     let event = installation_deleted_event(12345, 99999);
@@ -4217,11 +3993,6 @@ async fn installation_deleted_removes_sources_and_installer() {
             .unwrap()
             .is_empty()
     );
-    assert_eq!(
-        service.repo.installation_installers(),
-        HashMap::from([("88888".to_string(), "67890".to_string())])
-    );
-
     // Other installations are untouched.
     assert_eq!(
         service
@@ -4245,7 +4016,14 @@ async fn installation_deleted_unknown_installation_succeeds() {
     service.process_webhook_event(&event).await.unwrap();
     service.process_webhook_event(&event).await.unwrap();
 
-    assert!(service.repo.installation_installers().is_empty());
+    assert!(
+        service
+            .repo
+            .get_installation_sources("99999")
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -4260,143 +4038,6 @@ async fn installation_deleted_missing_installation_id_errors() {
     );
 
     service.process_webhook_event(&event).await.unwrap_err();
-}
-
-#[tokio::test]
-async fn associate_installations_for_github_user_associates_and_backfills() {
-    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
-
-    // The installation was created before the user linked github: only the
-    // installer is recorded, no sources. The github link now exists.
-    let repo = StubSyncRepo::new()
-        .with_installation_installer("99999", "12345")
-        .with_github_link("12345", "macro|user@user.com")
-        .with_user_teams("macro|user@user.com", vec![team_id]);
-
-    let service = make_sync_service_with_repo(repo);
-    let foreign_entity_service = service.foreign_entity_service.clone();
-    let pull_request = backfilled_pull_request("backfilled PR");
-    service.client.set_open_pull_requests(vec![pull_request]);
-
-    service
-        .associate_installations_for_github_user("12345")
-        .await
-        .unwrap();
-
-    let sources = service.repo.installation_sources();
-    assert_eq!(
-        sources,
-        vec![(
-            "99999".to_string(),
-            vec![GithubAppInstallationSource::Team(team_id)],
-        )]
-    );
-
-    assert_eq!(
-        service.client.list_open_pull_requests_calls(),
-        vec!["test-token".to_string()]
-    );
-    let foreign_entities = foreign_entity_service.foreign_entities();
-    assert_eq!(foreign_entities.len(), 1);
-    assert_eq!(foreign_entities[0].stored_for_id, team_id.to_string());
-    assert_eq!(foreign_entities[0].stored_for_auth_entity, "team");
-}
-
-#[tokio::test]
-async fn associate_installations_for_github_user_associates_multiple_installations() {
-    let repo = StubSyncRepo::new()
-        .with_installation_installer("11111", "12345")
-        .with_installation_installer("22222", "12345")
-        .with_installation_installer("33333", "someone-else")
-        .with_github_link("12345", "macro|user@user.com");
-
-    let service = make_sync_service_with_repo(repo);
-
-    service
-        .associate_installations_for_github_user("12345")
-        .await
-        .unwrap();
-
-    let user_source = vec![GithubAppInstallationSource::User(
-        "macro|user@user.com".to_string(),
-    )];
-    assert_eq!(
-        service.repo.installation_sources(),
-        vec![
-            ("11111".to_string(), user_source.clone()),
-            ("22222".to_string(), user_source),
-        ]
-    );
-}
-
-#[tokio::test]
-async fn associate_installations_for_github_user_without_installations_is_noop() {
-    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
-
-    let service = make_sync_service_with_repo(repo);
-
-    service
-        .associate_installations_for_github_user("12345")
-        .await
-        .unwrap();
-
-    assert!(service.repo.installation_sources().is_empty());
-    assert!(service.client.list_open_pull_requests_calls().is_empty());
-}
-
-#[tokio::test]
-async fn associate_installations_for_github_user_without_link_is_noop() {
-    let repo = StubSyncRepo::new().with_installation_installer("99999", "12345");
-
-    let service = make_sync_service_with_repo(repo);
-
-    service
-        .associate_installations_for_github_user("12345")
-        .await
-        .unwrap();
-
-    assert!(service.repo.installation_sources().is_empty());
-    assert!(service.client.list_open_pull_requests_calls().is_empty());
-}
-
-#[tokio::test]
-async fn installation_created_no_teams_associates_user() {
-    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
-    // user_teams is empty by default
-
-    let service = make_sync_service_with_repo(repo);
-    let event = installation_created_event(12345, 11111);
-
-    service.process_webhook_event(&event).await.unwrap();
-
-    let sources = service.repo.installation_sources();
-    assert_eq!(
-        sources,
-        vec![(
-            "11111".to_string(),
-            vec![GithubAppInstallationSource::User(
-                "macro|user@user.com".to_string(),
-            )],
-        )]
-    );
-}
-
-#[tokio::test]
-async fn installation_deleted_is_skipped() {
-    let service = make_sync_service();
-    let event = ValidatedGithubWebhookEvent::new(
-        "installation".to_string(),
-        serde_json::json!({
-            "action": "deleted",
-            "installation": { "id": 12345 },
-            "sender": { "login": "testuser", "id": 12345 }
-        }),
-    );
-
-    // Should not error — just skips
-    service.process_webhook_event(&event).await.unwrap();
-
-    assert!(service.repo.installation_sources().is_empty());
 }
 
 // ---------------------------------------------------------------------------

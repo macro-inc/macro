@@ -102,30 +102,9 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         sources: &[GithubAppInstallationSource],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Records the GitHub user that installed a GitHub App installation,
-    /// replacing any previously recorded installer for the installation.
-    fn upsert_installation_installer(
-        &self,
-        installation_id: &str,
-        github_user_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Returns the installation IDs installed by the given GitHub user.
-    fn get_installation_ids_by_installer(
-        &self,
-        github_user_id: &str,
-    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
-
     /// Deletes all source associations for a GitHub App installation.
     /// Deleting an installation with no associations is a no-op (idempotent).
     fn delete_installation_sources(
-        &self,
-        installation_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Deletes the recorded installer for a GitHub App installation.
-    /// Deleting an installation with no recorded installer is a no-op (idempotent).
-    fn delete_installation_installer(
         &self,
         installation_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -233,18 +212,6 @@ pub trait GithubSyncService: Send + Sync + 'static {
     ///
     /// New installation flows must use [`GithubSyncService::begin_installation_setup`].
     fn get_github_sync_app_url(&self) -> &str;
-
-    /// Associates any GitHub App installations installed by the given GitHub
-    /// user with that user's Macro sources (teams or user), then backfills
-    /// open pull requests for newly associated installations.
-    ///
-    /// Intended to be called when a `github_links` row is created after the
-    /// app was installed, since the installation webhook could not resolve a
-    /// Macro user at install time.
-    fn associate_installations_for_github_user(
-        &self,
-        github_user_id: &str,
-    ) -> impl Future<Output = Result<(), GithubError>> + Send;
 
     /// Generates an installation access token for the github sync app
     fn generate_installation_access_token(
