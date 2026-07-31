@@ -1,7 +1,7 @@
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { Combobox } from '@kobalte/core/combobox';
@@ -111,17 +111,16 @@ export function InboxSelector() {
         id="inbox-selector"
         priority={3}
         containerClass="h-full"
-        expanded={() => (
-          <Show when={showConnectButton()} fallback={<Selector />}>
-            <ConnectAnotherEmail />
+      >
+        {(isCollapsed) => (
+          <Show
+            when={showConnectButton()}
+            fallback={<Selector hideLabel={isCollapsed()} />}
+          >
+            <ConnectAnotherEmail hideLabel={isCollapsed()} />
           </Show>
         )}
-        collapsed={() => (
-          <Show when={showConnectButton()} fallback={<Selector hideLabel />}>
-            <ConnectAnotherEmail hideLabel />
-          </Show>
-        )}
-      />
+      </CollapsibleHeaderItem>
     </Show>
   );
 }

@@ -20,6 +20,7 @@ outbound = [
   "dep:aws-sdk-s3",
   "dep:base64",
   "dep:document_sub_type",
+  "dep:documents",
   "dep:dynamodb_client",
   "dep:entity_access_db_utils",
   "dep:hex",
@@ -81,16 +82,20 @@ async-recursion = { version = "1.1.1", optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 document_sub_type = { path = "../document_sub_type", optional = true }
+documents = { path = "../documents", default-features = false, optional = true }
 dynamodb_client = { path = "../dynamodb_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 hex = { workspace = true, optional = true }
 macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }
 sqlx = { workspace = true, optional = true }
-sqs_client = { path = "../sqs_client", optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "document",
+], optional = true }
 system_properties = { path = "../system_properties", optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+aws-sdk-sqs = { workspace = true }
 dotenvy = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { path = "../kafka_util" }

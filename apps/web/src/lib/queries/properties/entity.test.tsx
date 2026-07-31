@@ -1,5 +1,9 @@
 import type { Property } from '@property/types';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -274,6 +278,7 @@ describe('useEntityPropertiesQuery transport', () => {
 
 describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   beforeEach(() => {
+    onlineManager.setOnline(true);
     vi.clearAllMocks();
     optimisticUpdateSoupEntityMock.mockReturnValue({ rollback: rollbackMock });
     graphqlSoupEnabledMock.mockReturnValue(true);
@@ -290,9 +295,29 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   });
 
   afterEach(() => {
+    onlineManager.setOnline(true);
     dispose?.();
     document.body.replaceChildren();
     vi.restoreAllMocks();
+  });
+
+  it('submits GraphQL optimism while offline for the durable cache queue', async () => {
+    onlineManager.setOnline(false);
+    setEntityPropertyMock.mockResolvedValue({
+      kind: 'queued',
+      transactionId: 'txn-offline',
+    });
+
+    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
+
+    expect(setEntityPropertyMock).toHaveBeenCalledOnce();
+    expect(setEntityPropertyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ optimisticProperty: { id: 'assignment-1' } })
+    );
+
+    for (const callback of settlementCallbacks) {
+      callback({ transactionId: 'txn-offline', status: 'committed' });
+    }
   });
 
   it('mirrors queued GraphQL optimism and defers reconciliation', async () => {

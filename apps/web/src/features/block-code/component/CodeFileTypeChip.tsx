@@ -95,7 +95,7 @@ export function CodeFileTypeChip() {
                   ref={searchRef}
                   type="text"
                   placeholder="Search..."
-                  class="w-full bg-transparent text-xs outline-none placeholder:text-ink-extra-muted"
+                  class="w-full bg-transparent text-xs outline-none placeholder:text-ink-placeholder"
                   value={search()}
                   onInput={(e) => setSearch(e.currentTarget.value)}
                   onKeyDown={(e) => {

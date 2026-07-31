@@ -22,14 +22,30 @@ use channels::domain::{
     models::{ChannelSender, ChannelType},
 };
 use chrono::Utc;
+use documents::domain::events::{
+    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
+    DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, DocumentUpdatedMetadata,
+    InteractionReason,
+};
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
-    MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroProjectsTopic, Topic as _,
+    MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic, MacroProjectsTopic,
+    MacroPropertiesTopic, Topic as _,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use model::document::FileType;
+use models_properties::{
+    DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
+};
 use projects::domain::events::{
     ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
     ProjectRestoredMetadata, ProjectTopicEvent, ProjectUpdatedMetadata, ProjectUploadedMetadata,
+};
+use properties::domain::events::{
+    EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
+    PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyOptionCreatedMetadata,
+    PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata, PropertyTopicEvent,
 };
 use uuid::Uuid;
 
@@ -37,9 +53,14 @@ use super::{
     call::{CallEventDescription, CallIndexAction, describe_call_event},
     channel::{ChannelEventDescription, ChannelIndexAction, describe_channel_event},
     chat::{ChatEventDescription, ChatIndexAction, describe_chat_event},
+    document::{
+        DocumentEventDescription, DocumentIndexAction, describe_document_event,
+        stored_extractor_message, sync_extractor_message,
+    },
     project::{
         ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
     },
+    property::{PropertyEventDescription, PropertyIndexAction, describe_property_event},
     *,
 };
 
@@ -49,10 +70,16 @@ const MESSAGE_ID: Uuid = Uuid::from_u128(3);
 const CHAT_ID: &str = "chat-id";
 const SECOND_CHAT_ID: &str = "second-chat-id";
 const CHAT_MESSAGE_ID: &str = "chat-message-id";
+const DOCUMENT_ID: &str = "document-id";
+const SOURCE_DOCUMENT_ID: &str = "source-document-id";
 const PROJECT_ID: &str = "project-root";
 const CHILD_PROJECT_ID: &str = "project-child";
 const PARENT_PROJECT_ID: &str = "project-parent";
 const NEW_PARENT_PROJECT_ID: &str = "project-new-parent";
+const PROPERTY_ENTITY_ID: &str = "property-entity-id";
+const PROPERTY_DEFINITION_ID: Uuid = Uuid::from_u128(4);
+const PROPERTY_OPTION_ID: Uuid = Uuid::from_u128(5);
+const ENTITY_PROPERTY_ID: Uuid = Uuid::from_u128(6);
 
 struct TestMessage {
     topic: &'static str,
@@ -430,6 +457,145 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
     ]
 }
 
+fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)> {
+    let owner = user_id();
+
+    vec![
+        (
+            DocumentTopicEvent::Created(DocumentCreatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                document_name: "Document".to_string(),
+                file_type: Some(FileType::Pdf),
+                project_id: Some(PROJECT_ID.to_string()),
+                sub_type: None,
+                created_at: None,
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Ignore,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.created",
+            },
+        ),
+        (
+            DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(owner.clone()),
+                document_name: Some("Renamed document".to_string()),
+                previous_project_id: Some(PROJECT_ID.to_string()),
+                project_id: None,
+                file_type: None,
+                share_permission_updated: false,
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::RefreshName,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.updated",
+            },
+        ),
+        (
+            DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: Some(owner.clone()),
+                document_name: None,
+                previous_project_id: None,
+                project_id: Some(PROJECT_ID.to_string()),
+                file_type: None,
+                share_permission_updated: true,
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Ignore,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.updated",
+            },
+        ),
+        (
+            DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                actor_user_id: Some(owner.clone()),
+                project_id: Some(PROJECT_ID.to_string()),
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Ignore,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.deleted",
+            },
+        ),
+        (
+            DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                file_type: FileType::Pdf,
+                document_version_id: Some("convert".to_string()),
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::ExtractText {
+                    owner: owner.to_string(),
+                    file_type: FileType::Pdf,
+                    document_version_id: Some("convert".to_string()),
+                },
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.content_uploaded",
+            },
+        ),
+        (
+            DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                file_type: FileType::Md,
+                document_version_id: None,
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::ExtractSync {
+                    file_type: FileType::Md,
+                    document_version_id: None,
+                },
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.sync_content_updated",
+            },
+        ),
+        (
+            DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Remove,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.purged",
+            },
+        ),
+        (
+            DocumentTopicEvent::Copied(DocumentCopiedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                source_document_id: SOURCE_DOCUMENT_ID.to_string(),
+                source_version_id: Some(7),
+                owner,
+                document_name: "Copied document".to_string(),
+                file_type: Some(FileType::Pdf),
+                project_id: Some(PROJECT_ID.to_string()),
+                sub_type: None,
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Ignore,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.copied",
+            },
+        ),
+        (
+            DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                reason: InteractionReason::Edited,
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Ignore,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.interaction",
+            },
+        ),
+    ]
+}
+
 fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'static>)> {
     let owner = user_id();
 
@@ -589,6 +755,130 @@ fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'sta
     ]
 }
 
+fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'static>)> {
+    let actor_user_id = Some(user_id());
+
+    vec![
+        (
+            PropertyTopicEvent::Created(PropertyCreatedMetadata {
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                owner: PropertyOwner::System,
+                display_name: "Status".to_string(),
+                data_type: DataType::String,
+                is_multi_select: false,
+                specific_entity_type: None,
+                created_at: Utc::now(),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property.created",
+            },
+        ),
+        (
+            PropertyTopicEvent::Deleted(PropertyDeletedMetadata {
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                owner: PropertyOwner::System,
+                display_name: "Status".to_string(),
+                data_type: DataType::String,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property.deleted",
+            },
+        ),
+        (
+            PropertyTopicEvent::OptionCreated(PropertyOptionCreatedMetadata {
+                option_id: PROPERTY_OPTION_ID,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: PropertyOptionValue::String("Open".to_string()),
+                color: None,
+                display_order: 0,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property_option.created",
+            },
+        ),
+        (
+            PropertyTopicEvent::OptionUpdated(PropertyOptionUpdatedMetadata {
+                option_id: PROPERTY_OPTION_ID,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: PropertyOptionValue::String("Done".to_string()),
+                color: Some("#ffffff".to_string()),
+                display_order: 1,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property_option.updated",
+            },
+        ),
+        (
+            PropertyTopicEvent::OptionDeleted(PropertyOptionDeletedMetadata {
+                option_id: PROPERTY_OPTION_ID,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: PropertyOptionValue::String("Done".to_string()),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Ignore,
+                event_type: "property_option.deleted",
+            },
+        ),
+        (
+            PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                entity_property_id: ENTITY_PROPERTY_ID,
+                entity_id: PROPERTY_ENTITY_ID.to_string(),
+                entity_type: EntityType::Document,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+                value: None,
+                updated_at: Utc::now(),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Reindex {
+                    entity_id: PROPERTY_ENTITY_ID,
+                    entity_type: EntityType::Document,
+                },
+                event_type: "entity_property.updated",
+            },
+        ),
+        (
+            PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
+                entity_property_id: ENTITY_PROPERTY_ID,
+                entity_id: PROPERTY_ENTITY_ID.to_string(),
+                entity_type: EntityType::Chat,
+                property_definition_id: PROPERTY_DEFINITION_ID,
+                actor_user_id: actor_user_id.clone(),
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Reindex {
+                    entity_id: PROPERTY_ENTITY_ID,
+                    entity_type: EntityType::Chat,
+                },
+                event_type: "entity_property.deleted",
+            },
+        ),
+        (
+            PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+                entity_id: PROPERTY_ENTITY_ID.to_string(),
+                entity_type: EntityType::Thread,
+                actor_user_id,
+            }),
+            PropertyEventDescription {
+                action: PropertyIndexAction::Reindex {
+                    entity_id: PROPERTY_ENTITY_ID,
+                    entity_type: EntityType::Thread,
+                },
+                event_type: "entity_properties.cleared",
+            },
+        ),
+    ]
+}
+
 #[test]
 fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert_eq!(
@@ -600,7 +890,9 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert!(topics.contains(&MacroCallsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChatsTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroDocumentsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroPropertiesTopic::TOPIC_STR));
 }
 
 #[test]
@@ -683,6 +975,72 @@ fn maps_all_channel_lifecycle_events_to_index_actions() {
 }
 
 #[test]
+fn maps_all_document_lifecycle_events_to_index_actions() {
+    let cases = document_event_cases();
+    assert_eq!(cases.len(), 9);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable document event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_document_event(&event), expected);
+    }
+}
+
+#[test]
+fn document_extraction_actions_preserve_optional_versions() {
+    let content_uploaded = DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user_id(),
+        file_type: FileType::Pdf,
+        document_version_id: None,
+    });
+    assert_eq!(
+        describe_document_event(&content_uploaded).action,
+        DocumentIndexAction::ExtractText {
+            owner: "macro|owner@example.com".to_string(),
+            file_type: FileType::Pdf,
+            document_version_id: None,
+        }
+    );
+
+    let sync_content_updated =
+        DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            file_type: FileType::Md,
+            document_version_id: Some("snapshot-7".to_string()),
+        });
+    assert_eq!(
+        describe_document_event(&sync_content_updated).action,
+        DocumentIndexAction::ExtractSync {
+            file_type: FileType::Md,
+            document_version_id: Some("snapshot-7".to_string()),
+        }
+    );
+}
+
+#[test]
+fn document_extractor_messages_disable_index_overrides_and_set_expected_users() {
+    let stored = stored_extractor_message(
+        DOCUMENT_ID,
+        "macro|owner@example.com".to_string(),
+        FileType::Pdf,
+        None,
+    );
+    assert_eq!(stored.user_id, "macro|owner@example.com");
+    assert_eq!(stored.document_id, DOCUMENT_ID);
+    assert_eq!(stored.file_type, FileType::Pdf);
+    assert_eq!(stored.document_version_id, None);
+    assert_eq!(stored.index_override, None);
+
+    let sync = sync_extractor_message(DOCUMENT_ID, FileType::Md, Some("snapshot-7".to_string()));
+    assert_eq!(sync.user_id, "");
+    assert_eq!(sync.document_id, DOCUMENT_ID);
+    assert_eq!(sync.file_type, FileType::Md);
+    assert_eq!(sync.document_version_id.as_deref(), Some("snapshot-7"));
+    assert_eq!(sync.index_override, None);
+}
+
+#[test]
 fn maps_all_project_lifecycle_events_to_reconciliation_actions() {
     let cases = project_event_cases();
     assert_eq!(cases.len(), 7);
@@ -691,6 +1049,18 @@ fn maps_all_project_lifecycle_events_to_reconciliation_actions() {
         let serialized = serde_json::to_value(&event).expect("serializable project event");
         assert_eq!(serialized["event_type"], expected.event_type);
         assert_eq!(describe_project_event(&event), expected);
+    }
+}
+
+#[test]
+fn maps_all_property_lifecycle_events_to_index_actions() {
+    let cases = property_event_cases();
+    assert_eq!(cases.len(), 8);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable property event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_property_event(&event), expected);
     }
 }
 
@@ -775,6 +1145,104 @@ fn project_envelope_decodes_round_trip_with_string_key() {
     assert_eq!(decoded_event.event().event, event);
 }
 
+#[test]
+fn property_envelope_decodes_round_trip_with_entity_key() {
+    let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: PROPERTY_ENTITY_ID.to_string(),
+        entity_type: EntityType::Document,
+        actor_user_id: Some(user_id()),
+    });
+    let message = encoded_message(
+        MacroPropertiesTopic::TOPIC_STR,
+        PROPERTY_ENTITY_ID,
+        Event::new(event.clone()),
+    );
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable property event");
+    let DeclaredMacroEvent::PropertyMacroEvent(decoded_event) = decoded else {
+        panic!("expected property event");
+    };
+    assert_eq!(decoded_event.key(), PROPERTY_ENTITY_ID);
+    assert_eq!(decoded_event.event().event, event);
+}
+
+#[test]
+fn exact_macro_documents_envelopes_decode_into_document_events() {
+    let cases: Vec<(&[u8], Event<DocumentTopicEvent>)> = vec![
+        (
+            br#"{
+                "event_id":"00000000-0000-0000-0000-000000000001",
+                "schema_version":1,
+                "event_type":"document.content_uploaded",
+                "metadata":{
+                    "document_id":"document-id",
+                    "owner":"macro|owner@example.com",
+                    "file_type":"pdf",
+                    "document_version_id":"convert"
+                }
+            }"#,
+            Event::with_event_id(
+                Uuid::from_u128(1),
+                DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+                    document_id: DOCUMENT_ID.to_string(),
+                    owner: user_id(),
+                    file_type: FileType::Pdf,
+                    document_version_id: Some("convert".to_string()),
+                }),
+            ),
+        ),
+        (
+            br#"{
+                "event_id":"00000000-0000-0000-0000-000000000002",
+                "schema_version":1,
+                "event_type":"document.sync_content_updated",
+                "metadata":{
+                    "document_id":"document-id",
+                    "file_type":"md",
+                    "document_version_id":null
+                }
+            }"#,
+            Event::with_event_id(
+                Uuid::from_u128(2),
+                DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+                    document_id: DOCUMENT_ID.to_string(),
+                    file_type: FileType::Md,
+                    document_version_id: None,
+                }),
+            ),
+        ),
+        (
+            br#"{
+                "event_id":"00000000-0000-0000-0000-000000000003",
+                "schema_version":1,
+                "event_type":"document.purged",
+                "metadata":{"document_id":"document-id"}
+            }"#,
+            Event::with_event_id(
+                Uuid::from_u128(3),
+                DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+                    document_id: DOCUMENT_ID.to_string(),
+                }),
+            ),
+        ),
+    ];
+
+    for (payload, expected) in cases {
+        let message = TestMessage {
+            topic: MacroDocumentsTopic::TOPIC_STR,
+            key: Some(DOCUMENT_ID.to_string()),
+            payload: Some(payload.to_vec()),
+        };
+
+        let decoded = DeclaredMacroEvent::decode(&message).expect("decodable document event");
+        let DeclaredMacroEvent::DocumentMacroEvent(decoded_event) = decoded else {
+            panic!("expected document event");
+        };
+        assert_eq!(decoded_event.key(), DOCUMENT_ID);
+        assert_eq!(decoded_event.event(), &expected);
+    }
+}
+
 #[tokio::test]
 async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
     let malformed = TestMessage {
@@ -847,6 +1315,39 @@ async fn unsupported_project_schema_message_is_commit_safe() {
             assert_eq!(actual, 2);
         }
         outcome => panic!("expected malformed project record, got {outcome:?}"),
+    }
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[tokio::test]
+async fn unsupported_property_schema_message_is_commit_safe() {
+    let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: PROPERTY_ENTITY_ID.to_string(),
+        entity_type: EntityType::Document,
+        actor_user_id: Some(user_id()),
+    });
+    let message = encoded_message(
+        MacroPropertiesTopic::TOPIC_STR,
+        PROPERTY_ENTITY_ID,
+        Event::with_schema_version(event, 2),
+    );
+    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 6, 50);
+    let (sender, mut receiver) = mpsc::channel(1);
+
+    match handoff_decoded(&sender, decoded).await {
+        HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected,
+            actual,
+        }) => {
+            assert_eq!(topic, MacroPropertiesTopic::TOPIC_STR);
+            assert_eq!(expected, 1);
+            assert_eq!(actual, 2);
+        }
+        outcome => panic!("expected malformed property record, got {outcome:?}"),
     }
     assert!(matches!(
         receiver.try_recv(),

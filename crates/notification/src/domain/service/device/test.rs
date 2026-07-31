@@ -19,7 +19,10 @@ fn test_user_id() -> MacroUserIdStr<'static> {
 struct MockNotifRepo {
     existing_endpoint: Mutex<Option<String>>,
     upserted: Mutex<Vec<(String, String, String, String)>>,
-    deleted_token_result: Mutex<Result<String, &'static str>>,
+    deleted_token_result: Mutex<Result<Vec<String>, &'static str>>,
+    deleted_token_calls: Mutex<Vec<(String, String)>>,
+    stale_endpoints: Mutex<Vec<String>>,
+    stale_delete_calls: Mutex<Vec<(String, String)>>,
 }
 
 impl MockNotifRepo {
@@ -27,7 +30,10 @@ impl MockNotifRepo {
         Self {
             existing_endpoint: Mutex::new(Some(endpoint.to_string())),
             upserted: Mutex::new(Vec::new()),
-            deleted_token_result: Mutex::new(Ok("arn:default".to_string())),
+            deleted_token_result: Mutex::new(Ok(vec!["arn:default".to_string()])),
+            deleted_token_calls: Mutex::new(Vec::new()),
+            stale_endpoints: Mutex::new(Vec::new()),
+            stale_delete_calls: Mutex::new(Vec::new()),
         }
     }
 
@@ -35,18 +41,30 @@ impl MockNotifRepo {
         Self {
             existing_endpoint: Mutex::new(None),
             upserted: Mutex::new(Vec::new()),
-            deleted_token_result: Mutex::new(Ok("arn:default".to_string())),
+            deleted_token_result: Mutex::new(Ok(vec!["arn:default".to_string()])),
+            deleted_token_calls: Mutex::new(Vec::new()),
+            stale_endpoints: Mutex::new(Vec::new()),
+            stale_delete_calls: Mutex::new(Vec::new()),
         }
     }
 
-    fn with_delete_result(mut self, result: Result<String, &'static str>) -> Self {
+    fn with_delete_result(mut self, result: Result<Vec<String>, &'static str>) -> Self {
         self.deleted_token_result = Mutex::new(result);
+        self
+    }
+
+    fn with_stale_endpoints(mut self, endpoints: Vec<String>) -> Self {
+        self.stale_endpoints = Mutex::new(endpoints);
         self
     }
 }
 
 impl NotificationRepository for MockNotifRepo {
-    async fn get_device_endpoint(&self, _device_token: &str) -> Result<Option<String>, Report> {
+    async fn get_device_endpoint(
+        &self,
+        _device_token: &str,
+        _device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
         Ok(self.existing_endpoint.lock().unwrap().clone())
     }
 
@@ -66,16 +84,34 @@ impl NotificationRepository for MockNotifRepo {
         Ok(())
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
         &self,
-        _device_token: &str,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        device_token: &str,
         _device_type: &DeviceType,
-    ) -> Result<String, Report> {
+    ) -> Result<Vec<String>, Report> {
+        self.deleted_token_calls
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), device_token.to_string()));
         self.deleted_token_result
             .lock()
             .unwrap()
             .clone()
             .map_err(|e| rootcause::report!("{e}"))
+    }
+
+    async fn delete_stale_devices_by_token(
+        &self,
+        device_token: &str,
+        _device_type: &DeviceType,
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
+        self.stale_delete_calls
+            .lock()
+            .unwrap()
+            .push((device_token.to_string(), active_endpoint.to_string()));
+        Ok(self.stale_endpoints.lock().unwrap().clone())
     }
 
     async fn delete_device_by_endpoint(&self, _: &str) -> Result<(), Report> {
@@ -480,32 +516,120 @@ async fn register_android_uses_fcm_arn() {
         .unwrap();
 }
 
-// ─── Unregister Tests ────────────────────────────────────────────────────
-
 #[tokio::test]
-async fn unregister_happy_path() {
-    let db = MockNotifRepo::empty().with_delete_result(Ok("arn:to-delete".to_string()));
+async fn register_prunes_stale_registrations_for_token() {
+    let db = MockNotifRepo::with_existing_endpoint("arn:existing")
+        .with_stale_endpoints(vec!["arn:stale-1".to_string(), "arn:stale-2".to_string()]);
     let sns = MockSnsManager::new();
     let service = make_service(db, sns);
 
     service
-        .unregister_device("device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .await
+        .unwrap();
+
+    // Pruning must exclude the endpoint that was just upserted.
+    let stale_calls = service.repository.stale_delete_calls.lock().unwrap();
+    assert_eq!(stale_calls.len(), 1);
+    assert_eq!(stale_calls[0].1, "arn:existing");
+
+    let deleted = service.sns_endpoint.deleted.lock().unwrap();
+    assert_eq!(*deleted, vec!["arn:stale-1", "arn:stale-2"]);
+}
+
+#[tokio::test]
+async fn register_succeeds_when_stale_sns_delete_fails() {
+    let db = MockNotifRepo::with_existing_endpoint("arn:existing")
+        .with_stale_endpoints(vec!["arn:stale".to_string()]);
+    let mut sns = MockSnsManager::new();
+    sns.should_fail = true;
+    let service = make_service(db, sns);
+
+    service
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .await
+        .unwrap();
+
+    let upserted = service.repository.upserted.lock().unwrap();
+    assert_eq!(upserted.len(), 1);
+}
+
+// ─── Unregister Tests ────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn unregister_happy_path() {
+    let db = MockNotifRepo::empty().with_delete_result(Ok(vec!["arn:to-delete".to_string()]));
+    let sns = MockSnsManager::new();
+    let service = make_service(db, sns);
+
+    service
+        .unregister_device(test_user_id(), "device-token", &DeviceType::Ios)
         .await
         .unwrap();
 
     let deleted = service.sns_endpoint.deleted.lock().unwrap();
     assert_eq!(deleted.len(), 1);
     assert_eq!(deleted[0], "arn:to-delete");
+
+    // The delete must be scoped to the calling user.
+    let calls = service.repository.deleted_token_calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, test_user_id().to_string());
+}
+
+#[tokio::test]
+async fn unregister_no_matching_rows_succeeds() {
+    let db = MockNotifRepo::empty().with_delete_result(Ok(Vec::new()));
+    let sns = MockSnsManager::new();
+    let service = make_service(db, sns);
+
+    service
+        .unregister_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .await
+        .unwrap();
+
+    let deleted = service.sns_endpoint.deleted.lock().unwrap();
+    assert!(deleted.is_empty());
+}
+
+#[tokio::test]
+async fn unregister_deletes_all_matching_endpoints() {
+    let db = MockNotifRepo::empty()
+        .with_delete_result(Ok(vec!["arn:a".to_string(), "arn:b".to_string()]));
+    let sns = MockSnsManager::new();
+    let service = make_service(db, sns);
+
+    service
+        .unregister_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .await
+        .unwrap();
+
+    let deleted = service.sns_endpoint.deleted.lock().unwrap();
+    assert_eq!(*deleted, vec!["arn:a", "arn:b"]);
+}
+
+#[tokio::test]
+async fn unregister_succeeds_when_sns_delete_fails() {
+    let db = MockNotifRepo::empty()
+        .with_delete_result(Ok(vec!["arn:a".to_string(), "arn:b".to_string()]));
+    let mut sns = MockSnsManager::new();
+    sns.should_fail = true;
+    let service = make_service(db, sns);
+
+    service
+        .unregister_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn unregister_db_error_propagates() {
-    let db = MockNotifRepo::empty().with_delete_result(Err("device not found"));
+    let db = MockNotifRepo::empty().with_delete_result(Err("db error"));
     let sns = MockSnsManager::new();
     let service = make_service(db, sns);
 
     let result = service
-        .unregister_device("device-token", &DeviceType::Ios)
+        .unregister_device(test_user_id(), "device-token", &DeviceType::Ios)
         .await;
 
     assert!(result.is_err());

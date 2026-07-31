@@ -4,6 +4,7 @@ mod send;
 mod signature;
 mod thread;
 mod thread_labels;
+mod user;
 
 #[cfg(test)]
 mod test;

@@ -161,12 +161,8 @@ function InviteEntryRow(props: {
           onInput={(e) => props.onEmailChange(e.currentTarget.value)}
           onBlur={() => props.onBlur()}
           placeholder="Enter email address"
-          class={cn(
-            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
-            props.error
-              ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent'
-          )}
+          class="settings-input flex-1 min-w-0"
+          aria-invalid={!!props.error}
         />
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
@@ -661,12 +657,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
               onBlur={() => validateTeamName()}
               placeholder="My Team"
-              class={cn(
-                'w-full px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
-                teamNameError()
-                  ? 'border-failure focus:border-failure'
-                  : 'border-edge-muted focus:border-accent'
-              )}
+              class="settings-input w-full"
+              aria-invalid={!!teamNameError()}
             />
             <Show when={teamNameError()}>
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
@@ -1354,7 +1346,7 @@ function TeamManagement(props: {
                 value={memberQuery()}
                 onInput={(e) => setMemberQuery(e.currentTarget.value)}
                 placeholder="Filter members"
-                class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+                class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
               />
               <Show when={memberQuery()}>
                 <button
@@ -1476,7 +1468,7 @@ function TeamManagement(props: {
               value={deleteConfirmation()}
               onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
               placeholder={deleteConfirmationPhrase()}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
+              class="settings-input w-full"
             />
             <div class="flex justify-end gap-1 pt-2">
               <Button

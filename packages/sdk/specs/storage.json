@@ -15046,6 +15046,29 @@
         "description": "API-visible content lifecycle state derived from current document metadata.",
         "enum": ["unknown", "pending", "ready"]
       },
+      "DocumentContentUploadedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::ContentUploaded`].",
+        "required": ["document_id", "owner", "file_type"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the document whose stored bytes changed."
+          },
+          "document_version_id": {
+            "type": ["string", "null"],
+            "description": "Version written, or the converted-file marker; `None` for unversioned\nwrites (mirrors `SearchExtractorMessage::document_version_id`)."
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/FileType",
+            "description": "File type of the uploaded object (may differ from the document's own\ntype, e.g. `pdf` for the converted rendition of a docx)."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The owner of the document (used by the extractor to resolve S3 keys)."
+          }
+        }
+      },
       "DocumentCopiedMetadata": {
         "type": "object",
         "description": "Metadata for [`DocumentTopicEvent::Copied`].",
@@ -15554,6 +15577,17 @@
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
       },
+      "DocumentPurgedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Purged`].",
+        "required": ["document_id"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the hard-deleted document."
+          }
+        }
+      },
       "DocumentResponse": {
         "type": "object",
         "description": "Document response with content lifecycle metadata.",
@@ -15688,6 +15722,25 @@
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
         "enum": ["task", "snippet"]
       },
+      "DocumentSyncContentUpdatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::SyncContentUpdated`].",
+        "required": ["document_id", "file_type"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the live-collab document whose content changed."
+          },
+          "document_version_id": {
+            "type": ["string", "null"],
+            "description": "Version marker for the sync snapshot, when the caller supplies one."
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/FileType",
+            "description": "File type of the sync document (markdown today)."
+          }
+        }
+      },
       "DocumentTeamShareResponse": {
         "type": "object",
         "description": "The team-share state of a document. The team is resolved from the document\nowner's team membership.",
@@ -15748,6 +15801,51 @@
               "metadata": {
                 "$ref": "#/components/schemas/DocumentDeletedMetadata",
                 "description": "A document was soft-deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The document's stored bytes were (re)written to S3.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.content_uploaded"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentContentUploadedMetadata",
+                "description": "The document's stored bytes were (re)written to S3."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A live-collab (sync) document's content changed and should be re-extracted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.sync_content_updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentSyncContentUpdatedMetadata",
+                "description": "A live-collab (sync) document's content changed and should be re-extracted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The document row was permanently deleted (hard delete).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.purged"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentPurgedMetadata",
+                "description": "The document row was permanently deleted (hard delete)."
               }
             }
           },

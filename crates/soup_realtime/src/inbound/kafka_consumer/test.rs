@@ -10,7 +10,8 @@ use channels::domain::{
 use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use chrono::Utc;
 use documents::domain::events::{
-    DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentInteractionMetadata,
+    DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
     DocumentUpdatedMetadata, InteractionReason,
 };
 use email::domain::events::{
@@ -176,6 +177,30 @@ fn document_edit_interactions_map_to_updated_patches() {
         Patch::Updated(_)
     ));
     assert!(patches_from_document_event(&first_join).is_empty());
+}
+
+#[test]
+fn search_only_document_events_do_not_emit_patches() {
+    let events = [
+        DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            owner: user(),
+            file_type: "pdf".parse().expect("valid file type"),
+            document_version_id: Some("convert".to_string()),
+        }),
+        DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            file_type: "md".parse().expect("valid file type"),
+            document_version_id: None,
+        }),
+        DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        }),
+    ];
+
+    for event in events {
+        assert!(patches_from_document_event(&event).is_empty());
+    }
 }
 
 #[test]

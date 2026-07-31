@@ -11,15 +11,24 @@ processing = [
   "dep:call",
   "dep:channels",
   "dep:chat",
+  "dep:documents",
   "dep:kafka_util",
   "dep:macro_event_broker",
   "dep:macro_event_topics",
+  "dep:models_properties",
   "dep:projects",
+  "dep:properties",
   "dep:rdkafka",
   "dep:rootcause",
   "dep:tokio-retry",
 ]
-service = ["macro_db_client", "models_properties", "properties"]
+service = [
+  "dep:documents",
+  "dep:macro_event_broker",
+  "macro_db_client",
+  "dep:models_properties",
+  "dep:properties",
+]
 pdf = ["dep:pdfium-render"]
 
 [[bin]]
@@ -66,6 +75,7 @@ macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
 document_sub_type = { path = "../../crates/document_sub_type" }
+documents = { path = "../../crates/documents", default-features = false, optional = true }
 doppler-config = { workspace = true }
 model = { path = "../../crates/model" }
 s3_key = { path = "../../crates/s3_key" }
@@ -97,7 +107,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal", "sync", "time"] }
 tokio-retry = { workspace = true, optional = true }
-tokio-util = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

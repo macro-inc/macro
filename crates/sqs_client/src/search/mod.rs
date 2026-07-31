@@ -4,7 +4,7 @@ use crate::{
         call::{CallRecordMessage, RemoveCallRecord},
         channel::ChannelMessageUpdate,
         chat::ChatMessage,
-        document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
+        document::SearchExtractorMessage,
         email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
         project::UpsertProject,
     },
@@ -70,10 +70,7 @@ pub enum Operation {
 pub enum SearchQueueMessage {
     // Document
     ExtractDocumentText(SearchExtractorMessage),
-    RemoveDocument(DocumentId),
     ExtractSync(SearchExtractorMessage),
-    UpdateDocumentProperties(DocumentPropertiesUpdate),
-    UpdateDocumentName(DocumentId),
     // Chat
     /// SQS backfill work-queue contract for reconciling a chat message.
     ChatMessage(ChatMessage),
@@ -99,10 +96,7 @@ impl PrimaryId for SearchQueueMessage {
     fn id(&self) -> String {
         match self {
             SearchQueueMessage::ExtractDocumentText(message) => message.document_id.clone(),
-            SearchQueueMessage::RemoveDocument(message) => message.document_id.clone(),
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
-            SearchQueueMessage::UpdateDocumentProperties(message) => message.document_id.clone(),
-            SearchQueueMessage::UpdateDocumentName(message) => message.document_id.clone(),
             // The message id keeps entries unique within an SQS batch.
             SearchQueueMessage::ChatMessage(message) => message.message_id.clone(),
             SearchQueueMessage::ExtractEmailMessage(message)
@@ -131,10 +125,7 @@ impl SearchQueueMessage {
         match self {
             // Document
             SearchQueueMessage::ExtractDocumentText(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveDocument(_) => Operation::Remove,
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
-            SearchQueueMessage::UpdateDocumentProperties(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::UpdateDocumentName(_) => Operation::UpdateMetadata,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
             // Email
@@ -224,32 +215,4 @@ pub async fn bulk_enqueue_search_text_extractor(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::search::document::DocumentId;
-
-    #[test]
-    fn update_document_name_maps_to_update_metadata() {
-        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
-            document_id: "doc-1".to_string(),
-        });
-
-        assert!(matches!(message.operation(), Operation::UpdateMetadata));
-        assert_eq!(message.id(), "doc-1");
-    }
-
-    #[test]
-    fn update_document_name_round_trips() {
-        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
-            document_id: "doc-1".to_string(),
-        });
-
-        let serialized = serde_json::to_string(&message).unwrap();
-        let deserialized: SearchQueueMessage = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(message, deserialized);
-    }
 }

@@ -129,7 +129,7 @@ fn build() -> Step<Run> {
         ))
         .add_env(Env::new(
             "VITE_OTEL_ENV",
-            "${{ inputs.environment == 'prod' && 'production' || 'development' }}",
+            "${{ inputs.environment == 'prod' && 'prod' || 'development' }}",
         ))
 }
 

@@ -4,9 +4,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
-    CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
-    GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread, Thread,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailSyncStatus,
+    EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility, LabelType, Link, LinkLabel,
+    MessageListVisibility, ParsedMessage, ParsedThread, Thread, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -19,6 +20,7 @@ use macro_authorization::{
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
+    email::EmailStr,
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
@@ -219,10 +221,64 @@ impl SoupService for CountingSoupService {
 #[derive(Clone, Default)]
 struct CountingEmailService {
     inbox_calls: Arc<AtomicUsize>,
+    user_label_calls: Arc<AtomicUsize>,
+    user_link_calls: Arc<AtomicUsize>,
+    user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
 }
 
 fn test_email_err() -> EmailErr {
     EmailErr::RepoErr(anyhow::anyhow!("counting email service"))
+}
+
+impl EmailUserService for CountingEmailService {
+    async fn get_user_email_labels(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<LinkLabel>, EmailErr> {
+        self.user_label_calls.fetch_add(1, Ordering::SeqCst);
+        self.user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock")
+            .push(macro_id);
+        Ok(vec![LinkLabel {
+            id: Uuid::from_u128(501),
+            link_id: Uuid::from_u128(502),
+            provider_label_id: "Label_501".to_owned(),
+            name: "Customers".to_owned(),
+            created_at: Default::default(),
+            message_list_visibility: MessageListVisibility::Show,
+            label_list_visibility: LabelListVisibility::LabelShow,
+            type_: LabelType::User,
+        }])
+    }
+
+    async fn get_user_email_links(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<UserEmailLink>, EmailErr> {
+        self.user_link_calls.fetch_add(1, Ordering::SeqCst);
+        self.user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock")
+            .push(macro_id);
+        Ok(vec![UserEmailLink {
+            id: Uuid::from_u128(502),
+            macro_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            email_address: EmailStr::try_from("inbox@example.com".to_owned()).unwrap(),
+            photo_url: Some("https://example.com/inbox.png".to_owned()),
+            provider: UserProvider::Gmail,
+            is_sync_active: true,
+            sync_status: EmailSyncStatus::UpToDate,
+            needs_reauth: false,
+            settings: UserEmailLinkSettings {
+                signature_on_replies_forwards: true,
+                signature: Some("<p>Regards</p>".to_owned()),
+            },
+            is_primary: true,
+            created_at: Default::default(),
+            updated_at: Default::default(),
+        }])
+    }
 }
 
 impl EmailService for CountingEmailService {
@@ -593,6 +649,9 @@ struct TestHarness {
     email_content_reader: RecordingEmailContentReader,
     authorization_calls: Arc<AtomicUsize>,
     inbox_calls: Arc<AtomicUsize>,
+    user_label_calls: Arc<AtomicUsize>,
+    user_link_calls: Arc<AtomicUsize>,
+    user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     team_calls: Arc<AtomicUsize>,
     raw_soup_calls: Arc<AtomicUsize>,
     raw_soup_team_receipts: Arc<AtomicUsize>,
@@ -609,6 +668,9 @@ fn harness() -> TestHarness {
     let email_content_reader = RecordingEmailContentReader::default();
     let authorization_calls = Arc::clone(&authorization.authorization_calls);
     let inbox_calls = Arc::clone(&email.inbox_calls);
+    let user_label_calls = Arc::clone(&email.user_label_calls);
+    let user_link_calls = Arc::clone(&email.user_link_calls);
+    let user_catalog_identities = Arc::clone(&email.user_catalog_identities);
     let team_calls = Arc::clone(&entity_access.team_calls);
     let raw_soup_calls = Arc::clone(&soup.raw_calls);
     let raw_soup_team_receipts = Arc::clone(&soup.raw_team_receipts);
@@ -627,6 +689,9 @@ fn harness() -> TestHarness {
         email_content_reader,
         authorization_calls,
         inbox_calls,
+        user_label_calls,
+        user_link_calls,
+        user_catalog_identities,
         team_calls,
         raw_soup_calls,
         raw_soup_team_receipts,
@@ -779,10 +844,62 @@ async fn user_id_resolves_without_touching_services() {
     );
     assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.user_label_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.user_link_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        harness
+            .user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock")
+            .is_empty()
+    );
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn email_catalog_fields_use_the_authenticated_user_and_remain_direct_user_fields() {
+    let harness = harness();
+
+    let response = harness
+        .execute(
+            r#"{
+                user {
+                    emailLabels { __typename id linkId providerLabelId name }
+                    emailLinks {
+                        id macroId emailAddress photoUrl provider isSyncActive syncStatus
+                        needsReauth settings { signatureOnRepliesForwards signature }
+                        isPrimary createdAt updatedAt
+                    }
+                }
+            }"#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let label = &data["user"]["emailLabels"][0];
+    assert_eq!(label["__typename"], "GraphqlSoupEmailLabel");
+    assert_eq!(label["linkId"], Uuid::from_u128(502).to_string());
+    let link = &data["user"]["emailLinks"][0];
+    assert_eq!(link["emailAddress"], "inbox@example.com");
+    assert_eq!(link["syncStatus"], "UP_TO_DATE");
+    assert_eq!(link["settings"]["signature"], "<p>Regards</p>");
+    assert_eq!(harness.user_label_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.user_link_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        *harness
+            .user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock"),
+        vec![
+            MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+            MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        ]
+    );
 }
 
 #[tokio::test]

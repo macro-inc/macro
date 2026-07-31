@@ -1,35 +1,41 @@
-//! SQS adapter for document search cleanup and deletion.
+//! Kafka search-cleanup and SQS document-deletion adapter.
+
+#[cfg(test)]
+mod test;
 
 use std::sync::Arc;
 
-use sqs_client::search::{SearchQueueMessage, document::DocumentId};
+use documents::domain::events::{DocumentMacroEvent, DocumentPurgedMetadata};
+use macro_event_broker::MacroEventBroker;
 
 use crate::domain::ports::ProjectSearchIndexer;
 
-/// SQS-backed document search cleanup and deletion adapter.
+/// Kafka-backed document search cleanup and SQS-backed document deletion adapter.
 #[derive(Clone)]
-pub struct SqsProjectSearchIndexer {
+pub struct SqsProjectSearchIndexer<B: MacroEventBroker> {
     sqs: Arc<sqs_client::SQS>,
+    event_broker: B,
 }
 
-impl SqsProjectSearchIndexer {
-    /// Create a project search indexer from the shared SQS client.
-    pub fn new(sqs: Arc<sqs_client::SQS>) -> Self {
-        Self { sqs }
+impl<B: MacroEventBroker> SqsProjectSearchIndexer<B> {
+    /// Create a project search indexer from the shared SQS client and event broker.
+    pub fn new(sqs: Arc<sqs_client::SQS>, event_broker: B) -> Self {
+        Self { sqs, event_broker }
     }
 }
 
-impl ProjectSearchIndexer for SqsProjectSearchIndexer {
+impl<B: MacroEventBroker> ProjectSearchIndexer for SqsProjectSearchIndexer<B> {
     #[tracing::instrument(skip(self), err)]
     async fn remove_documents(&self, document_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = document_ids
-            .into_iter()
-            .map(|document_id| SearchQueueMessage::RemoveDocument(DocumentId { document_id }))
-            .collect();
+        for document_id in document_ids {
+            let event = DocumentMacroEvent::purged(
+                document_id.clone(),
+                DocumentPurgedMetadata { document_id },
+            );
+            drop(self.event_broker.send_event(&event)?);
+        }
 
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

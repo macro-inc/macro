@@ -565,8 +565,10 @@ a {
    Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
 @utility settings-input {
   @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-sm text-ink outline-none transition-colors;
+  /* Matches the composer/chat placeholder token so hint text reads the same
+     faintness everywhere, rather than settings sitting more prominent. */
   &::placeholder {
-    @apply text-ink-extra-muted;
+    @apply text-ink-placeholder;
   }
   &:hover {
     @apply border-edge;
