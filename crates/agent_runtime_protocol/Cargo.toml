@@ -13,6 +13,9 @@ axum = { workspace = true, features = ["ws"] }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+specta = { workspace = true }
+specta-serde = { workspace = true }
+specta-typescript = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-tungstenite = { workspace = true }

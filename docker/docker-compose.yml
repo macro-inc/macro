@@ -296,6 +296,36 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent_proxy_service (Port 8091: user-facing HTTP API and the shared
+  # agent-runtime WebSocket endpoint, every session dials in and is
+  # disambiguated by `?id=`)
+  # Proxy for external coding agents - MacroDB + connection gateway
+  # ============================================================================
+  agent_proxy_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_proxy_service"]
+    ports:
+      - "8091:8080"
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - connection_gateway
+    networks:
+      databases:
+      services:
+        aliases:
+          - agent-proxy-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # static_file_service (Port 8094)
   # Static file serving - DynamoDB
   # ============================================================================

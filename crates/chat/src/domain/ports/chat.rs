@@ -1,5 +1,5 @@
 use crate::domain::models::{
-    ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
+    ChatAgentKind, ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
     PatchChatMessageArgs, Result,
 };
 use agent::types::ChatMessageContent;
@@ -31,6 +31,12 @@ pub trait ChatRepo: Send + Sync + 'static {
     /// Get a chat metadata by its ID.
     fn get_metadata(&self, chat_id: &str)
     -> impl std::future::Future<Output = Result<Chat>> + Send;
+
+    /// Get what kind of agent backs a chat.
+    fn get_agent_kind(
+        &self,
+        chat_id: &str,
+    ) -> impl std::future::Future<Output = Result<ChatAgentKind>> + Send;
 
     /// Get the requesting user's access level on a chat.
     fn get_access_level(

@@ -9,7 +9,7 @@ use model::chat::NewChatMessage;
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
-use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatArgs};
+use crate::domain::models::{ChatAgentKind, ChatErr, CopyChatArgs, CreateChatArgs, PatchChatArgs};
 use crate::domain::ports::ChatRepo;
 
 async fn create_chat_with_message(repo: &PgChatRepo) -> (String, String) {
@@ -20,6 +20,7 @@ async fn create_chat_with_message(repo: &PgChatRepo) -> (String, String) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Message update test".to_string(),
                 project_id: None,
             },
@@ -60,6 +61,7 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Test Chat".to_string(),
                 project_id: None,
             },
@@ -94,6 +96,7 @@ async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Active Chat".to_string(),
                 project_id: None,
             },
@@ -253,6 +256,58 @@ async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
+async fn create_external_agent_chat_tracks_kind(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+
+    let macro_chat_id = repo
+        .create(
+            user_id.clone(),
+            CreateChatArgs {
+                kind: ChatAgentKind::MacroChat,
+                name: "Macro Chat".to_string(),
+                project_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let external_chat_id = repo
+        .create(
+            user_id,
+            CreateChatArgs {
+                kind: ChatAgentKind::External,
+                name: "External Agent".to_string(),
+                project_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.get_agent_kind(&macro_chat_id).await.unwrap(),
+        ChatAgentKind::MacroChat
+    );
+    assert_eq!(
+        repo.get_agent_kind(&external_chat_id).await.unwrap(),
+        ChatAgentKind::External
+    );
+
+    // the column reflects each chat's kind directly
+    let row = sqlx::query(r#"SELECT "agentKind" FROM "Chat" WHERE id = $1"#)
+        .bind(&external_chat_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(row.get::<String, _>("agentKind"), "External");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn create_chat_creates_permission(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
@@ -263,6 +318,7 @@ async fn create_chat_creates_permission(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Perm Chat".to_string(),
                 project_id: None,
             },
@@ -295,6 +351,7 @@ async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Access Chat".to_string(),
                 project_id: None,
             },
@@ -335,6 +392,7 @@ async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "History Chat".to_string(),
                 project_id: None,
             },
@@ -371,6 +429,7 @@ async fn create_chat_with_project_id(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Project Chat".to_string(),
                 project_id: Some("project-123".to_string()),
             },
@@ -404,6 +463,7 @@ async fn get_chat_returns_chat(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Get Me".to_string(),
                 project_id: None,
             },
@@ -446,6 +506,7 @@ async fn soft_delete_chat_sets_deleted_at(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Delete Me".to_string(),
                 project_id: None,
             },
@@ -479,6 +540,7 @@ async fn soft_delete_chat_removes_history(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "History Delete".to_string(),
                 project_id: None,
             },
@@ -513,6 +575,7 @@ async fn permanently_delete_chat_removes_row(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Perm Delete".to_string(),
                 project_id: None,
             },
@@ -545,6 +608,7 @@ async fn permanently_delete_chat_removes_permissions(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Perm Delete Perms".to_string(),
                 project_id: None,
             },
@@ -578,6 +642,7 @@ async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) 
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Perm Delete Access".to_string(),
                 project_id: None,
             },
@@ -613,6 +678,7 @@ async fn patch_chat_updates_name(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Original".to_string(),
                 project_id: None,
             },
@@ -653,6 +719,7 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Project Chat".to_string(),
                 project_id: None,
             },
@@ -701,6 +768,7 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Clear Project".to_string(),
                 project_id: Some("project-123".to_string()),
             },
@@ -746,6 +814,7 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Full Chat".to_string(),
                 project_id: None,
             },
@@ -787,6 +856,7 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
         .create(
             user_id.clone(),
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Source Chat".to_string(),
                 project_id: None,
             },
@@ -849,6 +919,7 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Revert Me".to_string(),
                 project_id: None,
             },
@@ -894,6 +965,7 @@ async fn get_permissions_returns_share_permission(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
+                kind: Default::default(),
                 name: "Perms Chat".to_string(),
                 project_id: None,
             },

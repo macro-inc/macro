@@ -8,6 +8,9 @@ import type { StreamErrorOneOf } from './streamErrorOneOf';
 import type { StreamErrorOneOfFive } from './streamErrorOneOfFive';
 import type { StreamErrorOneOfThree } from './streamErrorOneOfThree';
 
+/**
+ * A client-facing classification of a failure that ended a stream early.
+ */
 export type StreamError =
   | StreamErrorOneOf
   | StreamErrorOneOfThree

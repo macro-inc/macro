@@ -1,0 +1,53 @@
+# Local dev helpers for driving the agent proxy end-to-end.
+#
+# Typical flow:
+#   just create-agent                 # -> {"id":"<AGENT_ID>"}
+#   just prompt <AGENT_ID> "say hi"   # safe now: queued until a runtime is ready
+#   just mock-runtime <AGENT_ID>      # leave running; spawns Claude Code, flushes the queue
+#   just get-agent <AGENT_ID>         # persisted conversation
+#
+# The proxy owns the ACP handshake: once a runtime reports `acp_ready` it
+# sends `initialize` + `session/new` itself, then flushes anything queued
+# while the session had no ready runtime. Every ACP post returns 202;
+# agent replies stream to the connection gateway.
+# 400 = not an External chat / bad JSON-RPC, 403/404 = wrong agent id or no
+# access for the header user, 409 = runtime vanished mid-send.
+
+host := env('AGENT_PROXY_URL', 'http://localhost:8091')
+ws_host := env('AGENT_PROXY_WS_URL', 'ws://localhost:8091')
+auth_key := env('INTERNAL_API_KEY', 'local')
+user_id := env('LOCAL_USER_ID', 'macro|eric.hayes+bartsimpson@macro.com')
+
+curl := 'curl -s -H "content-type: application/json" -H "x-internal-auth-key: ' + auth_key + '" -H "x-internal-macro-user-id: ' + user_id + '"'
+
+# List recipes
+default:
+    @just --list
+
+# Seed the header user into a freshly-reset local DB (stack resets wipe it;
+# logging into the local app does the same thing through the real auth path)
+seed-user email='eric.hayes@macro.com':
+    docker exec macro-postgres-1 psql -U user -d macrodb -c "WITH mu AS (INSERT INTO macro_user (id, username, email, stripe_customer_id, has_trialed) VALUES (gen_random_uuid(), split_part('{{ email }}', '@', 1), '{{ email }}', 'cus_local_test', true) ON CONFLICT DO NOTHING RETURNING id) INSERT INTO \"User\" (id, email, name, macro_user_id) SELECT 'macro|{{ email }}', '{{ email }}', split_part('{{ email }}', '@', 1), mu.id FROM mu ON CONFLICT DO NOTHING"
+
+# Create an External agent chat; prints its id (the Macro session id)
+create-agent name='test coding agent':
+    {{ curl }} -X POST {{ host }}/agents -d '{"name":"{{ name }}","kind":"External"}'
+
+# Run the mock runtime hosting Claude Code for the session (leave running)
+mock-runtime agent_id:
+    cargo run -p agent_proxy --bin mock_runtime -- \
+        --proxy-url '{{ ws_host }}' --agent-id '{{ agent_id }}'
+
+# Prompt the agent. The proxy stamps the live ACP session id itself, and
+# queues the prompt durably if no runtime is ready yet - safe to run before
+# `mock-runtime`.
+prompt agent_id text id='3':
+    {{ curl }} -X POST {{ host }}/sessions/{{ agent_id }}/acp -d '{"jsonrpc":"2.0","id":{{ id }},"method":"session/prompt","params":{"sessionId":"","prompt":[{"type":"text","text":"{{ text }}"}]}}'
+
+# Forward one raw ACP JSON-RPC message verbatim
+send agent_id message:
+    {{ curl }} -X POST {{ host }}/sessions/{{ agent_id }}/acp -d '{{ message }}'
+
+# Fetch the agent with its persisted messages
+get-agent agent_id:
+    {{ curl }} {{ host }}/agents/{{ agent_id }} | python3 -m json.tool
