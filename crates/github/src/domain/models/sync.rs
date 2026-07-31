@@ -30,6 +30,40 @@ impl AsRef<str> for GithubKey {
     }
 }
 
+/// OAuth access token returned after exchanging a GitHub App setup code.
+#[derive(Clone, Deserialize)]
+pub struct GithubSetupAccessToken {
+    access_token: String,
+}
+
+impl GithubSetupAccessToken {
+    /// Creates an access token from GitHub's OAuth response value.
+    pub fn new(access_token: String) -> Self {
+        Self { access_token }
+    }
+
+    /// Returns the access token without transferring ownership of the secret.
+    pub fn as_str(&self) -> &str {
+        &self.access_token
+    }
+}
+
+/// A GitHub App installation visible to an authenticated GitHub user.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct GithubUserInstallation {
+    /// GitHub's numeric installation identifier.
+    pub id: u64,
+}
+
+/// One page of installations visible to an authenticated GitHub user.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GithubUserInstallationsPage {
+    /// Number of installations visible across every page.
+    pub total_count: u64,
+    /// Installations returned on this page.
+    pub installations: Vec<GithubUserInstallation>,
+}
+
 /// GitHub App installation access token response
 #[derive(Debug, Clone, Deserialize)]
 pub struct GithubInstallationAccessToken {
