@@ -16704,7 +16704,6 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
- "concurrent-queue",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
