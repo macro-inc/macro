@@ -615,6 +615,7 @@ where
                         next_sync_token: batch.next_sync_token,
                         observed_provider_event_ids: batch.observed_provider_event_ids,
                         materialized_range: batch.materialized_range,
+                        cancelled_provider_event_ids: batch.cancelled_provider_event_ids,
                     },
                 )
                 .await?;

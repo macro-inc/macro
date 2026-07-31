@@ -806,6 +806,37 @@ impl CalendarRepository for PgCalendarRepository {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
+        if !sync.cancelled_provider_event_ids.is_empty() {
+            // A cancelled recurring master retires its expanded instances via
+            // provider_recurring_event_id, matching Google's tombstone shape.
+            let affected_event_ids = sqlx::query_scalar!(
+                r#"
+                WITH deleted_sources AS (
+                    DELETE FROM calendar_event_sources source
+                    WHERE source.source_kind = 'google'
+                      AND source.account_id = $1
+                      AND source.calendar_id = $2
+                      AND (
+                            source.provider_event_id = ANY($3::text[])
+                            OR source.provider_recurring_event_id = ANY($3::text[])
+                      )
+                    RETURNING source.event_id
+                )
+                SELECT DISTINCT event_id AS "event_id!"
+                FROM deleted_sources
+                "#,
+                account_id,
+                sync.calendar_id,
+                &sync.cancelled_provider_event_ids,
+            )
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(report)?;
+            for event_id in affected_event_ids {
+                restore_best_source_or_delete(&mut tx, event_id).await?;
+            }
+        }
+
         if let Some(observed_provider_event_ids) = &sync.observed_provider_event_ids {
             let affected_event_ids = sqlx::query_scalar!(
                 r#"

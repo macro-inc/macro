@@ -543,6 +543,12 @@ pub struct GoogleEventSyncBatch {
     pub next_sync_token: String,
     /// Range rebuilt by this batch, or `None` for a token-only no-op poll.
     pub materialized_range: Option<OccurrenceRange>,
+    /// Provider event identifiers the change feed reported cancelled.
+    ///
+    /// Applied even when no full snapshot ran, so incremental polls can
+    /// retire sources without a destructive account sweep. A recurring
+    /// master's identifier also retires its expanded instances.
+    pub cancelled_provider_event_ids: Vec<String>,
 }
 
 /// Durable state committed for one calendar as soon as its poll completes,
@@ -557,6 +563,8 @@ pub struct GoogleCalendarSyncSnapshot {
     pub observed_provider_event_ids: Option<Vec<String>>,
     /// Exact occurrence range rebuilt by a full snapshot.
     pub materialized_range: Option<OccurrenceRange>,
+    /// Provider event identifiers the change feed reported cancelled.
+    pub cancelled_provider_event_ids: Vec<String>,
 }
 
 /// Kind of idempotent historical work triggered by a Google grant.

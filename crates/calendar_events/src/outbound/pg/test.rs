@@ -418,6 +418,7 @@ async fn completed_google_job_is_rearmed_and_reuses_calendar_sync_state(pool: Pg
             next_sync_token: "next-sync-token".to_string(),
             observed_provider_event_ids: Some(Vec::new()),
             materialized_range: Some(range.clone()),
+            cancelled_provider_event_ids: Vec::new(),
         },
     )
     .await
@@ -1037,6 +1038,7 @@ async fn google_snapshot_deletion_restores_the_surviving_email_source(pool: PgPo
             next_sync_token: "next".to_string(),
             observed_provider_event_ids: Some(Vec::new()),
             materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
+            cancelled_provider_event_ids: Vec::new(),
         },
     )
     .await
@@ -1060,6 +1062,146 @@ async fn google_snapshot_deletion_restores_the_surviving_email_source(pool: PgPo
     assert_eq!(restored.title, "Email fallback");
     assert_eq!(restored.canonical_source_kind, "email_ics");
     assert_eq!(restored.source_count, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(pool: PgPool) {
+    let owner_id = "macro|calendar-tombstone@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let email = timed_upsert(
+        owner_id,
+        link_id,
+        "tombstone@example.com",
+        "Email fallback",
+        1,
+    );
+    let event_id = repo.upsert_event_fixture(email).await.unwrap();
+    let enabled = repo
+        .apply_google_grant(link_id, complete_grant())
+        .await
+        .unwrap();
+    let account_id = repo.upsert_google_account(link_id).await.unwrap();
+    let calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "primary".to_string(),
+                name: "Primary".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: true,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap();
+    let mut google = timed_upsert(
+        owner_id,
+        link_id,
+        "tombstone@example.com",
+        "Google canonical",
+        2,
+    );
+    google.source = CalendarEventSource::Google(GoogleEventSource {
+        email_link_id: link_id,
+        account_id,
+        calendar_id,
+        provider_event_id: "cancelled-event".to_string(),
+        provider_recurring_event_id: None,
+        provider_etag: Some("\"etag\"".to_string()),
+        raw_payload: serde_json::json!({}),
+    });
+    repo.upsert_event_fixture(google).await.unwrap();
+    let mut instance = timed_upsert(
+        owner_id,
+        link_id,
+        "cancelled-series@example.com",
+        "Series instance",
+        1,
+    );
+    instance.source = CalendarEventSource::Google(GoogleEventSource {
+        email_link_id: link_id,
+        account_id,
+        calendar_id,
+        provider_event_id: "series-instance".to_string(),
+        provider_recurring_event_id: Some("cancelled-master".to_string()),
+        provider_etag: Some("\"etag\"".to_string()),
+        raw_payload: serde_json::json!({}),
+    });
+    let instance_event_id = repo.upsert_event_fixture(instance).await.unwrap();
+
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "incremental-next".to_string(),
+            observed_provider_event_ids: None,
+            materialized_range: None,
+            cancelled_provider_event_ids: vec![
+                "cancelled-event".to_string(),
+                "cancelled-master".to_string(),
+            ],
+        },
+    )
+    .await
+    .unwrap();
+
+    let restored = sqlx::query!(
+        r#"
+        SELECT title, canonical_source_kind,
+               (SELECT count(*) FROM calendar_event_sources WHERE event_id = $1) AS "source_count!"
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(restored.title, "Email fallback");
+    assert_eq!(restored.canonical_source_kind, "email_ics");
+    assert_eq!(restored.source_count, 1);
+
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM calendar_events WHERE id = $1"#,
+            instance_event_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT sync_token FROM calendars WHERE id = $1"#,
+            calendar_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .as_deref(),
+        Some("incremental-next")
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1439,6 +1581,7 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
             next_sync_token: "primary-next".to_string(),
             observed_provider_event_ids: Some(vec!["primary-event".to_string()]),
             materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
+            cancelled_provider_event_ids: Vec::new(),
         },
     )
     .await
@@ -1452,6 +1595,7 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
             next_sync_token: "sibling-next".to_string(),
             observed_provider_event_ids: Some(Vec::new()),
             materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
+            cancelled_provider_event_ids: Vec::new(),
         },
     )
     .await

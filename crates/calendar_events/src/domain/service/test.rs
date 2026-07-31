@@ -210,6 +210,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
             observed_provider_event_ids: Some(Vec::new()),
             next_sync_token: "next".to_string(),
             materialized_range: Some(context.range),
+            cancelled_provider_event_ids: Vec::new(),
         })
     }
 }
