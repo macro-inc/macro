@@ -29,7 +29,6 @@ use uuid::Uuid;
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
-const BOT_ENTITY_TYPE: &str = "bot";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -259,9 +258,9 @@ fn normalized_document_event(
 /// used for entity-access resolution.
 ///
 /// For most events the matching entity is the channel itself. For
-/// `channel.bot_mentioned` the matching entity (and so the `ids` filter
-/// namespace) is the mentioned bot principal, while access still resolves via
-/// the channel the mention happened in.
+/// `channel.mentioned` the matching entity (and so the `ids` filter
+/// namespace) is the mentioned entity — a user id, bot principal, or document
+/// id — while access still resolves via the channel the mention happened in.
 fn normalized_channel_event(
     event: &Event<ChannelTopicEvent>,
 ) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
@@ -272,7 +271,7 @@ fn normalized_channel_event(
         ChannelTopicEvent::MessagePosted(metadata) => {
             ("channel.message_posted", metadata.channel_id)
         }
-        ChannelTopicEvent::BotMentioned(metadata) => {
+        ChannelTopicEvent::Mentioned(metadata) => {
             let access_entity_id = metadata.channel_id.to_string();
             let ordering_key = access_entity_id.clone();
             let broker_envelope = serde_json::to_value(event)?;
@@ -280,9 +279,9 @@ fn normalized_channel_event(
                 normalized_event(
                     event.event_id,
                     event.schema_version,
-                    "channel.bot_mentioned",
-                    BOT_ENTITY_TYPE,
-                    metadata.bot_id.as_ref(),
+                    "channel.mentioned",
+                    &metadata.mentioned.entity_type,
+                    &metadata.mentioned.entity_id,
                     &ordering_key,
                     broker_envelope,
                 ),

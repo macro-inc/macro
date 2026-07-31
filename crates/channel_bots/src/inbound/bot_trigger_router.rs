@@ -19,7 +19,7 @@ use crate::domain::{
 ///
 /// System bots are defined in code and require no database row. Unknown bot ids
 /// are ignored here; only Macro AI is handled by this branch. Non-system bots
-/// are notified of mentions out of process via the `channel.bot_mentioned`
+/// are notified of mentions out of process via the `channel.mentioned`
 /// webhook event instead (see the `webhook` crate).
 pub struct BotTriggerRouter<C, R> {
     macro_ai: Arc<MacroAiHandler<C, R>>,

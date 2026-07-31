@@ -38,7 +38,7 @@ function hydrate(client: MacroClient, event: MacroEvent): EventMap[EventName] {
  */
 export class MacroEvents {
   private readonly handlers = new Map<EventName, Set<AnyHandler>>();
-  private selfBotPrincipal?: Promise<string>;
+  private selfPrincipal?: Promise<string>;
 
   constructor(
     private readonly client: MacroClient,
@@ -58,42 +58,47 @@ export class MacroEvents {
   }
 
   /**
-   * Subscribe to @-mentions of THIS bot: `channel.bot_mentioned` deliveries
-   * whose mentioned bot is the authenticated bot. Bot auth only.
+   * Subscribe to @-mentions of the authenticated caller: `channel.mentioned`
+   * deliveries whose mentioned entity is this bot (bot auth) or this user
+   * (user auth).
    *
-   * The bot's identity is resolved lazily (once) on the first delivery, and
-   * deliveries mentioning other bots are ignored — so this stays correct even
-   * when the receiving webhook is broader than one bot (no `ids` filter, or
-   * several bots sharing an endpoint). The webhook itself is registered
-   * separately and once, e.g. `macro.webhooks.create({ filters: [{ events:
-   * ['channel.bot_mentioned'], ids: [await macro.bots.myPrincipalId()] }],
+   * The caller's identity is resolved lazily (once) on the first delivery,
+   * and deliveries mentioning anyone else are ignored — so this stays correct
+   * even when the receiving webhook is broader than one entity (no `ids`
+   * filter, or several subscribers sharing an endpoint). The webhook itself
+   * is registered separately and once, e.g. `macro.webhooks.create({
+   * filters: [{ events: ['channel.mentioned'], ids: [<own principal>] }],
    * … })`.
    *
    * @returns An unsubscribe function.
    */
-  onSelfMention(handler: EventHandler<'channel.bot_mentioned'>): () => void {
-    if (this.client.authConfig.type !== 'bot') {
-      throw new MacroError(
-        'onSelfMention requires bot auth — a user API key has no bot identity',
-      );
-    }
-    return this.on('channel.bot_mentioned', async (event) => {
-      if (event.metadata.bot_id !== (await this.myPrincipal())) return;
+  onSelfMention(handler: EventHandler<'channel.mentioned'>): () => void {
+    return this.on('channel.mentioned', async (event) => {
+      if (event.metadata.mentioned.entity_id !== (await this.myPrincipal())) {
+        return;
+      }
       await handler(event);
     });
   }
 
-  /** The authenticated bot's `bot|<uuid>` principal, fetched once and cached. */
+  /**
+   * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
+   * auth, `macro|<email>` for user auth — fetched once and cached.
+   */
   private myPrincipal(): Promise<string> {
-    this.selfBotPrincipal ??= (async () => {
-      const bot = unwrap(await this.client.storage.getSelfBot());
-      return `bot|${bot.id}`;
+    this.selfPrincipal ??= (async () => {
+      if (this.client.authConfig.type === 'bot') {
+        const bot = unwrap(await this.client.storage.getSelfBot());
+        return `bot|${bot.id}`;
+      }
+      const { user_id } = unwrap(await this.client.auth.getUserInfo());
+      return user_id;
     })().catch((error) => {
       // Don't cache failures: the next delivery retries the lookup.
-      this.selfBotPrincipal = undefined;
+      this.selfPrincipal = undefined;
       throw error;
     });
-    return this.selfBotPrincipal;
+    return this.selfPrincipal;
   }
 
   /**

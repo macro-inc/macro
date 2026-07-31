@@ -1540,7 +1540,7 @@ fn message_posted_with_mentions(
 }
 
 #[test]
-fn broker_events_map_message_posted_bot_mentions() {
+fn broker_events_map_message_posted_mentions_per_entity() {
     use macro_event_broker::MacroEvent as _;
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -1558,58 +1558,101 @@ fn broker_events_map_message_posted_bot_mentions() {
         message_id,
         vec![
             mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
-            // Duplicate mentions of one bot emit a single event.
+            // Duplicate mentions of one entity emit a single event.
             mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
             // Macro AI surfaced through the user-mention UI still counts.
             mention("user", &macro_ai_principal),
-            // A valid bot principal that is not installed emits no bot event.
+            // A valid bot principal that is not installed emits nothing.
             mention(BOT_MENTION_ENTITY_TYPE, &uninstalled_bot_principal),
-            // Real user mentions emit no bot event.
+            // A bot-tagged mention with a malformed id emits nothing.
+            mention(BOT_MENTION_ENTITY_TYPE, "not-a-bot-principal"),
+            // The sender mentioning themselves emits nothing.
+            mention("user", "macro|alice@example.com"),
+            // User and document mentions emit like any other entity.
             mention("user", "macro|bob@example.com"),
+            mention("document", "doc-1"),
         ],
         &[bot_principal.as_str(), macro_ai_principal.as_str()],
     ));
 
-    assert_eq!(events.len(), 3);
     let posted = serde_json::to_value(events[0].event()).unwrap();
     assert_eq!(posted["event_type"], "channel.message_posted");
 
-    let first = serde_json::to_value(events[1].event()).unwrap();
-    assert_eq!(first["event_type"], "channel.bot_mentioned");
-    assert_eq!(first["metadata"]["bot_id"], bot_principal);
-    assert_eq!(first["metadata"]["channel_id"], channel_id.to_string());
-    assert_eq!(first["metadata"]["message_id"], message_id.to_string());
-    assert_eq!(first["metadata"]["sender"], "macro|alice@example.com");
-    assert_eq!(first["metadata"]["mentions"].as_array().unwrap().len(), 5);
+    let mentioned: Vec<_> = events[1..]
+        .iter()
+        .map(|event| serde_json::to_value(event.event()).unwrap())
+        .collect();
+    for envelope in &mentioned {
+        assert_eq!(envelope["event_type"], "channel.mentioned");
+        assert_eq!(envelope["metadata"]["channel_id"], channel_id.to_string());
+        assert_eq!(envelope["metadata"]["message_id"], message_id.to_string());
+        assert_eq!(envelope["metadata"]["sender"], "macro|alice@example.com");
+        assert_eq!(
+            envelope["metadata"]["mentions"].as_array().unwrap().len(),
+            8
+        );
+    }
+    let mentioned_entities: Vec<_> = mentioned
+        .iter()
+        .map(|envelope| {
+            (
+                envelope["metadata"]["mentioned"]["entity_type"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+                envelope["metadata"]["mentioned"]["entity_id"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        mentioned_entities,
+        vec![
+            ("bot".to_string(), bot_principal),
+            ("user".to_string(), macro_ai_principal),
+            ("user".to_string(), "macro|bob@example.com".to_string()),
+            ("document".to_string(), "doc-1".to_string()),
+        ]
+    );
     assert_eq!(events[1].key(), channel_id.to_string());
-
-    let second = serde_json::to_value(events[2].event()).unwrap();
-    assert_eq!(second["event_type"], "channel.bot_mentioned");
-    assert_eq!(second["metadata"]["bot_id"], macro_ai_principal);
 }
 
 #[test]
-fn broker_events_skip_bot_mentions_from_bot_senders() {
+fn broker_events_bot_authored_mentions_emit_except_self() {
     use macro_event_broker::MacroEvent as _;
-    let bot_principal = BotId::new_from_uuid(Uuid::new_v4())
+    let sender_bot = BotId::new_from_uuid(Uuid::new_v4());
+    let sender_principal = sender_bot.into_storage_id().to_string();
+    let other_bot_principal = BotId::new_from_uuid(Uuid::new_v4())
         .into_storage_id()
         .to_string();
 
     let events = broker_events_for_event(&message_posted_with_mentions(
-        Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
+        Sender::new_from_bot(sender_bot),
         Uuid::new_v4(),
         Uuid::new_v4(),
-        vec![mention(BOT_MENTION_ENTITY_TYPE, &bot_principal)],
-        &[bot_principal.as_str()],
+        vec![
+            // A bot mentioning itself never emits.
+            mention(BOT_MENTION_ENTITY_TYPE, &sender_principal),
+            // A bot mentioning another installed bot does emit.
+            mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
+        ],
+        &[sender_principal.as_str(), other_bot_principal.as_str()],
     ));
 
-    assert_eq!(events.len(), 1);
-    let envelope = serde_json::to_value(events[0].event()).unwrap();
-    assert_eq!(envelope["event_type"], "channel.message_posted");
+    assert_eq!(events.len(), 2);
+    let envelope = serde_json::to_value(events[1].event()).unwrap();
+    assert_eq!(envelope["event_type"], "channel.mentioned");
+    assert_eq!(
+        envelope["metadata"]["mentioned"]["entity_id"],
+        other_bot_principal
+    );
+    assert_eq!(envelope["metadata"]["sender"], sender_principal);
 }
 
 #[test]
-fn broker_events_skip_bot_mentions_on_message_changed() {
+fn broker_events_skip_mentions_on_message_changed() {
     use macro_event_broker::MacroEvent as _;
     let channel_id = Uuid::new_v4();
     let now = Utc::now();

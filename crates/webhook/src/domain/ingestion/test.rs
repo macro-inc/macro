@@ -12,7 +12,7 @@ use crate::domain::{
 use channel_sender::ChannelSender;
 use channels::domain::{
     broker_events::{
-        ChannelBotMentionedMetadata, ChannelCreatedMetadata, ChannelDeletedMetadata,
+        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMentionedMetadata,
         ChannelMessageAttachmentCreatedMetadata, ChannelMessageAttachmentRemovedMetadata,
         ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
@@ -713,30 +713,62 @@ fn channel_event_cases() -> Vec<EventCase> {
             channel_id.to_string(),
         ),
         // Access resolves via the channel; matching and ids filters use the
-        // bot principal.
+        // mentioned entity (here a bot principal).
         EventCase::new(
             TestBrokerEvent::Channel(Event::with_schema_version(
-                ChannelTopicEvent::BotMentioned(ChannelBotMentionedMetadata {
+                ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
                     channel_id,
                     message_id,
                     thread_id: None,
                     sender: sender(member),
                     channel_type: ChannelType::Team,
                     content: "hello bot".to_string(),
+                    mentioned: SimpleMention {
+                        entity_type: "bot".to_string(),
+                        entity_id: BOT_PRINCIPAL_ID.to_string(),
+                    },
                     mentions: vec![SimpleMention {
                         entity_type: "bot".to_string(),
                         entity_id: BOT_PRINCIPAL_ID.to_string(),
                     }],
-                    bot_id: bot_id::BotIdStr::try_from(BOT_PRINCIPAL_ID)
-                        .expect("valid bot principal"),
                     created_at: timestamp(),
                 }),
                 3,
             )),
-            "channel.bot_mentioned",
+            "channel.mentioned",
             EntityType::Channel,
-            BOT_ENTITY_TYPE,
+            "bot",
             BOT_PRINCIPAL_ID.to_string(),
+        )
+        .with_access_entity_id(channel_id.to_string())
+        .with_ordering_key(channel_id.to_string()),
+        // The mentioned entity kind flows through to matching: a user mention
+        // matches ids filters on the user id.
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
+                ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
+                    channel_id,
+                    message_id,
+                    thread_id: None,
+                    sender: sender(owner),
+                    channel_type: ChannelType::Team,
+                    content: "hello member".to_string(),
+                    mentioned: SimpleMention {
+                        entity_type: "user".to_string(),
+                        entity_id: member.to_string(),
+                    },
+                    mentions: vec![SimpleMention {
+                        entity_type: "user".to_string(),
+                        entity_id: member.to_string(),
+                    }],
+                    created_at: timestamp(),
+                }),
+                3,
+            )),
+            "channel.mentioned",
+            EntityType::Channel,
+            "user",
+            member.to_string(),
         )
         .with_access_entity_id(channel_id.to_string())
         .with_ordering_key(channel_id.to_string()),
@@ -830,12 +862,12 @@ fn webhook_event_cases() -> Vec<WebhookEventCase> {
 }
 
 #[tokio::test]
-async fn normalizes_and_matches_all_fifteen_event_variants() {
+async fn normalizes_and_matches_all_sixteen_event_cases() {
     let event_cases = document_event_cases()
         .into_iter()
         .chain(channel_event_cases())
         .collect::<Vec<_>>();
-    assert_eq!(event_cases.len(), 15);
+    assert_eq!(event_cases.len(), 16);
 
     for event_case in event_cases {
         let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);

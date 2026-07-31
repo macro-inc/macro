@@ -1452,48 +1452,6 @@ export type Channel = {
 };
 
 /**
- * Metadata for [`ChannelTopicEvent::BotMentioned`].
- */
-export type ChannelBotMentionedMetadata = {
-    /**
-     * Canonical principal id (`bot|<uuid>`) of the mentioned bot.
-     */
-    bot_id: string;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Type of channel containing the message.
-     */
-    channel_type: ChannelType;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Creation timestamp reported by the repository.
-     */
-    created_at: string;
-    /**
-     * All mentions attached to the message.
-     */
-    mentions: Array<SimpleMention>;
-    /**
-     * The id of the message that mentioned the bot.
-     */
-    message_id: string;
-    /**
-     * Message author. Always a user: bot-authored messages never emit this event.
-     */
-    sender: ChannelSender;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-};
-
-/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -1612,6 +1570,49 @@ export type ChannelJoinCodeResponse = {
      * Reusable code for joining the channel.
      */
     join_code: string;
+};
+
+/**
+ * Metadata for [`ChannelTopicEvent::Mentioned`].
+ */
+export type ChannelMentionedMetadata = {
+    /**
+     * Channel containing the message.
+     */
+    channel_id: string;
+    /**
+     * Type of channel containing the message.
+     */
+    channel_type: ChannelType;
+    /**
+     * Message body.
+     */
+    content: string;
+    /**
+     * Creation timestamp reported by the repository.
+     */
+    created_at: string;
+    /**
+     * The mentioned entity this event is about (`user`, `bot`, `document`, …).
+     */
+    mentioned: SimpleMention;
+    /**
+     * All mentions attached to the message.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * The id of the message carrying the mention.
+     */
+    message_id: string;
+    /**
+     * Message author; may be a bot. Self-mentions (an author mentioning
+     * their own principal) never emit this event.
+     */
+    sender: ChannelSender;
+    /**
+     * Thread parent id when the message is a thread reply.
+     */
+    thread_id?: string | null;
 };
 
 /**
@@ -2010,11 +2011,11 @@ export type ChannelTopicEvent = {
      */
     metadata: ChannelMessagePostedMetadata;
 } | {
-    event_type: 'channel.bot_mentioned';
+    event_type: 'channel.mentioned';
     /**
-     * A bot was `@`-mentioned in a user-authored message.
+     * An entity (user, bot, document, …) was mentioned in a message.
      */
-    metadata: ChannelBotMentionedMetadata;
+    metadata: ChannelMentionedMetadata;
 } | {
     event_type: 'channel.message_patched';
     /**

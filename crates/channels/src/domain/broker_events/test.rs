@@ -119,22 +119,31 @@ fn message_posted_wire_shape_with_bot_sender() {
 }
 
 #[test]
-fn bot_mentioned_wire_shape() {
+fn mentioned_wire_shape() {
     let bot_principal = "bot|00000000-0000-0000-0000-00000000a1a1";
     let event = Event::with_event_id(
         Uuid::nil(),
-        ChannelTopicEvent::BotMentioned(ChannelBotMentionedMetadata {
+        ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
             channel_id: Uuid::nil(),
             message_id: Uuid::nil(),
             thread_id: None,
             sender: user("macro|human@example.com"),
             channel_type: ChannelType::Team,
             content: "hello bot".to_string(),
-            mentions: vec![SimpleMention {
+            mentioned: SimpleMention {
                 entity_type: "bot".to_string(),
                 entity_id: bot_principal.to_string(),
-            }],
-            bot_id: BotIdStr::try_from(bot_principal).expect("valid bot principal"),
+            },
+            mentions: vec![
+                SimpleMention {
+                    entity_type: "bot".to_string(),
+                    entity_id: bot_principal.to_string(),
+                },
+                SimpleMention {
+                    entity_type: "user".to_string(),
+                    entity_id: "macro|member@example.com".to_string(),
+                },
+            ],
             created_at: timestamp(),
         }),
     );
@@ -145,7 +154,7 @@ fn bot_mentioned_wire_shape() {
         json!({
             "event_id": "00000000-0000-0000-0000-000000000000",
             "schema_version": 1,
-            "event_type": "channel.bot_mentioned",
+            "event_type": "channel.mentioned",
             "metadata": {
                 "channel_id": "00000000-0000-0000-0000-000000000000",
                 "message_id": "00000000-0000-0000-0000-000000000000",
@@ -153,10 +162,11 @@ fn bot_mentioned_wire_shape() {
                 "sender": "macro|human@example.com",
                 "channel_type": "team",
                 "content": "hello bot",
+                "mentioned": { "entity_type": "bot", "entity_id": bot_principal },
                 "mentions": [
                     { "entity_type": "bot", "entity_id": bot_principal },
+                    { "entity_type": "user", "entity_id": "macro|member@example.com" },
                 ],
-                "bot_id": bot_principal,
                 "created_at": "2026-01-02T03:04:05Z",
             },
         })
