@@ -1,4 +1,4 @@
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { hasToolCall, stepCountIs, streamText } from 'ai';
 import type { ResolvedModels } from '../../run-edit';
 import type { LexicalSession } from '../ai-toolkit';
@@ -75,6 +75,13 @@ export async function supervisor(
   // Manual span: dispatched coders launch from AI SDK stream callbacks where
   // the ambient context is unreliable, so they parent off this span explicitly.
   const superviseSpan = Telemetry.span('edit.supervise');
+  // Open in `prepareStep`, closed in `onStepFinish`. Coders dispatched during a
+  // turn parent off it, so the trace shows which turn spawned which edits.
+  let turnSpan: Span | undefined;
+  const endTurn = () => {
+    turnSpan?.end();
+    turnSpan = undefined;
+  };
   try {
     const dispatch = createDispatchTool({
       session,
@@ -94,7 +101,7 @@ export async function supervisor(
       onOps: opts.onOps,
       onCoderResult: opts.onCoderResult,
       onEditTrace: opts.onEditTrace,
-      span: superviseSpan,
+      parentSpan: () => turnSpan ?? superviseSpan,
     });
 
     const tools = {
@@ -121,16 +128,30 @@ export async function supervisor(
       tools,
       providerOptions: EDIT_PROVIDER_OPTIONS,
       abortSignal: opts.signal,
-      prepareStep: ({ stepNumber }) =>
+      prepareStep: ({ stepNumber }) => {
+        // A step that throws mid-flight never reaches onStepFinish; close any
+        // straggler so turns stay one-to-one with spans.
+        endTurn();
+        turnSpan = superviseSpan.span('edit.supervise.turn');
+        turnSpan.setAttr('turn.index', stepNumber);
+        turnSpan.setAttr('gen_ai.operation.name', 'chat');
         // require that the very first thing it does is a tool call
-        stepNumber === 0 ? { toolChoice: 'required' } : undefined,
-      onStepFinish: () => {
+        return stepNumber === 0 ? { toolChoice: 'required' } : undefined;
+      },
+      onStepFinish: (step) => {
         const now = Date.now();
         stepDurationsMs.push(now - lastStepAt);
-        superviseSpan.event('step', {
-          index: stepDurationsMs.length - 1,
-          duration_ms: now - lastStepAt,
-        });
+        turnSpan?.setAttr(
+          'gen_ai.usage.input_tokens',
+          step.usage.inputTokens ?? 0
+        );
+        turnSpan?.setAttr(
+          'gen_ai.usage.output_tokens',
+          step.usage.outputTokens ?? 0
+        );
+        turnSpan?.setAttr('turn.tool_calls', step.toolCalls.length);
+        turnSpan?.setAttr('turn.finish_reason', step.finishReason);
+        endTurn();
         lastStepAt = now;
       },
     });
@@ -181,9 +202,13 @@ export async function supervisor(
       clarification,
     };
   } catch (e) {
+    // A turn is still open when the failure happened mid-step; blame it there
+    // too so the trace points at the turn, not just the whole supervisor run.
+    turnSpan?.error(e);
     superviseSpan.error(e);
     throw e;
   } finally {
+    endTurn();
     superviseSpan.end();
   }
 }

@@ -228,10 +228,12 @@ export type DispatchToolOptions = {
   onCoderResult?: (codes: CoderRunCode[]) => void;
   /** Called after each dispatch call with the edit's timing trace. */
   onEditTrace?: (edit: DispatchEditTrace) => void;
-  /** Parent for per-edit `edit.dispatch` spans. Passed explicitly because
-   *  coders launch from AI SDK stream callbacks, where the ambient context
-   *  is not trustworthy. */
-  span?: Span;
+  /** Resolves the parent for each `edit.dispatch` span at launch time — the
+   *  supervisor turn that issued the call. Passed explicitly, and as a
+   *  function, because coders launch from AI SDK stream callbacks: the
+   *  ambient context is not trustworthy there, and the parent changes
+   *  from one turn to the next. */
+  parentSpan?: () => Span | undefined;
 };
 
 export const DispatchEditSchema = z.object({
@@ -354,8 +356,9 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     };
     // runEdit ends the span in its finally, so streamed runs that reject
     // before `execute` joins them still close it.
-    const span = opts.span
-      ? opts.span.span('edit.dispatch')
+    const parent = opts.parentSpan?.();
+    const span = parent
+      ? parent.span('edit.dispatch')
       : Telemetry.span('edit.dispatch');
     span.setAttr('dispatch.tool_call_id', toolCallId);
     span.setAttr('dispatch.streamed', streamed);
