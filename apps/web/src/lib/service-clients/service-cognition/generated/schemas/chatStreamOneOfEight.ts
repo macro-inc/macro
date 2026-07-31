@@ -6,7 +6,11 @@
  */
 import type { ChatStreamOneOfEightType } from './chatStreamOneOfEightType';
 
+/**
+ * Signals that no further items will be appended for this turn.
+ */
 export type ChatStreamOneOfEight = {
+  /** Correlates every item in this stream to one prompt turn. */
   stream_id: string;
   type: ChatStreamOneOfEightType;
 };

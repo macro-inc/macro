@@ -229,6 +229,11 @@ export type Chat = {
     userId: string;
 };
 
+/**
+ * What kind of agent backs a chat.
+ */
+export type ChatAgentKind = 'MacroChat' | 'External';
+
 export type ChatAttachment = {
     /**
      * The id of the attachment
@@ -369,22 +374,56 @@ export type ChatResponse = {
     userId: string;
 };
 
+/**
+ * One item pushed through the connection gateway's live-chat stream for a
+ * chat entity.
+ */
 export type ChatStream = (StreamError & {
     type: 'error';
 }) | {
+    /**
+     * Attachments included with the message.
+     */
     attachments: Array<Entity>;
+    /**
+     * The chat the message belongs to.
+     */
     chat_id: string;
+    /**
+     * The user's message text.
+     */
     content: string;
+    /**
+     * The persisted id of the user's message.
+     */
     message_id: string;
+    /**
+     * Correlates every item in this stream to one prompt turn.
+     */
     stream_id: string;
     type: 'chat_user_message';
 } | {
+    /**
+     * The chat the message belongs to.
+     */
     chat_id: string;
+    /**
+     * One part of the assistant's (possibly still streaming) response.
+     */
     content: AssistantMessagePart;
+    /**
+     * The id the assistant's message will be persisted under.
+     */
     message_id: string;
+    /**
+     * Correlates every item in this stream to one prompt turn.
+     */
     stream_id: string;
     type: 'chat_message_response';
 } | {
+    /**
+     * Correlates every item in this stream to one prompt turn.
+     */
     stream_id: string;
     type: 'stream_end';
 };
@@ -450,6 +489,7 @@ export type ConversationRecord = {
  * Request body for creating a chat.
  */
 export type CreateChatRequest = {
+    kind?: null | ChatAgentKind;
     /**
      * Optional name for the chat.
      */
@@ -1278,15 +1318,30 @@ export type StopChatStreamResponse = {
     stopped: boolean;
 };
 
+/**
+ * A client-facing classification of a failure that ended a stream early.
+ */
 export type StreamError = {
+    /**
+     * The model the request was running against.
+     */
     model: string;
     stream_error: 'provider_error';
+    /**
+     * The stream this error ended.
+     */
     stream_id: string;
 } | {
     stream_error: 'model_context_overflow';
+    /**
+     * The stream this error ended.
+     */
     stream_id: string;
 } | {
     stream_error: 'internal_error';
+    /**
+     * The stream this error ended.
+     */
     stream_id: string;
 };
 

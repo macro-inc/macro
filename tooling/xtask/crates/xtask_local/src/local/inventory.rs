@@ -244,6 +244,21 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: true,
     },
+    RustService {
+        compose_name: "agent_proxy_service",
+        cargo_bin: "agent_proxy_service",
+        package: "agent_proxy_service",
+        host_port: Some(Port::AgentProxy),
+        // No frontend proxy route yet; clients hit the host port directly.
+        // The shared agent-runtime WebSocket endpoint lives on this same
+        // port (route `/runtime`, sessions disambiguated by `?id=`) rather
+        // than a listener of its own.
+        path_prefix: None,
+        is_websocket: true,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

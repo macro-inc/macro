@@ -4,6 +4,7 @@ resolver = "2"
 members = [
   "crates/activity",
   "crates/agent",
+  "crates/agent_proxy",
   "crates/agent_runtime_protocol",
   "crates/ai_projections",
   "crates/ai_usage",
@@ -56,6 +57,7 @@ members = [
   "crates/unfurl",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
+  "services/agent_proxy_service",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
   "services/call_recording_preview_handler",
@@ -231,6 +233,9 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-serde = "=0.0.12"
+specta-typescript = "=0.0.12"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",

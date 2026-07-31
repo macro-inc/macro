@@ -1,6 +1,19 @@
 import { defineConfig } from 'orval';
 
 export default defineConfig({
+  agentProxyService: {
+    output: {
+      client: 'fetch',
+      target: './service-agent-proxy/generated/client.ts',
+      schemas: './service-agent-proxy/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-agent-proxy/openapi.json',
+    },
+  },
   authService: {
     output: {
       client: 'fetch',

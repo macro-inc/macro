@@ -31,6 +31,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
 base64 = { version = "0.22" }
+bitflags = { version = "2", default-features = false, features = ["std"] }
 byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
@@ -39,6 +40,7 @@ chrono = { version = "0.4", features = ["serde"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
+derive_more = { version = "2", features = ["add", "add_assign", "display", "from"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 doppleganger = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 doppleganger-core = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
@@ -107,8 +109,8 @@ scopeguard = { version = "1" }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
-serde_json = { version = "1", features = ["alloc", "raw_value", "unbounded_depth"] }
-serde_with = { version = "3", features = ["base64", "json"] }
+serde_json = { version = "1", features = ["alloc", "preserve_order", "raw_value", "unbounded_depth"] }
+serde_with = { version = "3", features = ["base64", "json", "schemars_1"] }
 sha1 = { version = "0.10", features = ["oid"] }
 sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
@@ -157,6 +159,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
 base64 = { version = "0.22" }
+bitflags = { version = "2", default-features = false, features = ["std"] }
 byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
@@ -166,6 +169,8 @@ chrono = { version = "0.4", features = ["serde"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
+derive_more = { version = "2", features = ["add", "add_assign", "display", "from"] }
+derive_more-impl = { version = "2", features = ["add", "add_assign", "display", "from"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 doppleganger = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 doppleganger-core = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
@@ -237,8 +242,9 @@ scopeguard = { version = "1" }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
-serde_json = { version = "1", features = ["alloc", "raw_value", "unbounded_depth"] }
-serde_with = { version = "3", features = ["base64", "json"] }
+serde_json = { version = "1", features = ["alloc", "preserve_order", "raw_value", "unbounded_depth"] }
+serde_with = { version = "3", features = ["base64", "json", "schemars_1"] }
+serde_with_macros = { version = "3", default-features = false, features = ["schemars_1"] }
 sha1 = { version = "0.10", features = ["oid"] }
 sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
@@ -273,9 +279,9 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 zeroize = { version = "1", features = ["derive"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
+futures-lite = { version = "2" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
@@ -290,9 +296,9 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
+futures-lite = { version = "2" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
@@ -307,10 +313,10 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.aarch64-apple-darwin.dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
+futures-lite = { version = "2" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
@@ -325,10 +331,10 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
+futures-lite = { version = "2" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }

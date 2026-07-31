@@ -1,3 +1,4 @@
+import { Sdk as AgentProxySdk } from '../../generated/agent-proxy/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -18,9 +19,10 @@ import {
 import { BotsNamespace } from '../entities/bots/namespace';
 import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
-import { resolveLocalPortmap } from '../local-portmap';
+import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 
 export class MacroClient {
+  readonly agentProxy: AgentProxySdk;
   readonly auth: AuthSdk;
   readonly cognition: CognitionSdk;
   readonly contacts: ContactsSdk;
@@ -34,14 +36,20 @@ export class MacroClient {
   readonly events?: MacroEvents;
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
+  /** Resolved service base urls: env defaults, then the local-stack portmap,
+   * then `opts.hosts` overrides. */
+  readonly hosts: Record<ServiceName, string>;
+  /** The local stack's generated port map; only set when env is `local`. */
+  readonly localPortmap?: LocalPortmap;
   private readonly requestedAs?: string;
   private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
-    const env: Env = opts.env ?? 'dev';
-    const localPortmap =
-      env === 'local' ? resolveLocalPortmap() : undefined;
+    const env = resolveEnv(opts);
+    const localPortmap = env === 'local' ? resolveLocalPortmap() : undefined;
     const hosts = { ...HOSTS[env], ...localPortmap?.hosts, ...opts.hosts };
+    this.hosts = hosts;
+    this.localPortmap = localPortmap;
     const envWebUrl =
       typeof process !== 'undefined' ? process.env.MACRO_WEB_URL : undefined;
     this.webAppUrl =
@@ -58,6 +66,9 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
+    this.agentProxy = new AgentProxySdk({
+      client: this.makeClient(hosts['agent-proxy']),
+    });
     this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
     this.cognition = new CognitionSdk({
       client: this.makeClient(hosts.cognition),
@@ -138,6 +149,19 @@ export class MacroClient {
     });
     return c;
   }
+}
+
+function resolveEnv(opts: MacroOpts): Env {
+  if (opts.env) return opts.env;
+  const fromEnv =
+    typeof process !== 'undefined' ? process.env.MACRO_ENV : undefined;
+  if (!fromEnv) return 'dev';
+  if (!(fromEnv in HOSTS)) {
+    throw new Error(
+      `invalid MACRO_ENV "${fromEnv}" — expected local, dev, or prod`,
+    );
+  }
+  return fromEnv as Env;
 }
 
 function resolveAuth(opts: MacroOpts): MacroAuth {

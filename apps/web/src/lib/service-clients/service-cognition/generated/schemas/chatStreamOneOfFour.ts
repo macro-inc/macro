@@ -13,10 +13,15 @@ import type { Entity } from './entity';
 so other clients can add it to their local chat state.
  */
 export type ChatStreamOneOfFour = {
+  /** Attachments included with the message. */
   attachments: Entity[];
+  /** The chat the message belongs to. */
   chat_id: string;
+  /** The user's message text. */
   content: string;
+  /** The persisted id of the user's message. */
   message_id: string;
+  /** Correlates every item in this stream to one prompt turn. */
   stream_id: string;
   type: ChatStreamOneOfFourType;
 };
