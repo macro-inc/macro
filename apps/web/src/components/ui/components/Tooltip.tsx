@@ -129,7 +129,12 @@ export function Tooltip(props: TooltipProps) {
                       {(token, ndx) => (
                         <>
                           <Hotkey token={token} theme="subtle" />
-                          <Show when={ndx() < tokens().length - 1}>
+                          <Show
+                            when={
+                              ndx() < tokens().length - 1 ||
+                              shortcuts().length > 0
+                            }
+                          >
                             <span class="text-ink-extra-muted">then</span>
                           </Show>
                         </>
