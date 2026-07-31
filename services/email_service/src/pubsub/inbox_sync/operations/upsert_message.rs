@@ -1,6 +1,5 @@
 use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::{
@@ -269,10 +268,10 @@ pub async fn upsert_message(
             })
         })?;
 
-    // Publish to the macro.email topic immediately after the committed insert,
-    // before the fallible side effects below. Drafts publish after every sync because
-    // their bodies are mutable. Existing immutable messages remain suppressed, except
-    // when a previously synced provider draft becomes sent.
+    // Publish to the macro.email topic immediately after the committed insert.
+    // Drafts publish after every sync because their bodies are mutable. Existing
+    // immutable messages remain suppressed except when a previously synced provider
+    // draft becomes sent.
     if let Some(event_kind) =
         select_message_sync_event(existing_message_was_draft, is_draft, is_sent)
     {
@@ -374,8 +373,6 @@ pub async fn upsert_message(
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
         enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients, is_sent).await?;
     }
-
-    notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;
 
     // trigger FE inbox refresh
     cg_refresh_email(

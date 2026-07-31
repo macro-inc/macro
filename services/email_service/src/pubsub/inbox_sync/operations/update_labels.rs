@@ -1,5 +1,4 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::{
@@ -164,9 +163,6 @@ pub async fn update_labels(
     }
 
     if has_label_changes {
-        // Publish semantic macro.email events before the fallible search
-        // notify: a notify failure retries the whole op, and on retry the
-        // label diff is empty so the events would be lost.
         publish_label_diff_events(
             ctx,
             link,
@@ -176,13 +172,6 @@ pub async fn update_labels(
             &db_message_labels,
         )
         .await;
-
-        let is_spam_or_trash = gmail_message_labels.iter().any(|label| {
-            label == service::label::system_labels::SPAM
-                || label == service::label::system_labels::TRASH
-        });
-
-        notify_search(ctx, link, db_message.db_id, is_spam_or_trash).await?;
 
         // tell FE to refresh user's inbox
         cg_refresh_email(
