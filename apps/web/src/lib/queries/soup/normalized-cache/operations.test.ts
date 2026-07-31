@@ -229,33 +229,32 @@ describe('buildSingleEntityFilter', () => {
       filterKey: 'call_filters',
       idKey: 'call_ids',
     },
-  ])('unblocks only $entityType filter with the real entityId', ({
-    entityType,
-    filterKey,
-    idKey,
-  }) => {
-    const filter = buildSingleEntityFilter(entityType, 'entity-1')!;
-    expect(filter).not.toBeNull();
-    expect(filter.limit).toBe(1);
+  ])(
+    'unblocks only $entityType filter with the real entityId',
+    ({ entityType, filterKey, idKey }) => {
+      const filter = buildSingleEntityFilter(entityType, 'entity-1')!;
+      expect(filter).not.toBeNull();
+      expect(filter.limit).toBe(1);
 
-    // The target filter uses the real entityId
-    expect((filter as any)[filterKey][idKey]).toEqual(['entity-1']);
+      // The target filter uses the real entityId
+      expect((filter as any)[filterKey][idKey]).toEqual(['entity-1']);
 
-    // All other ID-based filters use NIL_ID
-    const otherFilters = [
-      'document_filters',
-      'chat_filters',
-      'channel_filters',
-      'channel_thread_filters',
-      'project_filters',
-      'call_filters',
-    ].filter((k) => k !== filterKey);
+      // All other ID-based filters use NIL_ID
+      const otherFilters = [
+        'document_filters',
+        'chat_filters',
+        'channel_filters',
+        'channel_thread_filters',
+        'project_filters',
+        'call_filters',
+      ].filter((k) => k !== filterKey);
 
-    for (const key of otherFilters) {
-      const ids = Object.values((filter as any)[key])[0];
-      expect(ids).toEqual([NIL_ID]);
+      for (const key of otherFilters) {
+        const ids = Object.values((filter as any)[key])[0];
+        expect(ids).toEqual([NIL_ID]);
+      }
     }
-  });
+  );
 
   it('project filter defaults include_root to false', () => {
     const filter = buildSingleEntityFilter('project', 'entity-1');

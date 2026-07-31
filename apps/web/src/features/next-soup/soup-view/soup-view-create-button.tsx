@@ -6,7 +6,7 @@ import {
 import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -224,23 +224,16 @@ export const SoupViewCreateButton = () => {
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <CollapsibleHeaderItem
-          id="create-button"
-          priority={2}
-          expanded={() => (
-            <Show when={options().length > 1} fallback={<SingleOptionButton />}>
-              <MultiOptionButton />
-            </Show>
-          )}
-          collapsed={() => (
+        <CollapsibleHeaderItem id="create-button" priority={2}>
+          {(isCollapsed) => (
             <Show
               when={options().length > 1}
-              fallback={<SingleOptionButton hideLabel />}
+              fallback={<SingleOptionButton hideLabel={isCollapsed()} />}
             >
-              <MultiOptionButton hideLabel />
+              <MultiOptionButton hideLabel={isCollapsed()} />
             </Show>
           )}
-        />
+        </CollapsibleHeaderItem>
       </Show>
     </>
   );

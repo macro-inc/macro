@@ -1184,6 +1184,16 @@ export const storageServiceClient = {
     });
   },
 
+  async getDocumentByTeamSlug(params: { slug: string; signal?: AbortSignal }) {
+    return (
+      await dssFetch<{
+        data: GetDocumentResponseData;
+      }>(`/documents/slug/${encodeURIComponent(params.slug)}`, {
+        signal: params.signal,
+      })
+    ).map((result) => result.data);
+  },
+
   async createDocument(request: CreateDocumentRequest) {
     const result = await fetchWithToken<
       CreateDocumentResponse,
@@ -1488,7 +1498,10 @@ export const storageServiceClient = {
   async fetchCachedSnapshot(
     documentId: string
   ): Promise<Result<Uint8Array, ResultError<FetchWithTokenErrorCode>[]>> {
-    return dssFetch<Uint8Array>(`/documents/${documentId}/cached_snapshot_url`);
+    return dssFetch<Uint8Array>(
+      `/documents/${documentId}/cached_snapshot_url`,
+      { trace: { expectedStatusCodes: [404] } }
+    );
   },
 
   async getDocumentShortId({

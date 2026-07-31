@@ -14,7 +14,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use config::{Config, Environment};
@@ -168,7 +167,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(config.fusionauth_base_url.as_ref())
         .to_owned();
     let auth_client = fusionauth::FusionAuthClient::new(
-        config.fusionauth_tenant_id.to_string(),
         fusionauth_api_key,
         config.fusionauth_client_id.to_string().clone(),
         fusionauth_client_secret,
@@ -337,13 +335,13 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayUrl::new()?.to_string(),
     ));
     // Authentication creates channels and posts support welcome messages in-process, so its
-    // channel service must dispatch the same realtime, notification, search, contact, and broker
-    // side effects as the document-storage channel API.
+    // channel service must dispatch the same realtime, notification, contact, and broker side
+    // effects as the document-storage channel API. Channel broker events drive live search
+    // indexing.
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(macro_event_broker.clone());

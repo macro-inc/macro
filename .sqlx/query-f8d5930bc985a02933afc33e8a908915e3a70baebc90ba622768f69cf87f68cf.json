@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT\n                refs.team_slug AS \"team_slug!\",\n                refs.task_num AS \"task_num!\",\n                t.id AS \"team_id!\",\n                tt.document_id AS \"document_id!\"\n            FROM UNNEST($2::text[], $3::int4[]) AS refs(team_slug, task_num)\n            JOIN github_app_installation gai\n                ON gai.id = $1\n                AND gai.source_type = 'team'::github_app_installation_source_type\n            JOIN team t\n                ON t.id = gai.source_id::uuid\n                AND LOWER(t.slug) = LOWER(refs.team_slug)\n            JOIN team_task tt ON tt.team_id = t.id AND tt.task_num = refs.task_num\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_slug!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_num!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "document_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "f8d5930bc985a02933afc33e8a908915e3a70baebc90ba622768f69cf87f68cf"
+}

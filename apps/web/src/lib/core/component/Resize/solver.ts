@@ -18,6 +18,7 @@ type ResizeSolver = {
       minSize?: number;
       maxSize?: number;
       redistributionPreferredSize?: number;
+      shareGroup?: string;
     }
   ) => void;
   solve: () => LayoutResult;
@@ -77,7 +78,16 @@ function computeFractionalShares(
     if (totalFree > 0) {
       for (let i = 0; i < n; i++) {
         const room = Math.max(0, free[i]);
-        const take = Math.round((room / totalFree) * Math.abs(diff));
+        // Cap each take at the panel's own room: when the total diff
+        // exceeds the total free room, an uncapped take would push the
+        // panel past its min/max (a large panel could hit zero width while
+        // its neighbors sit at their minimums). The capped remainder falls
+        // through to the too-small handling below, which shrinks every
+        // panel together.
+        const take = Math.min(
+          room,
+          Math.round((room / totalFree) * Math.abs(diff))
+        );
         if (Number.isFinite(take)) {
           clamped[i] += diff > 0 ? take : -take;
         }
@@ -113,16 +123,15 @@ function computeFractionalShares(
           const containerTooSmall = usable < totalMinSizes;
 
           if (containerTooSmall) {
-            let totalCurrentSize = sumArray(clamped);
+            // Below the summed minimums nothing has room left to give, so
+            // every panel shrinks together by the same factor — sizes stay
+            // proportional to the minimums and always sum to the usable
+            // space.
+            const totalCurrentSize = sumArray(clamped);
             if (totalCurrentSize > 0) {
+              const scale = usable / totalCurrentSize;
               for (let i = 0; i < n; i++) {
-                const proportion = clamped[i] / totalCurrentSize;
-                const shrinkAmount = Math.min(
-                  remaining * proportion,
-                  clamped[i]
-                );
-                clamped[i] -= shrinkAmount;
-                remaining -= shrinkAmount;
+                clamped[i] *= scale;
               }
             }
           }
@@ -137,7 +146,9 @@ function computeFractionalShares(
     if (i >= 1) {
       offsets[i] = offsets[i - 1] + clamped[i - 1] + gutter;
     }
-    shares[i] = clamped[i] / usable;
+    // A zero-measure zone (e.g. mid-boot) must not emit NaN shares into
+    // the layout result consumers read.
+    shares[i] = usable > 0 ? clamped[i] / usable : 0;
   }
 
   return {
@@ -156,6 +167,25 @@ function initPanel(panel: PanelConfig): Panel {
     target: panel.target || { kind: 'auto' },
     share: 0,
   };
+}
+
+/**
+ * Panels with the same `shareGroup` form one layout unit; every ungrouped
+ * panel is a unit of its own. Automatic share allocation is per unit, so a
+ * group collectively receives the space a single panel would.
+ */
+function countUnits(panels: readonly Pick<Panel, 'shareGroup'>[]): number {
+  const groups = new Set<string>();
+  let units = 0;
+  for (const panel of panels) {
+    if (panel.shareGroup === undefined) {
+      units += 1;
+    } else if (!groups.has(panel.shareGroup)) {
+      groups.add(panel.shareGroup);
+      units += 1;
+    }
+  }
+  return units;
 }
 
 /**
@@ -207,19 +237,83 @@ function applyRedistributionPreferences(
   // Avoid leaving a gap when no other panel can absorb the remaining space.
   if (resolvedPreferredTotal + remainingMax + EPSILON < usable) return panels;
 
+  // Settle a pinned panel's size delta within its share group first: the
+  // group is one layout unit, so pinning one member trades space with its
+  // group-mates and leaves the other units' sizes alone. Whatever the
+  // group-mates cannot fund shrinks the pin itself (down to the panel's
+  // hard minimum) instead of taking space from other units. Hard minimums
+  // always still leak to the global solve.
+  const shareAdjustments = new Map<PanelId, number>();
+  const adjustedShare = (panel: Panel) =>
+    panel.share + (shareAdjustments.get(panel.id) ?? 0);
+  for (const entry of preferredPanels) {
+    const { panel, size } = entry;
+    if (panel.shareGroup === undefined) continue;
+    const groupMates = panels.filter(
+      (candidate) =>
+        candidate.shareGroup === panel.shareGroup &&
+        candidate.id !== panel.id &&
+        !preferredIds.has(candidate.id)
+    );
+    if (groupMates.length === 0) continue;
+
+    const delta = size / usable - panel.share;
+    if (delta > EPSILON) {
+      // The pin grows the panel: group-mates give up share, weighted by
+      // their room above minimum.
+      const capacities = groupMates.map((mate) =>
+        Math.max(0, adjustedShare(mate) - mate.minSize / usable)
+      );
+      const totalCapacity = sumArray(capacities);
+      const applied = Math.min(delta, totalCapacity);
+      if (totalCapacity > 0 && applied > 0) {
+        groupMates.forEach((mate, i) => {
+          const give = applied * (capacities[i] / totalCapacity);
+          shareAdjustments.set(
+            mate.id,
+            (shareAdjustments.get(mate.id) ?? 0) - give
+          );
+        });
+      }
+      const unfunded = delta - applied;
+      if (unfunded > EPSILON) {
+        entry.size = Math.max(panel.minSize, (panel.share + applied) * usable);
+      }
+    } else if (delta < -EPSILON) {
+      // The pin shrinks the panel: group-mates receive the freed share,
+      // weighted by their current shares.
+      const weights = groupMates.map((mate) =>
+        Math.max(0, adjustedShare(mate))
+      );
+      const totalWeight = sumArray(weights);
+      groupMates.forEach((mate, i) => {
+        const weight =
+          totalWeight > 0 ? weights[i] / totalWeight : 1 / groupMates.length;
+        shareAdjustments.set(
+          mate.id,
+          (shareAdjustments.get(mate.id) ?? 0) + -delta * weight
+        );
+      });
+    }
+  }
+
   const preferredSizeById = new Map(
     preferredPanels.map(({ panel, size }) => [panel.id, size])
   );
   return panels.map((panel) => {
     const preferred = preferredSizeById.get(panel.id);
-    return preferred === undefined
+    if (preferred !== undefined) {
+      return {
+        ...panel,
+        minSize: preferred,
+        maxSize: preferred,
+        share: preferred / usable,
+      };
+    }
+    const adjustment = shareAdjustments.get(panel.id);
+    return adjustment === undefined
       ? panel
-      : {
-          ...panel,
-          minSize: preferred,
-          maxSize: preferred,
-          share: preferred / usable,
-        };
+      : { ...panel, share: Math.max(0, panel.share + adjustment) };
   });
 }
 
@@ -276,7 +370,15 @@ export function createResizeSolver(params: {
     offsets: new Map(),
   });
 
-  // the solve on dependencies effect
+  // The solve on dependencies effect.
+  //
+  // Shares are INTENT: they record how the user wants space divided between
+  // layout units, and only unit arithmetic (panels joining/leaving) and
+  // manual gutter drags write them. A solve renders intent under the current
+  // constraints (minimums, pins) but NEVER writes the result back — solved
+  // pixels in a tight zone are constraint-dictated and carry no intent, and
+  // baking them in would permanently distort the model (e.g. a min-crushed
+  // Preview Pair would keep its crushed proportions after space frees up).
   createEffect(() => {
     const ps = panelsInOrder();
     const solveKind = nextSolveKind;
@@ -288,54 +390,9 @@ export function createResizeSolver(params: {
         ? applyRedistributionPreferences(ps, usable)
         : ps;
 
-    // run the solve to get pixel values
-    const solve = computeFractionalShares(
-      solvePanels,
-      params.size(),
-      params.gutter()
+    setLayout(
+      computeFractionalShares(solvePanels, params.size(), params.gutter())
     );
-
-    // basically update the float share values to match the actual pixel sizes returned by the solve.
-    const ids = order();
-    const n = ids.length;
-    if (usable > 0 && n > 0) {
-      const clampedPx = ids.map((id) => solve.sizes.get(id) ?? 0);
-      const mins = solvePanels.map((p) => p.minSize ?? 0);
-      const maxs = solvePanels.map((p) => p.maxSize ?? Infinity);
-
-      const free: number[] = [];
-      const clamped: number[] = [];
-      for (let i = 0; i < n; i++) {
-        const x = clampedPx[i];
-        if (x > mins[i] + EPSILON && x < maxs[i] - EPSILON) free.push(i);
-        else clamped.push(i);
-      }
-
-      for (const i of clamped) {
-        panelData[ids[i]].share = clampedPx[i] / usable;
-      }
-
-      const sumModelFree = sumArray(free.map((i) => panelData[ids[i]].share));
-      const sumPxFree = sumArray(free.map((i) => clampedPx[i])) / usable;
-
-      if (free.length > 0) {
-        if (sumModelFree > 0) {
-          const k = sumPxFree / sumModelFree;
-          for (const i of free) panelData[ids[i]].share *= k;
-        } else {
-          const eq = sumPxFree / free.length;
-          for (const i of free) panelData[ids[i]].share = eq;
-        }
-      }
-
-      // account for floating point drift
-      const sum = sumArray(ids.map((id) => panelData[id].share));
-      if (sum > 0 && Math.abs(sum - 1) > EPSILON) {
-        for (const id of ids) panelData[id].share /= sum;
-      }
-    }
-
-    setLayout(solve);
   });
 
   function addPanel(panel: PanelConfig, ndx?: number) {
@@ -350,8 +407,63 @@ export function createResizeSolver(params: {
 
       const usableSize = getUsable(nextLength, params.size(), params.gutter());
 
-      // Calculate incoming share based on target spec, defaulting to equal share
-      let incomingShare = 1 / nextLength;
+      // A panel joining a live share group carves its share out of the
+      // group's members: the group is one layout unit, so the other units
+      // keep their sizes. The group also absorbs the gutter the new panel
+      // introduces — usable space shrinks by one gutter, so without the
+      // correction every other panel would shift by its slice of it.
+      const groupMemberIds =
+        panel.shareGroup === undefined
+          ? []
+          : ids.filter((id) => panelData[id].shareGroup === panel.shareGroup);
+      if (groupMemberIds.length > 0) {
+        const memberIdSet = new Set(groupMemberIds);
+        const groupShare = sumArray(
+          groupMemberIds.map((id) => panelData[id].share)
+        );
+        const usableBefore = getUsable(length, params.size(), params.gutter());
+        const memberScale = groupMemberIds.length / (groupMemberIds.length + 1);
+        let incomingGroupShare = groupShare;
+        if (usableBefore > 0 && usableSize > 0) {
+          const nextGroupShare = Math.max(
+            0,
+            (groupShare * usableBefore - params.gutter()) / usableSize
+          );
+          const rescale = usableBefore / usableSize;
+          const groupRescale = groupShare > 0 ? nextGroupShare / groupShare : 0;
+          for (const id of ids) {
+            panelData[id].share *= memberIdSet.has(id)
+              ? groupRescale * memberScale
+              : rescale;
+          }
+          incomingGroupShare = nextGroupShare;
+        } else {
+          // Zone size unknown: fall back to a plain within-group carve.
+          for (const id of groupMemberIds) {
+            panelData[id].share *= memberScale;
+          }
+        }
+        panelData[panel.id] = {
+          ...initPanel(panel),
+          share: incomingGroupShare / (groupMemberIds.length + 1),
+        };
+
+        if (index >= order().length) {
+          setOrder((prev) => [...prev, panel.id]);
+        } else {
+          setOrder((prev) => [
+            ...prev.slice(0, index),
+            panel.id,
+            ...prev.slice(index),
+          ]);
+        }
+        setDirty();
+        return;
+      }
+
+      // Calculate incoming share based on target spec, defaulting to an
+      // equal share per layout unit (a share group counts as one unit).
+      let incomingShare = 1 / (countUnits(ids.map((id) => panelData[id])) + 1);
 
       if (panel.target && usableSize > 0) {
         switch (panel.target.kind) {
@@ -409,6 +521,7 @@ export function createResizeSolver(params: {
       minSize?: number;
       maxSize?: number;
       redistributionPreferredSize?: number;
+      shareGroup?: string;
     }
   ) {
     const panel = panelData[id];
@@ -435,6 +548,11 @@ export function createResizeSolver(params: {
         changed = true;
       }
     }
+    if ('shareGroup' in config) {
+      // Membership alone moves no pixels, so it does not dirty the layout;
+      // it only informs future share allocation.
+      panel.shareGroup = config.shareGroup;
+    }
     if (changed) setDirty();
   }
 
@@ -445,6 +563,57 @@ export function createResizeSolver(params: {
       const nextIds = ids.filter((x) => x !== id);
       const nextLength = nextIds.length;
       if (length === nextLength) return;
+
+      // A departing group member leaves its share to the rest of its group,
+      // so the group keeps its overall size and other units are unaffected.
+      // The group also reclaims the gutter the departing panel frees —
+      // mirroring the join-time absorption — so other panels' pixel widths
+      // survive an engage/disengage round-trip exactly. The proportional
+      // renormalization below then only fixes drift.
+      const dropped = panelData[id];
+      const groupMemberIds =
+        dropped?.shareGroup === undefined
+          ? []
+          : nextIds.filter(
+              (x) => panelData[x]?.shareGroup === dropped.shareGroup
+            );
+      if (groupMemberIds.length > 0 && dropped.share > 0) {
+        const memberSum = sumArray(
+          groupMemberIds.map((x) => panelData[x].share)
+        );
+        const usableBefore = getUsable(length, params.size(), params.gutter());
+        const usableAfter = getUsable(
+          nextLength,
+          params.size(),
+          params.gutter()
+        );
+        if (usableBefore > 0 && usableAfter > 0) {
+          const groupShare = memberSum + dropped.share;
+          const nextGroupShare =
+            (groupShare * usableBefore + params.gutter()) / usableAfter;
+          const rescale = usableBefore / usableAfter;
+          const memberIdSet = new Set(groupMemberIds);
+          for (const x of nextIds) {
+            if (!memberIdSet.has(x)) panelData[x].share *= rescale;
+          }
+          for (const x of groupMemberIds) {
+            const weight =
+              memberSum > 0
+                ? panelData[x].share / memberSum
+                : 1 / groupMemberIds.length;
+            panelData[x].share = nextGroupShare * weight;
+          }
+        } else {
+          // Zone size unknown: fall back to a plain within-group hand-off.
+          for (const x of groupMemberIds) {
+            const weight =
+              memberSum > 0
+                ? panelData[x].share / memberSum
+                : 1 / groupMemberIds.length;
+            panelData[x].share += dropped.share * weight;
+          }
+        }
+      }
 
       const sum = sumArray(
         nextIds.map((id) => untrack(() => panelData[id]?.share ?? 0))
@@ -489,7 +658,13 @@ export function createResizeSolver(params: {
     const L = ndx;
     const R = ndx + 1;
 
-    const shares = ids.map((id) => panelData[id]!.share);
+    // Drags anchor to the RENDERED layout (what the user sees), which can
+    // differ from the intent shares when constraints or pins are active.
+    // The dragged result is then written back as the new intent below —
+    // manual resizing is the one interaction that redefines intent from
+    // rendered reality.
+    const rendered = untrack(layout).shares;
+    const shares = ids.map((id) => rendered.get(id) ?? panelData[id]!.share);
 
     const bounds = (i: number) => {
       if (i < 0 || i >= panels.length) return [0, 0];
@@ -503,6 +678,115 @@ export function createResizeSolver(params: {
     const growCap = (i: number) => {
       const [, maxS] = bounds(i);
       return Math.max(0, maxS - shares[i]);
+    };
+
+    /**
+     * The preferred share a grouped panel soft-pins to during gutter drags,
+     * or undefined for panels without one.
+     */
+    const preferredShare = (i: number): number | undefined => {
+      const panel = panels[i];
+      const preferred = panel.redistributionPreferredSize;
+      if (
+        panel.shareGroup === undefined ||
+        preferred === undefined ||
+        !Number.isFinite(preferred)
+      ) {
+        return undefined;
+      }
+      const px = Math.min(Math.max(preferred, panel.minSize), panel.maxSize);
+      return px / usable;
+    };
+
+    /** Contiguous group-mates of panel `i`, walking in direction `dir`. */
+    const matesBeyond = (i: number, dir: 1 | -1): number[] => {
+      const group = panels[i].shareGroup;
+      if (group === undefined) return [];
+      const mates: number[] = [];
+      for (
+        let j = i + dir;
+        j >= 0 && j < n && panels[j].shareGroup === group;
+        j += dir
+      ) {
+        mates.push(j);
+      }
+      return mates;
+    };
+
+    /**
+     * Grow capacity of the handle's neighbor, including group-mates behind
+     * it when growth cascades past a preferred size (see growFrom).
+     */
+    const growCapFrom = (i: number, dir: 1 | -1) => {
+      const mates = preferredShare(i) === undefined ? [] : matesBeyond(i, dir);
+      return growCap(i) + sumArray(mates.map(growCap));
+    };
+
+    /**
+     * Grow the handle's neighbor `i` by `amount`. A grouped panel with a
+     * preferred size (a preview Controller) soft-caps at that preferred size: overflow flows
+     * to its group-mates beyond it (its Viewer) rather than growing it past
+     * its configured width. Dragging the group's own internal gutter is
+     * unaffected — there the mates sit on the handle side, so the neighbor
+     * grows directly.
+     */
+    const growFrom = (
+      newShares: number[],
+      i: number,
+      dir: 1 | -1,
+      amount: number
+    ) => {
+      const preferred = preferredShare(i);
+      const mates = preferred === undefined ? [] : matesBeyond(i, dir);
+      if (preferred === undefined || mates.length === 0) {
+        newShares[i] += amount;
+        return;
+      }
+      const softCap = Math.max(preferred, newShares[i]);
+      const direct = Math.min(amount, Math.max(0, softCap - newShares[i]));
+      newShares[i] += direct;
+      let remain = amount - direct;
+      for (const j of mates) {
+        if (remain <= EPSILON) break;
+        const [, maxS] = bounds(j);
+        const take = Math.min(remain, Math.max(0, maxS - newShares[j]));
+        newShares[j] += take;
+        remain -= take;
+      }
+      // Group-mates saturated: the rest lands on the neighbor after all.
+      newShares[i] += remain;
+    };
+
+    /**
+     * Shrink the stack starting at `from`, walking away from the handle.
+     * Grouped panels with a preferred size hold it while their elastic
+     * group-mates give space (pass 1); only when the whole stack is
+     * otherwise exhausted do they shrink below it to their minimum (pass 2).
+     */
+    const shrinkStack = (
+      newShares: number[],
+      from: number,
+      dir: 1 | -1,
+      amount: number
+    ) => {
+      let remain = amount;
+      for (let i = from; i >= 0 && i < n && remain > EPSILON; i += dir) {
+        const [minS] = bounds(i);
+        const preferred = preferredShare(i);
+        const floor =
+          preferred === undefined
+            ? minS
+            : Math.max(minS, Math.min(preferred, newShares[i]));
+        const take = Math.min(Math.max(0, newShares[i] - floor), remain);
+        newShares[i] -= take;
+        remain -= take;
+      }
+      for (let i = from; i >= 0 && i < n && remain > EPSILON; i += dir) {
+        const [minS] = bounds(i);
+        const take = Math.min(Math.max(0, newShares[i] - minS), remain);
+        newShares[i] -= take;
+        remain -= take;
+      }
     };
 
     const shrinkCapLeftStack = () => {
@@ -524,49 +808,32 @@ export function createResizeSolver(params: {
     };
 
     if (dShare < 0) {
-      // Move LEFT: shrink LEFT stack, grow RIGHT (R only)
+      // Move LEFT: shrink LEFT stack, grow RIGHT
       const req = -dShare;
       const capShrinkLeft = shrinkCapLeftStack();
-      const capGrowR = growCap(R);
+      const capGrowR = growCapFrom(R, 1);
       const applied = Math.min(req, capShrinkLeft, capGrowR);
       if (applied <= 0) return;
 
       const newShares = shares.slice();
       // shrink from the handle outward: L, L-1, L-2, ...
-      let remain = applied;
-      for (let i = L; i >= 0 && remain > EPSILON; i--) {
-        const [minS] = bounds(i);
-        const take = Math.min(newShares[i] - minS, remain);
-        if (take > 0) {
-          newShares[i] -= take;
-          remain -= take;
-        }
-      }
-      // grow immediate right neighbor only
-      newShares[R] += applied;
+      shrinkStack(newShares, L, -1, applied);
+      growFrom(newShares, R, 1, applied);
 
       for (let i = 0; i < n; i++) {
         panelData[ids[i]].share = newShares[i];
       }
     } else {
-      // dShare > 0: Move RIGHT: shrink RIGHT stack, grow LEFT (L only)
+      // dShare > 0: Move RIGHT: shrink RIGHT stack, grow LEFT
       const req = dShare;
       const capShrinkRight = shrinkCapRightStack();
-      const capGrowL = growCap(L);
+      const capGrowL = growCapFrom(L, -1);
       const applied = Math.min(req, capShrinkRight, capGrowL);
       if (applied <= 0) return;
 
       const newShares = shares.slice();
-      let remain = applied;
-      for (let i = R; i < n && remain > EPSILON; i++) {
-        const [minS] = bounds(i);
-        const take = Math.min(newShares[i] - minS, remain);
-        if (take > 0) {
-          newShares[i] -= take;
-          remain -= take;
-        }
-      }
-      newShares[L] += applied;
+      shrinkStack(newShares, R, 1, applied);
+      growFrom(newShares, L, -1, applied);
 
       for (let i = 0; i < n; i++) {
         panelData[ids[i]].share = newShares[i];
@@ -591,9 +858,23 @@ export function createResizeSolver(params: {
     solve: layout,
     reset: () => {
       const panels = panelsInOrder();
-      const n = panels.length;
+      const units = countUnits(panels);
+      if (units === 0) return;
+      const groupSizes = new Map<string, number>();
       for (const panel of panels) {
-        panelData[panel.id].share = 1 / n;
+        if (panel.shareGroup !== undefined) {
+          groupSizes.set(
+            panel.shareGroup,
+            (groupSizes.get(panel.shareGroup) ?? 0) + 1
+          );
+        }
+      }
+      // Equal share per unit; group members split their unit's share.
+      for (const panel of panels) {
+        panelData[panel.id].share =
+          panel.shareGroup === undefined
+            ? 1 / units
+            : 1 / units / groupSizes.get(panel.shareGroup)!;
       }
       setDirty();
     },

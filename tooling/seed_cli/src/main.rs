@@ -34,6 +34,11 @@ pub async fn main() -> anyhow::Result<()> {
     // Force to use local tracing
     MacroEntrypoint::new(Environment::Local).init();
     let cli = Cli::parse();
+    // The gmail entity talks only to Google — dispatch it before the required
+    // env vars / database connection so it works without the local stack.
+    if let EntityCommand::Gmail(args) = cli.command {
+        return args.execute().await;
+    }
     let env_vars = EnvVars::new()?;
     cli.command.validate_environment(&env_vars)?;
     tracing::trace!("initializing");
@@ -51,8 +56,7 @@ pub async fn main() -> anyhow::Result<()> {
         .context("could not connect to db")?;
     tracing::trace!("initialized db");
 
-    let fusionauth_client = FusionAuthClient::new_for_local_instance(
-        env_vars.fusionauth_tenant_id.to_string(),
+    let fusionauth_client = FusionAuthClient::new(
         env_vars.fusionauth_api_key_secret_key.to_string(),
         env_vars.fusionauth_client_id.to_string(),
         env_vars.fusionauth_client_secret_key.to_string(),

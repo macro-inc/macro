@@ -236,7 +236,7 @@ export function Automation() {
         <>
           <SplitHeaderLeft>
             <HeaderIsland class="shrink">
-              <div class="z-page-overlay relative flex h-full w-screen max-w-full shrink items-center gap-2">
+              <div class="z-split-header-content relative flex h-full w-screen max-w-full shrink items-center gap-2">
                 <EntityIcon
                   class="shrink-0"
                   targetType="automation"

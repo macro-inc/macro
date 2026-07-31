@@ -34,6 +34,12 @@ INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "https://search-processing-dev.macro.com"
 DSS_URL = "http://localhost:8086"
 DSS_INTERNAL_AUTH_KEY = "local"
+# Tags exported spans with deployment.environment=local, matching the
+# Datadog agent's DD_ENV so the env:local trace/log views include them.
+ENVIRONMENT = "local"
+# Local jaeger/datadog-agent OTLP receiver (docker port-mapped to the host).
+# Unset in deployed envs = trace and log export disabled.
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
 
 [[kv_namespaces]]
 binding = "DOCUMENT_VERSIONING_KV"
@@ -93,6 +99,8 @@ name = "sync-service-dev3"
 [env.dev.vars]
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_DEV"
 ENVIRONMENT = "development"
+# The proxy injects the Datadog key; the exporter appends the signal path.
+OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-dev.macroverse.workers.dev/i/otlp"
 SPS_URL = "https://search-processing-dev.macro.com"
 DSS_URL = "https://cloud-storage-dev.macro.com"
 
@@ -131,6 +139,8 @@ name = "sync-service-prod2"
 [env.prod.vars]
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PROD"
 ENVIRONMENT = "production"
+# The proxy injects the Datadog key; the exporter appends the signal path.
+OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-prod.macroverse.workers.dev/i/otlp"
 SPS_URL = "https://search-processing.macro.com"
 DSS_URL = "https://cloud-storage.macro.com"
 

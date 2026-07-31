@@ -662,8 +662,8 @@ describe('normalizedCacheExchange', () => {
     ops.next(makeOp(1));
     await tick();
 
-    expect(host.reads).toHaveLength(1);
-    expect(host.reads[0]?.opKey).toBe(1);
+    expect(host.reads).toHaveLength(2);
+    expect(host.reads.map((read) => read.opKey)).toEqual([1, 1]);
     expect(forwarded.map((op) => op.key)).toEqual([1]);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toEqual({ from: 'network' });
@@ -696,14 +696,16 @@ describe('normalizedCacheExchange', () => {
     ]);
     expect(forwarded.map((op) => op.key)).toEqual([1]);
     expect(host.writes).toHaveLength(1);
+    expect(host.reads).toHaveLength(1);
   });
 
-  it('network-only skips the read but writes the response', async () => {
+  it('network-only skips the initial read and refreshes dependencies after writing', async () => {
     const { ops, results } = harness(host);
     ops.next(makeOp(1, 'network-only'));
     await tick();
 
-    expect(host.reads).toHaveLength(0);
+    expect(host.reads).toHaveLength(1);
+    expect(host.reads[0]?.opKey).toBe(1);
     expect(results[0]?.data).toEqual({ from: 'network' });
     expect(host.writes).toHaveLength(1);
   });

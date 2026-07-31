@@ -89,13 +89,13 @@ export function CodeFileTypeChip() {
             {fileType()}
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="z-50 w-48 rounded shadow-md ring ring-edge bg-surface text-ink text-sm overflow-hidden">
+            <Popover.Content class="z-action-menu w-48 rounded shadow-md ring ring-edge bg-surface text-ink text-sm overflow-hidden">
               <div class="p-1.5 border-b border-edge">
                 <input
                   ref={searchRef}
                   type="text"
                   placeholder="Search..."
-                  class="w-full bg-transparent text-xs outline-none placeholder:text-ink-extra-muted"
+                  class="w-full bg-transparent text-xs outline-none placeholder:text-ink-placeholder"
                   value={search()}
                   onInput={(e) => setSearch(e.currentTarget.value)}
                   onKeyDown={(e) => {

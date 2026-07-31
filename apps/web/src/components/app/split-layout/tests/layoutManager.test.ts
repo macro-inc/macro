@@ -8,6 +8,7 @@ import {
   SplitEvent,
 } from '../layoutManager';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
+import { previewControllerWidthForContent } from '../previewController';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -694,17 +695,19 @@ describe('layoutManager', () => {
       });
     });
 
-    it('caps the Companies controller width at 70vw', () => {
+    it('uses the configured Companies controller width', () => {
       createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'companies' },
-        ]);
+        const content = { type: 'component' as const, id: 'companies' };
+        const manager = createSplitLayout(createMockOrchestrator(), [content]);
         const controllerId = manager.splits()[0].id;
 
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.previewControllerWidth(controllerId, 1000)).toBe(700);
-        expect(manager.previewControllerWidth(controllerId, 1600)).toBe(880);
+        for (const viewportWidth of [1000, 1600]) {
+          expect(
+            manager.previewControllerWidth(controllerId, viewportWidth)
+          ).toBe(previewControllerWidthForContent(content, viewportWidth));
+        }
 
         dispose();
       });

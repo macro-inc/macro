@@ -17,7 +17,6 @@ type EnvVars = {
 
 type Args = {
   envVars: EnvVars;
-  searchEventQueueArn: pulumi.Output<string> | string;
   tags: { [key: string]: string };
 };
 
@@ -31,27 +30,9 @@ export class SearchUploadHandler extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:SearchUploadHandler', name, {}, opts);
-    const { envVars, searchEventQueueArn, tags } = args;
+    const { envVars, tags } = args;
 
     this.tags = tags;
-
-    const sqsPolicy = new aws.iam.Policy(
-      `${LAMBA_BASE_NAME}-sqs-policy`,
-      {
-        policy: pulumi.output({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['sqs:SendMessage'],
-              Resource: [searchEventQueueArn],
-              Effect: 'Allow',
-            },
-          ],
-        }),
-        tags: this.tags,
-      },
-      { parent: this }
-    );
 
     this.role = new aws.iam.Role(
       `${LAMBA_BASE_NAME}-role`,
@@ -73,7 +54,6 @@ export class SearchUploadHandler extends pulumi.ComponentResource {
           aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole,
           aws.iam.ManagedPolicy.AWSLambdaRole,
           aws.iam.ManagedPolicy.CloudWatchLogsFullAccess,
-          sqsPolicy.arn,
         ],
         tags: this.tags,
       },

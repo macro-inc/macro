@@ -16,6 +16,7 @@
 #[cfg(test)]
 mod tests;
 
+pub mod content_uploaded;
 pub mod copy_document;
 pub mod create_document;
 #[cfg(feature = "document_create")]

@@ -17,7 +17,6 @@ secret!(CACHIX_AUTH_TOKEN);
 secret!(CLOUDFLARE_API_TOKEN);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
-secret!(DD_WEB_APP_TOKEN);
 secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
 secret!(FLY_API_TOKEN);

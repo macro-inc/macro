@@ -4,38 +4,48 @@ use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::chat_message::UpsertChatMessageArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
-use sqs_client::search::chat::{ChatMessage, RemoveChatMessage};
+use sqs_client::search::chat::ChatMessage;
 
 use crate::process::properties::to_indexed_properties;
 
-/// Handles the processing of chat messages
-#[tracing::instrument(skip(opensearch_client, db))]
+/// Handles the SQS backfill request for a chat message.
+#[tracing::instrument(skip(opensearch_client, db), err)]
 pub async fn insert_chat_message(
     opensearch_client: &OpensearchClient,
     db: &sqlx::Pool<sqlx::Postgres>,
     chat_message: &ChatMessage,
 ) -> anyhow::Result<()> {
-    let info = macro_db_client::chat::get::get_chat_message_info(
+    upsert_chat_message_by_ids(
+        opensearch_client,
         db,
         chat_message.chat_id.as_str(),
         chat_message.message_id.as_str(),
+        chat_message.index_override.as_deref(),
     )
     .await
-    .context("failed to get chat message info")?;
+}
+
+/// Upserts a chat message using the authoritative database values.
+#[tracing::instrument(skip(opensearch_client, db), err)]
+pub(crate) async fn upsert_chat_message_by_ids(
+    opensearch_client: &OpensearchClient,
+    db: &sqlx::Pool<sqlx::Postgres>,
+    chat_id: &str,
+    message_id: &str,
+    index_override: Option<&str>,
+) -> anyhow::Result<()> {
+    let info = macro_db_client::chat::get::get_chat_message_info(db, chat_id, message_id)
+        .await
+        .context("failed to get chat message info")?;
 
     let Some(info) = info else {
         return Ok(());
     };
 
-    let index_override = chat_message.index_override.as_deref();
     if info.deleted_at.is_some() {
         tracing::trace!("chat is deleted, removing message from search index");
         opensearch_client
-            .delete_chat_message(
-                chat_message.chat_id.as_str(),
-                chat_message.message_id.as_str(),
-                index_override,
-            )
+            .delete_chat_message(chat_id, message_id, index_override)
             .await
             .context("failed to delete chat message from search")?;
         return Ok(());
@@ -45,7 +55,7 @@ pub async fn insert_chat_message(
     // write or values set by the property-update path get wiped. A fetch
     // failure propagates (retry) rather than being mistaken for "empty".
     let properties = to_indexed_properties(
-        get_entity_properties_for_index(db, chat_message.chat_id.as_str(), EntityType::Chat)
+        get_entity_properties_for_index(db, chat_id, EntityType::Chat)
             .await
             .context("failed to fetch chat properties for search index")?,
     );
@@ -53,11 +63,11 @@ pub async fn insert_chat_message(
     opensearch_client
         .upsert_chat_message(
             &UpsertChatMessageArgs {
-                chat_id: chat_message.chat_id.clone(),
-                chat_message_id: chat_message.message_id.clone(),
-                user_id: chat_message.user_id.clone(),
-                created_at_millis: EpochMillis::new(chat_message.created_at.timestamp_millis())?,
-                updated_at_millis: EpochMillis::new(chat_message.updated_at.timestamp_millis())?,
+                chat_id: chat_id.to_string(),
+                chat_message_id: message_id.to_string(),
+                user_id: info.owner_user_id,
+                created_at_millis: EpochMillis::new(info.created_at.timestamp_millis())?,
+                updated_at_millis: EpochMillis::new(info.updated_at.timestamp_millis())?,
                 title: info.name,
                 content: info.content,
                 role: info.role,
@@ -71,22 +81,23 @@ pub async fn insert_chat_message(
     Ok(())
 }
 
-/// Handles the removal of chat message(s) from the opensearch index
-#[tracing::instrument(skip(opensearch_client))]
-pub async fn remove_chat_message(
+/// Removes a chat message or all messages for a chat from the search index.
+#[tracing::instrument(skip(opensearch_client), err)]
+pub(crate) async fn remove_chat_message(
     opensearch_client: &OpensearchClient,
-    remove_message: &RemoveChatMessage,
+    chat_id: &str,
+    message_id: Option<&str>,
+    index_override: Option<&str>,
 ) -> anyhow::Result<()> {
-    let index_override = remove_message.index_override.as_deref();
-    if let Some(message_id) = remove_message.message_id.as_ref() {
+    if let Some(message_id) = message_id {
         tracing::trace!("deleting chat message");
         opensearch_client
-            .delete_chat_message(remove_message.chat_id.as_str(), message_id, index_override)
+            .delete_chat_message(chat_id, message_id, index_override)
             .await?;
     } else {
         tracing::trace!("deleting chat");
         opensearch_client
-            .delete_chat(remove_message.chat_id.as_str(), index_override)
+            .delete_chat(chat_id, index_override)
             .await?;
     }
 

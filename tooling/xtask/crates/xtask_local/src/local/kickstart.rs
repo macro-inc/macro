@@ -9,13 +9,59 @@
 //! (after the app it registers against exists); passwordless login auto-creates
 //! all other users on demand.
 
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 
 use super::identity;
 
+#[cfg(test)]
+mod test;
+
+/// The Google OAuth web client the local `google`/`google_gmail` OIDC identity
+/// providers authenticate against (the Internal client in the
+/// `macro-email-testing` GCP project — see the macro-2634 proposal). Optional:
+/// without it the kickstart is unchanged and the email connect flows stay
+/// unreachable locally, exactly as before.
+pub struct GoogleIdp {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
+impl GoogleIdp {
+    /// Extract the Google client from the resolved run env (Doppler supplies
+    /// `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET_KEY`; in local mode
+    /// authentication_service uses the latter directly as the secret value).
+    ///
+    /// The `GOCSPX-` check is load-bearing, not cosmetic: older Doppler local
+    /// configs carry a Secrets-Manager key *name* (`google-client-secret-dev`)
+    /// in `GOOGLE_CLIENT_SECRET_KEY`. Real Google web-client secrets all carry
+    /// the `GOCSPX-` prefix; creating the IdPs with the placeholder would bake
+    /// a broken FusionAuth config into the init snapshot.
+    pub fn from_env(env: &BTreeMap<String, String>) -> Option<Self> {
+        let client_id = env.get("GOOGLE_CLIENT_ID")?.trim().to_string();
+        let client_secret = env.get("GOOGLE_CLIENT_SECRET_KEY")?.trim().to_string();
+        if client_id.is_empty() || !client_secret.starts_with("GOCSPX-") {
+            return None;
+        }
+        Some(GoogleIdp {
+            client_id,
+            client_secret,
+        })
+    }
+}
+
 /// Build the kickstart document. `lambda_body` is the JS source of
-/// `populate_jwt_local.js`; redirect URLs are templated from the instance ports.
-pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
+/// `populate_jwt_local.js`; `reconcile_lambda_body` is the reconcile lambda
+/// attached to `google_gmail` (only used when `google` is configured); redirect
+/// URLs are templated from the instance ports.
+pub fn build(
+    frontend_port: u16,
+    auth_port: u16,
+    lambda_body: &str,
+    reconcile_lambda_body: &str,
+    google: Option<&GoogleIdp>,
+) -> Value {
     let app_id = identity::APPLICATION_ID;
     let tenant_id = identity::TENANT_ID;
     let key_id = identity::JWT_SIGNING_KEY_ID;
@@ -39,7 +85,7 @@ pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
     // tenant marks `user.create` as AbsoluteMajority, so once the global
     // user.create webhook exists, creating a user would roll back unless
     // auth-service returns 2xx — which it isn't guaranteed to during kickstart.
-    let requests = vec![
+    let mut requests = vec![
         // 1. HS256 signing key.
         json!({
             "method": "POST",
@@ -79,9 +125,15 @@ pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
             }}
         }),
         // 4. Tenant — with SMTP pointed at Mailpit + the passwordless template,
-        // so FusionAuth-sent passwordless codes land in Mailpit.
+        // so FusionAuth-sent passwordless codes land in Mailpit. PATCH, not
+        // POST: `variables.defaultTenantId` (below) pins FusionAuth's built-in
+        // default tenant to our fixed id, and this request reconfigures that
+        // tenant in place. Local stays single-tenant this way — a second
+        // tenant would force the tenant header onto every API call, and the
+        // identity-provider search API returns nothing when that header is
+        // present.
         json!({
-            "method": "POST",
+            "method": "PATCH",
             "url": format!("/api/tenant/{tenant_id}"),
             "body": { "tenant": {
                 "name": "Macro Local",
@@ -211,10 +263,80 @@ pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
         }),
     ];
 
+    // Google OIDC identity providers — only when a real Google client is
+    // configured (see `GoogleIdp::from_env`). Mirrors the dev instance's IdP
+    // config field-for-field (generic OIDC, NOT FusionAuth's built-in Google
+    // type: auth-service and the IdP must share the same OAuth client, and the
+    // endpoints stay per-IdP config). Appended last: `applicationConfiguration`
+    // references the application, which must already exist.
+    if let Some(google) = google {
+        let oauth2_base = |scope: &str| {
+            json!({
+                "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline",
+                "token_endpoint": "https://oauth2.googleapis.com/token",
+                "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+                "client_id": google.client_id.as_str(),
+                "client_secret": google.client_secret.as_str(),
+                "clientAuthenticationMethod": "client_secret_basic",
+                "scope": scope,
+                "uniqueIdClaim": "sub",
+                "emailClaim": "email",
+                "emailVerifiedClaim": "email_verified",
+                "usernameClaim": "preferred_username",
+            })
+        };
+        let app_config = json!({
+            identity::APPLICATION_ID: { "enabled": true, "createRegistration": true }
+        });
+        requests.push(json!({
+            "method": "POST",
+            "url": format!("/api/lambda/{}", identity::RECONCILE_LAMBDA_ID),
+            "body": { "lambda": {
+                "id": identity::RECONCILE_LAMBDA_ID,
+                "name": "Reconcile Secondary IdP Link (local)",
+                "type": "OpenIDReconcile",
+                "enabled": true,
+                "body": reconcile_lambda_body,
+            }}
+        }));
+        requests.push(json!({
+            "method": "POST",
+            "url": format!("/api/identity-provider/{}", identity::GOOGLE_IDP_ID),
+            "body": { "identityProvider": {
+                "type": "OpenIDConnect",
+                "name": "google",
+                "enabled": true,
+                "debug": true,
+                "buttonText": "Google",
+                "linkingStrategy": "LinkByEmail",
+                "oauth2": oauth2_base("openid profile email"),
+                "applicationConfiguration": app_config.clone(),
+            }}
+        }));
+        requests.push(json!({
+            "method": "POST",
+            "url": format!("/api/identity-provider/{}", identity::GOOGLE_GMAIL_IDP_ID),
+            "body": { "identityProvider": {
+                "type": "OpenIDConnect",
+                "name": "google_gmail",
+                "enabled": true,
+                "debug": true,
+                "buttonText": "GoogleGmail",
+                "linkingStrategy": "LinkByEmail",
+                "lambdaConfiguration": { "reconcileId": identity::RECONCILE_LAMBDA_ID },
+                "oauth2": oauth2_base("openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic"),
+                "applicationConfiguration": app_config,
+            }}
+        }));
+    }
+
     json!({
         "//": "GENERATED by xtask (cargo x run-local). Deterministic local FusionAuth bootstrap. Do not edit.",
         "apiKeys": [ { "key": identity::FUSIONAUTH_API_KEY, "description": "Local Development API Key" } ],
-        "variables": {},
+        // `defaultTenantId` renames FusionAuth's built-in default tenant to our
+        // fixed id at schema-creation time, so the tenant request above can
+        // adopt it instead of creating a second tenant.
+        "variables": { "defaultTenantId": identity::TENANT_ID },
         "requests": requests,
     })
 }

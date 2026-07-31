@@ -16,7 +16,6 @@ pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct FusionAuthTenantId;
     pub struct FusionAuthApiSecretKey;
     pub struct FusionAuthClientId;
     pub struct FusionAuthClientSecretKey;
@@ -64,8 +63,6 @@ pub struct Config {
     pub database_url: DatabaseUrl,
     /// The Redis URI for the Redis this application should use.
     pub redis_uri: RedisUri,
-    /// FusionAuth Tenant Id
-    pub fusionauth_tenant_id: FusionAuthTenantId,
     /// FusionAuth API key secret name
     pub fusionauth_api_key_secret_key: FusionAuthApiSecretKey,
     /// FusionAuth client id

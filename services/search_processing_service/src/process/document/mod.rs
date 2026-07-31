@@ -1,17 +1,15 @@
 use anyhow::Context;
 use opensearch_client::OpensearchClient;
-use sqs_client::search::document::{DocumentId, SearchExtractorMessage};
+use sqs_client::search::document::SearchExtractorMessage;
 
 mod document_info;
 mod raw_document;
 
 pub async fn process_remove_message(
     opensearch_client: &OpensearchClient,
-    remove_message: &DocumentId,
+    document_id: &str,
 ) -> anyhow::Result<()> {
-    opensearch_client
-        .delete_document(remove_message.document_id.as_str(), None)
-        .await?;
+    opensearch_client.delete_document(document_id, None).await?;
 
     Ok(())
 }
@@ -25,18 +23,13 @@ pub async fn process_remove_message(
 pub async fn process_update_name_message(
     opensearch_client: &OpensearchClient,
     db: &sqlx::Pool<sqlx::Postgres>,
-    update_message: &DocumentId,
+    document_id: &str,
 ) -> anyhow::Result<()> {
-    let document = match macro_db_client::document::get_basic_document(
-        db,
-        update_message.document_id.as_str(),
-    )
-    .await
-    {
+    let document = match macro_db_client::document::get_basic_document(db, document_id).await {
         Ok(document) => document,
         Err(sqlx::Error::RowNotFound) => {
             tracing::debug!(
-                document_id = %update_message.document_id,
+                document_id,
                 "document not found; skipping search name update"
             );
             return Ok(());
@@ -46,14 +39,14 @@ pub async fn process_update_name_message(
 
     if document.deleted_at.is_some() {
         tracing::debug!(
-            document_id = %update_message.document_id,
+            document_id,
             "document is deleted; skipping search name update"
         );
         return Ok(());
     }
 
     opensearch_client
-        .update_document_metadata(update_message.document_id.as_str(), &document.document_name)
+        .update_document_metadata(document_id, &document.document_name)
         .await
         .context("failed to update document name in search index")?;
 

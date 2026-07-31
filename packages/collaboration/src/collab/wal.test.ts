@@ -1,7 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RawUpdate } from './shared';
+import { disposeTelemetryFor } from './telemetry';
 import { MockLiveSyncSource, MockWALStore, makeTestWAL } from './testing';
 import { WAL_TTL_MS, WALSyncer } from './wal';
+
+afterEach(() => {
+  disposeTelemetryFor('wal-telemetry-test');
+  vi.restoreAllMocks();
+});
 
 function makeWAL(live: MockLiveSyncSource) {
   return makeTestWAL(live);
@@ -115,6 +122,43 @@ describe('WALSyncer', () => {
     await wal.pendingFlush;
 
     expect(await undeliveredCount(walStore)).toBe(0);
+  });
+
+  it('records one delivery outage across repeated failures and ends it on recovery', async () => {
+    const span: Span = {
+      span: (() => span) as Span['span'],
+      run: (operation) => operation(),
+      setAttr: vi.fn(),
+      event: vi.fn(),
+      error: vi.fn(),
+      traceparent: () => undefined,
+      injectTraceHeaders: vi.fn(),
+      end: vi.fn(),
+    };
+    const spanSpy = vi.spyOn(Telemetry, 'span').mockReturnValue(span as never);
+    const store = new MockWALStore<RawUpdate>();
+    let delivered = false;
+    const push = vi.fn(async () => delivered);
+    const wal = new WALSyncer(store, push, 'wal-telemetry-test');
+
+    await wal.append(new Uint8Array([1]));
+    await wal.pendingFlush;
+    await wal.append(new Uint8Array([2]));
+    await wal.pendingFlush;
+
+    expect(spanSpy).toHaveBeenCalledTimes(1);
+    expect(spanSpy).toHaveBeenCalledWith('wal.delivery_outage');
+    expect(span.error).toHaveBeenCalledOnce();
+    expect(span.end).not.toHaveBeenCalled();
+
+    delivered = true;
+    await wal.flush();
+
+    expect(span.event).toHaveBeenCalledWith('wal.ack.confirmed', {
+      'wal.delivered': 2,
+    });
+    expect(span.setAttr).toHaveBeenCalledWith('outcome', 'recovered');
+    expect(span.end).toHaveBeenCalledOnce();
   });
 
   it('flushes updates that arrived during an in-flight flush', async () => {

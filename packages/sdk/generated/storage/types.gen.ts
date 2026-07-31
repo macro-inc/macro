@@ -3187,6 +3187,30 @@ export type DocumentContentLocation = 'object_storage' | 'sync_service' | 'docx_
 export type DocumentContentState = 'unknown' | 'pending' | 'ready';
 
 /**
+ * Metadata for [`DocumentTopicEvent::ContentUploaded`].
+ */
+export type DocumentContentUploadedMetadata = {
+    /**
+     * The id of the document whose stored bytes changed.
+     */
+    document_id: string;
+    /**
+     * Version written, or the converted-file marker; `None` for unversioned
+     * writes (mirrors `SearchExtractorMessage::document_version_id`).
+     */
+    document_version_id?: string | null;
+    /**
+     * File type of the uploaded object (may differ from the document's own
+     * type, e.g. `pdf` for the converted rendition of a docx).
+     */
+    file_type: FileType;
+    /**
+     * The owner of the document (used by the extractor to resolve S3 keys).
+     */
+    owner: MacroUserIdStr;
+};
+
+/**
  * Metadata for [`DocumentTopicEvent::Copied`].
  */
 export type DocumentCopiedMetadata = {
@@ -3492,6 +3516,16 @@ export type DocumentPreviewDataSubType = {
 };
 
 /**
+ * Metadata for [`DocumentTopicEvent::Purged`].
+ */
+export type DocumentPurgedMetadata = {
+    /**
+     * The id of the hard-deleted document.
+     */
+    document_id: string;
+};
+
+/**
  * Document response with content lifecycle metadata.
  */
 export type DocumentResponse = {
@@ -3594,6 +3628,24 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
 export type DocumentSubType = 'task' | 'snippet';
 
 /**
+ * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
+ */
+export type DocumentSyncContentUpdatedMetadata = {
+    /**
+     * The id of the live-collab document whose content changed.
+     */
+    document_id: string;
+    /**
+     * Version marker for the sync snapshot, when the caller supplies one.
+     */
+    document_version_id?: string | null;
+    /**
+     * File type of the sync document (markdown today).
+     */
+    file_type: FileType;
+};
+
+/**
  * The team-share state of a document. The team is resolved from the document
  * owner's team membership.
  */
@@ -3630,6 +3682,24 @@ export type DocumentTopicEvent = {
      * A document was soft-deleted.
      */
     metadata: DocumentDeletedMetadata;
+} | {
+    event_type: 'document.content_uploaded';
+    /**
+     * The document's stored bytes were (re)written to S3.
+     */
+    metadata: DocumentContentUploadedMetadata;
+} | {
+    event_type: 'document.sync_content_updated';
+    /**
+     * A live-collab (sync) document's content changed and should be re-extracted.
+     */
+    metadata: DocumentSyncContentUpdatedMetadata;
+} | {
+    event_type: 'document.purged';
+    /**
+     * The document row was permanently deleted (hard delete).
+     */
+    metadata: DocumentPurgedMetadata;
 } | {
     event_type: 'document.copied';
     /**

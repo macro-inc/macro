@@ -6,7 +6,7 @@ use models_properties::EntityType;
 use sqlx::PgPool;
 use sqs_client::search::{
     SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
-    document::DocumentPropertiesUpdate, email::EmailThreadBatchMessage, project::UpsertProject,
+    email::EmailThreadBatchMessage, project::UpsertProject,
 };
 
 use crate::config::BackfillPageSizes;
@@ -14,15 +14,15 @@ use crate::domain::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
     EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
-    SourcePage,
+    PropertySourcePage, SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
 const DEFAULT_EMAIL_BATCH_SIZE: usize = 50;
 
 /// Page size for the properties backfill's distinct-entity-id scan. A fixed
-/// value rather than a config knob: property rows are few and one message is
-/// enqueued per entity.
+/// value rather than a config knob: property rows are few and each entity is
+/// reindexed directly.
 const PROPERTIES_PAGE_SIZE: usize = 5000;
 
 /// Postgres-backed [`BackfillSource`] for every search-indexed entity. One
@@ -339,7 +339,7 @@ impl BackfillSource for PgBackfillSource {
         &self,
         req: &PropertiesBackfillRequest,
         offset: usize,
-    ) -> Result<SourcePage, BackfillError> {
+    ) -> Result<PropertySourcePage, BackfillError> {
         let entity_type = EntityType::from_str(&req.entity_type)
             .map_err(|e| BackfillError::Source(anyhow::Error::new(e)))?;
 
@@ -354,18 +354,9 @@ impl BackfillSource for PgBackfillSource {
             .map_err(BackfillError::Source)?;
 
         let rows_consumed = entity_ids.len();
-        let messages: Vec<SearchQueueMessage> = entity_ids
-            .into_iter()
-            .map(|entity_id| {
-                SearchQueueMessage::UpdateDocumentProperties(DocumentPropertiesUpdate {
-                    document_id: entity_id,
-                    entity_type: entity_type.to_string(),
-                })
-            })
-            .collect();
-
-        Ok(SourcePage {
-            messages,
+        Ok(PropertySourcePage {
+            entity_ids,
+            entity_type,
             rows_consumed,
         })
     }
@@ -396,6 +387,8 @@ impl BackfillSource for PgBackfillSource {
             })
         });
         let rows_consumed = batch.len();
+        // This SQS message is intentionally limited to backfills, which may
+        // target an alternate OpenSearch index through `index_override`.
         let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
             .map(|p| {

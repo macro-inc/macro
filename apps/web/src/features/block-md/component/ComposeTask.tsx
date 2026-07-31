@@ -201,6 +201,7 @@ function ComposeTaskTitleEditor(props: {
   onTagSelected: (tag: TagMentionLifecycle) => void;
   onDeleteTagsAtStart: () => boolean;
   portalScope?: PortalScope;
+  ref?: (el: HTMLDivElement) => void;
 }) {
   const [state, setState] = createSignal(props.value());
   const [showPlaceholder, setShowPlaceholder] = createSignal(
@@ -308,6 +309,7 @@ function ComposeTaskTitleEditor(props: {
         contentEditable={!props.disabled()}
         class="ph-no-capture w-full text-xl font-medium outline-none whitespace-pre-wrap wrap-break-words"
         ref={(el) => {
+          props.ref?.(el);
           onElementConnect(el, () => onConnect(el));
         }}
       />
@@ -528,6 +530,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [isCreating, setIsCreating] = createSignal(false);
   const [tagLayoutMode, setTagLayoutMode] =
     createSignal<ComposerTagLayoutMode>('bottom');
+  let titleEditorRoot: HTMLDivElement | undefined;
   let attachInputRef: HTMLInputElement | undefined;
 
   const handleAttachFiles = async (event: Event) => {
@@ -760,6 +763,15 @@ export function ComposeTask(props: ComposeTaskProps) {
     setIsCreating(true);
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
+    const resetTitleAndBody = () => {
+      clearTaskComposerDraft();
+      setTitle('');
+      setContent('');
+      setIsDraftLoaded(false);
+      const ed = bodyEditor();
+      ed && initializeEditorEmpty(ed);
+      requestAnimationFrame(() => titleEditorRoot?.focus());
+    };
 
     if (!createMore()) {
       // Snapshot the draft locally, then clear localStorage so a new dialog
@@ -807,6 +819,9 @@ export function ComposeTask(props: ComposeTaskProps) {
       return;
     }
 
+    resetTitleAndBody();
+    setIsCreating(false);
+
     const documentId = await createTaskWithProperties(
       taskTitle,
       taskContent,
@@ -814,8 +829,6 @@ export function ComposeTask(props: ComposeTaskProps) {
       createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
-
-    setIsCreating(false);
 
     if (!documentId) {
       return;
@@ -830,17 +843,6 @@ export function ComposeTask(props: ComposeTaskProps) {
       showTaskCreatedToast(documentId, optimisticSnapshot);
     }
     props.onCreateTask?.(taskTitle, taskContent);
-
-    if (createMore()) {
-      // Reset form for next task
-      setTitle('');
-      setContent('');
-      setPropertyValues(reconcile(getDefaultPropertyValues()));
-      setTagLayoutMode('bottom');
-      setIsDraftLoaded(false);
-      const ed = bodyEditor();
-      ed && initializeEditorEmpty(ed);
-    }
   };
 
   const handleContinueInSplit = async () => {
@@ -1080,6 +1082,9 @@ export function ComposeTask(props: ComposeTaskProps) {
             }}
             onDeleteTagsAtStart={deleteTitleTagsAtStart}
             portalScope={portalScope()}
+            ref={(el) => {
+              titleEditorRoot = el;
+            }}
           />
         </div>
 

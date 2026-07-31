@@ -1,0 +1,20 @@
+# Config for the local dev Datadog agent (docker-compose.tracing.yml).
+# api_key and site come from the container environment, which overrides
+# this file. This file exists because the OTLP receiver's CORS settings
+# (required for browser -> agent requests) can't be set via env vars.
+# Required for the agent to forward OTLP log records to Datadog Logs.
+logs_enabled: true
+otlp_config:
+  receiver:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "*"
+  logs:
+    enabled: true
+apm_config:
+  enabled: true

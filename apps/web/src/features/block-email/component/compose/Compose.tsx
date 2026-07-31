@@ -49,7 +49,8 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
@@ -235,7 +236,7 @@ export function EmailCompose(props: EmailComposeProps) {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
-      logger.error(
+      Telemetry.error(
         new Error('Unable to prepare email body for draft collection.')
       );
       return null;

@@ -191,6 +191,30 @@ pub struct CrmContact {
     pub updated_at: DateTime<Utc>,
 }
 
+/// What a depopulate teardown actually removed. Every field is `false` on
+/// the no-op paths (unknown contact, malformed email), so
+/// [`Self::removed_anything`] distinguishes a real teardown from a call
+/// that found nothing to do — the cleanup job logs on that basis.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DepopulateContactOutcome {
+    /// The `crm_contact_sources` row for this `(contact, link)` was deleted.
+    pub source_deleted: bool,
+    /// The `crm_contacts` row was deleted: no sibling source rows remained
+    /// and the contact was not `manually_created`.
+    pub contact_deleted: bool,
+    /// The `crm_companies` row was deleted (cascading to `crm_domains`): no
+    /// sibling contacts remained and the company was neither killswitched
+    /// (`email_sync = false`) nor `manually_created`.
+    pub company_deleted: bool,
+}
+
+impl DepopulateContactOutcome {
+    /// Whether the teardown deleted any row at all.
+    pub fn removed_anything(&self) -> bool {
+        self.source_deleted || self.contact_deleted || self.company_deleted
+    }
+}
+
 /// Result of [`crate::domain::companies_repo::CompaniesRepository::crm_scope_precheck`].
 ///
 /// Carries the per-input authorization status the caller (`EmailService`)

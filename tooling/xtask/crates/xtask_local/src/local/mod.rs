@@ -33,8 +33,10 @@ pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
 pub mod opensearch;
+pub mod portmap;
 pub mod proxy;
 pub mod resources;
+pub mod sdk_webhook;
 pub mod seed_env;
 pub mod snapshot;
 pub mod stack;
@@ -185,6 +187,13 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         stack::clear_state(&instance)?;
     }
 
+    // Before `prepare` (which resolves env and reads the OTLP port to decide
+    // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
+    // the same auto-wiring as a collector started manually beforehand.
+    if let Some(backend) = args.traces {
+        ensure_tracing_backend(&stage, backend)?;
+    }
+
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a
     // clean slate. That makes the command unconditionally idempotent — no
@@ -226,6 +235,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // DynamoDB/OpenSearch connection refused).
     bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
     bring_up_app(&stage, mode, &instance, &env)?;
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(&instance))
+        .transpose()?;
 
     // No restart-to-reload step: the teardown means `up` always creates fresh
     // containers, which start on the just-built binaries bind-mounted at
@@ -240,7 +252,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         stage.note("frontend disabled (--no-frontend)");
         None
     } else {
-        frontend::start(&stage, &instance, mode)?
+        frontend::start(&stage, &instance, mode, args.traces.is_some())?
     };
 
     summary::print(
@@ -468,6 +480,7 @@ fn prepare(
         instance,
         args.env.no_doppler,
         args.env.env_file.as_deref(),
+        static_frontend,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
 
@@ -487,10 +500,18 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    gen_compose::generate(mode, instance, &binaries, static_frontend)?;
+    let gmail_forwarder = env
+        .merged
+        .get("GMAIL_FORWARDER_SA_KEY")
+        .is_some_and(|key| !key.trim().is_empty());
+    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
+    if mode == Mode::Local {
+        portmap::write(instance)?;
+    }
     if mode.spec().runs_local_infra {
-        fusionauth::write_kickstart(instance)?;
+        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        fusionauth::write_kickstart(instance, google.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -650,7 +671,93 @@ fn bring_up_app(
         }
         up.arg("proxy");
     }
-    stage.run("Starting services (docker compose up -d)", &mut up)
+    stage.run("Starting services (docker compose up -d)", &mut up)?;
+    connect_tracing_network(instance);
+    Ok(())
+}
+
+/// Start the requested trace collector (`--traces`) under its own compose
+/// project, the same one a developer would use manually — see
+/// `docker/docker-compose.yml`'s `jaeger`/`datadog-agent` services. Global and
+/// idempotent (like `start_localstack`): one collector per machine, shared
+/// across instances, left running across `run_local` invocations.
+fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<()> {
+    // A keyed backend with a missing key accepts telemetry locally and drops
+    // every payload at the vendor intake (403), which looks like "traces are
+    // broken" rather than "key is missing" — so fail loud up front.
+    if let Some(var) = backend.required_env()
+        && macro_env_var::maybe_read_env(var).is_none_or(|v| v.is_empty())
+    {
+        anyhow::bail!(
+            "--traces {} requires the {var} env var to be set (export it in \
+             the shell you run this from)",
+            backend.compose_profile()
+        );
+    }
+    let compose = repo_root().join("docker/docker-compose.yml");
+    let mut up = Command::new("docker");
+    up.arg("compose")
+        .arg("--project-directory")
+        .arg(repo_root())
+        .arg("-f")
+        .arg(&compose)
+        .arg("--profile")
+        .arg(backend.compose_profile())
+        .arg("up")
+        .arg("-d")
+        .arg("--remove-orphans")
+        .arg(backend.compose_service());
+    stage.run(
+        &format!("Starting {} trace collector", backend.compose_profile()),
+        &mut up,
+    )?;
+
+    // `up -d` returns once the container starts, not once it's accepting
+    // connections; `env_layer::resolve` (which runs right after this, in
+    // `prepare`) needs the OTLP port live NOW to decide whether to wire
+    // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of racing.
+    for _ in 0..50 {
+        if summary::port_open(4318) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    anyhow::bail!(
+        "{} trace collector did not come up on port 4318 in time",
+        backend.compose_profile()
+    )
+}
+
+/// If the global trace collector (Jaeger or the Datadog agent) is running,
+/// attach it to this instance's `services` network under the `otel-collector`
+/// alias that the injected `OTEL_EXPORTER_OTLP_ENDPOINT` points at (see
+/// `env_layer::resolve`). The collectors are started under their own compose
+/// project (`docker/docker-compose.yml`, profiles `jaeger`/`datadog`), and
+/// Compose prefixes networks per project — so without this, instance
+/// containers can't resolve `otel-collector` and span exports fail with DNS
+/// errors. Best-effort: "already connected" (rerun) and other failures are
+/// ignored, they only mean traces don't flow.
+fn connect_tracing_network(instance: &Instance) {
+    if !summary::port_open(4318) {
+        return;
+    }
+    // Find the collector container (Jaeger or Datadog agent — both publish the
+    // OTLP HTTP port) by that port rather than assuming a container name, in
+    // case it was started under a different project.
+    let Some(collector) = Command::new("docker")
+        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|name| !name.is_empty())
+    else {
+        return;
+    };
+    let _ = Command::new("docker")
+        .args(["network", "connect", "--alias", "otel-collector"])
+        .arg(format!("{}_services", instance.project_name()))
+        .arg(collector)
+        .output();
 }
 
 /// Restart the given services' containers so they re-exec their freshly built
@@ -714,6 +821,7 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// is best-effort and noisy) so callers surface it as a single line; absent
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
+    sdk_webhook::stop(instance);
     let project = instance.project_name();
     // `-t 0`: SIGKILL immediately, no graceful-shutdown grace. The default 10s
     // SIGTERM timeout per container (Postgres' smart shutdown, OpenSearch, …)
@@ -803,7 +911,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
     println!("{}", path.display());
     Ok(())
 }
@@ -812,6 +920,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
 pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    sdk_webhook::stop(&instance);
     let mut cmd = Command::new("docker");
     cmd.args(["compose", "-p", instance.project_name(), "stop"]);
     stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)

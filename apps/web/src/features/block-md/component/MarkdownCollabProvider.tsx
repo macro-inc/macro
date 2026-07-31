@@ -68,6 +68,7 @@ import {
   onCleanup,
   type Setter,
 } from 'solid-js';
+import { endDocumentSpan, resumeDocumentSpan } from '../observability';
 import { CollabStatus } from './CollabStatus';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
@@ -459,7 +460,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           const state = loroManager.state;
           const empty = state
             ? isStateEmpty(state.state as unknown as SerializedEditorState)
-            : null;
+            : undefined;
 
           logSyncService({
             documentId: syncSource()!.documentId,
@@ -478,6 +479,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
               message:
                 'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
             });
+            endDocumentSpan(syncSource()!.documentId);
             return;
           }
 
@@ -514,6 +516,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
                   'editor init: initializeEditorWithVersionedState failed',
               });
               props.setEditorError(initError);
+              endDocumentSpan(syncSource()!.documentId);
               return;
             }
           }
@@ -521,6 +524,9 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           // Start the sync engine
           startSync();
           props.setEditorReady(true);
+          const documentId = syncSource()!.documentId;
+          resumeDocumentSpan(documentId)?.event('editor.ready');
+          endDocumentSpan(documentId);
           logSyncService({
             documentId: syncSource()!.documentId,
             level: 'info',
@@ -551,6 +557,8 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   onCleanup(() => {
     syncEngine.stop();
     walSyncer.destroy();
+    const documentId = syncSource()?.documentId;
+    if (documentId) endDocumentSpan(documentId);
   });
 
   return (

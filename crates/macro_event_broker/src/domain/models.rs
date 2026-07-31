@@ -181,6 +181,7 @@ impl<T, M> MessageWrapper<T, M> {
 
 impl<T: MessageParts, M: MacroEventCollection> MessageWrapper<T, M> {
     /// Decodes the message into one of the declared event types.
+    #[tracing::instrument(err, skip(self))]
     pub fn decode_payload(&self) -> Result<M, EventBrokerError> {
         M::decode(&self.inner)
     }

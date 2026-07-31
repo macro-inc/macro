@@ -1,12 +1,14 @@
 //! Outbound trait contracts for the backfill domain.
 //!
-//! Two ports:
+//! Three ports:
 //!
 //! - [`BackfillSource`] — entity-aware reader. One method per searchable
-//!   entity, each producing a [`SourcePage`] (messages + rows consumed) for
-//!   a given offset. The orchestrator drives sources through these methods.
+//!   entity, producing either a queue-backed [`SourcePage`] or a typed
+//!   [`PropertySourcePage`] for a given pagination position.
 //! - [`SearchEventPublisher`] — entity-agnostic batch publisher onto the
 //!   search-event queue.
+//! - [`PropertyBackfillIndexer`] — directly reindexes one typed entity's
+//!   denormalized properties.
 //!
 //! Splitting reads (source) from the queue write (publisher) keeps each
 //! adapter single-concern and lets the application-level pagination loop be
@@ -14,13 +16,14 @@
 
 use std::future::Future;
 
+use models_properties::EntityType;
 use sqs_client::search::SearchQueueMessage;
 
 use super::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
     EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
-    SourcePage,
+    PropertySourcePage, SourcePage,
 };
 
 /// Publishes batches of search-event messages.
@@ -31,8 +34,18 @@ pub trait SearchEventPublisher: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), BackfillError>> + Send;
 }
 
-/// Source of backfill messages across every searchable entity. The
-/// orchestrator's `drain_source` loop calls one of these per request.
+/// Directly reindexes denormalized properties for one typed entity.
+pub trait PropertyBackfillIndexer: Send + Sync + 'static {
+    /// Refetch and overwrite the indexed properties for an entity.
+    fn reindex(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), BackfillError>> + Send;
+}
+
+/// Source of backfill work across every searchable entity. The orchestrator
+/// calls one of these methods per request.
 ///
 /// `rows_consumed` on each [`SourcePage`] is the unit the orchestrator
 /// advances by; `messages` is what gets handed to the publisher. Sources
@@ -92,7 +105,8 @@ pub trait BackfillSource: Send + Sync + 'static {
         &self,
         req: &PropertiesBackfillRequest,
         offset: usize,
-    ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+    ) -> impl Future<Output = Result<PropertySourcePage, BackfillError>> + Send;
+
     /// Projects paginate by keyset cursor (mirroring documents): each call
     /// passes the cursor of the last row from the previous page (or `None`
     /// for the first page), and the implementation returns the page plus

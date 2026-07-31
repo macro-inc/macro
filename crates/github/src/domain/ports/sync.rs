@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
     GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, MacroTaskId,
-    TeamTaskReference, ValidatedGithubWebhookEvent,
+    ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -44,12 +44,16 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
     ///
     /// Implementations should use the installation's team sources from
     /// `github_app_installation` (`source_type = 'team'`) and the referenced
-    /// team slug/task number to find the backing Macro task document.
+    /// team slug/task number to find the backing Macro task document. Each
+    /// match is returned with the team it resolved in; because team slugs are
+    /// not unique, one reference may resolve in several of the installation's
+    /// teams and callers must treat such references as ambiguous instead of
+    /// linking every match.
     fn resolve_team_task_references(
         &self,
         installation_id: &str,
         references: &[TeamTaskReference],
-    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ResolvedTeamTaskReference>, Self::Err>> + Send;
 
     /// Maps GitHub user IDs to the Macro user IDs linked to them via the `github_links` table.
     ///

@@ -11,6 +11,11 @@ fn soup_response_schema_exposes_frontend_fields() {
         "participants: [GraphqlSoupChannelParticipant!]!",
         "latestMessage: GraphqlSoupChannelMessagePreview",
         "latestNonThreadMessage: GraphqlSoupChannelMessagePreview",
+        "input EmailThreadInput {",
+        "threadId: ID!",
+        "emailLabels: [GraphqlSoupEmailLabel!]!",
+        "emailLinks: [GraphqlEmailLink!]!",
+        "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
         "inboxVisible: Boolean!",
@@ -19,9 +24,24 @@ fn soup_response_schema_exposes_frontend_fields() {
         "participants: [GraphqlSoupEmailParticipant!]!",
         "attachments: [GraphqlSoupEmailAttachment!]!",
         "labels: [GraphqlSoupEmailLabel!]!",
+        "type GraphqlEmailLink {",
+        "macroId: String!",
+        "emailAddress: String!",
+        "photoUrl: String",
+        "provider: GraphqlEmailProvider!",
+        "isSyncActive: Boolean!",
+        "syncStatus: GraphqlEmailSyncStatus!",
+        "needsReauth: Boolean!",
+        "settings: GraphqlEmailLinkSettings!",
+        "isPrimary: Boolean!",
+        "type GraphqlEmailLinkSettings {",
+        "signatureOnRepliesForwards: Boolean!",
+        "signature: String",
         "properties: [GraphqlProperty!]!",
+        "messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!",
         "latestContentMessage: GraphqlSoupEmailMessage",
         "type GraphqlSoupEmailMessage {",
+        "isDraft: Boolean!",
         "bodyParsed: String",
         "bodyHtmlSanitized: String",
         "bodyReplyless: String",
@@ -43,6 +63,13 @@ fn soup_response_schema_exposes_frontend_fields() {
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
+        "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!",
+        "enum ChannelActivityType {",
+        "enum NotificationUpdateOperation {",
+        "MARK_SEEN",
+        "MARK_DONE",
+        "MARK_UNDONE",
         "type SoupSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
     ] {
@@ -52,6 +79,15 @@ fn soup_response_schema_exposes_frontend_fields() {
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),
         "Soup metadata must reuse the canonical GraphqlEntity object"
+    );
+    assert_eq!(
+        sdl.matches("type GraphqlSoupEmailLabel {").count(),
+        1,
+        "thread labels and the user catalog must share one normalized typename"
+    );
+    assert!(
+        !sdl.to_ascii_lowercase().contains("fusionauth"),
+        "internal FusionAuth identifiers must not enter the GraphQL contract"
     );
 }
 

@@ -6,6 +6,10 @@ name: macro
 services: 
   postgres:
     image: pgvector/pgvector:pg16
+    # The default 100 max_connections is exhausted when every service's pool
+    # fills under load (e.g. a large email backfill): workers then die on
+    # "pool timed out" / "too many clients". Local-only headroom.
+    command: postgres -c max_connections=500
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user"]
       interval: 2s

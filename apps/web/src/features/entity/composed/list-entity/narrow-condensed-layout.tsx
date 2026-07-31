@@ -11,7 +11,7 @@ import type { LayoutProps } from './shared';
 export function NarrowCondensedLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-2 items-center px-2 grid text-sm"
+      class="w-full gap-x-2 items-center pr-2 grid text-sm"
       style={{
         'grid-template-columns': 'auto 1fr',
         'grid-template-rows': '36px',
@@ -37,7 +37,7 @@ export function NarrowCondensedLayout(props: LayoutProps) {
         placement="title"
         class="ph-no-capture flex min-w-0 items-center gap-2 truncate font-normal"
       >
-        <Show when={props.unread}>
+        <Show when={props.unread} fallback={<div class="size-2" />}>
           <UnreadIndicator active />
         </Show>
         <div class="size-4 shrink-0">
