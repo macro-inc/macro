@@ -6,8 +6,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
-    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, MacroTaskId,
-    ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
+    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, GithubSetupAccessToken,
+    GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
+    ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -135,6 +136,20 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
 /// Abstracts HTTP communication with GitHub's API so the service
 /// layer does not need to manage its own HTTP client.
 pub trait GithubSyncClient: Send + Sync + 'static {
+    /// Exchanges a GitHub App setup callback code for a user access token.
+    fn exchange_setup_code(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+        code: &str,
+    ) -> impl Future<Output = Result<GithubSetupAccessToken, GithubError>> + Send;
+
+    /// Lists every GitHub App installation visible to a user access token.
+    fn list_user_installations(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<Vec<GithubUserInstallation>, GithubError>> + Send;
+
     /// Generates an installation access token for a given GitHub App installation.
     fn generate_installation_access_token(
         &self,

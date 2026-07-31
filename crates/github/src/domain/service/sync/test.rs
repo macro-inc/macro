@@ -5,8 +5,9 @@ use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
         GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
-        GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus, MacroTaskId,
-        ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
+        GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus,
+        GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
+        TeamTaskReference, ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
@@ -731,6 +732,22 @@ impl StubSyncClient {
 }
 
 impl GithubSyncClient for StubSyncClient {
+    async fn exchange_setup_code(
+        &self,
+        _client_id: &str,
+        _client_secret: &str,
+        _code: &str,
+    ) -> Result<GithubSetupAccessToken, GithubError> {
+        Ok(GithubSetupAccessToken::new("test-user-token".to_string()))
+    }
+
+    async fn list_user_installations(
+        &self,
+        _access_token: &str,
+    ) -> Result<Vec<GithubUserInstallation>, GithubError> {
+        Ok(Vec::new())
+    }
+
     async fn generate_installation_access_token(
         &self,
         _jwt: &str,
