@@ -1,5 +1,5 @@
 import { Message } from '../entities/channels/message';
-import { MacroError } from '../utils';
+import { MacroError, unwrap } from '../utils';
 import type { MacroClient } from '../utils/client';
 import type {
   DeliveryHeaders,
@@ -38,6 +38,7 @@ function hydrate(client: MacroClient, event: MacroEvent): EventMap[EventName] {
  */
 export class MacroEvents {
   private readonly handlers = new Map<EventName, Set<AnyHandler>>();
+  private selfBotPrincipal?: Promise<string>;
 
   constructor(
     private readonly client: MacroClient,
@@ -54,6 +55,45 @@ export class MacroEvents {
     set.add(handler as AnyHandler);
     this.handlers.set(event, set);
     return () => set.delete(handler as AnyHandler);
+  }
+
+  /**
+   * Subscribe to @-mentions of THIS bot: `channel.bot_mentioned` deliveries
+   * whose mentioned bot is the authenticated bot. Bot auth only.
+   *
+   * The bot's identity is resolved lazily (once) on the first delivery, and
+   * deliveries mentioning other bots are ignored — so this stays correct even
+   * when the receiving webhook is broader than one bot (no `ids` filter, or
+   * several bots sharing an endpoint). The webhook itself is registered
+   * separately and once, e.g. `macro.webhooks.create({ filters: [{ events:
+   * ['channel.bot_mentioned'], ids: [await macro.bots.myPrincipalId()] }],
+   * … })`.
+   *
+   * @returns An unsubscribe function.
+   */
+  onSelfMention(handler: EventHandler<'channel.bot_mentioned'>): () => void {
+    if (this.client.authConfig.type !== 'bot') {
+      throw new MacroError(
+        'onSelfMention requires bot auth — a user API key has no bot identity',
+      );
+    }
+    return this.on('channel.bot_mentioned', async (event) => {
+      if (event.metadata.bot_id !== (await this.myPrincipal())) return;
+      await handler(event);
+    });
+  }
+
+  /** The authenticated bot's `bot|<uuid>` principal, fetched once and cached. */
+  private myPrincipal(): Promise<string> {
+    this.selfBotPrincipal ??= (async () => {
+      const bot = unwrap(await this.client.storage.getSelfBot());
+      return `bot|${bot.id}`;
+    })().catch((error) => {
+      // Don't cache failures: the next delivery retries the lookup.
+      this.selfBotPrincipal = undefined;
+      throw error;
+    });
+    return this.selfBotPrincipal;
   }
 
   /**
