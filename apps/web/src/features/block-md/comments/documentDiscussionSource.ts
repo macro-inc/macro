@@ -5,7 +5,7 @@ import type {
   DiscussionThread,
 } from '@core/comments/discussion';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import { useResolvedUrlParams } from '@core/component/ParamsProvider';
+import { useUrlParams } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
 import { useCanComment } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -66,7 +66,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
   const canComment = useCanComment();
   const userId = useUserId();
-  const resolvedParams = useResolvedUrlParams(URL_PARAMS);
+  const urlParams = useUrlParams(URL_PARAMS);
 
   const createThreadFn = useCreateDiscussionThread();
   const createReplyFn = useCreateDiscussionReply();
@@ -79,28 +79,26 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   );
   const targetRequest = createMemo(
     () => {
-      const commentIdParam = resolvedParams.commentId();
-      const commentId = commentIdParam.value;
-      if (!commentId) return null;
-      if (!md.locationReady) return null;
-
-      const currentThreads = threads();
-      const hasDiscussionComment = currentThreads.some((thread) =>
-        thread.comments.some((comment) => comment.id === commentId)
-      );
-      return hasDiscussionComment
-        ? { commentId, revision: commentIdParam.revision }
-        : null;
+      const commentId = urlParams.commentId();
+      return commentId ? { commentId } : null;
     },
     undefined,
-    {
-      equals: (previous, next) =>
-        previous?.commentId === next?.commentId &&
-        previous?.revision === next?.revision,
-    }
+    { equals: false }
   );
-  const targetCommentId = () => targetRequest()?.commentId ?? null;
-  const targetRevision = () => targetRequest()?.revision ?? null;
+
+  const targetCommentId = createMemo(() => {
+    const request = targetRequest();
+    if (!request) return null;
+    const { commentId } = request;
+    if (!md.locationReady) return null;
+
+    const currentThreads = threads();
+    const hasDiscussionComment = currentThreads.some((thread) =>
+      thread.comments.some((comment) => comment.id === commentId)
+    );
+    return hasDiscussionComment ? commentId : null;
+  });
+  const targetRevision = () => targetRequest();
 
   return {
     threads,
