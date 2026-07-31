@@ -1,10 +1,10 @@
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::publish_email_event;
+use email::domain::events::{EmailMacroEvent, ThreadBackfilledMetadata};
 use models_email::email::service::backfill::{JobScopedPayload, UpdateMetadataPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailThreadMessage;
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and
@@ -80,22 +80,16 @@ pub async fn update_thread_metadata(
 
     incr_completed_threads(ctx, link, scope.job_id).await?;
 
-    // notify search-service about the new thread
-    let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
-        thread_id: p.thread_db_id.clone().to_string(),
-        macro_user_id: link.macro_id.to_string(),
-        index_override: None,
-    });
-
-    ctx.sqs_client
-        .send_message_to_search_event_queue(search_message)
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context("Failed to send message to search extractor queue"),
-            })
-        })?;
+    // Best-effort by design: publication failures are logged and dropped so a committed
+    // backfill is not retried after its completed-thread counters have advanced.
+    publish_email_event(
+        &ctx.macro_event_broker,
+        &EmailMacroEvent::thread_backfilled(ThreadBackfilledMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            thread_id: p.thread_db_id,
+        }),
+    );
 
     Ok(())
 }
