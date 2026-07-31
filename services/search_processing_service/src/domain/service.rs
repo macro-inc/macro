@@ -1,24 +1,25 @@
 //! Application-level backfill service.
 //!
 //! [`BackfillService`] is the inbound contract the HTTP layer talks to. The
-//! [`BackfillOrchestrator`] holds one [`BackfillSource`] (which knows about
-//! every entity type) and one [`SearchEventPublisher`], and runs the shared
-//! paginate-and-publish loop that drains a source onto the publisher. The
-//! loop lives here (in the domain) so it can be tested with in-memory fakes
-//! — adapters stay single-concern.
+//! [`BackfillOrchestrator`] holds a [`BackfillSource`], a
+//! [`SearchEventPublisher`] for queue-backed families, and a
+//! [`PropertyBackfillIndexer`] for direct property indexing. The orchestration
+//! loops live here so they can be tested with in-memory fakes while adapters
+//! stay single-concern.
 
 use std::future::Future;
 use std::sync::Arc;
 
+use futures::{StreamExt, TryStreamExt, stream};
 use tokio_util::sync::CancellationToken;
 
 use super::jobs::JobProgress;
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
-    PropertiesBackfillRequest, SourcePage,
+    PropertiesBackfillRequest, PropertySourcePage, SourcePage,
 };
-use super::ports::{BackfillSource, SearchEventPublisher};
+use super::ports::{BackfillSource, PropertyBackfillIndexer, SearchEventPublisher};
 
 /// Drive a source by repeatedly calling `fetch(cursor)`, publishing each
 /// page's messages, and stopping when the source reports zero rows
@@ -112,18 +113,24 @@ pub trait BackfillService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
 }
 
-pub struct BackfillOrchestrator<S, P> {
+pub struct BackfillOrchestrator<S, P, I> {
     source: S,
     publisher: P,
+    property_indexer: I,
 }
 
-impl<S, P> BackfillOrchestrator<S, P>
+impl<S, P, I> BackfillOrchestrator<S, P, I>
 where
     S: BackfillSource,
     P: SearchEventPublisher,
+    I: PropertyBackfillIndexer,
 {
-    pub fn new(source: S, publisher: P) -> Self {
-        Self { source, publisher }
+    pub fn new(source: S, publisher: P, property_indexer: I) -> Self {
+        Self {
+            source,
+            publisher,
+            property_indexer,
+        }
     }
 }
 
@@ -167,10 +174,58 @@ where
     Ok(BackfillReceipt { enqueued })
 }
 
-impl<S, P> BackfillService for BackfillOrchestrator<S, P>
+/// Drain typed property pages with a bounded number of direct reindexes.
+/// Cancellation is observed only at page boundaries so each started page is
+/// either completed and counted or fails without updating progress.
+async fn drain_property_source<Fut, I>(
+    indexer: &I,
+    progress: &JobProgress,
+    cancel: &CancellationToken,
+    fetch: impl Fn(usize) -> Fut,
+) -> Result<BackfillReceipt, BackfillError>
+where
+    Fut: Future<Output = Result<PropertySourcePage, BackfillError>>,
+    I: PropertyBackfillIndexer,
+{
+    let mut offset = 0usize;
+    let mut enqueued = 0usize;
+
+    loop {
+        if cancel.is_cancelled() {
+            tracing::info!(enqueued, "property backfill cancelled between pages");
+            break;
+        }
+
+        let page = fetch(offset).await?;
+        if page.rows_consumed == 0 {
+            break;
+        }
+
+        let PropertySourcePage {
+            entity_ids,
+            entity_type,
+            rows_consumed,
+        } = page;
+
+        stream::iter(entity_ids)
+            .map(|entity_id| async move { indexer.reindex(&entity_id, entity_type).await })
+            .buffer_unordered(20)
+            .try_collect::<Vec<()>>()
+            .await?;
+
+        enqueued += rows_consumed;
+        offset += rows_consumed;
+        progress.add(rows_consumed).await;
+    }
+
+    Ok(BackfillReceipt { enqueued })
+}
+
+impl<S, P, I> BackfillService for BackfillOrchestrator<S, P, I>
 where
     S: BackfillSource,
     P: SearchEventPublisher,
+    I: PropertyBackfillIndexer,
 {
     async fn backfill_calls(
         &self,
@@ -238,7 +293,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
+        drain_property_source(&self.property_indexer, &progress, &cancel, |offset| {
             self.source.fetch_entity_properties(&req, offset)
         })
         .await

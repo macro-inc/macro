@@ -5,7 +5,7 @@ pub mod context;
 pub(crate) mod document;
 mod email;
 pub(crate) mod project;
-mod properties;
+pub(crate) mod properties;
 mod user;
 pub mod worker;
 
@@ -100,10 +100,6 @@ pub async fn process_message(
                 &message,
             )
             .await?;
-        }
-        SearchQueueMessage::UpdateDocumentProperties(message) => {
-            properties::process_entity_property_update(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
         }
         SearchQueueMessage::ChatMessage(message) => {
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;

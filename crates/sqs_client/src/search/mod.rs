@@ -4,7 +4,7 @@ use crate::{
         call::{CallRecordMessage, RemoveCallRecord},
         channel::ChannelMessageUpdate,
         chat::ChatMessage,
-        document::{DocumentPropertiesUpdate, SearchExtractorMessage},
+        document::SearchExtractorMessage,
         email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
         project::UpsertProject,
     },
@@ -71,7 +71,6 @@ pub enum SearchQueueMessage {
     // Document
     ExtractDocumentText(SearchExtractorMessage),
     ExtractSync(SearchExtractorMessage),
-    UpdateDocumentProperties(DocumentPropertiesUpdate),
     // Chat
     /// SQS backfill work-queue contract for reconciling a chat message.
     ChatMessage(ChatMessage),
@@ -98,7 +97,6 @@ impl PrimaryId for SearchQueueMessage {
         match self {
             SearchQueueMessage::ExtractDocumentText(message) => message.document_id.clone(),
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
-            SearchQueueMessage::UpdateDocumentProperties(message) => message.document_id.clone(),
             // The message id keeps entries unique within an SQS batch.
             SearchQueueMessage::ChatMessage(message) => message.message_id.clone(),
             SearchQueueMessage::ExtractEmailMessage(message)
@@ -128,7 +126,6 @@ impl SearchQueueMessage {
             // Document
             SearchQueueMessage::ExtractDocumentText(_) => Operation::ExtractText,
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
-            SearchQueueMessage::UpdateDocumentProperties(_) => Operation::UpdateMetadata,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
             // Email

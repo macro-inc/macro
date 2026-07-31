@@ -36,7 +36,6 @@ bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["__disabled"] }
 chrono = { version = "0.4", features = ["serde"] }
-concurrent-queue = { version = "2" }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
@@ -162,7 +161,6 @@ bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["__disabled"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 chrono = { version = "0.4", features = ["serde"] }
-concurrent-queue = { version = "2" }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }

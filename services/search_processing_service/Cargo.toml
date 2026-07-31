@@ -15,7 +15,9 @@ processing = [
   "dep:kafka_util",
   "dep:macro_event_broker",
   "dep:macro_event_topics",
+  "dep:models_properties",
   "dep:projects",
+  "dep:properties",
   "dep:rdkafka",
   "dep:rootcause",
   "dep:tokio-retry",
@@ -24,8 +26,8 @@ service = [
   "dep:documents",
   "dep:macro_event_broker",
   "macro_db_client",
-  "models_properties",
-  "properties",
+  "dep:models_properties",
+  "dep:properties",
 ]
 pdf = ["dep:pdfium-render"]
 

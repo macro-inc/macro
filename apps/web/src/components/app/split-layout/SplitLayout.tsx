@@ -136,7 +136,9 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                       <Suspense>
                         <Resize.Panel
                           id={id}
-                          minSize={splitMinWidthForContent(handle().content())}
+                          minSize={splitMinWidthForContent(handle().content(), {
+                            isPreviewController: handle().isControllerSplit(),
+                          })}
                           // A Preview Pair is one layout unit: its two splits
                           // share the space a single split would get. Both
                           // members key their group by the Controller's id.
