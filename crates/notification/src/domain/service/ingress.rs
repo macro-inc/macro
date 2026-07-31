@@ -133,8 +133,10 @@ pub trait NotificationReader: Send + Sync + 'static {
     /// Unregister the user's device from push notifications.
     ///
     /// Deletes the user's device registrations matching the token + type, then
-    /// deletes the associated SNS endpoints. Succeeds when nothing matched, so
-    /// logout can call this without checking prior registration state.
+    /// best-effort deletes the associated SNS endpoints (an SNS failure does
+    /// not fail the call — the DB rows are already gone). Succeeds when
+    /// nothing matched, so logout can call this without checking prior
+    /// registration state.
     fn unregister_device(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -826,8 +828,17 @@ where
             .delete_user_devices_by_token(user_id, device_token, device_type)
             .await?;
 
+        // The DB rows are gone, so the unregistration has already succeeded;
+        // SNS endpoint deletion is best-effort cleanup and must not fail the
+        // call or abort the remaining endpoints.
         for endpoint in endpoints {
-            self.sns_endpoint.delete_endpoint(&endpoint).await?;
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %endpoint, "failed to delete SNS endpoint during unregister");
+                });
         }
 
         Ok(())

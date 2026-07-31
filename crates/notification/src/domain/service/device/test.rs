@@ -609,6 +609,20 @@ async fn unregister_deletes_all_matching_endpoints() {
 }
 
 #[tokio::test]
+async fn unregister_succeeds_when_sns_delete_fails() {
+    let db = MockNotifRepo::empty()
+        .with_delete_result(Ok(vec!["arn:a".to_string(), "arn:b".to_string()]));
+    let mut sns = MockSnsManager::new();
+    sns.should_fail = true;
+    let service = make_service(db, sns);
+
+    service
+        .unregister_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn unregister_db_error_propagates() {
     let db = MockNotifRepo::empty().with_delete_result(Err("db error"));
     let sns = MockSnsManager::new();
