@@ -59,10 +59,8 @@ pub(super) async fn cursor_soup(
     }
 
     let sort = sort_sql(parts.sort);
-    let mut query = QueryBuilder::<Postgres>::new(format!(
-        "{} WHERE event.deleted_at IS NULL AND (event.owner_id = ",
-        select_sql()
-    ));
+    let mut query =
+        QueryBuilder::<Postgres>::new(format!("{} WHERE (event.owner_id = ", select_sql()));
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(" OR EXISTS (SELECT 1 FROM macro_user_links link WHERE link.link_id = event.source_link_id AND link.primary_macro_id = ");
     query.push_bind(req.user_id.as_ref().to_string());
@@ -109,10 +107,8 @@ pub(super) async fn by_ids(
         return Ok(Vec::new());
     }
 
-    let mut query = QueryBuilder::<Postgres>::new(format!(
-        "{} WHERE event.deleted_at IS NULL AND (event.owner_id = ",
-        select_sql()
-    ));
+    let mut query =
+        QueryBuilder::<Postgres>::new(format!("{} WHERE (event.owner_id = ", select_sql()));
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(" OR EXISTS (SELECT 1 FROM macro_user_links link WHERE link.link_id = event.source_link_id AND link.primary_macro_id = ");
     query.push_bind(req.user_id.as_ref().to_string());

@@ -149,7 +149,6 @@ impl AccessRepository for PgAccessRepository {
             SELECT event.owner_id = $2 AS "is_owner!"
             FROM calendar_events event
             WHERE event.id = $1
-              AND event.deleted_at IS NULL
               AND (
                   event.owner_id = $2
                   OR EXISTS (

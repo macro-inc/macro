@@ -235,7 +235,10 @@ where
                     role: TeamRole::Member,
                 })
             }
-            EntityType::User | EntityType::ChannelMessage | EntityType::StaticFile => {
+            EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::StaticFile
+            | EntityType::CalendarEvent => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
         }

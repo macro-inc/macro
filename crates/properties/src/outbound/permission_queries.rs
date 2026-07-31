@@ -38,12 +38,12 @@ pub async fn get_owner_and_deleted(
         }
         EntityType::CalendarEvent => {
             let row = sqlx::query!(
-                "SELECT owner_id, deleted_at FROM calendar_events WHERE id = $1",
+                "SELECT owner_id FROM calendar_events WHERE id = $1",
                 Uuid::parse_str(entity_id)?,
             )
             .fetch_one(pool)
             .await?;
-            (row.owner_id, row.deleted_at.is_some())
+            (row.owner_id, false)
         }
         EntityType::Chat => {
             sqlx::query!(

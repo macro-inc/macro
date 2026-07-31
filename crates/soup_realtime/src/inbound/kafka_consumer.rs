@@ -324,6 +324,7 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
 
 fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<EntityType> {
     match entity_type {
+        PropertyEntityType::CalendarEvent => Some(EntityType::CalendarEvent),
         PropertyEntityType::CallRecord => Some(EntityType::Call),
         PropertyEntityType::Chat => Some(EntityType::Chat),
         PropertyEntityType::Company => Some(EntityType::CrmCompany),

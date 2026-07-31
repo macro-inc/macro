@@ -181,6 +181,8 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::Call(entity) => entity.2 = score,
             Self::CrmCompany(entity) => entity.2 = score,
             Self::ForeignEntity(entity) => entity.2 = score,
+            // Calendar events carry no frecency slot; scores never target them.
+            Self::CalendarEvent(_) => {}
         }
         self
     }
@@ -304,6 +306,7 @@ where
                 GraphqlSoupEntityType::Call => GraphqlSoupCall::<E>::type_name(),
                 GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
+                GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -390,6 +393,28 @@ where
         ID(self.0.id.to_string())
     }
 
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::CalendarEvent
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.title.clone())
+    }
+
+    /// Common calendar event metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.clone()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
     /// The owning Macro user.
     async fn owner_id(&self) -> &str {
         &self.0.owner_id
@@ -438,6 +463,11 @@ where
     /// Update timestamp.
     async fn updated_at(&self) -> String {
         self.0.updated_at.to_rfc3339()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        None
     }
 
     #[graphql(flatten)]
@@ -1798,6 +1828,7 @@ macro_rules! impl_common_interface_edges {
 }
 
 impl_common_interface_edges!(
+    GraphqlSoupCalendarEvent,
     GraphqlSoupDocument,
     GraphqlSoupChat,
     GraphqlSoupProject,

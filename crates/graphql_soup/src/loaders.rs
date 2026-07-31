@@ -18,6 +18,7 @@ use filter_ast::Expr;
 use futures::{future::BoxFuture, future::try_join_all};
 use item_filters::ast::{
     EmailFilterAst, EntityFilterAst,
+    calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
     chat::ChatLiteral,
@@ -335,6 +336,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut calls = Vec::new();
     let mut crm_companies = Vec::new();
     let mut foreign_entities = Vec::new();
+    let mut calendar_events = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -357,6 +359,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::Call => calls.push(CallLiteral::CallId(id)),
             EntityType::CrmCompany => crm_companies.push(CrmCompanyLiteral::Id(id)),
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
+            EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
@@ -372,6 +375,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
 
     let nil = Uuid::nil();
     Ok(EntityFilterAst {
+        calendar_event_filter: Some(literal_tree(calendar_events, CalendarEventLiteral::Id(nil))),
         document_filter: Some(literal_tree(documents, DocumentLiteral::Id(nil))),
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),
         chat_filter: Some(literal_tree(chats, ChatLiteral::ChatId(nil))),

@@ -140,8 +140,7 @@ static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
                     NULL::text as project_id,
                     'CALENDAR_EVENT'::property_entity_type as property_entity_type
                 FROM calendar_events event
-                WHERE event.deleted_at IS NULL
-                  AND (
+                WHERE (
                       event.owner_id = $1
                       OR EXISTS (
                           SELECT 1
@@ -421,7 +420,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
             NULL::timestamptz as "viewed_at",
             gi.sort_ts as "sort_ts",
             NULL::boolean as "is_completed",
-            event.deleted_at as "deleted_at",
+            NULL::timestamptz as "deleted_at",
             jsonb_build_object(
                 'id', event.id,
                 'ownerId', event.owner_id,

@@ -178,6 +178,9 @@ type GraphqlCacheDeletion {
 	Identifier used in the normalized cache key.
 	"""
 	entityId: ID!
+}
+
+"""
 The two operands of a recursive `CalendarEventFilterExpr` binary expression.
 """
 input GraphqlCalendarEventBinaryExpr {
@@ -1359,6 +1362,10 @@ enum GraphqlEntityType {
 	"""
 	CALL
 	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
 	CRM company entity.
 	"""
 	CRM_COMPANY
@@ -2016,11 +2023,23 @@ type GraphqlSoupBin {
 """
 GraphQL representation of a canonical calendar event.
 """
-type GraphqlSoupCalendarEvent {
+type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	The unique identifier.
 	"""
 	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common calendar event metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
 	"""
 	The owning Macro user.
 	"""
@@ -2062,6 +2081,10 @@ type GraphqlSoupCalendarEvent {
 	"""
 	updatedAt: String!
 	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
 	properties: [GraphqlProperty!]!
@@ -2069,6 +2092,14 @@ type GraphqlSoupCalendarEvent {
 	Notifications associated with this entity for the authenticated user.
 	"""
 	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
 }
 
 """
@@ -3082,7 +3113,6 @@ interface GraphqlSoupEntity {
 	"""
 	frecencyScore: Float
 }
-union GraphqlSoupEntity = GraphqlSoupDocument | GraphqlSoupChat | GraphqlSoupProject | GraphqlSoupEmailThread | GraphqlSoupChannel | GraphqlSoupChannelThread | GraphqlSoupCall | GraphqlSoupCalendarEvent | GraphqlSoupCrmCompany | GraphqlSoupForeignEntity
 
 """
 GraphQL representation of Soup entity types.
@@ -3117,10 +3147,6 @@ enum GraphqlSoupEntityType {
 	"""
 	CALL
 	"""
-	Calendar event entity.
-	"""
-	CALENDAR_EVENT
-	"""
 	CRM company entity.
 	"""
 	CRM_COMPANY
@@ -3128,6 +3154,10 @@ enum GraphqlSoupEntityType {
 	Foreign entity.
 	"""
 	FOREIGN_ENTITY
+	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
 }
 
 """
