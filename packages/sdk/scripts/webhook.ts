@@ -47,12 +47,12 @@ async function register(): Promise<void> {
   const events = parseEvents(values.events ?? fail('--events is required'));
   const scope = values.scope ?? fail('--scope is required');
   if (scope !== 'user' && scope !== 'team') fail('--scope must be user or team');
-  const userId = values['user-id'];
-  if (scope === 'user' && !userId) {
-    fail('--user-id is required when --scope user');
-  }
+  const userId =
+    scope === 'user'
+      ? required(values['user-id'], '--user-id')
+      : values['user-id'];
 
-  const macro = new Macro({ env, ...(userId ? { requestedAs: userId } : {}) });
+  const macro = new Macro({ env, requestedAs: userId });
   const webhook = await macro.webhooks.create({
     url: endpointUrl,
     name,
@@ -84,7 +84,7 @@ async function receive(id: string): Promise<void> {
   const macro = new Macro({
     env,
     webhookSecret: secret,
-    ...(userId ? { requestedAs: userId } : {}),
+    requestedAs: userId,
   });
   const receiver = macro.events.webhook();
 
