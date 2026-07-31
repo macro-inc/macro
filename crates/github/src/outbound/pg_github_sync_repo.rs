@@ -368,11 +368,68 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn upsert_installation_installer(
+        &self,
+        installation_id: &str,
+        github_user_id: &str,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO github_app_installation_installer (installation_id, github_user_id)
+            VALUES ($1, $2)
+            ON CONFLICT (installation_id)
+                DO UPDATE SET github_user_id = EXCLUDED.github_user_id, updated_at = NOW()
+            "#,
+            installation_id,
+            github_user_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_installation_ids_by_installer(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Vec<String>, Self::Err> {
+        let installation_ids = sqlx::query_scalar!(
+            r#"
+            SELECT installation_id
+            FROM github_app_installation_installer
+            WHERE github_user_id = $1
+            ORDER BY installation_id
+            "#,
+            github_user_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(installation_ids)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn delete_installation_sources(&self, installation_id: &str) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             DELETE FROM github_app_installation
             WHERE id = $1
+            "#,
+            installation_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_installation_installer(&self, installation_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM github_app_installation_installer
+            WHERE installation_id = $1
             "#,
             installation_id,
         )

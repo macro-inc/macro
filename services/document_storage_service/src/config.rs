@@ -25,8 +25,6 @@ env_vars! {
     pub struct OpensearchPassword;
     pub struct GithubSyncAppUrl;
     pub struct GithubSyncAppClientId;
-    pub struct GithubInstallationStateSecret;
-    pub struct GithubSyncAppClientSecret;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
     pub struct LivekitServerUrl;
@@ -100,8 +98,6 @@ pub struct Config {
     pub opensearch_password: OpensearchPassword,
     pub github_sync_app_url: GithubSyncAppUrl,
     pub github_sync_app_client_id: GithubSyncAppClientId,
-    pub github_installation_state_secret: GithubInstallationStateSecret,
-    pub github_sync_app_client_secret: GithubSyncAppClientSecret,
     pub kafka_brokers: KafkaBrokers,
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
