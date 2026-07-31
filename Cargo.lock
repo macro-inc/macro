@@ -4634,6 +4634,7 @@ dependencies = [
  "macro_event_topics",
  "macro_service_urls",
  "macro_sync_service_jwt",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mockall",

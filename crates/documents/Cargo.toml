@@ -14,6 +14,7 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:ai_usage",
   "dep:async-trait",
+  "dep:macro_tower_layers",
   "dep:model_file_type",
   "dep:schemars",
   "dep:sha2",
@@ -141,6 +142,7 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 async-trait = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }

@@ -41,6 +41,7 @@ export async function coder(
         runner: deps.runner,
         onOps: deps.onOps,
         onRunCode: deps.onRunCode,
+        span: deps.span,
       }),
       readDocument: createReadDocumentTool({ session }),
       reportBlocked: createImBlockedTool(

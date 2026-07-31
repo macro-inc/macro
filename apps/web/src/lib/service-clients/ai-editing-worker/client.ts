@@ -1,5 +1,7 @@
 import type { DocumentOp } from '@ai-ops/editor';
+import { resumeDocumentSpan } from '@block-md/observability';
 import { toast } from '@core/component/Toast/Toast';
+import { Telemetry } from '@macro-inc/observability';
 import { getDocumentPermissionToken } from '@service-storage/client';
 import { createSignal } from 'solid-js';
 
@@ -78,11 +80,25 @@ export async function requestAiEdit(args: {
   const controller = new AbortController();
   editControllers.set(args.documentId, controller);
   syncActiveEditDocs();
+  // Parent under the document's long-lived span when one exists, so the
+  // worker's whole edit trace joins the user's editing session; the injected
+  // traceparent makes the worker's request span a child of this one.
+  const documentSpan = resumeDocumentSpan(args.documentId);
+  const span = documentSpan
+    ? documentSpan.run(() => Telemetry.clientSpan('http POST /edit'))
+    : Telemetry.clientSpan('http POST /edit');
+  span.setAttr('http.method', 'POST');
+  span.setAttr('http.url', `${AI_EDITING_WORKER_HOST}/edit`);
+  span.setAttr('document.id', args.documentId);
   try {
     const token = await getDocumentPermissionToken(args.documentId);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    span.injectTraceHeaders(headers);
     const res = await fetch(`${AI_EDITING_WORKER_HOST}/edit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         documentToken: token,
         documentId: args.documentId,
@@ -93,9 +109,16 @@ export async function requestAiEdit(args: {
       }),
       signal: controller.signal,
     });
+    span.setAttr('http.status_code', res.status);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       console.error('ai edit request failed', res.status, body);
+      const message = `HTTP ${res.status} for POST /edit`;
+      span.error({
+        name: 'HttpError',
+        message,
+        stack: new Error(message).stack,
+      });
       return 'failed';
     }
     if (args.onOps) {
@@ -104,10 +127,15 @@ export async function requestAiEdit(args: {
     }
     return 'ok';
   } catch (e) {
-    if (controller.signal.aborted) return 'cancelled';
+    if (controller.signal.aborted) {
+      span.setAttr('http.aborted', true);
+      return 'cancelled';
+    }
     console.error('ai edit request failed', e);
+    span.error(e);
     return 'failed';
   } finally {
+    span.end();
     if (editControllers.get(args.documentId) === controller) {
       editControllers.delete(args.documentId);
       syncActiveEditDocs();

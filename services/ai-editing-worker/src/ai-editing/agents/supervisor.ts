@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { hasToolCall, stepCountIs, streamText } from 'ai';
 import type { ResolvedModels } from '../../run-edit';
 import type { LexicalSession } from '../ai-toolkit';
@@ -38,11 +39,30 @@ export async function supervisor(
   let interpretDurationMs: number | undefined;
   if (opts.interpret) {
     const interpretStartedAt = Date.now();
-    const interpretation = await interpreter(
-      docContext,
-      request,
-      models.interpret,
-      INTERPRET_SYSTEM
+    const interpretation = await Telemetry.span(
+      'edit.interpret',
+      async (span) => {
+        const result = await interpreter(
+          docContext,
+          request,
+          models.interpret,
+          INTERPRET_SYSTEM
+        );
+        span.setAttr(
+          'gen_ai.request.model',
+          (models.interpret as { modelId: string }).modelId
+        );
+        span.setAttr(
+          'gen_ai.usage.input_tokens',
+          result.totalUsage.inputTokens ?? 0
+        );
+        span.setAttr(
+          'gen_ai.usage.output_tokens',
+          result.totalUsage.outputTokens ?? 0
+        );
+        span.setAttr('intent.chars', result.text.length);
+        return result;
+      }
     );
     interpretDurationMs = Date.now() - interpretStartedAt;
     tracker.add(
@@ -52,84 +72,118 @@ export async function supervisor(
     intent = interpretation.text;
   }
 
-  const dispatch = createDispatchTool({
-    session,
-    makeChildModel: models.coding,
-    tracker,
-    request: intent ? `${request}\n\n<intent>\n${intent}\n</intent>` : request,
-    params: opts.params,
-    typingAnimations: opts.typingAnimations,
-    sleep: opts.sleep,
-    signal: opts.signal,
-    makeWriter: opts.borrowWriter,
-    runTask: coder,
-    serialize,
-    runner: opts.runner,
-    onOps: opts.onOps,
-    onCoderResult: opts.onCoderResult,
-    onEditTrace: opts.onEditTrace,
-  });
+  // Manual span: dispatched coders launch from AI SDK stream callbacks where
+  // the ambient context is unreliable, so they parent off this span explicitly.
+  const superviseSpan = Telemetry.span('edit.supervise');
+  try {
+    const dispatch = createDispatchTool({
+      session,
+      makeChildModel: models.coding,
+      tracker,
+      request: intent
+        ? `${request}\n\n<intent>\n${intent}\n</intent>`
+        : request,
+      params: opts.params,
+      typingAnimations: opts.typingAnimations,
+      sleep: opts.sleep,
+      signal: opts.signal,
+      makeWriter: opts.borrowWriter,
+      runTask: coder,
+      serialize,
+      runner: opts.runner,
+      onOps: opts.onOps,
+      onCoderResult: opts.onCoderResult,
+      onEditTrace: opts.onEditTrace,
+      span: superviseSpan,
+    });
 
-  const tools = {
-    reportBlocked: createImBlockedTool(
-      'Call this when you cannot proceed without more information or when the task is impossible.',
-      true
-    ),
-    dispatch: dispatch.tool,
-  };
+    const tools = {
+      reportBlocked: createImBlockedTool(
+        'Call this when you cannot proceed without more information or when the task is impossible.',
+        true
+      ),
+      dispatch: dispatch.tool,
+    };
 
-  const intentBlock = intent ? `<intent>\n${intent}\n</intent>\n\n` : '';
-  const prompt = `Request: ${request}\n\n${intentBlock}${docContext}`;
+    const intentBlock = intent ? `<intent>\n${intent}\n</intent>\n\n` : '';
+    const prompt = `Request: ${request}\n\n${intentBlock}${docContext}`;
 
-  // Wall-clock duration of each supervisor step, measured between step
-  // boundaries. Best-effort, but since between model calls it's probably good
-  // enough.
-  const stepDurationsMs: number[] = [];
-  let lastStepAt = Date.now();
-  const result = streamText({
-    model: models.supervisor,
-    stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
-    system: MASTER_SYSTEM,
-    prompt,
-    tools,
-    providerOptions: EDIT_PROVIDER_OPTIONS,
-    abortSignal: opts.signal,
-    prepareStep: ({ stepNumber }) =>
-      // require that the very first thing it does is a tool call
-      stepNumber === 0 ? { toolChoice: 'required' } : undefined,
-    onStepFinish: () => {
-      const now = Date.now();
-      stepDurationsMs.push(now - lastStepAt);
-      lastStepAt = now;
-    },
-  });
+    // Wall-clock duration of each supervisor step, measured between step
+    // boundaries. Best-effort, but since between model calls it's probably good
+    // enough.
+    const stepDurationsMs: number[] = [];
+    let lastStepAt = Date.now();
+    const result = streamText({
+      model: models.supervisor,
+      stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
+      system: MASTER_SYSTEM,
+      prompt,
+      tools,
+      providerOptions: EDIT_PROVIDER_OPTIONS,
+      abortSignal: opts.signal,
+      prepareStep: ({ stepNumber }) =>
+        // require that the very first thing it does is a tool call
+        stepNumber === 0 ? { toolChoice: 'required' } : undefined,
+      onStepFinish: () => {
+        const now = Date.now();
+        stepDurationsMs.push(now - lastStepAt);
+        superviseSpan.event('step', {
+          index: stepDurationsMs.length - 1,
+          duration_ms: now - lastStepAt,
+        });
+        lastStepAt = now;
+      },
+    });
 
-  for await (const part of result.fullStream) {
-    if (part.type === 'error') throw part.error;
-    if (part.type === 'abort')
-      throw opts.signal?.reason ?? new Error('edit session aborted');
+    for await (const part of result.fullStream) {
+      if (part.type === 'error') throw part.error;
+      if (part.type === 'abort')
+        throw opts.signal?.reason ?? new Error('edit session aborted');
+    }
+
+    const [steps, totalUsage, text] = await Promise.all([
+      result.steps,
+      result.totalUsage,
+      result.text,
+    ]);
+    tracker.add(models.supervisor as { modelId: string }, totalUsage);
+
+    const blocked = steps
+      .flatMap((s) => s.toolCalls)
+      .find((c) => c.toolName === 'reportBlocked');
+    const clarification = (blocked?.input as { message: string } | undefined)
+      ?.message;
+
+    superviseSpan.setAttr(
+      'gen_ai.request.model',
+      (models.supervisor as { modelId: string }).modelId
+    );
+    superviseSpan.setAttr(
+      'gen_ai.usage.input_tokens',
+      totalUsage.inputTokens ?? 0
+    );
+    superviseSpan.setAttr(
+      'gen_ai.usage.output_tokens',
+      totalUsage.outputTokens ?? 0
+    );
+    superviseSpan.setAttr('steps.count', steps.length);
+    superviseSpan.setAttr('edit.blocked', blocked !== undefined);
+    if (clarification !== undefined)
+      superviseSpan.setAttr('clarification.chars', clarification.length);
+
+    return {
+      text: text || 'Applied edits.',
+      totalUsage: tracker,
+      steps,
+      stepDurationsMs,
+      intent,
+      interpretDurationMs,
+      clarification,
+    };
+  } catch (e) {
+    superviseSpan.error(e);
+    throw e;
+  } finally {
+    superviseSpan.end();
   }
-
-  const [steps, totalUsage, text] = await Promise.all([
-    result.steps,
-    result.totalUsage,
-    result.text,
-  ]);
-  tracker.add(models.supervisor as { modelId: string }, totalUsage);
-
-  const blocked = steps
-    .flatMap((s) => s.toolCalls)
-    .find((c) => c.toolName === 'reportBlocked');
-  const clarification = (blocked?.input as { message: string } | undefined)
-    ?.message;
-
-  return {
-    text: text || 'Applied edits.',
-    totalUsage: tracker,
-    steps,
-    stepDurationsMs,
-    intent,
-    interpretDurationMs,
-    clarification,
-  };
 }
