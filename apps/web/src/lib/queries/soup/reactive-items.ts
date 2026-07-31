@@ -1,20 +1,15 @@
-/**
- * Reactive urql-backed soup items: the flagged alternative to the TanStack
- * `useSoupAstItemsQuery` path. Each page holds a live subscription to the
- * GraphQL Soup query, so results pushed by the normalized cache exchange
- * (optimistic property mutations, sibling writes, other tabs) re-render
- * the soup list directly — no TanStack invalidation round-trip.
+/*
+ * Reactive urql-backed Soup items: the flagged alternative to the TanStack
+ * `useSoupAstItemsQuery` path. Every loaded page remains subscribed to its
+ * normalized GraphQL cache operation so cache writes update the list directly.
  *
- * Scope matches the GraphQL transport: flat (non-grouped) views whose
- * filter AST has a GraphQL translation. Consumers check `isSupported`
- * and fall back to the TanStack path otherwise.
+ * Scope matches the GraphQL transport: flat views whose filter AST has a
+ * GraphQL translation. Consumers check `isSupported` and fall back to the
+ * TanStack path otherwise.
  */
 
-import { deepEqual } from '@core/util/compareUtils';
-import { createQuerySignal } from '@graphql-cache/solid/create-query-signal';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
   SoupDocument,
   type SoupQuery,
@@ -26,14 +21,8 @@ import {
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
-import {
-  type Accessor,
-  createComputed,
-  createMemo,
-  createSignal,
-  mapArray,
-  on,
-} from 'solid-js';
+import { type Accessor, createComputed, createMemo, on } from 'solid-js';
+import { createUrqlInfiniteQuery } from '../../urql-solid';
 import { makeGraphqlSoupInput } from './graphql-ast';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from './items';
 import { mapSoupPageToEntityList } from './transform-utils';
@@ -59,9 +48,9 @@ export type ReactiveSoupAstItemsQuery = {
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: () => void;
-  /** Drops all but the first page (filter changes, pull-to-refresh). */
-  trimToFirstPage: () => void;
-  /** Trims to the first page and refetches it from the network. */
+  /** Discards loaded continuation pages while retaining the initial page. */
+  resetToInitialPage: () => void;
+  /** Refetches the currently loaded page chain from the network. */
   refresh: () => Promise<void>;
 };
 
@@ -86,52 +75,45 @@ export function useReactiveSoupAstItemsQuery(
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
 
-  // Cursors of the pages currently shown. Structural key: the input memo
-  // yields a fresh object per read, so compare serialized form to avoid
-  // resetting pagination on every unrelated reactive tick.
-  const inputKey = createMemo(() => {
-    const input = firstPageInput();
-    return input === undefined ? undefined : JSON.stringify(input);
-  });
-  const [cursors, setCursors] = createSignal<(string | null)[]>([null]);
-  createComputed(on(inputKey, () => setCursors([null]), { defer: true }));
+  const query = createUrqlInfiniteQuery<
+    SoupQuery,
+    SoupQueryVariables,
+    string | null,
+    SoupAstItemsData
+  >(() => {
+    const firstInput = firstPageInput();
+    const queryOptions = options();
+    const showSupportedForeignEntities =
+      queryOptions.showSupportedForeignEntities;
 
-  const pages = mapArray(cursors, (cursor) => {
-    const query = createQuerySignal<SoupQuery, SoupQueryVariables>({
-      client: getGraphqlSoupClient,
-      document: SoupDocument,
-      // Serve the cached page instantly, revalidate over the network, and
-      // keep receiving cache-pushed re-executions for the page's lifetime.
-      requestPolicy: 'cache-and-network',
-      variables: () => {
-        if (!options().enabled) return undefined;
+    return {
+      query: SoupDocument,
+      client: getGraphqlSoupClient(),
+      initialPageParam: null,
+      variables: (cursor) => {
         const input = inputForCursor(cursor);
-        return input === undefined ? undefined : { input };
+        if (!input) {
+          throw new Error('GraphQL Soup input became unsupported');
+        }
+        return { input };
       },
-    });
-    const page = createMemo<SoupPage | undefined>(
-      () => {
-        const data = query.data();
-        return data == null ? undefined : mapGraphqlSoupPage(data);
-      },
-      undefined,
-      {
-        // Cache writes for unrelated backfill arguments can re-execute this
-        // operation with identical data. Retain the prior page so Solid's
-        // keyed list does not remount every row and dismiss open editors.
-        equals: deepEqual,
-      }
-    );
-    return { query, page };
+      getNextPageParam: (lastPage) => mapGraphqlSoupPage(lastPage).next_cursor,
+      enabled: queryOptions.enabled && firstInput !== undefined,
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: ({ pages }) => ({
+        entities: pages.flatMap((page) =>
+          mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
+            instructionsIdQuery,
+            showSupportedForeignEntities,
+          })
+        ),
+        groups: undefined,
+      }),
+    };
   });
 
-  const error = (): CombinedError | undefined => {
-    for (const entry of pages()) {
-      const queryError = entry.query.error();
-      if (queryError) return queryError;
-    }
-    return undefined;
-  };
+  const error = (): CombinedError | undefined => query.error ?? undefined;
   createComputed(
     on(error, (queryError) => {
       if (queryError) {
@@ -140,59 +122,24 @@ export function useReactiveSoupAstItemsQuery(
     })
   );
 
-  const lastPage = () => pages().at(-1);
-
-  const data = createMemo<SoupAstItemsData | undefined>(() => {
-    const list = pages();
-    if (list[0]?.page() === undefined) return undefined;
-    const entities = list.flatMap((entry) => {
-      const page = entry.page();
-      if (!page) return [];
-      return mapSoupPageToEntityList(page, {
-        instructionsIdQuery,
-        showSupportedForeignEntities: options().showSupportedForeignEntities,
-      });
-    });
-    return { entities, groups: undefined };
-  });
-
-  const isFetching = () =>
-    pages().some((entry) => entry.query.fetching() || entry.query.stale());
-
   return {
-    data,
+    data: () => query.data,
     error,
     isSupported,
-    isLoading: () => data() === undefined && isFetching(),
-    isFetching,
-    isFetchingNextPage: () => {
-      const last = lastPage();
-      return (
-        cursors().length > 1 &&
-        last !== undefined &&
-        last.page() === undefined &&
-        last.query.fetching()
-      );
-    },
-    hasNextPage: () => lastPage()?.page()?.next_cursor != null,
+    isLoading: () => query.isLoading,
+    isFetching: () => query.isFetching,
+    isFetchingNextPage: () => query.isFetchingNextPage,
+    hasNextPage: () => query.hasNextPage,
     fetchNextPage: () => {
-      const next = lastPage()?.page()?.next_cursor;
-      if (next == null || cursors().includes(next)) return;
-      setCursors((prev) => [...prev, next]);
+      void query.fetchNextPage();
     },
-    trimToFirstPage: () => {
-      setCursors((prev) => (prev.length > 1 ? [prev[0] ?? null] : prev));
-    },
+    resetToInitialPage: query.resetToInitialPage,
     refresh: async () => {
-      setCursors((prev) => (prev.length > 1 ? [prev[0] ?? null] : prev));
-      const input = firstPageInput();
-      if (input === undefined) return;
-      // Shares the operation key with the page subscription: the fresh
-      // network result is broadcast to it, updating the UI.
-      const result = await getGraphqlSoupClient()
-        .query(SoupDocument, { input }, { requestPolicy: 'network-only' })
-        .toPromise();
-      if (result.error) throw result.error;
+      if (firstPageInput() === undefined) return;
+      await query.refetch({
+        requestPolicy: 'network-only',
+        throwOnError: true,
+      });
     },
   };
 }

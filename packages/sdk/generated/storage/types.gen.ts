@@ -1603,8 +1603,7 @@ export type ChannelMentionedMetadata = {
      */
     message_id: string;
     /**
-     * Message author; may be a bot. Self-mentions (an author mentioning
-     * their own principal) never emit this event.
+     * Message author; may be a bot.
      */
     sender: ChannelSender;
     /**
@@ -10532,13 +10531,6 @@ export type InstallSyncData = {
     path?: never;
     query?: never;
     url: '/github/install-sync';
-};
-
-export type InstallSyncErrors = {
-    /**
-     * Authentication failed
-     */
-    401: unknown;
 };
 
 export type HealthHandlerData = {

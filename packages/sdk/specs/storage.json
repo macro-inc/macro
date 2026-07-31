@@ -7861,14 +7861,11 @@
     "/github/install-sync": {
       "get": {
         "tags": ["github::inbound::github_sync_router"],
-        "summary": "Redirects an authenticated user to the github sync app installation page.",
+        "summary": "Redirects the user to the github sync app installation page.",
         "operationId": "install_sync",
         "responses": {
           "307": {
-            "description": "Temporary redirect to the GitHub sync app installation page"
-          },
-          "401": {
-            "description": "Authentication failed"
+            "description": "Redirects to the github sync app installation page"
           }
         }
       }
@@ -12799,7 +12796,7 @@
           },
           "sender": {
             "$ref": "#/components/schemas/ChannelSender",
-            "description": "Message author; may be a bot. Self-mentions (an author mentioning\ntheir own principal) never emit this event."
+            "description": "Message author; may be a bot."
           },
           "thread_id": {
             "type": ["string", "null"],

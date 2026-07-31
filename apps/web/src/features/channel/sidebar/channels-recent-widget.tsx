@@ -378,6 +378,38 @@ export const ChannelsRecentWidget = (props: {
   let lastUserScrollAt = 0;
   let suppressNextScrollEvent = false;
 
+  const [hasOverflowTop, setHasOverflowTop] = createSignal(false);
+  const [hasOverflowBottom, setHasOverflowBottom] = createSignal(false);
+  let listScrollFrame: number | undefined;
+
+  const updateListScrollShadows = () => {
+    const el = channelListRef;
+    if (!el) return;
+    const maxScrollTop = el.scrollHeight - el.clientHeight;
+    setHasOverflowTop(el.scrollTop > 1);
+    setHasOverflowBottom(maxScrollTop - el.scrollTop > 1);
+  };
+
+  const scheduleListScrollUpdate = () => {
+    if (listScrollFrame !== undefined) cancelAnimationFrame(listScrollFrame);
+    listScrollFrame = requestAnimationFrame(() => {
+      listScrollFrame = undefined;
+      updateListScrollShadows();
+    });
+  };
+
+  // Overflow can change without a scroll event (channels load in, rows are
+  // removed, the visible-row cap changes), so re-check when those change too.
+  createEffect(() => {
+    recentChannels();
+    maxVisible();
+    scheduleListScrollUpdate();
+  });
+
+  onCleanup(() => {
+    if (listScrollFrame !== undefined) cancelAnimationFrame(listScrollFrame);
+  });
+
   const snapToTopIfIdle = () => {
     const el = channelListRef;
     if (!el || el.scrollTop === 0) return;
@@ -398,26 +430,41 @@ export const ChannelsRecentWidget = (props: {
     {
       id: 'channels-list',
       visible: () => (
-        <div
-          ref={channelListRef}
-          class="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
-          style={{ 'max-height': listMaxHeight() }}
-          onScroll={() => {
-            if (suppressNextScrollEvent) {
-              suppressNextScrollEvent = false;
-              return;
-            }
-            lastUserScrollAt = Date.now();
-          }}
-        >
-          <For each={recentChannels()}>
-            {(channel) => (
-              <ChannelRow
-                channel={channel}
-                onFloatingOpenChange={props.onDropdownOpenChange}
-              />
+        <div class="relative">
+          <div
+            ref={channelListRef}
+            class="flex flex-col gap-0.5 overflow-y-auto overscroll-none"
+            style={{ 'max-height': listMaxHeight() }}
+            onScroll={() => {
+              updateListScrollShadows();
+              if (suppressNextScrollEvent) {
+                suppressNextScrollEvent = false;
+                return;
+              }
+              lastUserScrollAt = Date.now();
+            }}
+          >
+            <For each={recentChannels()}>
+              {(channel) => (
+                <ChannelRow
+                  channel={channel}
+                  onFloatingOpenChange={props.onDropdownOpenChange}
+                />
+              )}
+            </For>
+          </div>
+          <div
+            class={cn(
+              'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
+              hasOverflowTop() ? 'opacity-100' : 'opacity-0'
             )}
-          </For>
+          />
+          <div
+            class={cn(
+              'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
+              hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
+            )}
+          />
         </div>
       ),
       dropdown: () => null,

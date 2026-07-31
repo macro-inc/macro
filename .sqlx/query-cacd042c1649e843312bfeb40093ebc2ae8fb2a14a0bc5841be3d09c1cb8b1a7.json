@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_app_installation_installer (installation_id, github_user_id)\n            VALUES ($1, $2)\n            ON CONFLICT (installation_id)\n                DO UPDATE SET github_user_id = EXCLUDED.github_user_id, updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cacd042c1649e843312bfeb40093ebc2ae8fb2a14a0bc5841be3d09c1cb8b1a7"
+}

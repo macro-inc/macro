@@ -26,14 +26,6 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
             crate::domain::models::GithubError::InvalidWebhookSignature => {
                 (StatusCode::UNAUTHORIZED, "unauthenticated")
             }
-            crate::domain::models::GithubError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
-            crate::domain::models::GithubError::InvalidInstallationState
-            | crate::domain::models::GithubError::InvalidInstallationSetupAction
-            | crate::domain::models::GithubError::MissingInstallationSetupField(_)
-            | crate::domain::models::GithubError::InstallationNotOwned => (
-                StatusCode::BAD_REQUEST,
-                "invalid installation setup callback",
-            ),
         };
 
         (

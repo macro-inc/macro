@@ -219,6 +219,7 @@ export class InfiniteQueryObserver<
       isFetchNextPageError:
         this.state.paginationError !== undefined ||
         this.failedNextPage !== undefined,
+      resetToInitialPage: this.resetToInitialPage,
       fetchNextPage: this.fetchNextPage,
       refetch: this.refetch,
     };
@@ -253,6 +254,15 @@ export class InfiniteQueryObserver<
     this.destroyPages();
     this.result.clear();
   }
+
+  readonly resetToInitialPage = (): void => {
+    if (this.destroyed) return;
+
+    this.cancelActions();
+    this.destroyPages(1);
+    this.setState({ paginationError: undefined });
+    this.emit();
+  };
 
   readonly fetchNextPage = (
     refetchOptions: UrqlQueryRefetchOptions = {}

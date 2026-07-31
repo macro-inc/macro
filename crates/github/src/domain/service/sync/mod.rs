@@ -13,11 +13,9 @@ mod notify_pr_checks;
 use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubAppInstallationSource, GithubError, GithubInstallationAccessToken,
-        GithubInstallationSetupAction, GithubKey, GithubPullRequestDetails,
-        GithubPullRequestStatus, GithubWebhookEventType, InstallationState, MacroTaskId,
+        GithubAppInstallationSource, GithubError, GithubInstallationAccessToken, GithubKey,
+        GithubPullRequestDetails, GithubPullRequestStatus, GithubWebhookEventType, MacroTaskId,
         ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
-        sign_installation_state, verify_installation_state,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
@@ -54,10 +52,6 @@ pub struct GithubSyncConfig {
     pub sync_app_pem: String,
     /// The client id for the github sync app
     pub sync_app_client_id: String,
-    /// The client secret for the GitHub sync App's setup OAuth exchange.
-    pub sync_app_client_secret: String,
-    /// Secret used to sign installation setup state carried through GitHub.
-    pub installation_state_secret: String,
 }
 
 /// The concrete github sync service implementation.
@@ -986,12 +980,7 @@ impl<
                 Ok(())
             }
             GithubWebhookEventType::Installation => match action {
-                Some("created") => {
-                    tracing::info!(
-                        "GitHub-initiated installation association is unsupported; use the authenticated setup flow"
-                    );
-                    Ok(())
-                }
+                Some("created") => self.handle_installation_created(webhook_event).await,
                 Some("deleted") => self.handle_installation_deleted(webhook_event).await,
                 _ => {
                     tracing::debug!(action, "skipping unhandled installation action");
@@ -1001,97 +990,63 @@ impl<
         }
     }
 
-    #[tracing::instrument(skip(self), fields(macro_user_id = %macro_user_id), err)]
-    async fn begin_installation_setup(
-        &self,
-        macro_user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
-        team_id: Option<uuid::Uuid>,
-    ) -> Result<String, GithubError> {
-        if let Some(team_id) = team_id {
-            let team_ids = self
-                .repo
-                .get_user_team_ids(macro_user_id.as_ref())
-                .await
-                .map_err(|error| GithubError::Internal(error.into()))?;
-            if !team_ids.contains(&team_id) {
-                return Err(GithubError::Forbidden);
-            }
-        }
-
-        let state = InstallationState {
-            macro_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
-                macro_user_id.as_ref().to_string(),
-            )
-            .map_err(|error| GithubError::Internal(error.into()))?,
-            team_id,
-            exp: chrono::Utc::now().timestamp() + 60 * 60,
-        };
-        let signed_state =
-            sign_installation_state(&state, self.config.installation_state_secret.as_bytes())
-                .map_err(|error| GithubError::Internal(error.into()))?;
-
-        let mut installation_url = url::Url::parse(&self.config.github_sync_app_url)
-            .map_err(|error| GithubError::Internal(error.into()))?;
-        installation_url
-            .query_pairs_mut()
-            .append_pair("state", &signed_state);
-
-        Ok(installation_url.into())
+    fn get_github_sync_app_url(&self) -> &str {
+        &self.config.github_sync_app_url
     }
 
-    #[tracing::instrument(skip(self, state, code), err)]
-    async fn complete_installation_setup(
+    #[tracing::instrument(skip(self), err)]
+    async fn associate_installations_for_github_user(
         &self,
-        state: &str,
-        code: Option<&str>,
-        installation_id: Option<u64>,
-        setup_action: &str,
+        github_user_id: &str,
     ) -> Result<(), GithubError> {
-        let state = verify_installation_state(
-            state,
-            self.config.installation_state_secret.as_bytes(),
-            chrono::Utc::now().timestamp(),
-        )
-        .map_err(|_| GithubError::InvalidInstallationState)?;
-        let setup_action = GithubInstallationSetupAction::try_from(setup_action)?;
+        let installation_ids = self
+            .repo
+            .get_installation_ids_by_installer(github_user_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
 
-        if setup_action == GithubInstallationSetupAction::Request {
+        if installation_ids.is_empty() {
+            tracing::debug!(github_user_id, "no installations recorded for github user");
             return Ok(());
         }
 
-        let code = code.ok_or(GithubError::MissingInstallationSetupField("code"))?;
-        let installation_id = installation_id.ok_or(GithubError::MissingInstallationSetupField(
-            "installation_id",
-        ))?;
-        let access_token = self
-            .client
-            .exchange_setup_code(
-                &self.config.sync_app_client_id,
-                &self.config.sync_app_client_secret,
-                code,
-            )
-            .await?;
-        let installations = self
-            .client
-            .list_user_installations(access_token.as_str())
-            .await?;
-        if !installations
-            .iter()
-            .any(|installation| installation.id == installation_id)
-        {
-            return Err(GithubError::InstallationNotOwned);
+        let sources = self.sources_for_github_user(github_user_id).await?;
+        if sources.is_empty() {
+            tracing::debug!(
+                github_user_id,
+                "no macro sources found for github user, skipping installation association"
+            );
+            return Ok(());
         }
 
-        let source = match state.team_id {
-            Some(team_id) => GithubAppInstallationSource::Team(team_id),
-            None => GithubAppInstallationSource::User(state.macro_user_id.into()),
-        };
-        self.associate_installation_with_sources(installation_id, &[source])
-            .await
-    }
+        for installation_id in installation_ids {
+            let installation_id: u64 = match installation_id.parse() {
+                Ok(id) => id,
+                Err(error) => {
+                    tracing::error!(
+                        error=?error,
+                        installation_id,
+                        "stored installation id is not a u64"
+                    );
+                    continue;
+                }
+            };
 
-    fn get_github_sync_app_url(&self) -> &str {
-        &self.config.github_sync_app_url
+            // Keep going on failure so one broken installation doesn't block
+            // associating the rest.
+            self.associate_installation_with_sources(installation_id, &sources)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error=?error,
+                        installation_id,
+                        "failed to associate installation with sources"
+                    );
+                })
+                .ok();
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

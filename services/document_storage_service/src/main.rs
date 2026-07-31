@@ -500,8 +500,6 @@ async fn main() -> anyhow::Result<()> {
             github_sync_app_url: config.github_sync_app_url.to_string(),
             sync_app_pem: config.github_sync_app_pem_secret_key.as_ref().to_string(),
             sync_app_client_id: config.github_sync_app_client_id.to_string(),
-            sync_app_client_secret: config.github_sync_app_client_secret.to_string(),
-            installation_state_secret: config.github_installation_state_secret.to_string(),
         },
         document_service.clone(),
         foreign_entity_service.clone(),
