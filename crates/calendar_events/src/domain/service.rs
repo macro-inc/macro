@@ -561,7 +561,7 @@ where
                 .await?;
             let calendar_id = stored_calendar.id;
             calendar_ids.push(calendar_id);
-            let force_full_snapshot = stored_calendar.requires_full_snapshot(&range);
+            let plan = stored_calendar.sync_plan(&range);
             let batch = self
                 .provider
                 .sync_events(
@@ -575,7 +575,7 @@ where
                         is_read_only,
                         range: range.clone(),
                         sync_token: stored_calendar.sync_token,
-                        force_full_snapshot,
+                        plan,
                     },
                 )
                 .await

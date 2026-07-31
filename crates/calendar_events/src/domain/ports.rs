@@ -11,7 +11,8 @@ use super::models::{
     CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEvent, CalendarEventUpsert,
     CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EmailCalendarBackfillState,
     EmailCalendarScanAssociation, EmailCalendarScanJob, GoogleCalendarSyncSnapshot,
-    GoogleEventSyncBatch, GoogleScopeSet, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+    GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, OccurrenceRange, ProviderCalendar,
+    StoredGoogleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -69,9 +70,8 @@ pub struct GoogleEventSyncContext {
     pub range: OccurrenceRange,
     /// Last continuation token committed for this provider calendar.
     pub sync_token: Option<String>,
-    /// Whether recurrence projections must be rebuilt even if no provider
-    /// change is reported.
-    pub force_full_snapshot: bool,
+    /// Domain-chosen reconciliation mode for this run.
+    pub plan: GoogleSyncPlan,
 }
 
 /// Authorized ingestion command for one normalized calendar event.

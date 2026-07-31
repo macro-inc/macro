@@ -415,6 +415,23 @@ impl OccurrenceRange {
         }
     }
 
+    /// Construct the quantized window sync jobs maintain.
+    ///
+    /// The future edge rounds `now + 730d` up to the next month boundary, so
+    /// the requested horizon only advances once a month instead of drifting
+    /// with every poll and forcing needless coverage work. It always covers
+    /// [`Self::historical_sync`], the window the read path accepts.
+    pub fn maintenance_horizon(now: DateTime<Utc>) -> Self {
+        let starts_at = now - chrono::Duration::days(365);
+        let ends_at = month_ceil(now + chrono::Duration::days(730));
+        Self {
+            starts_at,
+            ends_at,
+            start_date: starts_at.date_naive(),
+            end_date: ends_at.date_naive(),
+        }
+    }
+
     /// Return whether this viewport is covered by the occurrence window
     /// materialized by the ingestion pipelines.
     pub fn is_materialized_at(&self, now: DateTime<Utc>) -> bool {
@@ -433,13 +450,30 @@ impl OccurrenceRange {
             && self.end_date - self.start_date <= chrono::Duration::days(370)
     }
 
-    /// Validate the larger bounded window maintained by historical sync.
+    /// Validate the larger bounded window maintained by historical sync,
+    /// including the month of quantization padding on the future edge.
     pub fn is_valid_for_backfill(&self) -> bool {
         self.ends_at > self.starts_at
             && self.end_date > self.start_date
-            && self.ends_at - self.starts_at <= chrono::Duration::days(1100)
-            && self.end_date - self.start_date <= chrono::Duration::days(1100)
+            && self.ends_at - self.starts_at <= chrono::Duration::days(1130)
+            && self.end_date - self.start_date <= chrono::Duration::days(1130)
     }
+}
+
+fn month_ceil(instant: DateTime<Utc>) -> DateTime<Utc> {
+    use chrono::Datelike;
+
+    let date = instant.date_naive();
+    let (year, month) = if date.month() == 12 {
+        (date.year() + 1, 1)
+    } else {
+        (date.year(), date.month() + 1)
+    };
+    NaiveDate::from_ymd_opt(year, month, 1)
+        .expect("first day of a month is valid")
+        .and_hms_opt(0, 0, 0)
+        .expect("midnight is a valid time")
+        .and_utc()
 }
 
 #[cfg(test)]
@@ -514,18 +548,44 @@ pub struct StoredGoogleCalendar {
     pub materialized_range: Option<OccurrenceRange>,
 }
 
+/// How the provider adapter must reconcile one calendar this run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GoogleSyncPlan {
+    /// Rebuild the complete bounded snapshot: no continuation token was
+    /// committed or persisted coverage misses requested history.
+    FullSnapshot,
+    /// Apply the change feed, then materialize only the uncovered tail.
+    ExtendTail {
+        /// Exclusive instant where persisted coverage ends.
+        from: DateTime<Utc>,
+        /// Exclusive local date where persisted all-day coverage ends.
+        from_date: NaiveDate,
+    },
+    /// Apply the change feed; persisted coverage already spans the request.
+    Incremental,
+}
+
 impl StoredGoogleCalendar {
-    /// Return whether the provider snapshot must be rebuilt to initialize or
-    /// advance the maintained future horizon.
-    pub fn requires_full_snapshot(&self, requested: &OccurrenceRange) -> bool {
+    /// Choose how the adapter must reconcile this calendar for a requested
+    /// window, keeping full rebuilds for lost tokens or uncovered history
+    /// and extending decayed future coverage incrementally.
+    pub fn sync_plan(&self, requested: &OccurrenceRange) -> GoogleSyncPlan {
         let Some(materialized) = &self.materialized_range else {
-            return true;
+            return GoogleSyncPlan::FullSnapshot;
         };
-        self.sync_token.is_none()
+        if self.sync_token.is_none()
             || materialized.starts_at > requested.starts_at
             || materialized.start_date > requested.start_date
-            || materialized.ends_at < requested.ends_at
-            || materialized.end_date < requested.end_date
+        {
+            return GoogleSyncPlan::FullSnapshot;
+        }
+        if materialized.ends_at < requested.ends_at || materialized.end_date < requested.end_date {
+            return GoogleSyncPlan::ExtendTail {
+                from: materialized.ends_at,
+                from_date: materialized.end_date,
+            };
+        }
+        GoogleSyncPlan::Incremental
     }
 }
 
