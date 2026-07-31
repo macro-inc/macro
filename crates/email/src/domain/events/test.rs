@@ -14,6 +14,41 @@ fn timestamp() -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
+fn new_contract_events(link_id: Uuid) -> Vec<EmailMacroEvent> {
+    let owner = user_id("macro|owner@example.com");
+
+    vec![
+        EmailMacroEvent::message_draft_synced(MessageDraftSyncedMetadata {
+            link_id,
+            owner: owner.clone(),
+            message_id: Uuid::new_v4(),
+            provider_message_id: "gmail-draft-1".to_string(),
+            thread_id: Uuid::new_v4(),
+            provider_thread_id: "gmail-thread-1".to_string(),
+            is_spam_or_trash: false,
+        }),
+        EmailMacroEvent::thread_backfilled(ThreadBackfilledMetadata {
+            link_id,
+            owner: owner.clone(),
+            thread_id: Uuid::new_v4(),
+        }),
+        EmailMacroEvent::threads_reindex_requested(ThreadsReindexRequestedMetadata {
+            link_id,
+            owner: owner.clone(),
+            thread_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
+            reason: ThreadsReindexReason::ContactsChanged,
+        }),
+        EmailMacroEvent::thread_spam_changed(ThreadSpamChangedMetadata {
+            link_id,
+            owner,
+            actor: None,
+            thread_id: Uuid::new_v4(),
+            spam: true,
+            origin: EmailEventOrigin::ProviderSync,
+        }),
+    ]
+}
+
 #[test]
 fn message_received_wire_shape() {
     let event = Event::with_event_id(
@@ -61,6 +96,43 @@ fn message_received_wire_shape() {
             },
         })
     );
+}
+
+#[test]
+fn message_draft_synced_wire_shape_preserves_spam_or_trash_state() {
+    for is_spam_or_trash in [false, true] {
+        let event = Event::with_event_id(
+            Uuid::nil(),
+            EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+                link_id: Uuid::nil(),
+                owner: user_id("macro|owner@example.com"),
+                message_id: Uuid::nil(),
+                provider_message_id: "gmail-draft-1".to_string(),
+                thread_id: Uuid::nil(),
+                provider_thread_id: "gmail-thread-1".to_string(),
+                is_spam_or_trash,
+            }),
+        );
+
+        let value = serde_json::to_value(&event).expect("serializable");
+        assert_eq!(
+            value,
+            json!({
+                "event_id": "00000000-0000-0000-0000-000000000000",
+                "schema_version": 1,
+                "event_type": "email.message_draft_synced",
+                "metadata": {
+                    "link_id": "00000000-0000-0000-0000-000000000000",
+                    "owner": "macro|owner@example.com",
+                    "message_id": "00000000-0000-0000-0000-000000000000",
+                    "provider_message_id": "gmail-draft-1",
+                    "thread_id": "00000000-0000-0000-0000-000000000000",
+                    "provider_thread_id": "gmail-thread-1",
+                    "is_spam_or_trash": is_spam_or_trash,
+                },
+            })
+        );
+    }
 }
 
 #[test]
@@ -115,6 +187,19 @@ fn decode_round_trips() {
 }
 
 #[test]
+fn new_contract_events_decode_round_trip() {
+    let link_id = Uuid::new_v4();
+
+    for original in new_contract_events(link_id) {
+        let payload = serde_json::to_vec(original.event()).expect("serializable");
+        let decoded = EmailMacroEvent::decode(original.key(), &payload).expect("decodable payload");
+
+        assert_eq!(decoded.key(), link_id.to_string());
+        assert_eq!(decoded.event(), original.event());
+    }
+}
+
+#[test]
 fn events_are_keyed_by_link_id() {
     let link_id = Uuid::new_v4();
     let event = EmailMacroEvent::link_disconnected(LinkDisconnectedMetadata {
@@ -124,6 +209,23 @@ fn events_are_keyed_by_link_id() {
         reason: LinkDisconnectReason::ManuallyDisabled,
     });
     assert_eq!(event.key(), link_id.to_string());
+}
+
+#[test]
+fn new_contract_event_constructors_are_keyed_by_link_id() {
+    let link_id = Uuid::new_v4();
+
+    for event in new_contract_events(link_id) {
+        assert_eq!(event.key(), link_id.to_string());
+    }
+}
+
+#[test]
+fn threads_reindex_reason_uses_snake_case() {
+    let value = serde_json::to_value(ThreadsReindexReason::ContactsChanged)
+        .expect("reason is serializable");
+
+    assert_eq!(value, json!("contacts_changed"));
 }
 
 #[test]
@@ -180,6 +282,18 @@ fn event_type_strings_follow_dot_convention() {
                 received_at: None,
             }),
             "email.message_received",
+        ),
+        (
+            EmailMacroEvent::message_draft_synced(MessageDraftSyncedMetadata {
+                link_id,
+                owner: owner.clone(),
+                message_id: Uuid::nil(),
+                provider_message_id: "m".to_string(),
+                thread_id: Uuid::nil(),
+                provider_thread_id: "t".to_string(),
+                is_spam_or_trash: false,
+            }),
+            "email.message_draft_synced",
         ),
         (
             EmailMacroEvent::message_sent(MessageSentMetadata {
@@ -276,6 +390,17 @@ fn event_type_strings_follow_dot_convention() {
             "email.thread_starred",
         ),
         (
+            EmailMacroEvent::thread_spam_changed(ThreadSpamChangedMetadata {
+                link_id,
+                owner: owner.clone(),
+                actor: actor.clone(),
+                thread_id: Uuid::nil(),
+                spam: true,
+                origin: EmailEventOrigin::UserAction,
+            }),
+            "email.thread_spam_changed",
+        ),
+        (
             EmailMacroEvent::thread_project_changed(ThreadProjectChangedMetadata {
                 link_id,
                 owner: owner.clone(),
@@ -301,6 +426,23 @@ fn event_type_strings_follow_dot_convention() {
                 origin: EmailEventOrigin::ProviderSync,
             }),
             "email.thread_labels_updated",
+        ),
+        (
+            EmailMacroEvent::thread_backfilled(ThreadBackfilledMetadata {
+                link_id,
+                owner: owner.clone(),
+                thread_id: Uuid::nil(),
+            }),
+            "email.thread_backfilled",
+        ),
+        (
+            EmailMacroEvent::threads_reindex_requested(ThreadsReindexRequestedMetadata {
+                link_id,
+                owner,
+                thread_ids: vec![Uuid::nil()],
+                reason: ThreadsReindexReason::ContactsChanged,
+            }),
+            "email.threads_reindex_requested",
         ),
     ];
 
@@ -349,6 +491,8 @@ fn thread_label_change_maps_system_labels_to_semantic_events() {
         ("TRASH", false, "email.thread_trashed", "trashed", false),
         ("INBOX", true, "email.thread_archived", "archived", false),
         ("INBOX", false, "email.thread_archived", "archived", true),
+        ("SPAM", true, "email.thread_spam_changed", "spam", true),
+        ("SPAM", false, "email.thread_spam_changed", "spam", false),
     ];
 
     for (label, added, expected_type, state_field, expected_state) in cases {
@@ -365,7 +509,7 @@ fn thread_label_change_maps_system_labels_to_semantic_events() {
 
 #[test]
 fn thread_label_change_skips_unpublished_system_labels() {
-    for label in ["SPAM", "IMPORTANT", "SENT", "DRAFT"] {
+    for label in ["IMPORTANT", "SENT", "DRAFT"] {
         assert!(
             label_change(system_label(label), true).is_none(),
             "{label} add should not publish"
