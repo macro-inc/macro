@@ -101,6 +101,7 @@ export const cognitionExcluded = [
   'healthHandler',
   'listMcpServers',
   'mcpAuthCallback',
+  'mcpOauthClientMetadata',
   'rejectToolCall',
   'runImportHandler',
   'dismissRunHandler',
