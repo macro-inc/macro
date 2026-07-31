@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "agent_harness_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "agent_harness_service"
+path = "src/main.rs"
+
+[dependencies]
+agent_harness = { path = "../../crates/agent_harness" }
+channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
+anyhow = { workspace = true }
+kafka_util = { path = "../../crates/kafka_util" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -536,6 +536,13 @@ service_url! {
             dev: "wss://connection-gateway-dev.macro.com",
             prod: "wss://connection-gateway.macro.com",
         },
+        /// Agent proxy WebSocket URL (the shared runtime endpoint external
+        /// agent runtimes dial; see `crates/agent_proxy`).
+        pub AgentProxyWebsocketUrl {
+            local: "ws://localhost:8091",
+            dev: "wss://agent-proxy-dev.macro.com",
+            prod: "wss://agent-proxy.macro.com",
+        },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
             local: "http://localhost:8085",

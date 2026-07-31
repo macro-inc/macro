@@ -2,7 +2,9 @@
 resolver = "2"
 
 members = [
-  "crates/agent", "crates/agent_fold",
+  "crates/agent",
+  "crates/agent_fold",
+  "crates/agent_harness",
   "crates/agent_proxy",
   "crates/agent_runtime_protocol", "crates/agent_session",
   "crates/agent_trigger",
@@ -54,6 +56,7 @@ members = [
   "crates/unfurl",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
+  "services/agent_harness_service",
   "services/agent_proxy_service",
   "services/agent_trigger_service",
   "services/ai_projections_refresh_handler",
@@ -219,6 +222,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 rmcp = "1.6.0"
 rootcause = { version = "0.12" }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
