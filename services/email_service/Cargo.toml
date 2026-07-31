@@ -158,7 +158,6 @@ sqlx-core = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "email",
   "gmail",
-  "search",
   "sfs_delete",
   "sfs_uploader"
 ] }

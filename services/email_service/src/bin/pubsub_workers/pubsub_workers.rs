@@ -75,7 +75,6 @@ async fn main() -> anyhow::Result<()> {
     let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let backfill_queue = macro_queues::EmailBackfillQueue::new();
     let crm_cleanup_queue = macro_queues::EmailCrmCleanupQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
@@ -90,7 +89,6 @@ async fn main() -> anyhow::Result<()> {
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
         .gmail_ops_retry_queue(&gmail_ops_retry_queue)
-        .search_event_queue(&search_event_queue)
         .email_backfill_queue(&backfill_queue)
         .email_crm_cleanup_queue(&crm_cleanup_queue)
         .email_scheduled_queue(&email_scheduled_queue)

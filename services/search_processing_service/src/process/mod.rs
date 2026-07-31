@@ -57,28 +57,6 @@ pub async fn process_message(
             )
             .await?;
         }
-        SearchQueueMessage::RemoveEmailLink(message) => {
-            let link_id = message
-                .link_id
-                .parse::<Uuid>()
-                .context("failed to parse link_id as UUID")?;
-            email::remove::process_remove_messages_by_link_id(&ctx.opensearch_client, link_id)
-                .await?;
-        }
-        SearchQueueMessage::ExtractEmailThreadMessage(message) => {
-            let thread_id = message
-                .thread_id
-                .parse::<Uuid>()
-                .context("failed to parse thread_id as UUID")?;
-            email::upsert::process_upsert_thread_message(
-                &ctx.opensearch_client,
-                &ctx.db,
-                thread_id,
-                &message.macro_user_id,
-                message.index_override.as_deref(),
-            )
-            .await?;
-        }
         SearchQueueMessage::ExtractEmailThreadBatch(message) => {
             let thread_ids = message
                 .thread_ids
@@ -95,26 +73,6 @@ pub async fn process_message(
                 &thread_ids,
                 &message.macro_user_id,
                 message.index_override.as_deref(),
-            )
-            .await?;
-        }
-        SearchQueueMessage::RemoveEmailMessage(message) => {
-            let message_id = message
-                .message_id
-                .parse::<Uuid>()
-                .context("failed to parse message_id as UUID")?;
-            email::remove::process_remove_message(&ctx.opensearch_client, message_id, None).await?;
-        }
-        SearchQueueMessage::ExtractEmailMessage(message) => {
-            let message_id = message
-                .message_id
-                .parse::<Uuid>()
-                .context("failed to parse message_id as UUID")?;
-            email::upsert::process_upsert_message(
-                &ctx.opensearch_client,
-                &ctx.db,
-                message_id,
-                &message.macro_user_id,
             )
             .await?;
         }
