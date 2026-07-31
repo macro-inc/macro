@@ -27,7 +27,7 @@ coverage:
     bun install
     bun run coverage
 
-# Interactively create and verify a webhook. In `local` mode, start the
-# receiver first and use http://host.docker.internal:<port>/<path> as its URL.
+# Interactively create and verify a webhook. In `local` mode, register against
+# http://sdk-webhook-relay:8787/macro-events and run the receiver on the host.
 webhook *ARGS:
     bun run webhook -- "$@"
