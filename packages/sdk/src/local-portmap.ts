@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import type { ServiceName } from './config';
 
 type LocalPortmap = {
-  version: 1;
   webAppUrl: string;
   hosts: Partial<Record<ServiceName, string>>;
   sdkWebhookHostReceiverPort: number;

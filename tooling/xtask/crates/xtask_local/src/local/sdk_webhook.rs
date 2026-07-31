@@ -95,15 +95,12 @@ pub fn start(instance: &Instance) -> Result<Child> {
         .spawn()
         .context("starting the SDK webhook SSH reverse tunnel")?;
 
-    for _ in 0..20 {
-        std::thread::sleep(Duration::from_millis(100));
-        if child.try_wait()?.is_none() {
-            std::fs::write(pid_path(instance), child.id().to_string())?;
-            return Ok(child);
-        }
+    std::thread::sleep(Duration::from_millis(300));
+    if let Some(status) = child.try_wait()? {
+        bail!("SDK webhook SSH reverse tunnel exited with {status}");
     }
-    let _ = child.kill();
-    bail!("SDK webhook SSH reverse tunnel exited while connecting to the relay")
+    std::fs::write(pid_path(instance), child.id().to_string())?;
+    Ok(child)
 }
 
 /// Stop a previously started host-side tunnel, if present.

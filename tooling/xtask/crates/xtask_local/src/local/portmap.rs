@@ -8,13 +8,9 @@ use serde::Serialize;
 
 use super::instance::{Instance, Port};
 
-/// Generated local SDK endpoint manifest version.
-const VERSION: u8 = 1;
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PortMap {
-    version: u8,
     instance: String,
     web_app_url: String,
     hosts: BTreeMap<&'static str, String>,
@@ -38,7 +34,6 @@ pub fn write(instance: &Instance) -> Result<PathBuf> {
         ("unfurl", url(Port::Unfurl)),
     ]);
     let portmap = PortMap {
-        version: VERSION,
         instance: instance.name().to_string(),
         web_app_url: url(Port::Frontend),
         hosts,
