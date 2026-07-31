@@ -1,5 +1,7 @@
 //! Github Sync Client implementation of the [`GithubSyncClient`] port.
 
+use std::time::Duration;
+
 use super::pull_request_metadata::{
     fetch_open_pull_requests_for_installation, fetch_pull_request_metadata,
 };
@@ -16,17 +18,35 @@ use crate::domain::{
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
 const GITHUB_OAUTH_BASE_URL: &str = "https://github.com";
 const USER_INSTALLATIONS_PAGE_SIZE: u64 = 100;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[cfg(test)]
 mod test;
 
 /// Github sync client implementation backed by a reusable [`reqwest::Client`].
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct GithubSyncClientImpl {
     /// The reqwest client
     client: reqwest::Client,
     #[cfg(test)]
     api_base_url: Option<String>,
+}
+
+impl Default for GithubSyncClientImpl {
+    fn default() -> Self {
+        Self {
+            client: build_client(),
+            #[cfg(test)]
+            api_base_url: None,
+        }
+    }
+}
+
+fn build_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .expect("GitHub sync reqwest client should build")
 }
 
 impl GithubSyncClientImpl {
@@ -51,7 +71,7 @@ impl GithubSyncClientImpl {
     #[cfg(test)]
     fn with_api_base_url(api_base_url: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: build_client(),
             api_base_url: Some(api_base_url),
         }
     }
