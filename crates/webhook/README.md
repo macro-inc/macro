@@ -96,8 +96,7 @@ so one person or team is considered only once.
 
 `channel.mentioned` is emitted once per distinct entity `@`-mentioned in a
 channel message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
-any future mentionable kind. Self-mentions (an author mentioning their own
-principal) never emit, and bot mentions only emit when the bot is an active
+any future mentionable kind. Bot mentions only emit when the bot is an active
 channel participant; the author may itself be a bot. Like every channel
 event, access and `ids` filtering are by channel: the entity is the channel
 containing the message, and the mentioned entity travels in the payload's

@@ -1,6 +1,4 @@
-import { BotsNamespace } from '../entities/bots/namespace';
 import { Message } from '../entities/channels/message';
-import { User } from '../entities/users/user';
 import { MacroError } from '../utils';
 import type { MacroClient } from '../utils/client';
 import type {
@@ -40,7 +38,6 @@ function hydrate(client: MacroClient, event: MacroEvent): EventMap[EventName] {
  */
 export class MacroEvents {
   private readonly handlers = new Map<EventName, Set<AnyHandler>>();
-  private selfPrincipal?: Promise<string>;
 
   constructor(
     private readonly client: MacroClient,
@@ -78,28 +75,11 @@ export class MacroEvents {
     return this.on('channel.mentioned', async (event) => {
       // Principals embed emails for users; emails are case-insensitive.
       const mentioned = event.metadata.mentioned.entity_id.toLowerCase();
-      if (mentioned !== (await this.myPrincipal()).toLowerCase()) {
+      if (mentioned !== (await this.client.myPrincipalId()).toLowerCase()) {
         return;
       }
       await handler(event);
     });
-  }
-
-  /**
-   * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
-   * auth, `macro|<email>` for user auth — fetched once and cached.
-   */
-  private myPrincipal(): Promise<string> {
-    this.selfPrincipal ??= (
-      this.client.authConfig.type === 'bot'
-        ? new BotsNamespace(this.client).myPrincipalId()
-        : User.me(this.client).then((user) => user.id)
-    ).catch((error) => {
-      // Don't cache failures: the next delivery retries the lookup.
-      this.selfPrincipal = undefined;
-      throw error;
-    });
-    return this.selfPrincipal;
   }
 
   /**

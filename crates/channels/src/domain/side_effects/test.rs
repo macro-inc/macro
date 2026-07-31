@@ -1595,7 +1595,7 @@ fn broker_events_map_message_posted_mentions_per_entity() {
             mention(BOT_MENTION_ENTITY_TYPE, &uninstalled_bot_principal),
             // A bot-tagged mention with a malformed id emits nothing.
             mention(BOT_MENTION_ENTITY_TYPE, "not-a-bot-principal"),
-            // The sender mentioning themselves emits nothing.
+            // The sender mentioning themselves emits like any other mention.
             mention("user", "macro|alice@example.com"),
             // User and document mentions emit like any other entity.
             mention("user", "macro|bob@example.com"),
@@ -1639,6 +1639,7 @@ fn broker_events_map_message_posted_mentions_per_entity() {
         vec![
             ("bot".to_string(), bot_principal),
             ("user".to_string(), macro_ai_principal),
+            ("user".to_string(), "macro|alice@example.com".to_string()),
             ("user".to_string(), "macro|bob@example.com".to_string()),
             ("document".to_string(), "doc-1".to_string()),
         ]
@@ -1647,7 +1648,7 @@ fn broker_events_map_message_posted_mentions_per_entity() {
 }
 
 #[test]
-fn broker_events_bot_authored_mentions_emit_except_self() {
+fn broker_events_bot_authored_mentions_emit() {
     use macro_event_broker::MacroEvent as _;
     let sender_bot = BotId::new_from_uuid(Uuid::new_v4());
     let sender_principal = sender_bot.into_storage_id().to_string();
@@ -1660,22 +1661,27 @@ fn broker_events_bot_authored_mentions_emit_except_self() {
         Uuid::new_v4(),
         Uuid::new_v4(),
         vec![
-            // A bot mentioning itself never emits.
+            // Bot-authored mentions emit like any other, including a bot
+            // mentioning itself — the pipe reports facts, consumers filter.
             mention(BOT_MENTION_ENTITY_TYPE, &sender_principal),
-            // A bot mentioning another installed bot does emit.
             mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
         ],
         &[sender_principal.as_str(), other_bot_principal.as_str()],
     ));
 
-    assert_eq!(events.len(), 2);
-    let envelope = serde_json::to_value(events[1].event()).unwrap();
-    assert_eq!(envelope["event_type"], "channel.mentioned");
+    assert_eq!(events.len(), 3);
+    let self_mention = serde_json::to_value(events[1].event()).unwrap();
+    assert_eq!(self_mention["event_type"], "channel.mentioned");
     assert_eq!(
-        envelope["metadata"]["mentioned"]["entity_id"],
+        self_mention["metadata"]["mentioned"]["entity_id"],
+        sender_principal
+    );
+    let other = serde_json::to_value(events[2].event()).unwrap();
+    assert_eq!(
+        other["metadata"]["mentioned"]["entity_id"],
         other_bot_principal
     );
-    assert_eq!(envelope["metadata"]["sender"], sender_principal);
+    assert_eq!(other["metadata"]["sender"], sender_principal);
 }
 
 #[test]

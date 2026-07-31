@@ -84,6 +84,14 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.webAppUrl = client.webAppUrl;
   }
 
+  /**
+   * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
+   * auth, `macro|<email>` for user auth — fetched once and cached.
+   */
+  myPrincipalId(): Promise<string> {
+    return this._client.myPrincipalId();
+  }
+
   /** Clone of this SDK acting on behalf of `userId` (sent as
    * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
    * since a user token always acts as its own user. */

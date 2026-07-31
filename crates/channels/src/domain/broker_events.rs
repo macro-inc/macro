@@ -118,8 +118,7 @@ pub struct ChannelMentionedMetadata {
     pub message_id: Uuid,
     /// Thread parent id when the message is a thread reply.
     pub thread_id: Option<Uuid>,
-    /// Message author; may be a bot. Self-mentions (an author mentioning
-    /// their own principal) never emit this event.
+    /// Message author; may be a bot.
     pub sender: ChannelSender<'static>,
     /// Type of channel containing the message.
     pub channel_type: ChannelType,

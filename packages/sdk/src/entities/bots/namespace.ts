@@ -28,10 +28,15 @@ export class BotsNamespace {
 
   /**
    * The authenticated bot's canonical principal id (`bot|<uuid>`) — the form
-   * used for bot mentions, senders, and webhook `ids` filters.
+   * used for bot mentions, senders, and webhook `ids` filters. Cached on the
+   * client; see {@link MacroClient.myPrincipalId}.
    */
   async myPrincipalId(): Promise<string> {
-    const bot = await this.me();
-    return `bot|${bot.id}`;
+    if (this.client.authConfig.type !== 'bot') {
+      throw new MacroError(
+        'bots.myPrincipalId() requires bot auth — a user API key has no bot identity',
+      );
+    }
+    return this.client.myPrincipalId();
   }
 }

@@ -15,6 +15,8 @@ import {
   type ServiceName,
   WEB_APP_URLS,
 } from '../config';
+import { BotsNamespace } from '../entities/bots/namespace';
+import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
 import { resolveLocalPortmap } from '../local-portmap';
 
@@ -33,6 +35,7 @@ export class MacroClient {
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
   private readonly requestedAs?: string;
+  private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
     const env: Env = opts.env ?? 'dev';
@@ -85,6 +88,23 @@ export class MacroClient {
   /** Whether requests have a user identity accepted by acting-user endpoints. */
   hasActingUser(): boolean {
     return this.authConfig.type === 'user' || this.requestedAs !== undefined;
+  }
+
+  /**
+   * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
+   * auth, `macro|<email>` for user auth — fetched once and cached. Failed
+   * lookups are not cached, so a later call retries.
+   */
+  myPrincipalId(): Promise<string> {
+    this.selfPrincipal ??= (
+      this.authConfig.type === 'bot'
+        ? new BotsNamespace(this).me().then((bot) => `bot|${bot.id}`)
+        : User.me(this).then((user) => user.id)
+    ).catch((error) => {
+      this.selfPrincipal = undefined;
+      throw error;
+    });
+    return this.selfPrincipal;
   }
 
   private makeClient(baseUrl: string) {

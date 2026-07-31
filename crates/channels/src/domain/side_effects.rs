@@ -1300,16 +1300,13 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     },
                 ));
             }
-            // One mentioned event per distinct mentioned entity, with two
-            // exclusions:
-            // - self-mentions (an author mentioning their own principal)
-            //   never emit, so a bot cannot trigger itself;
-            // - bot mentions are invocations, so they only emit for bots
-            //   that are active channel participants (mention payloads are
-            //   client-controlled). Mentions of other entity kinds pass
-            //   through; delivery is already scoped to channel access.
+            // One mentioned event per distinct mentioned entity. Bot mentions
+            // are invocations, so they only emit for bots that are active
+            // channel participants (mention payloads are client-controlled).
+            // Mentions of other entity kinds — including an author mentioning
+            // themselves — pass through; delivery is already scoped to
+            // channel access and consumers filter on the payload.
             let active_bots = active_bot_mention_ids(mentions, participants);
-            let sender_principal = message.sender_id.as_ref();
             let emits = |mention: &SimpleMention| match mention_bot_id(&mention.entity_id) {
                 Some(bot_id) => active_bots.contains(&bot_id),
                 // A bot-tagged mention that isn't a canonical bot principal
@@ -1318,7 +1315,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             };
             let mut seen_mentions = HashSet::new();
             for mention in mentions {
-                if mention.entity_id == sender_principal || !emits(mention) {
+                if !emits(mention) {
                     continue;
                 }
                 if !seen_mentions.insert((mention.entity_type.as_str(), mention.entity_id.as_str()))
