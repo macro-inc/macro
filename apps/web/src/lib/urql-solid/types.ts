@@ -1,3 +1,4 @@
+import type { MaybeAccessor } from '@app/lib/signals/access';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type {
   AnyVariables,
@@ -11,7 +12,6 @@ import type {
   OperationResultSource,
   RequestPolicy,
 } from '@urql/core';
-import type { Accessor } from 'solid-js';
 
 /** Options shared by enabled and disabled urql queries. */
 type UrqlQueryCommonOptions<QueryData, Variables extends AnyVariables, Data> = {
@@ -329,4 +329,4 @@ export type UrqlMutationResult<
 };
 
 /** One reactive source of urql clients accepted by {@link UrqlProvider}. */
-export type UrqlClientSource = Client | Accessor<Client>;
+export type UrqlClientSource = MaybeAccessor<Client>;

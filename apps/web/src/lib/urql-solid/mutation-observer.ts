@@ -204,29 +204,21 @@ export class MutationObserver<
           this.result.notify();
         }
 
+        const errorArgs = [error, input, onMutateResult, undefined] as const;
+        const settledArgs = [
+          undefined,
+          error,
+          input,
+          onMutateResult,
+          undefined,
+        ] as const;
+
         try {
-          await options.onError?.(error, input, onMutateResult, undefined);
-          await executionOptions.onError?.(
-            error,
-            input,
-            onMutateResult,
-            undefined
-          );
+          await options.onError?.(...errorArgs);
+          await executionOptions.onError?.(...errorArgs);
         } finally {
-          await options.onSettled?.(
-            undefined,
-            error,
-            input,
-            onMutateResult,
-            undefined
-          );
-          await executionOptions.onSettled?.(
-            undefined,
-            error,
-            input,
-            onMutateResult,
-            undefined
-          );
+          await options.onSettled?.(...settledArgs);
+          await executionOptions.onSettled?.(...settledArgs);
         }
 
         throw error;
@@ -243,39 +235,32 @@ export class MutationObserver<
         this.result.notify();
       }
 
+      const settledArgs = [
+        result.data,
+        error,
+        input,
+        onMutateResult,
+        result,
+      ] as const;
+
       try {
         if (error) {
-          await options.onError?.(error, input, onMutateResult, result);
-          await executionOptions.onError?.(
-            error,
-            input,
-            onMutateResult,
-            result
-          );
+          const errorArgs = [error, input, onMutateResult, result] as const;
+          await options.onError?.(...errorArgs);
+          await executionOptions.onError?.(...errorArgs);
         } else {
-          await options.onSuccess?.(result.data, input, onMutateResult, result);
-          await executionOptions.onSuccess?.(
+          const successArgs = [
             result.data,
             input,
             onMutateResult,
-            result
-          );
+            result,
+          ] as const;
+          await options.onSuccess?.(...successArgs);
+          await executionOptions.onSuccess?.(...successArgs);
         }
       } finally {
-        await options.onSettled?.(
-          result.data,
-          error,
-          input,
-          onMutateResult,
-          result
-        );
-        await executionOptions.onSettled?.(
-          result.data,
-          error,
-          input,
-          onMutateResult,
-          result
-        );
+        await options.onSettled?.(...settledArgs);
+        await executionOptions.onSettled?.(...settledArgs);
       }
 
       return result;

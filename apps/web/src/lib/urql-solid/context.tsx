@@ -1,3 +1,4 @@
+import { access } from '@app/lib/signals/access';
 import type { Client } from '@urql/core';
 import {
   type Accessor,
@@ -9,12 +10,6 @@ import type { UrqlClientSource } from './types';
 
 const UrqlClientContext = createContext<Accessor<Client>>();
 
-function isClientAccessor(
-  source: UrqlClientSource
-): source is Accessor<Client> {
-  return typeof source === 'function';
-}
-
 /** Props for the application-local urql client provider. */
 export type UrqlProviderProps = ParentProps<{
   /** A fixed client or reactive client accessor. */
@@ -23,10 +18,7 @@ export type UrqlProviderProps = ParentProps<{
 
 /** Provides the default urql client used by descendant queries. */
 export function UrqlProvider(props: UrqlProviderProps) {
-  const client = (): Client => {
-    const source = props.client;
-    return isClientAccessor(source) ? source() : source;
-  };
+  const client = (): Client => access(props.client);
 
   return (
     <UrqlClientContext.Provider value={client}>
