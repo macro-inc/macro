@@ -287,3 +287,66 @@ fn plain_changed_events_map_directly_from_the_feed() {
     assert_eq!(classified.single_upserts.len(), 1);
     assert_eq!(classified.single_upserts[0].id, "plain-event");
 }
+
+#[test]
+fn tail_planning_skips_series_and_singles_the_feed_already_handled() {
+    let refreshed_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "refreshed_20280801T140000Z",
+        "recurringEventId": "refreshed",
+        "start": {"dateTime": "2028-08-01T14:00:00Z"},
+        "end": {"dateTime": "2028-08-01T15:00:00Z"}
+    }))
+    .unwrap();
+    let new_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "fresh_20280801T090000Z",
+        "recurringEventId": "fresh",
+        "start": {"dateTime": "2028-08-01T09:00:00Z"},
+        "end": {"dateTime": "2028-08-01T10:00:00Z"}
+    }))
+    .unwrap();
+    let tombstoned_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "gone_20280801T090000Z",
+        "recurringEventId": "gone",
+        "start": {"dateTime": "2028-08-01T09:00:00Z"},
+        "end": {"dateTime": "2028-08-01T10:00:00Z"}
+    }))
+    .unwrap();
+    let known_single: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "known-single",
+        "start": {"dateTime": "2028-08-02T09:00:00Z"},
+        "end": {"dateTime": "2028-08-02T10:00:00Z"}
+    }))
+    .unwrap();
+    let new_single: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "new-single",
+        "start": {"dateTime": "2028-08-03T09:00:00Z"},
+        "end": {"dateTime": "2028-08-03T10:00:00Z"}
+    }))
+    .unwrap();
+
+    let mut applied = AppliedChangeFeed::default();
+    applied.refreshed_series.insert("refreshed".to_string());
+    applied.cancelled.insert("gone".to_string());
+    applied.upserted_singles.insert("known-single".to_string());
+
+    let (series, singles) = plan_tail_refreshes(
+        vec![
+            refreshed_instance,
+            new_instance.clone(),
+            new_instance,
+            tombstoned_instance,
+            known_single,
+            new_single,
+        ],
+        &applied,
+    );
+
+    assert_eq!(series.into_iter().collect::<Vec<_>>(), vec!["fresh"]);
+    assert_eq!(
+        singles
+            .iter()
+            .map(|event| event.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["new-single"]
+    );
+}

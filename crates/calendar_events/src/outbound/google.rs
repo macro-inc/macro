@@ -384,14 +384,63 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             });
         }
 
+        let mut applied = self
+            .apply_change_feed(access_token, &context, changes)
+            .await?;
+        let materialized_range =
+            if let GoogleSyncPlan::ExtendTail { from, from_date } = context.plan {
+                self.extend_tail(access_token, &context, from, from_date, &mut applied)
+                    .await?;
+                Some(context.range.clone())
+            } else {
+                None
+            };
+
+        Ok(GoogleEventSyncBatch {
+            upserts: applied.upserts,
+            observed_provider_event_ids: None,
+            next_sync_token,
+            materialized_range,
+            cancelled_provider_event_ids: applied.cancelled.into_iter().collect(),
+        })
+    }
+}
+
+/// Feed application state shared by incremental polls and tail extension.
+#[derive(Default)]
+struct AppliedChangeFeed {
+    upserts: Vec<CalendarEventUpsert>,
+    cancelled: BTreeSet<String>,
+    refreshed_series: BTreeSet<String>,
+    upserted_singles: BTreeSet<String>,
+}
+
+enum SeriesOutcome {
+    Refreshed(Box<CalendarEventUpsert>),
+    Gone,
+    Malformed,
+}
+
+impl GoogleCalendarClient {
+    async fn apply_change_feed(
+        &self,
+        access_token: &str,
+        context: &GoogleEventSyncContext,
+        changes: Vec<GoogleEvent>,
+    ) -> Result<AppliedChangeFeed, GoogleProviderError> {
         let classified = classify_changes(changes);
-        let mut cancelled = classified.tombstoned_provider_event_ids;
-        let mut upserts = Vec::new();
+        let mut applied = AppliedChangeFeed {
+            cancelled: classified.tombstoned_provider_event_ids,
+            ..AppliedChangeFeed::default()
+        };
 
         for single in classified.single_upserts {
             let provider_event_id = single.id.clone();
-            match map_upsert(&context, single.clone(), Vec::new(), vec![single]) {
-                Ok(upsert) => upserts.push(upsert),
+            match map_upsert(context, single.clone(), Vec::new(), vec![single]) {
+                Ok(upsert) => {
+                    applied.upserts.push(upsert);
+                    applied.upserted_singles.insert(provider_event_id);
+                }
                 Err(error) => {
                     tracing::warn!(
                         error=?error,
@@ -406,64 +455,171 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
         // One bounded refresh per changed series keeps Google authoritative
         // for recurrence expansion without re-sweeping the whole window.
         for (master_id, feed_master) in classified.refresh_masters {
-            let master = match feed_master {
-                Some(master) => Some(master),
-                None => {
-                    self.event(access_token, &context.provider_calendar_id, &master_id)
-                        .await?
-                }
-            };
-            let Some(master) = master else {
-                cancelled.insert(master_id);
-                continue;
-            };
-            if master.status.as_deref() == Some("cancelled") {
-                cancelled.insert(master_id);
-                continue;
-            }
-            let exceptions = if master.ical_uid.is_empty() {
-                Vec::new()
-            } else {
-                self.events_by_ical_uid(
-                    access_token,
-                    &context.provider_calendar_id,
-                    &master.ical_uid,
-                )
+            match self
+                .refresh_series(access_token, context, &master_id, feed_master)
                 .await?
-                .into_iter()
-                .filter(|event| event.recurring_event_id.is_some())
-                .collect()
-            };
-            let instances = self
-                .instances(
-                    access_token,
-                    &context.provider_calendar_id,
-                    &master.id,
-                    &context.range,
-                )
-                .await?;
-            let provider_event_id = master.id.clone();
-            match map_upsert(&context, master, exceptions, instances) {
-                Ok(upsert) => upserts.push(upsert),
+            {
+                SeriesOutcome::Refreshed(upsert) => {
+                    applied.upserts.push(*upsert);
+                    applied.refreshed_series.insert(master_id);
+                }
+                SeriesOutcome::Gone => {
+                    applied.cancelled.insert(master_id);
+                }
+                SeriesOutcome::Malformed => {
+                    applied.refreshed_series.insert(master_id);
+                }
+            }
+        }
+
+        Ok(applied)
+    }
+
+    async fn refresh_series(
+        &self,
+        access_token: &str,
+        context: &GoogleEventSyncContext,
+        master_id: &str,
+        feed_master: Option<GoogleEvent>,
+    ) -> Result<SeriesOutcome, GoogleProviderError> {
+        let master = match feed_master {
+            Some(master) => Some(master),
+            None => {
+                self.event(access_token, &context.provider_calendar_id, master_id)
+                    .await?
+            }
+        };
+        let Some(master) = master else {
+            return Ok(SeriesOutcome::Gone);
+        };
+        if master.status.as_deref() == Some("cancelled") {
+            return Ok(SeriesOutcome::Gone);
+        }
+        let exceptions = if master.ical_uid.is_empty() {
+            Vec::new()
+        } else {
+            self.events_by_ical_uid(
+                access_token,
+                &context.provider_calendar_id,
+                &master.ical_uid,
+            )
+            .await?
+            .into_iter()
+            .filter(|event| event.recurring_event_id.is_some())
+            .collect()
+        };
+        let instances = self
+            .instances(
+                access_token,
+                &context.provider_calendar_id,
+                &master.id,
+                &context.range,
+            )
+            .await?;
+        let provider_event_id = master.id.clone();
+        match map_upsert(context, master, exceptions, instances) {
+            Ok(upsert) => Ok(SeriesOutcome::Refreshed(Box::new(upsert))),
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    provider_calendar_id=%context.provider_calendar_id,
+                    provider_event_id,
+                    "skipping malformed changed Google Calendar series"
+                );
+                Ok(SeriesOutcome::Malformed)
+            }
+        }
+    }
+
+    /// Materialize only the window the stored coverage does not reach yet:
+    /// one bounded expanded sweep of the tail, then a full-window refresh of
+    /// each series that surfaced there and was not already refreshed.
+    async fn extend_tail(
+        &self,
+        access_token: &str,
+        context: &GoogleEventSyncContext,
+        from: DateTime<Utc>,
+        from_date: NaiveDate,
+        applied: &mut AppliedChangeFeed,
+    ) -> Result<(), GoogleProviderError> {
+        let tail = OccurrenceRange {
+            starts_at: from,
+            ends_at: context.range.ends_at,
+            start_date: from_date,
+            end_date: context.range.end_date,
+        };
+        if tail.starts_at >= tail.ends_at {
+            return Ok(());
+        }
+        let tail_events = self
+            .events(access_token, &context.provider_calendar_id, &tail, true)
+            .await?;
+        let (tail_series, tail_singles) = plan_tail_refreshes(tail_events, applied);
+
+        for single in tail_singles {
+            let provider_event_id = single.id.clone();
+            match map_upsert(context, single.clone(), Vec::new(), vec![single]) {
+                Ok(upsert) => {
+                    applied.upserts.push(upsert);
+                    applied.upserted_singles.insert(provider_event_id);
+                }
                 Err(error) => {
                     tracing::warn!(
                         error=?error,
                         provider_calendar_id=%context.provider_calendar_id,
                         provider_event_id,
-                        "skipping malformed changed Google Calendar series"
+                        "skipping malformed Google Calendar event in the coverage tail"
                     );
                 }
             }
         }
 
-        Ok(GoogleEventSyncBatch {
-            upserts,
-            observed_provider_event_ids: None,
-            next_sync_token,
-            materialized_range: None,
-            cancelled_provider_event_ids: cancelled.into_iter().collect(),
-        })
+        for master_id in tail_series {
+            match self
+                .refresh_series(access_token, context, &master_id, None)
+                .await?
+            {
+                SeriesOutcome::Refreshed(upsert) => {
+                    applied.upserts.push(*upsert);
+                    applied.refreshed_series.insert(master_id);
+                }
+                SeriesOutcome::Gone => {
+                    applied.cancelled.insert(master_id);
+                }
+                SeriesOutcome::Malformed => {
+                    applied.refreshed_series.insert(master_id);
+                }
+            }
+        }
+
+        Ok(())
     }
+}
+
+/// Split a tail sweep into series needing a refresh and standalone events to
+/// upsert, skipping anything the change feed already handled this run.
+fn plan_tail_refreshes(
+    tail_events: Vec<GoogleEvent>,
+    applied: &AppliedChangeFeed,
+) -> (BTreeSet<String>, Vec<GoogleEvent>) {
+    let mut series = BTreeSet::new();
+    let mut singles = Vec::new();
+    let mut seen_singles = BTreeSet::new();
+    for event in tail_events {
+        if let Some(master_id) = &event.recurring_event_id {
+            if !applied.refreshed_series.contains(master_id)
+                && !applied.cancelled.contains(master_id)
+            {
+                series.insert(master_id.clone());
+            }
+        } else if !applied.upserted_singles.contains(&event.id)
+            && !applied.cancelled.contains(&event.id)
+            && seen_singles.insert(event.id.clone())
+        {
+            singles.push(event);
+        }
+    }
+    (series, singles)
 }
 
 #[derive(Default)]
