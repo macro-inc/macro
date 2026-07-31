@@ -48,7 +48,7 @@ maybe_env_vars! {
 pub struct GithubSyncConfig {
     /// The webhook secret used to validate github webhook events
     pub webhook_secret: String,
-    /// The url to the github sync app installation page
+    /// The URL to the GitHub Sync App profile or installation page.
     pub github_sync_app_url: String,
     /// The PEM key for the github sync app
     pub sync_app_pem: String,
@@ -1032,6 +1032,10 @@ impl<
 
         let mut installation_url = url::Url::parse(&self.config.github_sync_app_url)
             .map_err(|error| GithubError::Internal(error.into()))?;
+        let configured_path = installation_url.path().trim_end_matches('/');
+        if !configured_path.ends_with("/installations/new") {
+            installation_url.set_path(&format!("{configured_path}/installations/new"));
+        }
         installation_url
             .query_pairs_mut()
             .append_pair("state", &signed_state);

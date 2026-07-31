@@ -5086,10 +5086,26 @@ async fn begin_team_installation_setup_preserves_query_and_signs_team() {
     )
     .unwrap();
 
+    assert_eq!(url.path(), "/apps/test/installations/new");
     assert_eq!(query.get("existing").map(String::as_str), Some("1"));
     assert_eq!(state.macro_user_id, user);
     assert_eq!(state.team_id, Some(team_id));
     assert!(state.exp <= chrono::Utc::now().timestamp() + 60 * 60);
+}
+
+#[tokio::test]
+async fn begin_installation_setup_normalizes_app_profile_url() {
+    let user = installation_setup_user();
+    let mut service = make_sync_service();
+    service.config.github_sync_app_url = "https://github.com/apps/test?existing=1".to_string();
+
+    let setup_url = service.begin_installation_setup(&user, None).await.unwrap();
+    let url = url::Url::parse(&setup_url).unwrap();
+    let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+
+    assert_eq!(url.path(), "/apps/test/installations/new");
+    assert_eq!(query.get("existing").map(String::as_str), Some("1"));
+    assert!(query.contains_key("state"));
 }
 
 #[tokio::test]
