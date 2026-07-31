@@ -47,14 +47,16 @@ type InfiniteQueryKey<PageParam> = {
 };
 
 type InfiniteQueryObserverState<SelectedData> = {
-  data: SelectedData | undefined;
-  retainingPreviousData: boolean;
-  retainedFetched: boolean;
-  paused: boolean;
+  previousData: SelectedData | undefined;
+  enabled: boolean;
   fetchingNextPage: boolean;
-  fetchNextPageError: boolean;
   refetching: boolean;
   paginationError: CombinedError | undefined;
+};
+
+type NextPageParamResult<PageParam> = {
+  pageParam: PageParam | null | undefined;
+  error: CombinedError | null;
 };
 
 function shallowEqualContext(
@@ -104,16 +106,19 @@ export class InfiniteQueryObserver<
   private queryKey: InfiniteQueryKey<PageParam> | undefined;
   private readonly pages: Page<PageData, Variables, PageParam>[] = [];
   private state: InfiniteQueryObserverState<SelectedData> = {
-    data: undefined,
-    retainingPreviousData: false,
-    retainedFetched: false,
-    paused: false,
+    previousData: undefined,
+    enabled: true,
     fetchingNextPage: false,
-    fetchNextPageError: false,
     refetching: false,
     paginationError: undefined,
   };
   private failedNextPage: Page<PageData, Variables, PageParam> | undefined;
+  private currentResult!: InfiniteResult<
+    PageData,
+    Variables,
+    PageParam,
+    SelectedData
+  >;
   private readonly result = new ObserverResult(() => this.getCurrentResult());
   private actionController = new AbortController();
   private destroyed = false;
@@ -130,6 +135,7 @@ export class InfiniteQueryObserver<
   ) {
     this.client = client;
     this.options = options;
+    this.currentResult = this.buildResult();
     this.applyOptions(options, client);
   }
 
@@ -139,32 +145,51 @@ export class InfiniteQueryObserver<
     PageParam,
     SelectedData
   > {
+    return this.currentResult;
+  }
+
+  private buildResult(): InfiniteResult<
+    PageData,
+    Variables,
+    PageParam,
+    SelectedData
+  > {
     const infiniteData = this.successfulPages();
+    let data = this.state.previousData;
+    let derivationError: CombinedError | null = null;
 
     if (infiniteData.pages.length > 0) {
-      const data = this.options.select
-        ? this.options.select(infiniteData)
-        : (infiniteData as SelectedData);
-
-      this.setState({ data, retainingPreviousData: false });
-    } else if (!this.state.retainingPreviousData) {
-      this.setState({ data: undefined });
+      try {
+        data = this.options.select
+          ? this.options.select(infiniteData)
+          : (infiniteData as SelectedData);
+      } catch (cause) {
+        derivationError = toCombinedError(cause);
+      }
     }
 
     const pageResults = this.pages.map((page) =>
       page.observer.getCurrentResult()
     );
     const pageError = pageResults.find((page) => page.error)?.error ?? null;
-    const error = this.state.paginationError ?? pageError;
     const fetching = pageResults.some((page) => page.fetching);
     const stale = pageResults.some((page) => page.stale);
     const pageIsFetching = pageResults.some((page) => page.isFetching);
     const fetched =
       pageResults.some((page) => page.isFetched) ||
-      (this.state.retainingPreviousData && this.state.retainedFetched);
-    const nextPageParam = this.getNextPageParam(infiniteData);
+      this.state.previousData !== undefined;
+    let nextPageParam: PageParam | null | undefined;
+
+    if (!derivationError) {
+      const nextPage = this.resolveNextPageParam(infiniteData);
+      nextPageParam = nextPage.pageParam;
+      derivationError = nextPage.error;
+    }
+
+    const error = this.state.paginationError ?? derivationError ?? pageError;
     const hasNextPage =
       !this.state.paginationError &&
+      !derivationError &&
       nextPageParam !== null &&
       nextPageParam !== undefined;
     const isFetching =
@@ -172,7 +197,7 @@ export class InfiniteQueryObserver<
     const status = getQueryStatus(error, fetched);
 
     return {
-      data: this.state.data,
+      data,
       error,
       fetching,
       stale,
@@ -187,12 +212,13 @@ export class InfiniteQueryObserver<
         (fetched && !this.state.fetchingNextPage && pageIsFetching),
       isSuccess: status === 'success',
       isError: status === 'error',
-      isPaused: this.state.paused,
-      isEnabled: !this.state.paused,
+      isEnabled: this.state.enabled,
       isFetched: fetched,
       hasNextPage,
       isFetchingNextPage: this.state.fetchingNextPage,
-      isFetchNextPageError: this.state.fetchNextPageError,
+      isFetchNextPageError:
+        this.state.paginationError !== undefined ||
+        this.failedNextPage !== undefined,
       fetchNextPage: this.fetchNextPage,
       refetch: this.refetch,
     };
@@ -274,20 +300,17 @@ export class InfiniteQueryObserver<
     options: InfiniteOptions<PageData, Variables, PageParam, SelectedData>,
     client: Client
   ): void {
-    const wasPaused = this.state.paused;
-    const previousData = this.state.data;
-    const previousFetched =
-      this.pages.some((page) => page.observer.getCurrentResult().isFetched) ||
-      (this.state.retainingPreviousData && this.state.retainedFetched);
+    const wasEnabled = this.state.enabled;
+    const previousResult = this.getCurrentResult();
     this.options = options;
     this.client = client;
 
-    if (options.pause === true) {
+    if (options.enabled === false) {
       this.cancelActions();
-      this.setState({ paused: true });
+      this.setState({ enabled: false });
 
       for (const page of this.pages) {
-        page.observer.setOptions(this.pageOptions(page, true), client);
+        page.observer.setOptions(this.pageOptions(page, false), client);
       }
       this.emit();
       return;
@@ -309,21 +332,20 @@ export class InfiniteQueryObserver<
     if (queryChanged) {
       this.cancelActions();
       this.setState({
-        retainingPreviousData:
-          options.keepPreviousData !== false && previousData !== undefined,
-        retainedFetched: previousFetched,
+        previousData:
+          options.keepPreviousData !== false ? previousResult.data : undefined,
         paginationError: undefined,
       });
       this.queryKey = queryKey;
       this.destroyPages();
     }
 
-    this.setState({ paused: false });
+    this.setState({ enabled: true });
     if (this.pages.length === 0) {
       this.appendPage(options.initialPageParam, 0, initialVariables);
-    } else if (wasPaused) {
+    } else if (!wasEnabled) {
       for (const page of this.pages) {
-        page.observer.setOptions(this.pageOptions(page, false), client);
+        page.observer.setOptions(this.pageOptions(page, true), client);
       }
     }
     this.emit();
@@ -334,13 +356,13 @@ export class InfiniteQueryObserver<
       Page<PageData, Variables, PageParam>,
       'pageIndex' | 'pageParam' | 'variables'
     >,
-    pause: boolean
+    enabled: boolean
   ): UrqlQueryOptions<PageData, Variables> {
     return {
       query: this.options.query,
       variables: page.variables,
       client: this.client,
-      pause,
+      enabled,
       requestPolicy: this.options.requestPolicy,
       context: this.options.context,
       keepPreviousData: true,
@@ -361,7 +383,7 @@ export class InfiniteQueryObserver<
     const descriptor = { pageIndex, pageParam, variables };
     const observer = new QueryObserver<PageData, Variables>(
       this.client,
-      this.pageOptions(descriptor, this.state.paused),
+      this.pageOptions(descriptor, this.state.enabled),
       executeImmediately
     );
     const page: Page<PageData, Variables, PageParam> = {
@@ -387,7 +409,6 @@ export class InfiniteQueryObserver<
       !result.error
     ) {
       this.failedNextPage = undefined;
-      this.setState({ fetchNextPageError: false });
     }
 
     this.emit();
@@ -401,7 +422,6 @@ export class InfiniteQueryObserver<
     this.failedNextPage = undefined;
     this.setState({
       fetchingNextPage: false,
-      fetchNextPageError: false,
       refetching: false,
     });
   }
@@ -429,33 +449,53 @@ export class InfiniteQueryObserver<
     return { pages: data, pageParams };
   }
 
-  private getNextPageParam(
+  private resolveNextPageParam(
     data = this.successfulPages()
-  ): PageParam | null | undefined {
+  ): NextPageParamResult<PageParam> {
     const lastPage = data.pages.at(-1);
-    if (lastPage === undefined || data.pageParams.length === 0)
-      return undefined;
+    if (lastPage === undefined || data.pageParams.length === 0) {
+      return { pageParam: undefined, error: null };
+    }
+
     const lastPageParam = data.pageParams[
       data.pageParams.length - 1
     ] as PageParam;
-    return this.options.getNextPageParam(
-      lastPage,
-      data.pages,
-      lastPageParam,
-      data.pageParams
-    );
+
+    try {
+      return {
+        pageParam: this.options.getNextPageParam(
+          lastPage,
+          data.pages,
+          lastPageParam,
+          data.pageParams
+        ),
+        error: null,
+      };
+    } catch (cause) {
+      return { pageParam: undefined, error: toCombinedError(cause) };
+    }
   }
 
   private async runFetchNextPage(
     refetchOptions: UrqlQueryRefetchOptions,
     signal: AbortSignal
   ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
-    if (signal.aborted || this.destroyed || this.state.paused) {
+    if (signal.aborted || this.destroyed || !this.state.enabled) {
       return this.actionResult();
     }
 
-    const pageParam = this.getNextPageParam();
+    const nextPage = this.resolveNextPageParam();
 
+    if (nextPage.error) {
+      this.setState({ paginationError: nextPage.error });
+      this.emit();
+
+      if (refetchOptions.throwOnError) throw nextPage.error;
+
+      return this.actionResult();
+    }
+
+    const pageParam = nextPage.pageParam;
     if (pageParam === null || pageParam === undefined) {
       return this.actionResult();
     }
@@ -474,10 +514,7 @@ export class InfiniteQueryObserver<
         new Error('infinite query returned a repeated page parameter')
       );
 
-      this.setState({
-        paginationError: error,
-        fetchNextPageError: true,
-      });
+      this.setState({ paginationError: error });
       this.emit();
 
       if (refetchOptions.throwOnError) throw error;
@@ -486,10 +523,7 @@ export class InfiniteQueryObserver<
     }
 
     this.failedNextPage = undefined;
-    this.setState({
-      fetchingNextPage: true,
-      fetchNextPageError: false,
-    });
+    this.setState({ fetchingNextPage: true });
     this.emit();
 
     const page =
@@ -504,7 +538,6 @@ export class InfiniteQueryObserver<
       const error = page.observer.getCurrentResult().error;
 
       this.failedNextPage = error ? page : undefined;
-      this.setState({ fetchNextPageError: error !== null });
       this.emit();
 
       return this.actionResult();
@@ -512,7 +545,6 @@ export class InfiniteQueryObserver<
       if (signal.aborted) return this.actionResult();
 
       this.failedNextPage = page;
-      this.setState({ fetchNextPageError: true });
       this.emit();
 
       throw cause;
@@ -528,7 +560,7 @@ export class InfiniteQueryObserver<
     refetchOptions: UrqlQueryRefetchOptions,
     signal: AbortSignal
   ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
-    if (signal.aborted || this.destroyed || this.state.paused) {
+    if (signal.aborted || this.destroyed || !this.state.enabled) {
       return this.actionResult();
     }
 
@@ -537,7 +569,6 @@ export class InfiniteQueryObserver<
     this.failedNextPage = undefined;
     this.setState({
       refetching: true,
-      fetchNextPageError: false,
       paginationError: undefined,
     });
     this.emit();
@@ -559,7 +590,7 @@ export class InfiniteQueryObserver<
       if (signal.aborted) return this.actionResult();
 
       for (let pageIndex = 1; pageIndex < targetPageCount; pageIndex += 1) {
-        if (signal.aborted || this.destroyed || this.state.paused) break;
+        if (signal.aborted || this.destroyed || !this.state.enabled) break;
 
         const previousData = this.successfulPages(
           this.pages.slice(0, pageIndex)
@@ -570,8 +601,16 @@ export class InfiniteQueryObserver<
           break;
         }
 
-        const expectedPageParam = this.getNextPageParam(previousData);
+        const nextPage = this.resolveNextPageParam(previousData);
 
+        if (nextPage.error) {
+          this.setState({ paginationError: nextPage.error });
+          this.emit();
+          if (refetchOptions.throwOnError) throw nextPage.error;
+          break;
+        }
+
+        const expectedPageParam = nextPage.pageParam;
         if (expectedPageParam === null || expectedPageParam === undefined) {
           this.destroyPages(pageIndex);
           break;
@@ -620,6 +659,7 @@ export class InfiniteQueryObserver<
   }
 
   private emit(): void {
+    this.currentResult = this.buildResult();
     this.result.notify();
   }
 }

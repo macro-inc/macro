@@ -38,7 +38,7 @@ type QueryObserverState<QueryData, Variables extends AnyVariables, Data> = {
   hasNext: boolean;
   operation: OperationResult<QueryData, Variables>['operation'] | undefined;
   extensions: Record<string, unknown> | undefined;
-  paused: boolean;
+  enabled: boolean;
   fetched: boolean;
 };
 
@@ -67,7 +67,7 @@ export class QueryObserver<
     hasNext: false,
     operation: undefined,
     extensions: undefined,
-    paused: false,
+    enabled: true,
     fetched: false,
   };
   private readonly result = new ObserverResult(() => this.getCurrentResult());
@@ -84,7 +84,7 @@ export class QueryObserver<
     if (executeImmediately) {
       this.setOptions(options, client);
     } else {
-      this.setState({ paused: options.pause === true });
+      this.setState({ enabled: options.enabled !== false });
     }
   }
 
@@ -107,8 +107,7 @@ export class QueryObserver<
       isRefetching: status !== 'pending' && isFetching,
       isSuccess: status === 'success',
       isError: status === 'error',
-      isPaused: this.state.paused,
-      isEnabled: !this.state.paused,
+      isEnabled: this.state.enabled,
       isFetched: this.state.fetched,
       stale: this.state.stale,
       hasNext: this.state.hasNext,
@@ -131,13 +130,13 @@ export class QueryObserver<
     this.options = options;
     this.client = client;
 
-    if (options.pause === true) {
+    if (options.enabled === false) {
       if (this.execution) {
         this.onEnd(this.execution, 'cancelled');
       }
 
       this.setState({
-        paused: true,
+        enabled: false,
         fetching: false,
         stale: false,
         hasNext: false,
@@ -175,7 +174,10 @@ export class QueryObserver<
       return Promise.resolve(this.result.getActionResult());
     }
 
-    if (this.options.pause === true && this.options.variables === undefined) {
+    if (
+      this.options.enabled === false &&
+      this.options.variables === undefined
+    ) {
       return Promise.resolve(this.result.getActionResult());
     }
 
@@ -242,7 +244,7 @@ export class QueryObserver<
       this.execution = currentExecution;
 
       this.setState({
-        paused: options.pause === true,
+        enabled: options.enabled !== false,
         fetching: true,
         stale: false,
         hasNext: false,
@@ -272,7 +274,7 @@ export class QueryObserver<
 
       this.setState({
         error,
-        paused: options.pause === true,
+        enabled: options.enabled !== false,
         fetching: false,
         stale: false,
         hasNext: false,

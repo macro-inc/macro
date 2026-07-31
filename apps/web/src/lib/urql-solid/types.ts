@@ -13,12 +13,12 @@ import type {
 } from '@urql/core';
 import type { Accessor } from 'solid-js';
 
-/** Options shared by active and paused urql queries. */
+/** Options shared by enabled and disabled urql queries. */
 type UrqlQueryCommonOptions<QueryData, Variables extends AnyVariables, Data> = {
   /** Overrides the client supplied by the nearest {@link UrqlProvider}. */
   client?: Client;
-  /** Prevents automatic execution while preserving the current result. */
-  pause?: boolean;
+  /** Enables automatic execution. Defaults to true. */
+  enabled?: boolean;
   /** Default request policy for this query. */
   requestPolicy?: RequestPolicy;
   /** Additional operation context merged into each execution. */
@@ -34,7 +34,7 @@ type UrqlQueryCommonOptions<QueryData, Variables extends AnyVariables, Data> = {
 /**
  * Reactive urql query options.
  *
- * Active requests retain urql's conditional variable requirements. A paused
+ * Enabled requests retain urql's conditional variable requirements. A disabled
  * branch may omit variables so callers can represent unavailable inputs
  * without manufacturing placeholder values.
  */
@@ -48,7 +48,7 @@ export type UrqlQueryOptions<
   | ({
       query: DocumentInput<QueryData, Variables>;
       variables?: Variables;
-      pause: true;
+      enabled: false;
     } & UrqlQueryCommonOptions<QueryData, Variables, Data>);
 
 /** Overrides applied to a single imperative query reexecution. */
@@ -92,7 +92,6 @@ export type UrqlQueryResult<
   readonly isRefetching: boolean;
   readonly isSuccess: boolean;
   readonly isError: boolean;
-  readonly isPaused: boolean;
   readonly isEnabled: boolean;
   readonly isFetched: boolean;
   readonly stale: boolean;
@@ -102,7 +101,7 @@ export type UrqlQueryResult<
   /**
    * Reexecutes the current request and resolves with this same stable result.
    * Superseded or disposed reexecutions resolve instead of leaving a pending
-   * promise. A paused query without variables is a no-op.
+   * promise. A disabled query without variables is a no-op.
    */
   refetch(
     options?: UrqlQueryRefetchOptions
@@ -145,8 +144,8 @@ export type UrqlInfiniteQueryOptions<
   select?: (data: UrqlInfiniteData<PageData, PageParam>) => SelectedData;
   /** Overrides the client supplied by the nearest {@link UrqlProvider}. */
   client?: Client;
-  /** Stops page subscriptions while retaining accumulated data. */
-  pause?: boolean;
+  /** Enables page subscriptions. Defaults to true. */
+  enabled?: boolean;
   /** Default request policy for every page. */
   requestPolicy?: RequestPolicy;
   /** Additional operation context merged into every page execution. */
@@ -180,7 +179,6 @@ export type UrqlInfiniteQueryResult<
   readonly isRefetching: boolean;
   readonly isSuccess: boolean;
   readonly isError: boolean;
-  readonly isPaused: boolean;
   readonly isEnabled: boolean;
   readonly isFetched: boolean;
   readonly hasNextPage: boolean;

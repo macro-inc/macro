@@ -102,17 +102,17 @@ const OTHER_DOCUMENT = gql`
   }
 `;
 
-const pausedWithoutVariables: UrqlQueryOptions<Data, Variables> = {
+const disabledWithoutVariables: UrqlQueryOptions<Data, Variables> = {
   query: DOCUMENT,
-  pause: true,
+  enabled: false,
 };
-// @ts-expect-error Active requests retain generated variables requirements.
-const activeWithoutVariables: UrqlQueryOptions<Data, Variables> = {
+// @ts-expect-error Enabled requests retain generated variables requirements.
+const enabledWithoutVariables: UrqlQueryOptions<Data, Variables> = {
   query: DOCUMENT,
-  pause: false,
+  enabled: true,
 };
-void pausedWithoutVariables;
-void activeWithoutVariables;
+void disabledWithoutVariables;
+void enabledWithoutVariables;
 
 const disposals: Array<() => void> = [];
 afterEach(() => {
@@ -300,14 +300,14 @@ describe('createUrqlQuery reactive state', () => {
     expect(fake.executions[3]?.document).toBe(OTHER_DOCUMENT);
   });
 
-  it('pauses synchronously, preserves state, and resumes', () => {
+  it('disables synchronously, preserves state, and re-enables', () => {
     const fake = makeFakeClient();
-    const [pause, setPause] = createSignal(false);
+    const [enabled, setEnabled] = createSignal(true);
     const query = setup(() => ({
       query: DOCUMENT,
       variables: { input: 'first' },
       client: fake.client,
-      pause: pause(),
+      enabled: enabled(),
     }));
 
     fake.executions[0]?.next({
@@ -315,9 +315,8 @@ describe('createUrqlQuery reactive state', () => {
       stale: true,
       hasNext: true,
     });
-    setPause(true);
+    setEnabled(false);
     expect(fake.executions[0]?.unsubscribed).toBe(true);
-    expect(query.isPaused).toBe(true);
     expect(query.isEnabled).toBe(false);
     expect(query.fetchStatus).toBe('idle');
     expect(query.stale).toBe(false);
@@ -327,8 +326,7 @@ describe('createUrqlQuery reactive state', () => {
     fake.executions[0]?.next({ data: { value: 'late' } });
     expect(query.data).toEqual({ value: 'existing' });
 
-    setPause(false);
-    expect(query.isPaused).toBe(false);
+    setEnabled(true);
     expect(query.isEnabled).toBe(true);
     expect(query.isRefetching).toBe(true);
     expect(fake.executions).toHaveLength(2);
@@ -624,48 +622,45 @@ describe('createUrqlQuery refetch', () => {
     expect(query.fetchStatus).toBe('idle');
   });
 
-  it('manually executes a paused query without changing its configured state', async () => {
+  it('manually executes a disabled query without changing its configured state', async () => {
     const fake = makeFakeClient();
     const query = setup(
       () => ({
         query: DOCUMENT,
         variables: { input: 'manual' },
-        pause: true,
+        enabled: false,
       }),
       fake.client
     );
 
     expect(fake.executions).toHaveLength(0);
-    expect(query.isPaused).toBe(true);
     expect(query.isEnabled).toBe(false);
 
     const refetch = query.refetch();
     expect(fake.executions).toHaveLength(1);
-    expect(query.isPaused).toBe(true);
     expect(query.isEnabled).toBe(false);
     expect(query.isFetching).toBe(true);
 
     fake.executions[0]?.next({ data: { value: 'manual result' } });
     await expect(refetch).resolves.toBe(query);
     expect(query.data).toEqual({ value: 'manual result' });
-    expect(query.isPaused).toBe(true);
     expect(query.isEnabled).toBe(false);
     expect(query.isFetching).toBe(false);
   });
 
-  it('is a safe no-op for a paused query without variables', async () => {
+  it('is a safe no-op for a disabled query without variables', async () => {
     const fake = makeFakeClient();
     const query = setup(
       () => ({
         query: DOCUMENT,
-        pause: true,
+        enabled: false,
       }),
       fake.client
     );
 
     await expect(query.refetch()).resolves.toBe(query);
     expect(fake.executions).toHaveLength(0);
-    expect(query.isPaused).toBe(true);
+    expect(query.isEnabled).toBe(false);
   });
 
   it('settles superseded and disposed refetches without leaking promises', async () => {
