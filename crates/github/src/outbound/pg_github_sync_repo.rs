@@ -9,7 +9,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 use crate::domain::{
-    models::{GithubAppInstallationSource, GithubKey, MacroTaskId, TeamTaskReference},
+    models::{
+        GithubAppInstallationSource, GithubKey, MacroTaskId, ResolvedTeamTaskReference,
+        TeamTaskReference,
+    },
     ports::GithubSyncRepo,
 };
 
@@ -59,18 +62,29 @@ impl GithubSyncRepo for PgGithubSyncRepo {
             .iter()
             .map(|_| macro_uuid::generate_uuid_v7())
             .collect();
+        // Full-UUID document ids used to look up each task's owning team;
+        // an unconvertible short UUID simply matches no team_task row.
+        let document_ids: Vec<String> = task_ids
+            .iter()
+            .map(|t| t.to_uuid().map(|uuid| uuid.to_string()).unwrap_or_default())
+            .collect();
         let github_key = github_key.as_ref();
         let github_keys: Vec<&str> = std::iter::repeat_n(github_key, short_ids.len()).collect();
 
         sqlx::query!(
             r#"
-        INSERT INTO github_pr_tasks (id, github_key, task_id)
-        SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::text[])
-        ON CONFLICT (github_key, task_id) DO NOTHING
+        INSERT INTO github_pr_tasks (id, github_key, task_id, team_id)
+        SELECT u.id, u.github_key, u.task_id, tt.team_id
+        FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::text[])
+            AS u(id, github_key, task_id, document_id)
+        LEFT JOIN team_task tt ON tt.document_id = u.document_id
+        ON CONFLICT (github_key, task_id)
+            DO UPDATE SET team_id = COALESCE(github_pr_tasks.team_id, EXCLUDED.team_id)
         "#,
             &ids,
             &github_keys as &[&str],
-            &short_ids
+            &short_ids,
+            &document_ids
         )
         .execute(&self.pool)
         .await?;
@@ -113,7 +127,7 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         &self,
         installation_id: &str,
         references: &[TeamTaskReference],
-    ) -> Result<Vec<MacroTaskId>, Self::Err> {
+    ) -> Result<Vec<ResolvedTeamTaskReference>, Self::Err> {
         if references.is_empty() {
             return Ok(Vec::new());
         }
@@ -123,7 +137,11 @@ impl GithubSyncRepo for PgGithubSyncRepo {
 
         let rows = sqlx::query!(
             r#"
-            SELECT DISTINCT tt.document_id
+            SELECT DISTINCT
+                refs.team_slug AS "team_slug!",
+                refs.task_num AS "task_num!",
+                t.id AS "team_id!",
+                tt.document_id AS "document_id!"
             FROM UNNEST($2::text[], $3::int4[]) AS refs(team_slug, task_num)
             JOIN github_app_installation gai
                 ON gai.id = $1
@@ -143,12 +161,16 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         Ok(rows
             .into_iter()
             .filter_map(|row| {
-                let document_id = row.document_id;
-                match uuid::Uuid::parse_str(&document_id) {
-                    Ok(uuid) => Some(MacroTaskId::from_uuid(&uuid)),
+                let reference = TeamTaskReference::new(&row.team_slug, row.task_num)?;
+                match uuid::Uuid::parse_str(&row.document_id) {
+                    Ok(uuid) => Some(ResolvedTeamTaskReference {
+                        reference,
+                        team_id: row.team_id,
+                        task_id: MacroTaskId::from_uuid(&uuid),
+                    }),
                     Err(e) => {
                         tracing::warn!(
-                            document_id,
+                            document_id = row.document_id,
                             error=?e,
                             "team task document id is not a UUID"
                         );

@@ -429,6 +429,21 @@ impl TeamTaskReference {
     }
 }
 
+/// A [`TeamTaskReference`] resolved against a concrete team.
+///
+/// Because team slugs are not unique, one reference can resolve in more than
+/// one of an installation's teams; callers must treat such references as
+/// ambiguous rather than linking every match.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ResolvedTeamTaskReference {
+    /// The reference that was resolved.
+    pub reference: TeamTaskReference,
+    /// The team whose slug and task number matched the reference.
+    pub team_id: uuid::Uuid,
+    /// The task document backing the team task.
+    pub task_id: MacroTaskId,
+}
+
 /// A Macro task ID in the form `MACRO-{short_uuid}`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MacroTaskId {

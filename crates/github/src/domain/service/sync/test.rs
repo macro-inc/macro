@@ -6,7 +6,7 @@ use crate::domain::{
         EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
         GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
         GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus, MacroTaskId,
-        TeamTaskReference, ValidatedGithubWebhookEvent,
+        ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
@@ -301,8 +301,11 @@ impl DocumentService for StubDocumentService {
 /// Stateful stub repo that tracks task IDs per github key.
 struct StubSyncRepo {
     tasks: Mutex<HashMap<String, HashSet<String>>>,
-    /// Maps (installation_id, normalized team_slug, team_task_id) -> task ID.
-    team_task_references: Mutex<HashMap<(String, String, i32), MacroTaskId>>,
+    /// Maps (installation_id, normalized team_slug, team_task_id) -> matching
+    /// (team_id, task ID) pairs. Multiple entries model a slug shared by
+    /// several of the installation's teams.
+    #[allow(clippy::type_complexity)]
+    team_task_references: Mutex<HashMap<(String, String, i32), Vec<(uuid::Uuid, MacroTaskId)>>>,
     /// Maps github_user_id -> macro_ids for installation event lookups.
     ///
     /// A github_user_id may map to multiple Macro users because multiple Macro
@@ -382,16 +385,19 @@ impl StubSyncRepo {
         installation_id: &str,
         team_slug: &str,
         team_task_id: i32,
+        team_id: uuid::Uuid,
         task_id: MacroTaskId,
     ) -> Self {
-        self.team_task_references.lock().unwrap().insert(
-            (
+        self.team_task_references
+            .lock()
+            .unwrap()
+            .entry((
                 installation_id.to_string(),
                 team_slug.to_ascii_lowercase(),
                 team_task_id,
-            ),
-            task_id,
-        );
+            ))
+            .or_default()
+            .push((team_id, task_id));
         self
     }
 
@@ -476,7 +482,7 @@ impl GithubSyncRepo for StubSyncRepo {
         &self,
         installation_id: &str,
         references: &[TeamTaskReference],
-    ) -> Result<Vec<MacroTaskId>, Self::Err> {
+    ) -> Result<Vec<ResolvedTeamTaskReference>, Self::Err> {
         let team_task_references = self.team_task_references.lock().unwrap();
         let mut seen = HashSet::new();
         let mut resolved = Vec::new();
@@ -487,10 +493,14 @@ impl GithubSyncRepo for StubSyncRepo {
                 reference.team_slug.to_ascii_lowercase(),
                 reference.team_task_id,
             );
-            if let Some(task_id) = team_task_references.get(&key)
-                && seen.insert(task_id.clone())
-            {
-                resolved.push(task_id.clone());
+            for (team_id, task_id) in team_task_references.get(&key).into_iter().flatten() {
+                if seen.insert((*team_id, task_id.clone())) {
+                    resolved.push(ResolvedTeamTaskReference {
+                        reference: reference.clone(),
+                        team_id: *team_id,
+                        task_id: task_id.clone(),
+                    });
+                }
             }
         }
 
@@ -1470,7 +1480,8 @@ async fn pr_with_task_id_in_branch_name() {
 #[tokio::test]
 async fn pr_with_team_task_id_in_branch_name() {
     let task_id = MacroTaskId::from_uuid(&uuid::Uuid::parse_str(KNOWN_TASK_UUID).unwrap());
-    let repo = StubSyncRepo::new().with_team_task_reference("12345", "eng", 123, task_id);
+    let team_id = uuid::Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+    let repo = StubSyncRepo::new().with_team_task_reference("12345", "eng", 123, team_id, task_id);
     let service = make_sync_service_with_repo(repo);
 
     let event = ValidatedGithubWebhookEvent::new(
@@ -1506,7 +1517,8 @@ async fn pr_with_team_task_id_in_branch_name() {
 #[tokio::test]
 async fn team_task_id_requires_installation_team_match() {
     let task_id = MacroTaskId::from_uuid(&uuid::Uuid::parse_str(KNOWN_TASK_UUID).unwrap());
-    let repo = StubSyncRepo::new().with_team_task_reference("99999", "eng", 123, task_id);
+    let team_id = uuid::Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+    let repo = StubSyncRepo::new().with_team_task_reference("99999", "eng", 123, team_id, task_id);
     let service = make_sync_service_with_repo(repo);
 
     let event = ValidatedGithubWebhookEvent::new(
@@ -1530,6 +1542,53 @@ async fn team_task_id_requires_installation_team_match() {
     let result = service.process_webhook_event(&event).await;
     assert!(result.is_ok());
     assert!(service.client.pr_comments().is_empty());
+}
+
+#[tokio::test]
+async fn ambiguous_team_task_reference_links_nothing() {
+    // Two of the installation's teams share the slug "eng" (slugs are not
+    // unique), so "eng-123" matches a different task in each team. Linking
+    // either would risk attributing the PR to the wrong team's task, so the
+    // reference must be skipped entirely.
+    let task_a = MacroTaskId::from_uuid(&uuid::Uuid::parse_str(KNOWN_TASK_UUID).unwrap());
+    let task_b = MacroTaskId::from_uuid(
+        &uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+    );
+    let team_a = uuid::Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+    let team_b = uuid::Uuid::parse_str("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee").unwrap();
+    let repo = StubSyncRepo::new()
+        .with_team_task_reference("12345", "eng", 123, team_a, task_a)
+        .with_team_task_reference("12345", "eng", 123, team_b, task_b);
+    let service = make_sync_service_with_repo(repo);
+
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 7,
+                "title": "some feature",
+                "body": null,
+                "head": { "ref": "whutch/eng-123-fix-some-bug" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    let result = service.process_webhook_event(&event).await;
+    assert!(result.is_ok());
+
+    assert!(service.client.pr_comments().is_empty());
+    let tracked = service
+        .repo
+        .get_task_ids(GithubKey::new("my-org", "my-repo", 7))
+        .await
+        .unwrap();
+    assert!(tracked.is_empty());
 }
 
 #[tokio::test]
