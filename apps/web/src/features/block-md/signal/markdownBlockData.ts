@@ -22,6 +22,8 @@ export const blockDataSignal = blockDataSignalAs<MarkdownData>('md');
  *     clamped to a max width.
  * @property scrollContainer The scroll container is the direct sibling of the top bar
  *     and takes the full width of the block. This is where the scroll bar is attached.
+ * @property locationReady True after the editor is initialized and the first
+ *     location-scroll window has opened.
  */
 export type MdData = {
   editor?: LexicalEditor;
@@ -35,6 +37,7 @@ export type MdData = {
   scrollContainer?: HTMLElement;
   commentMargin?: HTMLElement;
   contentRef?: HTMLElement;
+  locationReady?: boolean;
 };
 
 export const mdStore = createBlockStore<MdData>({});

@@ -22,6 +22,7 @@ members = [
   "crates/favorites",
   "crates/foreign_entity",
   "crates/generic_email_domains",
+  "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",
   "crates/graphql_entity_mutation",
@@ -48,6 +49,7 @@ members = [
   "crates/soup_realtime",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
@@ -141,6 +143,7 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
+getrandom = "0.3"
 glob = "0.3.3"
 # Pinned engine for the generated dependency artifacts (used by the xtask
 # graph/deps commands). This version lives in Cargo.lock, so dev machines and
@@ -172,7 +175,8 @@ lol_html = "2.4.0"
 lru = "0.16"
 mockall = "0.13"
 nom = "8"
-opentelemetry = "0.31.0"
+opentelemetry = { version = "0.31.0", default-features = false }
+opentelemetry-http = { version = "0.31.0", default-features = false }
 opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
   "grpc-tonic",
   "internal-logs",
@@ -180,7 +184,7 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
   "metrics",
   "trace",
 ] }
-opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry_sdk = { version = "0.31.0", default-features = false }
 ordered-float = "5"
 paste = "1"
 pdfium-render = { version = "0.8.37", default-features = false, features = [
@@ -259,8 +263,12 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
-wasm-bindgen = "0.2"
+# worker-build (see services/sync-service/wrangler.toml) refuses to build against
+# anything older than 0.2.123, so keep this floor above that.
+wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
+web-time = "1.1.0"
+worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",

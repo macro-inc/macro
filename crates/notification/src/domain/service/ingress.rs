@@ -19,8 +19,8 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusUpdate, NotificationTypeName, UserNotificationRow,
-    UserNotificationStatusUpdate,
+    NotificationStatusPatch, NotificationStatusUpdate, NotificationTypeName, PatchDelete,
+    UserNotificationRow, UserNotificationStatusUpdate,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -56,11 +56,17 @@ pub trait NotificationIngress: Send + Sync + 'static {
 /// This is separated from [`NotificationIngress`] because these operations
 /// do not require the bulk-digest state machine.
 pub trait NotificationReader: Send + Sync + 'static {
-    /// Mark notifications as seen for a user and enqueue push notification clearing.
+    /// Update notifications for a user and enqueue any required push notification clearing.
     fn update_notifications(
         &self,
         req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Update notifications and return the authoritative active rows owned by the user.
+    fn update_notifications_and_return(
+        &self,
+        req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
     /// Get a user's non-deleted notifications, paginated.
     ///
@@ -489,7 +495,7 @@ where
     async fn update_notifications_impl(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         let changed = match &req.status {
             NotificationStatus::Seen => {
                 self.repository
@@ -504,9 +510,20 @@ where
         };
 
         if !changed.is_empty() {
+            let updates = changed
+                .iter()
+                .map(|notification| PatchDelete::Patch {
+                    id: notification.notification_id,
+                    diff: NotificationStatusPatch {
+                        done: notification.done,
+                        viewed_at: notification.viewed_at,
+                        updated_at: notification.updated_at,
+                    },
+                })
+                .collect();
             let update = UserNotificationStatusUpdate {
                 user: req.user_id.copied(),
-                update: NotificationStatusUpdate::new(changed),
+                update: NotificationStatusUpdate::new(updates),
             };
             if let Err(err) = self.realtime.publish_updates(&[update]).await {
                 tracing::warn!(error = ?err, "failed to publish notification status realtime update");
@@ -514,7 +531,7 @@ where
         }
 
         if !req.status.should_clear_push_notifs() {
-            return Ok(());
+            return Ok(changed);
         }
 
         let notifications_with_keys = self
@@ -523,7 +540,7 @@ where
             .await?;
 
         if notifications_with_keys.is_empty() {
-            return Ok(());
+            return Ok(changed);
         }
 
         let device_endpoints = self
@@ -556,7 +573,7 @@ where
             .collect();
 
         if ios_endpoints.is_empty() {
-            return Ok(());
+            return Ok(changed);
         }
 
         let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
@@ -594,7 +611,7 @@ where
 
         self.queue.publish(messages).await?;
 
-        Ok(())
+        Ok(changed)
     }
 }
 
@@ -605,11 +622,19 @@ where
     S: SnsEndpointManager,
     R: NotificationRealtimePublisher,
 {
-    fn update_notifications(
+    async fn update_notifications(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> impl Future<Output = Result<(), Report>> + Send {
-        self.update_notifications_impl(req)
+    ) -> Result<(), Report> {
+        self.update_notifications_impl(req).await.map(|_| ())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_notifications_and_return(
+        &self,
+        req: UpdateNotificationsRequest<'_>,
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        self.update_notifications_impl(req).await
     }
 
     #[tracing::instrument(err, skip(self))]

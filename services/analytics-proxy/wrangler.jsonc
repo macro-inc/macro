@@ -6,23 +6,67 @@
   "observability": {
     "enabled": true
   },
+  // Cap each client to 30 req/s. The binding only allows a 10s or 60s window,
+  // so 300 per 10s expresses 30/s. Bindings are not inherited by named
+  // environments, so this is repeated under each env below.
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 300, "period": 10 }
+    }
+  ],
   "vars": {
-    "POSTHOG_HOST": "https://us.i.posthog.com"
+    "POSTHOG_HOST": "https://us.i.posthog.com",
+    // Datadog's Cloudflare managed-platform endpoint accepts both OTLP signals.
+    // The server-side dd-api-key is injected from a Worker secret. The local
+    // pool overrides both origins to its collector via --var.
+    "OTLP_TRACES_INTAKE_URL": "https://cloudflare.integrations.otlp.us5.datadoghq.com",
+    "OTLP_LOGS_INTAKE_URL": "https://cloudflare.integrations.otlp.us5.datadoghq.com"
   },
   "env": {
     "local": {
+      "ratelimits": [
+        {
+          "name": "RATE_LIMITER",
+          "namespace_id": "1001",
+          "simple": { "limit": 300, "period": 10 }
+        }
+      ],
       "vars": {
-        "POSTHOG_HOST": "https://us.i.posthog.com"
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        // Host defaults for a bare `bun run dev`; the docker pool overrides
+        // both to http://otel-collector:4318 via --var (see docker-compose.yml).
+        "OTLP_TRACES_INTAKE_URL": "http://localhost:4318",
+        "OTLP_LOGS_INTAKE_URL": "http://localhost:4318"
       }
     },
     "dev": {
+      "ratelimits": [
+        {
+          "name": "RATE_LIMITER",
+          "namespace_id": "1001",
+          "simple": { "limit": 300, "period": 10 }
+        }
+      ],
       "vars": {
-        "POSTHOG_HOST": "https://us.i.posthog.com"
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        "OTLP_TRACES_INTAKE_URL": "https://cloudflare.integrations.otlp.us5.datadoghq.com",
+        "OTLP_LOGS_INTAKE_URL": "https://cloudflare.integrations.otlp.us5.datadoghq.com"
       }
     },
     "prod": {
+      "ratelimits": [
+        {
+          "name": "RATE_LIMITER",
+          "namespace_id": "1001",
+          "simple": { "limit": 300, "period": 10 }
+        }
+      ],
       "vars": {
-        "POSTHOG_HOST": "https://us.i.posthog.com"
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        "OTLP_TRACES_INTAKE_URL": "https://cloudflare.integrations.otlp.us5.datadoghq.com",
+        "OTLP_LOGS_INTAKE_URL": "https://cloudflare.integrations.otlp.us5.datadoghq.com"
       }
     }
   },

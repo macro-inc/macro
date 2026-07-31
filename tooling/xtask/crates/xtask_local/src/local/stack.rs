@@ -24,7 +24,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{Mode, arch, env_layer, frontend, mailpit, proxy, snapshot, summary};
+use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
@@ -129,6 +129,13 @@ fn write_state(instance: &Instance, state: &StackState) -> Result<()> {
     let path = state_path(instance);
     std::fs::write(&path, serde_json::to_string_pretty(state)?)
         .with_context(|| format!("writing {}", path.display()))
+}
+
+/// Whether the recorded stack serves the frontend as the static bundle on the
+/// proxy (headless `stack up`) rather than the dev server. False when no
+/// stack state exists (interactive `run_local`, which owns the dev server).
+pub(super) fn frontend_is_static(instance: &Instance) -> bool {
+    read_state(instance).is_some_and(|state| state.frontend == "static")
 }
 
 fn read_state(instance: &Instance) -> Option<StackState> {
@@ -255,6 +262,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         return Ok(instance);
     }
     super::bring_up_app(&stage, mode, &instance, &env)?;
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(&instance))
+        .transpose()?;
 
     // Headless "ready" means the backend answers through the proxy — the caller
     // (a CI step, an agent) acts on the URL the moment we return.
@@ -321,6 +331,7 @@ pub fn update(args: &UpdateArgs) -> Result<()> {
         &instance,
         args.env.no_doppler,
         args.env.env_file.as_deref(),
+        state.frontend == "static",
     )?;
     let changed = if let Some(source) = args.binaries_dir.as_deref() {
         let changed = apply_prebuilt_binaries(mode, &state, source)?;
@@ -550,8 +561,12 @@ pub fn down(args: &DownArgs) -> Result<()> {
 pub fn snapshot_status(args: &SnapshotArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     // The key hashes the generated kickstart; (re)write it so the verb works
-    // before any `up` has run. Deterministic, so this never changes a key.
-    super::fusionauth::write_kickstart(&instance)?;
+    // before any `up` has run. The kickstart depends on the resolved env (the
+    // optional Google IdP client), so resolve it the same way `up` does —
+    // otherwise the key reported here could differ from the key `up` computes.
+    let env = env_layer::resolve(Mode::Local, &instance, false, None, true)?;
+    let google = super::kickstart::GoogleIdp::from_env(&env.merged);
+    super::fusionauth::write_kickstart(&instance, google.as_ref())?;
     let plan = snapshot::Plan::compute(&instance)?;
     if args.json {
         println!(

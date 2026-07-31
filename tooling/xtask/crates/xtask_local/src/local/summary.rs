@@ -6,17 +6,20 @@ use console::Style;
 
 use super::env_layer::ResolvedEnv;
 use super::instance::{Instance, Port};
-use super::{Mode, frontend, mailpit, proxy};
+use super::{Mode, frontend, mailpit, proxy, sdk_webhook};
 
 /// The host-facing endpoints of an instance: (label, url, host port).
 /// Shared by the startup summary and `status-local`.
 pub fn endpoint_rows(instance: &Instance) -> Vec<(&'static str, String, u16)> {
+    // Headless stacks serve the app from the proxy origin; showing the
+    // dev-server URL there reads as "frontend down" when nothing is wrong.
+    let (frontend_url, frontend_port) = if super::stack::frontend_is_static(instance) {
+        (frontend::static_url(instance), instance.port(Port::Proxy))
+    } else {
+        (frontend::url(instance), instance.port(Port::Frontend))
+    };
     vec![
-        (
-            "frontend",
-            frontend::url(instance),
-            instance.port(Port::Frontend),
-        ),
+        ("frontend", frontend_url, frontend_port),
         ("proxy", proxy::url(instance), instance.port(Port::Proxy)),
         (
             "fusionauth",
@@ -133,6 +136,17 @@ pub fn print(
             .unwrap_or_else(|| "(none)".into()),
     );
     row("generated env", env.generated_path.display().to_string());
+    if mode == Mode::Local {
+        row(
+            "SDK config",
+            instance
+                .artifact_dir()
+                .join("portmap.json")
+                .display()
+                .to_string(),
+        );
+        row("Receive webhooks at", sdk_webhook::relay_url().to_string());
+    }
     // The frontend and mailpit rows come from the caller (they differ by
     // flow); the rest of the endpoint list is shared with `status-local`.
     for (label, url, _port) in endpoint_rows(instance) {
@@ -146,7 +160,60 @@ pub fn print(
         };
         row(label, value);
     }
+    if let Some(url) = traces_url() {
+        row("traces", url);
+    }
+    if let Some(url) = dd_logs_url() {
+        row("dd logs", url);
+    }
+
     row("logs", logs_command(instance, &env.generated_path));
     row("stop", stop_command(instance));
     println!();
+}
+
+/// The trace viewer for the OTel spans the web app emits, if one is running.
+///
+/// The viewers are global (fixed ports, one per machine, started manually via
+/// compose profiles — see `docker/docker-compose.yml`), so this probes rather
+/// than consulting the instance: the Jaeger UI on 16686, else a Datadog agent
+/// on the OTLP port 4318, whose traces land in the Datadog APM UI under the
+/// `env:` its compose profile sets (`DD_ENV`, default `local`).
+fn traces_url() -> Option<String> {
+    if port_open(16686) {
+        return Some("http://localhost:16686".into());
+    }
+    if port_open(4318) {
+        return Some(format!(
+            "https://us5.datadoghq.com/apm/traces?query=env%3A{}",
+            dd_env()
+        ));
+    }
+    None
+}
+
+/// The Datadog Logs Explorer for the OTel log records the web app emits —
+/// only when the Datadog agent is the running collector (Jaeger has no log
+/// UI; its OTLP logs are dropped).
+fn dd_logs_url() -> Option<String> {
+    if port_open(16686) || !port_open(4318) {
+        return None;
+    }
+    Some(format!(
+        "https://us5.datadoghq.com/logs?query=env%3A{}",
+        dd_env()
+    ))
+}
+
+fn dd_env() -> String {
+    macro_env_var::maybe_read_env("DD_ENV").unwrap_or_else(|| "local".into())
+}
+
+/// Whether something is listening on `port` on localhost.
+pub(super) fn port_open(port: u16) -> bool {
+    std::net::TcpStream::connect_timeout(
+        &([127, 0, 0, 1], port).into(),
+        std::time::Duration::from_millis(150),
+    )
+    .is_ok()
 }

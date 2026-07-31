@@ -67,3 +67,32 @@ export function getTeamSlugError(input: string): string | undefined {
 
   return undefined;
 }
+
+/** Builds the target URL template GitHub requires for numeric autolinks. */
+export function buildTeamTaskAutolinkTargetUrl(
+  teamSlug: string,
+  webOrigin: string
+): string {
+  return `${webOrigin.replace(/\/$/, '')}/app/task-slug/${teamSlug}-<num>`;
+}
+
+const TEAM_TASK_NUMBER_REGEX: RegExp = /^\d{1,9}$/;
+
+/**
+ * Mirrors the backend team-task slug parser: a `-`-separated prefix with no
+ * empty segments and a positive task number (digits capped at 9 to stay
+ * inside an i32), so slugs the backend would reject with 400 never leave the
+ * client.
+ */
+export function isValidTeamTaskSlug(slug: string): boolean {
+  const separatorIndex = slug.lastIndexOf('-');
+  if (separatorIndex === -1) return false;
+
+  const prefix = slug.slice(0, separatorIndex);
+  const number = slug.slice(separatorIndex + 1);
+  if (prefix === '' || prefix.split('-').some((segment) => segment === '')) {
+    return false;
+  }
+
+  return TEAM_TASK_NUMBER_REGEX.test(number) && Number(number) > 0;
+}

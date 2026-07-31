@@ -68,3 +68,31 @@ fn other_watch_failures_stay_gmail_errors() {
         ));
     }
 }
+
+#[test]
+fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
+    // SharedInboxConflict is held open for the force_share retry, so its row must be kept;
+    // every other terminal failure must clean up the row so it stops counting toward the
+    // /link/gmail start cap. The delete itself is covered by macro_db_client's own tests.
+    assert!(
+        !should_clean_up_in_progress_link(&InitError::SharedInboxConflict {
+            email_address: "shared@example.com".to_string(),
+            existing_owner_email: "owner@example.com".to_string(),
+            existing_link_id: Uuid::new_v4(),
+        }),
+        "SharedInboxConflict must keep the row for the force_share retry"
+    );
+
+    for err in [
+        InitError::AlreadyInitialized,
+        InitError::NoGmailGrant,
+        InitError::EnqueueError,
+        InitError::BadRequest("bad".to_string()),
+        InitError::GmailError(GmailError::Unauthorized),
+    ] {
+        assert!(
+            should_clean_up_in_progress_link(&err),
+            "terminal failure {err:?} should clean up the in_progress row"
+        );
+    }
+}

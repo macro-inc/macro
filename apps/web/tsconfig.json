@@ -182,12 +182,6 @@
       "@design/*": [
         "./src/lib/design/*"
       ],
-      "@observability": [
-        "./src/lib/observability/"
-      ],
-      "@observability/*": [
-        "./src/lib/observability/*"
-      ],
       "@service-sync": [
         "./src/lib/service-clients/service-sync"
       ],

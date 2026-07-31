@@ -91,6 +91,14 @@ impl NotificationReader for AuthenticationTestService {
         async { unreachable!("should not be called") }
     }
 
+    fn update_notifications_and_return(
+        &self,
+        _req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send
+    {
+        async { unreachable!("should not be called") }
+    }
+
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
@@ -561,6 +569,14 @@ impl NotificationReader for PresignedTestService {
         &self,
         _req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report>> + Send {
+        async { unreachable!() }
+    }
+
+    fn update_notifications_and_return(
+        &self,
+        _req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send
+    {
         async { unreachable!() }
     }
 

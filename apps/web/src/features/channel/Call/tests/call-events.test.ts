@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isCallEventType, parseCallEvent } from '../call-events';
 
+// `call-events` also exports the Solid websocket subscription used by the app.
+// Keep these parser tests from constructing that application-wide socket in
+// jsdom; the payload parser itself remains real and side-effect free.
+vi.mock('@service-connection/websocket', () => ({
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 // The connection gateway always sends `data` as a JSON string — see
 // `services/connection_gateway/src/model/message.rs`.
 const wire = (payload: unknown) => JSON.stringify(payload);

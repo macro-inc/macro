@@ -1,6 +1,5 @@
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
 
-import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronLeftIcon from '@phosphor/caret-left.svg';
@@ -87,7 +86,7 @@ function VideoViewerContent(props: {
         <Show when={props.indexLabel}>
           <div
             class="absolute top-4 left-4 rounded-lg border border-edge bg-surface px-3 py-1.5 shadow-md"
-            style={{ 'z-index': stackingContext.zModal + 1 }}
+            style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
           >
             <span class="text-sm font-medium text-ink">
               {props.indexLabel?.()}
@@ -98,7 +97,7 @@ function VideoViewerContent(props: {
         <Show when={!isMobile() && !props.navigationHidden}>
           <button
             class={cn(navButtonClass, 'left-4')}
-            style={{ 'z-index': stackingContext.zModal + 1 }}
+            style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
             onClick={props.onPrevious}
             disabled={!props.onPrevious}
             aria-label="Previous media"
@@ -108,7 +107,7 @@ function VideoViewerContent(props: {
 
           <button
             class={cn(navButtonClass, 'right-4')}
-            style={{ 'z-index': stackingContext.zModal + 1 }}
+            style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
             onClick={props.onNext}
             disabled={!props.onNext}
             aria-label="Next media"

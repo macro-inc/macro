@@ -1754,13 +1754,19 @@ pub async fn post_activity_handler<
     let user = &user.authorization.user;
     let channel_id = Uuid::parse_str(&req.channel_id)
         .map_err(|_| ChannelsHandlerErr::BadRequest("Invalid channel_id"))?;
+    let access = state
+        .access_service
+        .generate_entity_access_receipt::<MemberParticipantRole>(
+            &user.macro_user_id,
+            user.user_context.organization_id.map(i64::from),
+            &channel_id.to_string(),
+            EntityType::Channel,
+        )
+        .await
+        .map_err(map_access_error)?;
     let activity = state
         .service
-        .post_activity(
-            Sender::new_from_user(user.macro_user_id.clone()),
-            channel_id,
-            req.activity_type,
-        )
+        .post_activity(access, req.activity_type)
         .await?;
     Ok((StatusCode::OK, Json(ApiActivity::from(activity))))
 }

@@ -192,12 +192,18 @@ function DraggableCallWidget(props: {
     });
   });
 
+  // Set while a drag is in flight so hiding/unmounting can tear it down; a
+  // cancelled pointer (touch interrupted, pointer takeover) never fires
+  // pointerup, which would otherwise leave the move listener stuck on window.
+  let stopActiveDrag: (() => void) | undefined;
+
   const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0) return;
 
     const el = root();
     if (!el) return;
 
+    stopActiveDrag?.();
     e.preventDefault();
     const rect = el.getBoundingClientRect();
     const pointerStartX = e.clientX;
@@ -216,21 +222,30 @@ function DraggableCallWidget(props: {
       );
     };
 
-    const handleUp = () => {
+    const stopDrag = () => {
       setDragging(false);
       window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+      if (stopActiveDrag === stopDrag) stopActiveDrag = undefined;
     };
+    stopActiveDrag = stopDrag;
 
     window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
   };
+
+  createEffect(() => {
+    if (!props.visible) stopActiveDrag?.();
+  });
+  onCleanup(() => stopActiveDrag?.());
 
   return (
     <Show when={props.visible}>
       <div
         ref={setRoot}
-        class="fixed z-page-overlay w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
+        class="fixed z-float w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
         style={{
           left: position() ? `${position()!.left}px` : '50%',
           top: position() ? `${position()!.top}px` : undefined,

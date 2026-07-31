@@ -233,6 +233,7 @@ pub async fn update_search_with_raw_document(
     };
 
     let document_name = document_info.document_name;
+    let owner_id = document_info.owner.to_string();
     let sub_type = document_info.sub_type.map(|st| st.to_string());
 
     // TODO: this is hacky, update the search event message to use the correctly serialized
@@ -313,7 +314,7 @@ pub async fn update_search_with_raw_document(
                         raw_content: None,
                         document_name: document_name.clone(),
                         content: page_content.clone(),
-                        owner_id: search_extractor_message.user_id.clone(),
+                        owner_id: owner_id.clone(),
                         file_type: file_type.to_string(),
                         updated_at_millis,
                         sub_type: sub_type.clone(),
@@ -342,7 +343,7 @@ pub async fn update_search_with_raw_document(
                     raw_content: Some(result.raw_content),
                     document_name: document_name.clone(),
                     content: result.content,
-                    owner_id: search_extractor_message.user_id.clone(),
+                    owner_id: owner_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_millis,
                     sub_type: sub_type.clone(),
@@ -361,7 +362,7 @@ pub async fn update_search_with_raw_document(
                     raw_content: None,
                     document_name,
                     content: content.clone(),
-                    owner_id: search_extractor_message.user_id.clone(),
+                    owner_id,
                     file_type: file_type.to_string(),
                     updated_at_millis,
                     sub_type: sub_type.clone(),

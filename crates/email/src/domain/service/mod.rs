@@ -4,6 +4,7 @@ mod send;
 mod signature;
 mod thread;
 mod thread_labels;
+mod user;
 
 #[cfg(test)]
 mod test;
@@ -458,5 +459,16 @@ where
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
         self.get_latest_messages_parsed_impl(receipts).await
+    }
+
+    async fn get_messages_parsed(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
+        self.get_thread_parsed_impl(receipt, offset, limit)
+            .await
+            .map(|thread| thread.map(|thread| thread.messages))
     }
 }

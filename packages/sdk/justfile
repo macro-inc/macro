@@ -1,5 +1,7 @@
 # Macro SDK tasks.
 
+set positional-arguments
+
 # Fully refresh all generated code: rebuild the OpenAPI specs from the Rust
 # services (via apps/web's gen-api), copy them into ./specs, and regenerate
 # ./generated with orval.
@@ -24,3 +26,8 @@ check:
 coverage:
     bun install
     bun run coverage
+
+# Interactively create and verify a webhook. In `local` mode, register against
+# http://sdk-webhook-relay:8787/macro-events and run the receiver on the host.
+webhook *ARGS:
+    bun run webhook -- "$@"

@@ -21,9 +21,7 @@ pub use domain::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertyAccessReceiptExt,
     PropertyOptionInfo, PropertyTargetKey, ViewReceipt, canonical_entity_type,
 };
-pub use domain::ports::{
-    NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer,
-};
+pub use domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 pub use domain::service::{PropertiesService, TeamReceipt};
 pub use domain::service_impl::PropertiesServiceImpl;
 #[cfg(feature = "outbound")]

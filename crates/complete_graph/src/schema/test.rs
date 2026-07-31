@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
-    CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
-    GetEmailsRequest, Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput,
+    CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailSyncStatus,
+    EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility, LabelType, Link, LinkLabel,
+    MessageListVisibility, ParsedMessage, ParsedThread, Thread, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -18,13 +20,18 @@ use macro_authorization::{
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
+    email::EmailStr,
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType as ModelEntityType;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
-use models_soup::{document::SoupDocument, item::SoupItem};
+use models_soup::{
+    document::SoupDocument,
+    email_thread::{SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview},
+    item::SoupItem,
+};
 use rootcause::Report;
 use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
@@ -60,6 +67,7 @@ struct CountingSoupService {
     raw_calls: Arc<AtomicUsize>,
     raw_team_receipts: Arc<AtomicUsize>,
     return_empty_raw: bool,
+    raw_response: Arc<Mutex<Option<Vec<SoupItem<()>>>>>,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
@@ -90,6 +98,12 @@ fn test_soup_err() -> soup::domain::models::SoupErr {
     soup::domain::models::SoupErr::SoupDbErr(anyhow::anyhow!("counting Soup service"))
 }
 
+impl CountingSoupService {
+    fn set_raw_response(&self, items: Vec<SoupItem<()>>) {
+        *self.raw_response.lock().expect("raw response lock") = Some(items);
+    }
+}
+
 impl SoupService for CountingSoupService {
     async fn get_user_soup<T>(
         &self,
@@ -104,9 +118,10 @@ impl SoupService for CountingSoupService {
         if team_receipt.is_some() {
             self.raw_team_receipts.fetch_add(1, Ordering::SeqCst);
         }
-        if self.return_empty_raw {
+        let raw_response = self.raw_response.lock().expect("raw response lock").clone();
+        if self.return_empty_raw || raw_response.is_some() {
             let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
-                Paginated::from_parts(Vec::new(), None);
+                Paginated::from_parts(raw_response.unwrap_or_default(), None);
             return Ok(soup::domain::ports::SoupOutput::Left(page));
         }
         Err(test_soup_err())
@@ -206,10 +221,64 @@ impl SoupService for CountingSoupService {
 #[derive(Clone, Default)]
 struct CountingEmailService {
     inbox_calls: Arc<AtomicUsize>,
+    user_label_calls: Arc<AtomicUsize>,
+    user_link_calls: Arc<AtomicUsize>,
+    user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
 }
 
 fn test_email_err() -> EmailErr {
     EmailErr::RepoErr(anyhow::anyhow!("counting email service"))
+}
+
+impl EmailUserService for CountingEmailService {
+    async fn get_user_email_labels(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<LinkLabel>, EmailErr> {
+        self.user_label_calls.fetch_add(1, Ordering::SeqCst);
+        self.user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock")
+            .push(macro_id);
+        Ok(vec![LinkLabel {
+            id: Uuid::from_u128(501),
+            link_id: Uuid::from_u128(502),
+            provider_label_id: "Label_501".to_owned(),
+            name: "Customers".to_owned(),
+            created_at: Default::default(),
+            message_list_visibility: MessageListVisibility::Show,
+            label_list_visibility: LabelListVisibility::LabelShow,
+            type_: LabelType::User,
+        }])
+    }
+
+    async fn get_user_email_links(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<UserEmailLink>, EmailErr> {
+        self.user_link_calls.fetch_add(1, Ordering::SeqCst);
+        self.user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock")
+            .push(macro_id);
+        Ok(vec![UserEmailLink {
+            id: Uuid::from_u128(502),
+            macro_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            email_address: EmailStr::try_from("inbox@example.com".to_owned()).unwrap(),
+            photo_url: Some("https://example.com/inbox.png".to_owned()),
+            provider: UserProvider::Gmail,
+            is_sync_active: true,
+            sync_status: EmailSyncStatus::UpToDate,
+            needs_reauth: false,
+            settings: UserEmailLinkSettings {
+                signature_on_replies_forwards: true,
+                signature: Some("<p>Regards</p>".to_owned()),
+            },
+            is_primary: true,
+            created_at: Default::default(),
+            updated_at: Default::default(),
+        }])
+    }
 }
 
 impl EmailService for CountingEmailService {
@@ -324,6 +393,62 @@ impl EmailService for CountingEmailService {
 
     async fn list_email_filters(&self, _link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {
         Err(test_email_err())
+    }
+}
+
+#[derive(Clone, Default)]
+struct RecordingEmailContentReader {
+    calls: Arc<Mutex<Vec<Vec<graphql_email::EmailContentKey>>>>,
+}
+
+impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
+    async fn get_email_content(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        keys: Vec<graphql_email::EmailContentKey>,
+    ) -> HashMap<graphql_email::EmailContentKey, graphql_email::EmailContentLoad> {
+        self.calls
+            .lock()
+            .expect("email content calls lock")
+            .push(keys.clone());
+        keys.into_iter()
+            .map(|key| {
+                let thread_id = key.thread_id;
+                (
+                    key,
+                    graphql_email::EmailContentLoad::Found(vec![parsed_message(thread_id)]),
+                )
+            })
+            .collect()
+    }
+}
+
+fn parsed_message(thread_id: Uuid) -> ParsedMessage {
+    ParsedMessage {
+        db_id: Uuid::from_u128(100),
+        link_id: Uuid::from_u128(200),
+        thread_db_id: thread_id,
+        subject: Some("Direct thread subject".to_owned()),
+        snippet: Some("Direct thread snippet".to_owned()),
+        from: None,
+        to: Vec::new(),
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: Vec::new(),
+        body_parsed: Some("Direct thread body".to_owned()),
+        body_text: Some("Direct thread body".to_owned()),
+        body_html_sanitized: None,
+        body_macro: None,
+        body_replyless: Some("Direct thread body".to_owned()),
+        internal_date_ts: Some(Default::default()),
+        sent_at: Some(Default::default()),
+        is_read: true,
+        is_starred: false,
+        is_sent: false,
+        is_draft: false,
+        has_attachments: false,
+        created_at: Default::default(),
+        updated_at: Default::default(),
     }
 }
 
@@ -510,15 +635,23 @@ struct TestHarness {
         TestState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
-        NoOpSoupEmailContentEdgeReader,
+        RecordingEmailContentReader,
         graphql_favorite::NoOpEntityFavoriteEdgeReader,
         graphql_permission::NoOpEntityPermissionEdgeReader,
     >,
     state: TestState,
+    soup_service: CountingSoupService,
+    email_service: CountingEmailService,
+    email_content_reader: RecordingEmailContentReader,
     authorization_calls: Arc<AtomicUsize>,
     inbox_calls: Arc<AtomicUsize>,
+    user_label_calls: Arc<AtomicUsize>,
+    user_link_calls: Arc<AtomicUsize>,
+    user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     team_calls: Arc<AtomicUsize>,
     raw_soup_calls: Arc<AtomicUsize>,
     raw_soup_team_receipts: Arc<AtomicUsize>,
@@ -532,8 +665,12 @@ fn harness() -> TestHarness {
     let entity_access = CountingEntityAccessService::default();
     let authorization = FakeAuthorizationService::default();
     let soup = CountingSoupService::default();
+    let email_content_reader = RecordingEmailContentReader::default();
     let authorization_calls = Arc::clone(&authorization.authorization_calls);
     let inbox_calls = Arc::clone(&email.inbox_calls);
+    let user_label_calls = Arc::clone(&email.user_label_calls);
+    let user_link_calls = Arc::clone(&email.user_link_calls);
+    let user_catalog_identities = Arc::clone(&email.user_catalog_identities);
     let team_calls = Arc::clone(&entity_access.team_calls);
     let raw_soup_calls = Arc::clone(&soup.raw_calls);
     let raw_soup_team_receipts = Arc::clone(&soup.raw_team_receipts);
@@ -541,14 +678,20 @@ fn harness() -> TestHarness {
     let frecency_soup_team_receipts = Arc::clone(&soup.frecency_team_receipts);
     let grouped_soup_calls = Arc::clone(&soup.grouped_calls);
     TestHarness {
-        schema: build_schema_with_service(soup),
+        schema: build_schema_with_service(soup.clone()),
         state: TestState {
             authorization: MacroAuthorizationState::new(Arc::new(authorization)),
-            email: EmailRouterState::new(email),
+            email: EmailRouterState::new(email.clone()),
             entity_access: Arc::new(entity_access),
         },
+        soup_service: soup,
+        email_service: email,
+        email_content_reader,
         authorization_calls,
         inbox_calls,
+        user_label_calls,
+        user_link_calls,
+        user_catalog_identities,
         team_calls,
         raw_soup_calls,
         raw_soup_team_receipts,
@@ -589,9 +732,18 @@ impl TestHarness {
         query: &str,
         parts: axum::http::request::Parts,
     ) -> async_graphql::Response {
+        let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
         let request = async_graphql::Request::new(query)
             .data(GraphqlRequestParts::new(parts))
-            .data(self.state.clone());
+            .data(self.state.clone())
+            .data(graphql_soup::soup_item_loader(
+                self.soup_service.clone(),
+                Arc::new(self.email_service.clone()),
+            ))
+            .data(graphql_email::email_content_loader(
+                user_id,
+                self.email_content_reader.clone(),
+            ));
         self.schema.execute(request).await
     }
 }
@@ -621,6 +773,8 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         SchemaOnlyState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
         NoOpEntityPropertyReader,
         NoOpSoupEmailContentEdgeReader,
@@ -690,10 +844,62 @@ async fn user_id_resolves_without_touching_services() {
     );
     assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.user_label_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.user_link_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        harness
+            .user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock")
+            .is_empty()
+    );
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn email_catalog_fields_use_the_authenticated_user_and_remain_direct_user_fields() {
+    let harness = harness();
+
+    let response = harness
+        .execute(
+            r#"{
+                user {
+                    emailLabels { __typename id linkId providerLabelId name }
+                    emailLinks {
+                        id macroId emailAddress photoUrl provider isSyncActive syncStatus
+                        needsReauth settings { signatureOnRepliesForwards signature }
+                        isPrimary createdAt updatedAt
+                    }
+                }
+            }"#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let label = &data["user"]["emailLabels"][0];
+    assert_eq!(label["__typename"], "GraphqlSoupEmailLabel");
+    assert_eq!(label["linkId"], Uuid::from_u128(502).to_string());
+    let link = &data["user"]["emailLinks"][0];
+    assert_eq!(link["emailAddress"], "inbox@example.com");
+    assert_eq!(link["syncStatus"], "UP_TO_DATE");
+    assert_eq!(link["settings"]["signature"], "<p>Regards</p>");
+    assert_eq!(harness.user_label_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.user_link_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        *harness
+            .user_catalog_identities
+            .lock()
+            .expect("user catalog identities lock"),
+        vec![
+            MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+            MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        ]
+    );
 }
 
 #[tokio::test]
@@ -865,4 +1071,119 @@ async fn expired_credentials_return_the_safe_authorization_error() {
     assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+}
+
+fn soup_email_thread(thread_id: Uuid) -> SoupItem<()> {
+    SoupItem::EmailThread(SoupEnrichedEmailThreadPreview {
+        thread: SoupEmailThreadPreview {
+            id: thread_id,
+            provider_id: Some("provider-thread".to_owned()),
+            owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+            inbox_visible: true,
+            is_read: false,
+            is_draft: false,
+            is_important: true,
+            name: Some("Direct thread".to_owned()),
+            snippet: Some("Direct thread snippet".to_owned()),
+            sender_email: Some("sender@example.com".to_owned()),
+            sender_name: Some("Sender".to_owned()),
+            sender_photo_url: None,
+            sort_ts: Default::default(),
+            created_at: Default::default(),
+            updated_at: Default::default(),
+            viewed_at: None,
+            project_id: None,
+        },
+        attachments: Vec::new(),
+        participants: vec![SoupContact {
+            id: Uuid::from_u128(300),
+            link_id: Uuid::from_u128(200),
+            name: Some("Sender".to_owned()),
+            email_address: Some("sender@example.com".to_owned()),
+            sfs_photo_url: None,
+        }],
+        labels: Vec::new(),
+        extra: (),
+    })
+}
+
+#[tokio::test]
+async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagination() {
+    let harness = harness();
+    let thread_id = Uuid::from_u128(42);
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread(thread_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ __typename id linkId inboxVisible isRead messages(offset: 7, limit: 20) {{ id threadId bodyParsed }} }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let thread = &data["user"]["emailThread"];
+    assert_eq!(thread["__typename"], "GraphqlSoupEmailThread");
+    assert_eq!(thread["id"], thread_id.to_string());
+    assert_eq!(thread["linkId"], Uuid::from_u128(200).to_string());
+    assert_eq!(thread["inboxVisible"], true);
+    assert_eq!(thread["isRead"], false);
+    assert_eq!(thread["messages"][0]["threadId"], thread_id.to_string());
+    assert_eq!(thread["messages"][0]["bodyParsed"], "Direct thread body");
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *harness
+            .email_content_reader
+            .calls
+            .lock()
+            .expect("email content calls lock"),
+        vec![vec![graphql_email::EmailContentKey::page(thread_id, 7, 20)]]
+    );
+}
+
+#[tokio::test]
+async fn email_thread_returns_null_when_soup_cannot_load_the_thread() {
+    let harness = harness();
+    let thread_id = Uuid::from_u128(43);
+    harness.soup_service.set_raw_response(Vec::new());
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ id messages {{ id }} }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert!(data["user"]["emailThread"].is_null());
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
+    assert!(
+        harness
+            .email_content_reader
+            .calls
+            .lock()
+            .expect("email content calls lock")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn email_thread_rejects_an_invalid_thread_id_before_loading_soup() {
+    let harness = harness();
+
+    let response = harness
+        .execute(r#"{ user { emailThread(input: {threadId: "not-a-uuid"}) { id } } }"#)
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert!(
+        response.errors[0]
+            .message
+            .starts_with("invalid threadId UUID")
+    );
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
 }

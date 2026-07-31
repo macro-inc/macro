@@ -18,6 +18,7 @@ import { BotDetailActions } from './BotDetailActions';
 import { BotFormSection } from './BotFormSection';
 import { BotProfileFields } from './BotProfileFields';
 import { BotWebhooksSection } from './BotWebhooksSection';
+import { sameChannelSelection } from './botChannelOptions';
 import {
   type BotFormErrors,
   botToFormValues,
@@ -53,14 +54,23 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
     on(
       [() => botQuery.data, () => botChannelsQuery.data],
       ([bot, channels]) => {
-        if (initialized() || !bot || channels === undefined) return;
-        const nextForm = botToFormValues(bot);
-        const nextChannelIds = channels.map((channel) => channel.channel_id);
-        setForm(nextForm);
-        setInitialForm(nextForm);
-        setChannelIds(nextChannelIds);
-        setInitialChannelIds(nextChannelIds);
-        setInitialized(true);
+        if (!bot || channels === undefined) return;
+        const serverChannelIds = channels.map((channel) => channel.channel_id);
+        if (!initialized()) {
+          const nextForm = botToFormValues(bot);
+          setForm(nextForm);
+          setInitialForm(nextForm);
+          setChannelIds(serverChannelIds);
+          setInitialChannelIds(serverChannelIds);
+          setInitialized(true);
+          return;
+        }
+        // Later refetches (e.g. the bot joined a channel elsewhere) refresh
+        // the selection, but never clobber unsaved edits.
+        if (!sameChannelSelection(channelIds(), initialChannelIds())) return;
+        if (sameChannelSelection(serverChannelIds, channelIds())) return;
+        setChannelIds(serverChannelIds);
+        setInitialChannelIds(serverChannelIds);
       }
     )
   );
@@ -82,12 +92,8 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
       form.handle === original.handle &&
       form.description === original.description &&
       form.avatarUrl === original.avatarUrl;
-    const originalChannels = [...initialChannelIds()].sort();
-    const nextChannels = [...channelIds()].sort();
     return (
-      !sameForm ||
-      originalChannels.length !== nextChannels.length ||
-      originalChannels.some((id, index) => id !== nextChannels[index])
+      !sameForm || !sameChannelSelection(initialChannelIds(), channelIds())
     );
   });
   const pending = () =>
@@ -245,6 +251,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                 >
                   <ChannelMultiSelect
                     channelIds={channelIds()}
+                    assignedChannels={assignedChannels()}
                     onChange={setChannelIds}
                     disabled={saving()}
                   />

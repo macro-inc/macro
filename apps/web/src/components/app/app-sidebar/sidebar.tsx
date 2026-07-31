@@ -1,7 +1,7 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
-import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
+import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
@@ -145,8 +145,10 @@ type TryItemId = 'connect' | 'invite' | 'mobile';
 
 type TryItemVisibility = Record<TryItemId, boolean>;
 
-const COMMUNICATIONS_LINK_IDS = ['mail', 'channels', 'calls'] as const;
 const WORKSPACE_LINK_IDS = [
+  'mail',
+  'channels',
+  'calls',
   'documents',
   'tasks',
   'agents',
@@ -1259,9 +1261,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
       .filter((link): link is SidebarItem => link !== undefined)
       .map(toSectionItem);
 
-  const communicationsItems = createMemo(() =>
-    sectionItemsFor(COMMUNICATIONS_LINK_IDS)
-  );
   const workspaceItems = createMemo(() => sectionItemsFor(WORKSPACE_LINK_IDS));
 
   const toggleSectionVisibility = (id: SidebarSectionLinkId) => {
@@ -1351,7 +1350,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   createEffect(() => {
     middleScrollSize.width;
     middleScrollSize.height;
-    communicationsItems().length;
     workspaceItems().length;
     tryItems().length;
     props.overlayOpen;
@@ -1444,39 +1442,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onScroll={updateMiddleScrollShadows}
           class="size-full overflow-y-auto flex flex-col gap-3"
         >
-          <Show
-            when={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS).length > 0}
-          >
-            <CollapsibleSidebarSection
-              label="Conversations"
-              items={communicationsItems()}
-              headerMenu={() => (
-                <SidebarSectionMenu
-                  label="Conversations"
-                  options={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS)}
-                  onToggle={toggleSectionVisibility}
-                  onOpenChange={handleWorkspaceContextMenuOpenChange}
-                />
-              )}
-              onOpenChange={scheduleMiddleScrollUpdate}
-            />
-          </Show>
-
-          <Show when={sectionMenuOptionsFor(WORKSPACE_LINK_IDS).length > 0}>
-            <CollapsibleSidebarSection
-              label="Workspace"
-              items={workspaceItems()}
-              headerMenu={() => (
-                <SidebarSectionMenu
-                  label="Workspace"
-                  options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
-                  onToggle={toggleSectionVisibility}
-                  onOpenChange={handleWorkspaceContextMenuOpenChange}
-                />
-              )}
-              onOpenChange={scheduleMiddleScrollUpdate}
-            />
-          </Show>
+          <CollapsibleSidebarSection
+            label="Workspace"
+            persistKey="workspace"
+            items={workspaceItems()}
+            headerMenu={() => (
+              <SidebarSectionMenu
+                label="Workspace"
+                options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
+                onToggle={toggleSectionVisibility}
+                onOpenChange={handleWorkspaceContextMenuOpenChange}
+              />
+            )}
+            onOpenChange={scheduleMiddleScrollUpdate}
+          />
 
           <Suspense>
             <FavoritesSection
@@ -1485,15 +1464,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           </Suspense>
 
-          <ChannelsUnreadWidget
-            sidebarState={sidebarDisplayState()}
-            onSectionOpenChange={scheduleMiddleScrollUpdate}
-            onDropdownOpenChange={handleOverlayDropdownOpenChange}
-          />
-
           <Show when={tryItems().length > 0}>
             <CollapsibleSidebarSection
               label="Try"
+              persistKey="try"
               items={tryItems()}
               onOpenChange={scheduleMiddleScrollUpdate}
             />
@@ -1525,6 +1499,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <InCallPanel isSlim={() => false} />
           </div>
         </Show>
+        <Suspense>
+          <ChannelsRecentWidget
+            sidebarState={sidebarDisplayState()}
+            onSectionOpenChange={scheduleMiddleScrollUpdate}
+            onDropdownOpenChange={handleOverlayDropdownOpenChange}
+          />
+        </Suspense>
         <Show keyed when={isExpandedView() ? firstTeamInvite() : undefined}>
           {(invite) => <TeamInviteSidebarPromo invite={invite} />}
         </Show>

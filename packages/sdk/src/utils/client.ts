@@ -16,6 +16,7 @@ import {
   WEB_APP_URLS,
 } from '../config';
 import { MacroEvents } from '../events/receiver';
+import { resolveLocalPortmap } from '../local-portmap';
 
 export class MacroClient {
   readonly auth: AuthSdk;
@@ -35,10 +36,16 @@ export class MacroClient {
 
   constructor(opts: MacroOpts) {
     const env: Env = opts.env ?? 'dev';
-    const hosts = { ...HOSTS[env], ...opts.hosts };
+    const localPortmap =
+      env === 'local' ? resolveLocalPortmap() : undefined;
+    const hosts = { ...HOSTS[env], ...localPortmap?.hosts, ...opts.hosts };
     const envWebUrl =
       typeof process !== 'undefined' ? process.env.MACRO_WEB_URL : undefined;
-    this.webAppUrl = opts.webAppUrl ?? envWebUrl ?? WEB_APP_URLS[env];
+    this.webAppUrl =
+      opts.webAppUrl ??
+      envWebUrl ??
+      localPortmap?.webAppUrl ??
+      WEB_APP_URLS[env];
     this.authConfig = resolveAuth(opts);
     this.requestedAs = opts.requestedAs;
     if (this.requestedAs && this.authConfig.type !== 'bot') {

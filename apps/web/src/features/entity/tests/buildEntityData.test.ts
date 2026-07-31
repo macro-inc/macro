@@ -196,23 +196,23 @@ describe('buildEntityData', () => {
     ] satisfies Array<{
       status: CallStatus;
       attended: boolean;
-    }>)('builds a $status call with derived attendance', ({
-      status,
-      attended,
-    }) => {
-      expect(
-        buildEntityData({
-          ...base,
-          blockName: 'call',
-          channelId: 'c-1',
+    }>)(
+      'builds a $status call with derived attendance',
+      ({ status, attended }) => {
+        expect(
+          buildEntityData({
+            ...base,
+            blockName: 'call',
+            channelId: 'c-1',
+            status,
+          })
+        ).toMatchObject({
+          type: 'call',
           status,
-        })
-      ).toMatchObject({
-        type: 'call',
-        status,
-        attended,
-      });
-    });
+          attended,
+        });
+      }
+    );
   });
 
   describe('csv alias', () => {

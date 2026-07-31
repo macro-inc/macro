@@ -1,12 +1,20 @@
-use std::sync::Mutex;
+use std::{
+    collections::VecDeque,
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
+use models_properties::EntityType;
 use sqs_client::search::{SearchQueueMessage, call::CallRecordMessage};
 use tokio_util::sync::CancellationToken;
 
 use super::*;
 use crate::domain::jobs::JobProgress;
-use crate::domain::models::{CallBackfillRequest, SourcePage};
-use crate::domain::ports::SearchEventPublisher;
+use crate::domain::models::{CallBackfillRequest, PropertySourcePage, SourcePage};
+use crate::domain::ports::{PropertyBackfillIndexer, SearchEventPublisher};
 
 /// Programmable fake fetch closure. `drain_source` takes any
 /// `Fn(usize) -> Future<SourcePage>`, so the test fakes don't need to
@@ -477,4 +485,289 @@ async fn cancel_between_pages_stops_drain_after_current_page() {
     // First page fetched + published; cancellation prevents the second fetch.
     assert_eq!(source.observed_offsets(), vec![0]);
     assert_eq!(*publisher.seen.lock().unwrap(), vec![5]);
+}
+
+struct FakePropertySource {
+    pages: Mutex<VecDeque<PropertySourcePage>>,
+    offsets: Mutex<Vec<usize>>,
+    entity_type: EntityType,
+}
+
+impl FakePropertySource {
+    fn new(entity_type: EntityType, pages: Vec<PropertySourcePage>) -> Self {
+        Self {
+            pages: Mutex::new(pages.into_iter().collect()),
+            offsets: Mutex::new(Vec::new()),
+            entity_type,
+        }
+    }
+
+    async fn fetch_page(&self, offset: usize) -> Result<PropertySourcePage, BackfillError> {
+        self.offsets.lock().unwrap().push(offset);
+        Ok(self
+            .pages
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or_else(|| PropertySourcePage::empty(self.entity_type)))
+    }
+
+    fn observed_offsets(&self) -> Vec<usize> {
+        self.offsets.lock().unwrap().clone()
+    }
+}
+
+#[derive(Default)]
+struct RecordingPropertyIndexer {
+    entities: Mutex<Vec<(String, EntityType)>>,
+}
+
+impl RecordingPropertyIndexer {
+    fn indexed_count(&self) -> usize {
+        self.entities.lock().unwrap().len()
+    }
+
+    fn indexed_entities(&self) -> Vec<(String, EntityType)> {
+        self.entities.lock().unwrap().clone()
+    }
+}
+
+impl PropertyBackfillIndexer for RecordingPropertyIndexer {
+    async fn reindex(&self, entity_id: &str, entity_type: EntityType) -> Result<(), BackfillError> {
+        self.entities
+            .lock()
+            .unwrap()
+            .push((entity_id.to_owned(), entity_type));
+        Ok(())
+    }
+}
+
+fn property_page(
+    entity_type: EntityType,
+    entity_ids: impl IntoIterator<Item = impl Into<String>>,
+    rows_consumed: usize,
+) -> PropertySourcePage {
+    PropertySourcePage {
+        entity_ids: entity_ids.into_iter().map(Into::into).collect(),
+        entity_type,
+        rows_consumed,
+    }
+}
+
+#[tokio::test]
+async fn property_backfill_drains_multiple_pages() {
+    let entity_type = EntityType::Document;
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![
+            property_page(entity_type, ["one", "two"], 2),
+            property_page(entity_type, ["three"], 1),
+        ],
+    );
+    let indexer = RecordingPropertyIndexer::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 3);
+    assert_eq!(
+        indexer.indexed_entities(),
+        vec![
+            ("one".to_owned(), EntityType::Document),
+            ("two".to_owned(), EntityType::Document),
+            ("three".to_owned(), EntityType::Document),
+        ]
+    );
+    assert_eq!(source.observed_offsets(), vec![0, 2, 3]);
+}
+
+#[tokio::test]
+async fn property_backfill_advances_offset_by_rows_consumed() {
+    let entity_type = EntityType::Thread;
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![
+            property_page(entity_type, ["one", "two"], 100),
+            property_page(entity_type, ["three"], 40),
+        ],
+    );
+    let indexer = RecordingPropertyIndexer::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 140);
+    assert_eq!(indexer.indexed_count(), 3);
+    assert_eq!(source.observed_offsets(), vec![0, 100, 140]);
+}
+
+#[tokio::test]
+async fn property_backfill_updates_progress_after_successful_page() {
+    let entity_type = EntityType::Project;
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![property_page(entity_type, ["one", "two"], 7)],
+    );
+    let indexer = RecordingPropertyIndexer::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 7);
+    assert_eq!(progress.local_count(), 7);
+}
+
+#[tokio::test]
+async fn property_backfill_empty_page_indexes_nothing() {
+    let entity_type = EntityType::Task;
+    let source = FakePropertySource::new(entity_type, Vec::new());
+    let indexer = RecordingPropertyIndexer::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 0);
+    assert_eq!(progress.local_count(), 0);
+    assert_eq!(indexer.indexed_count(), 0);
+    assert_eq!(source.observed_offsets(), vec![0]);
+}
+
+struct CancellingPropertyIndexer {
+    cancel: CancellationToken,
+    indexed: AtomicUsize,
+}
+
+impl PropertyBackfillIndexer for CancellingPropertyIndexer {
+    async fn reindex(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(), BackfillError> {
+        self.indexed.fetch_add(1, Ordering::Relaxed);
+        self.cancel.cancel();
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn property_backfill_cancellation_stops_between_pages() {
+    let entity_type = EntityType::Chat;
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![
+            property_page(entity_type, ["indexed"], 1),
+            property_page(entity_type, ["not-indexed"], 1),
+        ],
+    );
+    let (progress, cancel) = detached();
+    let indexer = CancellingPropertyIndexer {
+        cancel: cancel.clone(),
+        indexed: AtomicUsize::new(0),
+    };
+
+    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 1);
+    assert_eq!(progress.local_count(), 1);
+    assert_eq!(indexer.indexed.load(Ordering::Relaxed), 1);
+    assert_eq!(source.observed_offsets(), vec![0]);
+}
+
+struct FailingPropertyIndexer;
+
+impl PropertyBackfillIndexer for FailingPropertyIndexer {
+    async fn reindex(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(), BackfillError> {
+        Err(BackfillError::Reindex(anyhow::anyhow!("reindex failed")))
+    }
+}
+
+#[tokio::test]
+async fn property_backfill_reindex_failure_propagates_without_progress() {
+    let entity_type = EntityType::Channel;
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![property_page(entity_type, ["failure"], 1)],
+    );
+    let indexer = FailingPropertyIndexer;
+    let (progress, cancel) = detached();
+
+    let error = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, BackfillError::Reindex(_)));
+    assert_eq!(progress.local_count(), 0);
+    assert_eq!(source.observed_offsets(), vec![0]);
+}
+
+#[derive(Default)]
+struct ConcurrencyTrackingPropertyIndexer {
+    active: AtomicUsize,
+    maximum_active: AtomicUsize,
+    completed: AtomicUsize,
+}
+
+impl PropertyBackfillIndexer for ConcurrencyTrackingPropertyIndexer {
+    async fn reindex(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(), BackfillError> {
+        let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+        self.maximum_active.fetch_max(active, Ordering::SeqCst);
+
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        self.active.fetch_sub(1, Ordering::SeqCst);
+        self.completed.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn property_backfill_limits_reindexes_to_twenty_simultaneous_operations() {
+    let entity_type = EntityType::Document;
+    let entity_ids = (0..45).map(|index| format!("entity-{index}"));
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![property_page(entity_type, entity_ids, 45)],
+    );
+    let indexer = ConcurrencyTrackingPropertyIndexer::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
+        source.fetch_page(offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 45);
+    assert_eq!(indexer.completed.load(Ordering::SeqCst), 45);
+    assert_eq!(indexer.maximum_active.load(Ordering::SeqCst), 20);
 }

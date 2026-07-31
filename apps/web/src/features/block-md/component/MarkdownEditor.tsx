@@ -455,6 +455,13 @@ export function MarkdownEditor(props: {
     createSignal<PersistentLocation>();
   const [locationReady, setLocationReady] = createSignal(false);
 
+  createEffect(() => {
+    setMdStore({ locationReady: locationReady() });
+  });
+  onCleanup(() => {
+    setMdStore({ locationReady: undefined });
+  });
+
   const { nodeId, location, commentId } = useUrlParams(URL_PARAMS);
   createEffect(on(nodeId, (id) => setHighlightNodeId(id ?? undefined)));
   createEffect(

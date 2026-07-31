@@ -49,6 +49,7 @@ fn inner_start() {
                 performance_layer()
                     .with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default()),
             )
+            .with(worker_rs_otel::OtelLayer::new("sync-service"))
             .init();
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -64,7 +65,21 @@ fn start() {
 }
 
 #[event(fetch)]
-async fn fetch(req: worker::Request, env: Env, _ctx: Context) -> Result<worker::Response> {
+async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::Response> {
     use crate::cf_worker::router;
-    router(env, req).await
+    use tracing::Instrument;
+
+    let traceparent = worker_rs_otel::traceparent_from_request(&req);
+    let (remote_id, remote_parent) = worker_rs_otel::remote_fields(traceparent.as_ref());
+    let method = req.method().to_string();
+    let path = req.path();
+    let span = tracing::info_span!(
+        "request",
+        http.method = %method,
+        http.path = %path,
+        trace.remote_id = %remote_id,
+        trace.remote_parent = %remote_parent,
+    );
+
+    worker_rs_otel::scope(&env, &ctx, router(env.clone(), req).instrument(span)).await
 }

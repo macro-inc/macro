@@ -818,7 +818,7 @@ version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
 dependencies = [
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "event-listener-strategy",
  "pin-project-lite",
 ]
@@ -875,7 +875,7 @@ dependencies = [
  "async-task",
  "blocking",
  "cfg-if",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "futures-lite 2.6.1",
  "rustix 1.1.4",
 ]
@@ -2443,7 +2443,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2778,7 +2778,6 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
- "sqs_client",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -3026,6 +3025,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_mutation",
+ "graphql_channel",
  "graphql_common",
  "graphql_email",
  "graphql_entity_mutation",
@@ -3237,6 +3237,18 @@ checksum = "be8aed40e4edbf4d3b4431ab260b63fdc40f5780a4766824329ea0f1eefe3c0f"
 dependencies = [
  "log",
  "web-sys",
+]
+
+[[package]]
+name = "const-hex"
+version = "1.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33e2a781ebdf4467d1428dc4593067825fb646f6871475098d8577421af73558"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "proptest",
+ "serde_core",
 ]
 
 [[package]]
@@ -3491,7 +3503,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e75b2483e97a5a7da73ac68a05b629f9c53cff58d8ed1c77866079e18b00dba5"
 dependencies = [
  "digest 0.10.7",
- "spin 0.10.0",
+ "spin 0.10.1",
 ]
 
 [[package]]
@@ -3983,7 +3995,9 @@ dependencies = [
  "aws-sdk-sqs",
  "aws-smithy-types",
  "aws_lambda_events",
+ "chat",
  "chrono",
+ "documents",
  "futures",
  "lambda_runtime",
  "macro_aws_config",
@@ -3991,9 +4005,12 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_queues",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "projects",
  "serde",
  "serde_json",
  "sqlx",
@@ -4892,7 +4909,6 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
- "email_db_client",
  "email_utils",
  "entity_access",
  "entity_access_management",
@@ -5424,7 +5440,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5446,11 +5462,10 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "event-listener"
-version = "5.4.1"
+version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
+checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
- "concurrent-queue",
  "parking",
  "pin-project-lite",
 ]
@@ -5461,7 +5476,7 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "pin-project-lite",
 ]
 
@@ -5646,7 +5661,7 @@ checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
  "futures-core",
  "futures-sink",
- "spin 0.9.8",
+ "spin 0.9.9",
 ]
 
 [[package]]
@@ -6186,6 +6201,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_channel"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "channels",
+ "chrono",
+ "entity_access",
+ "graphql_common",
+ "macro_user_id",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_common"
 version = "0.1.0"
 dependencies = [
@@ -6214,6 +6244,7 @@ dependencies = [
  "chrono",
  "email",
  "entity_access",
+ "futures",
  "macro_user_id",
  "tokio",
  "tracing",
@@ -6257,6 +6288,7 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "chrono",
  "graphql_common",
  "macro_user_id",
  "model-entity",
@@ -6264,6 +6296,7 @@ dependencies = [
  "rootcause",
  "serde_json",
  "tokio",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -6316,6 +6349,7 @@ dependencies = [
  "filter_ast",
  "futures",
  "graphql_common",
+ "graphql_email",
  "graphql_permission",
  "item_filters",
  "macro_authorization",
@@ -6611,7 +6645,7 @@ dependencies = [
  "hash32 0.2.1",
  "rustc_version",
  "serde",
- "spin 0.9.8",
+ "spin 0.9.9",
  "stable_deref_trait",
 ]
 
@@ -7595,7 +7629,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7765,13 +7799,12 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.98"
+version = "0.3.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67df7112613f8bfd9150013a0314e196f4800d3201ae742489d999db2f979f08"
+checksum = "53b44bfcdb3f8d5837a46dae1ca9660a837176eee74a28b229bc626816589102"
 dependencies = [
  "cfg-if",
  "futures-util",
- "once_cell",
  "wasm-bindgen",
 ]
 
@@ -7930,7 +7963,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
- "spin 0.9.8",
+ "spin 0.9.9",
 ]
 
 [[package]]
@@ -8787,10 +8820,15 @@ name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
  "http 1.4.0",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry_sdk",
  "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -9648,7 +9686,7 @@ dependencies = [
  "httparse",
  "memchr",
  "mime",
- "spin 0.9.8",
+ "spin 0.9.9",
  "version_check",
 ]
 
@@ -10008,7 +10046,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10513,9 +10551,13 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7175df06de5eaee9909d4805a3d07e28bb752c34cab57fa9cff549da596b30f"
 dependencies = [
+ "base64 0.22.1",
+ "const-hex",
  "opentelemetry",
  "opentelemetry_sdk",
  "prost 0.14.3",
+ "serde",
+ "serde_json",
  "tonic",
  "tonic-prost",
 ]
@@ -11375,11 +11417,13 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "aws-sdk-s3",
+ "aws-sdk-sqs",
  "axum",
  "axum-extra",
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "documents",
  "dotenvy",
  "dynamodb_client",
  "entity_access",
@@ -11488,6 +11532,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "proptest"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744"
+dependencies = [
+ "bitflags 2.11.1",
+ "num-traits",
+ "rand 0.9.4",
+ "rand_chacha 0.9.0",
+ "rand_xorshift",
+ "regex-syntax",
+ "unarray",
+]
+
+[[package]]
 name = "prost"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11515,7 +11574,7 @@ checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
  "heck 0.5.0",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "log",
  "multimap",
  "once_cell",
@@ -11535,7 +11594,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -11794,6 +11853,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
+dependencies = [
+ "rand_core 0.9.5",
 ]
 
 [[package]]
@@ -12491,7 +12559,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12562,7 +12630,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12822,9 +12890,12 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "call",
+ "channels",
+ "chat",
  "chrono",
  "comms_db_client",
  "document_sub_type",
+ "documents",
  "doppler-config",
  "email_db_client",
  "ensure_exists",
@@ -12858,6 +12929,7 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
+ "projects",
  "properties",
  "rdkafka",
  "rootcause",
@@ -12951,17 +13023,13 @@ name = "search_upload_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-sdk-sqs",
  "aws_lambda_events",
  "document_storage_service_client",
  "lambda_runtime",
- "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
- "macro_queues",
  "macro_service_urls",
  "s3_key",
- "sqs_client",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -13033,6 +13101,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "base64 0.22.1",
  "channels",
  "chrono",
  "clap",
@@ -13042,6 +13111,7 @@ dependencies = [
  "entity_access_db_utils",
  "fusionauth",
  "futures",
+ "jsonwebtoken 10.3.0",
  "lexical_client",
  "macro_aws_config",
  "macro_db_client",
@@ -13804,18 +13874,18 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.9.8"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
 dependencies = [
  "lock_api",
 ]
 
 [[package]]
 name = "spin"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
 
 [[package]]
 name = "spki"
@@ -13852,7 +13922,7 @@ dependencies = [
  "crc",
  "crossbeam-queue",
  "either",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "futures-core",
  "futures-intrusive",
  "futures-io",
@@ -14339,6 +14409,7 @@ name = "sync_service"
 version = "0.1.0"
 dependencies = [
  "bebop",
+ "getrandom 0.3.4",
  "loro",
  "macro_sync_service_jwt",
  "matchit 0.8.4",
@@ -14353,6 +14424,7 @@ dependencies = [
  "wasm-bindgen",
  "web-time",
  "worker",
+ "worker-rs-otel",
 ]
 
 [[package]]
@@ -14572,7 +14644,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -15296,6 +15368,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
+name = "unarray"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
+
+[[package]]
 name = "unfurl"
 version = "0.1.0"
 dependencies = [
@@ -15779,9 +15857,9 @@ checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.121"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ace1d07c165b0864824eee619580c4689389afa9dc9ed3a4c75040d82e6790"
+checksum = "4b067c0c11094aef6b7a801c1e34a26affafdf3d051dba08456b868789aaf9a4"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -15792,9 +15870,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.71"
+version = "0.4.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96492d0d3ffba25305a7dc88720d250b1401d7edca02cc3bcd50633b424673b8"
+checksum = "c62df1340f32221cb9c54d6a27b030e3dba64361d4a95bed55f9aacb44da291d"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -15802,9 +15880,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.121"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e68e6f4afd367a562002c05637acb8578ff2dea1943df76afb9e83d177c8578"
+checksum = "167ce5e579f6bcf889c4f7175a8a5a585de84e8ff93976ce393efa5f2837aab1"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -15812,9 +15890,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.121"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d95a9ec35c64b2a7cb35d3fead40c4238d0940c86d107136999567a4703259f2"
+checksum = "f3997c7839262f4ef12cf90b818d6340c18e80f263f1a94bf157d0ec4420380e"
 dependencies = [
  "bumpalo",
  "proc-macro2",
@@ -15825,18 +15903,18 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.121"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4e0100b01e9f0d03189a92b96772a1fb998639d981193d7dbab487302513441"
+checksum = "dc1b4cb0cc549fcf58d7dfc081778139b3d283a081644e833e84682ad71cea24"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "wasm-bindgen-test"
-version = "0.3.71"
+version = "0.3.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af5ec93229ad9ccd0a545a516dec76dc276613f278f6a91aa6b463d5b33d42d0"
+checksum = "2a0d555ca874445df8d314f94f5c948a4e74e5418f332c89f660a3d8310a96f4"
 dependencies = [
  "async-trait",
  "cast",
@@ -15856,9 +15934,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-test-macro"
-version = "0.3.71"
+version = "0.3.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c81b9fef827e575e0e54431736d1baa0d700315d8c62cfef1f61fa3aad0cbeb"
+checksum = "94eb68555b95bcea5e8cf4abe280b529049479fa995bfc23734af96a6aedc120"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -15867,9 +15945,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-test-shared"
-version = "0.2.121"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f4d8ae7ad5440360e9799dfd42857d126454a88441ddf72d288ef83fa47f527"
+checksum = "c31d56021e873866c968588ed85ccdf56db5c426e44afdb4618c39895104b920"
 
 [[package]]
 name = "wasm-encoder"
@@ -15920,9 +15998,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.98"
+version = "0.3.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b572dff8bcf38bad0fa19729c89bb5748b2b9b1d8be70cf90df697e3a8f32aa"
+checksum = "8622dcb61c0bcc9fffa6938bed81210af2da9a7e4a1a834b2e37a59b6dfb6141"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -16082,7 +16160,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16553,6 +16631,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "worker-rs-otel"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.3.4",
+ "http 1.4.0",
+ "opentelemetry",
+ "opentelemetry-proto",
+ "opentelemetry_sdk",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "web-time",
+ "worker",
+]
+
+[[package]]
 name = "worker-sys"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16610,7 +16705,6 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
- "concurrent-queue",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
@@ -16622,7 +16716,7 @@ dependencies = [
  "either",
  "elliptic-curve",
  "errno",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "fastrand 2.4.1",
  "flate2",
  "foldhash 0.2.0",
@@ -16650,7 +16744,6 @@ dependencies = [
  "idna",
  "indexmap 2.14.0",
  "ipnet",
- "itertools 0.10.5",
  "lazy_static",
  "libc",
  "linux-raw-sys 0.12.1",
@@ -16663,6 +16756,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry_sdk",
  "percent-encoding",
  "phf 0.13.1",
@@ -16700,7 +16794,7 @@ dependencies = [
  "simd-adler32",
  "slab",
  "smallvec",
- "spin 0.9.8",
+ "spin 0.9.9",
  "sqlx-core",
  "sqlx-postgres",
  "stable_deref_trait",
@@ -16718,6 +16812,8 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-core",
+ "tracing-log",
+ "tracing-subscriber",
  "triomphe",
  "tungstenite 0.28.0",
  "typenum",

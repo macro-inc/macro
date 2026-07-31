@@ -8,32 +8,29 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{gen_compose, identity, kickstart, stage::Stage};
 
-/// The local populate-JWT lambda body, inlined into `kickstart.json`.
-///
-/// LOCAL-ONLY variant of the production populate-JWT lambda. Production enriches
-/// the JWT by calling authentication-service over HTTP, but Lambda HTTP Connect
-/// is a licensed FusionAuth feature that silently fails without a Reactor
-/// license. Local runs unlicensed, so we derive the claims instead: password
-/// users follow the `macro|<email>` convention (see `seed_cli`) and no Google
-/// IdP is configured locally, so every local user is a `macro|` user.
-/// Divergence from production: `root_macro_id` / `macro_organization_id` are
-/// never populated — org-scoped JWT flows need the licensed lambda + a license.
-///
-/// Inlined (not `include_str!`) because the canonical `.js` lives under
-/// `infra/` where a blanket `*.js` gitignore makes it untracked — a fresh
-/// checkout / CI / devcontainer wouldn't have it, breaking the build. Kept
-/// comment-free so it survives FusionAuth flattening the body to one line.
-const POPULATE_JWT_LAMBDA: &str = "function populate(jwt, user, _registration) {
-  jwt.fusion_user_id = user.id;
-  jwt.email = user.email;
-  jwt.macro_user_id = 'macro|' + user.email;
-}";
+/// The FusionAuth lambda sources, read from the tracked templates at
+/// generation time (anchored on [`xtask_paths::repo_root`], so any cwd works).
+/// `populate_jwt_local.js` is the unlicensed local variant (see its header);
+/// the reconcile lambda is the same file production deploys via Pulumi.
+const POPULATE_JWT_LAMBDA: xtask_paths::RepoFile<'static> =
+    xtask_paths::RepoFile::new("infra/stacks/fusionauth-instance/templates/populate_jwt_local.js");
+const RECONCILE_LAMBDA: xtask_paths::RepoFile<'static> = xtask_paths::RepoFile::new(
+    "infra/stacks/fusionauth-instance/templates/reconcile_secondary_idp_link.js",
+);
+
+fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
+    let path = xtask_paths::repo_root().join(file.as_str());
+    std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
+}
 
 /// Generate `kickstart.json` into the instance's kickstart dir, which the
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
 /// run_local pre-seeds no users — passwordless login auto-creates any user on
-/// demand.
-pub fn write_kickstart(instance: &Instance) -> Result<()> {
+/// demand. `google` (from the resolved run env) additionally configures the
+/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally;
+/// the generated file is gitignored, and the init-snapshot key hashes it, so
+/// adding/removing the Google client re-inits the stack automatically.
+pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp>) -> Result<()> {
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
@@ -41,7 +38,9 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
-        POPULATE_JWT_LAMBDA,
+        &read_lambda(POPULATE_JWT_LAMBDA)?,
+        &read_lambda(RECONCILE_LAMBDA)?,
+        google,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)

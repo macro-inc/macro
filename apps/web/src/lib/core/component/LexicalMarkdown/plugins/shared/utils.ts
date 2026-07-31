@@ -186,7 +186,7 @@ export function lazyRegister(
       }
     })
   );
-  onCleanup(cleanup);
+  onCleanup(() => cleanup());
   return () => cleanup();
 }
 

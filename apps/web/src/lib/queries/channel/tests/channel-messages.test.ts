@@ -40,39 +40,42 @@ afterEach(() => {
 });
 
 describe('channelMessagesQueryOptions', () => {
-  it.each([
-    'NOT_FOUND',
-    'GONE',
-  ] as const)('throws missing load-around messages without retrying them for %s', async (code) => {
-    mocks.getChannelMessages.mockResolvedValueOnce(
-      resultErr([{ code, message: 'Message unavailable' }])
-    );
+  it.each(['NOT_FOUND', 'GONE'] as const)(
+    'throws missing load-around messages without retrying them for %s',
+    async (code) => {
+      mocks.getChannelMessages.mockResolvedValueOnce(
+        resultErr([{ code, message: 'Message unavailable' }])
+      );
 
-    const options = channelMessagesQueryOptions('channel-1', 'message-missing');
+      const options = channelMessagesQueryOptions(
+        'channel-1',
+        'message-missing'
+      );
 
-    let error: unknown;
-    try {
-      await options.queryFn({ pageParam: null });
-    } catch (err) {
-      error = err;
+      let error: unknown;
+      try {
+        await options.queryFn({ pageParam: null });
+      } catch (err) {
+        error = err;
+      }
+
+      if (!(error instanceof Error)) {
+        throw new Error('Expected queryFn to throw an Error');
+      }
+
+      expect(error).toBeInstanceOf(ThrownResultError);
+      expect(isMissingChannelMessageError(error)).toBe(true);
+      expect(options.retry(0, error)).toBe(false);
+      expect(mocks.getChannelMessages).toHaveBeenCalledTimes(1);
+      expect(mocks.getChannelMessages).toHaveBeenCalledWith({
+        channel_id: 'channel-1',
+        limit: 50,
+        next_cursor: null,
+        previous_cursor: null,
+        load_around_message_id: 'message-missing',
+      });
     }
-
-    if (!(error instanceof Error)) {
-      throw new Error('Expected queryFn to throw an Error');
-    }
-
-    expect(error).toBeInstanceOf(ThrownResultError);
-    expect(isMissingChannelMessageError(error)).toBe(true);
-    expect(options.retry(0, error)).toBe(false);
-    expect(mocks.getChannelMessages).toHaveBeenCalledTimes(1);
-    expect(mocks.getChannelMessages).toHaveBeenCalledWith({
-      channel_id: 'channel-1',
-      limit: 50,
-      next_cursor: null,
-      previous_cursor: null,
-      load_around_message_id: 'message-missing',
-    });
-  });
+  );
 
   it('preserves the default single retry for other errors', () => {
     const options = channelMessagesQueryOptions('channel-1', null);

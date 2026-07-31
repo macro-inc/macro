@@ -22,11 +22,13 @@ impl From<&Env> for Secrets {
             .unwrap_or_else(|_e| panic!("Couldn't get secret secret for internal API key"))
             .to_string();
         let document_permissions_secret = env
-            .var("DOCUMENT_PERMISSIONS_SECRET")
-            .unwrap_or_else(|e| {
-                panic!("Couldn't get DOCUMENT_PERMISSIONS_SECRET environment variable: {e}")
+            .secret("DOCUMENT_PERMISSIONS_SECRET")
+            .map(|value| value.to_string())
+            .or_else(|_| {
+                env.var("DOCUMENT_PERMISSIONS_SECRET")
+                    .map(|value| value.to_string())
             })
-            .to_string();
+            .unwrap_or_else(|e| panic!("Couldn't get DOCUMENT_PERMISSIONS_SECRET: {e}"));
 
         Self {
             internal_api_secret,

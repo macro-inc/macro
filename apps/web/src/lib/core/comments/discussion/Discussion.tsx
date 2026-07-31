@@ -11,7 +11,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
-import { createEffect, createSignal, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
@@ -31,10 +31,64 @@ import type {
 export function Discussion() {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
+  const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
+  const mountedComments = new Map<string, HTMLElement>();
+  let scrolledTarget: { commentId: string; revision: unknown } | undefined;
 
   // Deep-linking to a comment expands the discussion.
   createEffect(() => {
     if (source.targetCommentId() !== null) setIsExpanded(true);
+  });
+
+  const registerMountedComment = (commentId: string, element: HTMLElement) => {
+    mountedComments.set(commentId, element);
+    setMountedCommentsVersion((version) => version + 1);
+  };
+
+  const unregisterMountedComment = (
+    commentId: string,
+    element: HTMLElement
+  ) => {
+    if (mountedComments.get(commentId) === element) {
+      mountedComments.delete(commentId);
+      setMountedCommentsVersion((version) => version + 1);
+    }
+  };
+
+  createEffect(() => {
+    const targetCommentId = source.targetCommentId();
+    const targetRevision = source.targetRevision?.() ?? targetCommentId;
+    if (!targetCommentId) return;
+
+    const currentThreads = source.threads();
+    const targetThread = currentThreads.find((thread) =>
+      thread.comments.some((comment) => comment.id === targetCommentId)
+    );
+    if (!targetThread) return;
+
+    setIsExpanded(true);
+    mountedCommentsVersion();
+
+    const target = mountedComments.get(targetCommentId);
+    if (!target) return;
+    if (
+      scrolledTarget?.commentId === targetCommentId &&
+      Object.is(scrolledTarget.revision, targetRevision)
+    ) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      scrolledTarget = {
+        commentId: targetCommentId,
+        revision: targetRevision,
+      };
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    onCleanup(() => {
+      cancelAnimationFrame(frame);
+    });
   });
 
   let newThreadInputHandle: { clear: () => void } | undefined;
@@ -70,7 +124,13 @@ export function Discussion() {
           <div class="py-2 text-xs">
             <div>
               <Key each={source.threads()} by="id">
-                {(thread) => <DiscussionThreadView thread={thread()} />}
+                {(thread) => (
+                  <DiscussionThreadView
+                    thread={thread()}
+                    onCommentMount={registerMountedComment}
+                    onCommentCleanup={unregisterMountedComment}
+                  />
+                )}
               </Key>
             </div>
 
@@ -93,7 +153,11 @@ export function Discussion() {
   );
 }
 
-export function DiscussionThreadView(props: { thread: ViewThread }) {
+export function DiscussionThreadView(props: {
+  thread: ViewThread;
+  onCommentMount?: (commentId: string, element: HTMLElement) => void;
+  onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
+}) {
   const source = useDiscussion();
   const canEdit = source.canEdit;
 
@@ -190,6 +254,8 @@ export function DiscussionThreadView(props: { thread: ViewThread }) {
                 onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
                 onEditCancel={() => setEditingId(null)}
                 isHighlighted={source.targetCommentId() === rootComment().id}
+                onMount={props.onCommentMount}
+                onCleanup={props.onCommentCleanup}
               />
 
               <Show when={hasReplies() || isReplying()}>
@@ -214,6 +280,8 @@ export function DiscussionThreadView(props: { thread: ViewThread }) {
                             isHighlighted={
                               source.targetCommentId() === reply().id
                             }
+                            onMount={props.onCommentMount}
+                            onCleanup={props.onCommentCleanup}
                           />
                         </div>
                       )}
@@ -278,15 +346,21 @@ function DiscussionMessageView(props: {
   onEditSave: (snapshot: InputSnapshot) => void;
   onEditCancel: () => void;
   isHighlighted?: boolean;
+  onMount?: (commentId: string, element: HTMLElement) => void;
+  onCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
   const isEditing = () => props.editingId === props.comment.id;
   const messageData = () => discussionCommentToMessageData(props.comment);
 
   let containerRef: HTMLDivElement | undefined;
+
   onMount(() => {
-    if (props.isHighlighted) {
-      containerRef?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    if (!containerRef) return;
+    props.onMount?.(props.comment.id, containerRef);
+    onCleanup(() => {
+      if (!containerRef) return;
+      props.onCleanup?.(props.comment.id, containerRef);
+    });
   });
 
   return (

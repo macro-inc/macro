@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use models_properties::EntityType;
 use serde::{Deserialize, Serialize};
 use sqs_client::search::SearchQueueMessage;
 use thiserror::Error;
@@ -31,12 +32,40 @@ impl SourcePage {
     }
 }
 
+/// One page of entities whose denormalized properties must be reindexed.
+///
+/// A page has one entity type so the source parses and validates that type
+/// once, while the indexer receives typed work items. `rows_consumed` stays
+/// separate from the number of IDs so offset pagination follows source rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PropertySourcePage {
+    /// IDs of the entities to reindex.
+    pub entity_ids: Vec<String>,
+    /// Property entity type shared by every ID in this page.
+    pub entity_type: EntityType,
+    /// Number of source rows covered by this page.
+    pub rows_consumed: usize,
+}
+
+impl PropertySourcePage {
+    /// Construct the end-of-source page for an entity type.
+    pub fn empty(entity_type: EntityType) -> Self {
+        Self {
+            entity_ids: Vec::new(),
+            entity_type,
+            rows_consumed: 0,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum BackfillError {
     #[error("failed reading backfill source")]
     Source(#[source] anyhow::Error),
     #[error("failed publishing to search event queue")]
     Publish(#[source] anyhow::Error),
+    #[error("failed reindexing entity properties")]
+    Reindex(#[source] anyhow::Error),
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
@@ -193,10 +222,9 @@ pub struct EmailBackfillRequest {
     pub batch_size: Option<usize>,
 }
 
-/// Property-only backfill: re-enqueue a property update message for every
-/// entity of one type that has property rows, refreshing the denormalized
-/// `properties` field without re-extracting content. Used after adding the
-/// field to an index's mapping.
+/// Property-only backfill: directly reindex every entity of one type that has
+/// property rows, refreshing the denormalized `properties` field without
+/// re-extracting content. Used after adding the field to an index's mapping.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PropertiesBackfillRequest {
     /// The property entity type to backfill (e.g. "thread").

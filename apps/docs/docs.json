@@ -31,7 +31,8 @@
         "pages": [
           "product/inbox",
           "product/search",
-          "product/unified-memory"
+          "product/unified-memory",
+          "product/tagging"
         ]
       },
       {

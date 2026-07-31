@@ -4,7 +4,7 @@ use crate::local::instance::{Instance, Port};
 
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");
-    LocalEnv::for_instance(Mode::Local, &instance).to_env()
+    LocalEnv::for_instance(Mode::Local, &instance, true).to_env()
 }
 
 /// Every key a local service relies on must be present — this is the test that
@@ -117,8 +117,8 @@ fn aws_creds_are_dummy() {
 fn instance_secrets_are_scoped_but_identity_is_fixed() {
     let default = Instance::derive(None, None).unwrap();
     let agent_a = Instance::derive(Some("agent-a"), None).unwrap();
-    let a = LocalEnv::for_instance(Mode::Local, &default).to_env();
-    let b = LocalEnv::for_instance(Mode::Local, &agent_a).to_env();
+    let a = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
+    let b = LocalEnv::for_instance(Mode::Local, &agent_a, true).to_env();
 
     assert_ne!(
         a.get("SERVICE_INTERNAL_AUTH_KEY"),
@@ -136,8 +136,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
 fn fusionauth_public_url_uses_the_instance_host_port() {
     let default = Instance::derive(None, None).unwrap();
     let named = Instance::derive(Some("2508"), None).unwrap();
-    let default_env = LocalEnv::for_instance(Mode::Local, &default).to_env();
-    let named_env = LocalEnv::for_instance(Mode::Local, &named).to_env();
+    let default_env = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
     let named_public_url = format!("http://localhost:{}", named.port(Port::FusionAuth));
 
     assert_eq!(

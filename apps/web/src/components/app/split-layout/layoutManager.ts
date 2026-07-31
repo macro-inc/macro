@@ -1080,10 +1080,16 @@ export function createSplitLayout(
 
         // Closing a Preview Pair's Controller closes its Viewer too. Remove
         // the Viewer first so the Controller's final remove event determines
-        // which remaining split receives focus.
-        const viewerId = viewerOf(currentSplit.id);
-        if (viewerId) removeSplit(viewerId, false);
-        removeSplit(currentSplit.id);
+        // which remaining split receives focus. One atomic mutation: a flush
+        // between the removals would let a pending preview engagement (a
+        // split waiting on room, see soup-view's initial-preview effect)
+        // insert its Viewer into the still-crowded layout, min-crushing
+        // every panel and scrambling the freed space's redistribution.
+        batch(() => {
+          const viewerId = viewerOf(currentSplit.id);
+          if (viewerId) removeSplit(viewerId, false);
+          removeSplit(currentSplit.id);
+        });
       },
       getUrlSegments: () => contentUrlSegments(content()),
       getUrl: () => contentUrlSegments(content()).join('/'),
@@ -1232,22 +1238,28 @@ export function createSplitLayout(
 
     contentChangeListeners.delete(id);
     entryStateCaptors.delete(id);
-    clearPreviewPairsFor(id);
-    setSplitNamesById(
-      produce((map) => {
-        delete map[id];
-        return map;
-      })
-    );
 
-    const nextSplits = state.splits.filter((s) => s.id !== id);
-    setState('splits', reconcile(nextSplits));
+    // One atomic mutation: clearing the Preview Pair and removing the split
+    // must reach reactive consumers together, so the departing split's panel
+    // still carries its pair share-group when the resize solver drops it.
+    batch(() => {
+      clearPreviewPairsFor(id);
+      setSplitNamesById(
+        produce((map) => {
+          delete map[id];
+          return map;
+        })
+      );
 
-    dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: idx });
+      const nextSplits = state.splits.filter((s) => s.id !== id);
+      setState('splits', reconcile(nextSplits));
 
-    if (nextSplits.length === 0 && createNewOnEmpty) {
-      createNewSplit({ content: DEFAULT_SPLIT_CONTENT, referredFrom: null });
-    }
+      dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: idx });
+
+      if (nextSplits.length === 0 && createNewOnEmpty) {
+        createNewSplit({ content: DEFAULT_SPLIT_CONTENT, referredFrom: null });
+      }
+    });
   }
 
   /**
@@ -1376,21 +1388,28 @@ export function createSplitLayout(
     // replaces its content. Adopt an unclaimed placeholder already sitting
     // right of the controller instead of duplicating it. Without room for a
     // viewer, preview mode does not engage at all.
-    let viewerId = adoptableViewerFor(controllerId);
-    if (viewerId === undefined) {
-      if (!canAppendSplit()) return;
-      const controllerIndex = splitIndexById(controllerId);
-      const viewerHandle = createNewSplit({
-        content: PREVIEW_VIEWER_EMPTY_CONTENT,
-        activate: false,
-        referredFrom: null,
-        allowDuplicate: true,
-        insertIndex: controllerIndex >= 0 ? controllerIndex + 1 : undefined,
-      });
-      if (!viewerHandle) return;
-      viewerId = viewerHandle.id;
-    }
-    linkPreviewPair(controllerId, viewerId);
+    //
+    // Creating the viewer and linking the Preview Pair is one atomic
+    // mutation: the viewer's resize panel must register with its pair
+    // share-group already in place so it carves its width out of the
+    // Controller instead of every split.
+    batch(() => {
+      let viewerId = adoptableViewerFor(controllerId);
+      if (viewerId === undefined) {
+        if (!canAppendSplit()) return;
+        const controllerIndex = splitIndexById(controllerId);
+        const viewerHandle = createNewSplit({
+          content: PREVIEW_VIEWER_EMPTY_CONTENT,
+          activate: false,
+          referredFrom: null,
+          allowDuplicate: true,
+          insertIndex: controllerIndex >= 0 ? controllerIndex + 1 : undefined,
+        });
+        if (!viewerHandle) return;
+        viewerId = viewerHandle.id;
+      }
+      linkPreviewPair(controllerId, viewerId);
+    });
 
     // The Controller's configured width is enforced declaratively as an
     // automatic-redistribution preference and maximum (see
@@ -1407,9 +1426,14 @@ export function createSplitLayout(
   }
 
   function disengagePreviewMode(controllerId: SplitId) {
-    const viewerId = viewerOf(controllerId);
-    unlinkPreviewPair(controllerId);
-    if (viewerId) removeSplit(viewerId);
+    // Atomic for the same reason as removeSplit: the viewer's panel must
+    // still carry its pair share-group when the resize solver drops it, so
+    // its width returns to the Controller rather than every split.
+    batch(() => {
+      const viewerId = viewerOf(controllerId);
+      unlinkPreviewPair(controllerId);
+      if (viewerId) removeSplit(viewerId);
+    });
   }
 
   function resetPreviewMode(controllerId: SplitId) {
@@ -1615,24 +1639,26 @@ export function createSplitLayout(
       resultSplits.push(newSplit);
     }
 
-    // Clean up contentChangeListeners and splitNamesById for removed splits
-    for (const split of state.splits) {
-      if (!usedIds.has(split.id)) {
-        contentChangeListeners.delete(split.id);
-        entryStateCaptors.delete(split.id);
-        clearPreviewPairsFor(split.id);
-        setSplitNamesById(
-          produce((map) => {
-            delete map[split.id];
-            return map;
-          })
-        );
-      }
-    }
-
     // Update order and unlink any Preview Pair that the rebuild separated
-    // before reactive consumers can observe the new split layout.
+    // before reactive consumers can observe the new split layout. Removed
+    // splits are cleaned up in the same atomic mutation so a removed
+    // Preview Pair member's panel still carries its pair share-group when
+    // the resize solver drops it.
     batch(() => {
+      for (const split of state.splits) {
+        if (!usedIds.has(split.id)) {
+          contentChangeListeners.delete(split.id);
+          entryStateCaptors.delete(split.id);
+          clearPreviewPairsFor(split.id);
+          setSplitNamesById(
+            produce((map) => {
+              delete map[split.id];
+              return map;
+            })
+          );
+        }
+      }
+
       setState('splits', resultSplits);
       pruneNonAdjacentPreviewPairs();
     });
@@ -1887,11 +1913,15 @@ export function createSplitLayout(
       });
     }
 
-    for (const split of visibleSplits) {
-      if (split.id !== splitToKeep.id) {
-        removeSplit(split.id, false);
+    // Atomic for the same reason as SplitHandle.close: no flush between
+    // removals, so pending preview engagements only see the final layout.
+    batch(() => {
+      for (const split of visibleSplits) {
+        if (split.id !== splitToKeep.id) {
+          removeSplit(split.id, false);
+        }
       }
-    }
+    });
 
     const handle = getSplit(splitToKeep.id);
     if (handle) {

@@ -15,6 +15,20 @@ get_environment:
 seed *ARGS:
   cargo r "$@"
 
+# Seed/reset/status a REAL @macro-test.com Gmail test mailbox via the Gmail
+# API. Credentials come from AWS Secrets Manager, so an authenticated `aws` CLI is required.
+#   just gmail seed --account bigbox-10k@macro-test.com --count 10000
+#   just gmail reset --account bigbox-10k@macro-test.com
+#   just gmail status --account bigbox-10k@macro-test.com
+[positional-arguments]
+gmail *ARGS:
+  @GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-$(aws secretsmanager get-secret-value --secret-id google-client-id-local --query SecretString --output text)}" \
+  GOOGLE_CLIENT_SECRET_KEY="${GOOGLE_CLIENT_SECRET_KEY:-$(aws secretsmanager get-secret-value --secret-id google-client-secret-local --query SecretString --output text)}" \
+  GMAIL_TEST_ACCOUNT_TOKENS="${GMAIL_TEST_ACCOUNT_TOKENS:-$(aws secretsmanager get-secret-value --secret-id gmail-test-account-tokens --query SecretString --output text)}" \
+  GMAIL_FORWARDER_SA_KEY="${GMAIL_FORWARDER_SA_KEY:-$(aws secretsmanager get-secret-value --secret-id gmail-local-watch-forwarder-sa --query SecretString --output text)}" \
+  SQLX_OFFLINE="true" \
+  cargo r -- gmail "$@"
+
 # Reset and seed deterministic data for the local Playwright smoke suite.
 local-e2e-smoke:
   LOCAL_E2E_SEED="true" \
@@ -27,7 +41,6 @@ local-e2e-smoke:
   ENVIRONMENT="local" \
   FUSIONAUTH_BASE_URL="http://localhost:9011" \
   FUSIONAUTH_API_KEY_SECRET_KEY="local" \
-  FUSIONAUTH_TENANT_ID="local" \
   FUSIONAUTH_CLIENT_ID="local" \
   FUSIONAUTH_CLIENT_SECRET_KEY="local" \
   FUSIONAUTH_OAUTH_REDIRECT_URI="http://localhost:8080/oauth/redirect" \
@@ -49,7 +62,6 @@ scenario *ARGS:
   ENVIRONMENT="local" \
   FUSIONAUTH_BASE_URL="${FUSIONAUTH_BASE_URL:-http://localhost:9011}" \
   FUSIONAUTH_API_KEY_SECRET_KEY="${FUSIONAUTH_API_KEY_SECRET_KEY:-bf69486b-4733-4954-a44e-2e1b5f2c8a91}" \
-  FUSIONAUTH_TENANT_ID="${FUSIONAUTH_TENANT_ID:-11111111-1111-4111-8111-111111111111}" \
   FUSIONAUTH_CLIENT_ID="${FUSIONAUTH_CLIENT_ID:-22222222-2222-4222-8222-222222222222}" \
   FUSIONAUTH_CLIENT_SECRET_KEY="${FUSIONAUTH_CLIENT_SECRET_KEY:-local}" \
   FUSIONAUTH_OAUTH_REDIRECT_URI="http://localhost:8080/oauth/redirect" \

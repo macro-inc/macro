@@ -9,7 +9,7 @@
 #[cfg(test)]
 mod test;
 
-mod sample_bodies;
+pub(crate) mod sample_bodies;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -162,7 +162,7 @@ pub struct SeedMessage {
 }
 
 /// Fake contacts used for generating seed data.
-const FAKE_CONTACTS: &[(&str, &str)] = &[
+pub(crate) const FAKE_CONTACTS: &[(&str, &str)] = &[
     ("fakecontact1@gmail.com", "Alice Johnson"),
     ("fakecontact2@gmail.com", "Bob Smith"),
     ("fakecontact3@gmail.com", "Carol Williams"),
@@ -192,7 +192,7 @@ const SYSTEM_LABELS: &[(&str, &str)] = &[
 ];
 
 /// Subject lines to randomly pick from.
-const SUBJECTS: &[&str] = &[
+pub(crate) const SUBJECTS: &[&str] = &[
     "Meeting Follow-up",
     "Project Update",
     "Quick Question",

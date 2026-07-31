@@ -11,7 +11,7 @@ env_vars! {
     pub struct OpensearchPassword;
     pub struct DocumentStorageBucket;
     pub struct BackfillJobsTable;
-    /// Comma-separated Kafka bootstrap servers for live call lifecycle events.
+    /// Comma-separated Kafka bootstrap servers for live search-index events.
     pub struct KafkaBrokers;
 }
 
@@ -113,7 +113,7 @@ pub struct Config {
     /// The bucket where documents are stored
     pub document_storage_bucket: DocumentStorageBucket,
 
-    /// Comma-separated Kafka bootstrap servers for live call lifecycle events.
+    /// Comma-separated Kafka bootstrap servers for live search-index events.
     pub kafka_brokers: KafkaBrokers,
 
     /// The number of workers to spawn

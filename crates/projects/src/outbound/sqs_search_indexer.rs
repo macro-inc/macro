@@ -1,92 +1,41 @@
-//! SQS adapter for project search indexing and document deletion.
+//! Kafka search-cleanup and SQS document-deletion adapter.
+
+#[cfg(test)]
+mod test;
 
 use std::sync::Arc;
 
-use sqs_client::search::{
-    SearchQueueMessage,
-    chat::RemoveChatMessage,
-    document::DocumentId,
-    project::{RemoveProject, UpsertProject},
-};
+use documents::domain::events::{DocumentMacroEvent, DocumentPurgedMetadata};
+use macro_event_broker::MacroEventBroker;
 
 use crate::domain::ports::ProjectSearchIndexer;
 
-/// SQS-backed project search-index and document-deletion adapter.
+/// Kafka-backed document search cleanup and SQS-backed document deletion adapter.
 #[derive(Clone)]
-pub struct SqsProjectSearchIndexer {
+pub struct SqsProjectSearchIndexer<B: MacroEventBroker> {
     sqs: Arc<sqs_client::SQS>,
+    event_broker: B,
 }
 
-impl SqsProjectSearchIndexer {
-    /// Create a project search indexer from the shared SQS client.
-    pub fn new(sqs: Arc<sqs_client::SQS>) -> Self {
-        Self { sqs }
+impl<B: MacroEventBroker> SqsProjectSearchIndexer<B> {
+    /// Create a project search indexer from the shared SQS client and event broker.
+    pub fn new(sqs: Arc<sqs_client::SQS>, event_broker: B) -> Self {
+        Self { sqs, event_broker }
     }
 }
 
-impl ProjectSearchIndexer for SqsProjectSearchIndexer {
-    #[tracing::instrument(skip(self), err)]
-    async fn upsert_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = project_ids
-            .into_iter()
-            .map(|project_id| {
-                SearchQueueMessage::UpsertProject(UpsertProject {
-                    project_id,
-                    index_override: None,
-                })
-            })
-            .collect();
-
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn remove_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = project_ids
-            .into_iter()
-            .map(|project_id| {
-                SearchQueueMessage::RemoveProject(RemoveProject {
-                    project_id,
-                    index_override: None,
-                })
-            })
-            .collect();
-
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn remove_chats(&self, chat_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = chat_ids
-            .into_iter()
-            .map(|chat_id| {
-                SearchQueueMessage::RemoveChatMessage(RemoveChatMessage {
-                    chat_id,
-                    message_id: None,
-                    index_override: None,
-                })
-            })
-            .collect();
-
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
-    }
-
+impl<B: MacroEventBroker> ProjectSearchIndexer for SqsProjectSearchIndexer<B> {
     #[tracing::instrument(skip(self), err)]
     async fn remove_documents(&self, document_ids: Vec<String>) -> anyhow::Result<()> {
-        let messages = document_ids
-            .into_iter()
-            .map(|document_id| SearchQueueMessage::RemoveDocument(DocumentId { document_id }))
-            .collect();
+        for document_id in document_ids {
+            let event = DocumentMacroEvent::purged(
+                document_id.clone(),
+                DocumentPurgedMetadata { document_id },
+            );
+            drop(self.event_broker.send_event(&event)?);
+        }
 
-        self.sqs
-            .bulk_send_message_to_search_event_queue(messages)
-            .await
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

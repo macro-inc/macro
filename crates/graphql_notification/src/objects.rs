@@ -8,6 +8,12 @@ use crate::loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader};
 /// GraphQL notification attached to a Soup entity.
 pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
 
+impl From<UserNotificationRow<serde_json::Value>> for GraphqlSoupNotification {
+    fn from(value: UserNotificationRow<serde_json::Value>) -> Self {
+        Self(value)
+    }
+}
+
 /// A notification associated with a Soup entity.
 #[Object]
 impl GraphqlSoupNotification {

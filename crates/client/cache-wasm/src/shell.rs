@@ -136,9 +136,9 @@ pub struct CacheEngine {
     ops: Rc<RefCell<OpInterner>>,
 }
 
-/// Opens (or creates) the cache for `scope`. See
-/// [`cache_core::codec::cache_namespace`] for how scope + schema hash +
-/// format version determine the underlying database.
+/// Opens (or creates) the cache for `scope`. The physical database is selected
+/// by [`cache_core::codec::cache_database_name`] from `scope` alone; the schema
+/// compatibility epoch and format version are record-compatibility inputs.
 #[wasm_bindgen(js_name = openCache)]
 pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsError> {
     let storage = IdbStorage::open(&scope)
@@ -162,7 +162,7 @@ pub async fn destroy_cache(scope: String) -> Result<(), JsError> {
         .map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Schema hash baked into this build (namespace diagnostics).
+/// Schema hash baked into this build (build diagnostics).
 #[wasm_bindgen(js_name = schemaHash)]
 pub fn schema_hash() -> String {
     cache_core::meta::SCHEMA_HASH.to_string()

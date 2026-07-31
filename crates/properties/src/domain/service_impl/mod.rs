@@ -29,8 +29,6 @@ use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
-use std::sync::Arc;
-
 use super::error::PropertiesErr;
 use super::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
@@ -44,29 +42,15 @@ use super::model::{
     PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
     ViewReceipt,
 };
-use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
+use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
     extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
 };
 
-/// Entity types whose search index denormalizes property values, i.e. whose
-/// property mutations must enqueue a search reindex.
-fn is_search_indexed(entity_type: EntityType) -> bool {
-    matches!(
-        entity_type,
-        EntityType::Task
-            | EntityType::Document
-            | EntityType::Thread
-            | EntityType::Chat
-            | EntityType::Project
-            | EntityType::CallRecord
-    )
-}
-
 /// Implementation of [`PropertiesService`] using repository, permission,
-/// notification, search-indexing, and event-publishing ports.
+/// notification, and event-publishing ports.
 #[derive(Debug)]
 pub struct PropertiesServiceImpl<R, P, N, B = NoopMacroEventBroker>
 where
@@ -78,7 +62,6 @@ where
     repository: R,
     permission_service: Option<P>,
     notification_service: Option<N>,
-    search_indexer: Option<Arc<dyn PropertySearchIndexer>>,
     event_broker: B,
 }
 
@@ -98,7 +81,6 @@ where
             repository,
             permission_service,
             notification_service,
-            search_indexer: None,
             event_broker: NoopMacroEventBroker,
         }
     }
@@ -120,16 +102,8 @@ where
             repository: self.repository,
             permission_service: self.permission_service,
             notification_service: self.notification_service,
-            search_indexer: self.search_indexer,
             event_broker,
         }
-    }
-
-    /// Attach a search-reindex publisher so property mutations refresh the
-    /// search index. Builder-style so existing constructions are unaffected.
-    pub fn with_search_indexer(mut self, search_indexer: Arc<dyn PropertySearchIndexer>) -> Self {
-        self.search_indexer = Some(search_indexer);
-        self
     }
 
     /// Publish a property lifecycle event without coupling broker availability
@@ -315,24 +289,6 @@ where
             .await?
             .pop()
             .ok_or_else(|| PropertiesErr::Validation("Missing property target".to_string()))
-    }
-
-    /// Best-effort publish of a property reindex for entity types whose
-    /// search index denormalizes property values. Logs and continues on
-    /// failure so a missed reindex never fails the mutation itself.
-    async fn enqueue_property_upsert(&self, entity_id: &str, entity_type: EntityType) {
-        let Some(search_indexer) = self.search_indexer.as_ref() else {
-            return;
-        };
-        if !is_search_indexed(entity_type) {
-            return;
-        }
-        if let Err(error) = search_indexer
-            .enqueue_upsert(entity_id.to_string(), entity_type)
-            .await
-        {
-            tracing::warn!(error = ?error, entity_id = %entity_id, "failed to enqueue search reindex for property change");
-        }
     }
 
     /// Fetch a property definition, ensuring it exists, isn't a system
@@ -617,7 +573,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(entity_id, entity_type).await;
         self.publish_property_event(Self::entity_property_updated_event(
             &property,
             &property_value,
@@ -686,8 +641,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
-            .await;
         self.publish_property_event(Self::entity_property_updated_event(
             &mutation.property,
             &mutation.value,
@@ -724,8 +677,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
-            .await;
         if let Some(mutation) = mutation {
             self.publish_property_event(Self::entity_property_updated_event(
                 &mutation.property,
@@ -798,8 +749,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), entity_type)
-            .await;
         self.publish_entity_property_selection_events(&selections, access);
 
         Ok(selections)
@@ -887,8 +836,6 @@ where
                 continue;
             }
 
-            // Convert the repo error to a Send type up front so the raw
-            // `R::Err` is never held across the reindex await below.
             let update_result = self
                 .repository
                 .bulk_update_entity_property_options(
@@ -905,7 +852,6 @@ where
                         .last()
                         .map(|selection| selection.option_ids.clone())
                         .unwrap_or_default();
-                    self.enqueue_property_upsert(entity_id, entity_type).await;
                     self.publish_entity_property_selection_events(&selections, &access[index]);
                     outcomes[index] = Some(EntityOptionUpdateOutcome::Applied { option_ids });
                 }
