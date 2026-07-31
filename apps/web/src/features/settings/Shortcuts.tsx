@@ -958,6 +958,11 @@ const shortcutSections: ShortcutSection[] = [
         codes: ['ShiftLeft', 'Enter'],
         description: 'Open item in a new split',
       },
+      {
+        keys: ['opt+enter'],
+        codes: ['AltLeft', 'Enter'],
+        description: 'Open item in place of the preview',
+      },
       { keys: ['arrowup'], codes: ['ArrowUp'], description: 'Move up' },
       { keys: ['arrowdown'], codes: ['ArrowDown'], description: 'Move down' },
       {

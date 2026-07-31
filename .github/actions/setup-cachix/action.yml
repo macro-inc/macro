@@ -43,6 +43,19 @@ runs:
         echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
         echo "CACHIX_CACHE_NAME=$CACHIX_CACHE_NAME" >> "$GITHUB_ENV"
 
+        # A binary cache can return a valid narinfo while its backing NAR is
+        # temporarily unavailable. Without fallback, Nix fails the build after
+        # exhausting download retries instead of building that path locally.
+        # Preserve any runner-provided NIX_CONFIG.
+        {
+          echo 'NIX_CONFIG<<__MACRO_NIX_CONFIG__'
+          if [ -n "${NIX_CONFIG:-}" ]; then
+            printf '%s\n' "$NIX_CONFIG"
+          fi
+          echo 'fallback = true'
+          echo '__MACRO_NIX_CONFIG__'
+        } >> "$GITHUB_ENV"
+
         retry() {
           local attempts=$1
           shift

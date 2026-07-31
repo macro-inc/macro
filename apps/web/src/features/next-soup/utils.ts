@@ -330,6 +330,11 @@ export const restoreSoupFocus = async (entityId?: string): Promise<void> => {
 
 interface OpenEntityOptions {
   openInNewSplit?: boolean;
+  /**
+   * Open in place of the whole Preview Pair: the Viewer closes and the content
+   * replaces the Controller. No-op outside a Preview Pair.
+   */
+  replacePreview?: boolean;
   location?: SearchLocation;
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
@@ -513,7 +518,13 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
+  const {
+    allowDuplicate,
+    openInNewSplit,
+    replacePreview,
+    splitHandle,
+    mergeHistory,
+  } = options;
   let { location } = options;
 
   if (!location) {
@@ -561,6 +572,7 @@ export const openEntityInSplitFromUnifiedList = async (
           referredFrom: options.referredFrom,
           activate: true,
           preferNewSplit: openInNewSplit,
+          replacePreview,
           handle: splitHandle,
           mergeHistory,
         }
@@ -579,6 +591,7 @@ export const openEntityInSplitFromUnifiedList = async (
   if (
     !allowDuplicate &&
     !openInNewSplit &&
+    !replacePreview &&
     splitHandle &&
     preventDuplicatePreviewEntityOpen(entity, splitHandle)
   ) {
@@ -612,7 +625,9 @@ export const openEntityInSplitFromUnifiedList = async (
   const referredFrom = options.referredFrom ?? sourceListView;
 
   let splitContent: SplitContent = { ...content, params };
-  if (splitHandle?.isControllerSplit()) {
+  // Preview source metadata belongs on Viewer entries; a replacement takes the
+  // Preview Pair's place, so its entry is ordinary split history.
+  if (splitHandle?.isControllerSplit() && !replacePreview) {
     splitContent = withPreviewSourceEntityId(splitContent, entity.id);
   }
 
@@ -620,6 +635,7 @@ export const openEntityInSplitFromUnifiedList = async (
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
+    replacePreview,
     handle: splitHandle,
     mergeHistory,
     allowDuplicate,

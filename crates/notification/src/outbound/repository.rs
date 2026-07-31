@@ -1702,8 +1702,12 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db.delete_all_user_notifications(user_id).await
     }
 
-    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
-        self.db.get_device_endpoint(device_token).await
+    async fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
+        self.db.get_device_endpoint(device_token, device_type).await
     }
 
     async fn upsert_device(
@@ -1718,12 +1722,26 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
             .await
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        self.db
+            .delete_user_devices_by_token(user_id, device_token, device_type)
+            .await
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> Result<String, Report> {
-        self.db.delete_by_token(device_token, device_type).await
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
+        self.db
+            .delete_stale_devices_by_token(device_token, device_type, active_endpoint)
+            .await
     }
 
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {

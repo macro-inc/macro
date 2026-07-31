@@ -10534,6 +10534,13 @@ export type InstallSyncData = {
     url: '/github/install-sync';
 };
 
+export type InstallSyncErrors = {
+    /**
+     * Authentication failed
+     */
+    401: unknown;
+};
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;

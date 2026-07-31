@@ -23,6 +23,7 @@ import {
   type JSXElement,
 } from 'solid-js';
 import { createStore, produce, reconcile, type Store } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import {
   type ComponentMeta,
   type ComponentMetaMap,
@@ -203,6 +204,13 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
+  /**
+   * Open in place of the whole Preview Pair: the Viewer closes, preview mode
+   * disengages, and the content replaces the Controller — the same shape as
+   * external replacement navigation, but asked for deliberately. Ignored when
+   * the navigation does not come from a live Preview Pair.
+   */
+  replacePreview?: boolean;
   insertIndex?: number;
   handle?: SplitHandle;
   /**
@@ -1758,6 +1766,42 @@ export function createSplitLayout(
     }
   }
 
+  /**
+   * Where a navigation lands when its source belongs to a live Preview Pair.
+   *
+   * - `dissolve`: the Viewer closes and the content replaces the Controller.
+   * - `into-viewer`: the content previews in the Viewer, which never takes the
+   *   keyboard from the Controller.
+   * - `unchanged`: the navigation stands on its own — a new split, or the
+   *   Viewer replacing itself like any other split.
+   */
+  type PreviewRoute = 'dissolve' | 'into-viewer' | 'unchanged';
+
+  function previewRouteFor(
+    previewPair: PreviewPair,
+    explicitSourceId: SplitId | undefined,
+    options: OpenWithSplitOptions
+  ): PreviewRoute {
+    // Asking to replace the preview outranks everything else.
+    if (options.replacePreview) return 'dissolve';
+
+    // Explicit new-split intent stands on its own while there is room for it,
+    // which leaves the Preview Pair intact. Without room it falls back to the
+    // replacement routing below — into the Viewer, never the Controller.
+    if (options.preferNewSplit && canAppendSplit()) return 'unchanged';
+
+    // External (handle-less) replacement navigation, e.g. the sidebar or the
+    // command menu, takes the pair's place. Handle-less create-new actions are
+    // not replacements, and were already answered above.
+    if (explicitSourceId === undefined) return 'dissolve';
+
+    // A Controller selection previews; anything else (notably the Viewer
+    // navigating itself) replaces its own split.
+    return explicitSourceId === previewPair.controllerId
+      ? 'into-viewer'
+      : 'unchanged';
+  }
+
   function openWithSplit(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
@@ -1777,61 +1821,67 @@ export function createSplitLayout(
       if (result.handled) return undefined;
     }
 
-    // Preview Pair routing:
-    // - External (handle-less) replacement navigation while a Preview Pair
-    //   member is active dissolves the Preview Pair: the Viewer closes and
-    //   the content replaces the Controller. Explicit new-split intent is honored
-    //   without dissolving the Preview Pair when the layout has room.
-    // - A replace originating from the Controller (`options.handle` names
-    //   it) lands in the Viewer without stealing the keyboard. That
-    //   includes new-split intent when the layout is full — the fallback
-    //   replaces the Viewer, never the Controller.
-    // - The Viewer itself navigates like any split: it replaces
-    //   itself, honors new-split intent, and a full layout falls back to
-    //   replacing it (its own handle), never the Controller.
-    // Options are rewritten once, never recursively. Runs before the
-    // duplicate short-circuit so an existing-content hit can never activate
-    // (and focus) another split while the Controller holds the keyboard.
-    {
-      const explicitSourceId = options.handle?.id;
-      const sourceId = explicitSourceId ?? state.activeSplitId;
-      const previewPair = sourceId ? previewPairOf(sourceId) : undefined;
-      if (previewPair && findSplitById(previewPair.viewerId)) {
-        if (explicitSourceId === undefined) {
-          // Global create-new actions are handle-less too, but they are not
-          // replacement navigation. Honor their explicit new-split intent
-          // when there is room and leave the Preview Pair intact.
-          if (!options.preferNewSplit || !canAppendSplit()) {
-            disengagePreviewMode(previewPair.controllerId);
-            options = {
-              ...options,
-              handle: getSplit(previewPair.controllerId),
-              preferNewSplit: false,
-              insertIndex: undefined,
-            };
-          }
-        } else if (
-          explicitSourceId === previewPair.controllerId &&
-          (!options.preferNewSplit || !canAppendSplit())
-        ) {
-          options = {
+    // Preview Pair routing (see previewRouteFor for the rules). Options are
+    // rewritten once, never recursively. Runs before the duplicate
+    // short-circuit so an existing-content hit can never activate (and focus)
+    // another split while the Controller holds the keyboard.
+    const explicitSourceId = options.handle?.id;
+    const previewSourceId = explicitSourceId ?? state.activeSplitId;
+    const sourcePreviewPair = previewSourceId
+      ? previewPairOf(previewSourceId)
+      : undefined;
+    const previewPair =
+      sourcePreviewPair && findSplitById(sourcePreviewPair.viewerId)
+        ? sourcePreviewPair
+        : undefined;
+    const previewRoute: PreviewRoute = previewPair
+      ? previewRouteFor(previewPair, explicitSourceId, options)
+      : 'unchanged';
+
+    if (previewPair) {
+      options = match(previewRoute)
+        .with('dissolve', () => {
+          disengagePreviewMode(previewPair.controllerId);
+          return {
             ...options,
-            handle: getSplit(previewPair.viewerId),
+            handle: getSplit(previewPair.controllerId),
             preferNewSplit: false,
-            activate: false,
             insertIndex: undefined,
-            // Controller-originated navigation is transient selection state,
-            // not preview history: it replaces the Viewer's current
-            // entry, so only the preview's own navigation stacks up.
-            mergeHistory: true,
           };
-        }
-      }
+        })
+        .with('into-viewer', () => ({
+          ...options,
+          handle: getSplit(previewPair.viewerId),
+          preferNewSplit: false,
+          activate: false,
+          insertIndex: undefined,
+          // Controller-originated navigation is transient selection state,
+          // not preview history: it replaces the Viewer's current
+          // entry, so only the preview's own navigation stacks up.
+          mergeHistory: true,
+        }))
+        .with('unchanged', () => options)
+        .exhaustive();
     }
 
     const existingSplit = getSplitByContent(content.type, content.id);
 
-    if (!options.allowDuplicate && existingSplit) {
+    // Promoting the previewed row into a split of its own: the Viewer's copy is
+    // the preview being superseded, not a competing split, so it must not
+    // short-circuit into "activate what is already open". The Viewer drops back
+    // to its placeholder once the content has a real split (see below), so the
+    // content still lives in exactly one place. An `unchanged` route with
+    // new-split intent is precisely the case where the split has room to exist.
+    const promotedPreviewPair =
+      previewPair !== undefined &&
+      previewRoute === 'unchanged' &&
+      options.preferNewSplit === true &&
+      explicitSourceId === previewPair.controllerId &&
+      existingSplit?.id === previewPair.viewerId
+        ? previewPair
+        : undefined;
+
+    if (!options.allowDuplicate && existingSplit && !promotedPreviewPair) {
       // A controller selection can resolve to content already mounted in its
       // own viewer (notably two rows from one channel). Refresh the viewer's
       // merged history entry so per-entry source metadata follows the latest
@@ -1886,6 +1936,13 @@ export function createSplitLayout(
 
       return splitHandle;
     } else {
+      // The promoted content is about to own a real split, so clear the preview
+      // it came from first: it must never sit in two splits at once, and a
+      // Viewer still holding it would make createNewSplit dedupe into it.
+      if (promotedPreviewPair) {
+        resetPreviewMode(promotedPreviewPair.controllerId);
+      }
+
       return createNewSplit({
         content,
         activate: options.activate ?? true,

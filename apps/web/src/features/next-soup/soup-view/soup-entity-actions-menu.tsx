@@ -28,6 +28,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       activeListView: content.id,
       viewedProjectId: viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
+      splitHandle: panel.handle,
     });
   };
 
@@ -50,6 +51,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                 icon={action.icon}
                 hotkeyToken={action.hotkeyToken}
                 shortcut={action.shortcut}
+                disabled={action.disabled}
                 onClick={() => handleAction(action.onClick)}
                 class={action.destructive ? 'text-failure-ink' : undefined}
               />

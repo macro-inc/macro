@@ -1,3 +1,8 @@
+import {
+  registerPushRegistrationLifecycle,
+  syncPushRegistrations,
+} from '@core/auth/push-registration-lifecycle';
+import { hasLoginCookie } from '@core/util/cookies';
 import { whenSettled } from '@core/util/whenSettled';
 import {
   checkPermissions,
@@ -14,12 +19,14 @@ import {
 } from '@notifications';
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
+import { removeAllActive } from '@tauri-apps/plugin-notification';
 import {
   createContext,
   createEffect,
   createResource,
   createSignal,
   type JSX,
+  onCleanup,
 } from 'solid-js';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
@@ -50,9 +57,17 @@ function usePushNotifications(
       deviceType,
       token,
     });
-    const result = res.isOk() ? ('granted' as const) : ('denied' as const);
-    setPermission(result);
-    return result;
+    if (res.isErr()) {
+      // A failed registration is always a transient condition (network blip,
+      // auth still settling, backend error) — the endpoint has no "rejected"
+      // semantics. Only success may write the persisted state: flipping it to
+      // 'denied' here would disable remote-push dedupe and report push as off
+      // in Settings until the next successful sync.
+      console.error('failed to register device for push', res.error);
+      return 'denied';
+    }
+    setPermission('granted');
+    return 'granted';
   }
 
   async function requestNotificationRegistration() {
@@ -76,10 +91,13 @@ function usePushNotifications(
     const token = registrationResult()?.token;
 
     if (token) {
-      await notificationServiceClient.unregisterDevice({
+      const res = await notificationServiceClient.unregisterDevice({
         deviceType,
         token,
       });
+      if (res.isErr()) {
+        console.error('failed to unregister device for push', res.error);
+      }
     } else {
       console.warn('Cannot unregister device with no token set');
     }
@@ -87,40 +105,68 @@ function usePushNotifications(
     setPermission(undefined);
   }
 
-  // On launch, once permission state resolves, ensure persisted state is synced correct, and check if the APNS token has rotated.
-  // iOS returns the same token if valid, or a new one if it has rotated.
+  // (Re-)register this device under whoever is currently logged in. The
+  // backend keys a token to a single user, so this must run on every login —
+  // not just when the APNs token rotates — or the previous account keeps
+  // receiving this device's pushes.
+  async function syncDeviceRegistration() {
+    const sysPerm = await checkPermissions();
+    if (sysPerm.status !== 'granted') return;
+    const freshResult = await registerForRemoteNotifications();
+    if (!freshResult.token) return;
+    const storedToken = registrationResult()?.token;
+    if (storedToken && storedToken !== freshResult.token) {
+      // Best-effort: unregister the old token
+      notificationServiceClient
+        .unregisterDevice({ deviceType, token: storedToken })
+        .catch(console.error);
+    }
+    setRegistrationResult(freshResult);
+    const result = await registerDeviceWithNotificationService(
+      freshResult.token
+    );
+    if (result !== 'granted') {
+      // Surface the failure so the lifecycle's retry (and its logging) see it.
+      throw new Error('push device registration did not complete');
+    }
+  }
+
+  async function unregisterForLogout() {
+    // The logged-out account's already-delivered notifications must not
+    // linger in the system notification center for the next account to see.
+    await Promise.all([
+      removeAllActive().catch(console.error),
+      unregisterPushNotifications(),
+    ]);
+  }
+
+  const removeLifecycle = registerPushRegistrationLifecycle({
+    syncRegistration: syncDeviceRegistration,
+    unregisterForLogout,
+  });
+  onCleanup(removeLifecycle);
+
+  // On launch, once permission state resolves, ensure persisted state is
+  // synced correctly and — when a session exists — re-register the device so
+  // the backend registration tracks the current user (covering both an APNs
+  // token rotation and an account switch since the last launch).
   whenSettled(
     systemPermission,
     (perm) => {
-      // We defensively ensure our persisted perm state is synced properly, for backwards compatiblity
+      // OS permission was revoked externally (iOS Settings) — clear the
+      // persisted registration state so it never claims 'granted' when
+      // notifications can't display.
       if (perm.status !== 'granted') {
         setPermission(undefined);
         return;
       }
-      const storedToken = registrationResult()?.token;
-      if (!storedToken) {
-        setPermission(undefined);
+      if (!hasLoginCookie()) {
+        // Logged out: nothing to register against; login will sync.
         return;
       }
-      if (permission() !== 'granted') {
-        setPermission('granted');
-      }
-
-      registerForRemoteNotifications()
-        .then((freshResult) => {
-          if (freshResult.token && freshResult.token !== storedToken) {
-            // Best-effort unregister the old token
-            notificationServiceClient.unregisterDevice({
-              deviceType,
-              token: storedToken,
-            });
-            setRegistrationResult(freshResult);
-            registerDeviceWithNotificationService(freshResult.token).catch(
-              console.error
-            );
-          }
-        })
-        .catch(console.error);
+      // Sync via the lifecycle registry so the launch path gets the same
+      // one-retry behavior as login (registrations are idempotent).
+      syncPushRegistrations().catch(console.error);
     },
     console.error
   );
