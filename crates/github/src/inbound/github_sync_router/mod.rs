@@ -16,6 +16,10 @@ use axum::{
     response::Redirect,
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use entity_access::{
+    domain::{models::MemberTeamRole, ports::EntityAccessService},
+    inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
+};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
 };
@@ -28,58 +32,61 @@ use crate::domain::{
     ports::GithubSyncService,
 };
 
-/// Router state containing the github sync and authorization services.
-pub struct GithubSyncRouterState<T, Auth> {
-    /// The github sync service implementation.
+/// Router state containing the GitHub sync, entity access, and authorization services.
+pub struct GithubSyncRouterState<T, Eas, Auth> {
+    /// The GitHub sync service implementation.
     pub service: Arc<T>,
+    /// Service used to resolve the authenticated user's optional team.
+    pub entity_access_service: Arc<Eas>,
     /// State used to authenticate installation setup requests.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
 // Manual Clone impl so the services don't need to be Clone (they are behind Arcs).
-impl<T, Auth> Clone for GithubSyncRouterState<T, Auth> {
+impl<T, Eas, Auth> Clone for GithubSyncRouterState<T, Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<T, Auth> FromRef<GithubSyncRouterState<T, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &GithubSyncRouterState<T, Auth>) -> Self {
+impl<T, Eas, Auth> FromRef<GithubSyncRouterState<T, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &GithubSyncRouterState<T, Eas, Auth>) -> Self {
+        state.entity_access_service.clone()
+    }
+}
+
+impl<T, Eas, Auth> FromRef<GithubSyncRouterState<T, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &GithubSyncRouterState<T, Eas, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// Build the github sync router.
-pub fn github_sync_router<T, Auth, S>(state: GithubSyncRouterState<T, Auth>) -> Router<S>
+pub fn github_sync_router<T, Eas, Auth, S>(state: GithubSyncRouterState<T, Eas, Auth>) -> Router<S>
 where
     T: GithubSyncService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     Router::new()
         .route(
             "/install-sync",
-            axum::routing::get(install_sync_handler::<T, Auth>),
+            axum::routing::get(install_sync_handler::<T, Eas, Auth>),
         )
         .route(
             "/sync-redirect",
-            axum::routing::get(sync_redirect_handler::<T, Auth>),
+            axum::routing::get(sync_redirect_handler::<T, Eas, Auth>),
         )
         .route(
             "/webhook",
-            axum::routing::post(github_webhook_event_handler::<T, Auth>),
+            axum::routing::post(github_webhook_event_handler::<T, Eas, Auth>),
         )
         .with_state(state)
-}
-
-/// Query parameters for beginning an installation setup flow.
-#[derive(Debug, serde::Deserialize)]
-pub struct InstallSyncParams {
-    /// Team to associate with the installation. Omit for a personal installation.
-    pub team_id: Option<Uuid>,
 }
 
 /// Redirects an authenticated user to the github sync app installation page.
@@ -87,29 +94,30 @@ pub struct InstallSyncParams {
     get,
     path = "/github/install-sync",
     operation_id = "install_sync",
-    params(
-        ("team_id" = Option<Uuid>, Query, description = "Team to associate with the installation; omit for a personal installation"),
-    ),
     responses(
         (status = 307, description = "Temporary redirect to the GitHub sync app installation page"),
-        (status = 400, description = "The team_id query parameter is not a UUID"),
         (status = 401, description = "Authentication failed"),
-        (status = 403, description = "The authenticated user cannot configure the requested team"),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), err)]
-pub async fn install_sync_handler<T, Auth>(
-    State(ctx): State<GithubSyncRouterState<T, Auth>>,
+#[tracing::instrument(skip(ctx, authorization, team), err)]
+pub async fn install_sync_handler<T, Eas, Auth>(
+    State(ctx): State<GithubSyncRouterState<T, Eas, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
-    Query(params): Query<InstallSyncParams>,
+    team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
 ) -> Result<Redirect, GithubError>
 where
     T: GithubSyncService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let team_id = team
+        .entity_access_receipt
+        .map(|receipt| Uuid::parse_str(&receipt.entity().entity_id))
+        .transpose()
+        .map_err(|error| GithubError::Internal(error.into()))?;
     let url = ctx
         .service
-        .begin_installation_setup(&authorization.authorization.macro_user_id, params.team_id)
+        .begin_installation_setup(&authorization.authorization.macro_user_id, team_id)
         .await?;
 
     Ok(Redirect::temporary(&url))
@@ -144,8 +152,8 @@ pub struct SyncRedirectParams {
     )
 )]
 #[tracing::instrument(skip_all)]
-pub async fn sync_redirect_handler<T, Auth>(
-    State(ctx): State<GithubSyncRouterState<T, Auth>>,
+pub async fn sync_redirect_handler<T, Eas, Auth>(
+    State(ctx): State<GithubSyncRouterState<T, Eas, Auth>>,
     Query(params): Query<SyncRedirectParams>,
 ) -> Redirect
 where
@@ -202,16 +210,17 @@ fn team_settings_redirect() -> Redirect {
 /// [`ValidatedGithubWebhookEvent`].
 pub struct GithubWebhookEventExtractor(pub ValidatedGithubWebhookEvent);
 
-impl<T, Auth> FromRequest<GithubSyncRouterState<T, Auth>> for GithubWebhookEventExtractor
+impl<T, Eas, Auth> FromRequest<GithubSyncRouterState<T, Eas, Auth>> for GithubWebhookEventExtractor
 where
     T: GithubSyncService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
     type Rejection = GithubError;
 
     async fn from_request(
         req: Request,
-        state: &GithubSyncRouterState<T, Auth>,
+        state: &GithubSyncRouterState<T, Eas, Auth>,
     ) -> Result<Self, Self::Rejection> {
         let (parts, body) = req.into_parts();
 
@@ -243,8 +252,8 @@ where
 
 /// The main entrypoint for all github webhook events handling
 #[tracing::instrument(err, skip(ctx, event))]
-pub async fn github_webhook_event_handler<T, Auth>(
-    State(ctx): State<GithubSyncRouterState<T, Auth>>,
+pub async fn github_webhook_event_handler<T, Eas, Auth>(
+    State(ctx): State<GithubSyncRouterState<T, Eas, Auth>>,
     GithubWebhookEventExtractor(event): GithubWebhookEventExtractor,
 ) -> Result<StatusCode, GithubError>
 where

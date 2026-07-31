@@ -10461,28 +10461,15 @@ export type GetForeignEntityResponse = GetForeignEntityResponses[keyof GetForeig
 export type InstallSyncData = {
     body?: never;
     path?: never;
-    query?: {
-        /**
-         * Team to associate with the installation; omit for a personal installation
-         */
-        team_id?: string;
-    };
+    query?: never;
     url: '/github/install-sync';
 };
 
 export type InstallSyncErrors = {
     /**
-     * The team_id query parameter is not a UUID
-     */
-    400: unknown;
-    /**
      * Authentication failed
      */
     401: unknown;
-    /**
-     * The authenticated user cannot configure the requested team
-     */
-    403: unknown;
 };
 
 export type HealthHandlerData = {

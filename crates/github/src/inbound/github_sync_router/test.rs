@@ -2,12 +2,22 @@ use std::sync::{Arc, Mutex};
 
 use axum::{Router, http::Request};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use entity_access::domain::{
+    models::{
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+    },
+    ports::EntityAccessService,
+};
 use macro_authorization::{
     InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
     MacroAuthorizationState,
 };
 use macro_service_urls::AppServiceUrl;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 use model_user::UserContext;
 use rootcause::Report;
 use tower::util::ServiceExt;
@@ -47,6 +57,112 @@ impl MacroAuthorizationService for TestAuthorizationService {
         _claims: InternalIdentityClaims,
     ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TestEntityAccessService {
+    team_id: Option<Uuid>,
+}
+
+impl EntityAccessService for TestEntityAccessService {
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
+        _scope: BotAccessScope,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        Ok(self.team_id.map(|team_id| UserTeamInfo {
+            team_id,
+            role: TeamRole::Member,
+        }))
     }
 }
 
@@ -152,9 +268,14 @@ impl GithubSyncService for MockGithubSyncService {
 }
 
 fn mock_router() -> (Router, Arc<MockGithubSyncService>) {
+    mock_router_with_team(None)
+}
+
+fn mock_router_with_team(team_id: Option<Uuid>) -> (Router, Arc<MockGithubSyncService>) {
     let service = Arc::new(MockGithubSyncService::new());
     let router = github_sync_router(GithubSyncRouterState {
         service: service.clone(),
+        entity_access_service: Arc::new(TestEntityAccessService { team_id }),
         authorization_state: MacroAuthorizationState::new(Arc::new(TestAuthorizationService)),
     });
     (router, service)
@@ -200,19 +321,17 @@ async fn install_sync_rejects_unauthenticated_requests() {
 }
 
 #[tokio::test]
-async fn install_sync_starts_authenticated_personal_and_team_setups() {
-    let (router, service) = mock_router();
+async fn install_sync_uses_the_authenticated_users_optional_team() {
     let team_id = Uuid::new_v4();
+    let (personal_router, personal_service) = mock_router();
+    let (team_router, team_service) = mock_router_with_team(Some(team_id));
 
-    let personal_response = router
-        .clone()
+    let personal_response = personal_router
         .oneshot(authenticated_request("/install-sync"))
         .await
         .unwrap();
-    let team_response = router
-        .oneshot(authenticated_request(&format!(
-            "/install-sync?team_id={team_id}"
-        )))
+    let team_response = team_router
+        .oneshot(authenticated_request("/install-sync"))
         .await
         .unwrap();
 
@@ -225,31 +344,37 @@ async fn install_sync_starts_authenticated_personal_and_team_setups() {
         axum::http::StatusCode::TEMPORARY_REDIRECT
     );
     assert_eq!(
-        service.begin_calls(),
-        vec![
-            BeginCall {
-                macro_user_id: USER_ID.to_string(),
-                team_id: None,
-            },
-            BeginCall {
-                macro_user_id: USER_ID.to_string(),
-                team_id: Some(team_id),
-            },
-        ]
+        personal_service.begin_calls(),
+        vec![BeginCall {
+            macro_user_id: USER_ID.to_string(),
+            team_id: None,
+        }]
+    );
+    assert_eq!(
+        team_service.begin_calls(),
+        vec![BeginCall {
+            macro_user_id: USER_ID.to_string(),
+            team_id: Some(team_id),
+        }]
     );
 }
 
 #[tokio::test]
-async fn install_sync_rejects_invalid_team_query_syntax() {
+async fn install_sync_does_not_accept_team_context_from_the_query() {
     let (router, service) = mock_router();
 
     let response = router
-        .oneshot(authenticated_request("/install-sync?team_id=not-a-uuid"))
+        .oneshot(authenticated_request(
+            "/install-sync?team_id=00000000-0000-0000-0000-000000000001",
+        ))
         .await
         .unwrap();
 
-    assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
-    assert!(service.begin_calls().is_empty());
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::TEMPORARY_REDIRECT
+    );
+    assert_eq!(service.begin_calls()[0].team_id, None);
 }
 
 #[tokio::test]
