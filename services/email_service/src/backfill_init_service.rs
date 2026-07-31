@@ -91,6 +91,7 @@ async fn initialize_backfill(
         &ctx.db,
         &ctx.gmail_client,
         &ctx.sqs_client,
+        &ctx.macro_event_broker,
         access_token,
     )
     .await

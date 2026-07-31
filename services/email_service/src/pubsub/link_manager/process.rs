@@ -202,6 +202,7 @@ async fn handle_refresh(
         &ctx.db,
         &ctx.gmail_client,
         &ctx.sqs_client,
+        &ctx.macro_event_broker,
         gmail_access_token,
     )
     .await
