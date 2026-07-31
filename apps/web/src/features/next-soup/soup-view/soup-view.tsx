@@ -930,9 +930,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     // Plain click while engaged as a Controller previews into the Viewer;
-    // shift+click falls through to open a fresh split instead. Non-member
-    // channels flow through to openEntityInSplitFromUnifiedList, which shows the
-    // Viewer's Join prompt when previewing and otherwise no-ops.
+    // opt+click opens in place of the whole Preview Pair (the Viewer closes and
+    // the content replaces this list); shift+click falls through to open a
+    // fresh split instead. Non-member channels flow through to
+    // openEntityInSplitFromUnifiedList, which shows the Viewer's Join prompt
+    // when previewing and otherwise no-ops.
     if (
       panel.handle.isControllerSplit() &&
       type === 'entity' &&
@@ -949,6 +951,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       await openEntityInSplitFromUnifiedList(entity, {
         location,
         splitHandle: panel.handle,
+        replacePreview: event.altKey,
         referredFrom: currentView(),
       });
       return;

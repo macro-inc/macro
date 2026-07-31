@@ -249,9 +249,10 @@ export function CompanyKanban() {
   };
 
   const openCompany = (entity: EntityData, event: MouseEvent) => {
-    // Shift+click always opens a fresh split; a plain click while engaged as a
-    // Controller previews into the Viewer and shouldn't re-open an entity
-    // already shown elsewhere. Matches the list view's onEntityClick.
+    // Shift+click always opens a fresh split; opt+click opens into the Viewer
+    // for real; a plain click while engaged as a Controller previews into the
+    // Viewer and shouldn't re-open an entity already shown elsewhere. Matches
+    // the list view's onEntityClick.
     if (
       !event.shiftKey &&
       panel.handle.isControllerSplit() &&
@@ -263,6 +264,7 @@ export function CompanyKanban() {
 
     void openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
+      replacePreview: !event.shiftKey && event.altKey,
       splitHandle: panel.handle,
       referredFrom: 'companies',
     });
