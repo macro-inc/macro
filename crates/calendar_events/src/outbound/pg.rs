@@ -545,8 +545,7 @@ impl CalendarRepository for PgCalendarRepository {
                 is_read_only = EXCLUDED.is_read_only,
                 canonical_source_kind = EXCLUDED.canonical_source_kind,
                 canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
-                updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at),
-                deleted_at = NULL
+                updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at)
             WHERE
                 (
                     $25 = 'google'
@@ -690,7 +689,6 @@ impl CalendarRepository for PgCalendarRepository {
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
               )
-              AND event.deleted_at IS NULL
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (
@@ -1816,8 +1814,7 @@ async fn restore_best_source_or_delete(
             canonical_source_kind = $19,
             canonical_source_updated_at = $20,
             created_at = $21,
-            updated_at = GREATEST(calendar_events.updated_at, $22),
-            deleted_at = NULL
+            updated_at = GREATEST(calendar_events.updated_at, $22)
         WHERE id = $1
         "#,
         event_id,

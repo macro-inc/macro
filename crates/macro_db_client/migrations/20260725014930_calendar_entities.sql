@@ -115,7 +115,6 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     canonical_source_updated_at timestamptz NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    deleted_at timestamptz,
     UNIQUE (owner_id, source_link_id, ical_uid),
     UNIQUE (id, owner_id),
     UNIQUE (id, source_link_id),
@@ -139,12 +138,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 );
 
 CREATE INDEX IF NOT EXISTS calendar_events_owner_updated_idx
-    ON calendar_events (owner_id, updated_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
+    ON calendar_events (owner_id, updated_at DESC, id DESC);
 
 CREATE INDEX IF NOT EXISTS calendar_events_owner_created_idx
-    ON calendar_events (owner_id, created_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
+    ON calendar_events (owner_id, created_at DESC, id DESC);
 
 CREATE INDEX IF NOT EXISTS calendar_events_source_link_idx
     ON calendar_events (source_link_id);
