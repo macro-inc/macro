@@ -6,6 +6,8 @@
     "root": "../.."
   },
   "files": {
+    // orval's zod.ts crossed biome's 1 MiB default once calendar schemas landed
+    "maxSize": 2097152,
     "includes": [
       "**/*.{ts,tsx,js,jsx}",
       "**/openapi.json",
