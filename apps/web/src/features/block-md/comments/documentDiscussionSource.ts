@@ -13,6 +13,7 @@ import type { CommentThread } from '@service-storage/generated/schemas/commentTh
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
 import { createMemo } from 'solid-js';
 import { URL_PARAMS } from '../constants';
+import { mdStore } from '../signal/markdownBlockData';
 import {
   discussionThreads,
   sortComments,
@@ -71,6 +72,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const createReplyFn = useCreateDiscussionReply();
   const editFn = useEditDiscussionComment();
   const deleteFn = useDeleteDiscussionComment();
+  const md = mdStore.get;
 
   const threads = createMemo(() =>
     (discussionThreads() ?? []).map(toViewThread)
@@ -78,11 +80,33 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const targetCommentId = createMemo(
     () => {
       const commentId = urlParams.commentId();
-      if (!commentId) return null;
+      if (!commentId) {
+        console.debug('[discussion-target] no comment_id param');
+        return null;
+      }
+      if (!md.locationReady) {
+        console.debug('[discussion-target] waiting for editor location ready', {
+          commentId,
+          locationReady: md.locationReady,
+        });
+        return null;
+      }
 
-      const hasDiscussionComment = threads().some((thread) =>
+      const currentThreads = threads();
+      const threadSummary = currentThreads.map((thread) => ({
+        threadId: thread.id,
+        commentIds: thread.comments.map((comment) => comment.id),
+      }));
+
+      const hasDiscussionComment = currentThreads.some((thread) =>
         thread.comments.some((comment) => comment.id === commentId)
       );
+      console.debug('[discussion-target] source target check', {
+        commentId,
+        hasDiscussionComment,
+        threadCount: currentThreads.length,
+        threadSummary,
+      });
       return hasDiscussionComment ? commentId : null;
     },
     undefined,
@@ -94,6 +118,43 @@ export function createDocumentDiscussionSource(): DiscussionSource {
     canEdit: canComment,
     currentUserId: userId,
     targetCommentId,
+    scrollTargetCommentIntoView(target) {
+      const scrollContainer = md.scrollContainer;
+      if (!scrollContainer) {
+        console.debug('[discussion-target] missing md scroll container');
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const targetTop =
+        scrollContainer.scrollTop +
+        targetRect.top -
+        containerRect.top -
+        containerRect.height / 2 +
+        targetRect.height / 2;
+
+      console.debug('[discussion-target] md container scroll', {
+        scrollTop: scrollContainer.scrollTop,
+        targetTop,
+        container: {
+          top: containerRect.top,
+          bottom: containerRect.bottom,
+          height: containerRect.height,
+        },
+        target: {
+          top: targetRect.top,
+          bottom: targetRect.bottom,
+          height: targetRect.height,
+        },
+      });
+
+      scrollContainer.scrollTo({
+        top: targetTop,
+        behavior: 'smooth',
+      });
+    },
     async createThread(text, mentions) {
       await createThreadFn(text, buildCommentMentions(mentions));
     },

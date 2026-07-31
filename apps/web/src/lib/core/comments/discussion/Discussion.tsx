@@ -11,7 +11,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
@@ -31,64 +31,132 @@ import type {
 export function Discussion() {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
-  let sectionRef: HTMLElement | undefined;
+  const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
+  const mountedComments = new Map<string, HTMLElement>();
 
   // Deep-linking to a comment expands the discussion.
   createEffect(() => {
     if (source.targetCommentId() !== null) setIsExpanded(true);
   });
 
+  const registerMountedComment = (commentId: string, element: HTMLElement) => {
+    console.debug('[discussion-target] comment mounted', {
+      commentId,
+      isTarget: source.targetCommentId() === commentId,
+      mountedBefore: mountedComments.has(commentId),
+      isConnected: element.isConnected,
+    });
+    mountedComments.set(commentId, element);
+    setMountedCommentsVersion((version) => version + 1);
+  };
+
+  const unregisterMountedComment = (
+    commentId: string,
+    element: HTMLElement
+  ) => {
+    if (mountedComments.get(commentId) === element) {
+      console.debug('[discussion-target] comment unmounted', {
+        commentId,
+        isTarget: source.targetCommentId() === commentId,
+      });
+      mountedComments.delete(commentId);
+      setMountedCommentsVersion((version) => version + 1);
+    }
+  };
+
   createEffect(() => {
     const targetCommentId = source.targetCommentId();
-    if (!targetCommentId) return;
+    if (!targetCommentId) {
+      console.debug('[discussion-target] component target check', {
+        targetCommentId,
+        isExpanded: isExpanded(),
+        threadCount: source.threads().length,
+        mountedCount: mountedComments.size,
+      });
+      return;
+    }
 
-    const targetThread = source
-      .threads()
-      .find((thread) =>
-        thread.comments.some((comment) => comment.id === targetCommentId)
-      );
-    if (!targetThread) return;
+    const currentThreads = source.threads();
+    const targetThread = currentThreads.find((thread) =>
+      thread.comments.some((comment) => comment.id === targetCommentId)
+    );
+    if (!targetThread) {
+      console.debug('[discussion-target] waiting for target thread', {
+        targetCommentId,
+        isExpanded: isExpanded(),
+        threadCount: currentThreads.length,
+        mountedCount: mountedComments.size,
+      });
+      return;
+    }
 
     setIsExpanded(true);
+    mountedCommentsVersion();
 
-    const startedAt = performance.now();
-    let firstFoundAt: number | undefined;
-    let frame: number | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    const scrollToTarget = (behavior: ScrollBehavior) => {
-      const target = sectionRef?.querySelector<HTMLElement>(
-        `[data-discussion-comment-id="${targetCommentId}"]`
-      );
-      if (!target) return false;
-
-      target.scrollIntoView({ behavior, block: 'center' });
-      return true;
-    };
-
-    const queueScroll = () => {
-      frame = requestAnimationFrame(() => {
-        const now = performance.now();
-        const found = scrollToTarget(
-          firstFoundAt === undefined ? 'smooth' : 'auto'
-        );
-        if (found && firstFoundAt === undefined) firstFoundAt = now;
-
-        const shouldKeepTrying =
-          firstFoundAt === undefined
-            ? now - startedAt < 2000
-            : now - firstFoundAt < 500;
-        if (!shouldKeepTrying) return;
-
-        timeout = setTimeout(queueScroll, found ? 80 : 50);
+    const target = mountedComments.get(targetCommentId);
+    if (!target) {
+      console.debug('[discussion-target] waiting for target mount', {
+        targetCommentId,
+        targetThreadId: targetThread.id,
+        isExpanded: isExpanded(),
+        mountedIds: [...mountedComments.keys()],
       });
-    };
+      return;
+    }
 
-    queueScroll();
+    const scrollTargetIntoView =
+      source.scrollTargetCommentIntoView ??
+      ((target: HTMLElement) =>
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+
+    let afterFrame: number | undefined;
+    let afterSmoothStart: number | undefined;
+    const frame = requestAnimationFrame(() => {
+      const before = target.getBoundingClientRect();
+      console.debug('[discussion-target] scrolling target', {
+        targetCommentId,
+        targetThreadId: targetThread.id,
+        isConnected: target.isConnected,
+        before: {
+          top: before.top,
+          bottom: before.bottom,
+          height: before.height,
+        },
+      });
+
+      scrollTargetIntoView(target);
+
+      afterFrame = requestAnimationFrame(() => {
+        const after = target.getBoundingClientRect();
+        console.debug('[discussion-target] after scroll frame', {
+          targetCommentId,
+          after: {
+            top: after.top,
+            bottom: after.bottom,
+            height: after.height,
+          },
+        });
+      });
+
+      afterSmoothStart = window.setTimeout(() => {
+        const after = target.getBoundingClientRect();
+        console.debug('[discussion-target] after scroll timeout', {
+          targetCommentId,
+          after: {
+            top: after.top,
+            bottom: after.bottom,
+            height: after.height,
+          },
+        });
+      }, 300);
+    });
 
     onCleanup(() => {
-      if (frame !== undefined) cancelAnimationFrame(frame);
-      if (timeout) clearTimeout(timeout);
+      cancelAnimationFrame(frame);
+      if (afterFrame !== undefined) cancelAnimationFrame(afterFrame);
+      if (afterSmoothStart !== undefined) {
+        window.clearTimeout(afterSmoothStart);
+      }
     });
   });
 
@@ -102,7 +170,7 @@ export function Discussion() {
   };
 
   return (
-    <section ref={sectionRef} class="mt-3 pb-12">
+    <section class="mt-3 pb-12">
       <div class="flex items-center gap-2">
         <div class="w-6 border-t border-edge-muted" />
         <button
@@ -125,7 +193,13 @@ export function Discussion() {
           <div class="py-2 text-xs">
             <div>
               <Key each={source.threads()} by="id">
-                {(thread) => <DiscussionThreadView thread={thread()} />}
+                {(thread) => (
+                  <DiscussionThreadView
+                    thread={thread()}
+                    onCommentMount={registerMountedComment}
+                    onCommentCleanup={unregisterMountedComment}
+                  />
+                )}
               </Key>
             </div>
 
@@ -148,7 +222,11 @@ export function Discussion() {
   );
 }
 
-export function DiscussionThreadView(props: { thread: ViewThread }) {
+export function DiscussionThreadView(props: {
+  thread: ViewThread;
+  onCommentMount?: (commentId: string, element: HTMLElement) => void;
+  onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
+}) {
   const source = useDiscussion();
   const canEdit = source.canEdit;
 
@@ -245,6 +323,8 @@ export function DiscussionThreadView(props: { thread: ViewThread }) {
                 onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
                 onEditCancel={() => setEditingId(null)}
                 isHighlighted={source.targetCommentId() === rootComment().id}
+                onMount={props.onCommentMount}
+                onCleanup={props.onCommentCleanup}
               />
 
               <Show when={hasReplies() || isReplying()}>
@@ -269,6 +349,8 @@ export function DiscussionThreadView(props: { thread: ViewThread }) {
                             isHighlighted={
                               source.targetCommentId() === reply().id
                             }
+                            onMount={props.onCommentMount}
+                            onCleanup={props.onCommentCleanup}
                           />
                         </div>
                       )}
@@ -333,23 +415,25 @@ function DiscussionMessageView(props: {
   onEditSave: (snapshot: InputSnapshot) => void;
   onEditCancel: () => void;
   isHighlighted?: boolean;
+  onMount?: (commentId: string, element: HTMLElement) => void;
+  onCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
   const isEditing = () => props.editingId === props.comment.id;
   const messageData = () => discussionCommentToMessageData(props.comment);
 
   let containerRef: HTMLDivElement | undefined;
 
-  createEffect(() => {
-    if (!props.isHighlighted) return;
-
-    const frame = requestAnimationFrame(() => {
-      containerRef?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  onMount(() => {
+    if (!containerRef) return;
+    props.onMount?.(props.comment.id, containerRef);
+    onCleanup(() => {
+      if (!containerRef) return;
+      props.onCleanup?.(props.comment.id, containerRef);
     });
-    onCleanup(() => cancelAnimationFrame(frame));
   });
 
   return (
-    <div ref={containerRef} data-discussion-comment-id={props.comment.id}>
+    <div ref={containerRef}>
       <Show
         when={!isEditing()}
         fallback={

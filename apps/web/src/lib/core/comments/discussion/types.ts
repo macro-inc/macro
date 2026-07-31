@@ -48,6 +48,11 @@ export interface DiscussionSource {
   currentUserId: Accessor<string | undefined>;
   /** Comment id to highlight/scroll to (deep link), or null. */
   targetCommentId: Accessor<string | null>;
+  /**
+   * Scroll a rendered target comment into view. Sources can override this when
+   * they live inside a custom scroll container.
+   */
+  scrollTargetCommentIntoView?(target: HTMLElement): void;
   /** Start a new thread. */
   createThread(text: string, mentions: ItemMention[]): Promise<void>;
   /** Reply to an existing thread. */
