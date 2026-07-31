@@ -64,28 +64,28 @@ const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
     label: 'bg-ink border border-ink text-surface',
   },
   accentOpaque: {
-    label: '',
-    hotkey: '',
+    hotkey: 'bg-accent/10 border border-accent text-accent',
+    label: 'bg-accent border border-accent text-surface',
   },
   contrast: {
-    label: '',
-    hotkey: '',
+    hotkey: 'bg-ink border border-ink text-surface',
+    label: 'bg-surface border border-ink text-ink',
   },
   selected: {
-    label: '',
-    hotkey: '',
+    hotkey: 'bg-accent-bg border border-accent/40 text-accent',
+    label: 'bg-accent border border-accent text-surface',
   },
   clear: {
-    label: '',
-    hotkey: '',
+    hotkey: 'bg-transparent border border-transparent text-ink-muted',
+    label: 'bg-transparent border border-transparent text-ink',
   },
   green: {
-    label: '',
-    hotkey: '',
+    hotkey: 'bg-success-bg border border-success/30 text-success',
+    label: 'bg-success border border-success text-surface',
   },
   red: {
-    label: '',
-    hotkey: '',
+    hotkey: 'bg-failure/10 border border-failure/30 text-failure',
+    label: 'bg-failure border border-failure text-surface',
   },
 };
 
