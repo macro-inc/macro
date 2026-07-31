@@ -417,7 +417,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'skill',
     hotkeyToken: TOKENS.create.skill,
     altHotkeyToken: TOKENS.create.skillNewSplit,
-    hotkey: 'l' as const,
+    hotkey: 'i' as const,
     keyDownHandler: () => {
       runCreateAction('skill', { shouldInsert: pressedKeys().has('shift') });
       return true;
