@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::{AcpSessionId, AgentId, PendingMessageId};
 use agent::types::AssistantMessagePart;
 use agent_client_protocol::schema::v1::{
     ContentBlock, ContentChunk, RequestId, SessionUpdate, TextContent,
@@ -21,8 +22,8 @@ const USER: &str = "macro|test@example.com";
 /// runtime. Tests exercising the bootstrap itself clear/override this.
 const TEST_ACP_SESSION_ID: &str = "acp-test-session";
 
-fn session() -> Uuid {
-    Uuid::from_u128(0x1111_2222_3333_4444)
+fn session() -> AgentId {
+    AgentId::new(Uuid::from_u128(0x1111_2222_3333_4444))
 }
 
 fn user_id() -> MacroUserIdStr<'static> {
@@ -228,7 +229,7 @@ impl MessageRepo for FakeRepo {
 
 #[derive(Clone)]
 struct FakeSessions {
-    sent: Arc<StdMutex<Vec<(Uuid, RawJsonRpcMessage)>>>,
+    sent: Arc<StdMutex<Vec<(AgentId, RawJsonRpcMessage)>>>,
     connected: Arc<StdMutex<bool>>,
     fail_send: Arc<StdMutex<bool>>,
 }
@@ -244,20 +245,20 @@ impl Default for FakeSessions {
 }
 
 impl RuntimeSessions for FakeSessions {
-    fn send(&self, session_id: Uuid, message: RawJsonRpcMessage) -> Result<()> {
+    fn send(&self, agent_id: AgentId, message: RawJsonRpcMessage) -> Result<()> {
         if *self.fail_send.lock().unwrap() {
             return Err(AgentProxyErr::SessionNotConnected);
         }
-        self.sent.lock().unwrap().push((session_id, message));
+        self.sent.lock().unwrap().push((agent_id, message));
         Ok(())
     }
 
-    fn is_connected(&self, _session_id: Uuid) -> bool {
+    fn is_connected(&self, _agent_id: AgentId) -> bool {
         *self.connected.lock().unwrap()
     }
 }
 
-type Notified = (Uuid, &'static str, serde_json::Value);
+type Notified = (AgentId, &'static str, serde_json::Value);
 
 #[derive(Clone, Default)]
 struct FakeNotifier {
@@ -267,14 +268,14 @@ struct FakeNotifier {
 impl ClientNotifier for FakeNotifier {
     async fn notify_session(
         &self,
-        session_id: Uuid,
+        agent_id: AgentId,
         message_type: &'static str,
         payload: serde_json::Value,
     ) -> anyhow::Result<()> {
         self.notified
             .lock()
             .unwrap()
-            .push((session_id, message_type, payload));
+            .push((agent_id, message_type, payload));
         Ok(())
     }
 }
@@ -285,19 +286,19 @@ struct FakeQueue {
 }
 
 impl PendingMessages for FakeQueue {
-    async fn enqueue(&self, _session_id: Uuid, message: RawJsonRpcMessage) -> anyhow::Result<()> {
+    async fn enqueue(&self, _agent_id: AgentId, message: RawJsonRpcMessage) -> anyhow::Result<()> {
         self.pending.lock().unwrap().push(PendingMessage {
-            id: macro_uuid::generate_uuid_v7(),
+            id: PendingMessageId::new(macro_uuid::generate_uuid_v7()),
             message,
         });
         Ok(())
     }
 
-    async fn list(&self, _session_id: Uuid) -> anyhow::Result<Vec<PendingMessage>> {
+    async fn list(&self, _agent_id: AgentId) -> anyhow::Result<Vec<PendingMessage>> {
         Ok(self.pending.lock().unwrap().clone())
     }
 
-    async fn delete(&self, id: Uuid) -> anyhow::Result<()> {
+    async fn delete(&self, id: PendingMessageId) -> anyhow::Result<()> {
         self.pending.lock().unwrap().retain(|p| p.id != id);
         Ok(())
     }
@@ -376,7 +377,7 @@ fn harness(kind: ChatAgentKind, access: AccessLevel) -> Harness {
         .acp_sessions
         .lock()
         .unwrap()
-        .insert(session(), TEST_ACP_SESSION_ID.to_string());
+        .insert(session(), AcpSessionId::new(TEST_ACP_SESSION_ID));
     Harness {
         service,
         repo,
@@ -736,7 +737,7 @@ async fn handle_agent_connected_creates_acp_session() {
             .unwrap()
             .get(&session())
             .cloned(),
-        Some("acp-session-xyz".to_string())
+        Some(AcpSessionId::new("acp-session-xyz"))
     );
 
     let sent = h.sessions.sent.lock().unwrap();
@@ -896,7 +897,7 @@ async fn flush_pending_delivers_oldest_first_and_clears_the_queue() {
         .acp_sessions
         .lock()
         .unwrap()
-        .insert(session(), TEST_ACP_SESSION_ID.to_string());
+        .insert(session(), AcpSessionId::new(TEST_ACP_SESSION_ID));
     h.service.flush_pending(session()).await.unwrap();
 
     let sent = h.sessions.sent.lock().unwrap();
@@ -936,7 +937,7 @@ async fn flush_pending_keeps_undelivered_messages_queued() {
         .acp_sessions
         .lock()
         .unwrap()
-        .insert(session(), TEST_ACP_SESSION_ID.to_string());
+        .insert(session(), AcpSessionId::new(TEST_ACP_SESSION_ID));
     *h.sessions.fail_send.lock().unwrap() = true;
     h.service.flush_pending(session()).await.unwrap();
 
@@ -967,7 +968,7 @@ async fn flushed_prompt_responses_end_the_turn() {
         .acp_sessions
         .lock()
         .unwrap()
-        .insert(session(), TEST_ACP_SESSION_ID.to_string());
+        .insert(session(), AcpSessionId::new(TEST_ACP_SESSION_ID));
     h.service.flush_pending(session()).await.unwrap();
 
     // The runtime streams a chunk, then answers the flushed prompt: its
