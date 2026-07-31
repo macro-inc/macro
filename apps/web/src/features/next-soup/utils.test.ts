@@ -178,7 +178,7 @@ describe('preview history source', () => {
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({})),
-      getSplitByContent: vi.fn(),
+      getSplitByContent: vi.fn(() => ({ id: 'another-split' })),
       openWithSplit,
     } as unknown as SplitManager);
 
@@ -194,6 +194,7 @@ describe('preview history source', () => {
     expect(openWithSplit.mock.calls[0][1]).toMatchObject({
       replacePreview: true,
     });
+    expect(toastAlert).not.toHaveBeenCalled();
     expect(openWithSplit.mock.calls[0][1].preferNewSplit).toBeUndefined();
     // The content takes the pair's place, so it is not preview history.
     expect(

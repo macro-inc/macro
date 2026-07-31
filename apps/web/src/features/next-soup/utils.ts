@@ -591,6 +591,7 @@ export const openEntityInSplitFromUnifiedList = async (
   if (
     !allowDuplicate &&
     !openInNewSplit &&
+    !replacePreview &&
     splitHandle &&
     preventDuplicatePreviewEntityOpen(entity, splitHandle)
   ) {

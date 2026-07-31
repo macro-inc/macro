@@ -940,7 +940,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       type === 'entity' &&
       !event.shiftKey
     ) {
-      if (preventDuplicatePreviewEntityOpen(entity, panel.handle)) return;
+      if (
+        !event.altKey &&
+        preventDuplicatePreviewEntityOpen(entity, panel.handle)
+      ) {
+        return;
+      }
 
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
       // The openWithSplit redirect keeps the Viewer unfocused so keyboard
