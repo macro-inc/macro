@@ -33,8 +33,10 @@ pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
 pub mod opensearch;
+pub mod portmap;
 pub mod proxy;
 pub mod resources;
+pub mod sdk_webhook;
 pub mod seed_env;
 pub mod snapshot;
 pub mod stack;
@@ -233,6 +235,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // DynamoDB/OpenSearch connection refused).
     bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
     bring_up_app(&stage, mode, &instance, &env)?;
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(&instance))
+        .transpose()?;
 
     // No restart-to-reload step: the teardown means `up` always creates fresh
     // containers, which start on the just-built binaries bind-mounted at
@@ -501,6 +506,9 @@ fn prepare(
         .is_some_and(|key| !key.trim().is_empty());
     gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
+    if mode == Mode::Local {
+        portmap::write(instance)?;
+    }
     if mode.spec().runs_local_infra {
         let google = kickstart::GoogleIdp::from_env(&env.merged);
         fusionauth::write_kickstart(instance, google.as_ref())?;
@@ -813,6 +821,7 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// is best-effort and noisy) so callers surface it as a single line; absent
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
+    sdk_webhook::stop(instance);
     let project = instance.project_name();
     // `-t 0`: SIGKILL immediately, no graceful-shutdown grace. The default 10s
     // SIGTERM timeout per container (Postgres' smart shutdown, OpenSearch, …)
@@ -911,6 +920,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
 pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    sdk_webhook::stop(&instance);
     let mut cmd = Command::new("docker");
     cmd.args(["compose", "-p", instance.project_name(), "stop"]);
     stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)
