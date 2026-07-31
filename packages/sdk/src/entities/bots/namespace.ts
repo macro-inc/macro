@@ -19,7 +19,11 @@ export class BotsNamespace {
         'bots.me() requires bot auth — a user API key has no bot identity',
       );
     }
-    return unwrap(await this.client.storage.getSelfBot());
+    return unwrap(
+      await this.client.storage.getSelfBot({
+        headers: { 'x-macro-bot-scope': 'user' },
+      }),
+    );
   }
 
   /**

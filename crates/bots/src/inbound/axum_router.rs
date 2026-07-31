@@ -19,7 +19,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{AdminParticipantRole, EntityAccessReceipt},
+        models::{AdminParticipantRole, EntityAccessReceipt, MemberParticipantRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
@@ -428,7 +428,7 @@ async fn list_channel_bots_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
-    _access: ChannelAccessLevelExtractor<AdminParticipantRole, Svc, Auth>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     Path(path): Path<ChannelPath>,
 ) -> Result<Json<Vec<Bot>>, BotsHandlerErr> {
     Ok(Json(

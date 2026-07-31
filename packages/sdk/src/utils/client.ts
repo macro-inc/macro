@@ -87,10 +87,12 @@ export class MacroClient {
       const tok = typeof source === 'function' ? await source() : source;
       if (this.authConfig.type === 'bot') {
         request.headers.set('x-macro-bot-token', tok);
-        request.headers.set(
-          'x-macro-bot-scope',
-          this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
-        );
+        if (!request.headers.has('x-macro-bot-scope')) {
+          request.headers.set(
+            'x-macro-bot-scope',
+            this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
+          );
+        }
         if (this.requestedAs) {
           request.headers.set(
             'x-macro-bot-for-macro-user-id',

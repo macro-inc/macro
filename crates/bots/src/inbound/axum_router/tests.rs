@@ -46,10 +46,12 @@ enum TestBotMode {
 struct TestBotService {
     mode: TestBotMode,
     bot_channels: Vec<BotChannel>,
+    channel_bots: Vec<Bot>,
     self_bot: Option<Bot>,
     add_calls: Arc<AtomicUsize>,
     remove_calls: Arc<AtomicUsize>,
     list_bot_channels_calls: Arc<AtomicUsize>,
+    list_channel_bots_calls: Arc<AtomicUsize>,
 }
 
 impl TestBotService {
@@ -64,14 +66,23 @@ impl TestBotService {
         }
     }
 
+    fn with_channel_bots(mode: TestBotMode, channel_bots: Vec<Bot>) -> Self {
+        Self {
+            channel_bots,
+            ..Self::new(mode)
+        }
+    }
+
     fn with_bot_channels(mode: TestBotMode, bot_channels: Vec<BotChannel>) -> Self {
         Self {
             mode,
             bot_channels,
+            channel_bots: Vec::new(),
             self_bot: None,
             add_calls: Arc::new(AtomicUsize::new(0)),
             remove_calls: Arc::new(AtomicUsize::new(0)),
             list_bot_channels_calls: Arc::new(AtomicUsize::new(0)),
+            list_channel_bots_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -168,7 +179,9 @@ impl BotService for TestBotService {
     }
 
     async fn list_channel_bots(&self, _channel_id: Uuid) -> Result<Vec<Bot>, BotError> {
-        unimplemented!()
+        self.list_channel_bots_calls.fetch_add(1, Ordering::SeqCst);
+        self.result()?;
+        Ok(self.channel_bots.clone())
     }
 
     async fn create_token(
@@ -616,6 +629,32 @@ async fn bots_me_rejects_user_bearer_credentials() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn channel_member_can_list_channel_bots() {
+    let channel_id = Uuid::new_v4();
+    let bot = sample_self_bot(BotId::new_from_uuid(Uuid::new_v4()));
+    let service = TestBotService::with_channel_bots(TestBotMode::Ok, vec![bot.clone()]);
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/channels/{channel_id}/bots"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let bots: Vec<Bot> = serde_json::from_slice(&body).unwrap();
+    assert_eq!(bots.len(), 1);
+    assert_eq!(bots[0].id, bot.id);
+    assert_eq!(service.list_channel_bots_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
