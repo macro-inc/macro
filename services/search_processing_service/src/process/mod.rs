@@ -58,27 +58,65 @@ pub async fn process_message(
             .await?;
         }
         SearchQueueMessage::RemoveEmailLink(message) => {
-            email::remove::process_remove_messages_by_link_id(&ctx.opensearch_client, &message)
+            let link_id = message
+                .link_id
+                .parse::<Uuid>()
+                .context("failed to parse link_id as UUID")?;
+            email::remove::process_remove_messages_by_link_id(&ctx.opensearch_client, link_id)
                 .await?;
         }
         SearchQueueMessage::ExtractEmailThreadMessage(message) => {
-            email::upsert::process_upsert_thread_message(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
+            let thread_id = message
+                .thread_id
+                .parse::<Uuid>()
+                .context("failed to parse thread_id as UUID")?;
+            email::upsert::process_upsert_thread_message(
+                &ctx.opensearch_client,
+                &ctx.db,
+                thread_id,
+                &message.macro_user_id,
+                message.index_override.as_deref(),
+            )
+            .await?;
         }
         SearchQueueMessage::ExtractEmailThreadBatch(message) => {
+            let thread_ids = message
+                .thread_ids
+                .iter()
+                .map(|thread_id| {
+                    thread_id
+                        .parse::<Uuid>()
+                        .context("failed to parse thread_id as UUID")
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
             email::upsert::process_upsert_thread_batch_message(
                 &ctx.opensearch_client,
                 &ctx.db,
-                &message,
+                &thread_ids,
+                &message.macro_user_id,
+                message.index_override.as_deref(),
             )
             .await?;
         }
         SearchQueueMessage::RemoveEmailMessage(message) => {
-            email::remove::process_remove_message(&ctx.opensearch_client, &message).await?;
+            let message_id = message
+                .message_id
+                .parse::<Uuid>()
+                .context("failed to parse message_id as UUID")?;
+            email::remove::process_remove_message(&ctx.opensearch_client, message_id, None).await?;
         }
         SearchQueueMessage::ExtractEmailMessage(message) => {
-            email::upsert::process_upsert_message(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
+            let message_id = message
+                .message_id
+                .parse::<Uuid>()
+                .context("failed to parse message_id as UUID")?;
+            email::upsert::process_upsert_message(
+                &ctx.opensearch_client,
+                &ctx.db,
+                message_id,
+                &message.macro_user_id,
+            )
+            .await?;
         }
         SearchQueueMessage::ExtractDocumentText(message) => {
             document::process_extract_text_message(
