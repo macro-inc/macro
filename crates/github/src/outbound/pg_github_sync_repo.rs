@@ -408,4 +408,34 @@ impl GithubSyncRepo for PgGithubSyncRepo {
 
         Ok(installation_ids)
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_installation_sources(&self, installation_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM github_app_installation
+            WHERE id = $1
+            "#,
+            installation_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_installation_installer(&self, installation_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM github_app_installation_installer
+            WHERE installation_id = $1
+            "#,
+            installation_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

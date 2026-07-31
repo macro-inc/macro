@@ -929,3 +929,69 @@ async fn test_get_installation_ids_by_installer_empty(pool: Pool<Postgres>) {
 
     assert!(installation_ids.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// delete_installation_sources / delete_installation_installer
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_delete_installation_sources_removes_all_sources(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool.clone());
+
+    let sources = vec![
+        GithubAppInstallationSource::Team("dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap()),
+        GithubAppInstallationSource::User("macro|solo@user.com".to_string()),
+    ];
+    repo.upsert_installation_sources("123456", &sources)
+        .await
+        .unwrap();
+    repo.upsert_installation_sources("654321", &sources)
+        .await
+        .unwrap();
+
+    repo.delete_installation_sources("123456").await.unwrap();
+
+    assert!(get_installation_sources(&pool, "123456").await.is_empty());
+    // Other installations keep their sources.
+    assert_eq!(get_installation_sources(&pool, "654321").await.len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delete_installation_sources_missing_installation_is_noop(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.delete_installation_sources("missing").await.unwrap();
+    repo.delete_installation_sources("missing").await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delete_installation_installer_removes_installer(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.upsert_installation_installer("11111", "12345")
+        .await
+        .unwrap();
+    repo.upsert_installation_installer("22222", "12345")
+        .await
+        .unwrap();
+
+    repo.delete_installation_installer("11111").await.unwrap();
+
+    assert_eq!(
+        repo.get_installation_ids_by_installer("12345")
+            .await
+            .unwrap(),
+        vec!["22222"]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delete_installation_installer_missing_installation_is_noop(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.delete_installation_installer("missing").await.unwrap();
+    repo.delete_installation_installer("missing").await.unwrap();
+}

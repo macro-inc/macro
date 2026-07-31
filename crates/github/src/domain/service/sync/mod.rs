@@ -981,6 +981,7 @@ impl<
             }
             GithubWebhookEventType::Installation => match action {
                 Some("created") => self.handle_installation_created(webhook_event).await,
+                Some("deleted") => self.handle_installation_deleted(webhook_event).await,
                 _ => {
                     tracing::debug!(action, "skipping unhandled installation action");
                     Ok(())

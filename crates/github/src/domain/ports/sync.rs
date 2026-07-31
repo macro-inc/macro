@@ -114,6 +114,20 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         &self,
         github_user_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Deletes all source associations for a GitHub App installation.
+    /// Deleting an installation with no associations is a no-op (idempotent).
+    fn delete_installation_sources(
+        &self,
+        installation_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Deletes the recorded installer for a GitHub App installation.
+    /// Deleting an installation with no recorded installer is a no-op (idempotent).
+    fn delete_installation_installer(
+        &self,
+        installation_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Client interface for making GitHub sync API calls.

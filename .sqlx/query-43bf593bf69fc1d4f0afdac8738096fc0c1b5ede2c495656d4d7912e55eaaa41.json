@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM github_app_installation_installer\n            WHERE installation_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "43bf593bf69fc1d4f0afdac8738096fc0c1b5ede2c495656d4d7912e55eaaa41"
+}

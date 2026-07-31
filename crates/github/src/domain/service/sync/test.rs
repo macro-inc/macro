@@ -618,6 +618,22 @@ impl GithubSyncRepo for StubSyncRepo {
         installation_ids.sort();
         Ok(installation_ids)
     }
+
+    async fn delete_installation_sources(&self, installation_id: &str) -> Result<(), Self::Err> {
+        self.installation_source_rows
+            .lock()
+            .unwrap()
+            .remove(installation_id);
+        Ok(())
+    }
+
+    async fn delete_installation_installer(&self, installation_id: &str) -> Result<(), Self::Err> {
+        self.installation_installers
+            .lock()
+            .unwrap()
+            .remove(installation_id);
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -4085,6 +4101,94 @@ async fn installation_created_records_installer_with_github_link() {
         service.repo.installation_installers(),
         HashMap::from([("11111".to_string(), "12345".to_string())])
     );
+}
+
+// ---------------------------------------------------------------------------
+// installation deleted
+// ---------------------------------------------------------------------------
+
+fn installation_deleted_event(sender_id: u64, installation_id: u64) -> ValidatedGithubWebhookEvent {
+    ValidatedGithubWebhookEvent::new(
+        "installation".to_string(),
+        serde_json::json!({
+            "action": "deleted",
+            "installation": { "id": installation_id },
+            "sender": { "login": "testuser", "id": sender_id }
+        }),
+    )
+}
+
+#[tokio::test]
+async fn installation_deleted_removes_sources_and_installer() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("99999", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_installation_sources(
+            "88888",
+            vec![GithubAppInstallationSource::User(
+                "macro|user@user.com".to_string(),
+            )],
+        )
+        .with_installation_installer("99999", "12345")
+        .with_installation_installer("88888", "67890");
+
+    let service = make_sync_service_with_repo(repo);
+    let event = installation_deleted_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(
+        service
+            .repo
+            .get_installation_sources("99999")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        service.repo.installation_installers(),
+        HashMap::from([("88888".to_string(), "67890".to_string())])
+    );
+
+    // Other installations are untouched.
+    assert_eq!(
+        service
+            .repo
+            .get_installation_sources("88888")
+            .await
+            .unwrap(),
+        vec![GithubAppInstallationSource::User(
+            "macro|user@user.com".to_string()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn installation_deleted_unknown_installation_succeeds() {
+    let service = make_sync_service();
+    let event = installation_deleted_event(12345, 99999);
+
+    // GitHub retries webhooks: deleting an installation we never recorded
+    // (or already deleted) must succeed.
+    service.process_webhook_event(&event).await.unwrap();
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_installers().is_empty());
+}
+
+#[tokio::test]
+async fn installation_deleted_missing_installation_id_errors() {
+    let service = make_sync_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "installation".to_string(),
+        serde_json::json!({
+            "action": "deleted",
+            "sender": { "login": "testuser", "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap_err();
 }
 
 #[tokio::test]
