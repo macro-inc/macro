@@ -88,6 +88,7 @@ fn items_router(state: ApiContext) -> Router<ApiContext> {
 fn api_router(state: ApiContext) -> Router {
     let github_sync_service_router_state = GithubSyncRouterState {
         service: state.github_sync_service.clone(),
+        entity_access_service: state.entity_access_service.clone(),
         authorization_state: state.authorization_state.clone(),
     };
 

@@ -1308,7 +1308,7 @@ function TeamManagement(props: {
               description="Connect your team's repositories for pull request sync."
             >
               <a
-                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync?team_id=${encodeURIComponent(props.teamId)}`}
+                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"

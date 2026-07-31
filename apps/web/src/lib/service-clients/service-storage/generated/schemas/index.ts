@@ -698,7 +698,6 @@ export * from './hashMapOneOfFour';
 export * from './hashMapOneOfFourAllOf';
 export * from './hashMapOneOfFourAllOfType';
 export * from './highlightType';
-export * from './installSyncParams';
 export * from './interactionReason';
 export * from './item';
 export * from './itemWithUserAccessLevel';

@@ -8,6 +8,7 @@ version = "0.1.0"
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:entity_access",
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
@@ -44,6 +45,7 @@ documents = { path = "../documents", default-features = false, features = [
   "ports",
 ], optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
+  "inbound",
   "ports",
 ], optional = true }
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
