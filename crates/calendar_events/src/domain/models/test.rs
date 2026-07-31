@@ -45,6 +45,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
         id: Uuid::now_v7(),
         sync_token: Some("token".to_string()),
         materialized_range: Some(materialized.clone()),
+        watch_expires_at: None,
     };
 
     assert_eq!(
@@ -74,6 +75,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
         id: Uuid::now_v7(),
         sync_token: None,
         materialized_range: Some(materialized.clone()),
+        watch_expires_at: None,
     };
     assert_eq!(
         uninitialized.sync_plan(&OccurrenceRange::historical_sync(now)),
@@ -84,6 +86,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
         id: Uuid::now_v7(),
         sync_token: Some("token".to_string()),
         materialized_range: None,
+        watch_expires_at: None,
     };
     assert_eq!(
         unmaterialized.sync_plan(&OccurrenceRange::historical_sync(now)),

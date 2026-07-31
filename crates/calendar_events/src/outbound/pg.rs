@@ -15,8 +15,8 @@ use crate::domain::{
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarEvent, CalendarEventOverride,
         CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, CalendarOccurrenceCursor,
         CalendarSyncStatus, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
-        ProviderCalendar, StoredGoogleCalendar,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
@@ -258,6 +258,7 @@ struct StoredCalendarRow {
     materialized_ends_at: Option<DateTime<Utc>>,
     materialized_start_date: Option<NaiveDate>,
     materialized_end_date: Option<NaiveDate>,
+    watch_expires_at: Option<DateTime<Utc>>,
 }
 
 struct OccurrenceJoinRow {
@@ -941,6 +942,108 @@ impl CalendarRepository for PgCalendarRepository {
         tx.commit().await.map_err(report)
     }
 
+    #[tracing::instrument(skip(self, channel), fields(job_id = %key.job_id), err)]
+    async fn record_watch_channel(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        channel: GoogleWatchChannel,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET watch_channel_id = $3,
+                watch_resource_id = $4,
+                watch_expires_at = $5,
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            calendar_id,
+            account_id,
+            channel.channel_id.to_string(),
+            channel.resource_id,
+            channel.expires_at,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
+    }
+
+    #[tracing::instrument(skip(self, channel_id, resource_id), err)]
+    async fn find_watch_target(
+        &self,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> Result<Option<Uuid>, Report> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT account.email_link_id
+            FROM calendars calendar
+            JOIN calendar_accounts account ON account.id = calendar.account_id
+            WHERE calendar.watch_channel_id = $1
+              AND calendar.watch_resource_id = $2
+              AND NOT calendar.is_deleted
+              AND account.sync_status <> 'disabled'
+            "#,
+            channel_id,
+            resource_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn schedule_google_sync_for_link(&self, email_link_id: Uuid) -> Result<bool, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let scheduled = sqlx::query_scalar!(
+            r#"
+            WITH due AS (
+                UPDATE calendar_backfill_jobs job
+                SET status = 'pending',
+                    cursor = '{}',
+                    last_error = NULL,
+                    started_at = NULL,
+                    completed_at = NULL,
+                    lease_token = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = now()
+                FROM calendar_accounts account, email_links link
+                WHERE job.email_link_id = $1
+                  AND job.email_link_id = account.email_link_id
+                  AND job.account_id = account.id
+                  AND link.id = job.email_link_id
+                  AND job.kind = 'google_calendar'
+                  AND job.status = 'complete'
+                  AND job.grant_version = link.google_grant_version
+                  AND link.google_granted_scopes @> $2::text[]
+                  AND account.sync_status = 'ready'
+                RETURNING job.id
+            ),
+            republished AS (
+                UPDATE calendar_sync_outbox outbox
+                SET published_at = NULL
+                FROM due
+                WHERE outbox.backfill_job_id = due.id
+            )
+            SELECT count(*) > 0 AS "scheduled!" FROM due
+            "#,
+            email_link_id,
+            &required_scopes,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(scheduled)
+    }
+
     #[tracing::instrument(skip(self, calendar_ids), fields(job_id = %key.job_id), err)]
     async fn reconcile_google_calendar_list(
         &self,
@@ -1144,7 +1247,8 @@ async fn upsert_calendar_tx(
             materialized_starts_at,
             materialized_ends_at,
             materialized_start_date,
-            materialized_end_date
+            materialized_end_date,
+            watch_expires_at
         "#,
         Uuid::now_v7(),
         account_id,
@@ -1188,6 +1292,7 @@ fn stored_google_calendar(row: StoredCalendarRow) -> Result<StoredGoogleCalendar
         id: row.id,
         sync_token: row.sync_token,
         materialized_range,
+        watch_expires_at: row.watch_expires_at,
     })
 }
 

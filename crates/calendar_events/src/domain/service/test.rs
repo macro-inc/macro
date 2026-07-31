@@ -6,8 +6,8 @@ use crate::domain::{
         CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EmailCalendarBackfillState,
         EmailCalendarScanAssociation, EmailCalendarScanJob, EmailCalendarScanStatus,
         EmailIcsSource, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, ProviderCalendar,
-        StoredGoogleCalendar,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch,
+        GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
@@ -68,6 +68,7 @@ impl CalendarRepository for FakeRepo {
             id: Uuid::nil(),
             sync_token: None,
             materialized_range: None,
+            watch_expires_at: None,
         })
     }
 
@@ -90,6 +91,29 @@ impl CalendarRepository for FakeRepo {
         _calendar_ids: Vec<Uuid>,
     ) -> Result<(), Report> {
         Ok(())
+    }
+
+    async fn record_watch_channel(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
+        _channel: GoogleWatchChannel,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn find_watch_target(
+        &self,
+        _channel_id: &str,
+        _resource_id: &str,
+    ) -> Result<Option<Uuid>, Report> {
+        Ok(None)
+    }
+
+    async fn schedule_google_sync_for_link(&self, _email_link_id: Uuid) -> Result<bool, Report> {
+        Ok(false)
     }
 }
 
@@ -215,6 +239,17 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
             cancelled_provider_event_ids: Vec::new(),
         })
     }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
 }
 
 #[derive(Clone)]
@@ -238,6 +273,17 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
         _context: GoogleEventSyncContext,
     ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
         unreachable!("calendar listing fails first")
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
     }
 }
 
@@ -339,6 +385,7 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
         FakeRepo::default(),
         FakeGoogleProvider,
         lifecycle.clone(),
+        None,
     );
 
     let count = coordinator
@@ -377,6 +424,17 @@ impl GoogleCalendarProvider for HangingGoogleProvider {
     ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
         unreachable!("provider hangs before syncing events")
     }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
 }
 
 #[tokio::test]
@@ -386,6 +444,7 @@ async fn google_coordinator_surfaces_lease_loss_while_work_is_running() {
         FakeRepo::default(),
         HangingGoogleProvider,
         lifecycle.clone(),
+        None,
     );
 
     let error = coordinator
@@ -413,6 +472,7 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
         FakeRepo::default(),
         ReauthGoogleProvider,
         lifecycle.clone(),
+        None,
     );
 
     let error = coordinator

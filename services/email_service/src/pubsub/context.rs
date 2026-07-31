@@ -4,6 +4,7 @@ use crate::pubsub::calendar_backfill_adapters::{
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use calendar_events::{
+    domain::models::GoogleWatchConfig,
     domain::service::{
         EmailCalendarBackfillCoordinator, GoogleCalendarBackfillCoordinator,
         GoogleCalendarBackfillFailureService,
@@ -76,6 +77,7 @@ impl CalendarBackfillServices {
                     RedisCalendarRequestGate::new(redis_client),
                 ),
                 repository.clone(),
+                calendar_watch_config(),
             )),
             email_ics: Arc::new(EmailCalendarBackfillCoordinator::new(
                 PgEmailCalendarBackfillRepository::new(db),
@@ -84,6 +86,15 @@ impl CalendarBackfillServices {
             google_failure: Arc::new(GoogleCalendarBackfillFailureService::new(repository)),
         }
     }
+}
+
+/// Push notification channels are opened only when both optional watch
+/// variables are configured; without them the 5-minute poll is the sole
+/// freshness mechanism.
+pub fn calendar_watch_config() -> Option<GoogleWatchConfig> {
+    let address = macro_env_var::maybe_read_env("CALENDAR_WATCH_WEBHOOK_URL")?;
+    let token = macro_env_var::maybe_read_env("CALENDAR_WATCH_TOKEN")?;
+    Some(GoogleWatchConfig { address, token })
 }
 
 /// The unfurl-backed resolver used when Apollo enrichment is disabled.

@@ -13,7 +13,7 @@ use crate::domain::{
         AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventOverride,
         CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, EventStart, EventStatus,
         EventTime, EventTransparency, EventVisibility, GoogleEventSource, GoogleEventSyncBatch,
-        GoogleSyncPlan, OccurrenceRange, ProviderCalendar,
+        GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
     },
     ports::{
         GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
@@ -453,6 +453,50 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
             next_sync_token,
             materialized_range,
             cancelled_provider_event_ids: applied.cancelled.into_iter().collect(),
+        })
+    }
+
+    #[tracing::instrument(skip(self, access_token, config), err)]
+    async fn watch_calendar(
+        &self,
+        access_token: &str,
+        email_link_id: Uuid,
+        provider_calendar_id: &str,
+        channel_id: Uuid,
+        config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        let calendar = urlencoding::encode(provider_calendar_id);
+        self.gate.acquire(email_link_id).await?;
+        let response: GoogleChannelResponse = send_google(
+            self.client
+                .post(format!(
+                    "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/watch"
+                ))
+                .bearer_auth(access_token)
+                .json(&serde_json::json!({
+                    "id": channel_id.to_string(),
+                    "type": "web_hook",
+                    "address": config.address,
+                    "token": config.token,
+                })),
+        )
+        .await?;
+        let expiration_millis: i64 = response.expiration.parse().map_err(|_| {
+            GoogleProviderError::new(
+                GoogleProviderErrorKind::Transient,
+                "Google Calendar watch returned an unparseable expiration",
+            )
+        })?;
+        let expires_at = DateTime::from_timestamp_millis(expiration_millis).ok_or_else(|| {
+            GoogleProviderError::new(
+                GoogleProviderErrorKind::Transient,
+                "Google Calendar watch returned an out-of-range expiration",
+            )
+        })?;
+        Ok(GoogleWatchChannel {
+            channel_id,
+            resource_id: response.resource_id,
+            expires_at,
         })
     }
 }
@@ -1055,6 +1099,13 @@ fn parse_datetime(value: Option<&str>) -> Option<DateTime<Utc>> {
 
 fn report(error: impl std::error::Error + Send + Sync + 'static) -> Report {
     rootcause::report!(error).into()
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleChannelResponse {
+    resource_id: String,
+    expiration: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -245,6 +245,28 @@ where
     ) -> Result<super::models::CalendarSyncStatus, Report> {
         self.repository.sync_status(requester_id).await
     }
+
+    /// Re-arm the watched inbox's sync job for a push notification whose
+    /// channel token the adapter already verified. Returns whether the
+    /// notification matched an active channel.
+    #[tracing::instrument(skip(self, channel_id, resource_id), err)]
+    pub async fn handle_watch_notification(
+        &self,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> Result<bool, Report> {
+        let Some(email_link_id) = self
+            .repository
+            .find_watch_target(channel_id, resource_id)
+            .await?
+        else {
+            return Ok(false);
+        };
+        self.repository
+            .schedule_google_sync_for_link(email_link_id)
+            .await?;
+        Ok(true)
+    }
 }
 
 impl<R> CalendarOccurrenceService for CalendarService<R>
@@ -281,7 +303,12 @@ where
 pub struct GoogleCalendarBackfillService<R, G> {
     repository: R,
     provider: G,
+    watch: Option<super::models::GoogleWatchConfig>,
 }
+
+/// Renew a channel whenever less than this much lifetime remains, so every
+/// poll cycle has several chances before expiry.
+const WATCH_RENEWAL_THRESHOLD: chrono::Duration = chrono::Duration::hours(12);
 
 /// Periodically makes completed provider jobs eligible for another incremental poll.
 pub struct GoogleCalendarSyncScheduler<R> {
@@ -375,6 +402,7 @@ pub struct GoogleCalendarBackfillCoordinator<R, G, L> {
     repository: R,
     provider: G,
     lifecycle: L,
+    watch: Option<super::models::GoogleWatchConfig>,
 }
 
 impl<R, G, L> GoogleCalendarBackfillCoordinator<R, G, L>
@@ -383,12 +411,19 @@ where
     G: GoogleCalendarProvider + Clone,
     L: CalendarBackfillRepository,
 {
-    /// Construct a coordinator from domain ports.
-    pub fn new(repository: R, provider: G, lifecycle: L) -> Self {
+    /// Construct a coordinator from domain ports; supplying a watch config
+    /// makes every backfill maintain push notification channels.
+    pub fn new(
+        repository: R,
+        provider: G,
+        lifecycle: L,
+        watch: Option<super::models::GoogleWatchConfig>,
+    ) -> Self {
         Self {
             repository,
             provider,
             lifecycle,
+            watch,
         }
     }
 
@@ -437,8 +472,11 @@ where
             return Err(GoogleCalendarBackfillRunError::Retryable(message));
         }
 
-        let backfill =
-            GoogleCalendarBackfillService::new(self.repository.clone(), self.provider.clone());
+        let backfill = GoogleCalendarBackfillService::new(
+            self.repository.clone(),
+            self.provider.clone(),
+            self.watch.clone(),
+        );
         let work = backfill.backfill(key, lease_token, account_id, owner_id, access_token, range);
         let lease = self
             .lifecycle
@@ -520,10 +558,15 @@ where
     G: GoogleCalendarProvider,
 {
     /// Construct the provider backfill service.
-    pub fn new(repository: R, provider: G) -> Self {
+    pub fn new(
+        repository: R,
+        provider: G,
+        watch: Option<super::models::GoogleWatchConfig>,
+    ) -> Self {
         Self {
             repository,
             provider,
+            watch,
         }
     }
 
@@ -551,6 +594,7 @@ where
 
         for provider_calendar in calendars {
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
+            let watch_provider_calendar_id = provider_calendar.provider_calendar_id.clone();
             let is_read_only = !matches!(
                 provider_calendar.access_role.as_deref(),
                 Some("owner" | "writer")
@@ -622,6 +666,55 @@ where
                     calendar_count,
                 )
                 .await?;
+
+            // Channel upkeep is best-effort: the poll remains the backstop,
+            // so a failed watch call must not fail the sync that just
+            // committed durable progress.
+            if let Some(watch) = &self.watch
+                && stored_calendar
+                    .watch_expires_at
+                    .is_none_or(|expires_at| expires_at < Utc::now() + WATCH_RENEWAL_THRESHOLD)
+            {
+                let channel_id = Uuid::new_v4();
+                match self
+                    .provider
+                    .watch_calendar(
+                        access_token,
+                        key.email_link_id,
+                        &watch_provider_calendar_id,
+                        channel_id,
+                        watch,
+                    )
+                    .await
+                {
+                    Ok(channel) => {
+                        self.repository
+                            .record_watch_channel(
+                                key,
+                                lease_token,
+                                account_id,
+                                calendar_id,
+                                channel,
+                            )
+                            .await
+                            .inspect_err(|error| {
+                                tracing::warn!(
+                                    error=?error,
+                                    calendar_id=%calendar_id,
+                                    "failed to record Google Calendar watch channel"
+                                );
+                            })
+                            .ok();
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            error=?error,
+                            calendar_id=%calendar_id,
+                            "failed to open Google Calendar watch channel"
+                        );
+                    }
+                }
+            }
         }
 
         self.repository

@@ -546,6 +546,28 @@ pub struct StoredGoogleCalendar {
     pub sync_token: Option<String>,
     /// Exact recurrence window materialized by the last full snapshot.
     pub materialized_range: Option<OccurrenceRange>,
+    /// Expiry of the active push notification channel, when one exists.
+    pub watch_expires_at: Option<DateTime<Utc>>,
+}
+
+/// Deployment configuration enabling Google push notification channels.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoogleWatchConfig {
+    /// Public HTTPS address Google delivers notifications to.
+    pub address: String,
+    /// Shared verification token echoed back on every notification.
+    pub token: String,
+}
+
+/// An active Google push notification channel for one calendar.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoogleWatchChannel {
+    /// Client-minted channel identifier.
+    pub channel_id: Uuid,
+    /// Provider-assigned resource identifier required to stop the channel.
+    pub resource_id: String,
+    /// Provider-assigned channel expiry.
+    pub expires_at: DateTime<Utc>,
 }
 
 /// How the provider adapter must reconcile one calendar this run.
