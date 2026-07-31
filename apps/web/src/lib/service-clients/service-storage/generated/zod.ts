@@ -7501,6 +7501,18 @@ export const getForeignEntityResponse = zod
   .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
+ * @summary Redirects an authenticated user to the github sync app installation page.
+ */
+export const installSyncQueryParams = zod.object({
+  team_id: zod
+    .uuid()
+    .optional()
+    .describe(
+      'Team to associate with the installation; omit for a personal installation'
+    ),
+});
+
+/**
  * @summary Gets the users history
  */
 export const getHistoryHandlerResponse = zod.object({
