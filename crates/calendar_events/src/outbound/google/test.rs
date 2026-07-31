@@ -185,3 +185,105 @@ fn unrelated_forbidden_response_is_permanent() {
 
     assert_eq!(error.kind(), GoogleProviderErrorKind::Permanent);
 }
+
+#[test]
+fn cancelled_single_events_become_tombstones() {
+    let cancelled: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "gone-event",
+        "status": "cancelled"
+    }))
+    .unwrap();
+
+    let classified = classify_changes(vec![cancelled]);
+
+    assert!(
+        classified
+            .tombstoned_provider_event_ids
+            .contains("gone-event")
+    );
+    assert!(classified.refresh_masters.is_empty());
+    assert!(classified.single_upserts.is_empty());
+}
+
+#[test]
+fn exception_changes_refresh_their_series() {
+    let cancelled_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "master_20260724T140000Z",
+        "status": "cancelled",
+        "recurringEventId": "master",
+        "originalStartTime": {"dateTime": "2026-07-24T14:00:00Z"}
+    }))
+    .unwrap();
+    let modified_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "other_20260725T140000Z",
+        "iCalUID": "other@example.com",
+        "recurringEventId": "other",
+        "originalStartTime": {"dateTime": "2026-07-25T14:00:00Z"},
+        "start": {"dateTime": "2026-07-25T15:00:00Z"},
+        "end": {"dateTime": "2026-07-25T16:00:00Z"}
+    }))
+    .unwrap();
+
+    let classified = classify_changes(vec![cancelled_instance, modified_instance]);
+
+    assert!(classified.tombstoned_provider_event_ids.is_empty());
+    assert_eq!(classified.refresh_masters.len(), 2);
+    assert!(matches!(
+        classified.refresh_masters.get("master"),
+        Some(None)
+    ));
+    assert!(matches!(
+        classified.refresh_masters.get("other"),
+        Some(None)
+    ));
+}
+
+#[test]
+fn feed_master_payload_survives_exception_placeholders_in_any_order() {
+    let master = serde_json::json!({
+        "id": "master",
+        "iCalUID": "series@example.com",
+        "recurrence": ["RRULE:FREQ=DAILY"],
+        "start": {"dateTime": "2026-07-24T14:00:00Z"},
+        "end": {"dateTime": "2026-07-24T15:00:00Z"}
+    });
+    let exception = serde_json::json!({
+        "id": "master_20260724T140000Z",
+        "status": "cancelled",
+        "recurringEventId": "master"
+    });
+
+    for changes in [
+        vec![master.clone(), exception.clone()],
+        vec![exception, master],
+    ] {
+        let changes: Vec<GoogleEvent> = changes
+            .into_iter()
+            .map(|value| serde_json::from_value(value).unwrap())
+            .collect();
+        let classified = classify_changes(changes);
+        assert!(matches!(
+            classified.refresh_masters.get("master"),
+            Some(Some(payload)) if payload.ical_uid == "series@example.com"
+        ));
+    }
+}
+
+#[test]
+fn plain_changed_events_map_directly_from_the_feed() {
+    let singleton: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "plain-event",
+        "iCalUID": "plain@example.com",
+        "summary": "Moved meeting",
+        "start": {"dateTime": "2026-07-24T14:00:00Z"},
+        "end": {"dateTime": "2026-07-24T15:00:00Z"}
+    }))
+    .unwrap();
+
+    let classified = classify_changes(vec![singleton]);
+
+    assert!(classified.tombstoned_provider_event_ids.is_empty());
+    assert!(classified.refresh_masters.is_empty());
+    assert_eq!(classified.single_upserts.len(), 1);
+    assert_eq!(classified.single_upserts[0].id, "plain-event");
+}

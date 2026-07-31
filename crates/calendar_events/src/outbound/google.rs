@@ -1,6 +1,6 @@
 //! Google Calendar API adapter.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use reqwest::{Client, RequestBuilder, StatusCode};
@@ -140,6 +140,109 @@ impl GoogleCalendarClient {
             }
         }
     }
+
+    async fn event(
+        &self,
+        access_token: &str,
+        provider_calendar_id: &str,
+        provider_event_id: &str,
+    ) -> Result<Option<GoogleEvent>, GoogleProviderError> {
+        let calendar = urlencoding::encode(provider_calendar_id);
+        let event = urlencoding::encode(provider_event_id);
+        let response = self
+            .client
+            .get(format!(
+                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+            ))
+            .bearer_auth(access_token)
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        if status == StatusCode::NOT_FOUND || status == StatusCode::GONE {
+            return Ok(None);
+        }
+        if !status.is_success() {
+            let body = response.text().await.map_err(provider_transport_error)?;
+            return Err(provider_response_error(status, &body));
+        }
+        response
+            .json()
+            .await
+            .map(Some)
+            .map_err(provider_transport_error)
+    }
+
+    async fn events_by_ical_uid(
+        &self,
+        access_token: &str,
+        provider_calendar_id: &str,
+        ical_uid: &str,
+    ) -> Result<Vec<GoogleEvent>, GoogleProviderError> {
+        let calendar = urlencoding::encode(provider_calendar_id);
+        let mut page_token: Option<String> = None;
+        let mut result = Vec::new();
+        loop {
+            let mut request = self
+                .client
+                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .bearer_auth(access_token)
+                .query(&[
+                    ("maxResults", "2500"),
+                    ("singleEvents", "false"),
+                    ("showDeleted", "false"),
+                    ("iCalUID", ical_uid),
+                ]);
+            if let Some(token) = &page_token {
+                request = request.query(&[("pageToken", token)]);
+            }
+            let page: GoogleEventListResponse = send_google(request).await?;
+            result.extend(page.items);
+            page_token = page.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(result)
+    }
+
+    async fn instances(
+        &self,
+        access_token: &str,
+        provider_calendar_id: &str,
+        provider_event_id: &str,
+        range: &OccurrenceRange,
+    ) -> Result<Vec<GoogleEvent>, GoogleProviderError> {
+        let calendar = urlencoding::encode(provider_calendar_id);
+        let event = urlencoding::encode(provider_event_id);
+        let mut page_token: Option<String> = None;
+        let mut result = Vec::new();
+        loop {
+            let mut request = self
+                .client
+                .get(format!(
+                    "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}/instances"
+                ))
+                .bearer_auth(access_token)
+                .query(&[
+                    ("maxResults", "2500".to_string()),
+                    ("showDeleted", "false".to_string()),
+                    ("timeMin", range.starts_at.to_rfc3339()),
+                    ("timeMax", range.ends_at.to_rfc3339()),
+                    ("timeZone", "UTC".to_string()),
+                ]);
+            if let Some(token) = &page_token {
+                request = request.query(&[("pageToken", token)]);
+            }
+            let page: GoogleEventListResponse = send_google(request).await?;
+            result.extend(page.items);
+            page_token = page.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(result)
+    }
 }
 
 async fn send_google<T: DeserializeOwned>(
@@ -247,50 +350,159 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             }
             Err(error) => return Err(error),
         };
-        // ExtendTail still rebuilds the full window and the change feed is
-        // still only tested for emptiness; incremental application of both
-        // rides the GoogleSyncPlan contract in a follow-up.
+        // ExtendTail still rebuilds the full window; materializing only the
+        // uncovered tail rides the same plan contract in a follow-up.
         let rebuild_snapshot = !matches!(context.plan, GoogleSyncPlan::Incremental)
             || context.sync_token.is_none()
-            || token_was_reset
-            || !changes.is_empty();
-        if !rebuild_snapshot {
+            || token_was_reset;
+        if rebuild_snapshot {
+            let canonical_events = self
+                .events(
+                    access_token,
+                    &context.provider_calendar_id,
+                    &context.range,
+                    false,
+                )
+                .await?;
+            let instances = self
+                .events(
+                    access_token,
+                    &context.provider_calendar_id,
+                    &context.range,
+                    true,
+                )
+                .await?;
+
+            let mapped = map_snapshot(&context, canonical_events, instances);
+
             return Ok(GoogleEventSyncBatch {
-                upserts: Vec::new(),
-                observed_provider_event_ids: None,
+                upserts: mapped.upserts,
+                observed_provider_event_ids: Some(mapped.observed_provider_event_ids),
                 next_sync_token,
-                materialized_range: None,
+                materialized_range: Some(context.range.clone()),
                 cancelled_provider_event_ids: Vec::new(),
             });
         }
 
-        let canonical_events = self
-            .events(
-                access_token,
-                &context.provider_calendar_id,
-                &context.range,
-                false,
-            )
-            .await?;
-        let instances = self
-            .events(
-                access_token,
-                &context.provider_calendar_id,
-                &context.range,
-                true,
-            )
-            .await?;
+        let classified = classify_changes(changes);
+        let mut cancelled = classified.tombstoned_provider_event_ids;
+        let mut upserts = Vec::new();
 
-        let mapped = map_snapshot(&context, canonical_events, instances);
+        for single in classified.single_upserts {
+            let provider_event_id = single.id.clone();
+            match map_upsert(&context, single.clone(), Vec::new(), vec![single]) {
+                Ok(upsert) => upserts.push(upsert),
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        provider_calendar_id=%context.provider_calendar_id,
+                        provider_event_id,
+                        "skipping malformed changed Google Calendar event"
+                    );
+                }
+            }
+        }
+
+        // One bounded refresh per changed series keeps Google authoritative
+        // for recurrence expansion without re-sweeping the whole window.
+        for (master_id, feed_master) in classified.refresh_masters {
+            let master = match feed_master {
+                Some(master) => Some(master),
+                None => {
+                    self.event(access_token, &context.provider_calendar_id, &master_id)
+                        .await?
+                }
+            };
+            let Some(master) = master else {
+                cancelled.insert(master_id);
+                continue;
+            };
+            if master.status.as_deref() == Some("cancelled") {
+                cancelled.insert(master_id);
+                continue;
+            }
+            let exceptions = if master.ical_uid.is_empty() {
+                Vec::new()
+            } else {
+                self.events_by_ical_uid(
+                    access_token,
+                    &context.provider_calendar_id,
+                    &master.ical_uid,
+                )
+                .await?
+                .into_iter()
+                .filter(|event| event.recurring_event_id.is_some())
+                .collect()
+            };
+            let instances = self
+                .instances(
+                    access_token,
+                    &context.provider_calendar_id,
+                    &master.id,
+                    &context.range,
+                )
+                .await?;
+            let provider_event_id = master.id.clone();
+            match map_upsert(&context, master, exceptions, instances) {
+                Ok(upsert) => upserts.push(upsert),
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        provider_calendar_id=%context.provider_calendar_id,
+                        provider_event_id,
+                        "skipping malformed changed Google Calendar series"
+                    );
+                }
+            }
+        }
 
         Ok(GoogleEventSyncBatch {
-            upserts: mapped.upserts,
-            observed_provider_event_ids: Some(mapped.observed_provider_event_ids),
+            upserts,
+            observed_provider_event_ids: None,
             next_sync_token,
-            materialized_range: Some(context.range.clone()),
-            cancelled_provider_event_ids: Vec::new(),
+            materialized_range: None,
+            cancelled_provider_event_ids: cancelled.into_iter().collect(),
         })
     }
+}
+
+#[derive(Default)]
+struct ClassifiedChanges {
+    /// Events the feed reported deleted; a master id also retires its
+    /// expanded instances during the fenced per-calendar commit.
+    tombstoned_provider_event_ids: BTreeSet<String>,
+    /// Recurring series needing a bounded refresh, keyed by master id and
+    /// carrying the master when the feed already delivered it.
+    refresh_masters: BTreeMap<String, Option<GoogleEvent>>,
+    /// Changed standalone events whose feed payload is the whole update.
+    single_upserts: Vec<GoogleEvent>,
+}
+
+fn classify_changes(changes: Vec<GoogleEvent>) -> ClassifiedChanges {
+    let mut classified = ClassifiedChanges::default();
+    for change in changes {
+        let is_cancelled = change.status.as_deref() == Some("cancelled");
+        match (&change.recurring_event_id, is_cancelled) {
+            (Some(master_id), _) => {
+                // Created, modified, or cancelled exceptions all resolve by
+                // refreshing their series from the provider.
+                classified
+                    .refresh_masters
+                    .entry(master_id.clone())
+                    .or_insert(None);
+            }
+            (None, true) => {
+                classified.tombstoned_provider_event_ids.insert(change.id);
+            }
+            (None, false) if !change.recurrence.is_empty() => {
+                classified
+                    .refresh_masters
+                    .insert(change.id.clone(), Some(change));
+            }
+            (None, false) => classified.single_upserts.push(change),
+        }
+    }
+    classified
 }
 
 struct MappedGoogleSnapshot {
