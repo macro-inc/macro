@@ -17,7 +17,7 @@ pub use pull_request::{
 pub use sync::{
     GithubAppInstallationSource, GithubInstallationAccessToken, GithubKey, GithubWebhookEventType,
     MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
-    extract_github_mentions,
+    extract_github_mentions, strip_markdown_code,
 };
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]

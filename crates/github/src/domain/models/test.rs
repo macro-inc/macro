@@ -935,6 +935,93 @@ fn extract_text_unknown_event() {
 }
 
 // ---------------------------------------------------------------------------
+// strip_markdown_code
+// ---------------------------------------------------------------------------
+
+#[test]
+fn strip_markdown_code_removes_inline_spans() {
+    let stripped = strip_markdown_code("switch the sidebar to `py-6` for spacing");
+    assert_eq!(stripped, "switch the sidebar to   for spacing");
+    assert!(TeamTaskReference::extract_from_text(&stripped).is_empty());
+}
+
+#[test]
+fn strip_markdown_code_removes_fenced_blocks() {
+    let text = "Adjust padding:\n```css\n.sidebar { @apply py-6 px-4; }\n```\nDone.";
+    let stripped = strip_markdown_code(text);
+    assert_eq!(stripped, "Adjust padding:\nDone.");
+    assert!(TeamTaskReference::extract_from_text(&stripped).is_empty());
+}
+
+#[test]
+fn strip_markdown_code_removes_tilde_fences_and_language_tags() {
+    let text = "before\n~~~diff\n- pt-4\n+ py-6\n~~~\nafter";
+    assert_eq!(strip_markdown_code(text), "before\nafter");
+}
+
+#[test]
+fn strip_markdown_code_unclosed_fence_swallows_rest() {
+    let text = "intro\n```\npy-6 and db-27 live here";
+    assert_eq!(strip_markdown_code(text), "intro");
+}
+
+#[test]
+fn strip_markdown_code_double_backtick_spans() {
+    let stripped = strip_markdown_code("use ``a `py-6` class`` here");
+    assert_eq!(stripped, "use   here");
+}
+
+#[test]
+fn strip_markdown_code_keeps_unmatched_backticks_and_prose_refs() {
+    let stripped = strip_markdown_code("odd ` backtick, but PY-6 stays a reference");
+    assert_eq!(stripped, "odd ` backtick, but PY-6 stays a reference");
+    assert_eq!(
+        TeamTaskReference::extract_from_text(&stripped),
+        vec![TeamTaskReference::new("py", 6).unwrap()]
+    );
+}
+
+#[test]
+fn strip_markdown_code_plain_text_unchanged() {
+    let text = "fixes py-6 and db-27 in prose";
+    assert_eq!(strip_markdown_code(text), text);
+}
+
+// Regression: dungeonbooks/guild#205 — a review quoting a Tailwind class list
+// (`py-6`) must not produce a task reference for a team with slug PY, while
+// the reference in the branch name still resolves.
+#[test]
+fn extract_text_strips_code_from_review_body() {
+    let payload = serde_json::json!({
+        "action": "submitted",
+        "review": {
+            "body": "Consider tightening the spacing:\n```tsx\n<aside class=\"py-6 px-4\">\n```\nOtherwise LGTM."
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request_review".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 1);
+    let refs = TeamTaskReference::extract_from_text(&texts.join(" "));
+    assert!(refs.is_empty());
+}
+
+#[test]
+fn extract_text_strips_code_from_pr_body_but_keeps_branch() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "pull_request": {
+            "title": "fix(dashboard): make the mobile sidebar dismissable",
+            "body": "Swap `pt-4` for `py-6` on the sheet container.",
+            "head": { "ref": "ptaranat/db-27-mobile-hard-to-tap-out-of-sidebar" }
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    let refs = TeamTaskReference::extract_from_text(&texts.join(" "));
+    assert_eq!(refs, vec![TeamTaskReference::new("db", 27).unwrap()]);
+}
+
+// ---------------------------------------------------------------------------
 // ValidatedGithubWebhookEvent::extract_pr_context_text
 // ---------------------------------------------------------------------------
 

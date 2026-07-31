@@ -90,16 +90,22 @@ impl ValidatedGithubWebhookEvent {
     }
 
     /// Extract all text fields worth searching for task IDs, based on event type.
+    ///
+    /// Markdown code (fenced blocks and inline spans) is stripped from prose
+    /// fields before they are returned: quoted diffs and code snippets are full
+    /// of `identifier-number` tokens (e.g. the Tailwind class `py-6`) that must
+    /// never be mistaken for task references. Branch names are kept verbatim —
+    /// they cannot contain markdown.
     pub fn extract_searchable_text(&self) -> Vec<String> {
         let mut texts = Vec::new();
         match self.parsed_event_type() {
             GithubWebhookEventType::PullRequest => {
                 if let Some(pr) = self.payload.get("pull_request") {
                     if let Some(s) = pr.get("title").and_then(|v| v.as_str()) {
-                        texts.push(s.to_string());
+                        texts.push(strip_markdown_code(s));
                     }
                     if let Some(s) = pr.get("body").and_then(|v| v.as_str()) {
-                        texts.push(s.to_string());
+                        texts.push(strip_markdown_code(s));
                     }
                     if let Some(s) = pr
                         .get("head")
@@ -118,7 +124,7 @@ impl ValidatedGithubWebhookEvent {
                     .and_then(|c| c.get("body"))
                     .and_then(|v| v.as_str())
                 {
-                    texts.push(s.to_string());
+                    texts.push(strip_markdown_code(s));
                 }
             }
             GithubWebhookEventType::PullRequestReview => {
@@ -128,7 +134,7 @@ impl ValidatedGithubWebhookEvent {
                     .and_then(|r| r.get("body"))
                     .and_then(|v| v.as_str())
                 {
-                    texts.push(s.to_string());
+                    texts.push(strip_markdown_code(s));
                 }
             }
             GithubWebhookEventType::CheckRun
@@ -292,10 +298,10 @@ impl ValidatedGithubWebhookEvent {
 
         if let Some(pr) = pr {
             if let Some(s) = pr.get("title").and_then(|v| v.as_str()) {
-                texts.push(s.to_string());
+                texts.push(strip_markdown_code(s));
             }
             if let Some(s) = pr.get("body").and_then(|v| v.as_str()) {
-                texts.push(s.to_string());
+                texts.push(strip_markdown_code(s));
             }
             if let Some(s) = pr
                 .get("head")
@@ -308,6 +314,114 @@ impl ValidatedGithubWebhookEvent {
 
         texts
     }
+}
+
+/// Remove markdown code from text before task reference extraction: fenced
+/// code blocks (``` or ~~~) and inline code spans (`...`).
+///
+/// Code-formatted text is where `identifier-number` tokens live — quoted
+/// diffs, CSS utility classes like `py-6`, config keys — and those must never
+/// be mistaken for team task references. Removed spans are replaced with a
+/// single space so the surrounding prose keeps its token boundaries.
+pub fn strip_markdown_code(text: &str) -> String {
+    strip_inline_code_spans(&strip_fenced_code_blocks(text))
+}
+
+/// Returns the fence marker (character and run length) opening or closing a
+/// fenced code block on this line, if any.
+fn fence_marker(line: &str) -> Option<(char, usize)> {
+    let trimmed = line.trim_start();
+    let first = trimmed.chars().next()?;
+    if first != '`' && first != '~' {
+        return None;
+    }
+    let run = trimmed.chars().take_while(|c| *c == first).count();
+    (run >= 3).then_some((first, run))
+}
+
+/// Drop every line belonging to a fenced code block, fences included. An
+/// unclosed fence swallows the rest of the text, matching how markdown
+/// renders it.
+fn strip_fenced_code_blocks(text: &str) -> String {
+    let mut kept = Vec::new();
+    let mut open_fence: Option<(char, usize)> = None;
+
+    for line in text.lines() {
+        match (open_fence, fence_marker(line)) {
+            // Closing fence: same character, at least as long, nothing else on
+            // the line after the marker.
+            (Some((open_char, open_run)), Some((close_char, close_run)))
+                if close_char == open_char
+                    && close_run >= open_run
+                    && line
+                        .trim_start()
+                        .trim_start_matches(open_char)
+                        .trim()
+                        .is_empty() =>
+            {
+                open_fence = None;
+            }
+            (Some(_), _) => {}
+            (None, Some(marker)) => {
+                open_fence = Some(marker);
+            }
+            (None, None) => kept.push(line),
+        }
+    }
+
+    kept.join("\n")
+}
+
+/// Drop inline code spans: a run of N backticks closed by the next run of
+/// exactly N backticks (CommonMark semantics). Unmatched backtick runs are
+/// kept as literal text.
+fn strip_inline_code_spans(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] != '`' {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+
+        let open_run = chars[i..].iter().take_while(|c| **c == '`').count();
+        let span_start = i + open_run;
+
+        // Find the next backtick run of exactly `open_run` length.
+        let mut j = span_start;
+        let mut close_at = None;
+        while j < chars.len() {
+            if chars[j] == '`' {
+                let run = chars[j..].iter().take_while(|c| **c == '`').count();
+                if run == open_run {
+                    close_at = Some(j);
+                    break;
+                }
+                j += run;
+            } else {
+                j += 1;
+            }
+        }
+
+        match close_at {
+            Some(close) => {
+                out.push(' ');
+                i = close + open_run;
+            }
+            None => {
+                // No closer: keep the backticks as literal text.
+                for _ in 0..open_run {
+                    out.push('`');
+                }
+                i = span_start;
+            }
+        }
+    }
+
+    out
 }
 
 /// Known GitHub webhook event types we handle.

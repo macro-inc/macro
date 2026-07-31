@@ -1544,6 +1544,45 @@ async fn team_task_id_requires_installation_team_match() {
     assert!(service.client.pr_comments().is_empty());
 }
 
+// Regression for dungeonbooks/guild#205: a PR body/review quoting the
+// Tailwind class `py-6` in markdown code must not link team PY's task 6.
+#[tokio::test]
+async fn team_task_reference_inside_markdown_code_links_nothing() {
+    let task_id = MacroTaskId::from_uuid(&uuid::Uuid::parse_str(KNOWN_TASK_UUID).unwrap());
+    let team_id = uuid::Uuid::parse_str("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee").unwrap();
+    let repo = StubSyncRepo::new().with_team_task_reference("12345", "py", 6, team_id, task_id);
+    let service = make_sync_service_with_repo(repo);
+
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 205,
+                "title": "fix(dashboard): make the mobile sidebar dismissable",
+                "body": "Swap `pt-4` for `py-6` on the sheet container.\n```tsx\n<aside class=\"py-6 px-4\">\n```",
+                "head": { "ref": "ptaranat/mobile-sidebar-dismiss" }
+            },
+            "repository": {
+                "name": "guild",
+                "owner": { "login": "dungeonbooks" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    let result = service.process_webhook_event(&event).await;
+    assert!(result.is_ok());
+
+    assert!(service.client.pr_comments().is_empty());
+    let tracked = service
+        .repo
+        .get_task_ids(GithubKey::new("dungeonbooks", "guild", 205))
+        .await
+        .unwrap();
+    assert!(tracked.is_empty());
+}
+
 #[tokio::test]
 async fn ambiguous_team_task_reference_links_nothing() {
     // Two of the installation's teams share the slug "eng" (slugs are not
