@@ -5,7 +5,7 @@ import type {
   DiscussionThread,
 } from '@core/comments/discussion';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import { useUrlParams } from '@core/component/ParamsProvider';
+import { useResolvedUrlParams } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
 import { useCanComment } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -66,7 +66,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
   const canComment = useCanComment();
   const userId = useUserId();
-  const urlParams = useUrlParams(URL_PARAMS);
+  const resolvedParams = useResolvedUrlParams(URL_PARAMS);
 
   const createThreadFn = useCreateDiscussionThread();
   const createReplyFn = useCreateDiscussionReply();
@@ -77,9 +77,10 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const threads = createMemo(() =>
     (discussionThreads() ?? []).map(toViewThread)
   );
-  const targetCommentId = createMemo(
+  const targetRequest = createMemo(
     () => {
-      const commentId = urlParams.commentId();
+      const commentIdParam = resolvedParams.commentId();
+      const commentId = commentIdParam.value;
       if (!commentId) return null;
       if (!md.locationReady) return null;
 
@@ -87,17 +88,26 @@ export function createDocumentDiscussionSource(): DiscussionSource {
       const hasDiscussionComment = currentThreads.some((thread) =>
         thread.comments.some((comment) => comment.id === commentId)
       );
-      return hasDiscussionComment ? commentId : null;
+      return hasDiscussionComment
+        ? { commentId, revision: commentIdParam.revision }
+        : null;
     },
     undefined,
-    { equals: false }
+    {
+      equals: (previous, next) =>
+        previous?.commentId === next?.commentId &&
+        previous?.revision === next?.revision,
+    }
   );
+  const targetCommentId = () => targetRequest()?.commentId ?? null;
+  const targetRevision = () => targetRequest()?.revision ?? null;
 
   return {
     threads,
     canEdit: canComment,
     currentUserId: userId,
     targetCommentId,
+    targetRevision,
     async createThread(text, mentions) {
       await createThreadFn(text, buildCommentMentions(mentions));
     },

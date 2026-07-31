@@ -33,6 +33,7 @@ export function Discussion() {
   const [isExpanded, setIsExpanded] = createSignal(true);
   const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
   const mountedComments = new Map<string, HTMLElement>();
+  let scrolledTarget: { commentId: string; revision: unknown } | undefined;
 
   // Deep-linking to a comment expands the discussion.
   createEffect(() => {
@@ -56,6 +57,7 @@ export function Discussion() {
 
   createEffect(() => {
     const targetCommentId = source.targetCommentId();
+    const targetRevision = source.targetRevision?.() ?? targetCommentId;
     if (!targetCommentId) return;
 
     const currentThreads = source.threads();
@@ -69,8 +71,18 @@ export function Discussion() {
 
     const target = mountedComments.get(targetCommentId);
     if (!target) return;
+    if (
+      scrolledTarget?.commentId === targetCommentId &&
+      Object.is(scrolledTarget.revision, targetRevision)
+    ) {
+      return;
+    }
 
     const frame = requestAnimationFrame(() => {
+      scrolledTarget = {
+        commentId: targetCommentId,
+        revision: targetRevision,
+      };
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
