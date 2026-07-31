@@ -987,9 +987,9 @@ fn strip_markdown_code_plain_text_unchanged() {
     assert_eq!(strip_markdown_code(text), text);
 }
 
-// Regression: dungeonbooks/guild#205 — a review quoting a Tailwind class list
-// (`py-6`) must not produce a task reference for a team with slug PY, while
-// the reference in the branch name still resolves.
+// Regression: a review quoting a Tailwind class list (`py-6`) must not
+// produce a task reference for a team with slug PY, while the reference in
+// the branch name still resolves.
 #[test]
 fn extract_text_strips_code_from_review_body() {
     let payload = serde_json::json!({
@@ -1010,9 +1010,9 @@ fn extract_text_strips_code_from_pr_body_but_keeps_branch() {
     let payload = serde_json::json!({
         "action": "opened",
         "pull_request": {
-            "title": "fix(dashboard): make the mobile sidebar dismissable",
-            "body": "Swap `pt-4` for `py-6` on the sheet container.",
-            "head": { "ref": "ptaranat/db-27-mobile-hard-to-tap-out-of-sidebar" }
+            "title": "fix: adjust panel padding",
+            "body": "Swap `pt-4` for `py-6` on the panel container.",
+            "head": { "ref": "someuser/db-27-adjust-panel-padding" }
         }
     });
     let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload);

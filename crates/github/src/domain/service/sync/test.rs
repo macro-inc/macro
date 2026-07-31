@@ -1544,8 +1544,8 @@ async fn team_task_id_requires_installation_team_match() {
     assert!(service.client.pr_comments().is_empty());
 }
 
-// Regression for dungeonbooks/guild#205: a PR body/review quoting the
-// Tailwind class `py-6` in markdown code must not link team PY's task 6.
+// Regression: a PR body/review quoting the Tailwind class `py-6` in
+// markdown code must not link team PY's task 6.
 #[tokio::test]
 async fn team_task_reference_inside_markdown_code_links_nothing() {
     let task_id = MacroTaskId::from_uuid(&uuid::Uuid::parse_str(KNOWN_TASK_UUID).unwrap());
@@ -1559,13 +1559,13 @@ async fn team_task_reference_inside_markdown_code_links_nothing() {
             "action": "opened",
             "pull_request": {
                 "number": 205,
-                "title": "fix(dashboard): make the mobile sidebar dismissable",
-                "body": "Swap `pt-4` for `py-6` on the sheet container.\n```tsx\n<aside class=\"py-6 px-4\">\n```",
-                "head": { "ref": "ptaranat/mobile-sidebar-dismiss" }
+                "title": "fix: adjust panel padding",
+                "body": "Swap `pt-4` for `py-6` on the panel container.\n```tsx\n<aside class=\"py-6 px-4\">\n```",
+                "head": { "ref": "someuser/adjust-panel-padding" }
             },
             "repository": {
-                "name": "guild",
-                "owner": { "login": "dungeonbooks" }
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
             },
             "installation": { "id": 12345 }
         }),
@@ -1577,7 +1577,7 @@ async fn team_task_reference_inside_markdown_code_links_nothing() {
     assert!(service.client.pr_comments().is_empty());
     let tracked = service
         .repo
-        .get_task_ids(GithubKey::new("dungeonbooks", "guild", 205))
+        .get_task_ids(GithubKey::new("my-org", "my-repo", 205))
         .await
         .unwrap();
     assert!(tracked.is_empty());
