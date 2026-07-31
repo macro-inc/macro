@@ -33,7 +33,7 @@ import {
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { createOverflowCollapser } from '../utils/createOverflowCollapser';
+import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -69,14 +69,8 @@ export function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const headerCollapser = createOverflowCollapser(
-    () => layoutRefs.headerLeft,
-    () => panelSize.width
-  );
-  const toolbarCollapser = createOverflowCollapser(
-    () => layoutRefs.toolbarLeft,
-    () => panelSize.width
-  );
+  const headerCollapseController = createPriorityCollapseController();
+  const toolbarCollapseController = createPriorityCollapseController();
 
   const splitLayoutHelpers = useSplitLayout();
 
@@ -237,8 +231,8 @@ export function SplitPanel(props: SplitPanelProps) {
               );
             };
           },
-          headerCollapser,
-          toolbarCollapser,
+          headerCollapser: headerCollapseController.collapser,
+          toolbarCollapser: toolbarCollapseController.collapser,
           layoutRefs,
           titleFileMenuRef,
           setTitleFileMenuRef,
@@ -332,7 +326,10 @@ export function SplitPanel(props: SplitPanelProps) {
                   shouldHideSplitHeader() && 'hidden'
                 )}
               >
-                <SplitHeader ref={setHeaderRef} />
+                <SplitHeader
+                  ref={setHeaderRef}
+                  collapseController={headerCollapseController}
+                />
               </Panel.Header>
 
               <Panel.Toolbar
@@ -343,7 +340,10 @@ export function SplitPanel(props: SplitPanelProps) {
                   'border-b-0'
                 )}
               >
-                <SplitToolbar ref={setToolbarRef} />
+                <SplitToolbar
+                  ref={setToolbarRef}
+                  collapseController={toolbarCollapseController}
+                />
               </Panel.Toolbar>
 
               <Panel.Body>

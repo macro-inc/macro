@@ -10,17 +10,14 @@ import {
   onCleanup,
   useContext,
 } from 'solid-js';
-import {
-  type CollapsibleItemInput,
-  SplitLayoutContext,
-  SplitPanelContext,
-} from './context';
+import { SplitLayoutContext, SplitPanelContext } from './context';
 import type {
   SplitContent,
   SplitContentType,
   SplitHandle,
   SplitManager,
 } from './layoutManager';
+import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];

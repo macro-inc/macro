@@ -7,26 +7,7 @@ import {
   type Setter,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
-
-export type CollapsibleRegistration = {
-  id: string;
-  priority: number; // lower = higher priority to collapse first
-  collapsed: Accessor<boolean>;
-  // silent skips onCollapsedChange — used for pre-paint trial measurements
-  setCollapsed: (value: boolean, opts?: { silent?: boolean }) => void;
-  ref: Accessor<HTMLElement | null | undefined>;
-};
-
-export type CollapsibleItemInput = Omit<
-  CollapsibleRegistration,
-  'collapsed' | 'setCollapsed'
-> & {
-  onCollapsedChange?: (isCollapsed: boolean) => void;
-};
-
-export type OverflowCollapser = {
-  register: (reg: CollapsibleRegistration) => () => void; // returns cleanup
-};
+import type { PriorityCollapser } from './utils/createPriorityCollapser';
 
 export const SplitLayoutContext = createContext<{
   manager: SplitManager;
@@ -92,8 +73,8 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
-  headerCollapser: OverflowCollapser;
-  toolbarCollapser: OverflowCollapser;
+  headerCollapser: PriorityCollapser;
+  toolbarCollapser: PriorityCollapser;
 };
 
 export const SplitPanelContext = createContext<SplitPanelContextType>();

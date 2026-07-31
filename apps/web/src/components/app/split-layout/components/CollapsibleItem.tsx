@@ -1,5 +1,5 @@
 import { cn } from '@ui';
-import { type Accessor, createSignal, type JSX } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import {
   useRegisterCollapsibleHeaderItem,
   useRegisterCollapsibleToolbarItem,
@@ -16,8 +16,6 @@ type CollapsibleItemProps = {
 function CollapsibleItem(
   props: CollapsibleItemProps & { region: 'header' | 'toolbar' }
 ) {
-  const [itemRef, setItemRef] = createSignal<HTMLElement | null>(null);
-
   const register =
     props.region === 'header'
       ? useRegisterCollapsibleHeaderItem
@@ -25,12 +23,11 @@ function CollapsibleItem(
   const isCollapsed = register({
     id: props.id,
     priority: props.priority,
-    ref: itemRef,
     onCollapsedChange: (v) => props.onCollapsedChange?.(v),
   });
 
   return (
-    <div ref={setItemRef} class={cn('flex items-center', props.containerClass)}>
+    <div class={cn('flex items-center', props.containerClass)}>
       {props.children(isCollapsed)}
     </div>
   );
