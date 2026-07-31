@@ -921,7 +921,8 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
                 </span>
                 <span class="flex-1 text-ink">{link().label}</span>
                 <Hotkey
-                  token={link().hotkeyToken}
+                  // Hardcoding this so that we can include the command scope activation
+                  shortcut="g s"
                   theme="subtle"
                   class="ml-6"
                 />
