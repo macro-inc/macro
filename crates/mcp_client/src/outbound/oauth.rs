@@ -72,6 +72,45 @@ fn is_valid_client_metadata_url(client_id: &str) -> bool {
 }
 
 impl<S, R> OAuthService<S, R> {
+    fn configure_cimd_client(
+        &self,
+        auth_manager: &mut AuthorizationManager,
+        scopes: Vec<String>,
+    ) -> anyhow::Result<ResolvedClient> {
+        let client_id = self.client_metadata.client_id().to_string();
+        let config = OAuthClientConfig::new(client_id.clone(), self.client_metadata.redirect_uri())
+            .with_scopes(scopes.clone());
+        auth_manager.configure_client(config)?;
+
+        tracing::info!(%client_id, "using OAuth Client ID Metadata Document");
+        Ok(ResolvedClient {
+            client_id,
+            client_secret: None,
+            scopes,
+        })
+    }
+
+    async fn register_dcr_client(
+        &self,
+        auth_manager: &mut AuthorizationManager,
+        scopes: Vec<String>,
+    ) -> anyhow::Result<ResolvedClient> {
+        let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
+        let config = auth_manager
+            .register_client(
+                MCP_CLIENT_NAME,
+                self.client_metadata.redirect_uri(),
+                &scope_refs,
+            )
+            .await?;
+
+        Ok(ResolvedClient {
+            client_id: config.client_id,
+            client_secret: config.client_secret,
+            scopes,
+        })
+    }
+
     async fn resolve_dynamic_client(
         &self,
         auth_manager: &mut AuthorizationManager,
@@ -81,22 +120,7 @@ impl<S, R> OAuthService<S, R> {
         if supports_client_metadata
             && is_valid_client_metadata_url(self.client_metadata.client_id())
         {
-            let config = OAuthClientConfig::new(
-                self.client_metadata.client_id(),
-                self.client_metadata.redirect_uri(),
-            )
-            .with_scopes(scopes.clone());
-            auth_manager.configure_client(config)?;
-
-            tracing::info!(
-                client_id = self.client_metadata.client_id(),
-                "using OAuth Client ID Metadata Document"
-            );
-            return Ok(ResolvedClient {
-                client_id: self.client_metadata.client_id().to_string(),
-                client_secret: None,
-                scopes,
-            });
+            return self.configure_cimd_client(auth_manager, scopes);
         }
 
         if supports_client_metadata {
@@ -106,19 +130,7 @@ impl<S, R> OAuthService<S, R> {
             );
         }
 
-        let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
-        let config = auth_manager
-            .register_client(
-                MCP_CLIENT_NAME,
-                self.client_metadata.redirect_uri(),
-                &scope_refs,
-            )
-            .await?;
-        Ok(ResolvedClient {
-            client_id: config.client_id,
-            client_secret: config.client_secret,
-            scopes,
-        })
+        self.register_dcr_client(auth_manager, scopes).await
     }
 
     #[cfg(feature = "providers")]
