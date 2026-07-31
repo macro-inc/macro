@@ -1,6 +1,11 @@
 import { analytics } from '@app/lib/analytics';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  ENABLE_GRAPHQL_SOUP,
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import {
@@ -15,13 +20,17 @@ import type {
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
 import { useMutation, useMutationState, useQuery } from '@tanstack/solid-query';
-import { type Accessor, batch } from 'solid-js';
+import { type Accessor, batch, createMemo } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
-import { getGraphqlEntityProperties } from '../../service-clients/service-storage/graphql-entity-properties';
+import {
+  EntityPropertiesDocument,
+  type EntityPropertiesQuery,
+  type EntityPropertiesQueryVariables,
+} from '../../service-clients/service-storage/graphql/generated/graphql';
 import {
   type SetEntityPropertyDisposition,
   setEntityProperty,
@@ -30,6 +39,7 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '../../service-clients/service-storage/graphql-soup';
+import { createUrqlQuery } from '../../urql-solid';
 import { queryClient } from '../client';
 import {
   getSoupEntityById,
@@ -42,6 +52,11 @@ import {
   groupedPropertyKeys,
 } from '../soup/grouped/graphql-optimistic';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import {
+  buildEntityPropertiesInput,
+  fetchGraphqlEntityProperties,
+  mapGraphqlEntityProperties,
+} from './graphql/entity-properties';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
@@ -56,48 +71,74 @@ export function useEntityPropertiesQuery(
   entityId: Accessor<string>,
   includeMetadata: boolean
 ) {
-  return useQuery(
+  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
+
+  // Metadata properties are computed by the REST properties endpoint and are
+  // not part of the GraphQL Soup property edge. USER is not represented in
+  // Soup either. An empty id pauses both transports while editor selection is
+  // transitioning.
+  const graphqlInput = createMemo(() => {
+    const id = entityId();
+    if (!graphqlSoupFlag().enabled || includeMetadata || id.length === 0) {
+      return undefined;
+    }
+    return buildEntityPropertiesInput(entityType(), id);
+  });
+
+  const usesGraphql = () => graphqlInput() !== undefined;
+
+  const graphqlQuery = createUrqlQuery<
+    EntityPropertiesQuery,
+    EntityPropertiesQueryVariables,
+    Property[]
+  >(() => {
+    const input = graphqlInput();
+    const id = entityId();
+
+    return {
+      query: EntityPropertiesDocument,
+      client: getGraphqlSoupClient(),
+      variables: { input: input! },
+      enabled: input !== undefined,
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: (data) =>
+        (mapGraphqlEntityProperties(data, id) ?? []).flatMap((property) => {
+          try {
+            const mapped = soupPropertyToProperty(property);
+            return mapped.isMetadata === true ? [] : [mapped];
+          } catch (error) {
+            console.warn(
+              'Skipping GraphQL property with unsupported type',
+              error
+            );
+            return [];
+          }
+        }),
+    };
+  });
+
+  const restQuery = useQuery(
     () => {
       const type = entityType();
       const id = entityId();
       return {
-        queryKey: [
-          ...propertiesKeys.entity({
-            entityType: type,
-            entityId: id,
-          }).queryKey,
-          { includeMetadata },
-        ],
+        queryKey: propertiesKeys.entity({
+          entityType: type,
+          entityId: id,
+        }).queryKey,
+        enabled: !usesGraphql() && id.length > 0,
         queryFn: async () => {
-          // Metadata properties are computed by the REST properties endpoint
-          // and are not part of the GraphQL Soup property edge. Keep that
-          // explicit request (and USER, which Soup does not represent) on REST.
-          // TODO: Fetch metadata through GraphQL once Soup exposes the missing
-          // email-thread fields (first message timestamps/subject, latest
-          // inbound/outbound timestamps, and message count).
-          if (ENABLE_GRAPHQL_SOUP() && !includeMetadata) {
-            const properties = await getGraphqlEntityProperties(type, id);
-            if (properties) {
-              return properties.flatMap((property) => {
-                try {
-                  return [soupPropertyToProperty(property)];
-                } catch (error) {
-                  console.warn(
-                    'Skipping GraphQL property with unsupported type',
-                    error
-                  );
-                  return [];
-                }
-              });
-            }
-          }
-
+          // Always fetch with metadata so consumers with different
+          // `includeMetadata` values share one cache entry and one request.
           const data = await throwOnErr(
             async () =>
               await propertiesServiceClient.getEntityProperties({
                 entity_type: toPropertyTargetEntityType(type),
                 entity_id: id,
-                query: { include_metadata: includeMetadata },
+                query: { include_metadata: true },
               })
           );
           return data.properties.flatMap((property) => {
@@ -118,6 +159,27 @@ export function useEntityPropertiesQuery(
     },
     () => queryClient
   );
+
+  return {
+    get data() {
+      return usesGraphql() ? graphqlQuery.data : restQuery.data;
+    },
+    get error() {
+      return usesGraphql() ? graphqlQuery.error : restQuery.error;
+    },
+    get isLoading() {
+      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+    },
+    get isFetching() {
+      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+    },
+    refetch() {
+      if (entityId().length === 0) return Promise.resolve(undefined);
+      return usesGraphql()
+        ? fetchGraphqlEntityProperties(entityType(), entityId())
+        : restQuery.refetch();
+    },
+  };
 }
 
 function invalidatePropertiesForEntity(
@@ -127,6 +189,35 @@ function invalidatePropertiesForEntity(
   return queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
   });
+}
+
+async function refetchGraphqlProperties(
+  entityType: EntityType | PropertyTargetEntityType,
+  entityId: string
+): Promise<void> {
+  if (!ENABLE_GRAPHQL_SOUP()) return;
+  try {
+    await fetchGraphqlEntityProperties(entityType, entityId);
+  } catch (error) {
+    // The durable write already succeeded. The live query still receives the
+    // finite-retry error; log it without turning the write into a mutation
+    // failure.
+    console.warn('Failed to refresh GraphQL entity properties', error);
+  }
+}
+
+async function refetchEntityProperties(
+  entityType: EntityType | PropertyTargetEntityType,
+  entityId: string,
+  options: { graphql: boolean }
+): Promise<void> {
+  const refetches: Promise<unknown>[] = [
+    invalidatePropertiesForEntity(entityType, entityId),
+  ];
+  if (options.graphql) {
+    refetches.push(refetchGraphqlProperties(entityType, entityId));
+  }
+  await Promise.all(refetches);
 }
 
 function getPropertyDefinitionId(
@@ -289,12 +380,14 @@ export function useDeleteEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, DeleteEntityPropertyParams>(
       {
-        onError(error) {
+        onSuccess: (_data, variables) =>
+          refetchEntityProperties(variables.entityType, variables.entityId, {
+            graphql: true,
+          }),
+        onError(error, variables) {
           console.error('Failed to delete property', error);
           toast.failure('Failed to delete property');
-        },
-        onSettled: (_data, _error, variables) => {
-          invalidatePropertiesForEntity(
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
           );
@@ -339,14 +432,18 @@ export function useAddEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, AddEntityPropertyParams>(
       {
-        onError(error) {
-          if (ENABLE_GRAPHQL_SOUP()) return;
-          console.error('Failed to add property', error);
-          toast.failure('Failed to add property');
-        },
-        onSettled: (_data, _error, variables) => {
-          if (ENABLE_GRAPHQL_SOUP()) return;
-          invalidatePropertiesForEntity(
+        onSuccess: (_data, variables) =>
+          refetchEntityProperties(variables.entityType, variables.entityId, {
+            // A new assignment has no stable normalized id until the response,
+            // so refresh its owning entity relationship after the write.
+            graphql: true,
+          }),
+        onError(error, variables) {
+          if (!ENABLE_GRAPHQL_SOUP()) {
+            console.error('Failed to add property', error);
+            toast.failure('Failed to add property');
+          }
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
           );
@@ -402,14 +499,23 @@ function entityPropertyOptionCallbacks(
         );
         return { soupTxn };
       },
-      onError: (error, _vars, context) => {
+      onSuccess: (_data, variables) => {
+        invalidateSoupEntity(variables.entityId);
+        return refetchEntityProperties(
+          variables.entityType,
+          variables.entityId,
+          { graphql: true }
+        );
+      },
+      onError: (error, variables, context) => {
         context?.soupTxn?.rollback();
+        invalidateSoupEntity(variables.entityId);
         console.error(failureMessage, error);
         toast.failure(failureMessage);
-      },
-      onSettled: (_data, _error, variables) => {
-        invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-        invalidateSoupEntity(variables.entityId);
+        return invalidatePropertiesForEntity(
+          variables.entityType,
+          variables.entityId
+        );
       },
     },
     callbacks
@@ -658,21 +764,24 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
               ];
             })
           );
+          invalidateSoupEntity(variables.entityId);
+          // Await successful reconciliation so the in-flight overlay remains
+          // visible until both read owners have observed the durable value.
+          return refetchEntityProperties(
+            variables.entityType,
+            variables.entityId,
+            { graphql: true }
+          );
         },
-        onError: (error, _variables, context) => {
+        onError: (error, variables, context) => {
           context?.soupTxn?.rollback();
+          invalidateSoupEntity(variables.entityId);
           console.error('Failed to update tags', error);
           toast.failure(
             thrownResultErrorHasCode(error, 'FORBIDDEN')
               ? 'Edit permissions are required to update tags'
               : 'Failed to update tags'
           );
-        },
-        onSettled: (_data, _error, variables) => {
-          invalidateSoupEntity(variables.entityId);
-          // Returned so the mutation stays `pending` until the refetch lands,
-          // keeping the in-flight optimistic overlay visible through the
-          // reconcile with no flash back to the stale value.
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
@@ -794,14 +903,14 @@ function ensurePropertySettlementListener(): void {
         getPropertyDefinitionId(item.property),
         item.apiValues
       );
-      reconcilePropertySaveCaches(item);
+      reconcilePropertySaveCaches(item, { graphql: true });
       return;
     }
 
     // A SoupTransaction restores a whole cache snapshot, so it is unsafe to
     // roll one back after a durable write has spent time in the queue. Refetch
     // once all queued projections for this entity have settled instead.
-    reconcilePropertySaveCaches(item);
+    reconcilePropertySaveCaches(item, { graphql: true });
     const error = new Error(settlement.error);
     console.error('Queued property save permanently failed', error);
     toast.failure('Failed to save properties');
@@ -809,21 +918,29 @@ function ensurePropertySettlementListener(): void {
 }
 
 function invalidatePropertySaveCaches(
-  item: BulkSaveEntityPropertiesParams['properties'][number]
+  item: BulkSaveEntityPropertiesParams['properties'][number],
+  options: { graphql: boolean }
 ): void {
-  invalidatePropertiesForEntity(item.entityType, item.entityId);
+  void refetchEntityProperties(item.entityType, item.entityId, options);
   invalidateSoupEntity(item.entityId);
 }
 
 function reconcilePropertySaveCaches(
-  item: BulkSaveEntityPropertiesParams['properties'][number]
+  item: BulkSaveEntityPropertiesParams['properties'][number],
+  options: { graphql: boolean }
 ): void {
   const hasQueuedSave = [...queuedPropertySaves.values()].some(
     (queued) => queued.item.entityId === item.entityId
   );
   const hasActiveSave =
     (activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0) > 0;
-  if (!hasQueuedSave && !hasActiveSave) invalidatePropertySaveCaches(item);
+  if (hasQueuedSave || hasActiveSave) {
+    if (options.graphql) {
+      void refetchGraphqlProperties(item.entityType, item.entityId);
+    }
+    return;
+  }
+  invalidatePropertySaveCaches(item, options);
 }
 
 function trackActiveGraphqlPropertySaves(
@@ -855,6 +972,9 @@ function handleAcceptedPropertySave(
       getPropertyDefinitionId(item.property),
       item.apiValues
     );
+    reconcilePropertySaveCaches(item, {
+      graphql: !isInstantiatedProperty(item.property),
+    });
   } else if (disposition.kind === 'queued') {
     queuedPropertySaves.set(disposition.transactionId, { item });
     ensurePropertySettlementListener();
@@ -979,18 +1099,22 @@ export function useBulkSaveEntityPropertiesMutation(
           vars: BulkSaveEntityPropertiesParams
         ): BulkSaveEntityPropertiesContext => {
           const usesGraphqlSoup = ENABLE_GRAPHQL_SOUP();
-          // Keep any populated TanStack Soup projection in sync even when
-          // GraphQL owns transport and normalized-cache optimism.
-          const soupTxns = batch(() =>
-            vars.properties.map((item) =>
-              optimisticUpdateSoupEntityProperty(
-                item.entityId,
-                item.property,
-                apiValuesToSoupPropertyValue(item.apiValues)
+
+          let soupTxns: Array<SoupTransaction | undefined> = [];
+          if (!usesGraphqlSoup) {
+            soupTxns = batch(() =>
+              vars.properties.map((item) =>
+                optimisticUpdateSoupEntityProperty(
+                  item.entityId,
+                  item.property,
+                  apiValuesToSoupPropertyValue(item.apiValues)
+                )
               )
-            )
-          );
+            );
+          }
+
           if (usesGraphqlSoup) trackActiveGraphqlPropertySaves(vars);
+
           return { usesGraphqlSoup, soupTxns };
         },
         onError: (error, _variables, context) => {
@@ -1001,14 +1125,12 @@ export function useBulkSaveEntityPropertiesMutation(
           reportBulkPropertySaveFailure(error);
         },
         onSettled: (_data, _error, variables, context) => {
-          if (context?.usesGraphqlSoup)
+          if (context?.usesGraphqlSoup) {
             untrackActiveGraphqlPropertySaves(variables);
+          }
           batch(() => {
-            const reconciledEntityIds = new Set<string>();
             for (const item of variables.properties) {
-              if (reconciledEntityIds.has(item.entityId)) continue;
-              reconciledEntityIds.add(item.entityId);
-              reconcilePropertySaveCaches(item);
+              reconcilePropertySaveCaches(item, { graphql: false });
             }
           });
         },
