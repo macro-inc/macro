@@ -225,33 +225,57 @@ fn patches_from_chat_event(event: &ChatTopicEvent) -> Vec<SoupRealtimePatch> {
 }
 
 fn patches_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimePatch> {
-    if let EmailTopicEvent::ThreadTrashed(metadata) = event
-        && metadata.trashed
-    {
-        return vec![delete(EntityType::EmailThread, metadata.thread_id)];
-    }
+    let updated_thread = |thread_id| vec![update(EntityType::EmailThread, thread_id)];
+    let deleted_thread = |thread_id| vec![delete(EntityType::EmailThread, thread_id)];
 
-    let thread_id = match event {
-        EmailTopicEvent::MessageReceived(metadata) if !metadata.is_spam_or_trash => {
-            metadata.thread_id
+    match event {
+        EmailTopicEvent::MessageReceived(metadata) => {
+            if metadata.is_spam_or_trash {
+                Vec::new()
+            } else {
+                updated_thread(metadata.thread_id)
+            }
         }
-        EmailTopicEvent::MessageSent(metadata) => metadata.thread_id,
-        EmailTopicEvent::MessageDeleted(metadata) => metadata.thread_id,
-        EmailTopicEvent::MessageSendQueued(metadata) => metadata.thread_id,
-        EmailTopicEvent::MessageSendCancelled(metadata) => metadata.thread_id,
-        EmailTopicEvent::ThreadArchived(metadata) => metadata.thread_id,
-        EmailTopicEvent::ThreadTrashed(metadata) if !metadata.trashed => metadata.thread_id,
-        EmailTopicEvent::ThreadRead(metadata) => metadata.thread_id,
-        EmailTopicEvent::ThreadStarred(metadata) => metadata.thread_id,
-        EmailTopicEvent::ThreadProjectChanged(metadata) => metadata.thread_id,
-        EmailTopicEvent::ThreadLabelsUpdated(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageDraftSynced(metadata) => {
+            if metadata.is_spam_or_trash {
+                Vec::new()
+            } else {
+                updated_thread(metadata.thread_id)
+            }
+        }
+        EmailTopicEvent::MessageSent(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::MessageDeleted(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::MessageSendQueued(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::MessageSendCancelled(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadArchived(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadTrashed(metadata) => {
+            if metadata.trashed {
+                deleted_thread(metadata.thread_id)
+            } else {
+                updated_thread(metadata.thread_id)
+            }
+        }
+        EmailTopicEvent::ThreadRead(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadStarred(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadSpamChanged(metadata) => {
+            if metadata.spam {
+                deleted_thread(metadata.thread_id)
+            } else {
+                updated_thread(metadata.thread_id)
+            }
+        }
+        EmailTopicEvent::ThreadProjectChanged(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadLabelsUpdated(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadBackfilled(metadata) => updated_thread(metadata.thread_id),
+        EmailTopicEvent::ThreadsReindexRequested(metadata) => metadata
+            .thread_ids
+            .iter()
+            .map(|thread_id| update(EntityType::EmailThread, thread_id))
+            .collect(),
         EmailTopicEvent::LinkConnected(_)
         | EmailTopicEvent::LinkDisconnected(_)
-        | EmailTopicEvent::LinkReauthRequired(_)
-        | EmailTopicEvent::MessageReceived(_)
-        | EmailTopicEvent::ThreadTrashed(_) => return Vec::new(),
-    };
-    vec![update(EntityType::EmailThread, thread_id)]
+        | EmailTopicEvent::LinkReauthRequired(_) => Vec::new(),
+    }
 }
 
 fn channel_and_thread_entities(
