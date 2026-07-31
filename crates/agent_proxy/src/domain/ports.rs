@@ -4,12 +4,11 @@
 //! ([`chat::domain::ports::ChatRepo`] and [`chat::domain::ports::MessageRepo`]);
 //! only the capabilities unique to this service are defined here.
 
-use crate::domain::models::Result;
+use crate::domain::models::{AgentId, PendingMessageId, Result};
 use agent_client_protocol::RawJsonRpcMessage;
-use macro_uuid::Uuid;
 use std::future::Future;
 
-/// Live connections to agent runtimes, keyed by session (agent entity) ID.
+/// Live connections to agent runtimes, keyed by [`AgentId`].
 ///
 /// Implementations route a raw ACP JSON-RPC message to the runtime currently
 /// hosting the session. Registration of sessions is an adapter concern; the
@@ -18,19 +17,19 @@ pub trait RuntimeSessions: Send + Sync + 'static {
     /// Forward one raw ACP JSON-RPC message to the runtime hosting the
     /// session. Fails with [`crate::domain::models::AgentProxyErr::SessionNotConnected`]
     /// when the session has no live runtime connection.
-    fn send(&self, session_id: Uuid, message: RawJsonRpcMessage) -> Result<()>;
+    fn send(&self, agent_id: AgentId, message: RawJsonRpcMessage) -> Result<()>;
 
     /// Whether the session currently has a live runtime connection.
-    fn is_connected(&self, session_id: Uuid) -> bool;
+    fn is_connected(&self, agent_id: AgentId) -> bool;
 }
 
 impl<T: RuntimeSessions> RuntimeSessions for std::sync::Arc<T> {
-    fn send(&self, session_id: Uuid, message: RawJsonRpcMessage) -> Result<()> {
-        T::send(self, session_id, message)
+    fn send(&self, agent_id: AgentId, message: RawJsonRpcMessage) -> Result<()> {
+        T::send(self, agent_id, message)
     }
 
-    fn is_connected(&self, session_id: Uuid) -> bool {
-        T::is_connected(self, session_id)
+    fn is_connected(&self, agent_id: AgentId) -> bool {
+        T::is_connected(self, agent_id)
     }
 }
 
@@ -53,22 +52,22 @@ pub trait SessionAttachments: Send + Sync + 'static {
     /// monotonically increasing connection identifier: registrations from an
     /// older epoch than the current holder's are rejected with `None`, so a
     /// half-dead connection's late attach cannot displace a newer one.
-    fn register(&self, session_id: Uuid, epoch: u64, tx: AcpSender) -> Option<RegistrationId>;
+    fn register(&self, agent_id: AgentId, epoch: u64, tx: AcpSender) -> Option<RegistrationId>;
 
     /// Remove a session registration, but only when `registration` still
     /// identifies the current registration for the session. Returns whether
     /// the registration was actually removed, so callers can skip
     /// owner-scoped cleanup when a newer registration displaced theirs.
-    fn unregister(&self, session_id: Uuid, registration: RegistrationId) -> bool;
+    fn unregister(&self, agent_id: AgentId, registration: RegistrationId) -> bool;
 }
 
 impl<T: SessionAttachments> SessionAttachments for std::sync::Arc<T> {
-    fn register(&self, session_id: Uuid, epoch: u64, tx: AcpSender) -> Option<RegistrationId> {
-        T::register(self, session_id, epoch, tx)
+    fn register(&self, agent_id: AgentId, epoch: u64, tx: AcpSender) -> Option<RegistrationId> {
+        T::register(self, agent_id, epoch, tx)
     }
 
-    fn unregister(&self, session_id: Uuid, registration: RegistrationId) -> bool {
-        T::unregister(self, session_id, registration)
+    fn unregister(&self, agent_id: AgentId, registration: RegistrationId) -> bool {
+        T::unregister(self, agent_id, registration)
     }
 }
 
@@ -77,7 +76,7 @@ pub trait ClientNotifier: Send + Sync + 'static {
     /// Send a payload to every client tracking the session's chat entity.
     fn notify_session(
         &self,
-        session_id: Uuid,
+        agent_id: AgentId,
         message_type: &'static str,
         payload: serde_json::Value,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
@@ -87,7 +86,7 @@ pub trait ClientNotifier: Send + Sync + 'static {
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
     /// The queue row's id, needed to delete it after delivery.
-    pub id: Uuid,
+    pub id: PendingMessageId,
     /// The raw ACP JSON-RPC message exactly as the caller posted it.
     pub message: RawJsonRpcMessage,
 }
@@ -106,37 +105,37 @@ pub trait PendingMessages: Send + Sync + 'static {
     /// Append one raw ACP message to the session's queue.
     fn enqueue(
         &self,
-        session_id: Uuid,
+        agent_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Every queued message for the session, oldest first.
     fn list(
         &self,
-        session_id: Uuid,
+        agent_id: AgentId,
     ) -> impl Future<Output = anyhow::Result<Vec<PendingMessage>>> + Send;
 
     /// Remove a queued message after successful delivery.
-    fn delete(&self, id: Uuid) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn delete(&self, id: PendingMessageId) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 impl<T: PendingMessages> PendingMessages for std::sync::Arc<T> {
     fn enqueue(
         &self,
-        session_id: Uuid,
+        agent_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> impl Future<Output = anyhow::Result<()>> + Send {
-        T::enqueue(self, session_id, message)
+        T::enqueue(self, agent_id, message)
     }
 
     fn list(
         &self,
-        session_id: Uuid,
+        agent_id: AgentId,
     ) -> impl Future<Output = anyhow::Result<Vec<PendingMessage>>> + Send {
-        T::list(self, session_id)
+        T::list(self, agent_id)
     }
 
-    fn delete(&self, id: Uuid) -> impl Future<Output = anyhow::Result<()>> + Send {
+    fn delete(&self, id: PendingMessageId) -> impl Future<Output = anyhow::Result<()>> + Send {
         T::delete(self, id)
     }
 }

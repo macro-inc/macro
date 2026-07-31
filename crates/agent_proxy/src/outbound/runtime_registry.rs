@@ -3,10 +3,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{AgentProxyErr, Result};
+use crate::domain::models::{AgentId, AgentProxyErr, Result};
 use crate::domain::ports::{AcpSender, RegistrationId, RuntimeSessions, SessionAttachments};
 use agent_client_protocol::RawJsonRpcMessage;
-use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -19,13 +18,13 @@ struct SessionHandle {
     tx: AcpSender,
 }
 
-/// Maps session (agent entity) IDs to the live ACP channel of the runtime
+/// Maps [`AgentId`]s to the live ACP channel of the runtime
 /// currently hosting them. Implements the [`RuntimeSessions`] and
 /// [`SessionAttachments`] domain ports.
 #[derive(Default)]
 pub struct SessionRegistry {
     next_registration: AtomicU64,
-    sessions: Mutex<HashMap<Uuid, SessionHandle>>,
+    sessions: Mutex<HashMap<AgentId, SessionHandle>>,
 }
 
 impl SessionRegistry {
@@ -36,17 +35,17 @@ impl SessionRegistry {
 }
 
 impl SessionAttachments for SessionRegistry {
-    fn register(&self, session_id: Uuid, epoch: u64, tx: AcpSender) -> Option<RegistrationId> {
+    fn register(&self, agent_id: AgentId, epoch: u64, tx: AcpSender) -> Option<RegistrationId> {
         let mut sessions = self.sessions.lock().expect("session registry poisoned");
         if sessions
-            .get(&session_id)
+            .get(&agent_id)
             .is_some_and(|handle| handle.epoch > epoch)
         {
             return None;
         }
         let registration = RegistrationId(self.next_registration.fetch_add(1, Ordering::Relaxed));
         sessions.insert(
-            session_id,
+            agent_id,
             SessionHandle {
                 epoch,
                 registration,
@@ -56,23 +55,23 @@ impl SessionAttachments for SessionRegistry {
         Some(registration)
     }
 
-    fn unregister(&self, session_id: Uuid, registration: RegistrationId) -> bool {
+    fn unregister(&self, agent_id: AgentId, registration: RegistrationId) -> bool {
         let mut sessions = self.sessions.lock().expect("session registry poisoned");
         let owns = sessions
-            .get(&session_id)
+            .get(&agent_id)
             .is_some_and(|handle| handle.registration == registration);
         if owns {
-            sessions.remove(&session_id);
+            sessions.remove(&agent_id);
         }
         owns
     }
 }
 
 impl RuntimeSessions for SessionRegistry {
-    fn send(&self, session_id: Uuid, message: RawJsonRpcMessage) -> Result<()> {
+    fn send(&self, agent_id: AgentId, message: RawJsonRpcMessage) -> Result<()> {
         let sessions = self.sessions.lock().expect("session registry poisoned");
         let handle = sessions
-            .get(&session_id)
+            .get(&agent_id)
             .ok_or(AgentProxyErr::SessionNotConnected)?;
         handle
             .tx
@@ -80,10 +79,10 @@ impl RuntimeSessions for SessionRegistry {
             .map_err(|_| AgentProxyErr::SessionNotConnected)
     }
 
-    fn is_connected(&self, session_id: Uuid) -> bool {
+    fn is_connected(&self, agent_id: AgentId) -> bool {
         self.sessions
             .lock()
             .expect("session registry poisoned")
-            .contains_key(&session_id)
+            .contains_key(&agent_id)
     }
 }

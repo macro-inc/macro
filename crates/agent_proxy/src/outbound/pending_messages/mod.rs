@@ -7,9 +7,9 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::models::{AgentId, PendingMessageId};
 use crate::domain::ports::{PendingMessage, PendingMessages};
 use agent_client_protocol::RawJsonRpcMessage;
-use macro_uuid::Uuid;
 use sqlx::PgPool;
 
 /// Postgres adapter for the pending-message queue.
@@ -26,7 +26,7 @@ impl PgPendingMessages {
 }
 
 impl PendingMessages for PgPendingMessages {
-    async fn enqueue(&self, session_id: Uuid, message: RawJsonRpcMessage) -> anyhow::Result<()> {
+    async fn enqueue(&self, agent_id: AgentId, message: RawJsonRpcMessage) -> anyhow::Result<()> {
         let message = serde_json::to_value(&message)?;
         sqlx::query!(
             r#"
@@ -34,7 +34,7 @@ impl PendingMessages for PgPendingMessages {
             VALUES ($1, $2, $3)
             "#,
             macro_uuid::generate_uuid_v7(),
-            session_id.to_string(),
+            agent_id.to_string(),
             message,
         )
         .execute(&self.pool)
@@ -42,7 +42,7 @@ impl PendingMessages for PgPendingMessages {
         Ok(())
     }
 
-    async fn list(&self, session_id: Uuid) -> anyhow::Result<Vec<PendingMessage>> {
+    async fn list(&self, agent_id: AgentId) -> anyhow::Result<Vec<PendingMessage>> {
         let rows = sqlx::query!(
             r#"
             SELECT id, message
@@ -50,7 +50,7 @@ impl PendingMessages for PgPendingMessages {
             WHERE session_id = $1
             ORDER BY created_at, id
             "#,
-            session_id.to_string(),
+            agent_id.to_string(),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -59,20 +59,20 @@ impl PendingMessages for PgPendingMessages {
             .map(|row| {
                 let message = serde_json::from_value(row.message)?;
                 Ok(PendingMessage {
-                    id: row.id,
+                    id: PendingMessageId::new(row.id),
                     message,
                 })
             })
             .collect()
     }
 
-    async fn delete(&self, id: Uuid) -> anyhow::Result<()> {
+    async fn delete(&self, id: PendingMessageId) -> anyhow::Result<()> {
         sqlx::query!(
             r#"
             DELETE FROM agent_proxy_pending_message
             WHERE id = $1
             "#,
-            id,
+            id.as_uuid(),
         )
         .execute(&self.pool)
         .await?;
