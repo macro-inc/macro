@@ -15,10 +15,11 @@ pub trait DeviceRegistrationDbOps: Send + Sync + 'static {
         endpoint_arn: &str,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Look up an existing device endpoint ARN by its device token.
+    /// Look up an existing device endpoint ARN by its device token and type.
     fn get_device_endpoint(
         &self,
         device_token: &str,
+        device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<Option<String>, Report>> + Send;
 
     /// Upsert a device registration.
@@ -30,12 +31,23 @@ pub trait DeviceRegistrationDbOps: Send + Sync + 'static {
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Delete by token and type, returning the endpoint ARN.
-    fn delete_by_token(
+    /// Delete all of the user's registrations matching the token and type,
+    /// returning the removed endpoint ARNs.
+    fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl std::future::Future<Output = Result<Vec<String>, Report>> + Send;
+
+    /// Delete registrations sharing the token and type but pointing at a
+    /// different endpoint, returning the removed endpoint ARNs.
+    fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> impl std::future::Future<Output = Result<String, Report>> + Send;
+        active_endpoint: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<String>, Report>> + Send;
 }
 
 impl DeviceRegistrationDbOps for PgPool {
@@ -53,15 +65,20 @@ impl DeviceRegistrationDbOps for PgPool {
         Ok(())
     }
 
-    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
+    async fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
         let result = sqlx::query!(
             r#"
             SELECT d.device_endpoint
             FROM notification_user_device_registration d
-            WHERE d.device_token = $1
+            WHERE d.device_token = $1 AND d.device_type = $2
             LIMIT 1
             "#,
-            device_token
+            device_token,
+            device_type as _,
         )
         .map(|row| row.device_endpoint)
         .fetch_optional(self)
@@ -97,23 +114,50 @@ impl DeviceRegistrationDbOps for PgPool {
         Ok(())
     }
 
-    async fn delete_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        let user_id_str = user_id.as_ref();
+        let endpoints = sqlx::query!(
+            r#"
+            DELETE FROM notification_user_device_registration
+            WHERE user_id = $1 AND device_token = $2 AND device_type = $3
+            RETURNING device_endpoint
+            "#,
+            user_id_str,
+            device_token,
+            device_type as _,
+        )
+        .map(|row| row.device_endpoint)
+        .fetch_all(self)
+        .await?;
+
+        Ok(endpoints)
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> Result<String, Report> {
-        let result = sqlx::query!(
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
+        let endpoints = sqlx::query!(
             r#"
             DELETE FROM notification_user_device_registration
-            WHERE device_token = $1 AND device_type = $2
+            WHERE device_token = $1 AND device_type = $2 AND device_endpoint != $3
             RETURNING device_endpoint
             "#,
             device_token,
             device_type as _,
+            active_endpoint,
         )
-        .fetch_one(self)
+        .map(|row| row.device_endpoint)
+        .fetch_all(self)
         .await?;
 
-        Ok(result.device_endpoint)
+        Ok(endpoints)
     }
 }

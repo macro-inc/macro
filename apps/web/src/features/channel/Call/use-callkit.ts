@@ -1,4 +1,5 @@
 import { whenSplitManagerReady } from '@app/signal/splitLayout';
+import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-lifecycle';
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform, isTauri } from '@core/util/platform';
@@ -22,6 +23,51 @@ import { useCallKitThemeSync } from './use-callkit-theme-sync';
 // The 'iosvoip' variant exists in the backend but the generated schema has not been
 // regenerated to include it yet. Cast until a regeneration picks it up.
 const DEVICE_TYPE_IOS_VOIP = 'iosvoip' as DeviceType;
+
+async function getCachedVoipToken(): Promise<string | null> {
+  const { token } = await invoke<{ token: string | null }>(
+    'plugin:call-kit|get_voip_token'
+  );
+  return token;
+}
+
+async function registerVoipToken(token: string): Promise<void> {
+  const res = await notificationServiceClient.registerDevice({
+    token,
+    deviceType: DEVICE_TYPE_IOS_VOIP,
+  });
+  if (res.isErr()) {
+    // The client returns a Result and never rejects — throw so callers (and
+    // the push lifecycle's retry) can see the failure.
+    throw new Error(
+      `failed to register VoIP token: ${res.error.map((e) => e.code).join(',')}`
+    );
+  }
+}
+
+/** Register the cached PushKit token (if any) under the current session's user. */
+async function syncVoipRegistration(): Promise<void> {
+  const token = await getCachedVoipToken();
+  if (!token) return;
+  console.info('[callkit] registering cached VoIP token', {
+    tokenLength: token.length,
+  });
+  await registerVoipToken(token);
+}
+
+async function unregisterVoipForLogout(): Promise<void> {
+  const token = await getCachedVoipToken();
+  if (!token) return;
+  const res = await notificationServiceClient.unregisterDevice({
+    token,
+    deviceType: DEVICE_TYPE_IOS_VOIP,
+  });
+  if (res.isErr()) {
+    throw new Error(
+      `failed to unregister VoIP token: ${res.error.map((e) => e.code).join(',')}`
+    );
+  }
+}
 
 type VoipTokenPayload = { token: string };
 type CallAnsweredPayload = { channelId: string; nativeMedia?: boolean };
@@ -251,6 +297,7 @@ export function useCallKitSetup() {
         );
     }
 
+    // Token rotation: PushKit can hand us a new token at any point at runtime.
     trackListener(
       addPluginListener<VoipTokenPayload>(
         'call-kit',
@@ -259,31 +306,26 @@ export function useCallKitSetup() {
           console.info('[callkit] received VoIP token update', {
             tokenLength: token.length,
           });
-          await notificationServiceClient
-            .registerDevice({ token, deviceType: DEVICE_TYPE_IOS_VOIP })
-            .catch((err) =>
-              console.error('[callkit] failed to register VoIP token', err)
-            );
+          await registerVoipToken(token).catch((err) =>
+            console.error('[callkit] failed to register VoIP token', err)
+          );
         }
       ),
       'voip-token-updated'
     );
 
-    // Drain any VoIP token that arrived from PushKit before the listener above
-    // was registered (common on first launch).
-    invoke<{ token: string | null }>('plugin:call-kit|get_voip_token')
-      .then(({ token }) => {
-        if (!token) return;
-        console.info('[callkit] registering cached VoIP token', {
-          tokenLength: token.length,
-        });
-        return notificationServiceClient
-          .registerDevice({ token, deviceType: DEVICE_TYPE_IOS_VOIP })
-          .catch((err) =>
-            console.error('[callkit] failed to register cached VoIP token', err)
-          );
-      })
-      .catch((err) => console.error('[callkit] get_voip_token failed', err));
+    // Cold start: drain any token that arrived from PushKit before the
+    // listener above was registered.
+    syncVoipRegistration().catch((err) =>
+      console.error('[callkit] failed to register cached VoIP token', err)
+    );
+
+    // Account switch: rebind on login and remove on logout so the previous account's calls stop ringing this device. Registrations are idempotent upserts, so overlap between these three triggers is harmless.
+    const removeVoipLifecycle = registerPushRegistrationLifecycle({
+      syncRegistration: syncVoipRegistration,
+      unregisterForLogout: unregisterVoipForLogout,
+    });
+    onCleanup(removeVoipLifecycle);
 
     const handleCallAnswered = (
       { channelId, nativeMedia }: CallAnsweredPayload,

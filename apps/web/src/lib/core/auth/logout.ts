@@ -9,8 +9,10 @@ import { emailKeys } from '@queries/email/keys';
 import { propertiesKeys } from '@queries/properties/keys';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { authServiceClient } from '@service-auth/client';
+import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
+import { unregisterPushRegistrationsForLogout } from './push-registration-lifecycle';
 
 const unauthenticatedUserInfo: UserInfoData = {
   id: '',
@@ -48,6 +50,9 @@ export function useLogout() {
   const navigate = useNavigate();
 
   return createCallback(async () => {
+    // Must run before the session is torn down — the unregister call is
+    // authenticated. Time-boxed so a hung request can't block logout.
+    await raceTimeout(unregisterPushRegistrationsForLogout(), 3000);
     await clearLocalAuthSession();
     await authServiceClient.logout();
     analytics.track('sign_out');
