@@ -7802,11 +7802,32 @@
     "/github/install-sync": {
       "get": {
         "tags": ["github::inbound::github_sync_router"],
-        "summary": "Redirects the user to the github sync app installation page.",
+        "summary": "Redirects an authenticated user to the github sync app installation page.",
         "operationId": "install_sync",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "query",
+            "description": "Team to associate with the installation; omit for a personal installation",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "307": {
-            "description": "Redirects to the github sync app installation page"
+            "description": "Temporary redirect to the GitHub sync app installation page"
+          },
+          "400": {
+            "description": "The team_id query parameter is not a UUID"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "The authenticated user cannot configure the requested team"
           }
         }
       }
