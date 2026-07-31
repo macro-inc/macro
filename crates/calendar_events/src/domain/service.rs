@@ -455,7 +455,7 @@ where
         match result {
             Ok(count) => {
                 self.lifecycle
-                    .complete_google_backfill(key, lease_token, count)
+                    .complete_google_backfill(key, lease_token)
                     .await
                     .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)?;
                 Ok(count)
@@ -580,6 +580,7 @@ where
                 )
                 .await
                 .map_err(|error| -> Report { rootcause::report!(error).into() })?;
+            let mut calendar_count = 0;
             for upsert in batch.upserts {
                 if let Err(error) = validate_upsert(&upsert) {
                     tracing::warn!(
@@ -600,8 +601,9 @@ where
                         upsert,
                     })
                     .await?;
-                count += 1;
+                calendar_count += 1;
             }
+            count += calendar_count;
             // Committing per calendar keeps earlier calendars' sync tokens
             // durable when a later calendar's poll fails, so the retry only
             // re-pulls what never committed.
@@ -617,6 +619,7 @@ where
                         materialized_range: batch.materialized_range,
                         cancelled_provider_event_ids: batch.cancelled_provider_event_ids,
                     },
+                    calendar_count,
                 )
                 .await?;
         }

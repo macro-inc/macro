@@ -422,13 +422,24 @@ async fn completed_google_job_is_rearmed_and_reuses_calendar_sync_state(pool: Pg
             materialized_range: Some(range.clone()),
             cancelled_provider_event_ids: Vec::new(),
         },
+        3,
     )
     .await
     .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT extracted_count FROM calendar_backfill_jobs WHERE id = $1"#,
+            key.job_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        3
+    );
     repo.reconcile_google_calendar_list(key, lease_token, account_id, vec![calendar_id])
         .await
         .unwrap();
-    repo.complete_google_backfill(key, lease_token, 0)
+    repo.complete_google_backfill(key, lease_token)
         .await
         .unwrap();
     sqlx::query!(
@@ -906,7 +917,7 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
     repo.reconcile_google_calendar_list(key, current_lease, account_id, Vec::new())
         .await
         .unwrap();
-    repo.complete_google_backfill(key, current_lease, 0)
+    repo.complete_google_backfill(key, current_lease)
         .await
         .unwrap();
 
@@ -1042,6 +1053,7 @@ async fn google_snapshot_deletion_restores_the_surviving_email_source(pool: PgPo
             materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
             cancelled_provider_event_ids: Vec::new(),
         },
+        0,
     )
     .await
     .unwrap();
@@ -1163,6 +1175,7 @@ async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(p
                 "cancelled-master".to_string(),
             ],
         },
+        0,
     )
     .await
     .unwrap();
@@ -1585,6 +1598,7 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
             materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
             cancelled_provider_event_ids: Vec::new(),
         },
+        0,
     )
     .await
     .unwrap();
@@ -1599,6 +1613,7 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
             materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
             cancelled_provider_event_ids: Vec::new(),
         },
+        0,
     )
     .await
     .unwrap();

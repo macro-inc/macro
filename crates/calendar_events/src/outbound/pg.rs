@@ -800,9 +800,32 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         sync: GoogleCalendarSyncSnapshot,
+        events_upserted: usize,
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+
+        if events_upserted > 0 {
+            sqlx::query!(
+                r#"
+                UPDATE calendar_backfill_jobs
+                SET extracted_count = extracted_count + $3,
+                    updated_at = now()
+                WHERE id = $1
+                  AND email_link_id = $2
+                "#,
+                key.job_id,
+                key.email_link_id,
+                i64::try_from(events_upserted).map_err(|_| {
+                    rootcause::report!(
+                        "calendar backfill extracted count overflows the database representation"
+                    )
+                })?,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?;
+        }
 
         if !sync.cancelled_provider_event_ids.is_empty() {
             // A cancelled recurring master retires its expanded instances via
@@ -1350,7 +1373,6 @@ impl CalendarBackfillRepository for PgCalendarRepository {
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
-        extracted_count: usize,
     ) -> Result<(), Report> {
         let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
         let mut tx = self.pool.begin().await.map_err(report)?;
@@ -1358,31 +1380,25 @@ impl CalendarBackfillRepository for PgCalendarRepository {
             r#"
             UPDATE calendar_backfill_jobs
             SET status = 'complete',
-                extracted_count = $2,
                 completed_at = now(),
                 lease_token = NULL,
                 lease_expires_at = NULL,
                 updated_at = now()
             WHERE id = $1
-              AND email_link_id = $3
+              AND email_link_id = $2
               AND kind = 'google_calendar'
               AND status = 'running'
-              AND lease_token = $4
+              AND lease_token = $3
               AND lease_expires_at > now()
               AND EXISTS (
                     SELECT 1
                     FROM email_links link
                     WHERE link.id = calendar_backfill_jobs.email_link_id
                       AND link.google_grant_version = calendar_backfill_jobs.grant_version
-                      AND link.google_granted_scopes @> $5::text[]
+                      AND link.google_granted_scopes @> $4::text[]
               )
             "#,
             key.job_id,
-            i64::try_from(extracted_count).map_err(|_| {
-                rootcause::report!(
-                    "calendar backfill extracted count overflows the database representation"
-                )
-            })?,
             key.email_link_id,
             lease_token,
             &required_scopes,

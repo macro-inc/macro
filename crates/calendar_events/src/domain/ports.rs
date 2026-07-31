@@ -151,14 +151,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<StoredGoogleCalendar, Report>> + Send;
 
     /// Durably commit one calendar's poll under the backfill's fencing token:
-    /// prune sources a full snapshot no longer observed, then advance the
-    /// calendar's continuation token and materialized range.
+    /// prune sources a full snapshot no longer observed, advance the
+    /// calendar's continuation token and materialized range, and add this
+    /// calendar's upserts to the job's running progress counters.
     fn commit_google_calendar_sync(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
         account_id: Uuid,
         sync: GoogleCalendarSyncSnapshot,
+        events_upserted: usize,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Reconcile the provider's calendar list under the backfill's fencing
@@ -228,12 +230,12 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         lease_token: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Atomically complete the job and mark its account ready.
+    /// Atomically complete the job and mark its account ready; progress
+    /// counters were already accumulated by the per-calendar commits.
     fn complete_google_backfill(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
-        extracted_count: usize,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Persist a classified failure, releasing or terminating the job.

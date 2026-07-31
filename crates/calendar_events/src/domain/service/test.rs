@@ -77,6 +77,7 @@ impl CalendarRepository for FakeRepo {
         _lease_token: Uuid,
         _account_id: Uuid,
         _sync: GoogleCalendarSyncSnapshot,
+        _events_upserted: usize,
     ) -> Result<(), Report> {
         Ok(())
     }
@@ -243,7 +244,7 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
 #[derive(Clone)]
 struct FakeLifecycle {
     claim: CalendarBackfillClaim,
-    completions: Arc<Mutex<Vec<usize>>>,
+    completions: Arc<Mutex<Vec<()>>>,
     failures: Arc<Mutex<Vec<CalendarBackfillFailureDisposition>>>,
     failure_outcome: CalendarBackfillFailureOutcome,
     lease_lost: bool,
@@ -314,9 +315,8 @@ impl CalendarBackfillRepository for FakeLifecycle {
         &self,
         _key: CalendarBackfillJobKey,
         _lease_token: Uuid,
-        extracted_count: usize,
     ) -> Result<(), Report> {
-        self.completions.lock().unwrap().push(extracted_count);
+        self.completions.lock().unwrap().push(());
         Ok(())
     }
 
@@ -355,7 +355,7 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
         .unwrap();
 
     assert_eq!(count, 0);
-    assert_eq!(lifecycle.completions.lock().unwrap().as_slice(), &[0]);
+    assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
 }
 
 #[derive(Clone)]
