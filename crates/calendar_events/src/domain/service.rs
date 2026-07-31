@@ -543,7 +543,7 @@ where
         }
         let calendars = self
             .provider
-            .list_calendars(access_token)
+            .list_calendars(access_token, key.email_link_id)
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
         let mut count = 0;

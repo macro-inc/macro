@@ -23,25 +23,59 @@ use crate::domain::{
 
 const GOOGLE_CALENDAR_API: &str = "https://www.googleapis.com/calendar/v3";
 
-/// Google Calendar REST client.
-#[derive(Clone)]
-pub struct GoogleCalendarClient {
-    client: Client,
+/// Consulted before every Google Calendar HTTP request so deployments can
+/// enforce the per-user API quota. Denials surface as transient provider
+/// errors, which the backfill lifecycle retries.
+pub trait GoogleRequestGate: Send + Sync + 'static {
+    /// Admit one provider request on behalf of the connected inbox.
+    fn acquire(
+        &self,
+        email_link_id: Uuid,
+    ) -> impl Future<Output = Result<(), GoogleProviderError>> + Send;
 }
 
-impl GoogleCalendarClient {
-    /// Construct a client using the application's configured HTTP client.
+/// Gate that admits every request, for tests and unmetered environments.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnmeteredGate;
+
+impl GoogleRequestGate for UnmeteredGate {
+    async fn acquire(&self, _email_link_id: Uuid) -> Result<(), GoogleProviderError> {
+        Ok(())
+    }
+}
+
+/// Google Calendar REST client.
+#[derive(Clone)]
+pub struct GoogleCalendarClient<G = UnmeteredGate> {
+    client: Client,
+    gate: G,
+}
+
+impl GoogleCalendarClient<UnmeteredGate> {
+    /// Construct an unmetered client using the application's HTTP client.
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            gate: UnmeteredGate,
+        }
+    }
+}
+
+impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
+    /// Construct a client whose requests must pass the supplied quota gate.
+    pub fn with_gate(client: Client, gate: G) -> Self {
+        Self { client, gate }
     }
 
     async fn calendars(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
     ) -> Result<Vec<GoogleCalendar>, GoogleProviderError> {
         let mut page_token: Option<String> = None;
         let mut result = Vec::new();
         loop {
+            self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
                 .get(format!("{GOOGLE_CALENDAR_API}/users/me/calendarList"))
@@ -63,6 +97,7 @@ impl GoogleCalendarClient {
     async fn events(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
         provider_calendar_id: &str,
         range: &OccurrenceRange,
         single_events: bool,
@@ -71,6 +106,7 @@ impl GoogleCalendarClient {
         let mut page_token: Option<String> = None;
         let mut result = Vec::new();
         loop {
+            self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
                 .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
@@ -102,6 +138,7 @@ impl GoogleCalendarClient {
     async fn event_changes(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
         provider_calendar_id: &str,
         sync_token: Option<&str>,
     ) -> Result<(Vec<GoogleEvent>, String), GoogleProviderError> {
@@ -109,6 +146,7 @@ impl GoogleCalendarClient {
         let mut page_token: Option<String> = None;
         let mut result = Vec::new();
         loop {
+            self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
                 .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
@@ -144,11 +182,13 @@ impl GoogleCalendarClient {
     async fn event(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
         provider_calendar_id: &str,
         provider_event_id: &str,
     ) -> Result<Option<GoogleEvent>, GoogleProviderError> {
         let calendar = urlencoding::encode(provider_calendar_id);
         let event = urlencoding::encode(provider_event_id);
+        self.gate.acquire(email_link_id).await?;
         let response = self
             .client
             .get(format!(
@@ -176,6 +216,7 @@ impl GoogleCalendarClient {
     async fn events_by_ical_uid(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
         provider_calendar_id: &str,
         ical_uid: &str,
     ) -> Result<Vec<GoogleEvent>, GoogleProviderError> {
@@ -183,6 +224,7 @@ impl GoogleCalendarClient {
         let mut page_token: Option<String> = None;
         let mut result = Vec::new();
         loop {
+            self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
                 .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
@@ -209,6 +251,7 @@ impl GoogleCalendarClient {
     async fn instances(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
         provider_calendar_id: &str,
         provider_event_id: &str,
         range: &OccurrenceRange,
@@ -218,6 +261,7 @@ impl GoogleCalendarClient {
         let mut page_token: Option<String> = None;
         let mut result = Vec::new();
         loop {
+            self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
                 .get(format!(
@@ -300,14 +344,15 @@ fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderErro
     GoogleProviderError::new(kind, message)
 }
 
-impl GoogleCalendarProvider for GoogleCalendarClient {
+impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
     #[tracing::instrument(skip(self, access_token), err)]
     async fn list_calendars(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
     ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
         Ok(self
-            .calendars(access_token)
+            .calendars(access_token, email_link_id)
             .await?
             .into_iter()
             .map(|calendar| ProviderCalendar {
@@ -336,6 +381,7 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
         let (changes, next_sync_token, token_was_reset) = match self
             .event_changes(
                 access_token,
+                context.email_link_id,
                 &context.provider_calendar_id,
                 context.sync_token.as_deref(),
             )
@@ -344,14 +390,17 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             Ok((changes, next_sync_token)) => (changes, next_sync_token, false),
             Err(error) if error.kind() == GoogleProviderErrorKind::SyncTokenExpired => {
                 let (changes, next_sync_token) = self
-                    .event_changes(access_token, &context.provider_calendar_id, None)
+                    .event_changes(
+                        access_token,
+                        context.email_link_id,
+                        &context.provider_calendar_id,
+                        None,
+                    )
                     .await?;
                 (changes, next_sync_token, true)
             }
             Err(error) => return Err(error),
         };
-        // ExtendTail still rebuilds the full window; materializing only the
-        // uncovered tail rides the same plan contract in a follow-up.
         let rebuild_snapshot = !matches!(context.plan, GoogleSyncPlan::Incremental)
             || context.sync_token.is_none()
             || token_was_reset;
@@ -359,6 +408,7 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             let canonical_events = self
                 .events(
                     access_token,
+                    context.email_link_id,
                     &context.provider_calendar_id,
                     &context.range,
                     false,
@@ -367,6 +417,7 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             let instances = self
                 .events(
                     access_token,
+                    context.email_link_id,
                     &context.provider_calendar_id,
                     &context.range,
                     true,
@@ -421,7 +472,7 @@ enum SeriesOutcome {
     Malformed,
 }
 
-impl GoogleCalendarClient {
+impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     async fn apply_change_feed(
         &self,
         access_token: &str,
@@ -485,8 +536,13 @@ impl GoogleCalendarClient {
         let master = match feed_master {
             Some(master) => Some(master),
             None => {
-                self.event(access_token, &context.provider_calendar_id, master_id)
-                    .await?
+                self.event(
+                    access_token,
+                    context.email_link_id,
+                    &context.provider_calendar_id,
+                    master_id,
+                )
+                .await?
             }
         };
         let Some(master) = master else {
@@ -500,6 +556,7 @@ impl GoogleCalendarClient {
         } else {
             self.events_by_ical_uid(
                 access_token,
+                context.email_link_id,
                 &context.provider_calendar_id,
                 &master.ical_uid,
             )
@@ -511,6 +568,7 @@ impl GoogleCalendarClient {
         let instances = self
             .instances(
                 access_token,
+                context.email_link_id,
                 &context.provider_calendar_id,
                 &master.id,
                 &context.range,
@@ -552,7 +610,13 @@ impl GoogleCalendarClient {
             return Ok(());
         }
         let tail_events = self
-            .events(access_token, &context.provider_calendar_id, &tail, true)
+            .events(
+                access_token,
+                context.email_link_id,
+                &context.provider_calendar_id,
+                &tail,
+                true,
+            )
             .await?;
         let (tail_series, tail_singles) = plan_tail_refreshes(tail_events, applied);
 

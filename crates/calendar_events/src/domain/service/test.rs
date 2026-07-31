@@ -196,6 +196,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
     async fn list_calendars(
         &self,
         _access_token: &str,
+        _email_link_id: Uuid,
     ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
         Ok(Vec::new())
     }
@@ -222,6 +223,7 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
     async fn list_calendars(
         &self,
         _access_token: &str,
+        _email_link_id: Uuid,
     ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
         Err(GoogleProviderError::new(
             GoogleProviderErrorKind::ReauthRequired,
@@ -363,6 +365,7 @@ impl GoogleCalendarProvider for HangingGoogleProvider {
     async fn list_calendars(
         &self,
         _access_token: &str,
+        _email_link_id: Uuid,
     ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
         std::future::pending().await
     }

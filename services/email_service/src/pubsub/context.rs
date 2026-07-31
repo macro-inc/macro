@@ -1,5 +1,5 @@
 use crate::pubsub::calendar_backfill_adapters::{
-    PgEmailCalendarBackfillRepository, SqsEmailCalendarBackfillPublisher,
+    PgEmailCalendarBackfillRepository, RedisCalendarRequestGate, SqsEmailCalendarBackfillPublisher,
 };
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
@@ -39,7 +39,7 @@ pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 /// Concrete Google Calendar backfill application service.
 pub type GoogleCalendarBackfillService = GoogleCalendarBackfillCoordinator<
     PgCalendarRepository,
-    GoogleCalendarClient,
+    GoogleCalendarClient<RedisCalendarRequestGate>,
     PgCalendarRepository,
 >;
 
@@ -66,12 +66,15 @@ pub struct CalendarBackfillServices {
 
 impl CalendarBackfillServices {
     /// Compose calendar application services from process-level adapters.
-    pub fn new(db: PgPool, sqs_client: sqs_client::SQS) -> Self {
+    pub fn new(db: PgPool, sqs_client: sqs_client::SQS, redis_client: RedisClient) -> Self {
         let repository = PgCalendarRepository::new(db.clone());
         Self {
             google: Arc::new(GoogleCalendarBackfillCoordinator::new(
                 repository.clone(),
-                GoogleCalendarClient::new(reqwest::Client::new()),
+                GoogleCalendarClient::with_gate(
+                    reqwest::Client::new(),
+                    RedisCalendarRequestGate::new(redis_client),
+                ),
                 repository.clone(),
             )),
             email_ics: Arc::new(EmailCalendarBackfillCoordinator::new(

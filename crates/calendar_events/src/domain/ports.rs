@@ -178,6 +178,7 @@ pub trait GoogleCalendarProvider: Send + Sync + 'static {
     fn list_calendars(
         &self,
         access_token: &str,
+        email_link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ProviderCalendar>, GoogleProviderError>> + Send;
 
     /// Poll provider changes and, when needed, rebuild the bounded event snapshot.
