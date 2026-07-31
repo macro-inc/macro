@@ -49,6 +49,7 @@
     "@fontsource-variable/roboto-mono": "^5.2.8",
     "@fullcalendar/core": "^6.1.21",
     "@fullcalendar/daygrid": "^6.1.21",
+    "@fullcalendar/interaction": "^6.1.21",
     "@fullcalendar/timegrid": "^6.1.21",
     "@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef",
     "@kobalte/core": "^0.13.11",

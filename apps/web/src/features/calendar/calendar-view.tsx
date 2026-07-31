@@ -1,7 +1,8 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { DatesSetArg } from '@fullcalendar/core';
+import type { DatesSetArg, EventDropArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -248,25 +249,32 @@ export function CalendarView() {
   const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
     getDefaultCalendarTimeFormat()
   );
-  const calendarEvents = createCalendarEventFixtures();
-  const eventsById = new Map(calendarEvents.map((event) => [event.id, event]));
+  const initialCalendarEvents = createCalendarEventFixtures();
+  const [calendarEvents, setCalendarEvents] = createSignal(
+    initialCalendarEvents
+  );
+  const eventsById = createMemo(
+    () => new Map(calendarEvents().map((event) => [event.id, event]))
+  );
   const calendarSources = Array.from(
     new Map(
-      calendarEvents.map((event) => [event.calendar.id, event.calendar])
+      initialCalendarEvents.map((event) => [event.calendar.id, event.calendar])
     ).values()
   );
   const [visibleSourceIds, setVisibleSourceIds] = createSignal(
     new Set(calendarSources.map((source) => source.id))
   );
   const visibleEvents = createMemo(() =>
-    calendarEvents.filter((event) => visibleSourceIds().has(event.calendar.id))
+    calendarEvents().filter((event) =>
+      visibleSourceIds().has(event.calendar.id)
+    )
   );
   const fullCalendarEvents = createMemo(() =>
     visibleEvents().map(mapCalendarEventToFullCalendar)
   );
   const selectedEvent = () => {
     const eventId = selectedEventId();
-    return eventId ? eventsById.get(eventId) : undefined;
+    return eventId ? eventsById().get(eventId) : undefined;
   };
   const closeEventDetails = () => {
     setSelectedEventId(undefined);
@@ -283,6 +291,26 @@ export function CalendarView() {
       closeEventDetails();
     }
   };
+  const moveEvent = ({ event, revert }: EventDropArg) => {
+    if (!eventsById().has(event.id) || !event.startStr || !event.endStr) {
+      revert();
+      return;
+    }
+
+    closeEventDetails();
+    setCalendarEvents((current) =>
+      current.map((calendarEvent) =>
+        calendarEvent.id === event.id
+          ? {
+              ...calendarEvent,
+              start: event.startStr,
+              end: event.endStr,
+              allDay: event.allDay,
+            }
+          : calendarEvent
+      )
+    );
+  };
   let visibleRangeKey: string | undefined;
   const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
     const nextRangeKey = `${view.type}:${start.toISOString()}:${end.toISOString()}`;
@@ -294,7 +322,7 @@ export function CalendarView() {
 
   return (
     <FullCalendar.Root
-      plugins={[dayGridPlugin, timeGridPlugin]}
+      plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
       initialView="dayGridMonth"
       height="100%"
       expandRows
@@ -309,7 +337,11 @@ export function CalendarView() {
       firstDay={weekStartsOn()}
       slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
       eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
+      eventStartEditable
+      eventDurationEditable={false}
       events={fullCalendarEvents()}
+      eventDragStart={closeEventDetails}
+      eventDrop={moveEvent}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         setSelectedEventId(event.id);
@@ -358,7 +390,7 @@ export function CalendarView() {
 
       <FullCalendar.EventContent>
         {(renderProps) => {
-          const event = eventsById.get(renderProps.event.id);
+          const event = eventsById().get(renderProps.event.id);
           if (!event) return null;
 
           return (
