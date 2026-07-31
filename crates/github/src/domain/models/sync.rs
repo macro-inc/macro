@@ -7,6 +7,32 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::Deserialize;
 
+use super::GithubError;
+
+/// Action reported by GitHub after an installation setup flow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GithubInstallationSetupAction {
+    /// A new GitHub App installation was created.
+    Install,
+    /// An existing installation's repository selection was updated.
+    Update,
+    /// Installation was requested from an organization administrator.
+    Request,
+}
+
+impl TryFrom<&str> for GithubInstallationSetupAction {
+    type Error = GithubError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "install" => Ok(Self::Install),
+            "update" => Ok(Self::Update),
+            "request" => Ok(Self::Request),
+            _ => Err(GithubError::InvalidInstallationSetupAction),
+        }
+    }
+}
+
 /// Github key used for tracking tasks
 #[derive(Debug, Clone)]
 pub struct GithubKey(String);

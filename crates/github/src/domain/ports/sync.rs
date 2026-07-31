@@ -201,7 +201,37 @@ pub trait GithubSyncService: Send + Sync + 'static {
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
 
-    /// Returns the github sync app installation url
+    /// Begins an authenticated GitHub App installation setup flow.
+    fn begin_installation_setup(
+        &self,
+        _macro_user_id: &MacroUserIdStr<'_>,
+        _team_id: Option<uuid::Uuid>,
+    ) -> impl Future<Output = Result<String, GithubError>> + Send {
+        async {
+            Err(GithubError::Internal(anyhow::anyhow!(
+                "installation setup is unsupported"
+            )))
+        }
+    }
+
+    /// Completes an installation setup callback after verifying its state and ownership.
+    fn complete_installation_setup(
+        &self,
+        _state: &str,
+        _code: Option<&str>,
+        _installation_id: Option<u64>,
+        _setup_action: &str,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send {
+        async {
+            Err(GithubError::Internal(anyhow::anyhow!(
+                "installation setup is unsupported"
+            )))
+        }
+    }
+
+    /// Returns the raw installation URL for legacy inbound adapters.
+    ///
+    /// New installation flows must use [`GithubSyncService::begin_installation_setup`].
     fn get_github_sync_app_url(&self) -> &str;
 
     /// Associates any GitHub App installations installed by the given GitHub

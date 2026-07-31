@@ -679,6 +679,11 @@ struct PullRequestDetailsCall {
 }
 
 struct StubSyncClient {
+    setup_code_exchange_calls: Mutex<Vec<(String, String, String)>>,
+    user_installation_list_calls: Mutex<Vec<String>>,
+    user_installations: Mutex<Vec<GithubUserInstallation>>,
+    fail_setup_code_exchange: Mutex<bool>,
+    fail_user_installation_list: Mutex<bool>,
     pr_comments: Mutex<Vec<PrCommentCall>>,
     pull_request_details: Mutex<HashMap<String, GithubPullRequestDetails>>,
     pull_request_details_calls: Mutex<Vec<PullRequestDetailsCall>>,
@@ -689,12 +694,40 @@ struct StubSyncClient {
 impl StubSyncClient {
     fn new() -> Self {
         Self {
+            setup_code_exchange_calls: Mutex::new(Vec::new()),
+            user_installation_list_calls: Mutex::new(Vec::new()),
+            user_installations: Mutex::new(Vec::new()),
+            fail_setup_code_exchange: Mutex::new(false),
+            fail_user_installation_list: Mutex::new(false),
             pr_comments: Mutex::new(Vec::new()),
             pull_request_details: Mutex::new(HashMap::new()),
             pull_request_details_calls: Mutex::new(Vec::new()),
             open_pull_requests: Mutex::new(Vec::new()),
             list_open_pull_requests_calls: Mutex::new(Vec::new()),
         }
+    }
+
+    fn set_user_installations(&self, installation_ids: &[u64]) {
+        *self.user_installations.lock().unwrap() = installation_ids
+            .iter()
+            .map(|id| GithubUserInstallation { id: *id })
+            .collect();
+    }
+
+    fn fail_setup_code_exchange(&self) {
+        *self.fail_setup_code_exchange.lock().unwrap() = true;
+    }
+
+    fn fail_user_installation_list(&self) {
+        *self.fail_user_installation_list.lock().unwrap() = true;
+    }
+
+    fn setup_code_exchange_calls(&self) -> Vec<(String, String, String)> {
+        self.setup_code_exchange_calls.lock().unwrap().clone()
+    }
+
+    fn user_installation_list_calls(&self) -> Vec<String> {
+        self.user_installation_list_calls.lock().unwrap().clone()
     }
 
     fn pr_comments(&self) -> Vec<PrCommentCall> {
@@ -734,18 +767,33 @@ impl StubSyncClient {
 impl GithubSyncClient for StubSyncClient {
     async fn exchange_setup_code(
         &self,
-        _client_id: &str,
-        _client_secret: &str,
-        _code: &str,
+        client_id: &str,
+        client_secret: &str,
+        code: &str,
     ) -> Result<GithubSetupAccessToken, GithubError> {
+        self.setup_code_exchange_calls.lock().unwrap().push((
+            client_id.to_string(),
+            client_secret.to_string(),
+            code.to_string(),
+        ));
+        if *self.fail_setup_code_exchange.lock().unwrap() {
+            return Err(GithubError::Internal(anyhow::anyhow!("exchange failed")));
+        }
         Ok(GithubSetupAccessToken::new("test-user-token".to_string()))
     }
 
     async fn list_user_installations(
         &self,
-        _access_token: &str,
+        access_token: &str,
     ) -> Result<Vec<GithubUserInstallation>, GithubError> {
-        Ok(Vec::new())
+        self.user_installation_list_calls
+            .lock()
+            .unwrap()
+            .push(access_token.to_string());
+        if *self.fail_user_installation_list.lock().unwrap() {
+            return Err(GithubError::Internal(anyhow::anyhow!("listing failed")));
+        }
+        Ok(self.user_installations.lock().unwrap().clone())
     }
 
     async fn generate_installation_access_token(
@@ -1064,9 +1112,12 @@ fn make_sync_service_with_repo_and_notification_ingress(
     GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: "test-webhook-secret".to_string(),
-            github_sync_app_url: "test".to_string(),
+            github_sync_app_url: "https://github.com/apps/test/installations/new?existing=1"
+                .to_string(),
             sync_app_pem: TEST_PEM.to_string(),
             sync_app_client_id: "test-sync-app-client-id".to_string(),
+            sync_app_client_secret: "test-sync-app-client-secret".to_string(),
+            installation_state_secret: "test-installation-state-secret".to_string(),
         },
         doc_service,
         foreign_entity_service,
@@ -1083,9 +1134,12 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
     let service = GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: "test-webhook-secret".to_string(),
-            github_sync_app_url: "test".to_string(),
+            github_sync_app_url: "https://github.com/apps/test/installations/new?existing=1"
+                .to_string(),
             sync_app_pem: TEST_PEM.to_string(),
             sync_app_client_id: "test-sync-app-client-id".to_string(),
+            sync_app_client_secret: "test-sync-app-client-secret".to_string(),
+            installation_state_secret: "test-installation-state-secret".to_string(),
         },
         doc_service.clone(),
         foreign_entity_service,
@@ -5345,4 +5399,340 @@ async fn bot_opened_pr_body_mention_does_not_notify_mention() {
 
     let requests = service.notification_ingress.requests();
     assert!(requests_with_tag(&requests, "github_pr_mention").is_empty());
+}
+
+fn installation_setup_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|setup@example.com".to_string()).unwrap()
+}
+
+fn installation_setup_state(team_id: Option<uuid::Uuid>, exp: i64) -> String {
+    sign_installation_state(
+        &InstallationState {
+            macro_user_id: installation_setup_user(),
+            team_id,
+            exp,
+        },
+        b"test-installation-state-secret",
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn begin_team_installation_setup_preserves_query_and_signs_team() {
+    let user = installation_setup_user();
+    let team_id = uuid::Uuid::new_v4();
+    let service = make_sync_service_with_repo(
+        StubSyncRepo::new().with_user_teams(user.as_ref(), vec![team_id]),
+    );
+
+    let setup_url = service
+        .begin_installation_setup(&user, Some(team_id))
+        .await
+        .unwrap();
+    let url = url::Url::parse(&setup_url).unwrap();
+    let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+    let state = verify_installation_state(
+        query.get("state").unwrap(),
+        b"test-installation-state-secret",
+        chrono::Utc::now().timestamp(),
+    )
+    .unwrap();
+
+    assert_eq!(query.get("existing").map(String::as_str), Some("1"));
+    assert_eq!(state.macro_user_id, user);
+    assert_eq!(state.team_id, Some(team_id));
+    assert!(state.exp <= chrono::Utc::now().timestamp() + 60 * 60);
+}
+
+#[tokio::test]
+async fn begin_personal_installation_setup_does_not_infer_teams() {
+    let user = installation_setup_user();
+    let service = make_sync_service_with_repo(
+        StubSyncRepo::new().with_user_teams(user.as_ref(), vec![uuid::Uuid::new_v4()]),
+    );
+
+    let setup_url = service.begin_installation_setup(&user, None).await.unwrap();
+    let url = url::Url::parse(&setup_url).unwrap();
+    let signed_state = url
+        .query_pairs()
+        .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+        .unwrap();
+    let state = verify_installation_state(
+        &signed_state,
+        b"test-installation-state-secret",
+        chrono::Utc::now().timestamp(),
+    )
+    .unwrap();
+
+    assert_eq!(state.team_id, None);
+}
+
+#[tokio::test]
+async fn begin_installation_setup_rejects_non_member() {
+    let error = make_sync_service()
+        .begin_installation_setup(&installation_setup_user(), Some(uuid::Uuid::new_v4()))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, GithubError::Forbidden));
+}
+
+#[tokio::test]
+async fn complete_installation_setup_associates_team_personal_and_update_sources() {
+    let team_id = uuid::Uuid::new_v4();
+    let team_service = make_sync_service();
+    team_service.client.set_user_installations(&[41]);
+    team_service
+        .complete_installation_setup(
+            &installation_setup_state(Some(team_id), chrono::Utc::now().timestamp() + 60),
+            Some("team-code"),
+            Some(41),
+            "install",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        team_service.repo.installation_sources(),
+        vec![(
+            "41".to_string(),
+            vec![GithubAppInstallationSource::Team(team_id)]
+        )]
+    );
+
+    let personal_service = make_sync_service();
+    personal_service.client.set_user_installations(&[42]);
+    personal_service
+        .complete_installation_setup(
+            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+            Some("personal-code"),
+            Some(42),
+            "update",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        personal_service.repo.installation_sources(),
+        vec![(
+            "42".to_string(),
+            vec![GithubAppInstallationSource::User(
+                installation_setup_user().into()
+            )]
+        )]
+    );
+    assert_eq!(
+        personal_service.client.setup_code_exchange_calls(),
+        vec![(
+            "test-sync-app-client-id".to_string(),
+            "test-sync-app-client-secret".to_string(),
+            "personal-code".to_string()
+        )]
+    );
+    assert_eq!(
+        personal_service.client.user_installation_list_calls(),
+        vec!["test-user-token".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn update_associates_an_existing_installation_with_one_new_source() {
+    let existing_team = uuid::Uuid::new_v4();
+    let requested_team = uuid::Uuid::new_v4();
+    let service =
+        make_sync_service_with_repo(StubSyncRepo::new().with_installation_sources(
+            "43",
+            vec![GithubAppInstallationSource::Team(existing_team)],
+        ));
+    service.client.set_user_installations(&[43]);
+
+    service
+        .complete_installation_setup(
+            &installation_setup_state(Some(requested_team), chrono::Utc::now().timestamp() + 60),
+            Some("update-code"),
+            Some(43),
+            "update",
+        )
+        .await
+        .unwrap();
+
+    let sources: HashSet<_> = service
+        .repo
+        .get_installation_sources("43")
+        .await
+        .unwrap()
+        .into_iter()
+        .collect();
+    assert_eq!(
+        sources,
+        HashSet::from([
+            GithubAppInstallationSource::Team(existing_team),
+            GithubAppInstallationSource::Team(requested_team),
+        ])
+    );
+    assert_eq!(
+        service.repo.installation_sources(),
+        vec![(
+            "43".to_string(),
+            vec![GithubAppInstallationSource::Team(requested_team)]
+        )]
+    );
+}
+
+#[tokio::test]
+async fn complete_installation_setup_rejects_expired_and_tampered_state() {
+    let service = make_sync_service();
+    let expired = installation_setup_state(None, chrono::Utc::now().timestamp());
+    assert!(matches!(
+        service
+            .complete_installation_setup(&expired, Some("code"), Some(1), "install")
+            .await,
+        Err(GithubError::InvalidInstallationState)
+    ));
+
+    let mut tampered = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
+    tampered.push('x');
+    assert!(matches!(
+        service
+            .complete_installation_setup(&tampered, Some("code"), Some(1), "install")
+            .await,
+        Err(GithubError::InvalidInstallationState)
+    ));
+    assert!(service.client.setup_code_exchange_calls().is_empty());
+}
+
+#[tokio::test]
+async fn complete_installation_setup_rejects_foreign_installation() {
+    let service = make_sync_service();
+    service.client.set_user_installations(&[1, 2]);
+    let result = service
+        .complete_installation_setup(
+            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+            Some("code"),
+            Some(3),
+            "install",
+        )
+        .await;
+
+    assert!(matches!(result, Err(GithubError::InstallationNotOwned)));
+    assert!(service.repo.installation_sources().is_empty());
+}
+
+#[tokio::test]
+async fn complete_installation_setup_fails_closed_on_exchange_or_listing_failure() {
+    let exchange_service = make_sync_service();
+    exchange_service.client.fail_setup_code_exchange();
+    let state = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
+    assert!(
+        exchange_service
+            .complete_installation_setup(&state, Some("code"), Some(1), "install")
+            .await
+            .is_err()
+    );
+    assert!(
+        exchange_service
+            .client
+            .user_installation_list_calls()
+            .is_empty()
+    );
+    assert!(exchange_service.repo.installation_sources().is_empty());
+
+    let listing_service = make_sync_service();
+    listing_service.client.fail_user_installation_list();
+    assert!(
+        listing_service
+            .complete_installation_setup(&state, Some("code"), Some(1), "install")
+            .await
+            .is_err()
+    );
+    assert!(listing_service.repo.installation_sources().is_empty());
+}
+
+#[tokio::test]
+async fn complete_installation_setup_accepts_installation_from_complete_paginated_result() {
+    let service = make_sync_service();
+    let installation_ids: Vec<u64> = (1..=150).collect();
+    service.client.set_user_installations(&installation_ids);
+
+    service
+        .complete_installation_setup(
+            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+            Some("code"),
+            Some(150),
+            "install",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(service.repo.installation_sources().len(), 1);
+}
+
+#[tokio::test]
+async fn complete_installation_setup_verifies_request_state_then_no_ops() {
+    let service = make_sync_service();
+    service
+        .complete_installation_setup(
+            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+            None,
+            None,
+            "request",
+        )
+        .await
+        .unwrap();
+    assert!(service.client.setup_code_exchange_calls().is_empty());
+    assert!(service.repo.installation_sources().is_empty());
+
+    assert!(matches!(
+        service
+            .complete_installation_setup("invalid", None, None, "request")
+            .await,
+        Err(GithubError::InvalidInstallationState)
+    ));
+}
+
+#[tokio::test]
+async fn complete_installation_setup_rejects_missing_fields_and_unknown_action() {
+    let service = make_sync_service();
+    let state = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
+
+    assert!(matches!(
+        service
+            .complete_installation_setup(&state, None, Some(1), "install")
+            .await,
+        Err(GithubError::MissingInstallationSetupField("code"))
+    ));
+    assert!(matches!(
+        service
+            .complete_installation_setup(&state, Some("code"), None, "update")
+            .await,
+        Err(GithubError::MissingInstallationSetupField(
+            "installation_id"
+        ))
+    ));
+    assert!(matches!(
+        service
+            .complete_installation_setup(&state, None, None, "other")
+            .await,
+        Err(GithubError::InvalidInstallationSetupAction)
+    ));
+}
+
+#[tokio::test]
+async fn repeated_installation_association_is_idempotent() {
+    let service = make_sync_service();
+    service.client.set_user_installations(&[77]);
+    let state = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
+
+    for _ in 0..2 {
+        service
+            .complete_installation_setup(&state, Some("code"), Some(77), "install")
+            .await
+            .unwrap();
+    }
+
+    let rows = service.repo.get_installation_sources("77").await.unwrap();
+    assert_eq!(
+        rows,
+        vec![GithubAppInstallationSource::User(
+            installation_setup_user().into()
+        )]
+    );
 }

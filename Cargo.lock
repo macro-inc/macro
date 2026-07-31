@@ -6168,6 +6168,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "url",
  "urlencoding",
  "utoipa",
  "uuid",

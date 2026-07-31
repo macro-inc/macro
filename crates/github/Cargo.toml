@@ -62,6 +62,7 @@ subtle = "2.6.1"
 thiserror = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true, optional = true }
+url = { workspace = true }
 uuid = { workspace = true }
 
 fusionauth = { path = "../fusionauth", optional = true }
