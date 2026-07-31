@@ -208,7 +208,7 @@ export function MobileTouchMenu(props: {
               }}
             >
               <div
-                class="mobile-touch-menu-content flex items-end justify-start overflow-hidden rounded-2xl bg-menu ring ring-edge shadow-xl"
+                class="mobile-touch-menu-content flex items-end justify-start overflow-hidden rounded-2xl border border-edge bg-menu shadow-xl"
                 data-expanded={open() ? '' : undefined}
                 style={{
                   '--mobile-touch-menu-width': menuSize.width

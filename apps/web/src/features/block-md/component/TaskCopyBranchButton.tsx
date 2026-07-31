@@ -19,7 +19,10 @@ export function TaskCopyBranchButton(props: {
       depth={2}
       tooltip={showLabel() ? undefined : 'Copy branch name'}
       hotkey={TOKENS.entity.action.copyBranchName}
-      class={cn('gap-1.5 rounded-full px-2 ring ring-edge-muted', props.class)}
+      class={cn(
+        'gap-1.5 rounded-full border border-edge-muted px-2',
+        props.class
+      )}
       onClick={() => void copyBranchNameToClipboard(blockId)}
     >
       <GitBranch class="size-3.5" />

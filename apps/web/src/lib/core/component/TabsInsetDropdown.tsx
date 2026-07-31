@@ -41,7 +41,7 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
       <Dropdown.Trigger
         class={cn(
           'not-disabled:hover:bg-surface active:bg-surface focus-visible:bg-surface',
-          'h-auto p-0.5 rounded-lg border-0 ring ring-edge-muted bg-surface',
+          'h-auto p-0.5 rounded-lg border border-edge-muted bg-surface',
           local.class
         )}
         disabled={local.disabled}

@@ -196,7 +196,7 @@ function DropdownContent(props: DropdownContentProps) {
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-px bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -237,7 +237,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-px bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>

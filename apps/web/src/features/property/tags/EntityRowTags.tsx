@@ -320,7 +320,7 @@ export function InlineTagsPill(props: {
         <TagPicker
           docTags={props.docTags}
           triggerClass={cn(
-            'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+            'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
             'px-2 py-1 leading-tight text-left rounded-full bg-surface',
             'hover:bg-hover text-ink-muted focus-visible:bg-active focus-visible:ring-accent/10',
             tags().length === 0 && 'text-ink-extra-muted',

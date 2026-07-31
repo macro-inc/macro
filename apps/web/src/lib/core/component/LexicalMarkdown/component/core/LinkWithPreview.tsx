@@ -57,7 +57,7 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
       <Show when={previewOpen()}>
         <ScopedPortal>
           <div
-            class="absolute bg-surface rounded-xs ring ring-edge-muted border-edge left-0 z-10 shadow-lg max-w-72"
+            class="absolute bg-surface rounded-xs border border-edge-muted left-0 z-10 shadow-lg max-w-72"
             style={{
               transform: 'translateY(0)',
             }}

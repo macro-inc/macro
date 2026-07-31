@@ -28,7 +28,7 @@ function Pill(props: PillProps) {
   return (
     <span
       class={cn(
-        'min-w-0 rounded-full inline-flex items-center gap-1 px-1.5 py-1 leading-tight text-xs font-medium ring ring-edge ring-inset bg-surface/50',
+        'min-w-0 rounded-full inline-flex items-center gap-1 px-1.5 py-1 leading-tight text-xs font-medium border border-edge bg-surface/50',
         props.class
       )}
     >
@@ -365,7 +365,7 @@ function GithubPullRequestChecksPopover(props: {
                     <Layer depth={5}>
                       <span
                         class={cn(
-                          'absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md bg-active text-ink-extra-muted opacity-0 shadow-sm ring ring-edge-muted',
+                          'absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md border border-edge-muted bg-active text-ink-extra-muted opacity-0 shadow-sm',
                           hasUrl() && 'group-hover/check-card:opacity-100'
                         )}
                       >

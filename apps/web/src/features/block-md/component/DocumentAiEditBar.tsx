@@ -99,7 +99,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             variant="ghost"
             size="sm"
             depth={2}
-            class="gap-1.5 rounded-full px-2.5 ring ring-edge-muted"
+            class="gap-1.5 rounded-full border border-edge-muted px-2.5"
           >
             <span
               class="flex size-4 shrink-0 items-center justify-center"
