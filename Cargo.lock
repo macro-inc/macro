@@ -6162,6 +6162,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "chrono",
  "document_sub_type",
  "documents",
