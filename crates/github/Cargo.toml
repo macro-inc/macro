@@ -32,6 +32,7 @@ sync = [
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, features = [
   "ports",

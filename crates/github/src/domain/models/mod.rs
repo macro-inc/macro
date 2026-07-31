@@ -3,10 +3,14 @@
 #[cfg(test)]
 mod test;
 
+mod installation_state;
 mod link;
 mod pull_request;
 mod sync;
 
+pub use installation_state::{
+    InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
+};
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
