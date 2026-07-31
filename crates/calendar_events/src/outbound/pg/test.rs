@@ -1,7 +1,6 @@
 use super::*;
 use crate::domain::models::{
-    EmailIcsSource, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSnapshotKey,
-    GoogleEventSource,
+    EmailIcsSource, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSource,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
 use crate::domain::service::GoogleCalendarBackfillFailureService;
@@ -410,23 +409,22 @@ async fn completed_google_job_is_rearmed_and_reuses_calendar_sync_state(pool: Pg
         .unwrap()
         .id;
     let range = OccurrenceRange::historical_sync(Utc::now());
-    repo.reconcile_google_snapshot(
+    repo.commit_google_calendar_sync(
         key,
         lease_token,
-        GoogleCalendarSnapshot {
-            account_id,
-            calendar_ids: vec![calendar_id],
-            event_sources: Vec::new(),
-            calendar_syncs: vec![GoogleCalendarSyncSnapshot {
-                calendar_id,
-                next_sync_token: "next-sync-token".to_string(),
-                observed_provider_event_ids: Some(Vec::new()),
-                materialized_range: Some(range.clone()),
-            }],
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "next-sync-token".to_string(),
+            observed_provider_event_ids: Some(Vec::new()),
+            materialized_range: Some(range.clone()),
         },
     )
     .await
     .unwrap();
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, vec![calendar_id])
+        .await
+        .unwrap();
     repo.complete_google_backfill(key, lease_token, 0)
         .await
         .unwrap();
@@ -757,15 +755,8 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
         panic!("Google job should be claimable");
     };
     assert_eq!(claimed_account_id, account_id);
-    let empty_snapshot = GoogleCalendarSnapshot {
-        account_id,
-        calendar_ids: Vec::new(),
-        event_sources: Vec::new(),
-        calendar_syncs: Vec::new(),
-    };
-
     assert!(
-        repo.reconcile_google_snapshot(key, Uuid::new_v4(), empty_snapshot.clone())
+        repo.reconcile_google_calendar_list(key, Uuid::new_v4(), account_id, Vec::new())
             .await
             .is_err()
     );
@@ -780,7 +771,7 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
         1
     );
 
-    repo.reconcile_google_snapshot(key, lease_token, empty_snapshot)
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
         .await
         .unwrap();
     assert_eq!(
@@ -909,18 +900,9 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
     else {
         panic!("expired Google job should be reclaimable");
     };
-    repo.reconcile_google_snapshot(
-        key,
-        current_lease,
-        GoogleCalendarSnapshot {
-            account_id,
-            calendar_ids: Vec::new(),
-            event_sources: Vec::new(),
-            calendar_syncs: Vec::new(),
-        },
-    )
-    .await
-    .unwrap();
+    repo.reconcile_google_calendar_list(key, current_lease, account_id, Vec::new())
+        .await
+        .unwrap();
     repo.complete_google_backfill(key, current_lease, 0)
         .await
         .unwrap();
@@ -1046,23 +1028,22 @@ async fn google_snapshot_deletion_restores_the_surviving_email_source(pool: PgPo
     else {
         panic!("Google job should be claimable");
     };
-    repo.reconcile_google_snapshot(
+    repo.commit_google_calendar_sync(
         key,
         lease_token,
-        GoogleCalendarSnapshot {
-            account_id,
-            calendar_ids: vec![calendar_id],
-            event_sources: Vec::new(),
-            calendar_syncs: vec![GoogleCalendarSyncSnapshot {
-                calendar_id,
-                next_sync_token: "next".to_string(),
-                observed_provider_event_ids: Some(Vec::new()),
-                materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
-            }],
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "next".to_string(),
+            observed_provider_event_ids: Some(Vec::new()),
+            materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
         },
     )
     .await
     .unwrap();
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, vec![calendar_id])
+        .await
+        .unwrap();
 
     let restored = sqlx::query!(
         r#"
@@ -1449,31 +1430,37 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
     else {
         panic!("Google job should be claimable");
     };
-    repo.reconcile_google_snapshot(
+    repo.commit_google_calendar_sync(
         key,
         lease_token,
-        GoogleCalendarSnapshot {
-            account_id,
-            calendar_ids: vec![primary_calendar_id, sibling_calendar_id],
-            event_sources: vec![GoogleEventSnapshotKey {
-                calendar_id: primary_calendar_id,
-                provider_event_id: "primary-event".to_string(),
-            }],
-            calendar_syncs: vec![
-                GoogleCalendarSyncSnapshot {
-                    calendar_id: primary_calendar_id,
-                    next_sync_token: "primary-next".to_string(),
-                    observed_provider_event_ids: Some(vec!["primary-event".to_string()]),
-                    materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
-                },
-                GoogleCalendarSyncSnapshot {
-                    calendar_id: sibling_calendar_id,
-                    next_sync_token: "sibling-next".to_string(),
-                    observed_provider_event_ids: Some(Vec::new()),
-                    materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
-                },
-            ],
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id: primary_calendar_id,
+            next_sync_token: "primary-next".to_string(),
+            observed_provider_event_ids: Some(vec!["primary-event".to_string()]),
+            materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
         },
+    )
+    .await
+    .unwrap();
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id: sibling_calendar_id,
+            next_sync_token: "sibling-next".to_string(),
+            observed_provider_event_ids: Some(Vec::new()),
+            materialized_range: Some(OccurrenceRange::historical_sync(Utc::now())),
+        },
+    )
+    .await
+    .unwrap();
+    repo.reconcile_google_calendar_list(
+        key,
+        lease_token,
+        account_id,
+        vec![primary_calendar_id, sibling_calendar_id],
     )
     .await
     .unwrap();

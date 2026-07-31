@@ -15,7 +15,7 @@ use crate::domain::{
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarEvent, CalendarEventOverride,
         CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, CalendarOccurrenceCursor,
         CalendarSyncStatus, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSnapshot, GoogleScopeSet, OccurrenceRange,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
         ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
@@ -795,129 +795,134 @@ impl CalendarRepository for PgCalendarRepository {
         stored_google_calendar(calendar)
     }
 
-    #[tracing::instrument(skip(self, snapshot), fields(job_id = %key.job_id), err)]
-    async fn reconcile_google_snapshot(
+    #[tracing::instrument(skip(self, sync), fields(job_id = %key.job_id), err)]
+    async fn commit_google_calendar_sync(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
-        snapshot: GoogleCalendarSnapshot,
+        account_id: Uuid,
+        sync: GoogleCalendarSyncSnapshot,
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
-        fence_google_mutation_tx(&mut tx, key, lease_token, Some(snapshot.account_id)).await?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
-        let source_calendar_ids: Vec<_> = snapshot
-            .event_sources
-            .iter()
-            .map(|source| source.calendar_id)
-            .collect();
-        let provider_event_ids: Vec<_> = snapshot
-            .event_sources
-            .iter()
-            .map(|source| source.provider_event_id.clone())
-            .collect();
-        let refreshed_calendar_ids: Vec<_> = snapshot
-            .calendar_syncs
-            .iter()
-            .filter(|sync| sync.observed_provider_event_ids.is_some())
-            .map(|sync| sync.calendar_id)
-            .collect();
+        if let Some(observed_provider_event_ids) = &sync.observed_provider_event_ids {
+            let affected_event_ids = sqlx::query_scalar!(
+                r#"
+                WITH deleted_sources AS (
+                    DELETE FROM calendar_event_sources source
+                    WHERE source.source_kind = 'google'
+                      AND source.account_id = $1
+                      AND source.calendar_id = $2
+                      AND NOT (source.provider_event_id = ANY($3::text[]))
+                    RETURNING source.event_id
+                )
+                SELECT DISTINCT event_id AS "event_id!"
+                FROM deleted_sources
+                "#,
+                account_id,
+                sync.calendar_id,
+                observed_provider_event_ids,
+            )
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(report)?;
+            for event_id in affected_event_ids {
+                restore_best_source_or_delete(&mut tx, event_id).await?;
+            }
+        }
+
+        let has_materialized_range = sync.materialized_range.is_some();
+        let materialized_starts_at = sync
+            .materialized_range
+            .as_ref()
+            .map(|range| range.starts_at);
+        let materialized_ends_at = sync.materialized_range.as_ref().map(|range| range.ends_at);
+        let materialized_start_date = sync
+            .materialized_range
+            .as_ref()
+            .map(|range| range.start_date);
+        let materialized_end_date = sync.materialized_range.as_ref().map(|range| range.end_date);
+        let updated = sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET sync_token = $3,
+                materialized_starts_at = CASE
+                    WHEN $4 THEN $5
+                    ELSE materialized_starts_at
+                END,
+                materialized_ends_at = CASE
+                    WHEN $4 THEN $6
+                    ELSE materialized_ends_at
+                END,
+                materialized_start_date = CASE
+                    WHEN $4 THEN $7
+                    ELSE materialized_start_date
+                END,
+                materialized_end_date = CASE
+                    WHEN $4 THEN $8
+                    ELSE materialized_end_date
+                END,
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            sync.calendar_id,
+            account_id,
+            sync.next_sync_token,
+            has_materialized_range,
+            materialized_starts_at,
+            materialized_ends_at,
+            materialized_start_date,
+            materialized_end_date,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        if updated.rows_affected() != 1 {
+            return Err(rootcause::report!(
+                "provider calendar disappeared before sync state was committed"
+            ));
+        }
+
+        tx.commit().await.map_err(report)
+    }
+
+    #[tracing::instrument(skip(self, calendar_ids), fields(job_id = %key.job_id), err)]
+    async fn reconcile_google_calendar_list(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_ids: Vec<Uuid>,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+
         let affected_event_ids = sqlx::query_scalar!(
             r#"
-            WITH seen(calendar_id, provider_event_id) AS (
-                SELECT *
-                FROM unnest($3::uuid[], $4::text[])
-            ),
-            deleted_sources AS (
+            WITH deleted_sources AS (
                 DELETE FROM calendar_event_sources source
                 WHERE source.source_kind = 'google'
                   AND source.account_id = $1
                   AND (
                         source.calendar_id IS NULL
                         OR NOT (source.calendar_id = ANY($2::uuid[]))
-                        OR (
-                            source.calendar_id = ANY($5::uuid[])
-                            AND NOT EXISTS (
-                                SELECT 1
-                                FROM seen
-                                WHERE seen.calendar_id = source.calendar_id
-                                  AND seen.provider_event_id = source.provider_event_id
-                            )
-                        )
                   )
                 RETURNING source.event_id
             )
             SELECT DISTINCT event_id AS "event_id!"
             FROM deleted_sources
             "#,
-            snapshot.account_id,
-            &snapshot.calendar_ids,
-            &source_calendar_ids,
-            &provider_event_ids,
-            &refreshed_calendar_ids,
+            account_id,
+            &calendar_ids,
         )
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-
         for event_id in affected_event_ids {
             restore_best_source_or_delete(&mut tx, event_id).await?;
-        }
-
-        for sync in &snapshot.calendar_syncs {
-            let has_materialized_range = sync.materialized_range.is_some();
-            let materialized_starts_at = sync
-                .materialized_range
-                .as_ref()
-                .map(|range| range.starts_at);
-            let materialized_ends_at = sync.materialized_range.as_ref().map(|range| range.ends_at);
-            let materialized_start_date = sync
-                .materialized_range
-                .as_ref()
-                .map(|range| range.start_date);
-            let materialized_end_date =
-                sync.materialized_range.as_ref().map(|range| range.end_date);
-            let updated = sqlx::query!(
-                r#"
-                UPDATE calendars
-                SET sync_token = $3,
-                    materialized_starts_at = CASE
-                        WHEN $4 THEN $5
-                        ELSE materialized_starts_at
-                    END,
-                    materialized_ends_at = CASE
-                        WHEN $4 THEN $6
-                        ELSE materialized_ends_at
-                    END,
-                    materialized_start_date = CASE
-                        WHEN $4 THEN $7
-                        ELSE materialized_start_date
-                    END,
-                    materialized_end_date = CASE
-                        WHEN $4 THEN $8
-                        ELSE materialized_end_date
-                    END,
-                    updated_at = now()
-                WHERE id = $1
-                  AND account_id = $2
-                  AND NOT is_deleted
-                "#,
-                sync.calendar_id,
-                snapshot.account_id,
-                sync.next_sync_token,
-                has_materialized_range,
-                materialized_starts_at,
-                materialized_ends_at,
-                materialized_start_date,
-                materialized_end_date,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(report)?;
-            if updated.rows_affected() != 1 {
-                return Err(rootcause::report!(
-                    "provider calendar disappeared before sync state was committed"
-                ));
-            }
         }
 
         sqlx::query!(
@@ -948,8 +953,8 @@ impl CalendarRepository for PgCalendarRepository {
             WHERE account_id = $1
               AND is_deleted IS DISTINCT FROM NOT (id = ANY($2::uuid[]))
             "#,
-            snapshot.account_id,
-            &snapshot.calendar_ids,
+            account_id,
+            &calendar_ids,
         )
         .execute(&mut *tx)
         .await

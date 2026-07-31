@@ -10,8 +10,7 @@ use super::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
         CalendarOccurrenceCursor, EmailCalendarBackfillState, EmailCalendarScanAssociation,
-        EmailCalendarScanStatus, GoogleCalendarSnapshot, GoogleCalendarSyncSnapshot,
-        GoogleEventSnapshotKey, GoogleScopeSet, OccurrenceRange,
+        EmailCalendarScanStatus, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
@@ -549,8 +548,6 @@ where
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
         let mut count = 0;
         let mut calendar_ids = Vec::with_capacity(calendars.len());
-        let mut event_sources = Vec::new();
-        let mut calendar_syncs = Vec::with_capacity(calendars.len());
 
         for provider_calendar in calendars {
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
@@ -605,33 +602,26 @@ where
                     .await?;
                 count += 1;
             }
-            if let Some(provider_event_ids) = &batch.observed_provider_event_ids {
-                event_sources.extend(provider_event_ids.iter().map(|provider_event_id| {
-                    GoogleEventSnapshotKey {
+            // Committing per calendar keeps earlier calendars' sync tokens
+            // durable when a later calendar's poll fails, so the retry only
+            // re-pulls what never committed.
+            self.repository
+                .commit_google_calendar_sync(
+                    key,
+                    lease_token,
+                    account_id,
+                    GoogleCalendarSyncSnapshot {
                         calendar_id,
-                        provider_event_id: provider_event_id.clone(),
-                    }
-                }));
-            }
-            calendar_syncs.push(GoogleCalendarSyncSnapshot {
-                calendar_id,
-                next_sync_token: batch.next_sync_token,
-                observed_provider_event_ids: batch.observed_provider_event_ids,
-                materialized_range: batch.materialized_range,
-            });
+                        next_sync_token: batch.next_sync_token,
+                        observed_provider_event_ids: batch.observed_provider_event_ids,
+                        materialized_range: batch.materialized_range,
+                    },
+                )
+                .await?;
         }
 
         self.repository
-            .reconcile_google_snapshot(
-                key,
-                lease_token,
-                GoogleCalendarSnapshot {
-                    account_id,
-                    calendar_ids,
-                    event_sources,
-                    calendar_syncs,
-                },
-            )
+            .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
 
         Ok(count)

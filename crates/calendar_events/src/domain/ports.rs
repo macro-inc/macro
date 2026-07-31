@@ -10,7 +10,7 @@ use super::models::{
     AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
     CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEvent, CalendarEventUpsert,
     CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EmailCalendarBackfillState,
-    EmailCalendarScanAssociation, EmailCalendarScanJob, GoogleCalendarSnapshot,
+    EmailCalendarScanAssociation, EmailCalendarScanJob, GoogleCalendarSyncSnapshot,
     GoogleEventSyncBatch, GoogleScopeSet, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
 };
 
@@ -150,13 +150,25 @@ pub trait CalendarRepository: Send + Sync + 'static {
         calendar: ProviderCalendar,
     ) -> impl Future<Output = Result<StoredGoogleCalendar, Report>> + Send;
 
-    /// Reconcile a complete provider snapshot under the backfill's fencing
-    /// token, removing sources and calendars no longer returned by Google.
-    fn reconcile_google_snapshot(
+    /// Durably commit one calendar's poll under the backfill's fencing token:
+    /// prune sources a full snapshot no longer observed, then advance the
+    /// calendar's continuation token and materialized range.
+    fn commit_google_calendar_sync(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
-        snapshot: GoogleCalendarSnapshot,
+        account_id: Uuid,
+        sync: GoogleCalendarSyncSnapshot,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Reconcile the provider's calendar list under the backfill's fencing
+    /// token, removing calendars and sources no longer returned by Google.
+    fn reconcile_google_calendar_list(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

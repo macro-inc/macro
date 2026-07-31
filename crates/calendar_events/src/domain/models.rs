@@ -503,15 +503,6 @@ pub struct CalendarEventUpsert {
     pub occurrences: Vec<CalendarOccurrence>,
 }
 
-/// Provider event identity observed during one complete Google snapshot.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GoogleEventSnapshotKey {
-    /// Persisted calendar containing the source.
-    pub calendar_id: Uuid,
-    /// Provider event identifier.
-    pub provider_event_id: String,
-}
-
 /// Persisted state needed to choose an incremental or full provider sync.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredGoogleCalendar {
@@ -554,7 +545,8 @@ pub struct GoogleEventSyncBatch {
     pub materialized_range: Option<OccurrenceRange>,
 }
 
-/// Per-calendar state committed with one complete account poll.
+/// Durable state committed for one calendar as soon as its poll completes,
+/// so a later calendar's failure cannot discard this calendar's progress.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GoogleCalendarSyncSnapshot {
     /// Persisted Macro calendar identifier.
@@ -565,20 +557,6 @@ pub struct GoogleCalendarSyncSnapshot {
     pub observed_provider_event_ids: Option<Vec<String>>,
     /// Exact occurrence range rebuilt by a full snapshot.
     pub materialized_range: Option<OccurrenceRange>,
-}
-
-/// Calendars and event sources observed by a successful Google snapshot.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GoogleCalendarSnapshot {
-    /// Provider account being reconciled.
-    pub account_id: Uuid,
-    /// Persisted calendars observed in the provider response.
-    pub calendar_ids: Vec<Uuid>,
-    /// Provider event sources observed across calendars whose bounded snapshot
-    /// was rebuilt.
-    pub event_sources: Vec<GoogleEventSnapshotKey>,
-    /// Durable continuation and recurrence coverage state for each calendar.
-    pub calendar_syncs: Vec<GoogleCalendarSyncSnapshot>,
 }
 
 /// Kind of idempotent historical work triggered by a Google grant.

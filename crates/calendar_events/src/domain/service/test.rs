@@ -6,7 +6,7 @@ use crate::domain::{
         CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EmailCalendarBackfillState,
         EmailCalendarScanAssociation, EmailCalendarScanJob, EmailCalendarScanStatus,
         EmailIcsSource, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSnapshot, GoogleEventSyncBatch, ProviderCalendar,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, ProviderCalendar,
         StoredGoogleCalendar,
     },
     ports::{
@@ -71,11 +71,22 @@ impl CalendarRepository for FakeRepo {
         })
     }
 
-    async fn reconcile_google_snapshot(
+    async fn commit_google_calendar_sync(
         &self,
         _key: CalendarBackfillJobKey,
         _lease_token: Uuid,
-        _snapshot: GoogleCalendarSnapshot,
+        _account_id: Uuid,
+        _sync: GoogleCalendarSyncSnapshot,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn reconcile_google_calendar_list(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        _calendar_ids: Vec<Uuid>,
     ) -> Result<(), Report> {
         Ok(())
     }

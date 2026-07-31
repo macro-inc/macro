@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendars\n            SET sync_token = $3,\n                materialized_starts_at = CASE\n                    WHEN $4 THEN $5\n                    ELSE materialized_starts_at\n                END,\n                materialized_ends_at = CASE\n                    WHEN $4 THEN $6\n                    ELSE materialized_ends_at\n                END,\n                materialized_start_date = CASE\n                    WHEN $4 THEN $7\n                    ELSE materialized_start_date\n                END,\n                materialized_end_date = CASE\n                    WHEN $4 THEN $8\n                    ELSE materialized_end_date\n                END,\n                updated_at = now()\n            WHERE id = $1\n              AND account_id = $2\n              AND NOT is_deleted\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7e67578aa4f0140f493efc82b170abf0e14fa343fb22a13cf4ffc54caf27cce"
+}
