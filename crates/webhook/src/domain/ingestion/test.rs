@@ -417,15 +417,9 @@ struct EventCase {
     entity_type: EntityType,
     normalized_entity_type: &'static str,
     entity_id: String,
-    /// Entity used for access resolution when it differs from `entity_id`
-    /// (e.g. bot mentions resolve access via the channel).
-    access_entity_id: Option<String>,
-    /// Delivery ordering key when it differs from `entity_id`.
-    ordering_key: Option<String>,
 }
 
 impl EventCase {
-    /// Case whose matching entity is also the access entity and ordering key.
     fn new(
         event: TestBrokerEvent,
         event_name: &'static str,
@@ -439,31 +433,7 @@ impl EventCase {
             entity_type,
             normalized_entity_type,
             entity_id,
-            access_entity_id: None,
-            ordering_key: None,
         }
-    }
-
-    fn with_access_entity_id(mut self, access_entity_id: String) -> Self {
-        self.access_entity_id = Some(access_entity_id);
-        self
-    }
-
-    fn with_ordering_key(mut self, ordering_key: String) -> Self {
-        self.ordering_key = Some(ordering_key);
-        self
-    }
-
-    fn expected_access_entity_id(&self) -> String {
-        self.access_entity_id
-            .clone()
-            .unwrap_or_else(|| self.entity_id.clone())
-    }
-
-    fn expected_ordering_key(&self) -> String {
-        self.ordering_key
-            .clone()
-            .unwrap_or_else(|| self.entity_id.clone())
     }
 }
 
@@ -712,8 +682,8 @@ fn channel_event_cases() -> Vec<EventCase> {
             CHANNEL_ENTITY_TYPE,
             channel_id.to_string(),
         ),
-        // Access resolves via the channel; matching and ids filters use the
-        // mentioned entity (here a bot principal).
+        // Like every channel event, mentions match and resolve access on the
+        // channel; the mentioned entity is payload for consumers to filter on.
         EventCase::new(
             TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
@@ -733,37 +703,9 @@ fn channel_event_cases() -> Vec<EventCase> {
             )),
             "channel.mentioned",
             EntityType::Channel,
-            "bot",
-            BOT_PRINCIPAL_ID.to_string(),
-        )
-        .with_access_entity_id(channel_id.to_string())
-        .with_ordering_key(channel_id.to_string()),
-        // The mentioned entity kind flows through to matching: a user mention
-        // matches ids filters on the user id.
-        EventCase::new(
-            TestBrokerEvent::Channel(Event::with_schema_version(
-                ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
-                    channel_id,
-                    message_id,
-                    thread_id: None,
-                    sender: sender(owner),
-                    channel_type: ChannelType::Team,
-                    content: "hello member".to_string(),
-                    mentioned: SimpleMention {
-                        entity_type: "user".to_string(),
-                        entity_id: member.to_string(),
-                    },
-                    created_at: timestamp(),
-                }),
-                3,
-            )),
-            "channel.mentioned",
-            EntityType::Channel,
-            "user",
-            member.to_string(),
-        )
-        .with_access_entity_id(channel_id.to_string())
-        .with_ordering_key(channel_id.to_string()),
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
     ]
 }
 
@@ -854,12 +796,12 @@ fn webhook_event_cases() -> Vec<WebhookEventCase> {
 }
 
 #[tokio::test]
-async fn normalizes_and_matches_all_sixteen_event_cases() {
+async fn normalizes_and_matches_all_fifteen_event_variants() {
     let event_cases = document_event_cases()
         .into_iter()
         .chain(channel_event_cases())
         .collect::<Vec<_>>();
-    assert_eq!(event_cases.len(), 16);
+    assert_eq!(event_cases.len(), 15);
 
     for event_case in event_cases {
         let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
@@ -883,10 +825,7 @@ async fn normalizes_and_matches_all_sixteen_event_cases() {
 
         assert_eq!(
             lock(&access.calls).as_slice(),
-            &[(
-                event_case.expected_access_entity_id(),
-                event_case.entity_type
-            )],
+            &[(event_case.entity_id.clone(), event_case.entity_type)],
             "entity access mapping for {}",
             event_case.event_name
         );
@@ -918,10 +857,7 @@ async fn normalizes_and_matches_all_sixteen_event_cases() {
         assert_eq!(message.event.event_name, event_case.event_name);
         assert_eq!(message.event.entity_type, event_case.normalized_entity_type);
         assert_eq!(message.event.entity_id, event_case.entity_id);
-        assert_eq!(
-            message.event.ordering_key,
-            event_case.expected_ordering_key()
-        );
+        assert_eq!(message.event.ordering_key, event_case.entity_id);
         assert_eq!(message.event.broker_envelope, expected_envelope);
         assert_eq!(
             message.event.broker_envelope["event_type"],
@@ -930,42 +866,6 @@ async fn normalizes_and_matches_all_sixteen_event_cases() {
         assert!(message.event.occurred_at >= before_ingestion);
         assert!(message.event.occurred_at <= after_ingestion);
     }
-}
-
-#[tokio::test]
-async fn mentioned_deliveries_are_scoped_to_channel_access_workspaces_only() {
-    // Access to a channel.mentioned delivery derives from the channel, never
-    // from the mentioned entity: the mentioned bot's owner (or a mentioned
-    // user or document subscriber) gets nothing unless their workspace comes
-    // from the channel's accessors.
-    let event_case = channel_event_cases()
-        .into_iter()
-        .find(|event_case| event_case.normalized_entity_type == "bot")
-        .expect("bot mention event case");
-    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
-    );
-    let enqueuer = MockEnqueuer::default();
-    let service = service(access, repository.clone(), enqueuer.clone());
-
-    event_case
-        .event
-        .ingest(&service)
-        .await
-        .expect("bot mention should be ingested");
-
-    let repository_state = lock(&repository.state);
-    assert_eq!(
-        repository_state.match_calls.as_slice(),
-        &[MatchCall {
-            workspace_ids: vec![PERSONAL_WORKSPACE_ID.to_string()],
-            event_name: "channel.mentioned".to_string(),
-            entity_id: BOT_PRINCIPAL_ID.to_string(),
-        }],
-        "matching must consider exactly the channel accessors' workspaces"
-    );
 }
 
 #[tokio::test]

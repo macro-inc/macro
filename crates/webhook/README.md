@@ -98,13 +98,11 @@ so one person or team is considered only once.
 channel message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
 any future mentionable kind. Self-mentions (an author mentioning their own
 principal) never emit, and bot mentions only emit when the bot is an active
-channel participant; the author may itself be a bot. Access still resolves
-through the channel containing the message, but the matching entity is the
-mentioned entity: `entity_type` is the mention kind and the entity ID is the
-mentioned principal/id. A filter such as
-`{"events": ["channel.mentioned"], "ids": ["bot|<uuid>"]}` (or a user id, or a
-document id) therefore delivers exactly the mentions of that one entity. Note
-the `ids` namespace for this event is mentioned-entity ids, not channel IDs.
+channel participant; the author may itself be a bot. Like every channel
+event, access and `ids` filtering are by channel: the entity is the channel
+containing the message, and the mentioned entity travels in the payload's
+`mentioned` field for consumers to filter on (e.g. the SDK's
+`events.onSelfMention`).
 
 Webhook events use `entity_type = "webhook"` and take the event metadata's
 `workspace_id` as the sole matching workspace. This is a strict owner-workspace

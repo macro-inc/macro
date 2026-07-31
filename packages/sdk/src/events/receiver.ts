@@ -64,12 +64,12 @@ export class MacroEvents {
    * deliveries whose mentioned entity is this bot (bot auth) or this user
    * (user auth).
    *
-   * The caller's identity is resolved lazily (once) on the first delivery,
-   * and deliveries mentioning anyone else are ignored — so this stays correct
-   * even when the receiving webhook is broader than one entity (no `ids`
-   * filter, or several subscribers sharing an endpoint). The webhook itself
-   * is registered separately and once, e.g. `macro.webhooks.create({
-   * filters: [{ events: ['channel.mentioned'], ids: [<own principal>] }],
+   * `channel.mentioned` deliveries cover every mention in channels the
+   * webhook's workspace can access (its `ids` filter, like all channel
+   * events, holds channel ids); picking out "me" happens here, client-side.
+   * The caller's identity is resolved lazily (once) on the first delivery.
+   * The webhook itself is registered separately and once, e.g.
+   * `macro.webhooks.create({ filters: [{ events: ['channel.mentioned'] }],
    * … })`.
    *
    * @returns An unsubscribe function.
