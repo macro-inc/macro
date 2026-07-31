@@ -57,7 +57,7 @@ type GraphqlGroupQuery = {
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   fetchNextPage: () => Promise<void>;
-  refetch: () => Promise<void>;
+  resetToInitialPage: () => void;
   dispose: () => void;
 };
 
@@ -108,7 +108,7 @@ export function createGraphqlGroupedSoupQueries(
 ): {
   list: Accessor<GraphqlGroupQuery[]>;
   map: Accessor<Map<string, GraphqlGroupQuery>>;
-  refresh: () => Promise<void>;
+  resetToInitialPage: () => void;
 } {
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
@@ -238,12 +238,7 @@ export function createGraphqlGroupedSoupQueries(
           if (query.data === undefined) await query.refetch();
           await query.fetchNextPage();
         },
-        refetch: async () => {
-          await query.refetch({
-            requestPolicy: 'network-only',
-            throwOnError: true,
-          });
-        },
+        resetToInitialPage: query.resetToInitialPage,
       };
     });
 
@@ -302,8 +297,8 @@ export function createGraphqlGroupedSoupQueries(
   return {
     list,
     map,
-    refresh: async () => {
-      await Promise.all(list().map((query) => query.refetch()));
+    resetToInitialPage: () => {
+      for (const query of list()) query.resetToInitialPage();
     },
   };
 }

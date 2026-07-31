@@ -146,7 +146,7 @@ export function useReactiveGroupedSoupAstItemsQuery(
     isFetchingNextPage: () => false,
     hasNextPage: () => false,
     fetchNextPage: () => undefined,
-    trimToFirstPage: () => undefined,
+    resetToInitialPage: () => undefined,
     refresh: async () => {
       if (input() === undefined) return;
       await query.refetch({

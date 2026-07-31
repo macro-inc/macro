@@ -48,8 +48,8 @@ export type ReactiveSoupAstItemsQuery = {
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: () => void;
-  /** Reserved pagination reset hook; currently a no-op. */
-  trimToFirstPage: () => void;
+  /** Discards loaded continuation pages while retaining the initial page. */
+  resetToInitialPage: () => void;
   /** Refetches the currently loaded page chain from the network. */
   refresh: () => Promise<void>;
 };
@@ -133,9 +133,7 @@ export function useReactiveSoupAstItemsQuery(
     fetchNextPage: () => {
       void query.fetchNextPage();
     },
-    // Pagination trimming is intentionally deferred until the generic infinite
-    // observer has a compelling cross-domain reset API.
-    trimToFirstPage: () => undefined,
+    resetToInitialPage: query.resetToInitialPage,
     refresh: async () => {
       if (firstPageInput() === undefined) return;
       await query.refetch({

@@ -267,7 +267,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     ...queries,
     list,
     map,
-    refresh: () =>
-      args.graphqlReactive() ? graphqlQueries.refresh() : Promise.resolve(),
+    resetToInitialPage: () => {
+      if (args.graphqlReactive()) graphqlQueries.resetToInitialPage();
+    },
   };
 }

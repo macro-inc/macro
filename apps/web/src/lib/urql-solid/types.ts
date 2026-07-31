@@ -184,6 +184,8 @@ export type UrqlInfiniteQueryResult<
   readonly hasNextPage: boolean;
   readonly isFetchingNextPage: boolean;
   readonly isFetchNextPageError: boolean;
+  /** Discards every continuation page while retaining the live initial page. */
+  resetToInitialPage(): void;
   fetchNextPage(
     options?: UrqlQueryRefetchOptions
   ): Promise<

@@ -149,6 +149,51 @@ describe('createUrqlInfiniteQuery', () => {
     expect(fake.executions[0]?.unsubscribed).toBe(false);
   });
 
+  it('resets to the live initial page before refetching', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['second'], nextCursor: null });
+    await nextPage;
+
+    query.resetToInitialPage();
+
+    expect(query.data).toEqual(['first']);
+    expect(query.hasNextPage).toBe(true);
+    expect(fake.executions[0]?.unsubscribed).toBe(false);
+    expect(fake.executions[1]?.unsubscribed).toBe(true);
+
+    const refetch = query.refetch();
+    expect(fake.executions).toHaveLength(3);
+    expect(fake.executions[2]?.variables).toEqual({ cursor: null });
+    fake.executions[2]?.next({
+      values: ['first-refreshed'],
+      nextCursor: null,
+    });
+    await refetch;
+
+    expect(query.data).toEqual(['first-refreshed']);
+    expect(fake.executions).toHaveLength(3);
+  });
+
   it('disables page subscriptions and re-enables them', () => {
     const fake = makeFakeClient();
     const [enabled, setEnabled] = createSignal(true);

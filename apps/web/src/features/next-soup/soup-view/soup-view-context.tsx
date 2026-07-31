@@ -378,13 +378,12 @@ export const SoupViewContextProvider: FlowComponent<
   );
   onCleanup(predicatesCaptorTeardown);
 
-  const trimToFirstPage = () => {
+  const resetToInitialPage = () => {
     const groupBy = serverGroupByField();
 
-    // Reserved for a future reactive pagination-reset API. Defined below and
-    // currently a no-op; query identity changes still reset reactive pages.
-    reactiveItemsQuery.trimToFirstPage();
-    reactiveGroupedItemsQuery.trimToFirstPage();
+    reactiveItemsQuery.resetToInitialPage();
+    reactiveGroupedItemsQuery.resetToInitialPage();
+    groupQueries.resetToInitialPage();
 
     queryClient.setQueryData(
       soupKeys.astItems({
@@ -439,22 +438,22 @@ export const SoupViewContextProvider: FlowComponent<
   const queryFilters: QueryStore = {
     ...store,
     set: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.set(query);
       persistQueryFilters();
     },
     replace: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.replace(query);
       persistQueryFilters();
     },
     add: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.add(query);
       persistQueryFilters();
     },
     remove: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.remove(query);
       persistQueryFilters();
     },
@@ -1494,7 +1493,7 @@ export const SoupViewContextProvider: FlowComponent<
       refresh: async () => {
         if (!enabled()) return;
 
-        trimToFirstPage();
+        resetToInitialPage();
 
         await Promise.all([
           queryClient.invalidateQueries(
@@ -1508,7 +1507,6 @@ export const SoupViewContextProvider: FlowComponent<
           reactiveActive()
             ? activeReactiveItemsQuery().refresh()
             : Promise.resolve(),
-          reactiveGroupedActive() ? groupQueries.refresh() : Promise.resolve(),
           invalidateUserNotifications(),
         ]);
       },
