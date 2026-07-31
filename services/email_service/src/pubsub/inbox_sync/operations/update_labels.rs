@@ -7,11 +7,13 @@ use crate::pubsub::util::{
 };
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, LabelRef, ThreadArchivedMetadata,
-    ThreadLabelsUpdatedMetadata, ThreadReadMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
+    ThreadLabelsUpdatedMetadata, ThreadReadMetadata, ThreadSpamChangedMetadata,
+    ThreadStarredMetadata, ThreadTrashedMetadata,
 };
 use email_db_client::labels::delete::delete_db_message_labels;
 use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::{
@@ -23,6 +25,9 @@ use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingErro
 use sqlx::PgPool;
 use std::result;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Compares a db message's labels to the gmail message's labels, adding/removing as necessary
 #[tracing::instrument(skip(ctx))]
@@ -192,8 +197,8 @@ pub async fn update_labels(
 }
 
 /// System labels that never appear in a `thread_labels_updated` event:
-/// INBOX/TRASH/UNREAD/STARRED map to dedicated thread-state events, and
-/// SPAM/IMPORTANT/SENT/DRAFT changes are not published at all.
+/// INBOX/TRASH/UNREAD/STARRED/SPAM map to dedicated thread-state events, and
+/// IMPORTANT/SENT/DRAFT changes are not published.
 const NON_USER_LABELS: [&str; 8] = [
     service::label::system_labels::INBOX,
     service::label::system_labels::SPAM,
@@ -204,6 +209,36 @@ const NON_USER_LABELS: [&str; 8] = [
     service::label::system_labels::SENT,
     service::label::system_labels::DRAFT,
 ];
+
+fn build_provider_spam_changed_metadata(
+    link_id: Uuid,
+    owner: &MacroUserIdStr<'static>,
+    thread_id: Uuid,
+    labels_to_add: &[String],
+    labels_to_delete: &[String],
+) -> Option<ThreadSpamChangedMetadata> {
+    let spam_label = service::label::system_labels::SPAM;
+    let spam = if labels_to_add.iter().any(|label| label == spam_label) {
+        true
+    } else if labels_to_delete.iter().any(|label| label == spam_label) {
+        false
+    } else {
+        return None;
+    };
+
+    Some(ThreadSpamChangedMetadata {
+        link_id,
+        owner: owner.clone(),
+        actor: None,
+        thread_id,
+        spam,
+        origin: EmailEventOrigin::ProviderSync,
+    })
+}
+
+fn is_user_label(label: &str) -> bool {
+    !NON_USER_LABELS.contains(&label) && !label.starts_with("CATEGORY_")
+}
 
 /// Publish semantic macro.email events for a provider-side label diff, all
 /// with `origin = provider_sync`. Changes made through Macro update the DB
@@ -272,6 +307,16 @@ async fn publish_label_diff_events(
         }));
     }
 
+    if let Some(metadata) = build_provider_spam_changed_metadata(
+        link.id,
+        &link.macro_id,
+        thread_db_id,
+        labels_to_add,
+        labels_to_delete,
+    ) {
+        events.push(EmailMacroEvent::thread_spam_changed(metadata));
+    }
+
     if added(service::label::system_labels::UNREAD)
         || removed(service::label::system_labels::UNREAD)
     {
@@ -301,13 +346,9 @@ async fn publish_label_diff_events(
         }));
     }
 
-    // Gmail category tabs (CATEGORY_PERSONAL/SOCIAL/...) are provider system
-    // labels, not user labels.
-    let is_user_label = |l: &str| !NON_USER_LABELS.contains(&l) && !l.starts_with("CATEGORY_");
-
     let added_user: Vec<LabelRef> = labels_to_add
         .iter()
-        .filter(|l| is_user_label(l.as_str()))
+        .filter(|label| is_user_label(label.as_str()))
         .map(|l| LabelRef {
             label_id: None,
             provider_label_id: l.clone(),
@@ -316,14 +357,14 @@ async fn publish_label_diff_events(
         .collect();
     let removed_user: Vec<LabelRef> = db_message_labels
         .iter()
-        .filter(|l| {
-            labels_to_delete.contains(&l.provider_label_id)
-                && is_user_label(l.provider_label_id.as_str())
+        .filter(|label| {
+            labels_to_delete.contains(&label.provider_label_id)
+                && is_user_label(label.provider_label_id.as_str())
         })
-        .map(|l| LabelRef {
-            label_id: Some(l.id),
-            provider_label_id: l.provider_label_id.clone(),
-            name: Some(l.name.clone()),
+        .map(|label| LabelRef {
+            label_id: Some(label.id),
+            provider_label_id: label.provider_label_id.clone(),
+            name: Some(label.name.clone()),
         })
         .collect();
 
