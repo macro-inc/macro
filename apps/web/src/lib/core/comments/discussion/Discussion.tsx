@@ -40,12 +40,6 @@ export function Discussion() {
   });
 
   const registerMountedComment = (commentId: string, element: HTMLElement) => {
-    console.debug('[discussion-target] comment mounted', {
-      commentId,
-      isTarget: source.targetCommentId() === commentId,
-      mountedBefore: mountedComments.has(commentId),
-      isConnected: element.isConnected,
-    });
     mountedComments.set(commentId, element);
     setMountedCommentsVersion((version) => version + 1);
   };
@@ -55,10 +49,6 @@ export function Discussion() {
     element: HTMLElement
   ) => {
     if (mountedComments.get(commentId) === element) {
-      console.debug('[discussion-target] comment unmounted', {
-        commentId,
-        isTarget: source.targetCommentId() === commentId,
-      });
       mountedComments.delete(commentId);
       setMountedCommentsVersion((version) => version + 1);
     }
@@ -66,97 +56,26 @@ export function Discussion() {
 
   createEffect(() => {
     const targetCommentId = source.targetCommentId();
-    if (!targetCommentId) {
-      console.debug('[discussion-target] component target check', {
-        targetCommentId,
-        isExpanded: isExpanded(),
-        threadCount: source.threads().length,
-        mountedCount: mountedComments.size,
-      });
-      return;
-    }
+    if (!targetCommentId) return;
 
     const currentThreads = source.threads();
     const targetThread = currentThreads.find((thread) =>
       thread.comments.some((comment) => comment.id === targetCommentId)
     );
-    if (!targetThread) {
-      console.debug('[discussion-target] waiting for target thread', {
-        targetCommentId,
-        isExpanded: isExpanded(),
-        threadCount: currentThreads.length,
-        mountedCount: mountedComments.size,
-      });
-      return;
-    }
+    if (!targetThread) return;
 
     setIsExpanded(true);
     mountedCommentsVersion();
 
     const target = mountedComments.get(targetCommentId);
-    if (!target) {
-      console.debug('[discussion-target] waiting for target mount', {
-        targetCommentId,
-        targetThreadId: targetThread.id,
-        isExpanded: isExpanded(),
-        mountedIds: [...mountedComments.keys()],
-      });
-      return;
-    }
+    if (!target) return;
 
-    const scrollTargetIntoView =
-      source.scrollTargetCommentIntoView ??
-      ((target: HTMLElement) =>
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-
-    let afterFrame: number | undefined;
-    let afterSmoothStart: number | undefined;
     const frame = requestAnimationFrame(() => {
-      const before = target.getBoundingClientRect();
-      console.debug('[discussion-target] scrolling target', {
-        targetCommentId,
-        targetThreadId: targetThread.id,
-        isConnected: target.isConnected,
-        before: {
-          top: before.top,
-          bottom: before.bottom,
-          height: before.height,
-        },
-      });
-
-      scrollTargetIntoView(target);
-
-      afterFrame = requestAnimationFrame(() => {
-        const after = target.getBoundingClientRect();
-        console.debug('[discussion-target] after scroll frame', {
-          targetCommentId,
-          after: {
-            top: after.top,
-            bottom: after.bottom,
-            height: after.height,
-          },
-        });
-      });
-
-      afterSmoothStart = window.setTimeout(() => {
-        const after = target.getBoundingClientRect();
-        console.debug('[discussion-target] after scroll timeout', {
-          targetCommentId,
-          after: {
-            top: after.top,
-            bottom: after.bottom,
-            height: after.height,
-          },
-        });
-      }, 300);
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     onCleanup(() => {
       cancelAnimationFrame(frame);
-      if (afterFrame !== undefined) cancelAnimationFrame(afterFrame);
-      if (afterSmoothStart !== undefined) {
-        window.clearTimeout(afterSmoothStart);
-      }
     });
   });
 
