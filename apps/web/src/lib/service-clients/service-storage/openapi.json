@@ -12764,7 +12764,6 @@
           "channel_type",
           "content",
           "mentioned",
-          "mentions",
           "created_at"
         ],
         "properties": {
@@ -12788,14 +12787,7 @@
           },
           "mentioned": {
             "$ref": "#/components/schemas/SimpleMention",
-            "description": "The mentioned entity this event is about (`user`, `bot`, `document`, …)."
-          },
-          "mentions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SimpleMention"
-            },
-            "description": "All mentions attached to the message."
+            "description": "The mentioned entity this event is about (`user`, `bot`, `document`, …).\n\nThe message's full mention list travels on `channel.message_posted`."
           },
           "message_id": {
             "type": "string",

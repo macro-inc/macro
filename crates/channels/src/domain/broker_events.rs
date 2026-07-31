@@ -126,9 +126,9 @@ pub struct ChannelMentionedMetadata {
     /// Message body.
     pub content: String,
     /// The mentioned entity this event is about (`user`, `bot`, `document`, …).
+    ///
+    /// The message's full mention list travels on `channel.message_posted`.
     pub mentioned: SimpleMention,
-    /// All mentions attached to the message.
-    pub mentions: Vec<SimpleMention>,
     /// Creation timestamp reported by the repository.
     pub created_at: DateTime<Utc>,
 }

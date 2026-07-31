@@ -1572,7 +1572,9 @@ fn broker_events_map_message_posted_mentions_per_entity() {
             mention("user", "macro|bob@example.com"),
             mention("document", "doc-1"),
         ],
-        &[bot_principal.as_str(), macro_ai_principal.as_str()],
+        // Macro AI needs no participant row: it is a code-defined system bot
+        // available in every channel.
+        &[bot_principal.as_str()],
     ));
 
     let posted = serde_json::to_value(events[0].event()).unwrap();
@@ -1587,10 +1589,6 @@ fn broker_events_map_message_posted_mentions_per_entity() {
         assert_eq!(envelope["metadata"]["channel_id"], channel_id.to_string());
         assert_eq!(envelope["metadata"]["message_id"], message_id.to_string());
         assert_eq!(envelope["metadata"]["sender"], "macro|alice@example.com");
-        assert_eq!(
-            envelope["metadata"]["mentions"].as_array().unwrap().len(),
-            8
-        );
     }
     let mentioned_entities: Vec<_> = mentioned
         .iter()

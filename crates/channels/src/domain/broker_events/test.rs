@@ -134,16 +134,6 @@ fn mentioned_wire_shape() {
                 entity_type: "bot".to_string(),
                 entity_id: bot_principal.to_string(),
             },
-            mentions: vec![
-                SimpleMention {
-                    entity_type: "bot".to_string(),
-                    entity_id: bot_principal.to_string(),
-                },
-                SimpleMention {
-                    entity_type: "user".to_string(),
-                    entity_id: "macro|member@example.com".to_string(),
-                },
-            ],
             created_at: timestamp(),
         }),
     );
@@ -163,10 +153,6 @@ fn mentioned_wire_shape() {
                 "channel_type": "team",
                 "content": "hello bot",
                 "mentioned": { "entity_type": "bot", "entity_id": bot_principal },
-                "mentions": [
-                    { "entity_type": "bot", "entity_id": bot_principal },
-                    { "entity_type": "user", "entity_id": "macro|member@example.com" },
-                ],
                 "created_at": "2026-01-02T03:04:05Z",
             },
         })

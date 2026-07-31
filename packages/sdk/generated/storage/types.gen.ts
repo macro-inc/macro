@@ -1594,12 +1594,10 @@ export type ChannelMentionedMetadata = {
     created_at: string;
     /**
      * The mentioned entity this event is about (`user`, `bot`, `document`, …).
+     *
+     * The message's full mention list travels on `channel.message_posted`.
      */
     mentioned: SimpleMention;
-    /**
-     * All mentions attached to the message.
-     */
-    mentions: Array<SimpleMention>;
     /**
      * The id of the message carrying the mention.
      */

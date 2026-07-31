@@ -76,7 +76,7 @@ fn active_bot_mention_ids(
     mentions: &[SimpleMention],
     participants: &[ChannelParticipant],
 ) -> Vec<BotId> {
-    let active_bot_ids: HashSet<_> = participants
+    let mut active_bot_ids: HashSet<_> = participants
         .iter()
         .filter(|participant| participant.left_at.is_none())
         .filter_map(|participant| {
@@ -85,6 +85,9 @@ fn active_bot_mention_ids(
                 .map(|id| id.bot_id())
         })
         .collect();
+    // Macro AI is a code-defined system bot available in every channel; it
+    // has no participant row.
+    active_bot_ids.insert(bot_id::MACRO_AI_BOT_ID);
 
     bot_mention_ids(mentions)
         .into_iter()
@@ -1347,7 +1350,6 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     channel_type: metadata.channel_type,
                     content: message.content.clone(),
                     mentioned: mention.clone(),
-                    mentions: mentions.clone(),
                     created_at: message.created_at,
                 }));
             }

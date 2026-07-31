@@ -88,6 +88,14 @@ pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
         &self,
         people: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Resolve the workspace that owns a bot: the owner's user id for a
+    /// user-owned bot or the team id for a team-owned bot. `None` for unknown,
+    /// deleted, or system bots (which have no owner workspace).
+    fn resolve_bot_owner_workspace(
+        &self,
+        bot_principal: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Port for enqueueing one normalized event for one matched webhook.

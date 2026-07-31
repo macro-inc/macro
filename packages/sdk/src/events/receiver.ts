@@ -1,5 +1,7 @@
+import { BotsNamespace } from '../entities/bots/namespace';
 import { Message } from '../entities/channels/message';
-import { MacroError, unwrap } from '../utils';
+import { User } from '../entities/users/user';
+import { MacroError } from '../utils';
 import type { MacroClient } from '../utils/client';
 import type {
   DeliveryHeaders,
@@ -74,7 +76,9 @@ export class MacroEvents {
    */
   onSelfMention(handler: EventHandler<'channel.mentioned'>): () => void {
     return this.on('channel.mentioned', async (event) => {
-      if (event.metadata.mentioned.entity_id !== (await this.myPrincipal())) {
+      // Principals embed emails for users; emails are case-insensitive.
+      const mentioned = event.metadata.mentioned.entity_id.toLowerCase();
+      if (mentioned !== (await this.myPrincipal()).toLowerCase()) {
         return;
       }
       await handler(event);
@@ -86,14 +90,11 @@ export class MacroEvents {
    * auth, `macro|<email>` for user auth — fetched once and cached.
    */
   private myPrincipal(): Promise<string> {
-    this.selfPrincipal ??= (async () => {
-      if (this.client.authConfig.type === 'bot') {
-        const bot = unwrap(await this.client.storage.getSelfBot());
-        return `bot|${bot.id}`;
-      }
-      const { user_id } = unwrap(await this.client.auth.getUserInfo());
-      return user_id;
-    })().catch((error) => {
+    this.selfPrincipal ??= (
+      this.client.authConfig.type === 'bot'
+        ? new BotsNamespace(this.client).myPrincipalId()
+        : User.me(this.client).then((user) => user.id)
+    ).catch((error) => {
       // Don't cache failures: the next delivery retries the lookup.
       this.selfPrincipal = undefined;
       throw error;

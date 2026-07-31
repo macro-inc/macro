@@ -48,6 +48,7 @@ outbound = [
   "dep:sqs_client",
   "dep:tokio",
   "dep:url",
+  "dep:uuid",
   "ports",
 ]
 ports = ["dep:serde_json", "dep:url"]
