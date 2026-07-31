@@ -32,7 +32,7 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
         is_read_only: true,
         range,
         sync_token: None,
-        force_full_snapshot: true,
+        plan: GoogleSyncPlan::FullSnapshot,
     };
     let upsert = map_upsert(&context, master, Vec::new(), Vec::new()).unwrap();
 
@@ -79,7 +79,7 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         is_read_only: false,
         range,
         sync_token: None,
-        force_full_snapshot: true,
+        plan: GoogleSyncPlan::FullSnapshot,
     };
 
     let upsert = map_upsert(&context, master, Vec::new(), vec![malformed_instance]).unwrap();
@@ -121,7 +121,7 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
             end_date: ends_at.date_naive(),
         },
         sync_token: Some("token".to_string()),
-        force_full_snapshot: true,
+        plan: GoogleSyncPlan::FullSnapshot,
     };
 
     let mapped = map_snapshot(&context, vec![valid, malformed], Vec::new());

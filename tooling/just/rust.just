@@ -118,6 +118,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/ai_projections_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/webhook/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar_events/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_service/.env
 
 setup_macrodb:
     just crates/macro_db_client/create_db

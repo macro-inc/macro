@@ -39,7 +39,6 @@ struct ParsedEvent {
     event: CalendarEvent,
     recurrence_id: Option<EventStart>,
     occurrences: Vec<CalendarOccurrence>,
-    materialized_range: OccurrenceRange,
 }
 
 /// Return the stable SHA-256 content identity used for idempotent extraction.
@@ -131,7 +130,6 @@ pub fn parse_email_ics(
             source: CalendarEventSource::EmailIcs(source.clone()),
             overrides,
             occurrences,
-            materialized_range: master.materialized_range,
         });
     }
 
@@ -202,8 +200,8 @@ fn parse_event(
         updated_at,
     };
 
-    let (occurrences, materialized_range) = if recurrence_id.is_some() {
-        (Vec::new(), horizon.clone())
+    let occurrences = if recurrence_id.is_some() {
+        Vec::new()
     } else {
         materialize_occurrences(
             event,
@@ -219,7 +217,6 @@ fn parse_event(
         event: canonical,
         recurrence_id,
         occurrences,
-        materialized_range,
     })
 }
 
@@ -305,23 +302,20 @@ fn materialize_occurrences(
     event_time: &EventTime,
     horizon: &OccurrenceRange,
     is_cancelled: bool,
-) -> Result<(Vec<CalendarOccurrence>, OccurrenceRange), Report> {
+) -> Result<Vec<CalendarOccurrence>, Report> {
     if event.properties().get("RRULE").is_none() && event.multi_properties().get("RDATE").is_none()
     {
-        return Ok((
-            event_time
-                .overlaps(horizon)
-                .then(|| CalendarOccurrence {
-                    event_id,
-                    occurrence_key: event_time.occurrence_key(),
-                    recurrence_id: None,
-                    time: event_time.clone(),
-                    is_cancelled,
-                })
-                .into_iter()
-                .collect(),
-            horizon.clone(),
-        ));
+        return Ok(event_time
+            .overlaps(horizon)
+            .then(|| CalendarOccurrence {
+                event_id,
+                occurrence_key: event_time.occurrence_key(),
+                recurrence_id: None,
+                time: event_time.clone(),
+                is_cancelled,
+            })
+            .into_iter()
+            .collect());
     }
 
     let recurrence = event.get_recurrence().map_err(|error| {
@@ -368,40 +362,37 @@ fn materialize_occurrences(
         }
     }
 
-    Ok((
-        dates
-            .into_iter()
-            .filter_map(|starts| {
-                let starts_at = starts.with_timezone(&Utc);
-                let time = match event_time {
-                    EventTime::Timed { time_zone, .. } => EventTime::Timed {
-                        starts_at,
-                        ends_at: starts_at + duration,
-                        time_zone: time_zone.clone(),
-                    },
+    Ok(dates
+        .into_iter()
+        .filter_map(|starts| {
+            let starts_at = starts.with_timezone(&Utc);
+            let time = match event_time {
+                EventTime::Timed { time_zone, .. } => EventTime::Timed {
+                    starts_at,
+                    ends_at: starts_at + duration,
+                    time_zone: time_zone.clone(),
+                },
+                EventTime::AllDay {
+                    start_date,
+                    end_date,
+                } => {
+                    let days = *end_date - *start_date;
+                    let occurrence_start = starts_at.date_naive();
                     EventTime::AllDay {
-                        start_date,
-                        end_date,
-                    } => {
-                        let days = *end_date - *start_date;
-                        let occurrence_start = starts_at.date_naive();
-                        EventTime::AllDay {
-                            start_date: occurrence_start,
-                            end_date: occurrence_start + days,
-                        }
+                        start_date: occurrence_start,
+                        end_date: occurrence_start + days,
                     }
-                };
-                time.overlaps(horizon).then(|| CalendarOccurrence {
-                    event_id,
-                    occurrence_key: time.occurrence_key(),
-                    recurrence_id: None,
-                    time,
-                    is_cancelled,
-                })
+                }
+            };
+            time.overlaps(horizon).then(|| CalendarOccurrence {
+                event_id,
+                occurrence_key: time.occurrence_key(),
+                recurrence_id: None,
+                time,
+                is_cancelled,
             })
-            .collect(),
-        materialized_range,
-    ))
+        })
+        .collect())
 }
 
 fn event_duration(time: &EventTime) -> Duration {

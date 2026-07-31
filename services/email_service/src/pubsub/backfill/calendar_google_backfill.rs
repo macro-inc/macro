@@ -27,7 +27,7 @@ pub async fn calendar_google_backfill(
             },
             link.macro_id.as_ref(),
             access_token,
-            OccurrenceRange::historical_sync(Utc::now()),
+            OccurrenceRange::maintenance_horizon(Utc::now()),
         )
         .await
         .map(|_| ())

@@ -65,7 +65,7 @@ pub async fn ingest_calendar_parts(
         return Ok(0);
     }
 
-    let horizon = OccurrenceRange::historical_sync(Utc::now());
+    let horizon = OccurrenceRange::maintenance_horizon(Utc::now());
     let service = CalendarService::new(PgCalendarRepository::new(db.clone()));
     let mut extracted = 0;
 

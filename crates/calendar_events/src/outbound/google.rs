@@ -13,7 +13,7 @@ use crate::domain::{
         AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventOverride,
         CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, EventStart, EventStatus,
         EventTime, EventTransparency, EventVisibility, GoogleEventSource, GoogleEventSyncBatch,
-        OccurrenceRange, ProviderCalendar,
+        GoogleSyncPlan, OccurrenceRange, ProviderCalendar,
     },
     ports::{
         GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
@@ -247,7 +247,10 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             }
             Err(error) => return Err(error),
         };
-        let rebuild_snapshot = context.force_full_snapshot
+        // ExtendTail still rebuilds the full window and the change feed is
+        // still only tested for emptiness; incremental application of both
+        // rides the GoogleSyncPlan contract in a follow-up.
+        let rebuild_snapshot = !matches!(context.plan, GoogleSyncPlan::Incremental)
             || context.sync_token.is_none()
             || token_was_reset
             || !changes.is_empty();
@@ -257,6 +260,7 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
                 observed_provider_event_ids: None,
                 next_sync_token,
                 materialized_range: None,
+                cancelled_provider_event_ids: Vec::new(),
             });
         }
 
@@ -284,6 +288,7 @@ impl GoogleCalendarProvider for GoogleCalendarClient {
             observed_provider_event_ids: Some(mapped.observed_provider_event_ids),
             next_sync_token,
             materialized_range: Some(context.range.clone()),
+            cancelled_provider_event_ids: Vec::new(),
         })
     }
 }
@@ -502,7 +507,6 @@ fn map_upsert(
         source,
         overrides,
         occurrences,
-        materialized_range: context.range.clone(),
     })
 }
 

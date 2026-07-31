@@ -88,15 +88,23 @@ fn folds_override_into_master_entity() {
 }
 
 #[test]
-fn recurrence_limit_reduces_the_advertised_materialized_range() {
+fn recurrence_limit_caps_materialized_occurrences() {
     let ics = b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:dense@example.com\r\nDTSTAMP:20260701T000000Z\r\nDTSTART:20260701T000000Z\r\nDTEND:20260701T000100Z\r\nRRULE:FREQ=MINUTELY\r\nSUMMARY:Dense recurrence\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
     let requested = range();
 
     let events = parse_email_ics("macro|owner@example.com", source(ics), ics, &requested).unwrap();
 
     assert_eq!(events[0].occurrences.len(), 20_000);
-    assert!(events[0].materialized_range.ends_at < requested.ends_at);
-    assert!(events[0].materialized_range.end_date < requested.end_date);
+    let last_start = events[0]
+        .occurrences
+        .iter()
+        .map(|occurrence| match occurrence.time {
+            EventTime::Timed { starts_at, .. } => starts_at,
+            EventTime::AllDay { .. } => unreachable!("dense recurrence is timed"),
+        })
+        .max()
+        .unwrap();
+    assert!(last_start < requested.ends_at);
 }
 
 #[test]
