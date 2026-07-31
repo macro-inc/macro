@@ -101,6 +101,7 @@ async fn create_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
             CreateChatArgs {
                 name: action.name.clone(),
                 project_id: None,
+                kind: Default::default(),
             },
             share_permission,
         )

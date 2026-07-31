@@ -9,6 +9,7 @@
 // backend adds an endpoint, `just coverage` fails until you wrap it or type
 // it into one of these lists by hand, as a conscious decision.
 
+import type { Sdk as AgentProxySdk } from '../../generated/agent-proxy/sdk.gen';
 import type { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import type { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import type { Sdk as ConnectionSdk } from '../../generated/connection/sdk.gen';
@@ -21,6 +22,13 @@ import type { Sdk as SearchSdk } from '../../generated/search/sdk.gen';
 import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen';
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
+
+export const agentProxyExcluded = [
+  'agentProxyHealth',
+] as const satisfies readonly (keyof AgentProxySdk)[];
+
+export const agentProxyBacklog =
+  [] as const satisfies readonly (keyof AgentProxySdk)[];
 
 export const authExcluded = [
   'appleLogin',

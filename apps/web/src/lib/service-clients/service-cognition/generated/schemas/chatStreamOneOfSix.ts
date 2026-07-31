@@ -11,9 +11,13 @@ import type { ChatStreamOneOfSixType } from './chatStreamOneOfSixType';
  * Indicates a response from the chat completion API for a given message
  */
 export type ChatStreamOneOfSix = {
+  /** The chat the message belongs to. */
   chat_id: string;
+  /** One part of the assistant's (possibly still streaming) response. */
   content: AssistantMessagePart;
+  /** The id the assistant's message will be persisted under. */
   message_id: string;
+  /** Correlates every item in this stream to one prompt turn. */
   stream_id: string;
   type: ChatStreamOneOfSixType;
 };

@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { services } from '../services';
 
 const serviceClientDirectories = {
+  'agent-proxy': 'service-agent-proxy',
   auth: 'service-auth',
   cognition: 'service-cognition',
   connection: 'service-connection',

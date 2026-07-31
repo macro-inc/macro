@@ -13,7 +13,7 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
@@ -21,7 +21,9 @@ use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Result};
+use crate::domain::models::{
+    ChatAgentKind, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
+};
 use crate::domain::ports::ChatService;
 use crate::inbound::http::extractors::{ChatModelAccess, UserPermissionsState};
 
@@ -191,6 +193,9 @@ pub struct CreateChatRequest {
     pub name: Option<String>,
     /// Optional project to associate the chat with.
     pub project_id: Option<String>,
+    /// What kind of agent backs the chat. Defaults to `Macro`.
+    #[serde(default)]
+    pub kind: Option<ChatAgentKind>,
 }
 
 #[utoipa::path(
@@ -217,7 +222,7 @@ pub async fn create_chat_handler<
     P: UserRolesAndPermissionsService,
 >(
     State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    user: MacroAuthorizationExtractor<Auth, ActingUser>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     // 402 on no perms
     _access: ChatModelAccess<Auth, P>,
     Json(req): Json<CreateChatRequest>,
@@ -231,6 +236,7 @@ pub async fn create_chat_handler<
             CreateChatArgs {
                 name: req.name.unwrap_or_else(|| "New Chat".to_string()),
                 project_id: req.project_id,
+                kind: req.kind.unwrap_or_default(),
             },
         )
         .await?;

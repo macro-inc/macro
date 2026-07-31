@@ -9,6 +9,14 @@ export type Service = {
 
 export const services: Service[] = [
 	{
+		name: "agent-proxy",
+		dev: "https://agent-proxy-dev.macro.com/api-doc/openapi.json",
+		prod: "https://agent-proxy.macro.com/api-doc/openapi.json",
+		local: "http://localhost:8091/api-doc/openapi.json",
+		output: "../src/lib/service-clients/service-agent-proxy/",
+		orvalKey: "agentProxyService",
+	},
+	{
 		name: "cloud-storage",
 		dev: "https://cloud-storage-dev.macro.com/api-doc/openapi.json",
 		prod: "https://cloud-storage.macro.com/api-doc/openapi.json",

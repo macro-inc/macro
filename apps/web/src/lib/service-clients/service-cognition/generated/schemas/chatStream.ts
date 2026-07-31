@@ -9,6 +9,10 @@ import type { ChatStreamOneOfEight } from './chatStreamOneOfEight';
 import type { ChatStreamOneOfFour } from './chatStreamOneOfFour';
 import type { ChatStreamOneOfSix } from './chatStreamOneOfSix';
 
+/**
+ * One item pushed through the connection gateway's live-chat stream for a
+chat entity.
+ */
 export type ChatStream =
   | ChatStreamOneOf
   | ChatStreamOneOfFour
