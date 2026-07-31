@@ -28,6 +28,7 @@ fn default_instance_uses_fixed_ports() {
     assert_eq!(inst.port(Port::Postgres), 5432);
     assert_eq!(inst.port(Port::Auth), 8080);
     assert_eq!(inst.port(Port::DocStorage), 8086);
+    assert_eq!(inst.port(Port::SdkWebhookSsh), 8788);
     assert_eq!(inst.network_databases(), "databases");
     assert_eq!(inst.volume_postgres(), "macro_postgres_data");
 }
@@ -43,6 +44,10 @@ fn named_instance_is_isolated_and_deterministic() {
     );
     assert_eq!(a1.project_name(), "macro-agent-a");
     assert!(a1.port(Port::Postgres) >= 20_000);
+    assert_eq!(
+        a1.port(Port::SdkWebhookSsh),
+        a1.port_base() + Port::SdkWebhookSsh.offset()
+    );
     assert_eq!(a1.network_databases(), "databases-agent-a");
     assert_eq!(a1.volume_postgres(), "macro_postgres_data_agent-a");
 }

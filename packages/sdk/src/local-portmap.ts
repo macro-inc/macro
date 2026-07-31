@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ServiceName } from './config';
 
@@ -11,12 +11,9 @@ type LocalPortmap = {
 const portmapName = 'portmap.json';
 
 /** Load a generated local-stack port map, if one is available. */
-export function resolveLocalPortmap(
-  localPortmapPath?: string,
-): LocalPortmap | undefined {
-  const configuredPath = localPortmapPath ?? process.env.MACRO_LOCAL_PORTMAP;
-  const path = configuredPath ?? findPortmap();
-  if (!path || !existsSync(path)) return undefined;
+export function resolveLocalPortmap(): LocalPortmap | undefined {
+  const path = findPortmap();
+  if (!path) return undefined;
 
   let parsed: unknown;
   try {
@@ -30,18 +27,15 @@ export function resolveLocalPortmap(
 }
 
 function findPortmap(): string | undefined {
-  const instance = process.env.MACRO_LOCAL_INSTANCE ?? 'macro';
   let directory = process.cwd();
   while (true) {
-    const path = join(
-      directory,
-      'infra',
-      'local',
-      'generated',
-      instance,
-      portmapName,
-    );
-    if (existsSync(path)) return path;
+    const generated = join(directory, 'infra', 'local', 'generated');
+    if (existsSync(generated)) {
+      for (const instance of readdirSync(generated)) {
+        const path = join(generated, instance, portmapName);
+        if (existsSync(path)) return path;
+      }
+    }
 
     const parent = dirname(directory);
     if (parent === directory) return undefined;

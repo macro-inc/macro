@@ -24,7 +24,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{Mode, arch, env_layer, frontend, mailpit, proxy, snapshot, summary};
+use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
@@ -262,6 +262,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         return Ok(instance);
     }
     super::bring_up_app(&stage, mode, &instance, &env)?;
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(&instance))
+        .transpose()?;
 
     // Headless "ready" means the backend answers through the proxy — the caller
     // (a CI step, an agent) acts on the URL the moment we return.
@@ -612,6 +615,8 @@ fn summary_json(mode: Mode, instance: &Instance, static_frontend: bool) -> serde
             "postgres://user:password@localhost:{}/macrodb",
             instance.port(Port::Postgres)
         ),
+        "sdk_webhook_url": sdk_webhook::relay_url(),
+        "sdk_webhook_ssh_port": sdk_webhook::ssh_port(instance),
         "logs_cmd": format!("docker compose -p {} logs -f", instance.project_name()),
     })
 }

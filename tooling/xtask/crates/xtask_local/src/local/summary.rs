@@ -6,7 +6,7 @@ use console::Style;
 
 use super::env_layer::ResolvedEnv;
 use super::instance::{Instance, Port};
-use super::{Mode, frontend, mailpit, proxy};
+use super::{Mode, frontend, mailpit, proxy, sdk_webhook};
 
 /// The host-facing endpoints of an instance: (label, url, host port).
 /// Shared by the startup summary and `status-local`.
@@ -145,6 +145,7 @@ pub fn print(
                 .display()
                 .to_string(),
         );
+        row("Receive webhooks at", sdk_webhook::relay_url().to_string());
     }
     // The frontend and mailpit rows come from the caller (they differ by
     // flow); the rest of the endpoint list is shared with `status-local`.

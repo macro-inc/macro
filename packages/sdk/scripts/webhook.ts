@@ -3,7 +3,7 @@ import type { Env } from '../src/config';
 import type { EventName } from '../src/events/types';
 import { Macro } from '../src/macro';
 
-const localEndpoint = 'http://host.docker.internal:8787/macro-events';
+const localEndpoint = 'http://sdk-webhook-relay:8787/macro-events';
 
 const { positionals, values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -15,6 +15,7 @@ const { positionals, values } = parseArgs({
     name: { type: 'string' },
     port: { type: 'string' },
     scope: { type: 'string' },
+    'user-id': { type: 'string' },
     url: { type: 'string' },
   },
   strict: true,
@@ -44,28 +45,30 @@ async function register(): Promise<void> {
   const name = required(values.name, '--name');
   const events = parseEvents(values.events ?? fail('--events is required'));
   const scope = parseScope(values.scope) ?? fail('--scope is required');
+  const userId = values['user-id'];
+  if (scope === 'user' && !userId) {
+    fail('--user-id is required when --scope user');
+  }
   if (events.length === 0) fail('at least one event is required');
 
-  const macro = new Macro({ env });
+  const macro = new Macro({ env, ...(userId ? { requestedAs: userId } : {}) });
   const webhook = await macro.webhooks.create({
     url: endpointUrl,
     name,
     filters: [{ events }],
     scope,
   });
-  const secret = webhook.signingSecret;
+  const secret = webhook.signingSecret ?? fail('webhook signing secret missing');
 
   console.log(`
 Webhook registered.
 
 MACRO_WEBHOOK_ID=${webhook.id}
-MACRO_WEBHOOK_SECRET=${secret ?? '<missing>'}
+MACRO_WEBHOOK_SECRET=${shellQuote(secret)}
 
 Start the event printer and validation receiver:
-MACRO_WEBHOOK_SECRET=<the value above> bun run webhook receive ${webhook.id} --env ${env}
+MACRO_WEBHOOK_SECRET=${shellQuote(secret)} bun run webhook receive ${webhook.id} --env ${env}${userId ? ` --user-id ${shellQuote(userId)}` : ''}
 `);
-
-  if (!secret) process.exit(1);
 }
 
 async function receive(id: string): Promise<void> {
@@ -74,7 +77,12 @@ async function receive(id: string): Promise<void> {
     process.env.MACRO_WEBHOOK_SECRET ??
     fail('MACRO_WEBHOOK_SECRET is required');
   const port = parsePort(values.port ?? '8787');
-  const macro = new Macro({ env, webhookSecret: secret });
+  const userId = values['user-id'];
+  const macro = new Macro({
+    env,
+    webhookSecret: secret,
+    ...(userId ? { requestedAs: userId } : {}),
+  });
   const events = macro.events;
   if (!events) fail('Webhook signing secret is required');
   const receiver = events.webhook();
@@ -111,12 +119,13 @@ Register a webhook or receive and print its events.
 
   webhook register --env <dev|prod|local> --url <endpoint URL>
                    --name <webhook name> --events <event,event>
-                   --scope <user|team>
+                   --scope <user|team> [--user-id <macro-user-id>]
 
-  webhook receive <webhook-id> --env <dev|prod|local> [--port <port>]
+  webhook receive <webhook-id> --env <dev|prod|local>
+                   [--port <port>] [--user-id <macro-user-id>]
 
-For just run_local, use ${localEndpoint} for --url. Run receive on the Docker
-host with MACRO_WEBHOOK_SECRET set to the value printed by register.
+For just run_local, use ${localEndpoint} for --url. Run receive on the host
+with MACRO_WEBHOOK_SECRET set to the value printed by register.
 `);
 }
 
@@ -150,6 +159,10 @@ function parseScope(value: string | undefined): 'user' | 'team' | undefined {
   if (value === undefined) return undefined;
   if (value === 'user' || value === 'team') return value;
   fail('Webhook scope must be user or team');
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\\"'\\\"'")}'`;
 }
 
 function fail(message: string): never {

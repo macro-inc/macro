@@ -98,10 +98,6 @@ export interface MacroOpts {
   env?: Env;
   /** Override individual service hosts (e.g. point one at localhost). */
   hosts?: Partial<Record<ServiceName, string>>;
-  /** Path to a `just run_local` generated local port map. Node/Bun only.
-   * When omitted, local mode discovers `infra/local/generated/<instance>/portmap.json`
-   * from the current working directory. */
-  localPortmapPath?: string;
   /** Override the web app base URL (e.g. for local frontend dev). Also reads MACRO_WEB_URL. */
   webAppUrl?: string;
   /** Signing secret for verifying incoming webhooks. Falls back to MACRO_WEBHOOK_SECRET. */

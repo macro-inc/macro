@@ -37,7 +37,7 @@ export class MacroClient {
   constructor(opts: MacroOpts) {
     const env: Env = opts.env ?? 'dev';
     const localPortmap =
-      env === 'local' ? resolveLocalPortmap(opts.localPortmapPath) : undefined;
+      env === 'local' ? resolveLocalPortmap() : undefined;
     const hosts = { ...HOSTS[env], ...localPortmap?.hosts, ...opts.hosts };
     const envWebUrl =
       typeof process !== 'undefined' ? process.env.MACRO_WEB_URL : undefined;

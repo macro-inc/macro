@@ -1,5 +1,7 @@
 # Macro SDK tasks.
 
+set positional-arguments
+
 # Fully refresh all generated code: rebuild the OpenAPI specs from the Rust
 # services (via apps/web's gen-api), copy them into ./specs, and regenerate
 # ./generated with orval.
@@ -28,4 +30,4 @@ coverage:
 # Interactively create and verify a webhook. In `local` mode, start the
 # receiver first and use http://host.docker.internal:<port>/<path> as its URL.
 webhook *ARGS:
-    bun run webhook -- {{ ARGS }}
+    bun run webhook -- "$@"
