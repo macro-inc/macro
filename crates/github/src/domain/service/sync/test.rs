@@ -2736,15 +2736,22 @@ async fn github_pr_status_changed_edited_does_not_notify() {
 }
 
 #[tokio::test]
-async fn github_pr_status_changed_installation_backfill_does_not_notify() {
-    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
-    let service = make_sync_service_with_repo(repo);
+async fn authenticated_installation_setup_backfill_does_not_notify() {
+    let service = make_sync_service();
+    service.client.set_user_installations(&[12345]);
     service
         .client
         .set_open_pull_requests(vec![backfilled_pull_request("Backfilled PR")]);
-    let event = installation_created_event(12345, 12345);
 
-    service.process_webhook_event(&event).await.unwrap();
+    service
+        .complete_installation_setup(
+            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+            Some("setup-code"),
+            Some(12345),
+            "install",
+        )
+        .await
+        .unwrap();
 
     assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
     assert!(service.notification_ingress.requests().is_empty());
