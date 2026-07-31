@@ -13,6 +13,7 @@ use utoipa::OpenApi;
         crate::inbound::http::delete_agent,
         crate::inbound::http::permanently_delete_agent,
         crate::inbound::http::post_acp,
+        crate::inbound::http::upgrade_runtime_connection,
     ),
     components(schemas(
         crate::inbound::http::CreateAgentRequest,

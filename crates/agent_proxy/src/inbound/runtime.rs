@@ -4,13 +4,14 @@
 //! connection and carries no session identifier on the wire. Correlating an
 //! accepted
 //! connection to a chat/session id is therefore established out of band, by
-//! the adapter that accepts the connection:
-//! [`crate::outbound::shared_runtime_connections::SharedRuntimeConnections`]
-//! matches an `?id=` query parameter on its one shared WebSocket endpoint and
-//! hands `(session_id, channel)` to the composition root over a plain
+//! the adapter that accepts the connection - for the WebSocket carrier,
+//! [`crate::inbound::http::upgrade_runtime_connection`], which matches an
+//! `?id=` query parameter and hands `(session_id, channel)` on over a plain
 //! channel. [`RuntimeConnectionDriver::run`] drains that channel and drives
-//! each connection into the domain service.
+//! each connection into the domain service, and cannot tell which carrier
+//! accepted it.
 
+use crate::domain::models::AgentId;
 use crate::domain::ports::SessionAttachments;
 use crate::domain::service::AgentProxyService;
 use agent_runtime_protocol::domain::connection::{
@@ -18,7 +19,6 @@ use agent_runtime_protocol::domain::connection::{
 };
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use futures::StreamExt;
-use macro_uuid::Uuid;
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,11 +40,11 @@ impl SystemEventHandler for ForwardSystemEvents {
 /// Drains accepted runtime connections and drives each one into the domain
 /// service until it closes.
 ///
-/// Each connection already arrives tagged with the session it belongs to
-/// (matched against the `?id=` query parameter by
-/// [`crate::outbound::shared_runtime_connections::SharedRuntimeConnections`]),
-/// so there is no routing table here beyond that tag: one accepted connection
-/// drives exactly one session.
+/// Each connection already arrives tagged with the session it belongs to -
+/// matched against the `?id=` query parameter by
+/// [`crate::inbound::http::upgrade_runtime_connection`], or against the
+/// channel name by the Redis carrier - so there is no routing table here
+/// beyond that tag: one accepted connection drives exactly one session.
 pub struct RuntimeConnectionDriver<S, A> {
     attachments: Arc<A>,
     service: Arc<S>,
@@ -64,7 +64,7 @@ impl<S: AgentProxyService, A: SessionAttachments> RuntimeConnectionDriver<S, A> 
     /// Drain accepted `(session_id, channel)` pairs, spawning an independent
     /// task to drive each one so a slow or long-lived session never blocks
     /// another session's connection from being accepted and driven.
-    pub async fn run(self: Arc<Self>, mut incoming: UnboundedReceiver<(Uuid, ServerChannel)>) {
+    pub async fn run(self: Arc<Self>, mut incoming: UnboundedReceiver<(AgentId, ServerChannel)>) {
         while let Some((session_id, channel)) = incoming.recv().await {
             let driver = Arc::clone(&self);
             tokio::spawn(async move { driver.drive(session_id, channel).await });
@@ -74,7 +74,7 @@ impl<S: AgentProxyService, A: SessionAttachments> RuntimeConnectionDriver<S, A> 
 
     /// Attach one accepted connection's ACP channel to `session_id`, pump its
     /// traffic into the domain service, and clean up when it closes.
-    async fn drive(&self, session_id: Uuid, channel: ServerChannel) {
+    async fn drive(&self, session_id: AgentId, channel: ServerChannel) {
         let epoch = self.next_epoch.fetch_add(1, Ordering::Relaxed);
         tracing::info!(%session_id, epoch, "agent runtime connected");
 

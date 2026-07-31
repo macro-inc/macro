@@ -1,12 +1,13 @@
 //! Composition root for the agent proxy service.
 //!
-//! Runs the user-facing HTTP API (agent CRUD and posting ACP messages to
-//! sessions) on the same router and
-//! port as a shared runtime WebSocket endpoint
-//! ([`agent_proxy::outbound::shared_runtime_connections::SharedRuntimeConnections`])
-//! that every external agent's runtime dials into, disambiguated by an
-//! `?id=` query parameter; accepted connections are drained and driven into
-//! the domain service by [`agent_proxy::inbound::runtime::RuntimeConnectionDriver`].
+//! Runs one router serving both the user-facing HTTP API (agent CRUD and
+//! posting ACP messages to sessions) and the runtime WebSocket endpoint
+//! ([`agent_proxy::inbound::http::upgrade_runtime_connection`]) that every
+//! external agent's runtime dials into, disambiguated by an `?id=` query
+//! parameter.
+//!
+//! Accepted connections are drained and driven into the domain service by
+//! [`agent_proxy::inbound::runtime::RuntimeConnectionDriver`].
 
 #![recursion_limit = "256"]
 
@@ -20,7 +21,6 @@ use agent_proxy::inbound::runtime::RuntimeConnectionDriver;
 use agent_proxy::outbound::gateway::GatewayNotifier;
 use agent_proxy::outbound::pending_messages::PgPendingMessages;
 use agent_proxy::outbound::runtime_registry::SessionRegistry;
-use agent_proxy::outbound::shared_runtime_connections::SharedRuntimeConnections;
 use agent_proxy::swagger::ApiDoc;
 use anyhow::{Context, Result};
 use axum::Router;
@@ -67,11 +67,9 @@ async fn main() -> Result<()> {
         redis::Client::open(config.redis_host.as_str()).context("failed to build redis client")?;
     let stream_repo = RedisPostgresStreamRepo::new(redis_client, db.clone()).obj();
 
-    // All runtimes dial the same shared WebSocket endpoint, disambiguated by
-    // an `?id=` query parameter; accepted connections are handed to the
-    // driver below over `incoming`.
+    // Runtimes dial the WebSocket endpoint on the router below; accepted
+    // connections are handed to the driver over `incoming`.
     let (incoming_tx, incoming_rx) = tokio::sync::mpsc::unbounded_channel();
-    let runtime_connections = Arc::new(SharedRuntimeConnections::new(incoming_tx));
 
     let registry = Arc::new(SessionRegistry::new());
     let service = Arc::new(AgentProxyServiceImpl::new(
@@ -108,12 +106,12 @@ async fn main() -> Result<()> {
     let state = AgentProxyRouterState {
         service,
         authorization_state,
+        runtime_connections: incoming_tx,
     };
     let router = Router::new()
         .route("/health", axum::routing::get(health))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .merge(agent_proxy_router::<_, _, ()>(state))
-        .merge(runtime_connections.into_router())
         .layer(macro_cors::cors_layer());
 
     let addr = format!("0.0.0.0:{}", config.port);

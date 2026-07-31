@@ -4,7 +4,7 @@
 mod test;
 
 use crate::domain::models::{
-    AgentProxyErr, CreateAgentArgs, GetAgentResponse, PatchAgentArgs, Result,
+    AcpSessionId, AgentId, AgentProxyErr, CreateAgentArgs, GetAgentResponse, PatchAgentArgs, Result,
 };
 use crate::domain::ports::{ClientNotifier, PendingMessage, PendingMessages, RuntimeSessions};
 use crate::domain::translate::{TurnAccumulator, content_blocks_text, translate_session_update};
@@ -22,7 +22,7 @@ use chat::domain::ports::{ChatRepo, MessageRepo};
 use chrono::Utc;
 use futures::channel::oneshot;
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::{Uuid, generate_uuid_v7, string_to_uuid};
+use macro_uuid::generate_uuid_v7;
 use model::chat::NewChatMessage;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -86,20 +86,20 @@ pub trait AgentProxyService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
         args: CreateAgentArgs,
-    ) -> impl Future<Output = Result<Uuid>> + Send;
+    ) -> impl Future<Output = Result<AgentId>> + Send;
 
     /// Get an agent with its full chat data.
     fn get_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
     ) -> impl Future<Output = Result<GetAgentResponse>> + Send;
 
     /// Patch an agent's metadata. Requires edit access.
     fn patch_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
         args: PatchAgentArgs,
     ) -> impl Future<Output = Result<()>> + Send;
 
@@ -107,14 +107,14 @@ pub trait AgentProxyService: Send + Sync + 'static {
     fn delete_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Permanently delete an agent. Requires owner access.
     fn permanently_delete_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Start a runtime's ACP session once it reports readiness: negotiates
@@ -127,7 +127,10 @@ pub trait AgentProxyService: Send + Sync + 'static {
     ///
     /// Once the ACP session exists, any messages `post_acp` queued while the
     /// session had no ready runtime are flushed into it, oldest first.
-    fn handle_agent_connected(&self, session_id: Uuid) -> impl Future<Output = Result<()>> + Send;
+    fn handle_agent_connected(
+        &self,
+        session_id: AgentId,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Forward one user-posted ACP message to the runtime hosting the
     /// session, persisting prompts as user chat messages.
@@ -140,32 +143,32 @@ pub trait AgentProxyService: Send + Sync + 'static {
     fn post_acp(
         &self,
         user_id: MacroUserIdStr<'static>,
-        session_id: Uuid,
+        session_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Handle one ACP message received from an agent runtime for a session.
     fn handle_agent_message(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Handle one runtime lifecycle event for `session_id`. Every accepted
-    /// connection is dedicated to one session (see
-    /// [`crate::outbound::shared_runtime_connections::SharedRuntimeConnections`]),
-    /// so — unlike the wire protocol's events, which carry no identifier of
-    /// their own — the caller always knows which session an event belongs to.
+    /// connection is dedicated to one session, whichever carrier it arrived
+    /// on, so — unlike the wire protocol's events, which carry no identifier
+    /// of their own — the caller always knows which session an event belongs
+    /// to.
     fn handle_system_event(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         event: SystemEvent,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Handle a session's agent detaching (agent stopped or its runtime
     /// connection dropped): discard the session's in-flight turn state so a
     /// later agent instance starts from a clean slate.
-    fn handle_agent_detached(&self, session_id: Uuid);
+    fn handle_agent_detached(&self, session_id: AgentId);
 }
 
 /// Per-session in-flight turn state.
@@ -204,14 +207,15 @@ pub struct AgentProxyServiceImpl<R, Sessions, Notifier, Queue> {
     /// frontend's existing chat renderer picks up external-agent turns with
     /// no changes of its own.
     streams: Arc<dyn StreamRepo>,
-    turns: Mutex<HashMap<Uuid, SessionTurn>>,
+    turns: Mutex<HashMap<AgentId, SessionTurn>>,
     /// The ACP-level session id for each connected runtime, once its
     /// `session/new` handshake completes. `post_acp` stamps this onto every
     /// outgoing session-scoped message so callers never need to know it.
-    acp_sessions: Mutex<HashMap<Uuid, String>>,
+    acp_sessions: Mutex<HashMap<AgentId, AcpSessionId>>,
     /// ACP session bootstraps in flight, resolved by `handle_agent_message`
     /// when the matching `session/new` response arrives.
-    acp_bootstrap: Mutex<HashMap<Uuid, oneshot::Sender<std::result::Result<String, String>>>>,
+    acp_bootstrap:
+        Mutex<HashMap<AgentId, oneshot::Sender<std::result::Result<AcpSessionId, String>>>>,
 }
 
 impl<R, Sessions, Notifier, Queue> AgentProxyServiceImpl<R, Sessions, Notifier, Queue> {
@@ -247,7 +251,7 @@ where
     async fn require_access(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
         level: AccessLevel,
     ) -> Result<AccessLevel> {
         let access = self
@@ -263,7 +267,7 @@ where
     /// Best-effort gateway push; failures are logged, never propagated.
     async fn notify(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         message_type: &'static str,
         payload: serde_json::Value,
     ) {
@@ -279,7 +283,7 @@ where
     /// Best-effort live-chat-stream push; failures are logged, never
     /// propagated (a dropped chunk shouldn't fail the request that produced
     /// it - the persisted message is the source of truth).
-    async fn append_stream(&self, session_id: Uuid, stream_id: &str, item: ChatStream) {
+    async fn append_stream(&self, session_id: AgentId, stream_id: &str, item: ChatStream) {
         let Ok(payload) = serde_json::to_value(&item).inspect_err(
             |e| tracing::error!(error=?e, %session_id, "failed to serialize chat stream item"),
         ) else {
@@ -299,7 +303,7 @@ where
     /// ID so the matching response ends the assistant turn.
     async fn store_prompt(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         request_id: RequestId,
         prompt: PromptRequest,
     ) -> Result<()> {
@@ -340,7 +344,7 @@ where
     }
 
     /// Persist the accumulated assistant turn as one chat message.
-    async fn flush_turn(&self, session_id: Uuid) -> Result<()> {
+    async fn flush_turn(&self, session_id: AgentId) -> Result<()> {
         let (parts, stream_id) = {
             let mut turns = self.turns.lock().expect("turns mutex poisoned");
             let Some(turn) = turns.get_mut(&session_id) else {
@@ -389,7 +393,7 @@ where
     }
 
     /// Whether `response_id` answers a pending prompt for the session.
-    fn take_pending_prompt(&self, session_id: Uuid, response_id: &RequestId) -> bool {
+    fn take_pending_prompt(&self, session_id: AgentId, response_id: &RequestId) -> bool {
         let mut turns = self.turns.lock().expect("turns mutex poisoned");
         let Some(turn) = turns.get_mut(&session_id) else {
             return false;
@@ -407,7 +411,7 @@ where
 
     /// Log then forward a raw ACP message to the runtime hosting the
     /// session.
-    fn send_to_runtime(&self, session_id: Uuid, message: RawJsonRpcMessage) -> Result<()> {
+    fn send_to_runtime(&self, session_id: AgentId, message: RawJsonRpcMessage) -> Result<()> {
         tracing::debug!(
             %session_id,
             message = %serde_json::to_string(&message).unwrap_or_default(),
@@ -418,7 +422,7 @@ where
 
     /// The session's live ACP session id, or [`AgentProxyErr::AcpSessionNotReady`]
     /// if `handle_agent_connected` hasn't finished (or failed) creating one.
-    fn require_acp_session_id(&self, session_id: Uuid) -> Result<String> {
+    fn require_acp_session_id(&self, session_id: AgentId) -> Result<AcpSessionId> {
         self.acp_sessions
             .lock()
             .expect("acp sessions mutex poisoned")
@@ -430,7 +434,7 @@ where
     /// Whether the session's ACP bootstrap has completed and its ACP
     /// session id is live - i.e. whether `post_acp` can deliver immediately
     /// rather than queue. Cleared again by `handle_agent_detached`.
-    fn has_acp_session(&self, session_id: Uuid) -> bool {
+    fn has_acp_session(&self, session_id: AgentId) -> bool {
         self.acp_sessions
             .lock()
             .expect("acp sessions mutex poisoned")
@@ -448,7 +452,7 @@ where
     /// which answer a request rather than address one) also pass through.
     fn attach_acp_session_id(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> Result<RawJsonRpcMessage> {
         Ok(match message {
@@ -459,7 +463,7 @@ where
                     let acp_session_id = self.require_acp_session_id(session_id)?;
                     params.insert(
                         "sessionId".to_string(),
-                        serde_json::Value::String(acp_session_id),
+                        serde_json::Value::String(acp_session_id.into_string()),
                     );
                 }
                 RawJsonRpcMessage::Request(request)
@@ -471,7 +475,7 @@ where
                     let acp_session_id = self.require_acp_session_id(session_id)?;
                     params.insert(
                         "sessionId".to_string(),
-                        serde_json::Value::String(acp_session_id),
+                        serde_json::Value::String(acp_session_id.into_string()),
                     );
                 }
                 RawJsonRpcMessage::Notification(notification)
@@ -487,7 +491,7 @@ where
     /// reached an agent, so no response will ever end this turn).
     async fn store_and_forward_prompt(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         request_id: RequestId,
         prompt: PromptRequest,
         message: RawJsonRpcMessage,
@@ -503,7 +507,7 @@ where
     /// enqueue already did this, but a detach since then discards turn
     /// state, so the flush re-pushes (deduped) to guarantee the prompt's
     /// response still ends the turn.
-    fn push_pending_prompt(&self, session_id: Uuid, request_id: RequestId) {
+    fn push_pending_prompt(&self, session_id: AgentId, request_id: RequestId) {
         let mut turns = self.turns.lock().expect("turns mutex poisoned");
         let turn = turns.entry(session_id).or_insert_with(SessionTurn::new);
         if !turn.pending_prompts.contains(&request_id) {
@@ -517,7 +521,7 @@ where
     /// send means this runtime is on its way out, so forcing the rest
     /// through is pointless); prompt bookkeeping pushed above is rolled back
     /// for the failed message so it is re-pushed by that later flush.
-    async fn flush_pending(&self, session_id: Uuid) -> Result<()> {
+    async fn flush_pending(&self, session_id: AgentId) -> Result<()> {
         let pending = self
             .queue
             .list(session_id)
@@ -559,7 +563,7 @@ where
     /// whichever `handle_agent_connected` call is waiting on it. A no-op if
     /// no bootstrap is pending (e.g. it already resolved, or the connection
     /// was detached first).
-    fn resolve_new_session_bootstrap(&self, session_id: Uuid, message: &RawJsonRpcMessage) {
+    fn resolve_new_session_bootstrap(&self, session_id: AgentId, message: &RawJsonRpcMessage) {
         let Some(tx) = self
             .acp_bootstrap
             .lock()
@@ -572,7 +576,7 @@ where
         let resolution = match message {
             RawJsonRpcMessage::Response(AcpResponse::Result { result, .. }) => {
                 NewSessionResponse::from_value("session/new", result.clone())
-                    .map(|response| response.session_id.0.to_string())
+                    .map(|response| AcpSessionId::new(response.session_id.0.to_string()))
                     .map_err(|e| e.to_string())
             }
             RawJsonRpcMessage::Response(AcpResponse::Error { error, .. }) => Err(error.to_string()),
@@ -596,7 +600,7 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         args: CreateAgentArgs,
-    ) -> Result<Uuid> {
+    ) -> Result<AgentId> {
         if args.name.graphemes(true).count() > 100 {
             return Err(AgentProxyErr::BadRequest("name too long".to_string()));
         }
@@ -612,14 +616,14 @@ where
         )
         .await?;
 
-        Ok(string_to_uuid(&chat_id)?)
+        AgentId::parse(&chat_id)
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn get_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
     ) -> Result<GetAgentResponse> {
         let access = self
             .require_access(user_id, agent_id, AccessLevel::View)
@@ -639,7 +643,7 @@ where
     async fn patch_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
         args: PatchAgentArgs,
     ) -> Result<()> {
         self.require_access(user_id.clone(), agent_id, AccessLevel::Edit)
@@ -661,7 +665,11 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete_agent(&self, user_id: MacroUserIdStr<'static>, agent_id: Uuid) -> Result<()> {
+    async fn delete_agent(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        agent_id: AgentId,
+    ) -> Result<()> {
         self.require_access(user_id, agent_id, AccessLevel::Owner)
             .await?;
         ChatRepo::delete(&self.repo, &agent_id.to_string()).await?;
@@ -672,7 +680,7 @@ where
     async fn permanently_delete_agent(
         &self,
         user_id: MacroUserIdStr<'static>,
-        agent_id: Uuid,
+        agent_id: AgentId,
     ) -> Result<()> {
         self.require_access(user_id, agent_id, AccessLevel::Owner)
             .await?;
@@ -681,7 +689,7 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn handle_agent_connected(&self, session_id: Uuid) -> Result<()> {
+    async fn handle_agent_connected(&self, session_id: AgentId) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         self.acp_bootstrap
             .lock()
@@ -721,7 +729,7 @@ where
             .lock()
             .expect("acp sessions mutex poisoned")
             .insert(session_id, acp_session_id.clone());
-        tracing::info!(%session_id, acp_session_id, "ACP session ready");
+        tracing::info!(%session_id, %acp_session_id, "ACP session ready");
 
         // The session is ready from this line on: anything posted while it
         // was not - e.g. the prompt a caller supplied when launching the
@@ -736,7 +744,7 @@ where
     async fn post_acp(
         &self,
         user_id: MacroUserIdStr<'static>,
-        session_id: Uuid,
+        session_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> Result<()> {
         // Access first: a missing or foreign chat answers 404/403 without
@@ -798,7 +806,7 @@ where
     #[tracing::instrument(err, skip(self, message))]
     async fn handle_agent_message(
         &self,
-        session_id: Uuid,
+        session_id: AgentId,
         message: RawJsonRpcMessage,
     ) -> Result<()> {
         tracing::debug!(
@@ -879,7 +887,7 @@ where
     }
 
     #[tracing::instrument(skip(self))]
-    fn handle_agent_detached(&self, session_id: Uuid) {
+    fn handle_agent_detached(&self, session_id: AgentId) {
         let mut turns = self.turns.lock().expect("turns mutex poisoned");
         if turns.remove(&session_id).is_some() {
             tracing::debug!(%session_id, "discarded in-flight turn state");
@@ -902,7 +910,7 @@ where
     }
 
     #[tracing::instrument(err, skip(self, event), fields(event_name = %event.as_str()))]
-    async fn handle_system_event(&self, session_id: Uuid, event: SystemEvent) -> Result<()> {
+    async fn handle_system_event(&self, session_id: AgentId, event: SystemEvent) -> Result<()> {
         let payload =
             serde_json::to_value(&event).map_err(|e| AgentProxyErr::Unknown(anyhow::anyhow!(e)))?;
         self.notify(
