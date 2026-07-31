@@ -29,7 +29,6 @@ use uuid::Uuid;
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
-const BOT_ENTITY_TYPE: &str = "bot";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -163,26 +162,11 @@ where
             .await?;
         tracing::Span::current().record("accessor_count", accessors.len());
 
-        let mut workspace_ids = self
+        let workspace_ids = self
             .repository
             .resolve_workspace_ids(accessors)
             .await
             .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-
-        // A mentioned bot's webhook lives in its owner's workspace, and the
-        // owner need not retain access to the channel (installing a bot and
-        // later leaving must not silently stop its deliveries). Include the
-        // owner workspace alongside the accessors' workspaces.
-        if event.entity_type == BOT_ENTITY_TYPE
-            && let Some(owner_workspace) = self
-                .repository
-                .resolve_bot_owner_workspace(&event.entity_id)
-                .await
-                .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?
-            && !workspace_ids.contains(&owner_workspace)
-        {
-            workspace_ids.push(owner_workspace);
-        }
         tracing::Span::current().record("workspace_count", workspace_ids.len());
 
         self.match_and_enqueue(event, workspace_ids).await

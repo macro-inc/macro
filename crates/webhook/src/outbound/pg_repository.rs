@@ -14,7 +14,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::str::FromStr;
-use uuid::Uuid;
 
 /// PostgreSQL-backed implementation of [`WebhookRepo`].
 #[derive(Clone)]
@@ -151,32 +150,6 @@ impl WebhookWorkspaceResolver for PgRepository {
         workspace_ids.sort_unstable();
         workspace_ids.dedup();
         Ok(workspace_ids)
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn resolve_bot_owner_workspace(
-        &self,
-        bot_principal: &str,
-    ) -> Result<Option<String>, Self::Err> {
-        let Some(bot_uuid) = bot_principal
-            .strip_prefix("bot|")
-            .and_then(|raw| Uuid::parse_str(raw).ok())
-        else {
-            return Ok(None);
-        };
-
-        let owner = sqlx::query_scalar!(
-            r#"
-            SELECT COALESCE(owner_user_id, team_id::text) AS "owner?"
-            FROM bots
-            WHERE id = $1 AND deleted_at IS NULL
-            "#,
-            bot_uuid,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(owner.flatten())
     }
 }
 

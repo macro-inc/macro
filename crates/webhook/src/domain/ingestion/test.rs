@@ -196,10 +196,8 @@ struct MockRepositoryState {
     matching_webhooks: Vec<Webhook>,
     fail_workspace_resolution: bool,
     fail_matching: bool,
-    bot_owner_workspace: Option<String>,
     workspace_calls: Vec<Vec<MacroUserIdStr<'static>>>,
     match_calls: Vec<MatchCall>,
-    bot_owner_calls: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -215,10 +213,8 @@ impl MockRepository {
                 matching_webhooks,
                 fail_workspace_resolution: false,
                 fail_matching: false,
-                bot_owner_workspace: None,
                 workspace_calls: Vec::new(),
                 match_calls: Vec::new(),
-                bot_owner_calls: Vec::new(),
             })),
         }
     }
@@ -237,15 +233,6 @@ impl WebhookWorkspaceResolver for MockRepository {
             anyhow::bail!("workspace resolver unavailable");
         }
         Ok(state.resolved_workspace_ids.clone())
-    }
-
-    async fn resolve_bot_owner_workspace(
-        &self,
-        bot_principal: &str,
-    ) -> Result<Option<String>, Self::Err> {
-        let mut state = lock(&self.state);
-        state.bot_owner_calls.push(bot_principal.to_string());
-        Ok(state.bot_owner_workspace.clone())
     }
 }
 
@@ -946,10 +933,11 @@ async fn normalizes_and_matches_all_sixteen_event_cases() {
 }
 
 #[tokio::test]
-async fn mentioned_bot_owner_workspace_is_included_without_channel_access() {
-    // A mentioned bot's webhook lives in its owner's workspace; the owner may
-    // have no channel access (installed the bot, then left the channel), so
-    // the owner workspace must be matched alongside the accessors'.
+async fn mentioned_deliveries_are_scoped_to_channel_access_workspaces_only() {
+    // Access to a channel.mentioned delivery derives from the channel, never
+    // from the mentioned entity: the mentioned bot's owner (or a mentioned
+    // user or document subscriber) gets nothing unless their workspace comes
+    // from the channel's accessors.
     let event_case = channel_event_cases()
         .into_iter()
         .find(|event_case| event_case.normalized_entity_type == "bot")
@@ -957,9 +945,8 @@ async fn mentioned_bot_owner_workspace_is_included_without_channel_access() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
     let repository = MockRepository::new(
         vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_match", TEAM_WORKSPACE_ID)],
+        vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
     );
-    lock(&repository.state).bot_owner_workspace = Some(TEAM_WORKSPACE_ID.to_string());
     let enqueuer = MockEnqueuer::default();
     let service = service(access, repository.clone(), enqueuer.clone());
 
@@ -971,25 +958,14 @@ async fn mentioned_bot_owner_workspace_is_included_without_channel_access() {
 
     let repository_state = lock(&repository.state);
     assert_eq!(
-        repository_state.bot_owner_calls.as_slice(),
-        &[BOT_PRINCIPAL_ID.to_string()]
-    );
-    assert_eq!(
         repository_state.match_calls.as_slice(),
         &[MatchCall {
-            workspace_ids: vec![
-                PERSONAL_WORKSPACE_ID.to_string(),
-                TEAM_WORKSPACE_ID.to_string()
-            ],
+            workspace_ids: vec![PERSONAL_WORKSPACE_ID.to_string()],
             event_name: "channel.mentioned".to_string(),
             entity_id: BOT_PRINCIPAL_ID.to_string(),
-        }]
+        }],
+        "matching must consider exactly the channel accessors' workspaces"
     );
-    drop(repository_state);
-
-    let enqueuer_state = lock(&enqueuer.state);
-    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
-    assert_eq!(enqueuer_state.attempted_messages[0].webhook_id, "wh_match");
 }
 
 #[tokio::test]
