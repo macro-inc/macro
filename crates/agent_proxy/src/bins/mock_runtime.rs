@@ -47,12 +47,12 @@
 //! this process logs the runtime-protocol lifecycle to stderr.
 
 use agent_client_protocol::{AcpAgent, Client, ConnectTo};
+use agent_proxy::domain::models::AgentId;
 use agent_runtime_protocol::domain::connection::RuntimeConnection;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::outbound::websocket::connect_runtime;
 use anyhow::{Context, Result};
 use clap::Parser;
-use macro_uuid::Uuid;
 
 /// The local stack's shared runtime WebSocket endpoint on the agent proxy.
 const LOCAL_STACK_WS_URL: &str = "ws://127.0.0.1:8091";
@@ -87,7 +87,7 @@ struct Args {
     /// The agent (chat entity) UUID this runtime hosts. Must be an existing
     /// chat created with kind `External`.
     #[arg(long)]
-    agent_id: Uuid,
+    agent_id: AgentId,
 
     /// Override the agent command (defaults to running Zed's Claude Code ACP
     /// adapter with npx).

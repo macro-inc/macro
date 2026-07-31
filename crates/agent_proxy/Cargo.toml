@@ -32,7 +32,7 @@ unicode-segmentation = { workspace = true }
 
 # Inbound (HTTP + runtime WebSocket)
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
-axum = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }

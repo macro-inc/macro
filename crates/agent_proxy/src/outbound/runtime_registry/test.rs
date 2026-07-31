@@ -1,8 +1,8 @@
 use super::*;
 use futures::StreamExt;
 
-fn session() -> Uuid {
-    Uuid::from_u128(0x1111_2222_3333_4444)
+fn session() -> AgentId {
+    AgentId::new(macro_uuid::Uuid::from_u128(0x1111_2222_3333_4444))
 }
 
 fn message() -> RawJsonRpcMessage {

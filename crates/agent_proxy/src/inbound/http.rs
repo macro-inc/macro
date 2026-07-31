@@ -1,21 +1,35 @@
-//! HTTP API: agent CRUD and posting ACP messages to a session.
+//! HTTP API: agent CRUD, posting ACP messages to a session, and the runtime
+//! WebSocket endpoint.
+//!
+//! The WebSocket endpoint is an HTTP route like any other - a `GET` that
+//! happens to answer `101 Switching Protocols` - so it is served by this
+//! router rather than a second one merged alongside it. Note that it is the
+//! only route here without a [`MacroAuthorizationExtractor`]: this router has
+//! no blanket auth layer, each handler takes the extractor it needs, and a
+//! runtime dialing in is not an acting user.
 
-use crate::domain::models::{AgentProxyErr, CreateAgentArgs, GetAgentResponse, PatchAgentArgs};
+use crate::domain::models::{
+    AgentId, AgentProxyErr, CreateAgentArgs, GetAgentResponse, PatchAgentArgs,
+};
 use crate::domain::service::AgentProxyService;
 use agent_client_protocol::RawJsonRpcMessage;
-use axum::extract::{FromRef, Path, State};
+use agent_runtime_protocol::domain::connection::ServerChannel;
+use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::outbound::websocket::connect_socket;
+use axum::extract::ws::WebSocketUpgrade;
+use axum::extract::{FromRef, Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chat::domain::models::ChatAgentKind;
 use macro_authorization::{
     ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
-use macro_uuid::Uuid;
 use model::response::{EmptyResponse, StringIDResponse};
 use serde::Deserialize;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 use utoipa::ToSchema;
 
 /// Shared state for the agent proxy router.
@@ -24,6 +38,11 @@ pub struct AgentProxyRouterState<S, Auth> {
     pub service: Arc<S>,
     /// Authorization state used by the [`MacroAuthorizationExtractor`].
     pub authorization_state: MacroAuthorizationState<Auth>,
+    /// Where accepted runtime connections are handed off, to be drained by
+    /// [`crate::inbound::runtime::RuntimeConnectionDriver`]. The same sender
+    /// every other carrier feeds, so nothing downstream can tell which one a
+    /// connection arrived on.
+    pub runtime_connections: UnboundedSender<(AgentId, ServerChannel)>,
 }
 
 impl<S, Auth> Clone for AgentProxyRouterState<S, Auth> {
@@ -31,6 +50,7 @@ impl<S, Auth> Clone for AgentProxyRouterState<S, Auth> {
         Self {
             service: Arc::clone(&self.service),
             authorization_state: self.authorization_state.clone(),
+            runtime_connections: self.runtime_connections.clone(),
         }
     }
 }
@@ -61,7 +81,47 @@ where
             axum::routing::delete(permanently_delete_agent::<S, Auth>),
         )
         .route("/sessions/{session_id}/acp", post(post_acp::<S, Auth>))
+        .route("/runtime", get(upgrade_runtime_connection::<S, Auth>))
         .with_state(state)
+}
+
+/// Query parameters on the shared runtime endpoint: which session this
+/// connection belongs to.
+#[derive(Debug, Deserialize)]
+pub struct RuntimeQuery {
+    /// The agent this runtime hosts.
+    id: AgentId,
+}
+
+/// Accept one agent runtime's WebSocket connection.
+///
+/// One endpoint serves every session, disambiguated by `?id=` rather than a
+/// listener per session. `agent_runtime_protocol` deliberately carries no
+/// session identifier on the wire - a connection hosts exactly one agent
+/// execution, so the wire protocol has no routing table - which makes this
+/// handler the place that identifier actually lives: matched against the
+/// query parameter the runtime dialed with, then handed on the same way for
+/// every session.
+#[utoipa::path(
+    get,
+    path = "/runtime",
+    tag = "agent proxy",
+    operation_id = "connect_agent_runtime",
+    params(("id" = Uuid, Query, description = "ID of the agent session (chat) this runtime hosts")),
+    responses(
+        (status = 101, description = "WebSocket upgrade; carries the agent-runtime protocol"),
+        (status = 400, description = "missing or malformed session id"),
+    )
+)]
+pub async fn upgrade_runtime_connection<S: AgentProxyService, Auth: MacroAuthorizationService>(
+    State(state): State<AgentProxyRouterState<S, Auth>>,
+    Query(query): Query<RuntimeQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    ws.on_upgrade(move |socket| async move {
+        let channel = connect_socket::<ToRuntimeMessage, ToServerMessage>(socket);
+        let _ = state.runtime_connections.send((query.id, channel));
+    })
 }
 
 /// Health check handler.
@@ -152,7 +212,7 @@ pub async fn create_agent<S: AgentProxyService, Auth: MacroAuthorizationService>
 pub async fn get_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, ActingUser>,
-    Path(agent_id): Path<Uuid>,
+    Path(agent_id): Path<AgentId>,
 ) -> Result<Json<GetAgentResponse>, AgentProxyApiError> {
     let response = state
         .service
@@ -180,7 +240,7 @@ pub async fn get_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
 pub async fn patch_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, ActingUser>,
-    Path(agent_id): Path<Uuid>,
+    Path(agent_id): Path<AgentId>,
     Json(req): Json<PatchAgentRequest>,
 ) -> Result<Json<EmptyResponse>, AgentProxyApiError> {
     state
@@ -216,7 +276,7 @@ pub async fn patch_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
 pub async fn delete_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, ActingUser>,
-    Path(agent_id): Path<Uuid>,
+    Path(agent_id): Path<AgentId>,
 ) -> Result<Json<EmptyResponse>, AgentProxyApiError> {
     state
         .service
@@ -243,7 +303,7 @@ pub async fn delete_agent<S: AgentProxyService, Auth: MacroAuthorizationService>
 pub async fn permanently_delete_agent<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, ActingUser>,
-    Path(agent_id): Path<Uuid>,
+    Path(agent_id): Path<AgentId>,
 ) -> Result<Json<EmptyResponse>, AgentProxyApiError> {
     state
         .service
@@ -274,7 +334,7 @@ pub async fn permanently_delete_agent<S: AgentProxyService, Auth: MacroAuthoriza
 pub async fn post_acp<S: AgentProxyService, Auth: MacroAuthorizationService>(
     State(state): State<AgentProxyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, ActingUser>,
-    Path(session_id): Path<Uuid>,
+    Path(session_id): Path<AgentId>,
     Json(message): Json<serde_json::Value>,
 ) -> Result<StatusCode, AgentProxyApiError> {
     let message: RawJsonRpcMessage = serde_json::from_value(message)

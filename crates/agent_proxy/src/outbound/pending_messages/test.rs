@@ -6,8 +6,8 @@ use sqlx::{Pool, Postgres};
 const SESSION: &str = "11111111-1111-1111-1111-111111111111";
 const OTHER_SESSION: &str = "22222222-2222-2222-2222-222222222222";
 
-fn session() -> Uuid {
-    Uuid::parse_str(SESSION).unwrap()
+fn session() -> AgentId {
+    AgentId::parse(SESSION).unwrap()
 }
 
 fn message(id: i64) -> RawJsonRpcMessage {
@@ -29,7 +29,7 @@ async fn enqueue_then_list_returns_oldest_first_per_session(pool: Pool<Postgres>
     queue.enqueue(session(), message(1)).await.unwrap();
     queue.enqueue(session(), message(2)).await.unwrap();
     queue
-        .enqueue(Uuid::parse_str(OTHER_SESSION).unwrap(), message(3))
+        .enqueue(AgentId::parse(OTHER_SESSION).unwrap(), message(3))
         .await
         .unwrap();
 
@@ -66,5 +66,8 @@ async fn delete_removes_only_the_delivered_row(pool: Pool<Postgres>) {
     assert_eq!(remaining[0].id, listed[1].id);
 
     // Deleting an unknown id is not an error.
-    queue.delete(macro_uuid::generate_uuid_v7()).await.unwrap();
+    queue
+        .delete(PendingMessageId::new(macro_uuid::generate_uuid_v7()))
+        .await
+        .unwrap();
 }
