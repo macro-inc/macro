@@ -1,11 +1,13 @@
+import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { ServiceName } from './config';
 
 type LocalPortmap = {
   version: 1;
   webAppUrl: string;
   hosts: Partial<Record<ServiceName, string>>;
+  sdkWebhookHostReceiverPort: number;
 };
 
 const portmapName = 'portmap.json';
@@ -27,20 +29,17 @@ export function resolveLocalPortmap(): LocalPortmap | undefined {
 }
 
 function findPortmap(): string | undefined {
-  let directory = process.cwd();
-  while (true) {
-    const generated = join(directory, 'infra', 'local', 'generated');
-    if (existsSync(generated)) {
-      for (const instance of readdirSync(generated)) {
-        const path = join(generated, instance, portmapName);
-        if (existsSync(path)) return path;
-      }
-    }
+  const root = execSync('git rev-parse --show-toplevel', {
+    encoding: 'utf8',
+  }).trim();
+  const generated = join(root, 'infra', 'local', 'generated');
+  if (!existsSync(generated)) return undefined;
 
-    const parent = dirname(directory);
-    if (parent === directory) return undefined;
-    directory = parent;
+  for (const instance of readdirSync(generated)) {
+    const path = join(generated, instance, portmapName);
+    if (existsSync(path)) return path;
   }
+  return undefined;
 }
 
 function parsePortmap(value: unknown, path: string): LocalPortmap {
@@ -54,12 +53,22 @@ function parsePortmap(value: unknown, path: string): LocalPortmap {
   if (!portmap.hosts || typeof portmap.hosts !== 'object') {
     throw new Error(`invalid Macro local port map hosts in ${path}`);
   }
+  if (typeof portmap.sdkWebhookHostReceiverPort !== 'number') {
+    throw new Error(
+      `invalid Macro local port map sdkWebhookHostReceiverPort in ${path}`,
+    );
+  }
 
   const hosts: Partial<Record<ServiceName, string>> = {};
   for (const [name, url] of Object.entries(portmap.hosts)) {
     if (isServiceName(name) && typeof url === 'string') hosts[name] = url;
   }
-  return { version: 1, webAppUrl: portmap.webAppUrl, hosts };
+  return {
+    version: 1,
+    webAppUrl: portmap.webAppUrl,
+    hosts,
+    sdkWebhookHostReceiverPort: portmap.sdkWebhookHostReceiverPort,
+  };
 }
 
 function isServiceName(value: string): value is ServiceName {

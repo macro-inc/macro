@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import type { Env } from '../src/config';
 import type { EventName } from '../src/events/types';
+import { resolveLocalPortmap } from '../src/local-portmap';
 import { Macro } from '../src/macro';
 
 const localEndpoint = 'http://sdk-webhook-relay:8787/macro-events';
@@ -44,12 +45,12 @@ async function register(): Promise<void> {
   const endpointUrl = required(values.url, '--url');
   const name = required(values.name, '--name');
   const events = parseEvents(values.events ?? fail('--events is required'));
-  const scope = parseScope(values.scope) ?? fail('--scope is required');
+  const scope = values.scope ?? fail('--scope is required');
+  if (scope !== 'user' && scope !== 'team') fail('--scope must be user or team');
   const userId = values['user-id'];
   if (scope === 'user' && !userId) {
     fail('--user-id is required when --scope user');
   }
-  if (events.length === 0) fail('at least one event is required');
 
   const macro = new Macro({ env, ...(userId ? { requestedAs: userId } : {}) });
   const webhook = await macro.webhooks.create({
@@ -64,10 +65,10 @@ async function register(): Promise<void> {
 Webhook registered.
 
 MACRO_WEBHOOK_ID=${webhook.id}
-MACRO_WEBHOOK_SECRET=${shellQuote(secret)}
+MACRO_WEBHOOK_SECRET="${secret}"
 
 Start the event printer and validation receiver:
-MACRO_WEBHOOK_SECRET=${shellQuote(secret)} bun run webhook receive ${webhook.id} --env ${env}${userId ? ` --user-id ${shellQuote(userId)}` : ''}
+MACRO_WEBHOOK_SECRET="${secret}" bun run webhook receive ${webhook.id} --env ${env}${userId ? ` --user-id "${userId}"` : ''}
 `);
 }
 
@@ -76,25 +77,27 @@ async function receive(id: string): Promise<void> {
   const secret =
     process.env.MACRO_WEBHOOK_SECRET ??
     fail('MACRO_WEBHOOK_SECRET is required');
-  const port = parsePort(values.port ?? '8787');
+  const port = Number(
+    values.port ?? resolveLocalPortmap()?.sdkWebhookHostReceiverPort ?? 8787,
+  );
   const userId = values['user-id'];
   const macro = new Macro({
     env,
     webhookSecret: secret,
     ...(userId ? { requestedAs: userId } : {}),
   });
-  const events = macro.events;
-  if (!events) fail('Webhook signing secret is required');
-  const receiver = events.webhook();
+  const receiver = macro.events.webhook();
 
   Bun.serve({
     hostname: '0.0.0.0',
     port,
     fetch: async (request) => {
-      const event = request.headers.get('x-macro-event') ?? 'unknown';
-      console.log(`[${event}] ${await request.clone().text()}`);
+      const bodyPromise = request.clone().text();
       try {
-        return await receiver(request);
+        const response = await receiver(request);
+        const event = request.headers.get('x-macro-event') ?? 'unknown';
+        console.log(`[${event}] ${await bodyPromise}`);
+        return response;
       } catch (error) {
         console.error('Webhook signature verification failed:', error);
         return new Response('invalid signature', { status: 401 });
@@ -147,22 +150,6 @@ function parseEvents(value: string): EventName[] {
     .filter(Boolean) as EventName[];
   if (events.length === 0) fail('--events must contain at least one event');
   return events;
-}
-
-function parsePort(value: string): number {
-  const port = Number(value);
-  if (Number.isInteger(port) && port > 0 && port < 65_536) return port;
-  fail('port must be an integer between 1 and 65535');
-}
-
-function parseScope(value: string | undefined): 'user' | 'team' | undefined {
-  if (value === undefined) return undefined;
-  if (value === 'user' || value === 'team') return value;
-  fail('Webhook scope must be user or team');
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\\"'\\\"'")}'`;
 }
 
 function fail(message: string): never {

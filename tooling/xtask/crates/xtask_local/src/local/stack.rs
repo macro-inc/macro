@@ -615,8 +615,6 @@ fn summary_json(mode: Mode, instance: &Instance, static_frontend: bool) -> serde
             "postgres://user:password@localhost:{}/macrodb",
             instance.port(Port::Postgres)
         ),
-        "sdk_webhook_url": sdk_webhook::relay_url(),
-        "sdk_webhook_ssh_port": sdk_webhook::ssh_port(instance),
         "logs_cmd": format!("docker compose -p {} logs -f", instance.project_name()),
     })
 }

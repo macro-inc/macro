@@ -9,7 +9,6 @@ use anyhow::{Context, Result, bail};
 use super::instance::{Instance, Port};
 
 const RELAY_PORT: u16 = 8787;
-const HOST_RECEIVER_PORT: u16 = 8787;
 const USER: &str = "sdk-webhook";
 
 pub fn relay_url() -> &'static str {
@@ -18,6 +17,10 @@ pub fn relay_url() -> &'static str {
 
 pub fn ssh_port(instance: &Instance) -> u16 {
     instance.port(Port::SdkWebhookSsh)
+}
+
+pub fn host_receiver_port(instance: &Instance) -> u16 {
+    instance.port(Port::SdkWebhookHostReceiver)
 }
 
 pub fn key_dir(instance: &Instance) -> PathBuf {
@@ -81,7 +84,10 @@ pub fn start(instance: &Instance) -> Result<Child> {
         .arg(ssh_port(instance).to_string())
         .args([
             "-R",
-            &format!("0.0.0.0:{RELAY_PORT}:127.0.0.1:{HOST_RECEIVER_PORT}"),
+            &format!(
+                "0.0.0.0:{RELAY_PORT}:127.0.0.1:{}",
+                host_receiver_port(instance)
+            ),
         ])
         .arg(format!("{USER}@127.0.0.1"))
         .stdout(Stdio::null())

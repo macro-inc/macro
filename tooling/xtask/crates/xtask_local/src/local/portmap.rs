@@ -18,6 +18,7 @@ struct PortMap {
     instance: String,
     web_app_url: String,
     hosts: BTreeMap<&'static str, String>,
+    sdk_webhook_host_receiver_port: u16,
 }
 
 /// Write the direct host-port endpoints for a local stack instance.
@@ -41,6 +42,7 @@ pub fn write(instance: &Instance) -> Result<PathBuf> {
         instance: instance.name().to_string(),
         web_app_url: url(Port::Frontend),
         hosts,
+        sdk_webhook_host_receiver_port: super::sdk_webhook::host_receiver_port(instance),
     };
     let path = instance.ensure_artifact_dir()?.join("portmap.json");
     let contents = serde_json::to_string_pretty(&portmap).context("serializing port map")?;
