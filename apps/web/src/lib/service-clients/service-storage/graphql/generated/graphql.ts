@@ -46,6 +46,40 @@ export type EntitySharePolicyInput = {
   publicAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
 };
 
+/** The two operands of a recursive `CalendarEventFilterExpr` binary expression. */
+export type GraphqlCalendarEventBinaryExpr = {
+  /** The left-hand expression. */
+  left: GraphqlCalendarEventExpr;
+  /** The right-hand expression. */
+  right: GraphqlCalendarEventExpr;
+};
+
+/** A recursive `CalendarEventFilterExpr` filter expression. */
+export type GraphqlCalendarEventExpr =
+  {   /** Matches when both expressions match. */
+  and: GraphqlCalendarEventBinaryExpr; literal?: never; not?: never; or?: never; }
+  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  literal: GraphqlCalendarEventLiteral; not?: never; or?: never; }
+  |  { and?: never; literal?: never;   /** Negates an expression. */
+  not: GraphqlCalendarEventExpr; or?: never; }
+  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  or: GraphqlCalendarEventBinaryExpr; };
+
+/** GraphQL input representing a calendar event literal. */
+export type GraphqlCalendarEventLiteral =
+  {   /** Attendee email. */
+  attendee: string; endsAfter?: never; id?: never; organizer?: never; startsBefore?: never; status?: never; }
+  |  { attendee?: never;   /** Master end must be after this RFC3339 instant. */
+  endsAfter: string; id?: never; organizer?: never; startsBefore?: never; status?: never; }
+  |  { attendee?: never; endsAfter?: never;   /** Canonical event id. */
+  id: string | number; organizer?: never; startsBefore?: never; status?: never; }
+  |  { attendee?: never; endsAfter?: never; id?: never;   /** Organizer email. */
+  organizer: string; startsBefore?: never; status?: never; }
+  |  { attendee?: never; endsAfter?: never; id?: never; organizer?: never;   /** Master start must be before this RFC3339 instant. */
+  startsBefore: string; status?: never; }
+  |  { attendee?: never; endsAfter?: never; id?: never; organizer?: never; startsBefore?: never;   /** Event status. */
+  status: string; };
+
 /** The two operands of a recursive `CallFilterExpr` binary expression. */
 export type GraphqlCallBinaryExpr = {
   /** The left-hand expression. */
@@ -425,6 +459,8 @@ export type GraphqlEntityAccessLevel =
 
 /** GraphQL input mirroring `item_filters::ast::EntityFilterAst`. */
 export type GraphqlEntityFilterAst = {
+  /** The calendar event filter to apply. */
+  calendarEventFilter?: GraphqlCalendarEventExpr | null | undefined;
   /** The call filter to apply. */
   callFilter?: GraphqlCallExpr | null | undefined;
   /** The channel filter to apply. */
@@ -474,6 +510,8 @@ export type GraphqlEntityReferenceInput = {
 
 /** Canonical entity types accepted by cross-entity APIs. */
 export type GraphqlEntityType =
+  /** Calendar event entity. */
+  | 'CALENDAR_EVENT'
   /** Call entity. */
   | 'CALL'
   /** Channel entity. */
@@ -646,6 +684,8 @@ export type GraphqlPropertyDataType =
 
 /** An entity type supported by the properties domain. */
 export type GraphqlPropertyEntityType =
+  /** Calendar event entity. */
+  | 'CALENDAR_EVENT'
   /** Call record entity. */
   | 'CALL_RECORD'
   /** Channel entity. */
@@ -745,6 +785,8 @@ export type GraphqlSimpleSortMethod =
 
 /** GraphQL representation of Soup entity types. */
 export type GraphqlSoupEntityType =
+  /** Calendar event entity. */
+  | 'CALENDAR_EVENT'
   /** Call entity. */
   | 'CALL'
   /** Channel entity. */
@@ -907,6 +949,7 @@ type EntityMutationResultFields_GraphqlMutationError_Fragment = { __typename: 'G
 type EntityMutationResultFields_GraphqlMutationSuccess_Fragment = { __typename: 'GraphqlMutationSuccess', effects: Array<
     | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
     | { __typename: 'SoupUpdated', item:
+        | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
         | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
               | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
               | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -980,6 +1023,7 @@ export type EntityMutationPayloadFieldsFragment = { results: Array<
     | { __typename: 'GraphqlMutationSuccess', effects: Array<
         | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
         | { __typename: 'SoupUpdated', item:
+            | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
             | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                   | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                   | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1054,6 +1098,7 @@ export type RenameEntitiesMutation = { renameEntities: { results: Array<
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1128,6 +1173,7 @@ export type MoveEntitiesMutation = { moveEntities: { results: Array<
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1202,6 +1248,7 @@ export type UpdateEntitySharePoliciesMutation = { updateEntitySharePolicies: { r
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1276,6 +1323,7 @@ export type TrashEntitiesMutation = { trashEntities: { results: Array<
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1350,6 +1398,7 @@ export type RestoreEntitiesMutation = { restoreEntities: { results: Array<
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1424,6 +1473,7 @@ export type DeleteEntitiesPermanentlyMutation = { deleteEntitiesPermanently: { r
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1498,6 +1548,7 @@ export type DuplicateEntitiesMutation = { duplicateEntities: { results: Array<
       | { __typename: 'GraphqlMutationSuccess', effects: Array<
           | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
           | { __typename: 'SoupUpdated', item:
+              | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
               | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                     | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                     | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1573,6 +1624,7 @@ export type SetEntityFavoriteMutation = { setEntityFavorite:
     | { __typename: 'GraphqlMutationSuccess', effects: Array<
         | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
         | { __typename: 'SoupUpdated', item:
+            | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
             | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                   | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                   | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1643,6 +1695,7 @@ export type GroupSoupMembershipQueryVariables = Exact<{
 
 
 export type GroupSoupMembershipQuery = { user: { id: string, groupSoup: { bins: Array<{ key: string, totalCount: number, nextCursor: string | null, items: Array<
+          | { __typename: 'GraphqlSoupCalendarEvent', id: string }
           | { __typename: 'GraphqlSoupCall', id: string }
           | { __typename: 'GraphqlSoupChannel', id: string }
           | { __typename: 'GraphqlSoupChannelMessage', id: string }
@@ -1660,6 +1713,7 @@ export type GroupSoupQueryVariables = Exact<{
 
 
 export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ key: string, totalCount: number, nextCursor: string | null, items: Array<
+          | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
           | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
                 | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
                 | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1721,6 +1775,8 @@ export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ ke
                 | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
         > }> } } };
+
+type GraphqlHistoryItemFields_GraphqlSoupCalendarEvent_Fragment = { __typename: 'GraphqlSoupCalendarEvent', id: string, entityType: GraphqlSoupEntityType, frecencyScore: number | null };
 
 type GraphqlHistoryItemFields_GraphqlSoupCall_Fragment = { __typename: 'GraphqlSoupCall', id: string, channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, entityType: GraphqlSoupEntityType, frecencyScore: number | null, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
       | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
@@ -1784,6 +1840,7 @@ type GraphqlHistoryItemFields_GraphqlSoupProject_Fragment = { __typename: 'Graph
      | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
 export type GraphqlHistoryItemFieldsFragment =
+  | GraphqlHistoryItemFields_GraphqlSoupCalendarEvent_Fragment
   | GraphqlHistoryItemFields_GraphqlSoupCall_Fragment
   | GraphqlHistoryItemFields_GraphqlSoupChannel_Fragment
   | GraphqlHistoryItemFields_GraphqlSoupChannelMessage_Fragment
@@ -1813,6 +1870,7 @@ export type SetEntityPropertyMutation = { setEntityProperty: { id: string, prope
 type SoupPatchFields_GraphqlCacheDeletion_Fragment = { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string };
 
 type SoupPatchFields_SoupUpdated_Fragment = { __typename: 'SoupUpdated', item:
+    | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
     | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
           | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
           | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1886,6 +1944,7 @@ export type SoupUpdatesSubscriptionVariables = Exact<{ [key: string]: never; }>;
 export type SoupUpdatesSubscription = { soupUpdates: Array<
     | { __typename: 'GraphqlCacheDeletion', graphqlTypeName: string, entityId: string }
     | { __typename: 'SoupUpdated', item:
+        | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
         | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
               | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
               | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -1955,6 +2014,7 @@ export type SoupQueryVariables = Exact<{
 
 
 export type SoupQuery = { user: { id: string, soup: { nextCursor: string | null, items: Array<
+        | { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
         | { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
               | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
               | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
@@ -2016,6 +2076,8 @@ export type SoupQuery = { user: { id: string, soup: { nextCursor: string | null,
               | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
              | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
       > } } };
+
+type SoupItemFields_GraphqlSoupCalendarEvent_Fragment = { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
 type SoupItemFields_GraphqlSoupCall_Fragment = { __typename: 'GraphqlSoupCall', channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }>, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
       | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
@@ -2087,6 +2149,7 @@ type SoupItemFields_GraphqlSoupProject_Fragment = { __typename: 'GraphqlSoupProj
      | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
 export type SoupItemFieldsFragment =
+  | SoupItemFields_GraphqlSoupCalendarEvent_Fragment
   | SoupItemFields_GraphqlSoupCall_Fragment
   | SoupItemFields_GraphqlSoupChannel_Fragment
   | SoupItemFields_GraphqlSoupChannelMessage_Fragment
@@ -2097,6 +2160,8 @@ export type SoupItemFieldsFragment =
   | SoupItemFields_GraphqlSoupForeignEntity_Fragment
   | SoupItemFields_GraphqlSoupProject_Fragment
 ;
+
+type SoupEntityCoreFields_GraphqlSoupCalendarEvent_Fragment = { id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
 type SoupEntityCoreFields_GraphqlSoupCall_Fragment = { id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
@@ -2117,6 +2182,7 @@ type SoupEntityCoreFields_GraphqlSoupForeignEntity_Fragment = { id: string, enti
 type SoupEntityCoreFields_GraphqlSoupProject_Fragment = { id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
 export type SoupEntityCoreFieldsFragment =
+  | SoupEntityCoreFields_GraphqlSoupCalendarEvent_Fragment
   | SoupEntityCoreFields_GraphqlSoupCall_Fragment
   | SoupEntityCoreFields_GraphqlSoupChannel_Fragment
   | SoupEntityCoreFields_GraphqlSoupChannelMessage_Fragment
