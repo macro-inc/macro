@@ -52,14 +52,6 @@ export async function supervisor(
           'gen_ai.request.model',
           (models.interpret as { modelId: string }).modelId
         );
-        span.setAttr(
-          'gen_ai.usage.input_tokens',
-          result.totalUsage.inputTokens ?? 0
-        );
-        span.setAttr(
-          'gen_ai.usage.output_tokens',
-          result.totalUsage.outputTokens ?? 0
-        );
         span.setAttr('intent.chars', result.text.length);
         return result;
       }
@@ -141,14 +133,6 @@ export async function supervisor(
       onStepFinish: (step) => {
         const now = Date.now();
         stepDurationsMs.push(now - lastStepAt);
-        turnSpan?.setAttr(
-          'gen_ai.usage.input_tokens',
-          step.usage.inputTokens ?? 0
-        );
-        turnSpan?.setAttr(
-          'gen_ai.usage.output_tokens',
-          step.usage.outputTokens ?? 0
-        );
         turnSpan?.setAttr('turn.tool_calls', step.toolCalls.length);
         turnSpan?.setAttr('turn.finish_reason', step.finishReason);
         endTurn();
@@ -178,14 +162,6 @@ export async function supervisor(
     superviseSpan.setAttr(
       'gen_ai.request.model',
       (models.supervisor as { modelId: string }).modelId
-    );
-    superviseSpan.setAttr(
-      'gen_ai.usage.input_tokens',
-      totalUsage.inputTokens ?? 0
-    );
-    superviseSpan.setAttr(
-      'gen_ai.usage.output_tokens',
-      totalUsage.outputTokens ?? 0
     );
     superviseSpan.setAttr('steps.count', steps.length);
     superviseSpan.setAttr('edit.blocked', blocked !== undefined);

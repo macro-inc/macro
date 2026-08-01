@@ -162,14 +162,6 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
           );
           span.setAttr('edit.ops_total', result.ops.length);
           span.setAttr('edit.blocked', result.clarification !== undefined);
-          span.setAttr(
-            'gen_ai.usage.input_tokens',
-            result.usage.reduce((sum, u) => sum + u.inputTokens, 0)
-          );
-          span.setAttr(
-            'gen_ai.usage.output_tokens',
-            result.usage.reduce((sum, u) => sum + u.outputTokens, 0)
-          );
           return result;
         } catch (err) {
           span.setAttr('edit.aborted', signal.aborted);

@@ -317,14 +317,6 @@ export function createDispatchTool(opts: DispatchToolOptions) {
           'gen_ai.request.model',
           (childModel as { modelId: string }).modelId
         );
-        span.setAttr(
-          'gen_ai.usage.input_tokens',
-          result.totalUsage.inputTokens ?? 0
-        );
-        span.setAttr(
-          'gen_ai.usage.output_tokens',
-          result.totalUsage.outputTokens ?? 0
-        );
         span.setAttr('run_code.count', trace.runCodeAt.length);
         span.setAttr('coder.blocked', findBlocked(result) !== null);
         return result;
