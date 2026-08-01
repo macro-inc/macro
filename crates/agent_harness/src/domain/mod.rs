@@ -7,7 +7,6 @@
 //! belong to the adapters on either side.
 
 pub mod handler;
-pub mod models;
 pub mod ports;
 pub mod provision;
 pub mod runtime;

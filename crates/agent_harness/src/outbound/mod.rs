@@ -1,7 +1,6 @@
 //! Outbound adapters: the concrete providers, stores, and carriers the domain
 //! ports are satisfied by.
 
-pub mod agent_session_store;
 pub mod channel_reply;
 pub mod daytona;
 pub mod namespace;

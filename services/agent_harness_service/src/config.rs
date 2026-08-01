@@ -3,6 +3,7 @@
 
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_uuid::Uuid;
 
 macro_env_var::env_vars!(
     /// Comma-separated Kafka bootstrap servers.
@@ -41,6 +42,13 @@ pub struct Config {
     pub daytona_snapshot: String,
     /// Token with read access to the repo cloned into sandboxes.
     pub github_token: GithubToken,
+    /// The bot this deployment answers for.
+    ///
+    /// Configuration rather than a constant: `@claude` and `@codex` are separate
+    /// deployments of this same binary, distinguished only by which bot id they
+    /// watch for. It must be a real `bots` row - `agent_session.bot_id`
+    /// references it.
+    pub harness_bot_id: Uuid,
 }
 
 impl Config {

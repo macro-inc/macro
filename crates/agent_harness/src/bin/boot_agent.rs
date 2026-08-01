@@ -1,4 +1,3 @@
-use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,7 +12,6 @@ use agent_harness::outbound::namespace::{
 };
 use agent_harness::testing::mock_proxy::LoggingAttachments;
 use anyhow::Context;
-use futures::FutureExt;
 
 macro_env_var::env_vars!(
     /// Token with read access to the repo cloned into the sandbox.
@@ -76,21 +74,14 @@ async fn run<Provider: SandboxProvider>(provider: Provider, prompt: String) -> a
     let sandbox = provider.spawn().await.context("spawning the sandbox")?;
     println!("sandbox {} is ready", sandbox.id());
 
-    // Everything past spawn runs against a sandbox we are paying for, so it is
-    // released on every path - including a panic, which would otherwise unwind
-    // straight past the release and leave the sandbox holding the account's
-    // memory quota.
-    let result = AssertUnwindSafe(drive(&sandbox, session_id, attachments.as_ref()))
-        .catch_unwind()
-        .await;
+    // Everything past spawn runs against a sandbox we are paying for, so the
+    // result is held and the release happens either way.
+    let result = drive(&sandbox, session_id, attachments.as_ref()).await;
 
     println!("releasing sandbox {}", sandbox.id());
     sandbox.release().await;
 
-    match result {
-        Ok(result) => result,
-        Err(panic) => std::panic::resume_unwind(panic),
-    }
+    result
 }
 
 /// The part that needs a live sandbox.

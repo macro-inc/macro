@@ -31,7 +31,7 @@ use serde::Deserialize;
 
 use anyhow::Context;
 
-use crate::domain::ports::{AcpFrames, AgentSandbox, SandboxProvider};
+use crate::domain::ports::{AcpFrames, AgentSandbox, ContainerId, SandboxProvider};
 use crate::domain::provision;
 use crate::outbound::daytona::GithubToken;
 use crate::outbound::sidecar_pump;
@@ -516,6 +516,7 @@ impl NamespaceProvider {
             .context("fronting the sidecar with an ingress")?;
 
         Ok(NamespaceSandbox {
+            id: ContainerId::new(instance.id.clone()),
             instance,
             client: self.client.clone(),
             sidecar_url: sidecar_url.trim_end_matches('/').to_owned(),
@@ -525,6 +526,10 @@ impl NamespaceProvider {
 
 impl SandboxProvider for NamespaceProvider {
     type Sandbox = NamespaceSandbox;
+
+    async fn resume(&self, _id: &ContainerId) -> anyhow::Result<Self::Sandbox> {
+        todo!("re-resolve the sidecar ingress; fails once the instance deadline has passed")
+    }
 
     #[tracing::instrument(err, skip(self))]
     async fn spawn(&self) -> anyhow::Result<Self::Sandbox> {
@@ -583,6 +588,8 @@ impl SandboxProvider for NamespaceProvider {
 
 /// One Namespace instance running the ACP sidecar.
 pub struct NamespaceSandbox {
+    /// The instance id, as the stable container identifier.
+    id: ContainerId,
     instance: Instance,
     client: NamespaceClient,
     /// Externally reachable base URL of the sidecar, allocated at spawn.
@@ -590,8 +597,8 @@ pub struct NamespaceSandbox {
 }
 
 impl AgentSandbox for NamespaceSandbox {
-    fn id(&self) -> &str {
-        &self.instance.id
+    fn id(&self) -> &ContainerId {
+        &self.id
     }
 
     /// UNVERIFIED: ingresses terminate TLS and speak HTTP, so this dials `wss`,

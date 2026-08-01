@@ -31,6 +31,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use agent_session::domain::ports::AgentSessionRepo;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use channels::domain::side_effects::ChannelBotTrigger;
 use kafka_util::{GroupName, KafkaEventConsumer};
@@ -40,9 +41,7 @@ use macro_event_broker::{
 use rootcause::prelude::ResultExt as _;
 
 use crate::domain::handler::MentionHandler;
-use crate::domain::ports::{
-    AgentSessionStore, ChannelReplier, RuntimeAttachments, SandboxProvider,
-};
+use crate::domain::ports::{ChannelReplier, RuntimeAttachments, SandboxProvider};
 
 /// Consumer group owning this harness's channel-message offsets.
 pub struct AgentHarnessConsumerGroup;
@@ -94,7 +93,7 @@ pub async fn run<Provider, Attach, Sessions, Replier>(
 where
     Provider: SandboxProvider,
     Attach: RuntimeAttachments,
-    Sessions: AgentSessionStore,
+    Sessions: AgentSessionRepo,
     Replier: ChannelReplier,
 {
     tracing::info!(

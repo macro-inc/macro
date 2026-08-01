@@ -17,7 +17,7 @@ use serde::Deserialize;
 use anyhow::Context;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
-use crate::domain::ports::{AcpFrames, AgentSandbox, SandboxProvider};
+use crate::domain::ports::{AcpFrames, AgentSandbox, ContainerId, SandboxProvider};
 use crate::domain::provision;
 use crate::outbound::sidecar_pump;
 
@@ -402,6 +402,10 @@ impl DaytonaProvider {
 impl SandboxProvider for DaytonaProvider {
     type Sandbox = DaytonaSandbox;
 
+    async fn resume(&self, _id: &ContainerId) -> anyhow::Result<Self::Sandbox> {
+        todo!("re-resolve the sidecar preview url and re-run ensure; fail if the sandbox is gone")
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn spawn(&self) -> anyhow::Result<Self::Sandbox> {
         // The repo url and token ride in the sandbox environment so the ensure
@@ -493,7 +497,7 @@ impl DaytonaProvider {
             .await?;
 
         Ok(DaytonaSandbox {
-            id: id.to_owned(),
+            id: ContainerId::new(id.to_owned()),
             client: self.client.clone(),
             sidecar_url: preview.url,
             preview_token: preview.token,
@@ -503,7 +507,7 @@ impl DaytonaProvider {
 
 /// One Daytona sandbox running the ACP sidecar.
 pub struct DaytonaSandbox {
-    id: String,
+    id: ContainerId,
     client: DaytonaClient,
     /// Externally reachable base URL of the sidecar, resolved at spawn.
     sidecar_url: String,
@@ -512,7 +516,7 @@ pub struct DaytonaSandbox {
 }
 
 impl AgentSandbox for DaytonaSandbox {
-    fn id(&self) -> &str {
+    fn id(&self) -> &ContainerId {
         &self.id
     }
 
@@ -540,8 +544,12 @@ impl AgentSandbox for DaytonaSandbox {
     async fn release(&self) {
         // No pooling on Daytona: releasing destroys. Reported rather than
         // propagated - a leaked sandbox should not mask why the run ended.
-        let _ = self.client.delete(&self.id).await.inspect_err(|error| {
-            tracing::error!(error = ?error, sandbox_id = %self.id, "sandbox delete failed");
-        });
+        let _ = self
+            .client
+            .delete(self.id.as_str())
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, sandbox_id = %self.id, "sandbox delete failed");
+            });
     }
 }

@@ -151,6 +151,7 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "agent_runtime_protocol",
+ "agent_session",
  "anyhow",
  "base64 0.22.1",
  "bot_id",
@@ -178,13 +179,16 @@ name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
  "agent_harness",
+ "agent_session",
  "anyhow",
+ "bots",
  "channels",
  "kafka_util",
  "macro_config",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_uuid",
  "serde",
  "sqlx",
  "tokio",

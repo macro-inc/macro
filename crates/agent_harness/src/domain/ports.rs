@@ -1,13 +1,12 @@
 //! Ports the mention use case depends on.
 //!
-//! Deliberately few, because the harness delegates almost everything about a
-//! *session* to agent_proxy and keeps only what nothing else does:
+//! Deliberately few, because the harness delegates: sessions are persisted by
+//! `agent_session`, and ACP is driven by whatever implements
+//! [`RuntimeAttachments`]. What is left is what nothing else does:
 //!
 //! - [`SandboxProvider`] / [`AgentSandbox`] - provisioning containers, ours alone
 //! - [`RuntimeAttachments`] - handing a container's connection to whatever
 //!   manages sessions, which is the entire seam to agent_proxy
-//! - [`AgentSessionStore`] - the `(bot, thread) -> chat` mapping, which is a
-//!   channel concept agent_proxy has no notion of
 //! - [`ChannelReplier`] - posting the link back
 //!
 //! What is *not* here is anything about ACP: no bootstrap, no frame relay, no
@@ -21,12 +20,9 @@ use std::future::Future;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::ServerChannel;
-use bot_id::BotId;
 use macro_uuid::Uuid;
 
 use channels::domain::side_effects::ChannelBotTrigger;
-
-use crate::domain::models::{AgentSession, AgentSessionStatus, ThreadSession};
 
 /// The ACP frame stream of a sandbox's harness: raw JSON-RPC messages in
 /// both directions. Adapters own transport and framing (the Daytona adapter
@@ -34,10 +30,42 @@ use crate::domain::models::{AgentSession, AgentSessionStatus, ThreadSession};
 /// typed frames.
 pub type AcpFrames = Channel<RawJsonRpcMessage, RawJsonRpcMessage>;
 
+/// A provider's stable identifier for one container.
+///
+/// Stable across reconnects and across harness restarts, which is what makes
+/// resumption possible: persist this with the session and a later process can
+/// call [`SandboxProvider::resume`] instead of paying to boot a fresh container
+/// and losing the agent's working state.
+///
+/// Opaque on purpose - Daytona's sandbox ids and Namespace's instance ids share
+/// no format, and nothing outside a provider should parse one.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ContainerId(String);
+
+impl ContainerId {
+    /// Wrap a provider-issued identifier.
+    #[must_use]
+    pub fn new(id: String) -> Self {
+        Self(id)
+    }
+
+    /// The identifier as the provider issued it.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ContainerId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 /// One provisioned sandbox hosting an ACP harness.
 pub trait AgentSandbox: Send + Sync + 'static {
     /// The provider's identifier for this sandbox.
-    fn id(&self) -> &str;
+    fn id(&self) -> &ContainerId;
 
     /// Open the ACP frame stream to the harness. Callable more than once:
     /// reconnects open a fresh stream to the same sandbox.
@@ -60,61 +88,12 @@ pub trait SandboxProvider: Send + Sync + 'static {
     /// Per-run spawn parameters (repo, branch, image) reappear as an options
     /// struct when there are any.
     fn spawn(&self) -> impl Future<Output = anyhow::Result<Self::Sandbox>> + Send;
-}
 
-/// What a new agent session needs to be created with.
-///
-/// `model`, `harness`, and `repo_url` are all per-session columns, so they are
-/// arguments rather than constants - even though today every value comes from
-/// this deployment's own configuration.
-#[derive(Debug, Clone)]
-pub struct NewAgentSession {
-    /// Thread the triggering mention was posted in, if any.
-    pub created_from_thread_id: Option<Uuid>,
-    /// Bot the session answers for.
-    pub bot_id: BotId,
-    /// Model the agent runs.
-    pub model: String,
-    /// Which harness runs the agent.
-    pub harness: String,
-    /// Repository cloned into the sandbox.
-    pub repo_url: String,
-}
-
-/// Reads and writes `agent_sessions`.
-///
-/// The lookup is the interesting one and is deliberately a single call: for an
-/// incoming message it answers "is there a session, do I own it, and was it
-/// created at this thread or is this a message in the session's own orphaned
-/// thread" in one query, so the use case branches on a value rather than
-/// assembling that answer from several round trips.
-///
-/// Uniqueness of one session per bot per thread is the store's invariant to
-/// enforce, not the caller's: two mentions of the same bot in the same thread
-/// can be processed concurrently off different Kafka partitions, so
-/// [`AgentSessionStore::create`] has to lose that race deterministically rather
-/// than leave two rows behind.
-pub trait AgentSessionStore: Send + Sync + 'static {
-    /// Resolve the session state for `bot_id` given the thread a message
-    /// arrived in.
-    fn find_for_thread(
+    /// Reattach to a container this provider handed out earlier.
+    fn resume(
         &self,
-        bot_id: BotId,
-        thread_id: Option<Uuid>,
-    ) -> impl Future<Output = anyhow::Result<ThreadSession>> + Send;
-
-    /// Create a session and the orphaned thread it lives in.
-    fn create(
-        &self,
-        session: NewAgentSession,
-    ) -> impl Future<Output = anyhow::Result<AgentSession>> + Send;
-
-    /// Move a session to a new lifecycle state.
-    fn set_status(
-        &self,
-        id: Uuid,
-        status: AgentSessionStatus,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+        id: &ContainerId,
+    ) -> impl Future<Output = anyhow::Result<Self::Sandbox>> + Send;
 }
 
 /// Hands a container's runtime connection to whatever manages the session.
@@ -134,23 +113,30 @@ pub trait RuntimeAttachments: Send + Sync + 'static {
     fn attach(&self, session_id: Uuid, channel: ServerChannel) -> anyhow::Result<()>;
 }
 
-/// Posts the harness's replies back into the channel a mention came from.
+/// Posts messages into channel threads as the harness bot.
 ///
-/// Always into [`crate::domain::models::reply_thread_id`], so a top-level
-/// mention gets a new thread hanging off it and a mention already in a thread
-/// gets another message in that thread.
+/// The target thread is an argument rather than something derived from the
+/// trigger, because a run writes to two different threads and the split is
+/// deliberate:
 ///
-/// Posts are sent as the harness bot, not as the person who mentioned it.
+/// - the thread the mention came from gets **exactly one** message, the link to
+///   the agent session, so a busy channel is not filled with progress chatter
+/// - the session's **own** thread gets everything else - progress, output, the
+///   run's history - because that thread exists only to hold this run
+///
+/// Posts are sent as the harness bot, attributed via `triggered_by` to the
+/// person who asked, so it reads as their agent answering rather than a bot
+/// talking unprompted.
 ///
 /// Returns the posted message's id, which is not a convenience: a session's
 /// `thread_id` references `comms_messages`, so the row cannot be written until
-/// some message anchors its thread. The reply is that message.
+/// some message anchors its thread. The link message is that anchor.
 pub trait ChannelReplier: Send + Sync + 'static {
-    /// Post `body` in reply to `trigger`'s message, and return the new
-    /// message's id.
-    fn reply(
+    /// Post `body` into `thread_id`, on behalf of whoever sent `trigger`.
+    fn post(
         &self,
         trigger: &ChannelBotTrigger,
+        thread_id: Uuid,
         body: String,
     ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
 }

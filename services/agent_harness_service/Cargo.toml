@@ -10,6 +10,8 @@ path = "src/main.rs"
 
 [dependencies]
 agent_harness = { path = "../../crates/agent_harness" }
+agent_session = { path = "../../crates/agent_session" }
+bots = { path = "../../crates/bots" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
@@ -17,6 +19,7 @@ macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+macro_uuid = { path = "../../crates/macro_uuid" }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

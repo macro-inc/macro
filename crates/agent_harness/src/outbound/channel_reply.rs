@@ -1,19 +1,27 @@
-//! Channel adapter: post the harness's replies as the bot.
+//! Channel adapter: post the harness's messages as the bot.
 //!
 //! Calls `channels`' own [`ChannelService`] in process. There is no HTTP here
 //! and no bot token: authenticating to our own API to reach a service we already
-//! link would only re-derive, over a socket, an actor we can just pass as an
+//! link would only re-derive, over a socket, an actor we can pass as an
 //! argument.
 //!
-//! The actor is a bot [`Sender`], so the message is attributed to the harness
-//! bot rather than to whoever mentioned it - the same thing
-//! `post_message_handler` does after resolving a bot principal from its receipt.
+//! The actor is a bot [`Sender`], so the message is *authored* by the harness
+//! bot - the same thing `post_message_handler` does after resolving a bot
+//! principal from its receipt. `triggered_by` separately records which user
+//! caused the post, which is what lets a reader tell whose request an agent is
+//! answering.
 //!
 //! Generic over the service so the composition root decides how much of the
 //! side-effect machinery is wired. That matters: `ChannelServiceImpl::new` uses
 //! a no-op event dispatcher, which persists the message but emits no broker
-//! event and pushes nothing to connected clients - so the reply would not appear
-//! until a refresh. `with_dependencies` is what makes it show up live.
+//! event and pushes nothing to connected clients - so it would not appear until
+//! a refresh. `with_dependencies` is what makes it show up live.
+//!
+//! The bot must also be a *participant* of the channel to clear the
+//! member-role check. Nothing here adds it.
+//!
+//! Which thread to post into is the caller's decision - see [`ChannelReplier`]
+//! for why a run writes to two of them.
 
 use anyhow::Context;
 use bot_id::BotId;
@@ -23,7 +31,6 @@ use channels::domain::side_effects::ChannelBotTrigger;
 use macro_uuid::{Uuid, string_to_uuid};
 use std::sync::Arc;
 
-use crate::domain::models::reply_thread_id;
 use crate::domain::ports::ChannelReplier;
 
 /// Posts harness replies through the channels service.
@@ -43,9 +50,14 @@ impl<Channels> ChannelsReplier<Channels> {
 impl<Channels: ChannelService> ChannelReplier for ChannelsReplier<Channels> {
     #[tracing::instrument(err, skip(self, trigger, body), fields(
         channel_id = %trigger.channel_id,
-        thread_id = %reply_thread_id(trigger),
+        %thread_id,
     ))]
-    async fn reply(&self, trigger: &ChannelBotTrigger, body: String) -> anyhow::Result<Uuid> {
+    async fn post(
+        &self,
+        trigger: &ChannelBotTrigger,
+        thread_id: Uuid,
+        body: String,
+    ) -> anyhow::Result<Uuid> {
         let response = self
             .channels
             .post_message(
@@ -54,16 +66,15 @@ impl<Channels: ChannelService> ChannelReplier for ChannelsReplier<Channels> {
                 PostMessageRequest {
                     content: body,
                     mentions: Vec::new(),
-                    // Always a thread: a top-level mention gets a new thread
-                    // hanging off the mention itself.
-                    thread_id: Some(reply_thread_id(trigger)),
+                    thread_id: Some(thread_id),
                     attachments: Vec::new(),
                     nonce: None,
                     notification_policy:
                         channels::domain::models::PostMessageNotificationPolicy::default(),
-                    // Attributes the post to the person who asked, which is what
-                    // makes it read as their agent answering rather than a bot
-                    // talking to itself.
+                    // Provenance, not authorship: the sender is the bot, and
+                    // this records which user caused it to speak. `None` when a
+                    // bot triggered us, since the column is for user-triggered
+                    // agent posts.
                     triggered_by: trigger.message.sender_id.as_user().map(ToString::to_string),
                 },
             )

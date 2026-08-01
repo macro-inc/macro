@@ -24,13 +24,14 @@ use std::sync::Arc;
 
 use agent_harness::domain::handler::MentionHandler;
 use agent_harness::inbound::kafka;
-use agent_harness::outbound::agent_session_store::PgAgentSessionStore;
 use agent_harness::outbound::channel_reply::ChannelsReplier;
 use agent_harness::outbound::daytona::{
     DaytonaApiKey, DaytonaProvider, DaytonaSettings, GithubToken,
 };
 use agent_harness::testing::mock_proxy::LoggingAttachments;
+use agent_session::outbound::postgres::PgAgentSessionRepo;
 use anyhow::Context;
+use bots::domain::models::BotId;
 use channels::domain::service::ChannelServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use sqlx::postgres::PgPoolOptions;
@@ -43,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
 
     let config = Config::from_env()?;
+    let bot = BotId::new_from_uuid(config.harness_bot_id);
 
     let db = PgPoolOptions::new()
         .min_connections(3)
@@ -58,21 +60,13 @@ async fn main() -> anyhow::Result<()> {
         github_token: GithubToken::new(config.github_token.as_ref().to_owned()),
     }));
 
-    // TODO: the real session manager is agent_proxy, wired in once its
-    // five ports are built here. Until then a mention logs its run instead of
-    // persisting it.
     let attachments = Arc::new(LoggingAttachments::new(String::new()));
-    let sessions = Arc::new(PgAgentSessionStore::new(db.clone()));
-    // In process: no HTTP, no bot token. `ChannelServiceImpl::new` uses a no-op
-    // event dispatcher, so replies persist but are not pushed to connected
-    // clients - `with_dependencies` is what makes them appear live.
+    let sessions = Arc::new(PgAgentSessionRepo::new(db.clone()));
     let channels = Arc::new(ChannelServiceImpl::new(PgChannelsRepo::new(db.clone())));
-    let replier = Arc::new(ChannelsReplier::new(
-        channels,
-        agent_harness::domain::mentions::HARNESS_BOT_ID,
-    ));
+    let replier = Arc::new(ChannelsReplier::new(channels, bot));
 
     let handler = Arc::new(MentionHandler::new(
+        bot,
         provider,
         attachments,
         sessions,
