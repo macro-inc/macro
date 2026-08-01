@@ -70,7 +70,7 @@ export function Dialog(props: DialogProps) {
           class={cn(
             'invisible fixed inset-0 z-modal bg-modal-overlay',
             animateOnOpen() && 'dialog-overlay-open-animation',
-            Boolean(props.visibleScrim) && 'visible'
+            (props.visibleScrim ?? true) && 'visible'
           )}
         />
         <div
