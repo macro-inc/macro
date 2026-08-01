@@ -150,8 +150,8 @@ export function CommandMenuInner(props: {
   const defaultCommandItems = props.items
     ? undefined
     : useCommandItems(query, CommandState.categoryFilter, {
-        searchActive: CommandState.isOpen,
-      });
+      searchActive: CommandState.isOpen,
+    });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
   const listController = createCommandListController({
@@ -446,6 +446,7 @@ export function CommandMenuInner(props: {
       // If in command scope, go back to main menu
       if (CommandState.commandScopeCommands().length > 0) {
         CommandState.clearCommandScopeCommands();
+        CommandState.clearQuery(); // Reset query text when backing out
         CommandState.setSelectedIndex(0);
         setActiveScope(hotkeyScope);
         return true;
