@@ -272,7 +272,7 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
 const CHECKBOX_ITEM_BOX_CLASS = cn(
   'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
   'border border-transparent text-surface',
-  'group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted',
+  'group-hover:border-edge-muted group-data-highlighted:border-edge-muted',
   'hover:border-accent',
   'group-data-checked:bg-accent group-data-checked:border-accent'
 );
@@ -323,11 +323,11 @@ function DropdownSub(props: DropdownSubProps) {
 }
 
 function DropdownItem(props: DropdownItemProps) {
-  const [local, rest] = splitProps(props, ['class']);
+  const [local, rest] = splitProps(props, ['class', 'closeOnSelect']);
   return (
     <KobalteDropdownMenu.Item
       class={cn(ROW_CLASS, local.class)}
-      closeOnSelect={props.closeOnSelect}
+      closeOnSelect={local.closeOnSelect}
       {...rest}
     />
   );
