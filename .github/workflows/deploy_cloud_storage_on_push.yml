@@ -30,7 +30,6 @@ on:
     - .github/actions/deploy-cloud-storage-pulumi/**
     - .github/actions/setup-nix/**
     - .github/actions/teardown-nix/**
-    - .github/actions/setup-cachix/**
     - .github/actions/migrate-cloud-storage-db/**
     - .github/scripts/build-cloud-storage-lambdas-nix.sh
     - .github/services-config.json
@@ -49,4 +48,3 @@ jobs:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}

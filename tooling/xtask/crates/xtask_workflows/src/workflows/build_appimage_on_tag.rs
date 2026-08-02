@@ -40,7 +40,6 @@ pub fn build_appimage_job(ref_expr: &str) -> Job {
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix())
         .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())

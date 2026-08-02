@@ -46,7 +46,8 @@ pub fn pulumi_preview_pr() -> Workflow {
                 .add_path(xtask_paths::repo_glob!(
                     ".github/actions/preview-cloud-storage-pulumi/**"
                 ))
-                .add_path(xtask_paths::repo_glob!(".github/actions/setup-cachix/**"))
+                .add_path(xtask_paths::repo_glob!(".github/actions/setup-nix/**"))
+                .add_path(xtask_paths::repo_glob!(".github/actions/teardown-nix/**"))
                 .add_path(xtask_paths::repo_glob!(
                     ".github/scripts/build-cloud-storage-lambdas-nix.sh"
                 ))
@@ -168,7 +169,8 @@ fn changed_files() -> Step<Use> {
                 .github/workflows/pulumi_preview_pr.yml
                 .github/workflows/reusable_preview_service.yml
                 .github/actions/preview-cloud-storage-pulumi/**
-                .github/actions/setup-cachix/**
+                .github/actions/setup-nix/**
+                .github/actions/teardown-nix/**
                 .github/scripts/build-cloud-storage-lambdas-nix.sh
                 .github/services-config.json
             "#}
@@ -212,7 +214,8 @@ fn detect_affected_services() -> Step<Run> {
                       "$file" == ".github/workflows/pulumi_preview_pr.yml" || \
                       "$file" == ".github/workflows/reusable_preview_service.yml" || \
                       "$file" == .github/actions/preview-cloud-storage-pulumi/* || \
-                      "$file" == .github/actions/setup-cachix/* || \
+                      "$file" == .github/actions/setup-nix/* || \
+                      "$file" == .github/actions/teardown-nix/* || \
                       "$file" == ".github/scripts/build-cloud-storage-lambdas-nix.sh" ]]; then
                   service_changed=true
                   break

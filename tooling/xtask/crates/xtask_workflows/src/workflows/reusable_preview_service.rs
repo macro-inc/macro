@@ -6,7 +6,7 @@
 //! The preview job is pulumi-preview + occasional Lambda Nix builds (warm runs
 //! are pure cache substitution), so `linux-small` suffices; it mounts the
 //! profile's default `/nix` volume, with `setup-nix` before use and
-//! `teardown-nix` after. Cold Lambda closures fall back to Cachix.
+//! `teardown-nix` after.
 
 use anyhow::Result;
 use gh_workflow::{Event, Job, Step, Use, Workflow, WorkflowCall};
@@ -73,8 +73,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
-              CACHIX_AUTH_TOKEN:
-                required: true
         "#})?,
     );
     Ok(())
@@ -127,5 +125,4 @@ fn preview_pulumi() -> Step<Use> {
     .add_with(("use-lfs", "${{ inputs.use-lfs }}"))
     .add_with(("github-token", "${{ inputs.github-token }}"))
     .add_with(("cloud-storage-service-name", "${{ inputs.service-name }}"))
-    .add_with(("cachix-auth-token", "${{ secrets.CACHIX_AUTH_TOKEN }}"))
 }
