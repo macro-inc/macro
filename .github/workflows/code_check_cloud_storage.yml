@@ -242,6 +242,9 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   test:
     needs:
     - path-check
@@ -348,6 +351,9 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   status-check:
     needs:
     - path-check

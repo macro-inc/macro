@@ -61,6 +61,9 @@ jobs:
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Run ast-grep
       run: bunx --yes @ast-grep/cli@0.44.1 scan
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   status-check:
     needs:
     - path-check

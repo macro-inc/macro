@@ -23,9 +23,8 @@ pub fn reusable_preview_service() -> Workflow {
 
 /// Fill in the ordered `workflow_call` inputs/secrets block.
 ///
-/// Relative to the hand-written workflow this drops the `SCCACHE_BUCKET`
-/// secret and its pass-through: Lambda artifacts build inside Nix derivations,
-/// where S3 sccache never applied (the sole caller uses `secrets: inherit`, so
+/// Lambda artifacts build inside Nix derivations, so this workflow does not
+/// need a separate sccache secret (the sole caller uses `secrets: inherit`, so
 /// no caller change is needed).
 pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     let on = root

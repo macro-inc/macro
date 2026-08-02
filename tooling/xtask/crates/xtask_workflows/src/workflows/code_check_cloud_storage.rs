@@ -75,6 +75,7 @@ fn check() -> Job {
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
 }
 
 /// cargo nextest against postgres + redis service containers.
@@ -98,6 +99,7 @@ fn test() -> Job {
         .add_step(prepare_tests())
         .add_step(run_tests())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay

@@ -68,6 +68,9 @@ jobs:
           name: web-app-prod-build
           path: apps/web/dist
           retention-days: 7
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
 
   deploy:
     name: Deploy Web App
@@ -122,6 +125,9 @@ jobs:
           DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
           DATADOG_SITE: us5.datadoghq.com
           DATADOG_API_HOST: api.us5.datadoghq.com
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
 
   upload:
     name: Upload Release Artifacts
