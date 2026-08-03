@@ -101,7 +101,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey, NavRow, Tooltip } from '@ui';
+import { Button, cn, Dropdown, Hotkey, Layer, NavRow, Tooltip } from '@ui';
 import {
   type Component,
   type ComponentProps,
@@ -519,54 +519,6 @@ export const GoToHotkeys = () => {
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
 const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
-type SidebarShortcutLinkProps = {
-  label: string;
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
-  onClick: () => void;
-  isSlim: () => boolean;
-  trailing?: JSX.Element;
-};
-
-const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
-  const [isHovering, setIsHovering] = createSignal(false);
-
-  return (
-    <div class="group/shortcut relative w-full">
-      <NavRow
-        draggable={false}
-        class={cn(
-          'h-7 group-hover/shortcut:bg-ink/3 group-hover/shortcut:text-ink',
-          props.trailing && !props.isSlim() && 'pr-8'
-        )}
-        fullWidth
-        tooltipPlacement="right"
-        label={props.isSlim() ? props.label : undefined}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-        onMouseDown={(e) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-          props.onClick();
-        }}
-      >
-        <div class="relative size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-        </div>
-
-        <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
-          <span class="flex-1 min-w-0 whitespace-nowrap">{props.label}</span>
-        </div>
-      </NavRow>
-
-      <Show when={props.trailing && !props.isSlim()}>
-        <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-          {props.trailing}
-        </div>
-      </Show>
-    </div>
-  );
-};
-
 const SidebarSectionMenu = (props: {
   label: string;
   options: { id: SidebarSectionLinkId; label: string; checked: boolean }[];
@@ -610,40 +562,66 @@ const SidebarSectionMenu = (props: {
   </Dropdown>
 );
 
-const SidebarTryItemMenu = (props: {
+type TryCardItem = {
+  id: TryItemId;
   label: string;
-  onDismiss: () => void;
-  onOpenChange?: (open: boolean) => void;
-}) => (
-  <Dropdown
-    placement="right-start"
-    gutter={8}
-    onOpenChange={props.onOpenChange}
-  >
-    <Dropdown.Trigger
-      variant="ghost"
-      class="shrink-0 opacity-0 group-hover/shortcut:pointer-events-auto group-hover/shortcut:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5 pointer-events-none"
-      label={`${props.label} options`}
-      onMouseDown={(e: MouseEvent) => {
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: () => void;
+};
+
+const TryCardRow = (props: { item: TryCardItem }) => {
+  const [isHovering, setIsHovering] = createSignal(false);
+
+  return (
+    <button
+      type="button"
+      aria-label={props.item.label}
+      class="flex h-7 w-full items-center justify-start gap-2 rounded-md px-1.5 py-0 text-sm font-medium text-ink-muted outline-none hover:bg-ink/5 hover:text-ink focus-visible:bg-ink/5 focus-visible:text-ink [&_svg]:size-3.5"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onMouseDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
-        e.stopPropagation();
       }}
-      onClick={(e: MouseEvent) => e.stopPropagation()}
+      onClick={props.item.onClick}
     >
-      <DotsThreeIcon />
-    </Dropdown.Trigger>
-    <Dropdown.Content class="w-40 shadow-menu">
-      <Dropdown.Group>
-        <Dropdown.Item
-          class="min-h-8 gap-2 px-2.5 text-[13px]"
-          onSelect={props.onDismiss}
-        >
-          <span class="flex-1 truncate text-ink">Dismiss</span>
-        </Dropdown.Item>
-      </Dropdown.Group>
-    </Dropdown.Content>
-  </Dropdown>
+      <span class="size-5 shrink-0 flex items-center justify-center">
+        <Dynamic component={props.item.icon} triggerAnimation={isHovering()} />
+      </span>
+      <span class="min-w-0 flex-1 truncate text-left">{props.item.label}</span>
+    </button>
+  );
+};
+
+const TryCard = (props: {
+  items: readonly TryCardItem[];
+  onDismiss: () => void;
+}) => (
+  <Layer depth={1}>
+    <section aria-label="Quick Start" class="relative group/try-card w-full">
+      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
+        <header class="flex items-center gap-2 min-w-0 px-2.5 py-1.5 border-b border-ink-muted/8">
+          <h3 class="flex-1 min-w-0 text-xs font-medium text-ink leading-tight m-0">
+            Quick Start
+          </h3>
+          <Button
+            variant="ghost"
+            class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
+            label="Dismiss Quick Start"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onDismiss();
+            }}
+          >
+            <XIcon />
+          </Button>
+        </header>
+        <div class="p-1 flex flex-col gap-0.5">
+          <For each={props.items}>{(item) => <TryCardRow item={item} />}</For>
+        </div>
+      </div>
+    </section>
+  </Layer>
 );
 
 const SidebarDropdownLink = (
@@ -1325,6 +1303,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     scheduleMiddleScrollUpdate();
   };
 
+  const dismissTrySection = () => {
+    setTryVisibility({
+      connect: false,
+      invite: false,
+      mobile: false,
+    });
+  };
+
   const sectionMenuOptionsFor = (ids: readonly SidebarSectionLinkId[]) =>
     ids
       .map((id) => findLink(id))
@@ -1335,8 +1321,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
         checked: sectionVisibility()[link.id as SidebarSectionLinkId],
       }));
 
-  const tryItems = createMemo<CollapsibleSidebarSectionItem[]>(() => {
-    const items: CollapsibleSidebarSectionItem[] = [];
+  const tryItems = createMemo<TryCardItem[]>(() => {
+    const items: TryCardItem[] = [];
     const addTryItem = (
       id: TryItemId,
       label: string,
@@ -1345,34 +1331,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ) => {
       if (!tryVisibility()[id]) return;
 
-      const trailing = (
-        <SidebarTryItemMenu
-          label={label}
-          onDismiss={() => dismissTryItem(id)}
-          onOpenChange={handleWorkspaceContextMenuOpenChange}
-        />
-      );
-
       items.push({
         id,
-        visible: () => (
-          <SidebarShortcutLink
-            label={label}
-            isSlim={isSlim}
-            onClick={onClick}
-            icon={icon}
-            trailing={trailing}
-          />
-        ),
-        dropdown: () => (
-          <SidebarShortcutLink
-            label={label}
-            isSlim={isSlim}
-            onClick={onClick}
-            icon={icon}
-            trailing={trailing}
-          />
-        ),
+        label,
+        icon,
+        onClick: () => {
+          onClick();
+          dismissTryItem(id);
+        },
       });
     };
 
@@ -1520,15 +1486,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onDropdownOpenChange={handleOverlayDropdownOpenChange}
             />
           </Suspense>
-
-          <Show when={tryItems().length > 0}>
-            <CollapsibleSidebarSection
-              label="Try"
-              persistKey="try"
-              items={tryItems()}
-              onOpenChange={scheduleMiddleScrollUpdate}
-            />
-          </Show>
         </div>
         <div
           class={cn(
@@ -1609,6 +1566,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onClick: () => openSettingsTab('Account'),
             }}
           />
+        </Show>
+        <Show when={isExpandedView() && tryItems().length > 0}>
+          <TryCard items={tryItems()} onDismiss={dismissTrySection} />
         </Show>
         <SidebarSettingsWidget
           isSlim={isSlim}
