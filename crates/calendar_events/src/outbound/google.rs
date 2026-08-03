@@ -405,6 +405,13 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
             || context.sync_token.is_none()
             || token_was_reset;
         if rebuild_snapshot {
+            tracing::info!(
+                plan = ?context.plan,
+                had_sync_token = context.sync_token.is_some(),
+                token_was_reset,
+                feed_changes = changes.len(),
+                "rebuilding full Google Calendar snapshot"
+            );
             let canonical_events = self
                 .events(
                     access_token,
@@ -901,6 +908,11 @@ fn map_upsert(
     let overrides = exceptions
         .into_iter()
         .filter_map(|exception| {
+            // Cancelled exceptions arrive without times; the occurrence
+            // replace already removes them, so there is no override to keep.
+            if exception.status.as_deref() == Some("cancelled") {
+                return None;
+            }
             let provider_event_id = exception.id.clone();
             (|| -> Result<CalendarEventOverride, Report> {
                 let original = exception
