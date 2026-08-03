@@ -73,7 +73,10 @@ impl CalendarBackfillServices {
             google: Arc::new(GoogleCalendarBackfillCoordinator::new(
                 repository.clone(),
                 GoogleCalendarClient::with_gate(
-                    reqwest::Client::new(),
+                    reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(30))
+                        .build()
+                        .expect("calendar client configuration is valid"),
                     RedisCalendarRequestGate::new(redis_client),
                 ),
                 repository.clone(),
