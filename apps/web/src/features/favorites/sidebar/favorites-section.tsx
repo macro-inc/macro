@@ -48,7 +48,6 @@ import {
   createMemo,
   createSignal,
   For,
-  onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -70,8 +69,6 @@ export type FavoriteDragData = {
 };
 
 const HOVER_PREVIEW_COUNT = 3;
-/** Rows the favorites list shows before it scrolls internally. */
-const VISIBLE_FAVORITES_COUNT = 5;
 
 function getPreviewThreadRoots(notifications: UnifiedNotification[]): string[] {
   const roots: string[] = [];
@@ -235,30 +232,6 @@ const FavoritesGroup = (props: {
     name: props.persistKey,
   });
   const reorderMutation = useReorderFavoritesMutation();
-  const [hasOverflowTop, setHasOverflowTop] = createSignal(false);
-  const [hasOverflowBottom, setHasOverflowBottom] = createSignal(false);
-  let favoriteListRef: HTMLUListElement | undefined;
-  let listScrollFrame: number | undefined;
-
-  const listMaxHeight = `calc(${VISIBLE_FAVORITES_COUNT} * 1.75rem + ${
-    VISIBLE_FAVORITES_COUNT - 1
-  } * 0.125rem)`;
-
-  const updateListScrollShadows = () => {
-    const el = favoriteListRef;
-    if (!el) return;
-    const maxScrollTop = el.scrollHeight - el.clientHeight;
-    setHasOverflowTop(el.scrollTop > 1);
-    setHasOverflowBottom(maxScrollTop - el.scrollTop > 1);
-  };
-
-  const scheduleListScrollUpdate = () => {
-    if (listScrollFrame !== undefined) cancelAnimationFrame(listScrollFrame);
-    listScrollFrame = requestAnimationFrame(() => {
-      listScrollFrame = undefined;
-      updateListScrollShadows();
-    });
-  };
 
   // Rows are keyed by what they point at; favorites have no surrogate id.
   const keys = createMemo(() =>
@@ -294,17 +267,6 @@ const FavoritesGroup = (props: {
         entityId: favorite.entityId,
       })),
     });
-    scheduleListScrollUpdate();
-  });
-
-  createEffect(() => {
-    props.favorites.length;
-    expanded();
-    scheduleListScrollUpdate();
-  });
-
-  onCleanup(() => {
-    if (listScrollFrame !== undefined) cancelAnimationFrame(listScrollFrame);
   });
 
   return (
@@ -330,50 +292,29 @@ const FavoritesGroup = (props: {
         class="grid w-full transition-[grid-template-rows] duration-200 ease-out"
         style={{ 'grid-template-rows': expanded() ? '1fr' : '0fr' }}
       >
-        <div class="min-h-0 overflow-hidden">
-          <div class="relative">
-            <ul
-              ref={favoriteListRef}
-              class="min-h-0 flex flex-col gap-0.5 overflow-y-auto overscroll-none"
-              style={{ 'max-height': listMaxHeight }}
-              onScroll={updateListScrollShadows}
-            >
-              <SortableProvider ids={keys()}>
-                <For each={props.favorites}>
-                  {(favorite) => (
-                    <li
-                      class={cn(
-                        'w-full transition-[opacity,transform] duration-200 ease-out',
-                        expanded()
-                          ? 'opacity-100 translate-y-0'
-                          : 'opacity-0 -translate-y-2'
-                      )}
-                    >
-                      <FavoriteRow
-                        favorite={favorite}
-                        disabled={!expanded()}
-                        onContextMenuOpenChange={props.onContextMenuOpenChange}
-                        notifications={notificationsForFavorite(favorite)}
-                      />
-                    </li>
+        <ul class="min-h-0 overflow-hidden flex flex-col gap-0.5">
+          <SortableProvider ids={keys()}>
+            <For each={props.favorites}>
+              {(favorite) => (
+                <li
+                  class={cn(
+                    'w-full transition-[opacity,transform] duration-200 ease-out',
+                    expanded()
+                      ? 'opacity-100 translate-y-0'
+                      : 'opacity-0 -translate-y-2'
                   )}
-                </For>
-              </SortableProvider>
-            </ul>
-            <div
-              class={cn(
-                'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
-                hasOverflowTop() ? 'opacity-100' : 'opacity-0'
+                >
+                  <FavoriteRow
+                    favorite={favorite}
+                    disabled={!expanded()}
+                    onContextMenuOpenChange={props.onContextMenuOpenChange}
+                    notifications={notificationsForFavorite(favorite)}
+                  />
+                </li>
               )}
-            />
-            <div
-              class={cn(
-                'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
-                hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-          </div>
-        </div>
+            </For>
+          </SortableProvider>
+        </ul>
       </div>
     </section>
   );
