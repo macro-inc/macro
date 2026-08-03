@@ -141,36 +141,32 @@ export function InlineFollowupMenu(props: {
             depth={2}
             class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
           >
-            <div class="p-1.5">
-              <For each={props.options}>
-                {(option, index) => (
-                  <button
-                    type="button"
-                    class="w-[calc(100%-0.75rem)] flex items-center gap-2 px-2 py-1.5 mx-1.5 text-left text-sm rounded-lg"
-                    classList={{
-                      'bg-hover': boundedIndex() === index(),
-                    }}
-                    onMouseEnter={() => props.onSelectedIndexChange?.(index())}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      option.onSelect();
-                    }}
-                  >
-                    <span class="min-w-0 flex-1 truncate">{option.label}</span>
-                    <Show when={option.hotkey}>
-                      {(hotkey) => (
-                        <Hotkey shortcut={hotkey()} theme="subtle" />
-                      )}
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
+            <For each={props.options}>
+              {(option, index) => (
+                <button
+                  type="button"
+                  class="w-[calc(100%-0.75rem)] flex items-center gap-2 px-2 py-1.5 mx-1.5 text-left text-sm rounded-lg"
+                  classList={{
+                    'bg-hover': boundedIndex() === index(),
+                  }}
+                  onMouseEnter={() => props.onSelectedIndexChange?.(index())}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    option.onSelect();
+                  }}
+                >
+                  <span class="min-w-0 flex-1 truncate">{option.label}</span>
+                  <Show when={option.hotkey}>
+                    {(hotkey) => <Hotkey shortcut={hotkey()} theme="subtle" />}
+                  </Show>
+                </button>
+              )}
+            </For>
           </Surface>
         </div>
       </ScopedPortal>

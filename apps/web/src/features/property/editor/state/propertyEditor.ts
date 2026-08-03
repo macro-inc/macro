@@ -14,22 +14,29 @@ interface PropertyEditorState {
   targetProperty?: Property | PropertyDefinitionDomain;
 }
 
+type PropertyEditorOpenOptions = {
+  restoreFocus?: () => void | Promise<void>;
+};
+
 const [state, setState] = createStore<PropertyEditorState>({
   mode: 'selector',
   selectedEntities: [],
   targetProperty: undefined,
 });
 
+let restoreFocusAfterClose: PropertyEditorOpenOptions['restoreFocus'];
+
 export function openPropertyEditor(
   entities: EntityData[],
   mode: PropertyEditorMode = 'selector',
-  targetProperty?: Property | PropertyDefinitionDomain
+  targetProperty?: Property | PropertyDefinitionDomain,
+  options?: PropertyEditorOpenOptions
 ) {
   if (!entities || entities.length === 0) {
     console.warn('Cannot open property editor without entities');
     return;
   }
-  setPropertyEditorOpen(true);
+  restoreFocusAfterClose = options?.restoreFocus;
   setState(
     reconcile({
       mode,
@@ -37,9 +44,12 @@ export function openPropertyEditor(
       targetProperty,
     })
   );
+  setPropertyEditorOpen(true);
 }
 
 export function closePropertyEditor() {
+  const restoreFocus = restoreFocusAfterClose;
+  restoreFocusAfterClose = undefined;
   setPropertyEditorOpen(false);
   setState(
     reconcile({
@@ -49,10 +59,13 @@ export function closePropertyEditor() {
       targetPropertyDefinition: undefined,
     })
   );
+  void restoreFocus?.();
 }
 
 export function togglePropertyEditor(force?: boolean) {
-  setPropertyEditorOpen(force ?? !propertyEditorOpen());
+  const next = force ?? !propertyEditorOpen();
+  if (next) setPropertyEditorOpen(true);
+  else closePropertyEditor();
 }
 
 export function setPropertyEditorMode(mode: PropertyEditorMode) {
