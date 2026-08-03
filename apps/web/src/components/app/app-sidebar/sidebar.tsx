@@ -1513,6 +1513,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           </Suspense>
 
+          <Suspense>
+            <ChannelsRecentWidget
+              sidebarState={sidebarDisplayState()}
+              onSectionOpenChange={scheduleMiddleScrollUpdate}
+              onDropdownOpenChange={handleOverlayDropdownOpenChange}
+            />
+          </Suspense>
+
           <Show when={tryItems().length > 0}>
             <CollapsibleSidebarSection
               label="Try"
@@ -1548,13 +1556,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <InCallPanel isSlim={() => false} />
           </div>
         </Show>
-        <Suspense>
-          <ChannelsRecentWidget
-            sidebarState={sidebarDisplayState()}
-            onSectionOpenChange={scheduleMiddleScrollUpdate}
-            onDropdownOpenChange={handleOverlayDropdownOpenChange}
-          />
-        </Suspense>
         <Show keyed when={isExpandedView() ? firstTeamInvite() : undefined}>
           {(invite) => <TeamInviteSidebarPromo invite={invite} />}
         </Show>
