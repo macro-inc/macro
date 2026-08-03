@@ -2,7 +2,9 @@ import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { DatesSetArg, EventDropArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import interactionPlugin, {
+  type EventResizeDoneArg,
+} from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -291,7 +293,10 @@ export function CalendarView() {
       closeEventDetails();
     }
   };
-  const moveEvent = ({ event, revert }: EventDropArg) => {
+  const updateEventDates = ({
+    event,
+    revert,
+  }: EventDropArg | EventResizeDoneArg) => {
     if (!eventsById().has(event.id) || !event.startStr || !event.endStr) {
       revert();
       return;
@@ -338,10 +343,13 @@ export function CalendarView() {
       slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
       eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
       eventStartEditable
-      eventDurationEditable={false}
+      eventDurationEditable
+      eventResizableFromStart
       events={fullCalendarEvents()}
       eventDragStart={closeEventDetails}
-      eventDrop={moveEvent}
+      eventDrop={updateEventDates}
+      eventResizeStart={closeEventDetails}
+      eventResize={updateEventDates}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         setSelectedEventId(event.id);
