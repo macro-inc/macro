@@ -501,6 +501,38 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_one(&mut *tx)
         .await
         .map_err(report)?;
+        // Full snapshots re-upsert every event they observed, and a provider
+        // sync-token reset makes that happen wholesale. When the incoming
+        // Google projection is identical to the stored one, skip the write
+        // path entirely so rebuilds cost reads, not occurrence churn.
+        if let CalendarEventSource::Google(source) = &upsert.source {
+            let existing = sqlx::query!(
+                r#"
+                SELECT event_id, normalized_payload
+                FROM calendar_event_sources
+                WHERE source_kind = 'google'
+                  AND account_id = $1
+                  AND calendar_id = $2
+                  AND provider_event_id = $3
+                "#,
+                source.account_id,
+                source.calendar_id,
+                &source.provider_event_id,
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(report)?;
+            if let Some(row) = existing {
+                let incoming =
+                    serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
+                if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming)
+                {
+                    tx.commit().await.map_err(report)?;
+                    return Ok(row.event_id);
+                }
+            }
+        }
+
         let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
         let proposed_id = upsert.event.id;
 
@@ -2279,6 +2311,24 @@ fn attendee_status(value: &str) -> AttendeeResponseStatus {
         "tentative" => AttendeeResponseStatus::Tentative,
         _ => AttendeeResponseStatus::NeedsAction,
     }
+}
+
+/// Strip the volatile identifiers a fresh normalization mints (the proposed
+/// entity id and its occurrence back-references) so two projections of the
+/// same provider state compare equal.
+fn canonical_projection(value: &serde_json::Value) -> serde_json::Value {
+    let mut value = value.clone();
+    if let Some(event) = value.get_mut("event").and_then(|event| event.get_mut("id")) {
+        *event = serde_json::Value::Null;
+    }
+    if let Some(occurrences) = value.get_mut("occurrences").and_then(|v| v.as_array_mut()) {
+        for occurrence in occurrences {
+            if let Some(id) = occurrence.get_mut("eventId") {
+                *id = serde_json::Value::Null;
+            }
+        }
+    }
+    value
 }
 
 fn report(error: impl std::error::Error + Send + Sync + 'static) -> Report {

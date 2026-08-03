@@ -1328,6 +1328,83 @@ async fn sync_status_reflects_visible_account_ingestion_state(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
+    let owner_id = "macro|calendar-idempotent@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    repo.apply_google_grant(link_id, complete_grant())
+        .await
+        .unwrap();
+    let account_id = repo.upsert_google_account(link_id).await.unwrap();
+    let calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "primary".to_string(),
+                name: "Primary".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: true,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap();
+
+    let build = |title: &str| {
+        let mut upsert = timed_upsert(owner_id, link_id, "idempotent@example.com", title, 1);
+        upsert.source = CalendarEventSource::Google(GoogleEventSource {
+            email_link_id: link_id,
+            account_id,
+            calendar_id,
+            provider_event_id: "stable-event".to_string(),
+            provider_recurring_event_id: None,
+            provider_etag: Some("\"etag\"".to_string()),
+            raw_payload: serde_json::json!({}),
+        });
+        upsert
+    };
+
+    let first_id = repo
+        .upsert_event_fixture(build("Same title"))
+        .await
+        .unwrap();
+    let generated_before = sqlx::query_scalar!(
+        r#"SELECT max(generated_at) AS "max!" FROM calendar_event_occurrences WHERE event_id = $1"#,
+        first_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // A rebuild re-mints the proposed entity id, so a fresh mapping of the
+    // same provider state must be recognized as unchanged and skipped.
+    let second_id = repo
+        .upsert_event_fixture(build("Same title"))
+        .await
+        .unwrap();
+    assert_eq!(second_id, first_id);
+    let generated_after = sqlx::query_scalar!(
+        r#"SELECT max(generated_at) AS "max!" FROM calendar_event_occurrences WHERE event_id = $1"#,
+        first_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(generated_after, generated_before);
+
+    // A real change still writes through.
+    repo.upsert_event_fixture(build("New title")).await.unwrap();
+    let title = sqlx::query_scalar!("SELECT title FROM calendar_events WHERE id = $1", first_id,)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(title, "New title");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delegated_inbox_source_grants_calendar_visibility(pool: PgPool) {
     let child_id = "macro|child@example.com";
     let primary_id = "macro|primary@example.com";
