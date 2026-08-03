@@ -1,0 +1,22 @@
+[package]
+name = "agent_session"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+macro_uuid = { path = "../macro_uuid" }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+bots = { path = "../bots"}
+macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent-client-protocol = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
