@@ -546,8 +546,23 @@ pub struct StoredGoogleCalendar {
     pub sync_token: Option<String>,
     /// Exact recurrence window materialized by the last full snapshot.
     pub materialized_range: Option<OccurrenceRange>,
+    /// When this calendar's sync state last committed, if ever.
+    pub synced_at: Option<DateTime<Utc>>,
     /// Expiry of the active push notification channel, when one exists.
     pub watch_expires_at: Option<DateTime<Utc>>,
+}
+
+/// How often Google's own read-only system calendars (holidays, birthdays)
+/// are synced. Their content changes on the order of once a year, and Google
+/// chronically resets their sync tokens, turning every poll into a full
+/// snapshot; a daily cadence keeps them fresh without that churn.
+pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
+
+/// Whether a provider calendar is one of Google's shared system calendars
+/// (`en.usa#holiday@group.v.calendar.google.com` and friends) rather than a
+/// calendar a person maintains.
+pub fn is_system_calendar(provider_calendar_id: &str) -> bool {
+    provider_calendar_id.ends_with("@group.v.calendar.google.com")
 }
 
 /// Deployment configuration enabling Google push notification channels.

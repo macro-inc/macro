@@ -29,8 +29,7 @@
                 "USER",
                 "COMPANY",
                 "TASK",
-                "CALL_RECORD",
-                "CALENDAR_EVENT"
+                "CALL_RECORD"
               ]
             }
           }
@@ -74,8 +73,7 @@
                 "USER",
                 "COMPANY",
                 "TASK",
-                "CALL_RECORD",
-                "CALENDAR_EVENT"
+                "CALL_RECORD"
               ]
             }
           }

@@ -258,6 +258,7 @@ struct StoredCalendarRow {
     materialized_ends_at: Option<DateTime<Utc>>,
     materialized_start_date: Option<NaiveDate>,
     materialized_end_date: Option<NaiveDate>,
+    synced_at: Option<DateTime<Utc>>,
     watch_expires_at: Option<DateTime<Utc>>,
 }
 
@@ -932,6 +933,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             UPDATE calendars
             SET sync_token = $3,
+                synced_at = now(),
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
                     ELSE materialized_starts_at
@@ -1280,6 +1282,7 @@ async fn upsert_calendar_tx(
             materialized_ends_at,
             materialized_start_date,
             materialized_end_date,
+            synced_at,
             watch_expires_at
         "#,
         Uuid::now_v7(),
@@ -1324,6 +1327,7 @@ fn stored_google_calendar(row: StoredCalendarRow) -> Result<StoredGoogleCalendar
         id: row.id,
         sync_token: row.sync_token,
         materialized_range,
+        synced_at: row.synced_at,
         watch_expires_at: row.watch_expires_at,
     })
 }

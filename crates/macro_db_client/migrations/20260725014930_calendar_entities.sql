@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS calendars (
     is_selected boolean NOT NULL DEFAULT true,
     is_deleted boolean NOT NULL DEFAULT false,
     sync_token text,
+    synced_at timestamptz,
     watch_channel_id text,
     watch_resource_id text,
     watch_expires_at timestamptz,

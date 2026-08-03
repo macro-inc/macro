@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone, Default)]
 struct FakeRepo {
     upserts: Arc<Mutex<Vec<CalendarEventUpsert>>>,
+    stored_synced_at: Option<chrono::DateTime<Utc>>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -68,6 +69,7 @@ impl CalendarRepository for FakeRepo {
             id: Uuid::nil(),
             sync_token: None,
             materialized_range: None,
+            synced_at: self.stored_synced_at,
             watch_expires_at: None,
         })
     }
@@ -397,6 +399,78 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
             "macro|calendar@example.com",
             "secret",
             OccurrenceRange::historical_sync(Utc::now()),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(count, 0);
+    assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
+}
+
+#[derive(Clone)]
+struct SystemCalendarProvider;
+
+impl GoogleCalendarProvider for SystemCalendarProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        Ok(vec![ProviderCalendar {
+            provider_calendar_id: "en.usa#holiday@group.v.calendar.google.com".to_string(),
+            name: "Holidays in United States".to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some("reader".to_string()),
+            is_primary: false,
+            is_selected: true,
+        }])
+    }
+
+    async fn sync_events(
+        &self,
+        _access_token: &str,
+        _context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        unreachable!("freshly synced system calendars must not sync")
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
+}
+
+#[tokio::test]
+async fn freshly_synced_system_calendars_are_skipped() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repo = FakeRepo {
+        stored_synced_at: Some(Utc::now()),
+        ..FakeRepo::default()
+    };
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repo,
+        SystemCalendarProvider,
+        lifecycle.clone(),
+        None,
+    );
+
+    let count = coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::maintenance_horizon(Utc::now()),
         )
         .await
         .unwrap();

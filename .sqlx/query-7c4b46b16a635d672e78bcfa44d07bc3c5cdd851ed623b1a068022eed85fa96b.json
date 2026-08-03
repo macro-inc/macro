@@ -20,8 +20,7 @@
                 "USER",
                 "COMPANY",
                 "TASK",
-                "CALL_RECORD",
-                "CALENDAR_EVENT"
+                "CALL_RECORD"
               ]
             }
           }

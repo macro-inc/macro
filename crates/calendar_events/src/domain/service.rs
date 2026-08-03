@@ -605,6 +605,13 @@ where
                 .await?;
             let calendar_id = stored_calendar.id;
             calendar_ids.push(calendar_id);
+            if super::models::is_system_calendar(&provider_calendar_id)
+                && stored_calendar.synced_at.is_some_and(|synced_at| {
+                    synced_at > Utc::now() - super::models::SYSTEM_CALENDAR_SYNC_INTERVAL
+                })
+            {
+                continue;
+            }
             let plan = stored_calendar.sync_plan(&range);
             let batch = self
                 .provider
