@@ -140,10 +140,6 @@ fn log_channel_event(topic: &str, key: Option<&str>, event: &ChannelMacroEvent) 
         ChannelTopicEvent::Updated(_) => "channel.updated",
         ChannelTopicEvent::Deleted(_) => "channel.deleted",
         ChannelTopicEvent::MessagePosted(_) => "channel.message_posted",
-        // A ping, not a message. Deliberately ignored: `channel.message_posted`
-        // already carries the full mention list, so acting on this too would
-        // start a run twice - once per mentioned entity.
-        ChannelTopicEvent::Mentioned(_) => "channel.mentioned",
         ChannelTopicEvent::MessagePatched(_) => "channel.message_patched",
         ChannelTopicEvent::MessageDeleted(_) => "channel.message_deleted",
         ChannelTopicEvent::MessageAttachmentCreated(_) => "channel.message_attachment_created",
