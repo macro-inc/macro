@@ -134,7 +134,7 @@ Agents can edit documents that are open or closed. One interesting use case for 
 
 <br />
 
-# CRM
+# CRM that keeps itself up to date
 
 The problem with standalone CRM is the same as with task trackers: it's not up to date. The CRM only partially reflects reality, so if you want to know what the latest status on a deal is you still have to message the AE/SDR and ask for context. CRMs are also too rigid and closed-source, while DIY CRMs in Airtable/Notion don't provide email aggregation by Company/Contact/Deal that is the core feature of CRM. We went through all the CRMs, including the new AI-native ones, and while they're well-designed they're just structurally set up to fail over time.
 
@@ -152,7 +152,7 @@ We haven't innovated on the core idea of CRM other than what you read in the abo
 
 <br />
 
-# Agents
+# Agents and unified team-level memory
 
 Since Macro has the team context in a single database, it is uniquely positioned to offer team-level memory with full context of all of the operations of the business. We do this every day via a cron job. Your memory is updated from team conversations, your DMs, your sent and received emails, tasks created and completed, etc. All of this is synthesized together in one pass, rather than severally, and combined with your previous memory to form the new memory output. The net result:
 
@@ -167,6 +167,15 @@ Team memory comes in quite handy. For example, I took a screenshot of some featu
 Memory isn't supposed to encompass everything. Macro also has a tool/MCP surface with near 100% coverage of the things you can do in Macro's UI, so that your agents aren't limited in what they can do like they are in most SaaS. There are also no rate limits on MCP.
 
 [Agents docs &rarr;](https://docs.macro.com/product/agents)
+
+
+Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP client at your workspace:
+
+```bash
+claude mcp add --transport http macro https://mcp-server.macro.com/mcp
+```
+
+See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
 
 <br />
 
@@ -189,18 +198,6 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 # Using the hosted app
 
 [Sign up](https://macro.com/app) and connect your Gmail or Google Workspace account. Macro runs in any modern browser, with an [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) for your phone. The [getting started guide](https://docs.macro.com/getting-started) takes you from a fresh account to a working setup in about 15 minutes. Coming from Notion, Slack, Superhuman, or Linear? See [Switch to Macro](https://docs.macro.com/switch-to-macro).
-
-<br />
-
-# Agents & MCP
-
-Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP client at your workspace:
-
-```bash
-claude mcp add --transport http macro https://mcp-server.macro.com/mcp
-```
-
-See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
 
 <br />
 
