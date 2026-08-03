@@ -292,12 +292,13 @@ pub async fn upsert_message(
         },
     )
     .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to extract calendar invitation"),
-        })
-    })?;
+    .inspect_err(|error| {
+        // Calendar extraction is best-effort: a Gmail or database failure
+        // here must not block the message's core side effects, and the
+        // durable email-ICS backfill re-extracts anything missed.
+        tracing::warn!(error = ?error, "failed to extract calendar invitation");
+    })
+    .ok();
 
     handle_attachment_upload(
         ctx,
