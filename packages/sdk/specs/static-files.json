@@ -1,0 +1,442 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "static_file_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/file": {
+      "put": {
+        "tags": ["file::put_presigned_url"],
+        "operationId": "put_presigned_url",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PutFileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/file/bulk-delete": {
+      "post": {
+        "tags": ["file::bulk_delete_file"],
+        "summary": "Bulk delete files.",
+        "operationId": "handle_bulk_delete_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk delete results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/file/metadata/{file_id}": {
+      "get": {
+        "tags": ["file::metadata"],
+        "operationId": "handle_get_metadata",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "File ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileMetadata"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/file/{file_id}": {
+      "delete": {
+        "tags": ["file::delete_file"],
+        "operationId": "handle_delete_file",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "File ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/file/{file_id}": {
+      "get": {
+        "tags": ["s3::file"],
+        "operationId": "get_file_documentation",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "Unique identifier of the file to retrieve",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File contents retrieved successfully",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BulkDeleteRequest": {
+        "type": "object",
+        "required": ["file_ids"],
+        "properties": {
+          "file_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of file IDs to delete"
+          }
+        }
+      },
+      "BulkDeleteResponse": {
+        "type": "object",
+        "required": ["total", "succeeded", "failed", "results"],
+        "properties": {
+          "failed": {
+            "type": "integer",
+            "description": "Number of failed deletions",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeleteResult"
+            },
+            "description": "Individual results for each file"
+          },
+          "succeeded": {
+            "type": "integer",
+            "description": "Number of successful deletions",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of files attempted",
+            "minimum": 0
+          }
+        }
+      },
+      "DeleteResult": {
+        "type": "object",
+        "required": ["file_id", "success"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "Error message if deletion failed"
+          },
+          "file_id": {
+            "type": "string",
+            "description": "File ID that was attempted to delete"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the deletion was successful"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "FileMetadata": {
+        "type": "object",
+        "description": "File metadata for static files",
+        "required": [
+          "file_id",
+          "content_type",
+          "is_uploaded",
+          "file_name",
+          "owner_id",
+          "s3_key"
+        ],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "mimetype"
+          },
+          "extension_data": {
+            "description": "extra metadata, uploaded with the file"
+          },
+          "file_id": {
+            "type": "string",
+            "description": "id of static file"
+          },
+          "file_name": {
+            "type": "string",
+            "description": "file name"
+          },
+          "is_uploaded": {
+            "type": "boolean",
+            "description": "is data uploaded to s3"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "owner"
+          },
+          "s3_key": {
+            "type": "string",
+            "description": "s3 key"
+          }
+        }
+      },
+      "PutFileRequest": {
+        "type": "object",
+        "required": ["file_name"],
+        "properties": {
+          "content_type": {
+            "type": ["string", "null"],
+            "description": "optional mime type if type cannot be infered from file_name"
+          },
+          "extension_data": {
+            "description": "extra metadata to store with file\ndon't put anything private in here it is public"
+          },
+          "file_name": {
+            "type": "string",
+            "description": "file name"
+          }
+        }
+      },
+      "PutFileResponse": {
+        "type": "object",
+        "required": ["upload_url", "file_location", "id"],
+        "properties": {
+          "file_location": {
+            "type": "string",
+            "description": "permalink"
+          },
+          "id": {
+            "type": "string",
+            "description": "key to retrieve metadata"
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "expiring url to upload file blob to"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "macro static file service",
+      "description": "Static File Service"
+    }
+  ]
+}

@@ -133,7 +133,8 @@ if (stack !== 'local') {
       envVars: {
         DYNAMODB_TABLE: pulumi.interpolate`${dynamoTableName}`,
         ENVIRONMENT: stack,
-        RUST_LOG: 'upload_extractor_lambda_trigger=trace',
+        RUST_LOG:
+          'upload_extractor_lambda_trigger=trace,macro_http_request=info',
       },
       uploadExtractorQueueArn: bulkUploadQueue.queue.arn,
       uploadBucketName: pulumi.interpolate`${bulkUploadBucket.bucket.bucket}`,
@@ -153,7 +154,8 @@ if (stack !== 'local') {
           ServiceUrl.CONNECTION_GATEWAY_URL
         ),
         ENVIRONMENT: stack,
-        RUST_LOG: 'upload_extractor_lambda_handler=trace',
+        RUST_LOG:
+          'upload_extractor_lambda_handler=trace,macro_http_request=info',
       },
       uploadExtractorQueueArn: bulkUploadQueue.queue.arn,
       uploadBucketArn: pulumi.interpolate`${bulkUploadBucket.bucket.arn}`,

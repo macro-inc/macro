@@ -85,7 +85,8 @@ pub async fn process_candidate(
         return Ok(());
     }
 
-    ctx.crm_service
+    let outcome = ctx
+        .crm_service
         .depopulate_contact(&team_id, &link.id, contact_email)
         .await
         .map_err(|e| {
@@ -94,6 +95,20 @@ pub async fn process_candidate(
                 source: anyhow::Error::from(e).context("Failed to depopulate CRM contact"),
             })
         })?;
+
+    // The only record of work actually done: every other branch here is a
+    // skip, so without this a run's real teardown count is unobservable.
+    if outcome.removed_anything() {
+        tracing::info!(
+            team_id = %team_id,
+            source_deleted = outcome.source_deleted,
+            contact_deleted = outcome.contact_deleted,
+            company_deleted = outcome.company_deleted,
+            "Depopulated CRM contact"
+        );
+    } else {
+        tracing::debug!("Nothing to tear down for contact; skipping depopulation");
+    }
 
     Ok(())
 }

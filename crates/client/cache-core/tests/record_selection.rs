@@ -117,9 +117,11 @@ fn projects_cold_links_skips_incomplete_and_paginates_exclusively() {
 }
 
 #[test]
-fn reads_object_and_union_fragments_in_entity_key_order() {
+fn reads_schema_incomplete_objects_through_fragments_in_entity_key_order() {
     block_on(async {
         let mut storage = InMemoryStorage::new();
+        // These records intentionally omit other current, non-null schema
+        // fields. A fragment selecting only persisted fields remains complete.
         storage
             .put_batch(vec![
                 document("b", "Beta"),

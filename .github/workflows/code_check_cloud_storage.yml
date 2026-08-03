@@ -57,7 +57,9 @@ jobs:
             - 'static_assets/**'
             - 'flake.nix'
             - 'flake.lock'
-            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-nix/**'
+            - '.github/actions/setup-nix-dev-shell/**'
+            - '.github/actions/teardown-nix/**'
             - '.github/actions/setup-sccache/**'
             - '.github/services-config.json'
             - '.github/scripts/build-cloud-storage-lambdas.sh'
@@ -107,7 +109,7 @@ jobs:
         # live Postgres (SQLX_OFFLINE is unset there), so `.sqlx` contents cannot change
         # test outcomes, and a query change always comes with a source change in the
         # owning crate, which the package filter below already maps.
-        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
+        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-nix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
           echo "Workspace-level change detected; running all tests"
           echo "nextest_filter=" >> "$GITHUB_OUTPUT"
           exit 0
@@ -156,10 +158,7 @@ jobs:
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -244,6 +243,9 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   test:
     needs:
     - path-check
@@ -283,10 +285,7 @@ jobs:
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -353,6 +352,9 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   status-check:
     needs:
     - path-check

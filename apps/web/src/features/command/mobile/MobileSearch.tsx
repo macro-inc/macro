@@ -184,7 +184,7 @@ function MobileSearchInner() {
   return (
     <>
       {/* Full-frame results surface. Sits below the float host (see
-          zMobileSearch) so the input (dock region) and tabs (accessory
+          --z-index-mobile-search) so the input (dock region) and tabs (accessory
           region) float over it; bottom padding clears that floating chrome. */}
       <Layer depth={0}>
         <div class="fixed inset-0 z-mobile-search flex flex-col bg-surface pt-(--safe-top) pr-(--safe-right) pb-[calc(var(--virtual-keyboard-height)+var(--mobile-content-inset-bottom))] pl-(--safe-left)">

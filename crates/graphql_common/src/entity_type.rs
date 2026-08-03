@@ -1,4 +1,4 @@
-use async_graphql::{Enum, ID, Object};
+use async_graphql::{Enum, ID, Object, SimpleObject};
 use model_entity::{Entity, EntityType};
 
 /// GraphQL representation of Soup entity types.
@@ -22,6 +22,8 @@ pub enum GraphqlSoupEntityType {
     CrmCompany,
     /// Foreign entity.
     ForeignEntity,
+    /// Calendar event entity.
+    CalendarEvent,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -41,6 +43,8 @@ pub enum GraphqlEntityType {
     ChannelMessage,
     /// Call entity.
     Call,
+    /// Calendar event entity.
+    CalendarEvent,
     /// CRM company entity.
     CrmCompany,
     /// Foreign entity.
@@ -58,7 +62,15 @@ pub enum GraphqlEntityType {
 impl GraphqlSoupEntityType {
     /// Construct a GraphQL Soup entity type from the canonical model type.
     pub fn new(entity_type: EntityType) -> Self {
-        match entity_type {
+        Self::try_new(entity_type).unwrap_or_else(|| {
+            tracing::error!("{entity_type:?}");
+            Self::Document
+        })
+    }
+
+    /// Try to construct a GraphQL Soup entity type from the canonical model type.
+    pub fn try_new(entity_type: EntityType) -> Option<Self> {
+        Some(match entity_type {
             EntityType::Document => Self::Document,
             EntityType::Chat => Self::Chat,
             EntityType::Project => Self::Project,
@@ -68,8 +80,9 @@ impl GraphqlSoupEntityType {
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
-            unsupported => panic!("{unsupported} is not a Soup entity type"),
-        }
+            EntityType::CalendarEvent => Self::CalendarEvent,
+            _ => return None,
+        })
     }
 
     /// Convert this GraphQL Soup entity type into the canonical model type.
@@ -84,6 +97,7 @@ impl GraphqlSoupEntityType {
             Self::Call => EntityType::Call,
             Self::CrmCompany => EntityType::CrmCompany,
             Self::ForeignEntity => EntityType::ForeignEntity,
+            Self::CalendarEvent => EntityType::CalendarEvent,
         }
     }
 }
@@ -99,6 +113,7 @@ impl GraphqlEntityType {
             EntityType::Channel => Self::Channel,
             EntityType::ChannelMessage => Self::ChannelMessage,
             EntityType::Call => Self::Call,
+            EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::User => Self::User,
@@ -116,6 +131,7 @@ impl GraphqlEntityType {
     /// Convert this GraphQL entity type into the canonical model type.
     pub fn into_model(self) -> EntityType {
         match self {
+            Self::CalendarEvent => EntityType::CalendarEvent,
             Self::Document => EntityType::Document,
             Self::Chat => EntityType::Chat,
             Self::Project => EntityType::Project,
@@ -147,5 +163,24 @@ impl<'a> GraphqlEntity<'a> {
     /// The entity's canonical type.
     async fn entity_type(&self) -> GraphqlEntityType {
         GraphqlEntityType::new(self.0.entity_type)
+    }
+}
+
+/// Marker instructing a normalized GraphQL cache to delete one entity record.
+#[derive(SimpleObject)]
+pub struct GraphqlCacheDeletion {
+    /// Concrete GraphQL object type used in the normalized cache key.
+    pub graphql_type_name: String,
+    /// Identifier used in the normalized cache key.
+    pub entity_id: ID,
+}
+
+impl GraphqlCacheDeletion {
+    /// Constructs a cache deletion marker from its concrete GraphQL type and identifier.
+    pub fn new(graphql_type_name: impl Into<String>, entity_id: impl Into<ID>) -> Self {
+        Self {
+            graphql_type_name: graphql_type_name.into(),
+            entity_id: entity_id.into(),
+        }
     }
 }

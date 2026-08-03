@@ -7,24 +7,11 @@ description: >-
   systemd is active (full VMs), otherwise starts nix-daemon directly as a
   background process (e.g. Namespace runners, where systemd is not active).
 
-inputs:
-  extra-substituters:
-    description: Space-separated extra binary cache substituters to trust.
-    required: false
-    default: ''
-  extra-trusted-public-keys:
-    description: Space-separated public keys for the extra substituters.
-    required: false
-    default: ''
-
 runs:
   using: composite
   steps:
     - name: Install or re-initialise Nix
       shell: bash
-      env:
-        EXTRA_SUBSTITUTERS: ${{ inputs.extra-substituters }}
-        EXTRA_TRUSTED_PUBLIC_KEYS: ${{ inputs.extra-trusted-public-keys }}
       run: |
         set -euo pipefail
 
@@ -108,21 +95,5 @@ runs:
         export PATH="/nix/var/nix/profiles/default/bin:$PATH"
         export NIX_REMOTE=daemon
         echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
-
-        # Append fallback substituters (e.g. Cachix) so a cold cache volume
-        # pulls prebuilt artifacts instead of compiling from source.
-        if [[ -n "${EXTRA_SUBSTITUTERS}" ]]; then
-          {
-            echo "extra-substituters = ${EXTRA_SUBSTITUTERS}"
-            echo "extra-trusted-public-keys = ${EXTRA_TRUSTED_PUBLIC_KEYS}"
-          } | sudo tee -a /etc/nix/nix.conf >/dev/null
-          if $have_systemd; then
-            sudo systemctl restart nix-daemon.service 2>/dev/null || true
-          else
-            sudo pkill -x nix-daemon 2>/dev/null || true
-            sleep 1
-            start_daemon
-          fi
-        fi
 
         "$nix_bin" --version || nix --version

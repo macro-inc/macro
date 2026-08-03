@@ -3,8 +3,9 @@
 use crate::domain::{
     broker_events::{
         ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelEventAttachment, ChannelMacroEvent,
-        ChannelMessageAttachmentCreatedMetadata, ChannelMessageAttachmentRemovedMetadata,
-        ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
+        ChannelMentionedMetadata, ChannelMessageAttachmentCreatedMetadata,
+        ChannelMessageAttachmentRemovedMetadata, ChannelMessageDeletedMetadata,
+        ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
@@ -16,8 +17,7 @@ use crate::domain::{
     },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
-        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSearchIndexer,
-        ChannelSideEffectContext,
+        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSideEffectContext,
     },
 };
 use bot_id::BotIdStr;
@@ -64,6 +64,33 @@ fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
             _ => None,
         })
         .filter(|id| seen.insert(*id))
+        .collect()
+}
+
+/// Collect mentioned bots that are active participants in the channel.
+///
+/// Mention payloads are client-controlled, so a syntactically valid bot id is
+/// not sufficient to dispatch a trigger or publish a bot-mention event.
+fn active_bot_mention_ids(
+    mentions: &[SimpleMention],
+    participants: &[ChannelParticipant],
+) -> Vec<BotId> {
+    let mut active_bot_ids: HashSet<_> = participants
+        .iter()
+        .filter(|participant| participant.left_at.is_none())
+        .filter_map(|participant| {
+            BotIdStr::parse_from_str(&participant.user_id)
+                .ok()
+                .map(|id| id.bot_id())
+        })
+        .collect();
+    // Macro AI is a code-defined system bot available in every channel; it
+    // has no participant row.
+    active_bot_ids.insert(bot_id::MACRO_AI_BOT_ID);
+
+    bot_mention_ids(mentions)
+        .into_iter()
+        .filter(|bot_id| active_bot_ids.contains(bot_id))
         .collect()
 }
 
@@ -295,11 +322,10 @@ pub enum ChannelNotificationEffect {
 
 /// Domain service that derives and dispatches side effects for channel events.
 #[derive(Clone)]
-pub struct ChannelSideEffectService<C, R, N, S, K, B = NoopMacroEventBroker> {
+pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
     context: C,
     realtime: R,
     notifications: N,
-    search: S,
     contacts: K,
     bot_triggers: Option<ChannelBotTriggerSender>,
     macro_event_broker: B,
@@ -327,17 +353,16 @@ struct InviteNotificationRequest {
     metadata: ChannelMetadata,
 }
 
-impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
+impl<C, R, N, K> ChannelSideEffectService<C, R, N, K> {
     /// Create a channel side-effect service that drops broker events.
     ///
     /// Use [`Self::with_macro_event_broker`] to publish channel events to the
     /// macro event broker.
-    pub fn new(context: C, realtime: R, notifications: N, search: S, contacts: K) -> Self {
+    pub fn new(context: C, realtime: R, notifications: N, contacts: K) -> Self {
         Self {
             context,
             realtime,
             notifications,
-            search,
             contacts,
             bot_triggers: None,
             macro_event_broker: NoopMacroEventBroker,
@@ -345,7 +370,7 @@ impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
     }
 }
 
-impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
+impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
     /// Configure a sender for bot triggers derived from channel messages.
     pub fn with_bot_trigger_sender(mut self, bot_triggers: ChannelBotTriggerSender) -> Self {
         self.bot_triggers = Some(bot_triggers);
@@ -356,12 +381,11 @@ impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
     pub fn with_macro_event_broker<B2: MacroEventBroker>(
         self,
         macro_event_broker: B2,
-    ) -> ChannelSideEffectService<C, R, N, S, K, B2> {
+    ) -> ChannelSideEffectService<C, R, N, K, B2> {
         ChannelSideEffectService {
             context: self.context,
             realtime: self.realtime,
             notifications: self.notifications,
-            search: self.search,
             contacts: self.contacts,
             bot_triggers: self.bot_triggers,
             macro_event_broker,
@@ -374,13 +398,14 @@ impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
         channel_id: Uuid,
         message: &MutatedMessage,
         mentions: &[SimpleMention],
+        participants: &[ChannelParticipant],
     ) {
         // Only user-authored messages can trigger bots; this prevents bots
         // (including Macro AI) from triggering each other in a loop.
         if message.sender_id.as_user().is_none() {
             return;
         }
-        let bot_ids = bot_mention_ids(mentions);
+        let bot_ids = active_bot_mention_ids(mentions, participants);
         if bot_ids.is_empty() {
             return;
         }
@@ -428,12 +453,11 @@ where
     }
 }
 
-impl<C, R, N, S, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, S, K, B>
+impl<C, R, N, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
-    S: ChannelSearchIndexer + Clone,
     K: ChannelContactsDispatcher + Clone,
     B: MacroEventBroker + Clone,
 {
@@ -448,9 +472,7 @@ where
             ChannelEvent::ParticipantsRemoved { .. } => {}
             ChannelEvent::EntityMentionCreated { .. } => {}
             ChannelEvent::EntityMentionDeleted { .. } => {}
-            ChannelEvent::ChannelDeleted { channel_id, .. } => {
-                self.search.remove_message(channel_id, None).await;
-            }
+            ChannelEvent::ChannelDeleted { .. } => {}
             ChannelEvent::MessagePosted {
                 channel_id,
                 metadata,
@@ -491,7 +513,6 @@ where
                     nonce,
                 })
                 .await;
-                self.search.index_message(channel_id, message_id).await;
             }
             ChannelEvent::MessageChanged {
                 channel_id,
@@ -501,7 +522,6 @@ where
                 posted_notification,
                 ..
             } => {
-                let message_id = message.id;
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
@@ -510,7 +530,6 @@ where
                     nonce,
                 })
                 .await;
-                self.search.index_message(channel_id, message_id).await;
 
                 if let Some(notification) = posted_notification {
                     self.send_message_posted_notifications(PostedMessageNotificationInputs {
@@ -527,13 +546,11 @@ where
                 }
             }
             ChannelEvent::MessageDeleted {
-                channel_id,
                 message,
                 recipients,
                 nonce,
                 ..
             } => {
-                let message_id = message.id;
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
@@ -542,9 +559,6 @@ where
                     nonce,
                 })
                 .await;
-                self.search
-                    .remove_message(channel_id, Some(message_id))
-                    .await;
             }
             ChannelEvent::ReactionChanged {
                 channel_id,
@@ -632,12 +646,11 @@ where
     }
 }
 
-impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B>
+impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
-    S: ChannelSearchIndexer + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
     async fn handle_message_posted(&self, event: MessagePostedSideEffects) {
@@ -673,8 +686,7 @@ where
             .await;
         }
 
-        self.search.index_message(channel_id, message.id).await;
-        self.dispatch_bot_triggers(channel_id, &message, &mentions);
+        self.dispatch_bot_triggers(channel_id, &message, &mentions, &participants);
         if notification_policy != PostMessageNotificationPolicy::Silent {
             self.send_message_posted_notifications(PostedMessageNotificationInputs {
                 channel_id,
@@ -1252,6 +1264,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         ChannelEvent::MessagePosted {
             channel_id,
             metadata,
+            participants,
             message,
             mentions,
             attachments,
@@ -1286,6 +1299,39 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                             .collect(),
                     },
                 ));
+            }
+            // One mentioned event per distinct mentioned entity. Bot mentions
+            // are invocations, so they only emit for bots that are active
+            // channel participants (mention payloads are client-controlled).
+            // Mentions of other entity kinds — including an author mentioning
+            // themselves — pass through; delivery is already scoped to
+            // channel access and consumers filter on the payload.
+            let active_bots = active_bot_mention_ids(mentions, participants);
+            let emits = |mention: &SimpleMention| match mention_bot_id(&mention.entity_id) {
+                Some(bot_id) => active_bots.contains(&bot_id),
+                // A bot-tagged mention that isn't a canonical bot principal
+                // is malformed; other kinds pass through.
+                None => mention.entity_type != BOT_MENTION_ENTITY_TYPE,
+            };
+            let mut seen_mentions = HashSet::new();
+            for mention in mentions {
+                if !emits(mention) {
+                    continue;
+                }
+                if !seen_mentions.insert((mention.entity_type.as_str(), mention.entity_id.as_str()))
+                {
+                    continue;
+                }
+                events.push(ChannelMacroEvent::mentioned(ChannelMentionedMetadata {
+                    channel_id: *channel_id,
+                    message_id: message.id,
+                    thread_id: message.thread_id,
+                    sender: message.sender_id.clone(),
+                    channel_type: metadata.channel_type,
+                    content: message.content.clone(),
+                    mentioned: mention.clone(),
+                    created_at: message.created_at,
+                }));
             }
             events
         }

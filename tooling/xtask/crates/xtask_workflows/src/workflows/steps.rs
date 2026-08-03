@@ -65,6 +65,12 @@ pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
         })
 }
 
+/// `oven-sh/setup-bun` — installs Bun on the runner. Version-tagged (not
+/// SHA-pinned) to match the JS deploy/publish workflows.
+pub fn setup_bun() -> Step<Use> {
+    Step::new("Setup Bun").uses("oven-sh", "setup-bun", "v2")
+}
+
 /// Install the Rust toolchain only (no sccache, no cache) — for the lightweight
 /// `path-check` and workflow-drift jobs.
 pub fn setup_rust_light() -> Step<Use> {
@@ -99,31 +105,27 @@ pub fn setup_dev_shell() -> Step<Use> {
     )
 }
 
-/// Configure Cachix and enter the repo's Nix dev shell. This is retained for
-/// workflow families that have not yet migrated to Namespace's Nix cache.
-pub fn setup_cachix_dev_shell() -> Step<Use> {
-    uses_local(
-        "Setup Nix dev shell",
-        xtask_paths::repo_dir!(".github/actions/setup-cachix"),
-    )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
-    .add_with(("dev-shell", "true"))
-}
-
 /// Mount the Namespace profile's persisted cache volume: `cache: rust` persists
 /// the cargo registry/git, and `path:` persists the Nix store. Compiled objects
 /// deliberately use Namespace's official remote sccache instead of this volume.
 /// `continue-on-error` because the volume is a pure optimization — a failure
 /// just means cold Cargo/Nix state, never a wrong build.
 pub fn mount_cache_volume() -> Step<Use> {
-    Step::new("Mount Namespace cache volume")
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "rust"))
+        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+}
+
+/// The pinned `nscloud-cache-action`, shared by every mount helper below.
+/// `continue-on-error` because a cache volume is always a pure optimization — a
+/// failure just means cold state, never a wrong build.
+fn nscloud_cache_action(name: &str) -> Step<Use> {
+    Step::new(name)
         .uses(
             "namespacelabs",
             "nscloud-cache-action",
             "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
         )
-        .add_with(("cache", "rust"))
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
         .continue_on_error(true)
 }
 
@@ -136,12 +138,7 @@ pub fn mount_cache_volume() -> Step<Use> {
 /// The volume is a block-device mount, so multi-GB trees cost nothing to save
 /// or restore when it hits.
 pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
-    Step::new("Mount Namespace cache volume")
-        .uses(
-            "namespacelabs",
-            "nscloud-cache-action",
-            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
-        )
+    nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "nix"))
         .add_with((
             "path",
@@ -150,7 +147,24 @@ pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
                 vars::PREVIEW_SNAPSHOT_VOLUME_DIR,
             ),
         ))
-        .continue_on_error(true)
+}
+
+/// [`mount_cache_volume`] for the wasm worker build. `target/` is listed
+/// explicitly for the same reason [`mount_cache_volume_with_cargo_target`] does
+/// it — `cache: rust` alone is only relied on for the registry/git here. The
+/// last two paths are what wrangler's `[build]` line otherwise redoes every
+/// run: the pinned `worker-build` binary and wasm-pack's downloaded `wasm-opt`.
+pub fn mount_wasm_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "rust"))
+        .add_with((
+            "path",
+            format!(
+                "${{{{ github.workspace }}}}/target\n{}\n{}",
+                xtask_paths::runtime_path!("/home/runner/.cargo/bin").as_str(),
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+            ),
+        ))
 }
 
 /// Configure Namespace's official artifact-backed remote sccache. Call this
@@ -209,12 +223,7 @@ fi"#
 /// OpenAPI-binary build; compiled objects live in Namespace's remote sccache.
 /// `continue-on-error` for the same reason as [`mount_cache_volume`].
 pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
-    Step::new("Mount Namespace cache volume")
-        .uses(
-            "namespacelabs",
-            "nscloud-cache-action",
-            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
-        )
+    nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "nix"))
         .map(|step| {
             if with_rust {
@@ -229,7 +238,6 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
                 step.add_with(("path", vars::BUN_CACHE_VOLUME_DIR))
             }
         })
-        .continue_on_error(true)
 }
 
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
@@ -277,32 +285,13 @@ pub fn checkout_v4() -> Step<Use> {
         .add_with(("persist-credentials", false))
 }
 
-/// Wrap a shell fragment in the standard Cachix watch-store lifecycle.
-///
-/// The watcher is optional and always cleaned up, so Nix builds still succeed
-/// when Cachix is unavailable while every deploy-family caller shares the same
-/// process and trap semantics.
-pub fn with_cachix_watch(inner: &str) -> String {
-    indoc::formatdoc! {r#"
-        set -euo pipefail
-        cachix_pid=
-        if command -v cachix >/dev/null 2>&1 && [ -n "${{CACHIX_CACHE_NAME:-}}" ]; then
-          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-          cachix_pid=$!
-          trap 'if [ -n "${{cachix_pid:-}}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-        fi
-        {inner}
-    "#}
-}
-
-/// `nix build` wrapped in `cachix watch-store`, so realised store paths are
-/// pushed to Cachix as they build — the consistency backstop when the /nix
-/// volume is cold or evicted.
-pub fn nix_build_watched(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
-    let script = with_cachix_watch(&format!(
-        "nix build --print-build-logs {targets}\necho \"{done_msg}\""
-    ));
-    Step::new(name).run(script).shell("bash")
+/// Build Nix targets using Namespace's mounted `/nix` cache volume.
+pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
+    Step::new(name)
+        .run(format!(
+            "set -euo pipefail\nnix build --print-build-logs {targets}\necho \"{done_msg}\""
+        ))
+        .shell("bash")
 }
 
 /// Upload a build's handoff tarball to Namespace artifact storage: strongly
@@ -323,14 +312,7 @@ pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
 /// version-pinned by infra/ and identical across services; a cold volume just
 /// re-downloads (~45s). Requires the job to pin `PULUMI_HOME: /pulumi`.
 pub fn cache_pulumi_plugins() -> Step<Use> {
-    Step::new("Cache Pulumi plugins")
-        .uses(
-            "namespacelabs",
-            "nscloud-cache-action",
-            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
-        )
-        .add_with(("path", "/pulumi/plugins"))
-        .continue_on_error(true)
+    nscloud_cache_action("Cache Pulumi plugins").add_with(("path", "/pulumi/plugins"))
 }
 
 /// Make PULUMI_HOME (/pulumi) and its mounted plugins subdir writable so
@@ -368,23 +350,7 @@ pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
 /// Mount only the `/nix` store cache volume (no cargo/sccache). Used by the
 /// desktop builds that delegate entirely to Nix.
 pub fn mount_nix_cache_volume() -> Step<Use> {
-    Step::new("Mount /nix cache volume")
-        .uses(
-            "namespacelabs",
-            "nscloud-cache-action",
-            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
-        )
-        .add_with(("cache", "nix"))
-        .continue_on_error(true)
-}
-
-/// Configure Cachix (without entering a dev shell).
-pub fn setup_cachix() -> Step<Use> {
-    uses_local(
-        "Configure Cachix fallback",
-        xtask_paths::repo_dir!(".github/actions/setup-cachix"),
-    )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
+    nscloud_cache_action("Mount /nix cache volume").add_with(("cache", "nix"))
 }
 
 /// Derive a safe tag name from the git ref for use in artifact names.

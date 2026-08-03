@@ -33,6 +33,12 @@ INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "http://search-processing-service:8080"
 DSS_URL = "http://document_storage_service:8080"
 DSS_INTERNAL_AUTH_KEY = "local"
+# Tags exported spans with deployment.environment=local, matching the
+# Datadog agent's DD_ENV so the env:local trace/log views include them.
+ENVIRONMENT = "local"
+# jaeger/datadog-agent alias on the compose `services` network.
+# Unset in deployed envs = trace and log export disabled.
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://otel-collector:4318"
 
 [[kv_namespaces]]
 binding = "DOCUMENT_VERSIONING_KV"

@@ -100,6 +100,7 @@ use utoipa::OpenApi;
             mcp_api::update_server,
             mcp_api::delete_server,
             mcp_api::start_auth,
+            mcp_api::client_metadata,
             mcp_api::auth_callback
         ),
         components(

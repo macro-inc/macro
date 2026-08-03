@@ -299,3 +299,102 @@ async fn test_grouped_single_group_filter(pool: Pool<Postgres>) -> anyhow::Resul
 
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn tagged_calendar_event_participates_in_grouped_property_soup(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|user-1@test.com";
+    const EVENT_ID: uuid::Uuid = uuid::uuid!("ca1e0000-0000-0000-0000-000000000001");
+    const LINK_ID: uuid::Uuid = uuid::uuid!("ca1e0000-0000-0000-0000-000000000002");
+    const STATUS_PROPERTY_ID: uuid::Uuid = uuid::uuid!("00000001-0000-0000-0000-000000000002");
+    const IN_PROGRESS_OPTION_ID: &str = "00000001-0000-0000-0002-000000000002";
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider
+        )
+        VALUES ($1, $2, $2, 'calendar-grouping@example.com', 'GMAIL')
+        "#,
+        LINK_ID,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title,
+            starts_at, ends_at, canonical_source_kind, canonical_source_updated_at
+        )
+        VALUES (
+            $1, $2, $3, 'grouped@example.com', 'Grouped calendar event',
+            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'email_ics',
+            '2026-07-24T12:00:00Z'
+        )
+        "#,
+        EVENT_ID,
+        OWNER_ID,
+        LINK_ID,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties
+            (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            'ca1e0000-0000-0000-0000-000000000003',
+            ($1::uuid)::text,
+            'CALENDAR_EVENT',
+            $2,
+            '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000002"]}'::jsonb
+        )
+        "#,
+        EVENT_ID,
+        STATUS_PROPERTY_ID,
+    )
+    .execute(&pool)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::Property {
+                    property_definition_id: STATUS_PROPERTY_ID,
+                    entity_type: None,
+                },
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .filter(|item| item.item.id() == EVENT_ID)
+    .collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].key, IN_PROGRESS_OPTION_ID);
+    assert!(matches!(
+        items[0].item,
+        models_soup::item::SoupItem::CalendarEvent(_)
+    ));
+
+    Ok(())
+}

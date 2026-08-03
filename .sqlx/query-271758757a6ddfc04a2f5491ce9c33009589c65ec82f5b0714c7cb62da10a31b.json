@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_backfill_jobs\n        SET status = 'pending',\n            cursor = '{}',\n            scanned_count = 0,\n            extracted_count = 0,\n            last_error = NULL,\n            started_at = NULL,\n            completed_at = NULL,\n            lease_expires_at = NULL,\n            updated_at = now()\n        WHERE email_link_id = $1\n          AND grant_version = $2\n          AND status = 'failed'\n        RETURNING id, account_id, kind\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "271758757a6ddfc04a2f5491ce9c33009589c65ec82f5b0714c7cb62da10a31b"
+}

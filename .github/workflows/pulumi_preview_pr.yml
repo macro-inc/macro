@@ -28,7 +28,8 @@ on:
     - .github/workflows/pulumi_preview_pr.yml
     - .github/workflows/reusable_preview_service.yml
     - .github/actions/preview-cloud-storage-pulumi/**
-    - .github/actions/setup-cachix/**
+    - .github/actions/setup-nix/**
+    - .github/actions/teardown-nix/**
     - .github/scripts/build-cloud-storage-lambdas-nix.sh
     - .github/services-config.json
 permissions:
@@ -72,7 +73,8 @@ jobs:
           .github/workflows/pulumi_preview_pr.yml
           .github/workflows/reusable_preview_service.yml
           .github/actions/preview-cloud-storage-pulumi/**
-          .github/actions/setup-cachix/**
+          .github/actions/setup-nix/**
+          .github/actions/teardown-nix/**
           .github/scripts/build-cloud-storage-lambdas-nix.sh
           .github/services-config.json
         write_output_files: 'true'
@@ -111,7 +113,8 @@ jobs:
                   "$file" == ".github/workflows/pulumi_preview_pr.yml" || \
                   "$file" == ".github/workflows/reusable_preview_service.yml" || \
                   "$file" == .github/actions/preview-cloud-storage-pulumi/* || \
-                  "$file" == .github/actions/setup-cachix/* || \
+                  "$file" == .github/actions/setup-nix/* || \
+                  "$file" == .github/actions/teardown-nix/* || \
                   "$file" == ".github/scripts/build-cloud-storage-lambdas-nix.sh" ]]; then
               service_changed=true
               break

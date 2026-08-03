@@ -20,6 +20,11 @@ export function UnifiedReplyInput(props: {
    * otherwise the thread root.
    */
   getTargetMessage: () => MessageData | undefined;
+  /**
+   * Whether the target thread already has replies. When it does, the flag
+   * reads "Replying to thread"; otherwise it names the message's sender.
+   */
+  threadHasReplies: () => boolean;
   onNavigateToTarget: () => void;
   onExit: () => void;
 }) {
@@ -31,7 +36,7 @@ export function UnifiedReplyInput(props: {
       <InputFlag
         label={
           <Show
-            when={props.getTargetMessage()}
+            when={!props.threadHasReplies() && props.getTargetMessage()}
             keyed
             fallback="Replying to thread"
           >

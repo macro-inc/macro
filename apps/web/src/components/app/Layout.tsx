@@ -1,12 +1,10 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
-import {
-  IncomingCallWidgetEvents,
-  SidebarActiveCallWidget,
-  useIncomingCallWidgetVisible,
-} from '@app/features/block-call/sidebar/active-call-widget';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
+import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -26,6 +24,7 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
+import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
 import { mountGlobalFocusListener } from '@app/signal/focus';
@@ -45,7 +44,6 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -194,12 +192,18 @@ function DraggableCallWidget(props: {
     });
   });
 
+  // Set while a drag is in flight so hiding/unmounting can tear it down; a
+  // cancelled pointer (touch interrupted, pointer takeover) never fires
+  // pointerup, which would otherwise leave the move listener stuck on window.
+  let stopActiveDrag: (() => void) | undefined;
+
   const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0) return;
 
     const el = root();
     if (!el) return;
 
+    stopActiveDrag?.();
     e.preventDefault();
     const rect = el.getBoundingClientRect();
     const pointerStartX = e.clientX;
@@ -218,21 +222,30 @@ function DraggableCallWidget(props: {
       );
     };
 
-    const handleUp = () => {
+    const stopDrag = () => {
       setDragging(false);
       window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+      if (stopActiveDrag === stopDrag) stopActiveDrag = undefined;
     };
+    stopActiveDrag = stopDrag;
 
     window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
   };
+
+  createEffect(() => {
+    if (!props.visible) stopActiveDrag?.();
+  });
+  onCleanup(() => stopActiveDrag?.());
 
   return (
     <Show when={props.visible}>
       <div
         ref={setRoot}
-        class="fixed z-page-overlay w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
+        class="fixed z-float w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
         style={{
           left: position() ? `${position()!.left}px` : '50%',
           top: position() ? `${position()!.top}px` : undefined,
@@ -292,9 +305,10 @@ function NewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
   const navigate = useNavigate();
   const location = useLocation();
+  const onboardingV4 = useOnboardingV4Flag();
 
   createEffect(() => {
-    if (!ENABLE_ONBOARDING_V4 || isMobile() || isNativeMobilePlatform()) {
+    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
       return;
     }
     const data = userInfoQuery.data;
@@ -303,12 +317,14 @@ function NewOnboardingRedirect() {
     }
     if (AUTH_URLS.includes(location.pathname)) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // the flow carries it as ?next and its finish() returns there instead of
-    // home. Base-relative so navigate() can resolve it against the router.
+    // /setup carries it as ?next and its finish() returns there instead of
+    // the post-setup landing. Base-relative so navigate() can resolve it
+    // against the router.
     const target =
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
+    const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
     navigate(
-      target === '/'
+      isGenericEntry
         ? '/onboarding'
         : `/onboarding?next=${encodeURIComponent(target)}`,
       { replace: true }
@@ -421,9 +437,6 @@ function LayoutInner(props: RouteSectionProps) {
               <FavoritesCommands />
               <CommandMenu />
             </Suspense>
-          </Show>
-          <Show when={isSidebarVisible()}>
-            <IncomingCallWidgetEvents />
           </Show>
           <Suspense>
             <PropertyEditorModal />

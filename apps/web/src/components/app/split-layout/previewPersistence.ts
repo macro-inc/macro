@@ -50,6 +50,36 @@ export function serializePreviewPairs(
   return value || undefined;
 }
 
+/**
+ * Remap a preview query value for a layout whose split at `removedSplitIndex`
+ * (URL pair order) is being removed. A Preview Pair whose Controller or Viewer
+ * was the removed split is dropped; Controller indices past it shift down by
+ * one so the remaining pairs keep pointing at the same splits. Returns the
+ * serialized value, or `undefined` when no pairs survive.
+ */
+export function remapPreviewQueryForRemovedSplit(
+  previewQuery: PreviewQueryValue,
+  removedSplitIndex: number
+): string | undefined {
+  const remapped = parsePreviewPairs(previewQuery).flatMap(
+    (previewPair): PreviewPairUrlEntry[] => {
+      const viewerIndex = previewPair.controllerIndex + 1;
+      if (
+        previewPair.controllerIndex === removedSplitIndex ||
+        viewerIndex === removedSplitIndex
+      ) {
+        return [];
+      }
+      return [
+        previewPair.controllerIndex > removedSplitIndex
+          ? { controllerIndex: previewPair.controllerIndex - 1 }
+          : previewPair,
+      ];
+    }
+  );
+  return serializePreviewPairs(remapped);
+}
+
 function isPreviewEmpty(content: SplitContent): boolean {
   return content.type === 'component' && content.id === 'preview-empty';
 }

@@ -20,6 +20,7 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::inbound::axum_router::CalendarRouterState;
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -44,7 +45,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use config::{Config, Environment};
@@ -114,7 +114,7 @@ use soup_realtime::{
     domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
     outbound::{
         entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
-        soup_consumer::SoupTopicConsumer, soup_item_reader::SoupRepoItemReader,
+        soup_consumer::SoupTopicConsumer,
     },
 };
 use sqlx::postgres::PgPoolOptions;
@@ -137,6 +137,14 @@ mod config;
 mod model;
 mod outbound;
 mod service;
+
+const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
+const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
+
+fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
+    let exponent = consecutive_failures.saturating_sub(1).min(6);
+    Duration::from_secs((1_u64 << exponent).min(SOUP_CONSUMER_RESTART_MAX_DELAY_SECS))
+}
 
 maybe_env_vars! {
     struct AppleBundleId;
@@ -375,11 +383,7 @@ async fn main() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_search_indexer(Arc::new(
-            crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
-                sqs_client.clone(),
-            ),
-        )),
+        .with_event_broker(macro_event_broker.clone()),
     );
 
     // Create the channel list service used by soup.
@@ -462,7 +466,7 @@ async fn main() -> anyhow::Result<()> {
         DynamoBulkUploadAdapter::new(dynamodb_client.clone()),
         ShaCountAdapter::new(Redis::new(redis_client.clone())),
         entity_access_management_service.clone(),
-        SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone())),
+        SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone()), macro_event_broker.clone()),
         if cfg!(feature = "local") {
             Some(uuid::uuid!("d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc"))
         } else {
@@ -471,28 +475,21 @@ async fn main() -> anyhow::Result<()> {
         macro_event_broker.clone(),
     ));
 
-    let document_service = Arc::new(
-        DocumentServiceImpl::new(
-            document_repo,
-            cloudfront_config,
-            sync_service_client.as_ref().clone(),
-            s3_upload_adapter,
-            TaskPropertiesAdapter {
-                system_properties: system_properties_service.clone(),
-                properties: properties_service.clone(),
-                entity_access_service: entity_access_service.clone(),
-            },
-            connection_service,
-            entity_access_management_service.clone(),
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-            macro_event_broker.clone(),
-        )
-        .with_search_indexer(Arc::new(
-            crate::service::document_search_indexer::SqsDocumentSearchIndexer::new(
-                sqs_client.clone(),
-            ),
-        )),
-    );
+    let document_service = Arc::new(DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_service_client.as_ref().clone(),
+        s3_upload_adapter,
+        TaskPropertiesAdapter {
+            system_properties: system_properties_service.clone(),
+            properties: properties_service.clone(),
+            entity_access_service: entity_access_service.clone(),
+        },
+        connection_service,
+        entity_access_management_service.clone(),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker.clone(),
+    ));
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
         db.clone(),
@@ -667,13 +664,10 @@ async fn main() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
-        Arc::new(sqs_client.clone()),
-    );
     let call_service = Arc::new(
         call_service_builder
-            .with_search_indexer(call_search_indexer)
-            .with_voice_repo(PgVoiceRepo::new(db.clone())),
+            .with_voice_repo(PgVoiceRepo::new(db.clone()))
+            .with_event_broker(macro_event_broker.clone()),
     );
 
     let call_state = CallRouterState::new(
@@ -828,7 +822,6 @@ async fn main() -> anyhow::Result<()> {
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_bot_trigger_sender(bot_trigger_sender)
@@ -929,10 +922,10 @@ async fn main() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
-        let soup_pool = readonly_pool::ReadOnlyPool(readonly_db.clone());
         let macro_event_broker = macro_event_broker.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
+            let mut consecutive_failures = 0_u32;
             loop {
                 if cancellation_token.is_cancelled() {
                     break;
@@ -940,38 +933,61 @@ async fn main() -> anyhow::Result<()> {
 
                 let fanout_service = SoupRealtimeServiceImpl::new(
                     EntityAccessExpander::new(entity_access_service.clone()),
-                    SoupRepoItemReader::new(PgSoupRepo::new(soup_pool.clone())),
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
-                tracing::info!("starting realtime Soup document consumer");
+                tracing::info!("starting realtime Soup entity consumer");
                 let result = fanout_service
-                    .run_document_update_consumer(&brokers, cancellation_token.cancelled())
+                    .run_entity_update_consumer(&brokers, cancellation_token.cancelled())
                     .await;
 
                 if cancellation_token.is_cancelled() {
                     break;
                 }
 
-                match result {
+                let restart_delay = match result {
                     Ok(()) => {
-                        tracing::error!("realtime Soup document consumer exited unexpectedly")
+                        consecutive_failures = 0;
+                        tracing::error!("realtime Soup entity consumer exited unexpectedly");
+                        soup_consumer_restart_delay(1)
                     }
-                    Err(error) => tracing::error!(
-                        error = ?error,
-                        "realtime Soup document consumer exited unexpectedly"
-                    ),
-                }
+                    Err(error) => {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        let restart_delay = soup_consumer_restart_delay(consecutive_failures);
+                        if consecutive_failures >= SOUP_CONSUMER_RESTART_ALERT_THRESHOLD {
+                            tracing::error!(
+                                error = ?error,
+                                consecutive_failures,
+                                restart_delay_secs = restart_delay.as_secs(),
+                                "realtime Soup entity consumer repeatedly failed"
+                            );
+                        } else {
+                            tracing::warn!(
+                                error = ?error,
+                                consecutive_failures,
+                                restart_delay_secs = restart_delay.as_secs(),
+                                "realtime Soup entity consumer failed; scheduling restart"
+                            );
+                        }
+                        restart_delay
+                    }
+                };
 
                 tokio::select! {
                     biased;
                     _ = cancellation_token.cancelled() => break,
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                    _ = tokio::time::sleep(restart_delay) => {}
                 }
             }
         }
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+    let calendar_state = CalendarRouterState::new(
+        Arc::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+        )),
+        authorization_state.clone(),
+    );
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
@@ -989,6 +1005,7 @@ async fn main() -> anyhow::Result<()> {
                 db.clone(),
                 redis_sha_client.clone(),
                 sqs_client.clone(),
+                macro_event_broker.clone(),
             )),
         ));
 
@@ -1023,6 +1040,7 @@ async fn main() -> anyhow::Result<()> {
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
+        macro_event_broker: macro_event_broker.clone(),
         sqs_client: sqs_client.clone(),
         notification_ingress_service: notification_ingress_service.clone(),
         conn_gateway_client: conn_gateway_client.clone(),
@@ -1037,6 +1055,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         channel_list_state,
         entity_access_service: entity_access_service.clone(),
+        calendar_state,
         projects_state: ProjectRouterState {
             service: project_service,
             access_service: entity_access_service.clone(),
@@ -1057,6 +1076,7 @@ async fn main() -> anyhow::Result<()> {
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),
+        channel_service: channels_service.clone(),
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
@@ -1098,6 +1118,7 @@ async fn main() -> anyhow::Result<()> {
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
             editing_worker_client,
+            properties_service: api_context.properties_service.clone(),
         };
 
         tokio::spawn(async move {

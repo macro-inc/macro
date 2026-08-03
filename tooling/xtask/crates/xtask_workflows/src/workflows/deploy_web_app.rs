@@ -35,8 +35,8 @@ pub fn deploy_web_app() -> Workflow {
 
 /// Fill in the ordered dispatch/call input blocks.
 ///
-/// Relative to the hand-written workflow this drops the `SCCACHE_BUCKET`
-/// secret: the build runs sccache against the web-ci cache volume, not S3.
+/// The build uses the shared Namespace `web-ci` sccache cache, so no sccache
+/// backend secret is needed here.
 pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     let on = root
         .get_mut("on")
@@ -81,8 +81,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
-              DD_WEB_APP_TOKEN:
-                required: true
               SEGMENT_WRITE_KEY:
                 required: true
               POSTHOG_API_KEY:
@@ -106,6 +104,7 @@ fn build_deploy() -> Job {
         .add_step(pulumi_up())
         .add_step(upload_sourcemaps())
         .add_step(upload_production_build())
+        .add_step(steps::teardown_nix())
 }
 
 fn checkout() -> Step<Use> {
@@ -123,10 +122,16 @@ fn build() -> Step<Run> {
     Step::new("Build")
         .run("just build-${{ inputs.environment }}")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("VITE_DD_WEB_APP_TOKEN", vars::DD_WEB_APP_TOKEN))
-        .add_env(Env::new("VITE_DD_HASH", "${{ github.sha }}"))
         .add_env(Env::new("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY))
         .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
+        .add_env(Env::new(
+            "VITE_OTEL_EXPORTER_URL",
+            "${{ inputs.environment == 'prod' && 'https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces' || 'https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces' }}",
+        ))
+        .add_env(Env::new(
+            "VITE_OTEL_ENV",
+            "${{ inputs.environment == 'prod' && 'prod' || 'development' }}",
+        ))
 }
 
 fn install_infra_dependencies() -> Step<Run> {

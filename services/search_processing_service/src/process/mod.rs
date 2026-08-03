@@ -1,16 +1,17 @@
-mod call;
-mod channel;
-mod chat;
+pub(crate) mod call;
+pub(crate) mod channel;
+pub(crate) mod chat;
 pub mod context;
-mod document;
+pub(crate) mod document;
 mod email;
-mod project;
-mod properties;
+pub(crate) mod project;
+pub(crate) mod properties;
 mod user;
 pub mod worker;
 
 use anyhow::Context;
 use sqs_client::search::SearchQueueMessage;
+use uuid::Uuid;
 
 use crate::process::context::SearchProcessingContext;
 
@@ -39,11 +40,22 @@ pub async fn process_message(
             user::remove_user_profile(&ctx.opensearch_client, &user_profile_id).await?;
         }
         SearchQueueMessage::ChannelMessageUpdate(message) => {
-            channel::process_channel_message_update(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
-        SearchQueueMessage::RemoveChannelMessage(message) => {
-            channel::process_remove_channel_message(&ctx.opensearch_client, &message).await?;
+            let channel_id = message
+                .channel_id
+                .parse::<Uuid>()
+                .context("failed to parse channel_id as UUID")?;
+            let message_id = message
+                .message_id
+                .parse::<Uuid>()
+                .context("failed to parse message_id as UUID")?;
+            channel::process_channel_message_update(
+                &ctx.opensearch_client,
+                &ctx.db,
+                channel_id,
+                message_id,
+                message.index_override.as_deref(),
+            )
+            .await?;
         }
         SearchQueueMessage::RemoveEmailLink(message) => {
             email::remove::process_remove_messages_by_link_id(&ctx.opensearch_client, &message)
@@ -68,9 +80,6 @@ pub async fn process_message(
             email::upsert::process_upsert_message(&ctx.opensearch_client, &ctx.db, &message)
                 .await?;
         }
-        SearchQueueMessage::RemoveDocument(message) => {
-            document::process_remove_message(&ctx.opensearch_client, &message).await?;
-        }
         SearchQueueMessage::ExtractDocumentText(message) => {
             document::process_extract_text_message(
                 &ctx.opensearch_client,
@@ -92,31 +101,43 @@ pub async fn process_message(
             )
             .await?;
         }
-        SearchQueueMessage::UpdateDocumentProperties(message) => {
-            properties::process_entity_property_update(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
-        SearchQueueMessage::UpdateDocumentName(message) => {
-            document::process_update_name_message(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
         SearchQueueMessage::ChatMessage(message) => {
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;
         }
-        SearchQueueMessage::RemoveChatMessage(message) => {
-            chat::remove_chat_message(&ctx.opensearch_client, &message).await?;
-        }
         SearchQueueMessage::CallRecord(message) => {
-            call::process_call_record(&ctx.opensearch_client, &ctx.db, &message).await?;
+            let call_id = message
+                .call_id
+                .parse::<Uuid>()
+                .context("failed to parse call_id as UUID")?;
+            call::process_call_record(
+                &ctx.opensearch_client,
+                &ctx.db,
+                call_id,
+                message.index_override.as_deref(),
+            )
+            .await?;
         }
         SearchQueueMessage::RemoveCallRecord(message) => {
-            call::process_remove_call_record(&ctx.opensearch_client, &message).await?;
+            let channel_id = message
+                .channel_id
+                .parse::<Uuid>()
+                .context("failed to parse channel_id as UUID")?;
+            let call_id = message
+                .call_id
+                .as_deref()
+                .map(Uuid::parse_str)
+                .transpose()
+                .context("failed to parse call_id as UUID")?;
+            call::process_remove_call_record(
+                &ctx.opensearch_client,
+                channel_id,
+                call_id,
+                message.index_override.as_deref(),
+            )
+            .await?;
         }
         SearchQueueMessage::UpsertProject(message) => {
             project::upsert_project(&ctx.opensearch_client, &ctx.db, &message).await?;
-        }
-        SearchQueueMessage::RemoveProject(message) => {
-            project::remove_project(&ctx.opensearch_client, &message).await?;
         }
     }
 

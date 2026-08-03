@@ -13,9 +13,8 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
-    NotificationIdAndCollapseKey, NotificationStatusPatch, PatchDelete, RateLimitConfig,
-    RateLimitExceeded, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
-    TaggedContent, UserNotificationRow,
+    NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
+    RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
@@ -180,6 +179,29 @@ impl BulkDigestStateMachine for MockStateMachine {
     }
 }
 
+fn updated_notification(
+    user_id: MacroUserIdStr<'_>,
+    notification_id: Uuid,
+    done: bool,
+    viewed_at: Option<chrono::DateTime<Utc>>,
+    updated_at: chrono::DateTime<Utc>,
+) -> UserNotificationRow<serde_json::Value> {
+    UserNotificationRow {
+        owner_id: user_id.into_owned(),
+        notification_id,
+        notification_event_type: "test_notification".to_string(),
+        entity: EntityType::Document.with_entity_str("doc-1").into_owned(),
+        sent: true,
+        done,
+        created_at: updated_at,
+        viewed_at,
+        updated_at,
+        deleted_at: None,
+        notification_metadata: json!({}),
+        sender_id: None,
+    }
+}
+
 impl NotificationRepository for MockRepository {
     async fn get_muted_users<'a>(
         &self,
@@ -254,12 +276,16 @@ impl NotificationRepository for MockRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.mark_seen_calls
             .lock()
             .unwrap()
             .push((user_id.to_string(), notification_ids.to_vec()));
-        Ok(Vec::new())
+        let now = Utc::now();
+        Ok(notification_ids
+            .iter()
+            .map(|id| updated_notification(user_id.clone(), *id, false, Some(now), now))
+            .collect())
     }
 
     async fn mark_notifications_done(
@@ -267,13 +293,17 @@ impl NotificationRepository for MockRepository {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.mark_done_calls.lock().unwrap().push((
             user_id.to_string(),
             notification_ids.to_vec(),
             done,
         ));
-        Ok(Vec::new())
+        let now = Utc::now();
+        Ok(notification_ids
+            .iter()
+            .map(|id| updated_notification(user_id.clone(), *id, done, None, now))
+            .collect())
     }
 
     async fn get_basic_notifications(
@@ -363,7 +393,11 @@ impl NotificationRepository for MockRepository {
         Ok(())
     }
 
-    async fn get_device_endpoint(&self, _device_token: &str) -> Result<Option<String>, Report> {
+    async fn get_device_endpoint(
+        &self,
+        _device_token: &str,
+        _device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
         Ok(None)
     }
 
@@ -377,12 +411,22 @@ impl NotificationRepository for MockRepository {
         Ok(())
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _device_token: &str,
+        _device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         _device_token: &str,
         _device_type: &DeviceType,
-    ) -> Result<String, Report> {
-        Ok(String::new())
+        _active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
+        Ok(Vec::new())
     }
 
     async fn delete_device_by_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
@@ -468,7 +512,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         (**self)
             .mark_notifications_seen(user_id, notification_ids)
             .await
@@ -479,7 +523,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         (**self)
             .mark_notifications_done(user_id, notification_ids, done)
             .await
@@ -587,8 +631,14 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self).delete_all_user_notifications(user_id).await
     }
 
-    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
-        (**self).get_device_endpoint(device_token).await
+    async fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
+        (**self)
+            .get_device_endpoint(device_token, device_type)
+            .await
     }
 
     async fn upsert_device(
@@ -603,13 +653,25 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
             .await
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        (**self)
+            .delete_user_devices_by_token(user_id, device_token, device_type)
+            .await
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> Result<String, Report> {
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
         (**self)
-            .delete_device_by_token(device_token, device_type)
+            .delete_stale_devices_by_token(device_token, device_type, active_endpoint)
             .await
     }
 
@@ -1571,6 +1633,44 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
     assert!(
         published.is_empty(),
         "Should not publish when no collapse keys"
+    );
+}
+
+#[tokio::test]
+async fn test_update_notifications_and_return_preserves_requested_order() {
+    let user = test_user_id("reader@example.com");
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let repo = Arc::new(MockRepository::new());
+    let service = NotificationReaderService {
+        repository: repo,
+        queue: Arc::new(MockQueue::new()),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
+    let notification_ids = [second, first];
+
+    let updated = service
+        .update_notifications_and_return(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Done(false),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        updated
+            .iter()
+            .map(|notification| notification.notification_id)
+            .collect::<Vec<_>>(),
+        notification_ids
+    );
+    assert!(
+        updated
+            .iter()
+            .all(|notification| notification.owner_id == user)
     );
 }
 

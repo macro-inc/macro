@@ -9,6 +9,8 @@ use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType as AccessEntityType, RequiredPermission,
 };
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::DataType;
 use models_properties::api::requests::SetPropertyValue;
@@ -17,6 +19,7 @@ use models_properties::api::{
     PropertyDataType, UpdatePropertyOptionRequest, is_valid_hex_color,
 };
 use models_properties::convert_set_property_value_to_property_value;
+use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -26,9 +29,12 @@ use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
-use std::sync::Arc;
-
 use super::error::PropertiesErr;
+use super::events::{
+    EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
+    PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
+    PropertyOptionCreatedMetadata, PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata,
+};
 use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
@@ -36,39 +42,27 @@ use super::model::{
     PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
     ViewReceipt,
 };
-use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
+use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
     extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
 };
 
-/// Entity types whose search index denormalizes property values, i.e. whose
-/// property mutations must enqueue a search reindex.
-fn is_search_indexed(entity_type: EntityType) -> bool {
-    matches!(
-        entity_type,
-        EntityType::Task
-            | EntityType::Document
-            | EntityType::Thread
-            | EntityType::Chat
-            | EntityType::Project
-            | EntityType::CallRecord
-    )
-}
-
-/// Implementation of PropertiesService using a repository and optional permission service.
+/// Implementation of [`PropertiesService`] using repository, permission,
+/// notification, and event-publishing ports.
 #[derive(Debug)]
-pub struct PropertiesServiceImpl<R, P, N>
+pub struct PropertiesServiceImpl<R, P, N, B = NoopMacroEventBroker>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
+    B: MacroEventBroker,
 {
     repository: R,
     permission_service: Option<P>,
     notification_service: Option<N>,
-    search_indexer: Option<Arc<dyn PropertySearchIndexer>>,
+    event_broker: B,
 }
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -87,15 +81,132 @@ where
             repository,
             permission_service,
             notification_service,
-            search_indexer: None,
+            event_broker: NoopMacroEventBroker,
+        }
+    }
+}
+
+impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
+where
+    R: PropertiesRepo,
+    P: PermissionService,
+    N: NotificationService,
+    B: MacroEventBroker,
+{
+    /// Replace the event broker while preserving every other service dependency.
+    pub fn with_event_broker<B2: MacroEventBroker>(
+        self,
+        event_broker: B2,
+    ) -> PropertiesServiceImpl<R, P, N, B2> {
+        PropertiesServiceImpl {
+            repository: self.repository,
+            permission_service: self.permission_service,
+            notification_service: self.notification_service,
+            event_broker,
         }
     }
 
-    /// Attach a search-reindex publisher so property mutations refresh the
-    /// search index. Builder-style so existing constructions are unaffected.
-    pub fn with_search_indexer(mut self, search_indexer: Arc<dyn PropertySearchIndexer>) -> Self {
-        self.search_indexer = Some(search_indexer);
-        self
+    /// Publish a property lifecycle event without coupling broker availability
+    /// to a completed mutation.
+    fn publish_property_event(&self, event: PropertyMacroEvent) {
+        drop(self.event_broker.send_event(&event).inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to schedule property event");
+        }));
+    }
+
+    /// Build a creation event from the authoritative persisted definition.
+    fn property_created_event(
+        property: &PropertyDefinition,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::created(PropertyCreatedMetadata {
+            property_definition_id: property.id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            owner: property.owner.clone(),
+            display_name: property.display_name.clone(),
+            data_type: property.data_type,
+            is_multi_select: property.is_multi_select,
+            specific_entity_type: property.specific_entity_type,
+            created_at: property.created_at,
+        })
+    }
+
+    /// Build an option creation event from the authoritative persisted state.
+    fn property_option_created_event(
+        option: &PropertyOption,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::property_option_created(PropertyOptionCreatedMetadata {
+            option_id: option.id,
+            property_definition_id: option.property_definition_id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            value: option.value.clone(),
+            color: option.color.clone(),
+            display_order: option.display_order,
+        })
+    }
+
+    /// Build an option update event from the authoritative post-update state.
+    fn property_option_updated_event(
+        option: &PropertyOption,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::property_option_updated(PropertyOptionUpdatedMetadata {
+            option_id: option.id,
+            property_definition_id: option.property_definition_id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            value: option.value.clone(),
+            color: option.color.clone(),
+            display_order: option.display_order,
+        })
+    }
+
+    /// Build an option deletion event from the value captured before deletion.
+    fn property_option_deleted_event(
+        option: &PropertyOption,
+        actor_user_id: &MacroUserIdStr<'_>,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::property_option_deleted(PropertyOptionDeletedMetadata {
+            option_id: option.id,
+            property_definition_id: option.property_definition_id,
+            actor_user_id: Some(actor_user_id.clone().into_owned()),
+            value: option.value.clone(),
+        })
+    }
+
+    /// Build an entity-property update event from committed persistence state.
+    fn entity_property_updated_event(
+        property: &EntityProperty,
+        value: &Option<PropertyValue>,
+        access: &EditReceipt,
+    ) -> PropertyMacroEvent {
+        PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+            entity_property_id: property.id,
+            entity_id: property.entity_id.clone(),
+            entity_type: property.entity_type,
+            property_definition_id: property.property_definition_id,
+            actor_user_id: access.authenticated_user().cloned(),
+            value: value.clone(),
+            updated_at: property.updated_at,
+        })
+    }
+
+    /// Publish each authoritative mutation returned by a bulk transaction.
+    fn publish_entity_property_selection_events(
+        &self,
+        selections: &[EntityPropertyOptionSelection],
+        access: &EditReceipt,
+    ) {
+        for mutation in selections
+            .iter()
+            .filter_map(|selection| selection.mutation.as_ref())
+        {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                access,
+            ));
+        }
     }
 
     /// The permission service, or the error every receipt-minting path maps a
@@ -134,6 +245,7 @@ where
             .map(|receipt| {
                 let canonical_entity_type = receipt.entity_type();
                 let storage_entity_type = match canonical_entity_type {
+                    AccessEntityType::CalendarEvent => EntityType::CalendarEvent,
                     AccessEntityType::Document => Uuid::parse_str(receipt.entity_id())
                         .ok()
                         .and_then(|document_id| document_sub_types.get(&document_id))
@@ -178,24 +290,6 @@ where
             .await?
             .pop()
             .ok_or_else(|| PropertiesErr::Validation("Missing property target".to_string()))
-    }
-
-    /// Best-effort publish of a property reindex for entity types whose
-    /// search index denormalizes property values. Logs and continues on
-    /// failure so a missed reindex never fails the mutation itself.
-    async fn enqueue_property_upsert(&self, entity_id: &str, entity_type: EntityType) {
-        let Some(search_indexer) = self.search_indexer.as_ref() else {
-            return;
-        };
-        if !is_search_indexed(entity_type) {
-            return;
-        }
-        if let Err(error) = search_indexer
-            .enqueue_upsert(entity_id.to_string(), entity_type)
-            .await
-        {
-            tracing::warn!(error = ?error, entity_id = %entity_id, "failed to enqueue search reindex for property change");
-        }
     }
 
     /// Fetch a property definition, ensuring it exists, isn't a system
@@ -297,11 +391,12 @@ where
     }
 }
 
-impl<R, P, N> PropertiesService for PropertiesServiceImpl<R, P, N>
+impl<R, P, N, B> PropertiesService for PropertiesServiceImpl<R, P, N, B>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
+    B: MacroEventBroker,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
@@ -448,6 +543,11 @@ where
             let property = self
                 .handle_task_relationship_property(access, property_definition_id, value)
                 .await?;
+            self.publish_property_event(Self::entity_property_updated_event(
+                &property,
+                &property_value,
+                access,
+            ));
             return Ok(EntityPropertyWithDefinition {
                 property,
                 definition: property_definition,
@@ -474,7 +574,11 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(entity_id, entity_type).await;
+        self.publish_property_event(Self::entity_property_updated_event(
+            &property,
+            &property_value,
+            access,
+        ));
 
         Ok(EntityPropertyWithDefinition {
             property,
@@ -527,7 +631,8 @@ where
         self.validate_property_options(property_definition_id, &[option_id])
             .await?;
 
-        self.repository
+        let mutation = self
+            .repository
             .add_entity_property_option(
                 access.entity_id(),
                 subject.storage_entity_type,
@@ -537,8 +642,11 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
-            .await;
+        self.publish_property_event(Self::entity_property_updated_event(
+            &mutation.property,
+            &mutation.value,
+            access,
+        ));
 
         Ok(())
     }
@@ -559,7 +667,8 @@ where
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
         let subject = self.resolve_subject(access).await?;
-        self.repository
+        let mutation = self
+            .repository
             .remove_entity_property_option(
                 access.entity_id(),
                 subject.storage_entity_type,
@@ -569,8 +678,13 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
-            .await;
+        if let Some(mutation) = mutation {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                access,
+            ));
+        }
 
         Ok(())
     }
@@ -636,8 +750,7 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), entity_type)
-            .await;
+        self.publish_entity_property_selection_events(&selections, access);
 
         Ok(selections)
     }
@@ -724,8 +837,6 @@ where
                 continue;
             }
 
-            // Convert the repo error to a Send type up front so the raw
-            // `R::Err` is never held across the reindex await below.
             let update_result = self
                 .repository
                 .bulk_update_entity_property_options(
@@ -737,12 +848,12 @@ where
                 .map_err(anyhow::Error::from);
 
             match update_result {
-                Ok(mut selections) => {
+                Ok(selections) => {
                     let option_ids = selections
-                        .pop()
-                        .map(|selection| selection.option_ids)
+                        .last()
+                        .map(|selection| selection.option_ids.clone())
                         .unwrap_or_default();
-                    self.enqueue_property_upsert(entity_id, entity_type).await;
+                    self.publish_entity_property_selection_events(&selections, &access[index]);
                     outcomes[index] = Some(EntityOptionUpdateOutcome::Applied { option_ids });
                 }
                 Err(error) => {
@@ -762,6 +873,35 @@ where
             .into_iter()
             .map(|outcome| outcome.expect("every subject yields an outcome"))
             .collect())
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
+    async fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> Result<PropertyDefinition, PropertiesErr> {
+        let definition = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)?;
+
+        if !definition.is_system {
+            self.repository
+                .get_property_definition_with_owner(
+                    property_definition_id,
+                    user_id,
+                    team_id_from_receipt(team),
+                )
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or(PropertiesErr::NotFound)?;
+        }
+
+        Ok(definition)
     }
 
     #[tracing::instrument(skip(self, team), err)]
@@ -873,6 +1013,8 @@ where
             "successfully created property definition"
         );
 
+        self.publish_property_event(Self::property_created_event(&property, user_id));
+
         Ok(property)
     }
 
@@ -912,6 +1054,14 @@ where
             .map_err(anyhow::Error::from)?;
 
         tracing::info!("successfully deleted property definition");
+
+        self.publish_property_event(PropertyMacroEvent::deleted(PropertyDeletedMetadata {
+            property_definition_id: property.id,
+            actor_user_id: Some(user_id.clone().into_owned()),
+            owner: property.owner,
+            display_name: property.display_name,
+            data_type: property.data_type,
+        }));
 
         Ok(())
     }
@@ -999,6 +1149,8 @@ where
             "successfully added property option"
         );
 
+        self.publish_property_event(Self::property_option_created_event(&option, user_id));
+
         Ok(option)
     }
 
@@ -1064,7 +1216,10 @@ where
             .await
             .map_err(anyhow::Error::from)?
         {
-            UpdatePropertyOptionOutcome::Updated(updated) => Ok(updated),
+            UpdatePropertyOptionOutcome::Updated(updated) => {
+                self.publish_property_event(Self::property_option_updated_event(&updated, user_id));
+                Ok(updated)
+            }
             UpdatePropertyOptionOutcome::NotFound => Err(PropertiesErr::OptionNotFound),
             UpdatePropertyOptionOutcome::DuplicateValue => Err(PropertiesErr::DuplicateOptionValue),
         }
@@ -1102,12 +1257,14 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        if deleted {
-            tracing::info!("successfully deleted property option");
-            Ok(())
-        } else {
-            Err(PropertiesErr::OptionNotFound)
+        if !deleted {
+            return Err(PropertiesErr::OptionNotFound);
         }
+
+        tracing::info!("successfully deleted property option");
+        self.publish_property_event(Self::property_option_deleted_event(&option, user_id));
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, team), err)]
@@ -1151,13 +1308,17 @@ where
             ),
         };
 
-        let definition = self
+        let result = self
             .repository
             .get_or_create_tag_definition(owner)
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.build_tag_set(scope, Some(definition)).await
+        if result.created {
+            self.publish_property_event(Self::property_created_event(&result.definition, user_id));
+        }
+
+        self.build_tag_set(scope, Some(result.definition)).await
     }
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
@@ -1272,11 +1433,20 @@ where
         let subject = self.resolve_subject(access).await?;
         let entity_reference =
             EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
-        Ok(self
-            .repository
+        self.repository
             .delete_entity_properties(&entity_reference)
             .await
-            .map_err(anyhow::Error::from)?)
+            .map_err(anyhow::Error::from)?;
+
+        self.publish_property_event(PropertyMacroEvent::entity_properties_cleared(
+            EntityPropertiesClearedMetadata {
+                entity_id: access.entity_id().to_string(),
+                entity_type: subject.storage_entity_type,
+                actor_user_id: access.authenticated_user().cloned(),
+            },
+        ));
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), fields(entity_property_id = %entity_property_id), err)]
@@ -1343,6 +1513,16 @@ where
             .map_err(anyhow::Error::from)?;
 
         tracing::info!("successfully removed entity property");
+
+        self.publish_property_event(PropertyMacroEvent::entity_property_deleted(
+            EntityPropertyDeletedMetadata {
+                entity_property_id,
+                entity_id: property_info.entity_id,
+                entity_type: property_info.entity_type,
+                property_definition_id: property_info.property_definition_id,
+                actor_user_id: access.authenticated_user().cloned(),
+            },
+        ));
 
         Ok(())
     }

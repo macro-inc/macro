@@ -4,7 +4,7 @@ use crate::local::instance::{Instance, Port};
 
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");
-    LocalEnv::for_instance(Mode::Local, &instance).to_env()
+    LocalEnv::for_instance(Mode::Local, &instance, true).to_env()
 }
 
 /// Every key a local service relies on must be present — this is the test that
@@ -65,6 +65,39 @@ fn emits_webhook_fifo_queue_override_url() {
     );
 }
 
+/// In-network callers must resolve these through the docker alias. The
+/// `Environment::Local` defaults are host port mappings, which inside a
+/// container point back at the caller itself.
+#[test]
+fn emits_in_network_service_url_overrides() {
+    let env = local_env();
+    for (key, expected) in [
+        (
+            "OVERRIDE_CONNECTION_GATEWAY_URL",
+            "http://connection-gateway:8080",
+        ),
+        (
+            "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+            "http://document-storage-service:8080",
+        ),
+    ] {
+        assert_eq!(env.get(key).map(String::as_str), Some(expected));
+    }
+}
+
+/// The auth service presents `SERVICE_INTERNAL_AUTH_KEY` to document storage,
+/// which validates against `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`. Dev/prod point
+/// both at one secret; locally they must match too or every auth-service
+/// internal call (starter docs seeding at signup) is a 401.
+#[test]
+fn auth_service_internal_key_matches_dss_auth_key() {
+    let env = local_env();
+    assert_eq!(
+        env.get("SERVICE_INTERNAL_AUTH_KEY"),
+        env.get("DOCUMENT_STORAGE_SERVICE_AUTH_KEY"),
+    );
+}
+
 #[test]
 fn aws_creds_are_dummy() {
     let env = local_env();
@@ -84,8 +117,8 @@ fn aws_creds_are_dummy() {
 fn instance_secrets_are_scoped_but_identity_is_fixed() {
     let default = Instance::derive(None, None).unwrap();
     let agent_a = Instance::derive(Some("agent-a"), None).unwrap();
-    let a = LocalEnv::for_instance(Mode::Local, &default).to_env();
-    let b = LocalEnv::for_instance(Mode::Local, &agent_a).to_env();
+    let a = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
+    let b = LocalEnv::for_instance(Mode::Local, &agent_a, true).to_env();
 
     assert_ne!(
         a.get("SERVICE_INTERNAL_AUTH_KEY"),
@@ -103,8 +136,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
 fn fusionauth_public_url_uses_the_instance_host_port() {
     let default = Instance::derive(None, None).unwrap();
     let named = Instance::derive(Some("2508"), None).unwrap();
-    let default_env = LocalEnv::for_instance(Mode::Local, &default).to_env();
-    let named_env = LocalEnv::for_instance(Mode::Local, &named).to_env();
+    let default_env = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
     let named_public_url = format!("http://localhost:{}", named.port(Port::FusionAuth));
 
     assert_eq!(

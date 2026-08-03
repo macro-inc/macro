@@ -4,7 +4,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, Surface } from '@ui';
 import { For, Show } from 'solid-js';
 import { BotAvatar } from './BotAvatar';
-import type { BotChannelOption } from './ChannelMultiSelect';
+import type { BotChannelOption } from './botChannelOptions';
 import { CredentialField } from './CredentialField';
 import { channelWebhookUrl, webhookExample } from './webhook';
 

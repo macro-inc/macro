@@ -97,7 +97,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/foreign_entity/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/stream/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_project_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/github/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/referral/.env
@@ -118,6 +117,8 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_projections/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/ai_projections_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/webhook/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar_events/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_service/.env
 
 setup_macrodb:
     just crates/macro_db_client/create_db

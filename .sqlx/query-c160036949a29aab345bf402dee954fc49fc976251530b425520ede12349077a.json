@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_jobs\n        SET status = 'InProgress',\n            initialized_at = now(),\n            init_lease_token = NULL,\n            init_lease_expires_at = NULL,\n            updated_at = now()\n        WHERE id = $1\n          AND status = 'Init'\n          AND init_lease_token = $2\n          AND init_lease_expires_at > now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c160036949a29aab345bf402dee954fc49fc976251530b425520ede12349077a"
+}

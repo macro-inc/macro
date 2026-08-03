@@ -51,7 +51,10 @@ function refreshEmailThread(notification: UnifiedNotification) {
 export function handleNotificationUpdate(notification: UnifiedNotification) {
   match(notification.notification_metadata)
     .with({ tag: 'channel_mention' }, ({ content }) => {
-      refreshChannel(notification, content.threadId?.toString());
+      refreshChannel(
+        notification,
+        (content.threadId ?? content.messageId)?.toString()
+      );
     })
     .with({ tag: 'document_mention' }, ({ content }) => {
       refreshChannel(notification, content.threadId?.toString());

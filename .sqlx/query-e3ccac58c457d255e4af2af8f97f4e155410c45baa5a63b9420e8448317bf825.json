@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE entity_properties\n        SET values = jsonb_set(\n                values,\n                '{value}',\n                COALESCE(\n                    (\n                        SELECT jsonb_agg(elem)\n                        FROM jsonb_array_elements(values -> 'value') AS elem\n                        WHERE elem <> to_jsonb($4::text)\n                    ),\n                    '[]'::jsonb\n                )\n            ),\n            updated_at = NOW()\n        WHERE entity_id = $1\n          AND entity_type = $2\n          AND property_definition_id = $3\n          AND values ->> 'type' = 'SelectOption'\n          AND values -> 'value' @> jsonb_build_array($4::text)\n        RETURNING\n            id,\n            entity_id,\n            entity_type as \"entity_type: EntityType\",\n            property_definition_id,\n            values as \"value: serde_json::Value\",\n            created_at,\n            updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "value: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "e3ccac58c457d255e4af2af8f97f4e155410c45baa5a63b9420e8448317bf825"
+}

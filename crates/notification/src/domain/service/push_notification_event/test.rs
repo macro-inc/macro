@@ -99,15 +99,7 @@ impl NotificationRepository for MockNotifRepo {
         &self,
         _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
-    ) -> Result<
-        Vec<
-            crate::domain::models::PatchDelete<
-                uuid::Uuid,
-                crate::domain::models::NotificationStatusPatch,
-            >,
-        >,
-        Report,
-    > {
+    ) -> Result<Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>, Report> {
         unimplemented!()
     }
     async fn mark_notifications_done(
@@ -115,15 +107,7 @@ impl NotificationRepository for MockNotifRepo {
         _: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
         _: bool,
-    ) -> Result<
-        Vec<
-            crate::domain::models::PatchDelete<
-                uuid::Uuid,
-                crate::domain::models::NotificationStatusPatch,
-            >,
-        >,
-        Report,
-    > {
+    ) -> Result<Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>, Report> {
         unimplemented!()
     }
     async fn get_basic_notifications(
@@ -201,7 +185,11 @@ impl NotificationRepository for MockNotifRepo {
     ) -> Result<(), Report> {
         unimplemented!()
     }
-    async fn get_device_endpoint(&self, _: &str) -> Result<Option<String>, Report> {
+    async fn get_device_endpoint(
+        &self,
+        _: &str,
+        _: &crate::domain::models::device::DeviceType,
+    ) -> Result<Option<String>, Report> {
         unimplemented!()
     }
     async fn upsert_device(
@@ -213,11 +201,20 @@ impl NotificationRepository for MockNotifRepo {
     ) -> Result<(), Report> {
         unimplemented!()
     }
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &str,
+        _: &crate::domain::models::device::DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        unimplemented!()
+    }
+    async fn delete_stale_devices_by_token(
         &self,
         _: &str,
         _: &crate::domain::models::device::DeviceType,
-    ) -> Result<String, Report> {
+        _: &str,
+    ) -> Result<Vec<String>, Report> {
         unimplemented!()
     }
     async fn get_users_with_type_disabled<'a>(

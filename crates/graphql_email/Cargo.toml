@@ -9,6 +9,7 @@ async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 email = { path = "../email", default-features = false, features = ["ports"] }
 entity_access = { path = "../entity_access", default-features = false }
+futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true }
 tracing = { workspace = true }

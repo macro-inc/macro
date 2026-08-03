@@ -28,6 +28,7 @@ export * from './media';
 export * from './mentions';
 export * from './node-accessory';
 export * from './node-transform';
+export * from './normalize-triple-click';
 export * from './pinned-properties';
 export * from './pluginManager';
 export * from './popup';

@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use sqlx::{Pool, Postgres};
 
+#[cfg(test)]
+mod test;
+
 /// One row of the search-backfill scan: just enough to build an upsert
 /// message and the keyset cursor.
 pub struct ProjectSearchBackfillRow {
@@ -73,21 +76,30 @@ pub async fn get_sub_project_ids(
     Ok(result)
 }
 
-/// Gets all projects that are older than the provided date
+/// A deleted project and the user who owns it.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ProjectToDelete {
+    /// The deleted project's ID.
+    pub project_id: String,
+    /// The owning user's ID.
+    pub user_id: String,
+}
+
+/// Gets all projects and their owners that are older than the provided date.
 #[tracing::instrument(skip(db))]
 pub async fn get_projects_to_delete(
     db: &Pool<Postgres>,
     date: &chrono::NaiveDateTime,
-) -> anyhow::Result<Vec<String>> {
-    let result = sqlx::query!(
+) -> anyhow::Result<Vec<ProjectToDelete>> {
+    let result = sqlx::query_as!(
+        ProjectToDelete,
         r#"
-            SELECT p.id
+            SELECT p.id as project_id, p."userId" as user_id
             FROM "Project" p
             WHERE p."deletedAt" IS NOT NULL AND p."deletedAt" <= $1
         "#,
         date
     )
-    .map(|row| row.id)
     .fetch_all(db)
     .await?;
 

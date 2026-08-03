@@ -22,6 +22,7 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
@@ -463,6 +464,13 @@ where
         channel_id: Uuid,
         mut req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
+        if req.channel_name.is_none()
+            && req.convert_to_team_channel.is_none()
+            && req.auto_join_team.is_none()
+        {
+            return Ok(());
+        }
+
         let actor = require_user_actor(&actor)?;
         let info = self
             .repo
@@ -850,6 +858,13 @@ where
             tracing::error!(error=?err, "unable to upsert activity for attachment patch");
         }
 
+        if attachments_changed || content.is_some() {
+            self.repo
+                .touch_channel_updated_at(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        }
+
         Ok(())
     }
 
@@ -1002,9 +1017,18 @@ where
             ));
         }
 
+        let mut membership_changed = false;
         for participant in &req.participants {
-            self.repo
+            let participant_changed = self
+                .repo
                 .add_participant(channel_id, participant.copied(), ParticipantRole::Member)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            membership_changed |= participant_changed;
+        }
+        if membership_changed {
+            self.repo
+                .touch_channel_updated_at(channel_id)
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
@@ -1170,6 +1194,11 @@ where
             return Ok(());
         }
 
+        self.repo
+            .touch_channel_updated_at(info.id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
         active_participant_user_ids.push(actor_user.clone());
         self.events.dispatch(ChannelEvent::ParticipantJoined {
             channel_id: info.id,
@@ -1197,7 +1226,13 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        match (info.channel_type, participants.len()) {
+        // Bots can be channel participants; only user participants count
+        // toward the minimum-membership guard.
+        let user_participant_count = participants
+            .iter()
+            .filter(|participant| MacroUserIdStr::try_from(participant.user_id.as_str()).is_ok())
+            .count();
+        match (info.channel_type, user_participant_count) {
             (ChannelType::Private, 2) | (ChannelType::DirectMessage, _) => {
                 return Err(ChannelMutationErr::BadRequest(
                     "cannot leave channel with only 2 participants".to_string(),
@@ -1599,10 +1634,20 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn post_activity(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         activity_type: ActivityType,
     ) -> Result<Activity, ChannelMutationErr> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".to_string(),
+            ));
+        }
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
+        let actor = access.get_authenticated_user().map_err(|_| {
+            ChannelMutationErr::Unauthorized("authenticated user required".to_string())
+        })?;
+
         let activity = self
             .repo
             .set_activity(actor.as_ref().to_string(), channel_id, activity_type)

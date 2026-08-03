@@ -1,4 +1,5 @@
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
 import ResetIcon from '@phosphor/arrow-clockwise.svg';
 import HomeIcon from '@phosphor/house.svg';
 import { Button, Dialog, Surface } from '@ui';
@@ -10,7 +11,7 @@ interface FatalErrorProps {
 }
 
 export function FatalError(props: FatalErrorProps) {
-  logger.error(props.error || 'Unknown error', {
+  Telemetry.error(props.error || 'Unknown error', {
     url: window.location.href,
   });
 

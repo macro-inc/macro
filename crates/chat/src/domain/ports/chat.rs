@@ -97,8 +97,16 @@ pub trait ChatRepo: Send + Sync + 'static {
         message_id: &str,
     ) -> impl std::future::Future<Output = Result<ChatMessageContent>> + Send;
 
-    /// Update the content of a specific message.
+    /// Update a specific message's final content and chat recency.
     fn update_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        content: &ChatMessageContent,
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
+
+    /// Persist interim message content without updating chat recency.
+    fn update_interim_message_content(
         &self,
         chat_id: &str,
         message_id: &str,

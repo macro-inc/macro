@@ -47,7 +47,11 @@ function _mapFromListsByKey<T extends Record<string, any>>(
   return map;
 }
 
-function uniqueByKey<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+/** First-occurrence-wins dedup by a string key, preserving input order. */
+export function uniqueByKey<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string
+): T[] {
   const map = new Map<string, T>();
   for (const item of items) {
     const key = keyOf(item);

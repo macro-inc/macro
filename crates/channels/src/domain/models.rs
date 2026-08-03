@@ -483,7 +483,7 @@ pub struct ThreadReplyRow {
 
 /// Type of channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
@@ -793,7 +793,7 @@ pub struct NewChannelAttachment {
 
 /// Simple entity mention attached to a message.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SimpleMention {
     /// Mentioned entity type.
     pub entity_type: String,

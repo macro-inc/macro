@@ -26,6 +26,7 @@ use crate::domain::side_effects::{
 };
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
@@ -949,8 +950,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Upsert the user's activity (view/interaction) for a channel.
     fn post_activity(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _activity_type: ActivityType,
     ) -> impl Future<Output = Result<Activity, ChannelMutationErr>> + Send {
         async move {
@@ -1094,19 +1094,6 @@ pub trait ChannelContactsDispatcher: Send + Sync + 'static {
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-}
-
-/// Indexer for channel search updates.
-pub trait ChannelSearchIndexer: Send + Sync + 'static {
-    /// Enqueue a message upsert.
-    fn index_message(&self, channel_id: Uuid, message_id: Uuid) -> impl Future<Output = ()> + Send;
-
-    /// Enqueue a message or channel removal.
-    fn remove_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Option<Uuid>,
-    ) -> impl Future<Output = ()> + Send;
 }
 
 /// Share-permission updater for items referenced by channel messages.

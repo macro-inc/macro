@@ -29,7 +29,7 @@ export function Surface(props: SurfaceProps) {
     const base: JSX.CSSProperties = {};
 
     if (!local.hideBorder) {
-      base.border = `0.5px solid ${local.edgeColor ?? 'var(--b4)'}`;
+      base.border = `var(--app-border-width, 0.5px) solid ${local.edgeColor ?? 'var(--b4)'}`;
     }
 
     if (local.active) {

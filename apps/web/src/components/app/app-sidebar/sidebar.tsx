@@ -1,10 +1,12 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
-import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
+import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
+import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
+import { createGettingStartedSidebarVisibility } from '@app/features/getting-started/sidebar-visibility';
 import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
@@ -41,6 +43,7 @@ import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_ACTIVITY,
@@ -70,6 +73,7 @@ import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedHomeIcon } from '@icon/wide-home';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
@@ -77,12 +81,14 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
+import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
-import HomeIcon from '@phosphor/house.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import XIcon from '@phosphor/x.svg';
+import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useJoinTeamMutation,
@@ -90,19 +96,17 @@ import {
   useUserInvitesQuery,
 } from '@queries/team/invitations';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { authServiceClient } from '@service-auth/client';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
+import { Button, cn, Dropdown, Hotkey, Layer, NavRow, Tooltip } from '@ui';
 import {
   type Component,
   type ComponentProps,
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   type JSX,
@@ -141,8 +145,10 @@ type TryItemId = 'connect' | 'invite' | 'mobile';
 
 type TryItemVisibility = Record<TryItemId, boolean>;
 
-const COMMUNICATIONS_LINK_IDS = ['mail', 'channels', 'calls'] as const;
 const WORKSPACE_LINK_IDS = [
+  'mail',
+  'channels',
+  'calls',
   'documents',
   'tasks',
   'agents',
@@ -382,7 +388,10 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const links = createMemo((): SidebarItem[] => buildSidebarLinks());
+  const gettingStartedEnabled = useGettingStartedEnabled();
+  const links = createMemo((): SidebarItem[] =>
+    buildSidebarLinks(gettingStartedEnabled())
+  );
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(
@@ -510,54 +519,6 @@ export const GoToHotkeys = () => {
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
 const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
-type SidebarShortcutLinkProps = {
-  label: string;
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
-  onClick: () => void;
-  isSlim: () => boolean;
-  trailing?: JSX.Element;
-};
-
-const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
-  const [isHovering, setIsHovering] = createSignal(false);
-
-  return (
-    <div class="group/shortcut relative w-full">
-      <NavRow
-        draggable={false}
-        class={cn(
-          'h-7 group-hover/shortcut:bg-ink/3 group-hover/shortcut:text-ink',
-          props.trailing && !props.isSlim() && 'pr-8'
-        )}
-        fullWidth
-        tooltipPlacement="right"
-        label={props.isSlim() ? props.label : undefined}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-        onMouseDown={(e) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-          props.onClick();
-        }}
-      >
-        <div class="relative size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-        </div>
-
-        <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
-          <span class="flex-1 min-w-0 whitespace-nowrap">{props.label}</span>
-        </div>
-      </NavRow>
-
-      <Show when={props.trailing && !props.isSlim()}>
-        <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-          {props.trailing}
-        </div>
-      </Show>
-    </div>
-  );
-};
-
 const SidebarSectionMenu = (props: {
   label: string;
   options: { id: SidebarSectionLinkId; label: string; checked: boolean }[];
@@ -601,40 +562,66 @@ const SidebarSectionMenu = (props: {
   </Dropdown>
 );
 
-const SidebarTryItemMenu = (props: {
+type TryCardItem = {
+  id: TryItemId;
   label: string;
-  onDismiss: () => void;
-  onOpenChange?: (open: boolean) => void;
-}) => (
-  <Dropdown
-    placement="right-start"
-    gutter={8}
-    onOpenChange={props.onOpenChange}
-  >
-    <Dropdown.Trigger
-      variant="ghost"
-      class="shrink-0 opacity-0 group-hover/shortcut:pointer-events-auto group-hover/shortcut:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5 pointer-events-none"
-      label={`${props.label} options`}
-      onMouseDown={(e: MouseEvent) => {
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: () => void;
+};
+
+const TryCardRow = (props: { item: TryCardItem }) => {
+  const [isHovering, setIsHovering] = createSignal(false);
+
+  return (
+    <button
+      type="button"
+      aria-label={props.item.label}
+      class="flex h-7 w-full items-center justify-start gap-2 rounded-md px-1.5 py-0 text-sm font-medium text-ink-muted outline-none hover:bg-ink/5 hover:text-ink focus-visible:bg-ink/5 focus-visible:text-ink [&_svg]:size-3.5"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onMouseDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
-        e.stopPropagation();
       }}
-      onClick={(e: MouseEvent) => e.stopPropagation()}
+      onClick={props.item.onClick}
     >
-      <DotsThreeIcon />
-    </Dropdown.Trigger>
-    <Dropdown.Content class="w-40 shadow-menu">
-      <Dropdown.Group>
-        <Dropdown.Item
-          class="min-h-8 gap-2 px-2.5 text-[13px]"
-          onSelect={props.onDismiss}
-        >
-          <span class="flex-1 truncate text-ink">Dismiss</span>
-        </Dropdown.Item>
-      </Dropdown.Group>
-    </Dropdown.Content>
-  </Dropdown>
+      <span class="size-5 shrink-0 flex items-center justify-center">
+        <Dynamic component={props.item.icon} triggerAnimation={isHovering()} />
+      </span>
+      <span class="min-w-0 flex-1 truncate text-left">{props.item.label}</span>
+    </button>
+  );
+};
+
+const TryCard = (props: {
+  items: readonly TryCardItem[];
+  onDismiss: () => void;
+}) => (
+  <Layer depth={1}>
+    <section aria-label="Quick Start" class="relative group/try-card w-full">
+      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
+        <header class="flex items-center gap-2 min-w-0 px-2.5 py-1.5 border-b border-ink-muted/8">
+          <h3 class="flex-1 min-w-0 text-xs font-medium text-ink leading-tight m-0">
+            Quick Start
+          </h3>
+          <Button
+            variant="ghost"
+            class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
+            label="Dismiss Quick Start"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onDismiss();
+            }}
+          >
+            <XIcon />
+          </Button>
+        </header>
+        <div class="p-1 flex flex-col gap-0.5">
+          <For each={props.items}>{(item) => <TryCardRow item={item} />}</For>
+        </div>
+      </div>
+    </section>
+  </Layer>
 );
 
 const SidebarDropdownLink = (
@@ -794,24 +781,42 @@ type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
   onMenuOpenChange?: (open: boolean) => void;
+  /**
+   * The Getting Started link, surfaced here only while it's hidden from the
+   * sidebar rows (see `AppSidebar`). Keeps the page reachable from the account
+   * menu once the user removes its dedicated row.
+   */
+  gettingStartedLink?: SidebarItem;
 };
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const email = useEmail();
   const logout = useLogout();
+  const layout = useSplitLayout();
 
-  const [userName] = createResource(async () => {
-    const response = await authServiceClient.getUserName();
-    return response.isOk() ? response.value : null;
-  });
+  const userName = useOwnUserName();
+
+  const openGettingStarted = () => {
+    const link = props.gettingStartedLink;
+    if (!link) return;
+    navigateToSidebarView({
+      viewId: link.id,
+      params: link.params,
+      shiftKey: false,
+      activeSplit: globalSplitManager()?.activeSplit(),
+      openWithSplit: layout.openWithSplit,
+      referredFrom: 'sidebar',
+    });
+    globalSplitManager()?.returnFocus();
+  };
 
   // Prefer the user's real name (first/last); fall back to their email.
   const displayName = createMemo(() => {
     const name = userName();
     const parts = [name?.first_name, name?.last_name]
       .map((part) => part?.trim())
-      .filter((part): part is string => Boolean(part) && part !== 'N/A');
+      .filter((part): part is string => isRealNamePart(part));
     return parts.length > 0 ? parts.join(' ') : (email() ?? 'Macro User');
   });
 
@@ -882,6 +887,28 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             </div>
           </div>
           <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-muted" />
+          <Show when={props.gettingStartedLink}>
+            {(link) => (
+              <Dropdown.Item
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={openGettingStarted}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={link().icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <span class="flex-1 text-ink">{link().label}</span>
+                <Hotkey
+                  // Hardcoding this so that we can include the command scope activation
+                  shortcut="g s"
+                  theme="subtle"
+                  class="ml-6"
+                />
+              </Dropdown.Item>
+            )}
+          </Show>
           <Dropdown.Item
             class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
             onSelect={() => CommandState.open()}
@@ -947,9 +974,18 @@ const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
   label: 'Home',
   href: '/home',
-  icon: HomeIcon,
+  icon: AnimatedHomeIcon,
   hotkey: 'h',
   hotkeyToken: TOKENS.sidebar.goTo.home,
+};
+
+const GETTING_STARTED_LINK: SidebarItem = {
+  id: 'getting-started',
+  label: 'Getting Started',
+  href: '/getting-started',
+  icon: CompassIcon,
+  hotkey: 's',
+  hotkeyToken: TOKENS.sidebar.goTo.gettingStarted,
 };
 
 const ACTIVITY_LINK: SidebarItem = {
@@ -962,16 +998,24 @@ const ACTIVITY_LINK: SidebarItem = {
 };
 
 /**
- * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Activity, Calls, and CRM entries in their correct positions.
+ * Assemble the ordered sidebar link list: the static links plus Home, Getting
+ * started, and the flag-gated Activity, Calls, and CRM entries in their
+ * correct positions.
  * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
  * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
  * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
+ * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
+ * passed in because this runs outside a component; when false the link is
+ * fully absent — row, `g s` hotkey, and command menu entry.
  * Rendered sections additionally drop `hiddenFromSidebar` entries, which have
  * hotkeys but no sidebar row.
  */
-const buildSidebarLinks = (): SidebarItem[] => {
-  let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
+const buildSidebarLinks = (showGettingStarted: boolean): SidebarItem[] => {
+  let links: SidebarItem[] = [
+    DASHBOARD_LINK,
+    ...(showGettingStarted ? [GETTING_STARTED_LINK] : []),
+    ...SIDEBAR_LINKS,
+  ];
 
   if (ENABLE_ACTIVITY) {
     const idx = links.findIndex((link) => link.id === 'inbox');
@@ -1056,7 +1100,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
   });
 
-  const allLinks = createMemo((): SidebarItem[] => buildSidebarLinks());
+  const gettingStartedEnabled = useGettingStartedEnabled();
+  const allLinks = createMemo((): SidebarItem[] =>
+    buildSidebarLinks(gettingStartedEnabled())
+  );
+
+  // Hides only the rendered row: the g+s hotkey and command menu entry keep
+  // working (like `hiddenFromSidebar` links), so the page stays reachable.
+  const gettingStartedVisibility = createGettingStartedSidebarVisibility();
 
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
@@ -1184,6 +1235,23 @@ export const AppSidebar = (props: AppSidebarProps) => {
       sidebarState={sidebarDisplayState()}
       hotkeyVisible={goToHotkeyVisible()}
       onContextMenuOpenChange={handleOverlayDropdownOpenChange}
+      removeAction={
+        link.id === 'getting-started'
+          ? {
+              tooltip: 'Remove from sidebar',
+              onRemove: () => {
+                gettingStartedVisibility.hide();
+                // Hiding drops the row only — the go-to hotkey and its
+                // command-menu entry stay registered (see buildSidebarLinks),
+                // so this stays true.
+                toast.success('Removed from sidebar', {
+                  subtext:
+                    'You can always find Getting Started in the account menu or command menu.',
+                });
+              },
+            }
+          : undefined
+      }
     />
   );
 
@@ -1199,9 +1267,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox', 'activity']
+    ['home', 'getting-started', 'inbox', 'activity']
+      .filter(
+        (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
+      )
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
+  );
+
+  // While the Getting Started row is hidden (but still account-gated in via
+  // `findLink`), surface it in the account menu so the page stays reachable.
+  const gettingStartedMenuLink = createMemo(() =>
+    gettingStartedVisibility.hidden() ? findLink('getting-started') : undefined
   );
 
   const sectionItemsFor = (ids: readonly SidebarSectionLinkId[]) =>
@@ -1211,9 +1288,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
       .filter((link): link is SidebarItem => link !== undefined)
       .map(toSectionItem);
 
-  const communicationsItems = createMemo(() =>
-    sectionItemsFor(COMMUNICATIONS_LINK_IDS)
-  );
   const workspaceItems = createMemo(() => sectionItemsFor(WORKSPACE_LINK_IDS));
 
   const toggleSectionVisibility = (id: SidebarSectionLinkId) => {
@@ -1229,6 +1303,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     scheduleMiddleScrollUpdate();
   };
 
+  const dismissTrySection = () => {
+    setTryVisibility({
+      connect: false,
+      invite: false,
+      mobile: false,
+    });
+  };
+
   const sectionMenuOptionsFor = (ids: readonly SidebarSectionLinkId[]) =>
     ids
       .map((id) => findLink(id))
@@ -1239,8 +1321,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
         checked: sectionVisibility()[link.id as SidebarSectionLinkId],
       }));
 
-  const tryItems = createMemo<CollapsibleSidebarSectionItem[]>(() => {
-    const items: CollapsibleSidebarSectionItem[] = [];
+  const tryItems = createMemo<TryCardItem[]>(() => {
+    const items: TryCardItem[] = [];
     const addTryItem = (
       id: TryItemId,
       label: string,
@@ -1249,34 +1331,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ) => {
       if (!tryVisibility()[id]) return;
 
-      const trailing = (
-        <SidebarTryItemMenu
-          label={label}
-          onDismiss={() => dismissTryItem(id)}
-          onOpenChange={handleWorkspaceContextMenuOpenChange}
-        />
-      );
-
       items.push({
         id,
-        visible: () => (
-          <SidebarShortcutLink
-            label={label}
-            isSlim={isSlim}
-            onClick={onClick}
-            icon={icon}
-            trailing={trailing}
-          />
-        ),
-        dropdown: () => (
-          <SidebarShortcutLink
-            label={label}
-            isSlim={isSlim}
-            onClick={onClick}
-            icon={icon}
-            trailing={trailing}
-          />
-        ),
+        label,
+        icon,
+        onClick: () => {
+          onClick();
+          dismissTryItem(id);
+        },
       });
     };
 
@@ -1303,7 +1365,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   createEffect(() => {
     middleScrollSize.width;
     middleScrollSize.height;
-    communicationsItems().length;
     workspaceItems().length;
     tryItems().length;
     props.overlayOpen;
@@ -1396,39 +1457,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onScroll={updateMiddleScrollShadows}
           class="size-full overflow-y-auto flex flex-col gap-3"
         >
-          <Show
-            when={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS).length > 0}
-          >
-            <CollapsibleSidebarSection
-              label="Conversations"
-              items={communicationsItems()}
-              headerMenu={() => (
-                <SidebarSectionMenu
-                  label="Conversations"
-                  options={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS)}
-                  onToggle={toggleSectionVisibility}
-                  onOpenChange={handleWorkspaceContextMenuOpenChange}
-                />
-              )}
-              onOpenChange={scheduleMiddleScrollUpdate}
-            />
-          </Show>
-
-          <Show when={sectionMenuOptionsFor(WORKSPACE_LINK_IDS).length > 0}>
-            <CollapsibleSidebarSection
-              label="Workspace"
-              items={workspaceItems()}
-              headerMenu={() => (
-                <SidebarSectionMenu
-                  label="Workspace"
-                  options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
-                  onToggle={toggleSectionVisibility}
-                  onOpenChange={handleWorkspaceContextMenuOpenChange}
-                />
-              )}
-              onOpenChange={scheduleMiddleScrollUpdate}
-            />
-          </Show>
+          <CollapsibleSidebarSection
+            label="Workspace"
+            persistKey="workspace"
+            items={workspaceItems()}
+            headerMenu={() => (
+              <SidebarSectionMenu
+                label="Workspace"
+                options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
+                onToggle={toggleSectionVisibility}
+                onOpenChange={handleWorkspaceContextMenuOpenChange}
+              />
+            )}
+            onOpenChange={scheduleMiddleScrollUpdate}
+          />
 
           <Suspense>
             <FavoritesSection
@@ -1437,19 +1479,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           </Suspense>
 
-          <ChannelsUnreadWidget
-            sidebarState={sidebarDisplayState()}
-            onSectionOpenChange={scheduleMiddleScrollUpdate}
-            onDropdownOpenChange={handleOverlayDropdownOpenChange}
-          />
-
-          <Show when={tryItems().length > 0}>
-            <CollapsibleSidebarSection
-              label="Try"
-              items={tryItems()}
-              onOpenChange={scheduleMiddleScrollUpdate}
+          <Suspense>
+            <ChannelsRecentWidget
+              sidebarState={sidebarDisplayState()}
+              onSectionOpenChange={scheduleMiddleScrollUpdate}
+              onDropdownOpenChange={handleOverlayDropdownOpenChange}
             />
-          </Show>
+          </Suspense>
         </div>
         <div
           class={cn(
@@ -1531,10 +1567,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
             }}
           />
         </Show>
+        <Show when={isExpandedView() && tryItems().length > 0}>
+          <TryCard items={tryItems()} onDismiss={dismissTrySection} />
+        </Show>
         <SidebarSettingsWidget
           isSlim={isSlim}
           onSelect={openSettingsTab}
           onMenuOpenChange={handleOverlayDropdownOpenChange}
+          gettingStartedLink={gettingStartedMenuLink()}
         />
       </div>
       <InviteModal />
@@ -1559,6 +1599,12 @@ interface SidebarLinkProps extends SidebarItem {
    * Email link's expand chevron.
    */
   trailingWhenActive?: JSX.Element;
+  /**
+   * Swaps the icon for an X while the row is hovered (expanded sidebar only —
+   * in slim mode the icon is the whole row, so the swap would hijack
+   * navigation). Clicking the X calls `onRemove` instead of navigating.
+   */
+  removeAction?: { tooltip: string; onRemove: () => void };
 }
 
 const SidebarLink = (props: SidebarLinkProps) => {
@@ -1679,7 +1725,53 @@ const SidebarLink = (props: SidebarLinkProps) => {
         >
           <Show when={props.icon}>
             <div class="size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+              <Show
+                when={
+                  isHovering() && props.sidebarState !== 'slim'
+                    ? props.removeAction
+                    : undefined
+                }
+                fallback={
+                  <Dynamic
+                    component={props.icon}
+                    triggerAnimation={isHovering()}
+                  />
+                }
+              >
+                {(removeAction) => (
+                  <Tooltip
+                    label={removeAction().tooltip}
+                    as="span"
+                    placement="top"
+                  >
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={removeAction().tooltip}
+                      class="flex items-center justify-center text-ink-muted
+                     rounded-md hover:bg-failure hover:text-surface p-1"
+                      onMouseDown={(e) => {
+                        // The row navigates on mousedown; the X must not.
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeAction().onRemove();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeAction().onRemove();
+                        }
+                      }}
+                    >
+                      <XIcon />
+                    </span>
+                  </Tooltip>
+                )}
+              </Show>
             </div>
           </Show>
 

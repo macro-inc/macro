@@ -30,11 +30,10 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
-import { splitPanelLayer } from '../layers';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { createHeaderCollapser } from '../utils/createHeaderCollapser';
+import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -70,10 +69,8 @@ export function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const headerCollapser = createHeaderCollapser(
-    () => layoutRefs.headerLeft,
-    () => panelSize.width
-  );
+  const headerCollapseController = createPriorityCollapseController();
+  const toolbarCollapseController = createPriorityCollapseController();
 
   const splitLayoutHelpers = useSplitLayout();
 
@@ -234,7 +231,8 @@ export function SplitPanel(props: SplitPanelProps) {
               );
             };
           },
-          headerCollapser,
+          headerCollapser: headerCollapseController.collapser,
+          toolbarCollapser: toolbarCollapseController.collapser,
           layoutRefs,
           titleFileMenuRef,
           setTitleFileMenuRef,
@@ -321,14 +319,17 @@ export function SplitPanel(props: SplitPanelProps) {
               <Panel.Header
                 class={cn(
                   'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
-                  splitPanelLayer.controls,
+                  'z-split-panel-chrome',
                   // On mobile the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
                   'mobile:min-h-0 mobile:border-b-0',
                   shouldHideSplitHeader() && 'hidden'
                 )}
               >
-                <SplitHeader ref={setHeaderRef} />
+                <SplitHeader
+                  ref={setHeaderRef}
+                  collapseController={headerCollapseController}
+                />
               </Panel.Header>
 
               <Panel.Toolbar
@@ -339,7 +340,10 @@ export function SplitPanel(props: SplitPanelProps) {
                   'border-b-0'
                 )}
               >
-                <SplitToolbar ref={setToolbarRef} />
+                <SplitToolbar
+                  ref={setToolbarRef}
+                  collapseController={toolbarCollapseController}
+                />
               </Panel.Toolbar>
 
               <Panel.Body>

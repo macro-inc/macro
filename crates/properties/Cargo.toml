@@ -9,7 +9,6 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
   "dep:schemars",
-  "dep:serde",
   "dep:serde_json",
   "ports",
 ]
@@ -17,7 +16,6 @@ default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:serde",
   "dep:serde_json",
   "dep:tokio",
   "dep:utoipa",
@@ -53,6 +51,8 @@ futures = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity", optional = true }
@@ -61,7 +61,7 @@ models_permissions = { path = "../models_permissions", optional = true }
 models_properties = { path = "../models_properties" }
 notification = { path = "../notification", optional = true }
 schemars = { workspace = true, optional = true }
-serde = { workspace = true, optional = true }
+serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties" }

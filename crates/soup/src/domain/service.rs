@@ -169,7 +169,6 @@ where
                 .await
                 .map_err(anyhow::Error::from)?,
         };
-
         Ok(res.into_iter().map(|item| SoupCandidate {
             item,
             frecency_score: None,

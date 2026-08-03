@@ -5,7 +5,6 @@ import { Login } from '@app/features/auth/Login';
 import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
-import { Signup } from '@app/features/auth/Signup';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { SearchProvider } from '@app/features/next-soup/search-context';
@@ -14,6 +13,7 @@ import { InteractiveOnboardingModal } from '@app/features/onboarding/Interactive
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
+import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
@@ -25,6 +25,7 @@ import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { CallKitSync } from '@channel/Call/use-callkit';
@@ -34,8 +35,8 @@ import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_ONBOARDING_V4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -60,11 +61,13 @@ import {
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
+import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
+import { Telemetry } from '@macro-inc/observability';
 import {
   BrowserNotificationModal,
   createNotificationSource,
@@ -73,10 +76,6 @@ import {
   usePlatformNotificationState,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
-import {
-  clearUser as clearDatadogUser,
-  setUser as setDatadogUser,
-} from '@observability';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
@@ -115,9 +114,11 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
+import { TaskRoute } from './TaskRoute';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -249,9 +250,8 @@ function BasePathComponent() {
   });
 
   // check session storage for redirect url
-  const redirectUrl = sessionStorage.getItem('redirectUrl');
+  const redirectUrl = consumePostLoginRedirect();
   if (redirectUrl) {
-    sessionStorage.removeItem('redirectUrl');
     const relativeUrl = redirectUrl.replace(window.location.origin, '');
     window.location.href = relativeUrl;
     return;
@@ -308,7 +308,45 @@ function SetupRedirect() {
   return <Navigate href={`/onboarding${location.search}`} />;
 }
 
+/**
+ * The old split-screen /setup surface is retired; the onboarding flow lives at
+ * /onboarding now. Flag off, /setup must go home — forwarding would land
+ * flag-off web users on /login and native users on MobileOnboarding.
+ */
+function SetupRoute() {
+  const onboardingV4 = useOnboardingV4Flag();
+
+  return (
+    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
+      <Show when={onboardingV4().enabled} fallback={<Navigate href="/" />}>
+        <SetupRedirect />
+      </Show>
+    </Show>
+  );
+}
+
+/**
+ * Web/desktop gate for /onboarding. Waits for PostHog to report flags before
+ * bouncing: with the flag on but not yet loaded, a direct visit (or a reload
+ * mid-flow) would otherwise get kicked to /login and lose its ?next.
+ */
+function OnboardingRoute() {
+  const onboardingV4 = useOnboardingV4Flag();
+
+  return (
+    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
+      <Show when={onboardingV4().enabled} fallback={<Navigate href="/login" />}>
+        <OnboardingFlow />
+      </Show>
+    </Show>
+  );
+}
+
 const ROUTES: RouteDefinition[] = [
+  {
+    path: '/task-slug/:taskSlug',
+    component: TaskRoute,
+  },
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
@@ -359,7 +397,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: Signup,
+    component: () => <Login signupMode />,
   },
   {
     path: CALLBACK_PATH,
@@ -430,22 +468,12 @@ const ROUTES: RouteDefinition[] = [
     // direct visit must not touch the onboarding backend (reading it
     // creates the flow's row and starts gathers).
     component: () =>
-      isNativeMobilePlatform() ? (
-        <MobileOnboarding />
-      ) : !ENABLE_ONBOARDING_V4 ? (
-        <Navigate href="/login" />
-      ) : (
-        <OnboardingFlow />
-      ),
+      isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingRoute />,
   },
   {
-    // The old split-screen /setup surface is retired; the onboarding flow
-    // lives at /onboarding now. Preserve the query (?next deep links).
-    // Flag off, /setup must go home — forwarding would land flag-off web
-    // users on /login and native users on the MobileOnboarding screen.
+    // Preserve the query (?next deep links) when forwarding to /onboarding.
     path: '/setup',
-    component: () =>
-      ENABLE_ONBOARDING_V4 ? <SetupRedirect /> : <Navigate href="/" />,
+    component: SetupRoute,
   },
   {
     path: '/team-invite',
@@ -520,16 +548,12 @@ function UserInfoSideEffects() {
   let syncedPlanKey: string | undefined;
   createEffect(
     on(userInfo, (user) => {
-      // Keep Datadog log user context in sync with auth state: set on every
-      // authenticated load (the logs SDK doesn't persist across reloads), and
-      // clear on logout so logs aren't attributed to a signed-out user. Logout
-      // flips userInfo client-side, and on native mobile it's an SPA navigation
-      // with no page reload, so this effect is what clears it there.
-      if (user?.authenticated) {
-        setDatadogUser({ id: user.id, email: user.email });
-      } else {
-        clearDatadogUser();
-      }
+      // Keep telemetry user context in sync with auth state: set on every
+      // authenticated load, and clear on logout so spans and logs aren't
+      // attributed to a signed-out user. Logout flips userInfo client-side,
+      // and on native mobile it's an SPA navigation with no page reload, so
+      // this effect is what clears it there.
+      Telemetry.config.setUser(user?.authenticated ? user.id : undefined);
 
       if (!user || !user.authenticated) {
         syncedPlanKey = undefined;
@@ -576,14 +600,16 @@ function QuerySyncProviderWithUserId() {
 
 function InitialInteractiveOnboardingModal() {
   const userInfoQuery = useUserInfoQuery();
+  const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
 
   const modalOpen = () =>
     open() &&
     // Onboarding-v4 replaces this modal on desktop; the Layout redirect
-    // sends first-time users to /onboarding instead.
-    (!ENABLE_ONBOARDING_V4 || isMobile()) &&
+    // sends first-time users to /onboarding instead. Desktop waits for the
+    // flag to resolve so this doesn't flash before that redirect fires.
+    (isMobile() || (!onboardingV4().loading && !onboardingV4().enabled)) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
@@ -673,6 +699,7 @@ export function Root() {
                           <CallProvider>
                             <CallKitSync />
                             <CallStartedNotifier />
+                            <IncomingCallEvents />
                             <QuickAccessProvider>
                               <SearchProvider>
                                 <ChatAttachmentsInit />

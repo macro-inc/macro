@@ -522,6 +522,7 @@ async fn bulk_options_across_entities_skips_denied_and_applies_granted() {
                 Ok(vec![EntityPropertyOptionSelection {
                     property_definition_id: property_id,
                     option_ids: vec![option_id],
+                    mutation: None,
                 }])
             })
         });

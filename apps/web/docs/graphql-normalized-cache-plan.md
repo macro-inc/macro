@@ -54,9 +54,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
 10. **Eviction & GC** — active operations pin their dependencies; memory tier
     is LRU with a byte budget; disk tier has a byte budget with orphan sweep
     (records unreachable from any persisted operation root).
-11. **Cache identity & lifecycle** — namespace by `scope + schemaHash +
-    cacheFormatVersion`, where **scope is an anonymous client-generated
-    uuid** (localStorage), *not* user identity: construction is synchronous
+11. **Cache identity & lifecycle** — namespace by `scope +
+    schemaCompatibilityEpoch + cacheFormatVersion`, where **scope is an
+    anonymous client-generated uuid** (localStorage), *not* user identity:
+    construction is synchronous
     and offline-capable (no identity waterfall), and no PII appears in
     enumerable storage metadata (IDB database names / SQLite filenames).
     User↔cache consistency is enforced by **identity witnessing**, split
@@ -69,7 +70,11 @@ entire cache in browser memory. With 10s of thousands of cached objects
     triggering write (no stale-in-flight-write races). A mismatch wipes and
     rebinds (“silent restart”) and all active operations re-execute. Eager
     path: clear on logout.
-    Discard on schema/format mismatch (cache is disposable, rebuild from
+    Additive GraphQL schema changes retain existing normalized records;
+    fragment reads can continue projecting fields already present. Manually
+    bump the schema compatibility epoch when identity, field storage shape, or
+    other schema-derived cache semantics become incompatible. Discard records
+    on compatibility-epoch/format mismatch (cache is disposable, rebuild from
     network).
 
     **Key policy — presence-of-id convention**: no client-side key config.
@@ -291,7 +296,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
 
 **Phase 2 — persistence** *(done — `cache-sqlite`, `cache-idb`)*
 - Shared postcard record codec + `cache_namespace(scope)` embedding
-  schema hash + format version.
+  schema compatibility epoch + format version.
 - SQLite backend (Tauri native): WAL mode, batch txns, namespace
   wipe-on-mismatch; tested natively incl. engine integration.
 - IndexedDB backend via the `idb` crate: one DB per namespace, atomic

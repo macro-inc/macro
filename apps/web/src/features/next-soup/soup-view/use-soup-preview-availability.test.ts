@@ -17,15 +17,49 @@ const row = (
 
 const flushEffects = () => Promise.resolve();
 
+/**
+ * A SplitHandle stub whose controller role follows engage/disengage calls,
+ * mirroring how the layout manager reports a Preview Pair.
+ */
+const splitHandleStub = (options: { controller: boolean; room?: boolean }) => {
+  let controller = options.controller;
+  const engagePreview = vi.fn(() => {
+    controller = true;
+  });
+  const disengagePreview = vi.fn(() => {
+    controller = false;
+  });
+  return {
+    engagePreview,
+    disengagePreview,
+    exitPreviewAsUser: () => {
+      controller = false;
+    },
+    handle: {
+      isControllerSplit: () => controller,
+      isViewerSplit: () => false,
+      canEngagePreview: () => options.room ?? true,
+      engagePreview,
+      disengagePreview,
+    } as unknown as SplitHandle,
+  };
+};
+
 type HarnessOptions = {
   rows?: SoupRow[];
   isLoading?: boolean;
   isFetching?: boolean;
   isPlaceholderData?: boolean;
+  controller?: boolean;
+  room?: boolean;
+  onPreviewRestored?: () => void;
 };
 
 const createHarness = (initial: HarnessOptions = {}) => {
-  const disengagePreview = vi.fn();
+  const stub = splitHandleStub({
+    controller: initial.controller ?? true,
+    room: initial.room,
+  });
   let dispose!: () => void;
   let setRows!: (rows: SoupRow[]) => void;
   let setLoading!: (loading: boolean) => void;
@@ -51,15 +85,15 @@ const createHarness = (initial: HarnessOptions = {}) => {
       isLoading,
       isFetching,
       isPlaceholderData,
-      splitHandle: {
-        isControllerSplit: () => true,
-        disengagePreview,
-      } as unknown as SplitHandle,
+      splitHandle: stub.handle,
+      onPreviewRestored: initial.onPreviewRestored,
     });
   });
 
   return {
-    disengagePreview,
+    engagePreview: stub.engagePreview,
+    disengagePreview: stub.disengagePreview,
+    exitPreviewAsUser: stub.exitPreviewAsUser,
     dispose,
     setRows,
     setLoading,
@@ -121,6 +155,7 @@ describe('Soup preview availability', () => {
     });
     await flushEffects();
     expect(harness.disengagePreview).not.toHaveBeenCalled();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
     harness.dispose();
   });
 
@@ -160,6 +195,97 @@ describe('Soup preview availability', () => {
     harness.setFetching(false);
     await flushEffects();
     expect(harness.disengagePreview).toHaveBeenCalledOnce();
+    harness.dispose();
+  });
+
+  it('re-engages preview when entities return after an empty state', async () => {
+    const onPreviewRestored = vi.fn();
+    const harness = createHarness({ onPreviewRestored });
+
+    await flushEffects();
+    harness.setRows([]);
+    await flushEffects();
+    expect(harness.disengagePreview).toHaveBeenCalledOnce();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
+
+    harness.setRows([row()]);
+    await flushEffects();
+    expect(harness.engagePreview).toHaveBeenCalledOnce();
+    expect(onPreviewRestored).toHaveBeenCalledOnce();
+    harness.dispose();
+  });
+
+  it('waits for the returning result to settle before restoring preview', async () => {
+    const onPreviewRestored = vi.fn();
+    const harness = createHarness({ onPreviewRestored });
+
+    await flushEffects();
+    harness.setRows([]);
+    await flushEffects();
+    expect(harness.disengagePreview).toHaveBeenCalledOnce();
+
+    // Entities reappear while their fetch is still in flight (e.g. an
+    // optimistic insert): the suspension must not restore mid-flight.
+    batch(() => {
+      harness.setRows([row()]);
+      harness.setFetching(true);
+    });
+    await flushEffects();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
+
+    harness.setFetching(false);
+    await flushEffects();
+    expect(harness.engagePreview).toHaveBeenCalledOnce();
+    expect(onPreviewRestored).toHaveBeenCalledOnce();
+    harness.dispose();
+  });
+
+  it('does not re-engage after the user exits preview mode', async () => {
+    const harness = createHarness();
+
+    await flushEffects();
+    harness.exitPreviewAsUser();
+
+    harness.setRows([]);
+    await flushEffects();
+    expect(harness.disengagePreview).not.toHaveBeenCalled();
+
+    harness.setRows([row()]);
+    await flushEffects();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
+    harness.dispose();
+  });
+
+  it('does not engage when preview was never on', async () => {
+    const harness = createHarness({ rows: [], controller: false });
+
+    await flushEffects();
+    harness.setRows([row()]);
+    await flushEffects();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
+    harness.dispose();
+  });
+
+  it('consumes the suspension when there is no room to restore', async () => {
+    const onPreviewRestored = vi.fn();
+    const harness = createHarness({ room: false, onPreviewRestored });
+
+    await flushEffects();
+    harness.setRows([]);
+    await flushEffects();
+    expect(harness.disengagePreview).toHaveBeenCalledOnce();
+
+    harness.setRows([row()]);
+    await flushEffects();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
+    expect(onPreviewRestored).not.toHaveBeenCalled();
+
+    // The consumed suspension cannot re-engage on a later cycle either.
+    harness.setRows([]);
+    await flushEffects();
+    harness.setRows([row()]);
+    await flushEffects();
+    expect(harness.engagePreview).not.toHaveBeenCalled();
     harness.dispose();
   });
 });

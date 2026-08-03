@@ -36,6 +36,7 @@ export * from './errorResponse';
 export * from './generateEmailLinkRequest';
 export * from './genericSuccessResponse';
 export * from './getLegacyUserPermissionsResponse';
+export * from './getLegacyUserPermissionsResponseCreatedAt';
 export * from './getLegacyUserPermissionsResponseGroup';
 export * from './getLegacyUserPermissionsResponseName';
 export * from './getNamesWithEmailRequestBody';

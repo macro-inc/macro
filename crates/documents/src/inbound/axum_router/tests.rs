@@ -22,7 +22,7 @@ use macro_authorization::{
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{
-    document::{DocumentBasic, DocumentMetadata, response::DocumentResponseMetadata},
+    document::{DocumentBasic, DocumentMetadata, FileType, response::DocumentResponseMetadata},
     sync_service::SyncServiceVersionID,
 };
 use model_entity::Entity;
@@ -42,7 +42,7 @@ use task_dedup::{
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::{DocumentRouterState, documents_router};
+use super::{DocumentRouterState, content_uploaded::content_uploaded_handler, documents_router};
 use crate::{
     domain::{
         content::DocumentContent,
@@ -53,7 +53,7 @@ use crate::{
             DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
             LocationQueryParams, TaskBranchName,
         },
-        ports::{DocumentService, create::DocumentCreationService},
+        ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{
             CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
             DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
@@ -90,6 +90,13 @@ struct UploadSnapshotCall {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct ContentUploadedCall {
+    document_id: String,
+    file_type: FileType,
+    document_version_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct TeamSlugCall {
     team_id: String,
     user_id: String,
@@ -107,6 +114,7 @@ enum TeamSlugResult {
 struct FakeDocumentService {
     create_calls: Mutex<Vec<CreateDocumentCall>>,
     upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
+    content_uploaded_calls: Mutex<Vec<ContentUploadedCall>>,
     internal_get_calls: Mutex<Vec<String>>,
     team_slug_calls: Mutex<Vec<TeamSlugCall>>,
     team_slug_result: Mutex<Option<TeamSlugResult>>,
@@ -125,6 +133,13 @@ impl FakeDocumentService {
         self.upload_snapshot_calls
             .lock()
             .expect("upload snapshot calls lock poisoned")
+            .clone()
+    }
+
+    fn content_uploaded_calls(&self) -> Vec<ContentUploadedCall> {
+        self.content_uploaded_calls
+            .lock()
+            .expect("content uploaded calls lock poisoned")
             .clone()
     }
 
@@ -391,6 +406,25 @@ impl DocumentService for FakeDocumentService {
         _share: bool,
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
+    }
+}
+
+impl DocumentContentEventService for FakeDocumentService {
+    async fn publish_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        self.content_uploaded_calls
+            .lock()
+            .expect("content uploaded calls lock poisoned")
+            .push(ContentUploadedCall {
+                document_id: document_id.to_string(),
+                file_type,
+                document_version_id,
+            });
+        Ok(())
     }
 }
 
@@ -791,8 +825,19 @@ fn test_router() -> (
         FakeDocumentService,
         FakeEntityAccessService,
         FakeAuthorizationService,
-        (),
-    >(state);
+        DocumentRouterState<FakeDocumentService, FakeEntityAccessService, FakeAuthorizationService>,
+    >(state.clone())
+    .route(
+        "/{document_id}/content-uploaded",
+        axum::routing::post(
+            content_uploaded_handler::<
+                FakeDocumentService,
+                FakeEntityAccessService,
+                FakeAuthorizationService,
+            >,
+        ),
+    )
+    .with_state(state);
 
     (
         router,
@@ -967,6 +1012,56 @@ async fn get_document_by_team_slug_preserves_domain_error_statuses() {
     assert!(access_service.document_access_calls().is_empty());
     assert!(document_service.get_document_calls().is_empty());
     assert!(document_service.internal_get_calls().is_empty());
+}
+
+#[tokio::test]
+async fn content_uploaded_requires_internal_authentication_and_forwards_request() {
+    let (router, document_service, _access_service, authorization_service) = test_router();
+    let body = || {
+        Body::from(
+            serde_json::to_vec(&json!({
+                "file_type": "pdf",
+                "document_version_id": "convert",
+            }))
+            .expect("request should serialize"),
+        )
+    };
+
+    let jwt_request = Request::post("/content-document/content-uploaded")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .header("content-type", "application/json")
+        .body(body())
+        .expect("request should build");
+    assert_eq!(
+        send_status(&router, jwt_request).await,
+        StatusCode::FORBIDDEN
+    );
+    assert!(document_service.content_uploaded_calls().is_empty());
+
+    let internal_request = Request::post("/content-document/content-uploaded")
+        .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+        .header("content-type", "application/json")
+        .body(body())
+        .expect("request should build");
+    assert_eq!(send_status(&router, internal_request).await, StatusCode::OK);
+    assert_eq!(
+        document_service.content_uploaded_calls(),
+        [ContentUploadedCall {
+            document_id: "content-document".to_string(),
+            file_type: FileType::Pdf,
+            document_version_id: Some("convert".to_string()),
+        }]
+    );
+    assert_eq!(
+        authorization_service.calls(),
+        [
+            AuthorizationCall::Jwt(JWT_TOKEN.to_string()),
+            AuthorizationCall::Internal {
+                provided_key: STANDARD_INTERNAL_KEY.to_string(),
+                claims: InternalIdentityClaims::default(),
+            },
+        ]
+    );
 }
 
 #[tokio::test]

@@ -1,4 +1,4 @@
-//! Macro event broker publisher for realtime Soup events.
+//! Macro event broker publisher for realtime Soup patches.
 
 #[cfg(test)]
 mod test;
@@ -11,7 +11,7 @@ use crate::domain::{
     ports::SoupRealtimePublisher,
 };
 
-/// Realtime Soup publisher backed by the typed macro event broker service.
+/// Realtime Soup patch publisher backed by the typed macro event broker service.
 pub struct KafkaSoupRealtimePublisher<B> {
     broker: B,
 }
@@ -33,7 +33,7 @@ where
         err
     )]
     async fn publish(&self, message: SoupRealtimeMessage) -> Result<(), Report> {
-        let event = SoupMacroEvent::item_updated(message);
+        let event = SoupMacroEvent::from_message(message);
         let publish = self
             .broker
             .send_event(&event)

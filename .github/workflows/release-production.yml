@@ -22,7 +22,15 @@ jobs:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+  deploy-sync-service:
+    name: Deploy Sync Service
+    # The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
+    needs: [deploy-cloud-storage]
+    uses: ./.github/workflows/deploy_sync_service.yml
+    with:
+      environment: prod
+    secrets: inherit
 
   build:
     name: Build Web App
@@ -50,16 +58,19 @@ jobs:
         working-directory: apps/web
         run: just build-prod
         env:
-          VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
-          VITE_DD_HASH: ${{ github.sha }}
           VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
           VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+          VITE_OTEL_ENV: prod
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: web-app-prod-build
           path: apps/web/dist
           retention-days: 7
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
 
   deploy:
     name: Deploy Web App
@@ -114,6 +125,9 @@ jobs:
           DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
           DATADOG_SITE: us5.datadoghq.com
           DATADOG_API_HOST: api.us5.datadoghq.com
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
 
   upload:
     name: Upload Release Artifacts

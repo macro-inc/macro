@@ -12,6 +12,7 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EntityFilterAst, LiteralTree,
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
@@ -86,6 +87,8 @@ impl EmailPreset {
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemType {
+    /// Calendar event.
+    CalendarEvent,
     /// Macro document.
     Document,
     /// AI chat conversation.
@@ -108,6 +111,25 @@ pub enum ItemType {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EntityItem {
+    /// Canonical calendar event item.
+    #[serde(rename_all = "camelCase")]
+    CalendarEvent {
+        /// Calendar event id.
+        id: Uuid,
+        /// Event title.
+        title: String,
+        /// Event status.
+        status: String,
+        /// Optional location.
+        location: Option<String>,
+        /// Optional conference join URL.
+        conference_url: Option<String>,
+        /// Canonical timed or all-day span.
+        time: serde_json::Value,
+        /// Tags on the event visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
     /// Macro document item.
     #[serde(rename_all = "camelCase")]
     Document {
@@ -217,6 +239,15 @@ impl EntityItem {
         tag_map: &HashMap<Uuid, AppliedTag>,
     ) -> Self {
         match item {
+            SoupItem::CalendarEvent(event) => EntityItem::CalendarEvent {
+                id: event.id,
+                title: event.title,
+                status: event.status,
+                location: event.location,
+                conference_url: event.conference_url,
+                time: serde_json::to_value(event.time).unwrap_or(serde_json::Value::Null),
+                tags: resolve_applied_tags(&event.extra.properties, tag_map),
+            },
             SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
                 sub_type: doc.sub_type.as_ref().map(|sub_type| {
@@ -312,6 +343,7 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Chat(chat) => &chat.extra.properties,
             SoupItem::Project(project) => &project.extra.properties,
             SoupItem::EmailThread(thread) => &thread.extra.properties,
+            SoupItem::CalendarEvent(event) => &event.extra.properties,
             SoupItem::CrmCompany(company) => &company.extra.properties,
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
@@ -496,6 +528,7 @@ impl ListEntities {
         };
 
         let ast = EntityFilterAst {
+            calendar_event_filter: None,
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
             chat_filter: self.chat_filter.clone(),
@@ -534,6 +567,11 @@ impl ListEntities {
         };
 
         EntityFilterAst {
+            calendar_event_filter: if include_types.contains(&ItemType::CalendarEvent) {
+                ast.calendar_event_filter
+            } else {
+                Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil()))))
+            },
             document_filter: if include_types.contains(&ItemType::Document) {
                 ast.document_filter
             } else {
@@ -801,6 +839,7 @@ pub(super) fn build_summary(
     let mut channels = 0;
     let mut channel_threads = 0;
     let mut call_records = 0;
+    let mut calendar_events = 0;
     let mut foreign_entities = 0;
 
     for item in items {
@@ -812,6 +851,7 @@ pub(super) fn build_summary(
             EntityItem::Channel { .. } => channels += 1,
             EntityItem::ChannelThread { .. } => channel_threads += 1,
             EntityItem::Call { .. } => call_records += 1,
+            EntityItem::CalendarEvent { .. } => calendar_events += 1,
             EntityItem::ForeignEntity { .. } => foreign_entities += 1,
         }
     }
@@ -857,6 +897,12 @@ pub(super) fn build_summary(
         parts.push(format!(
             "{call_records} call record{}",
             if call_records == 1 { "" } else { "s" }
+        ));
+    }
+    if calendar_events > 0 {
+        parts.push(format!(
+            "{calendar_events} calendar event{}",
+            if calendar_events == 1 { "" } else { "s" }
         ));
     }
     if foreign_entities > 0 {

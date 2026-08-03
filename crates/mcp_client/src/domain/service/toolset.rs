@@ -1,4 +1,4 @@
-use crate::domain::models::{CallToolResultExt, Error, McpServer, McpServerRecord};
+use crate::domain::models::{CallToolResultExt, Error, MacroUserIdStr, McpServer, McpServerRecord};
 use crate::domain::ports::{McpConnector, McpServerStore};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
@@ -55,6 +55,9 @@ pub struct McpToolSet {
     tools: BTreeMap<MangledName, RegisteredTool>,
     /// Kept alive so the background transport tasks aren't cancelled.
     _connections: Vec<McpServer>,
+    /// The owning user, for correlating tool-call failures in logs. All
+    /// records passed to [`McpToolSet::new`] belong to one user in practice.
+    user_id: Option<MacroUserIdStr<'static>>,
 }
 
 impl McpToolSet {
@@ -65,28 +68,43 @@ impl McpToolSet {
     /// Servers that fail to connect or list tools are silently skipped.
     #[tracing::instrument(skip_all)]
     pub async fn new<S: McpServerStore>(records: &[McpServerRecord], server_store: Arc<S>) -> Self {
-        let futs = records
-            .iter()
-            .filter(|r| r.enabled)
-            .map(|record| {
-                let server_store = server_store.clone();
-                async move {
-                let client = record.connect(server_store).await.inspect_err(|e| {
-                    tracing::warn!(server = %record.server_name, error = ?e, "failed to connect");
-                }).ok()?;
+        let user_id = records.first().map(|r| r.user_id.clone());
+
+        let futs = records.iter().filter(|r| r.enabled).map(|record| {
+            let server_store = server_store.clone();
+            async move {
+                let client = record
+                    .connect(server_store)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::warn!(
+                            user_id = %record.user_id,
+                            server = %record.server_name,
+                            url = %record.url,
+                            error = ?e,
+                            "failed to connect"
+                        );
+                    })
+                    .ok()?;
 
                 let server_tools = match client.list_all_tools().await {
                     Ok(t) => t,
                     Err(e) => {
-                        tracing::warn!(server = %record.server_name, error = ?e, "failed to list tools");
+                        tracing::warn!(
+                            user_id = %record.user_id,
+                            server = %record.server_name,
+                            url = %record.url,
+                            error = ?e,
+                            "failed to list tools"
+                        );
                         let _ = client.cancel().await;
                         return None;
                     }
                 };
 
                 Some((record.server_name.clone(), client, server_tools))
-                }
-            });
+            }
+        });
 
         let results = futures::future::join_all(futs).await;
 
@@ -115,6 +133,7 @@ impl McpToolSet {
         Self {
             tools,
             _connections: connections,
+            user_id,
         }
     }
 
@@ -156,7 +175,7 @@ impl McpToolSet {
         names
     }
 
-    #[tracing::instrument(skip(self, arguments), err)]
+    #[tracing::instrument(skip(self, arguments), err, fields(user_id = ?self.user_id))]
     async fn call_tool(
         &self,
         name: &str,

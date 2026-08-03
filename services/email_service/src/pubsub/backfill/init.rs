@@ -1,154 +1,22 @@
-use super::increment_counters;
-use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
-use crate::util::process_pre_insert::sync_labels::sync_labels;
-use crate::util::sync_contacts::sync_contacts;
-use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
+use crate::{backfill_init_service, pubsub::context::PubSubContext};
+use models_email::email::service::{
+    backfill::{BackfillJob, InitPayload, JobScopedPayload},
+    link::Link,
+    pubsub::ProcessingError,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::email::service::thread::ListThreadsPayload;
-use models_email::email::service::{backfill, link};
-use models_email::gmail::operations::GmailApiOperation;
-use std::cmp::min;
 
-/// This step is invoked via the API when a new job is created.
-/// Populates total_threads value in backfill_job row, and sends the first ListThreads message.
-#[tracing::instrument(skip(ctx, access_token))]
+/// Map one initialization queue delivery into the email-backfill application service.
+#[tracing::instrument(
+    skip(ctx, access_token, link, backfill_job),
+    fields(link_id = %link.id, job_id = %backfill_job.id),
+    err
+)]
 pub async fn init_backfill(
     ctx: &PubSubContext,
     access_token: &str,
     scope: &JobScopedPayload<InitPayload>,
-    link: &link::Link,
-    backfill_job: &backfill::BackfillJob,
+    link: &Link,
+    backfill_job: &BackfillJob,
 ) -> Result<(), ProcessingError> {
-    tracing::info!("Initializing backfill job");
-
-    // ensure we have the user's labels in the db
-    sync_labels(&ctx.db, &ctx.gmail_client, access_token, link.id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to sync labels"),
-            })
-        })?;
-
-    if let Err(e) = sync_contacts(
-        link,
-        &ctx.db,
-        &ctx.gmail_client,
-        &ctx.sqs_client,
-        access_token,
-    )
-    .await
-    {
-        tracing::error!(error = ?e, "Failed to sync contacts");
-    }
-
-    let threads_requested_limit = backfill_job.threads_requested_limit;
-
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::UsersGetProfile,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
-    // get the total number of threads the user has in their account
-    let total_threads = match ctx
-        .gmail_client
-        .get_profile_threads_total(access_token)
-        .await
-    {
-        Ok(list) => list,
-        Err(e) => {
-            // Construct the structured Retryable error and return immediately.
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get total threads from Gmail API"),
-            }));
-        }
-    };
-
-    // If thread count is not specified, populate all available threads. Otherwise,
-    // populate up to the requested number or total available, whichever is smaller
-    let total_threads = match threads_requested_limit {
-        Some(requested) => min(total_threads, requested),
-        None => total_threads,
-    };
-
-    email_db_client::backfill::job::update::update_job_total_threads(
-        &ctx.db,
-        scope.job_id,
-        total_threads,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to update total_threads"),
-        })
-    })?;
-
-    // With no threads to list, no per-thread message is ever enqueued, so the
-    // per-thread completion path that finalizes the job never runs. Complete
-    // the job directly instead.
-    if total_threads == 0 {
-        increment_counters::handle_job_completed(ctx, link, scope.job_id).await?;
-        return Ok(());
-    }
-
-    ctx.redis_client
-        .init_backfill_job_progress(scope.job_id, total_threads)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::RedisQueryFailed,
-                source: e.context("Failed to create entry in redis for job"),
-            })
-        })?;
-
-    let thread_sqs_msg = BackfillPubsubMessage {
-        backfill_operation: BackfillOperation::ListThreads(JobScopedPayload {
-            link_id: scope.link_id,
-            job_id: scope.job_id,
-            payload: ListThreadsPayload {
-                next_page_token: None, // a value of None tells the process to start from the beginning
-                // Seed the user's most important threads first; this pass then
-                // hands off to the normal most-recent-to-least sweep. Only for
-                // full backfills: a bounded backfill (threads_requested_limit set)
-                // must process an exact count, but the priority pass and the
-                // newest-first sweep can each enqueue up to the limit, so their
-                // non-overlapping threads would push the unique total past it.
-                priority_pass: threads_requested_limit.is_none(),
-            },
-        }),
-    };
-
-    ctx.sqs_client
-        .enqueue_email_backfill_message(thread_sqs_msg)
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context("Failed to enqueue initial ListThreads message".to_string()),
-            })
-        })?;
-
-    email_db_client::backfill::job::update::update_backfill_job_status(
-        &ctx.db,
-        scope.job_id,
-        BackfillJobStatus::InProgress,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to update backfill job status to InProgress"),
-        })
-    })?;
-
-    Ok(())
+    backfill_init_service::init_backfill(ctx, access_token, scope, link, backfill_job).await
 }

@@ -74,7 +74,7 @@ impl CompaniesRepository for StubRepo {
         _link_id: &uuid::Uuid,
         _domain: &str,
         _email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         unimplemented!()
     }
 

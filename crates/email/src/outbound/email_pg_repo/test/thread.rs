@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::*;
 
 #[sqlx::test(
@@ -38,6 +40,31 @@ async fn test_thread_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()>
     let thread = repo.thread_by_id(thread_id).await?;
 
     assert!(thread.is_none(), "Non-existent thread should return None");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn moving_thread_to_project_advances_thread_timestamp(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
+    let new_project_id = "proj-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let repo = EmailPgRepo::new(pool);
+    let original_updated_at = repo.thread_by_id(thread_id).await?.unwrap().updated_at;
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(
+        repo.update_thread_project(thread_id, Some(new_project_id))
+            .await?
+    );
+
+    let updated_thread = repo.thread_by_id(thread_id).await?.unwrap();
+    assert_eq!(updated_thread.project_id.as_deref(), Some(new_project_id));
+    assert!(updated_thread.updated_at > original_updated_at);
 
     Ok(())
 }

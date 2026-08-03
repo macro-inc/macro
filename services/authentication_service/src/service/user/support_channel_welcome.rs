@@ -16,9 +16,9 @@ const JACOB_EMAIL: &str = "jacob@macro.com";
 const JULIA_EMAIL: &str = "julia@macro.com";
 const TEO_EMAIL: &str = "teo@macro.com";
 
-/// The channel operation required to post a new user's welcome message.
+/// The channel operation required to post a new user's welcome messages.
 pub trait SupportChannelMessageGateway: Send + Sync + 'static {
-    /// Post the initial welcome message.
+    /// Post a welcome message.
     fn post_message(
         &self,
         actor: Sender,
@@ -62,18 +62,22 @@ pub async fn post_support_channel_welcome(
     let julia = support_user(JULIA_EMAIL)?;
     let teo = support_user(TEO_EMAIL)?;
 
-    let content = format!(
-        "Hey {},\n\
-Thanks signing up for Macro, we're excited for you to try it out.\n\
-In case you need any help, this is a support channel with {} (the ceo) and {} (the cto).\n\
-If you have any feedback or find any bugs let us know here!\n\
-Julia",
-        user_mention(&new_user)?,
+    let new_user_mention = user_mention(&new_user)?;
+
+    let welcome = format!(
+        "Hey {new_user_mention},\n\
+\n\
+Welcome to Macro, we're excited for you to try it out.\n\
+\n\
+This is your own personal support Channel, with {} (ceo) and {} (cto) and me (julia).\n\
+\n\
+If you have any feedback or find any bugs let us know here.",
         user_mention(&jacob)?,
         user_mention(&teo)?,
     );
-    // Keep Jacob and Teo visually mentioned in the welcome copy without notifying them. Julia is
-    // the sender, so the channel notification policy excludes her automatically.
+    // Keep Jacob and Teo visually mentioned without tracking them: tracked
+    // mentions would notify them on every signup. Julia is the sender, so the
+    // channel notification policy excludes her automatically.
     let mentions = [&new_user].into_iter().map(SimpleMention::user).collect();
 
     gateway
@@ -81,7 +85,7 @@ Julia",
             Sender::new_from_user(julia),
             channel_id,
             PostMessageRequest {
-                content,
+                content: welcome,
                 mentions,
                 thread_id: None,
                 attachments: Vec::new(),
@@ -90,5 +94,7 @@ Julia",
                 triggered_by: None,
             },
         )
-        .await
+        .await?;
+
+    Ok(())
 }

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO calendar_event_sources (\n                    id, event_id, source_link_id, source_kind, email_link_id, email_thread_id,\n                    email_message_id, email_attachment_id, content_hash,\n                    raw_payload, source_sequence, source_updated_at, normalized_payload\n                )\n                VALUES (\n                    $1, $2, $3, 'email_ics', $3, $4, $5, $6, $7, $8,\n                    $9, $10, $11\n                )\n                ON CONFLICT (\n                    email_link_id,\n                    email_message_id,\n                    COALESCE(email_attachment_id, ''),\n                    content_hash,\n                    event_id\n                ) WHERE source_kind = 'email_ics'\n                DO UPDATE SET\n                    raw_payload = EXCLUDED.raw_payload,\n                    source_sequence = EXCLUDED.source_sequence,\n                    source_updated_at = EXCLUDED.source_updated_at,\n                    normalized_payload = EXCLUDED.normalized_payload,\n                    last_seen_at = now()\n                WHERE\n                    EXCLUDED.source_sequence > calendar_event_sources.source_sequence\n                    OR (\n                        EXCLUDED.source_sequence = calendar_event_sources.source_sequence\n                        AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at\n                    )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c65dbb2fce28734477e2c1e40d3a0f0b49e75e41bceb0133b74794fbe2144ce7"
+}

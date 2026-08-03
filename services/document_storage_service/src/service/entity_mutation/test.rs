@@ -1,14 +1,17 @@
 use super::*;
 
 #[test]
-fn success_includes_requested_entity_and_cascade_refs() {
+fn success_preserves_domain_effect_order_and_kind() {
     let requested = EntityType::Project.with_entity_string("project-1".to_owned());
     let child = EntityType::Document.with_entity_string("document-1".to_owned());
+    let effects = vec![
+        EntityMutationEffect::deleted(requested.clone()),
+        EntityMutationEffect::updated(child.clone()),
+    ];
 
-    let success = success_with_affected(requested.clone(), vec![child.clone()])
-        .expect("mutation should succeed");
+    let success = success(effects.clone()).expect("mutation should succeed");
 
-    assert_eq!(success.affected_entities, vec![requested, child]);
+    assert_eq!(success.effects, effects);
 }
 
 #[test]
@@ -44,6 +47,8 @@ fn favoritable_kinds_are_an_explicit_allowlist() {
         EntityType::User,
         EntityType::Team,
         EntityType::ChannelMessage,
+        EntityType::StaticFile,
+        EntityType::CrmContact,
     ] {
         assert!(
             !favoritable(entity_type),
@@ -58,9 +63,7 @@ fn favoritable_kinds_are_an_explicit_allowlist() {
         EntityType::EmailThread,
         EntityType::Call,
         EntityType::ForeignEntity,
-        EntityType::StaticFile,
         EntityType::CrmCompany,
-        EntityType::CrmContact,
     ] {
         assert!(
             favoritable(entity_type),

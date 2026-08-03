@@ -12,10 +12,27 @@ export type {
 export { CallControls } from './CallControls/CallControls';
 export { CallEventSync } from './CallEventSync';
 export { CallOverlay } from './CallOverlay';
-export { CallStartedNotifier, stopCallRinger } from './CallStartedNotifier';
+export {
+  CallStartedNotifier,
+  MAX_RING_DURATION_MS,
+  stopCallRinger,
+} from './CallStartedNotifier';
 export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';
+export type {
+  CallAnsweredEvent,
+  CallEndedEvent,
+  CallEvent,
+  CallEventType,
+  CallShareWithTeamToggledEvent,
+  CallStartedEvent,
+} from './call-events';
+export {
+  createCallEventsEffect,
+  isCallEventType,
+  parseCallEvent,
+} from './call-events';
 export { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 export type {
   InCallPanelControls,

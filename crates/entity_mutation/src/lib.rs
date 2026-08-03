@@ -15,7 +15,7 @@ pub use capability::{
     UpdateEntitySharePolicy,
 };
 pub use models::{
-    DuplicateEntityRequest, EntityMutationActor, EntityMutationErrorCode, EntityMutationSuccess,
-    MoveEntityRequest, RenameEntityRequest, UpdateEntitySharePolicyRequest,
+    DuplicateEntityRequest, EntityMutationActor, EntityMutationEffect, EntityMutationErrorCode,
+    EntityMutationSuccess, MoveEntityRequest, RenameEntityRequest, UpdateEntitySharePolicyRequest,
 };
 pub use ports::{EntityMutationService, MutateEntitiesResult, UnavailableEntityMutationService};

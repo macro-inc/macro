@@ -1,4 +1,3 @@
-import { err, ok } from 'neverthrow';
 /**
  * @vitest-environment jsdom
  */
@@ -22,11 +21,13 @@ vi.mock('@service-notification/client', () => ({
   notificationServiceClient: {
     userNotifications: vi.fn(),
     bulkGetUserNotificationsByEventItemId: vi.fn(),
-    bulkMarkNotificationAsSeen: vi.fn(),
-    bulkMarkNotificationAsDone: vi.fn(),
   },
   channelMentionMetadata: {},
   documentMentionMetadata: {},
+}));
+
+vi.mock('@service-storage/graphql-notifications', () => ({
+  updateNotifications: vi.fn(),
 }));
 
 vi.mock('@queries/soup/normalized-cache', () => ({
@@ -40,14 +41,9 @@ import {
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
-import { notificationServiceClient } from '@service-notification/client';
+import { updateNotifications } from '@service-storage/graphql-notifications';
 
-const mockBulkMarkNotificationAsSeen = vi.mocked(
-  notificationServiceClient.bulkMarkNotificationAsSeen
-);
-const mockBulkMarkNotificationAsDone = vi.mocked(
-  notificationServiceClient.bulkMarkNotificationAsDone
-);
+const mockUpdateNotifications = vi.mocked(updateNotifications);
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
   optimisticUpdateSoupItemUpdatedAt
 );
@@ -236,7 +232,7 @@ describe('notification mutations', () => {
       const n2 = createMockNotification({ id: 'n2', viewed_at: null });
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
-      mockBulkMarkNotificationAsSeen.mockResolvedValue(ok({ success: true }));
+      mockUpdateNotifications.mockResolvedValue([]);
 
       let mutatePromise: Promise<unknown> | undefined;
 
@@ -250,6 +246,10 @@ describe('notification mutations', () => {
 
       await mutatePromise;
 
+      expect(mockUpdateNotifications).toHaveBeenCalledWith({
+        notificationIds: ['n1'],
+        operation: 'MARK_SEEN',
+      });
       const notifications = getNotificationsFromCache();
       expect(typeof notifications[0].viewed_at).toBe('string');
       expect(notifications[1].viewed_at).toBe(null);
@@ -261,8 +261,8 @@ describe('notification mutations', () => {
       const n1 = createMockNotification({ id: 'n1', viewed_at: null });
       seedQueryCache([createMockNotificationPage([n1])]);
 
-      mockBulkMarkNotificationAsSeen.mockResolvedValue(
-        err([{ code: 'SERVER_ERROR', message: 'Failed to mark as seen' }])
+      mockUpdateNotifications.mockRejectedValue(
+        new Error('Failed to mark as seen')
       );
 
       let mutatePromise: Promise<unknown> | undefined;
@@ -295,7 +295,7 @@ describe('notification mutations', () => {
         createMockNotificationPage([n2]),
       ]);
 
-      mockBulkMarkNotificationAsSeen.mockResolvedValue(ok({ success: true }));
+      mockUpdateNotifications.mockResolvedValue([]);
 
       let mutatePromise: Promise<unknown> | undefined;
 
@@ -324,7 +324,7 @@ describe('notification mutations', () => {
       const n3 = createMockNotification({ id: 'n3' });
       seedQueryCache([createMockNotificationPage([n1, n2, n3])]);
 
-      mockBulkMarkNotificationAsDone.mockResolvedValue(ok({ success: true }));
+      mockUpdateNotifications.mockResolvedValue([]);
 
       let mutatePromise: Promise<unknown> | undefined;
 
@@ -338,6 +338,10 @@ describe('notification mutations', () => {
 
       await mutatePromise;
 
+      expect(mockUpdateNotifications).toHaveBeenCalledWith({
+        notificationIds: ['n1', 'n3'],
+        operation: 'MARK_DONE',
+      });
       const notifications = getNotificationsFromCache();
       expect(notifications).toHaveLength(1);
       expect(notifications[0].id).toBe('n2');
@@ -350,9 +354,7 @@ describe('notification mutations', () => {
       const n2 = createMockNotification({ id: 'n2' });
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
-      mockBulkMarkNotificationAsDone.mockResolvedValue(
-        err([{ code: 'NETWORK_ERROR', message: 'Connection failed' }])
-      );
+      mockUpdateNotifications.mockRejectedValue(new Error('Connection failed'));
 
       let mutatePromise: Promise<unknown> | undefined;
 
@@ -386,7 +388,7 @@ describe('notification mutations', () => {
         createMockNotificationPage([n3]),
       ]);
 
-      mockBulkMarkNotificationAsDone.mockResolvedValue(ok({ success: true }));
+      mockUpdateNotifications.mockResolvedValue([]);
 
       let mutatePromise: Promise<unknown> | undefined;
 

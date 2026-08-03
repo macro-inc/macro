@@ -1,6 +1,7 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
 import { fetchWithAuth } from '@service-auth/fetch';
 import { err, ok, type Result } from 'neverthrow';
 import type { ObjectLike, ResultError } from './result';
@@ -143,10 +144,10 @@ export async function fetchWithToken<
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const result = await fetchWithAuth<T, CustomErrorCode>(input, init);
     if (result.isErr()) {
-      logger.error('fetchWithToken: fetchWithAuth failed', {
-        input,
-        init,
-        errors: result.error,
+      Telemetry.error('fetchWithToken: fetchWithAuth failed', {
+        input: typeof input === 'string' ? input : input.url,
+        method: init?.method,
+        errors: JSON.stringify(result.error),
       });
     }
 

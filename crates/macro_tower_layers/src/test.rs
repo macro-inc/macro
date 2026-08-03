@@ -14,6 +14,7 @@ use tracing::{
 struct CapturedTracing {
     event_levels: Mutex<Vec<Level>>,
     span_level: Mutex<Option<Level>>,
+    span_target: Mutex<Option<String>>,
     declared_span_fields: Mutex<HashSet<String>>,
     initial_span_fields: Mutex<HashMap<String, String>>,
     recorded_span_fields: Mutex<HashMap<String, String>>,
@@ -61,6 +62,7 @@ impl tracing::Subscriber for TracingCapture {
 
     fn new_span(&self, attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
         *self.captured.span_level.lock().unwrap() = Some(*attrs.metadata().level());
+        *self.captured.span_target.lock().unwrap() = Some(attrs.metadata().target().to_owned());
         *self.captured.declared_span_fields.lock().unwrap() = attrs
             .metadata()
             .fields()
@@ -111,6 +113,10 @@ fn request_span_uses_info_and_safe_structured_fields() {
     });
 
     assert_eq!(*captured.span_level.lock().unwrap(), Some(Level::INFO));
+    assert_eq!(
+        captured.span_target.lock().unwrap().as_deref(),
+        Some(HTTP_REQUEST_SPAN_TARGET)
+    );
 
     let declared_fields = captured.declared_span_fields.lock().unwrap();
     assert!(declared_fields.contains("http.request.method"));
@@ -211,6 +217,126 @@ async fn starvation_detector_warns_when_runtime_blocked() {
     tokio::time::sleep(Duration::from_millis(15)).await;
 
     assert_eq!(captured.event_count(Level::WARN), 1);
+}
+
+#[test]
+fn header_extractor_extracts_w3c_traceparent() {
+    let propagator = opentelemetry_sdk::propagation::TraceContextPropagator::new();
+    let mut headers = http::HeaderMap::new();
+    headers.insert(
+        "traceparent",
+        "00-5b8aa5a2d2c872e8321cf37308d69df2-051581bf3cb55c13-01"
+            .parse()
+            .unwrap(),
+    );
+
+    let cx = opentelemetry::propagation::TextMapPropagator::extract(
+        &propagator,
+        &opentelemetry_http::HeaderExtractor(&headers),
+    );
+
+    let span_context = cx.span().span_context().clone();
+    assert!(span_context.is_valid());
+    assert!(span_context.is_remote());
+    assert_eq!(
+        span_context.trace_id().to_string(),
+        "5b8aa5a2d2c872e8321cf37308d69df2"
+    );
+    assert_eq!(span_context.span_id().to_string(), "051581bf3cb55c13");
+}
+
+#[test]
+fn request_span_adopts_remote_traceparent() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    // Provider with no exporter: spans are created (so parentage is real) but
+    // never shipped anywhere.
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    with_default(subscriber, || {
+        let request = http::Request::builder()
+            .uri("/test")
+            .header(
+                "traceparent",
+                "00-5b8aa5a2d2c872e8321cf37308d69df2-051581bf3cb55c13-01",
+            )
+            .body(())
+            .unwrap();
+
+        let span = MakeSpanWithRemoteParent.make_span(&request);
+        let trace_id = span.context().span().span_context().trace_id();
+        assert_eq!(
+            trace_id.to_string(),
+            "5b8aa5a2d2c872e8321cf37308d69df2",
+            "request span should continue the remote trace"
+        );
+    });
+}
+
+#[test]
+fn request_span_without_traceparent_stays_root() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    with_default(subscriber, || {
+        let request = http::Request::builder().uri("/test").body(()).unwrap();
+        let span = MakeSpanWithRemoteParent.make_span(&request);
+        let trace_id = span.context().span().span_context().trace_id();
+        assert_ne!(
+            trace_id.to_string(),
+            "5b8aa5a2d2c872e8321cf37308d69df2",
+            "no traceparent should mean a fresh trace"
+        );
+    });
+}
+
+#[test]
+fn inject_trace_headers_emits_current_span_traceparent() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    with_default(subscriber, || {
+        let span = tracing::info_span!("outbound_call");
+        let _guard = span.enter();
+
+        let mut headers = http::HeaderMap::new();
+        inject_trace_headers(&mut headers);
+
+        let traceparent = headers
+            .get("traceparent")
+            .expect("traceparent header should be injected inside a span")
+            .to_str()
+            .unwrap();
+        let trace_id = span.context().span().span_context().trace_id().to_string();
+        assert!(
+            traceparent.contains(&trace_id),
+            "traceparent {traceparent} should carry the current trace id {trace_id}"
+        );
+    });
+}
+
+#[test]
+fn inject_trace_headers_is_a_noop_outside_a_span() {
+    let mut headers = http::HeaderMap::new();
+    inject_trace_headers(&mut headers);
+    assert!(headers.get("traceparent").is_none());
 }
 
 #[tokio::test]

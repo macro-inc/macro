@@ -6,6 +6,6 @@ pub mod key;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum IncomingEvent {
-    EventBridgeEvent(EventBridgeEvent),
+    EventBridgeEvent(Box<EventBridgeEvent>),
     SqsEvent(SqsEvent),
 }

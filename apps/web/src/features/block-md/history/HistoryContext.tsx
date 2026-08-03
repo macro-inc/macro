@@ -1,5 +1,6 @@
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { ThrownResultError } from '@core/util/result';
 import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
   buildDiffState,
@@ -32,6 +33,15 @@ export type HistoryUser = {
   color: string;
 };
 
+function describeError(error: unknown): string {
+  if (error instanceof ThrownResultError) {
+    const [first] = error.errors;
+    return first?.description ?? error.message;
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 type HistoryContextValue = {
   isOpen: Accessor<boolean>;
   selectedAt: Accessor<Date | null>;
@@ -42,6 +52,8 @@ type HistoryContextValue = {
   requestLoad: () => void;
   sessions: Accessor<readonly HistorySession[]>;
   loading: { sessions: Accessor<boolean>; doc: Accessor<boolean> };
+  /** Underlying failure message when the snapshot or peer map didn't load. */
+  error: Accessor<string | null>;
   checkoutAt: (ms: number) => SerializedEditorState | null;
   versionIdAt: (ms: number) => HistoryVersionId | null;
   diff: {
@@ -101,7 +113,7 @@ export function HistoryProvider(props: {
     () => (isOpen() || shouldLoad() ? props.documentId() : undefined),
     async (documentId) => {
       const result = await syncServiceClient.getSnapshot({ documentId });
-      if (result.isErr()) throw new Error(String(result.error));
+      if (result.isErr()) throw new ThrownResultError(result.error);
       const doc = new LoroDoc();
       doc.import(result.value);
       return doc;
@@ -131,6 +143,14 @@ export function HistoryProvider(props: {
       : undefined;
   const loadedPeers = (): Map<string, string> | undefined =>
     peerMap.isSuccess ? peerMap.data : undefined;
+
+  // Either fetch failing leaves the timeline permanently empty, so surface it
+  // instead of leaving the UI to guess between "still loading" and "no edits".
+  const error = createMemo<string | null>(() => {
+    if (historyDoc.error !== undefined) return describeError(historyDoc.error);
+    if (peerMap.isError) return describeError(peerMap.error);
+    return null;
+  });
 
   // One stable useDisplayName per unique userId — batched into a single fetch.
   const uniqueUserIds = createMemo(() => {
@@ -237,9 +257,12 @@ export function HistoryProvider(props: {
     requestLoad,
     sessions,
     loading: {
-      sessions: () => loadedDoc() == null || peerMap.isPending,
-      doc: () => loadedDoc() == null,
+      // A failed load is not a pending one — `error` owns that state.
+      sessions: () =>
+        error() == null && (loadedDoc() == null || peerMap.isPending),
+      doc: () => error() == null && loadedDoc() == null,
     },
+    error,
     checkoutAt,
     versionIdAt,
     userByPeer,

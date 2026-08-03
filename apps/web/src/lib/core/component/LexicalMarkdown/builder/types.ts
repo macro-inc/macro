@@ -50,6 +50,9 @@ export interface MentionsOptions {
 export interface TagsOptions {
   /** Insert inline tag mentions into the editor document. Defaults to true. */
   insertTags?: boolean;
+  /** When set, selecting a tag opens a one-row prompt to apply it to this entity label. */
+  applyTargetLabel?: string;
+  isApplied?: (tag: TagMentionLifecycle) => boolean;
   onCreate?: (tag: TagMentionLifecycle) => void;
   onRemove?: (tag: TagMentionLifecycle) => void;
   setTags?: (tags: ReadonlySet<TagMentionLifecycle>) => void;

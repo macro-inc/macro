@@ -1,7 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Lambda } from '../../packages/lambda';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
+import {
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  getKafkaClusterPolicy,
+  stack,
+} from '../../packages/shared';
 
 const LAMBDA_BASE_NAME = 'deleted_item_poller';
 const REPO_ROOT = '../../..';
@@ -11,6 +15,7 @@ const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.z
 export type EnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
+  KAFKA_BROKERS: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
 };
 
@@ -80,6 +85,7 @@ export class DeleteItemPoller extends pulumi.ComponentResource {
           aws.iam.ManagedPolicy.AWSLambdaVPCAccessExecutionRole,
           aws.iam.ManagedPolicy.CloudWatchLogsFullAccess,
           sqsPolicy.arn,
+          getKafkaClusterPolicy(),
         ],
         tags: this.tags,
       },

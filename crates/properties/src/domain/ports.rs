@@ -21,9 +21,9 @@ use models_properties::{DataType, EntityPropertyReference, EntityReference, Enti
 use uuid::Uuid;
 
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyDefinitionOwner, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome, ViewReceipt,
+    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
+    PropertyDefinitionOwner, TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -147,13 +147,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         owner: PropertyDefinitionOwner<'a>,
     ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
 
-    /// Return the owner's tag definition, creating it on first use.
+    /// Return the owner's tag definition and whether it was created on this call.
     // Explicit lifetime required by mockall's automock expansion.
     #[allow(clippy::needless_lifetimes)]
     fn get_or_create_tag_definition<'a>(
         &self,
         owner: PropertyDefinitionOwner<'a>,
-    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<GetOrCreateTagDefinitionResult, Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(
@@ -174,25 +174,27 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<EntityProperty, Self::Err>> + Send;
 
     /// Atomically add one option to a multi-select entity property value,
-    /// attaching the property if needed. Re-adding a present option is a no-op.
-    /// Composes with concurrent option changes without a lost update.
+    /// attaching the property if needed. Re-adding a present option is deduped.
+    /// Composes with concurrent option changes without a lost update and returns
+    /// the complete persisted state.
     fn add_entity_property_option(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
     /// Atomically remove one option from a multi-select entity property value.
-    /// A no-op if the property is unattached or the option is not present.
+    /// Returns no snapshot if the property is unattached or the option is not
+    /// present, because no row was mutated.
     fn remove_entity_property_option(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<EntityPropertyMutationSnapshot>, Self::Err>> + Send;
 
     /// Apply option deltas to several of an entity's multi-select property values
     /// in a single transaction, returning each property's final option ids.
@@ -404,20 +406,4 @@ pub trait NotificationService: Send + Sync + 'static {
         &self,
         notification: TaskAssignedNotification<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-}
-
-/// Port for keeping an entity's indexed properties in sync after a mutation.
-///
-/// Mirrors the per-domain `*SearchIndexer` ports (e.g. `CallSearchIndexer`):
-/// the domain calls it on a write and an SQS-backed adapter in the composition
-/// root publishes the upsert. `dyn`-compatible (boxed future) so it can be an
-/// optional collaborator on the service without adding a generic parameter.
-pub trait PropertySearchIndexer: Send + Sync + std::fmt::Debug {
-    /// Enqueue an upsert of the entity's indexed properties. Best-effort —
-    /// callers log and continue on error.
-    fn enqueue_upsert(
-        &self,
-        entity_id: String,
-        entity_type: EntityType,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>>;
 }

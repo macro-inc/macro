@@ -167,6 +167,40 @@ describe('preview history source', () => {
 
     expect(previewSourceEntityId(openWithSplit.mock.calls[0][0])).toBe('doc-1');
   });
+
+  it('forwards an explicit preview replacement to the split manager', async () => {
+    const openWithSplit = vi.fn();
+    const controller = {
+      content: () => ({ type: 'component', id: 'inbox' }),
+      isControllerSplit: () => true,
+      viewerId: () => 'viewer-1',
+    } as unknown as SplitHandle;
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      getSplitByContent: vi.fn(() => ({ id: 'another-split' })),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'document',
+        id: 'doc-1',
+        fileType: 'md',
+      } as EntityData,
+      { splitHandle: controller, replacePreview: true }
+    );
+
+    expect(openWithSplit.mock.calls[0][1]).toMatchObject({
+      replacePreview: true,
+    });
+    expect(toastAlert).not.toHaveBeenCalled();
+    expect(openWithSplit.mock.calls[0][1].preferNewSplit).toBeUndefined();
+    // The content takes the pair's place, so it is not preview history.
+    expect(
+      previewSourceEntityId(openWithSplit.mock.calls[0][0])
+    ).toBeUndefined();
+  });
 });
 
 describe('getChannelEntityTarget', () => {

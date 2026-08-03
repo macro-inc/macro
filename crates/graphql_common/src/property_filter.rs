@@ -71,6 +71,8 @@ impl GraphqlPropertyMatchValue {
 /// An entity type supported by the properties domain.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlPropertyEntityType {
+    /// Calendar event entity.
+    CalendarEvent,
     /// Call record entity.
     CallRecord,
     /// Channel entity.
@@ -95,6 +97,7 @@ impl GraphqlPropertyEntityType {
     /// Construct a GraphQL property entity type from its properties-domain model.
     pub fn new(value: models_properties::EntityType) -> Self {
         match value {
+            models_properties::EntityType::CalendarEvent => Self::CalendarEvent,
             models_properties::EntityType::CallRecord => Self::CallRecord,
             models_properties::EntityType::Channel => Self::Channel,
             models_properties::EntityType::Chat => Self::Chat,
@@ -110,6 +113,7 @@ impl GraphqlPropertyEntityType {
     /// Convert this GraphQL entity type into its properties-domain model.
     pub fn into_model(self) -> models_properties::EntityType {
         match self {
+            Self::CalendarEvent => models_properties::EntityType::CalendarEvent,
             Self::CallRecord => models_properties::EntityType::CallRecord,
             Self::Channel => models_properties::EntityType::Channel,
             Self::Chat => models_properties::EntityType::Chat,
@@ -128,6 +132,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 
     fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
+            GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,

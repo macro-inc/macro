@@ -101,6 +101,15 @@ async fn main() -> anyhow::Result<()> {
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
+
+    worker_tracker.spawn(email_service::calendar_outbox::run(
+        db.clone(),
+        sqs_client.clone(),
+        calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+        ),
+        worker_cancellation_token.clone(),
+    ));
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,

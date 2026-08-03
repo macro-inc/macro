@@ -8,7 +8,6 @@ import {
   update,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type GroupedSoupInput,
   GroupSoupMembershipDocument,
@@ -20,37 +19,12 @@ import { NOT_SET_GROUP_KEY } from './types';
 type BuildArgs = {
   host: CacheHost;
   entityId: string;
-  /** Properties-service entity kind, used to key the normalized record. */
-  entityType: EntityType;
   propertyDefinitionId: string;
   oldGroupKeys: readonly string[];
   newGroupKeys: readonly string[];
   /** Unsupported/date values still discover and revalidate relevant fields. */
   revalidateOnly?: boolean;
 };
-
-/** Cache `__typename` for a properties-service entity kind. */
-function soupEntityTypename(entityType: EntityType): string | undefined {
-  switch (entityType) {
-    case 'DOCUMENT':
-    case 'TASK':
-      return 'GraphqlSoupDocument';
-    case 'CHAT':
-      return 'GraphqlSoupChat';
-    case 'PROJECT':
-      return 'GraphqlSoupProject';
-    case 'THREAD':
-      return 'GraphqlSoupEmailThread';
-    case 'CHANNEL':
-      return 'GraphqlSoupChannel';
-    case 'CALL_RECORD':
-      return 'GraphqlSoupCall';
-    case 'COMPANY':
-      return 'GraphqlSoupCrmCompany';
-    case 'USER':
-      return undefined;
-  }
-}
 
 export type OptimisticGroupedPropertyUpdates = {
   updates: OptimisticUpdate[];
@@ -151,11 +125,6 @@ export async function buildOptimisticGroupedPropertyUpdates(
   );
   const { removed, added } = changes;
   const updates: OptimisticUpdate[] = [];
-  const soupTypename = soupEntityTypename(args.entityType);
-  // Kinds without a Soup entity record cannot be optimistically moved;
-  // membership converges through revalidation instead.
-  if (!soupTypename) return { updates: [], revalidations };
-  const itemEntityKey = `${soupTypename}:${args.entityId}`;
   for (const pages of views.values()) {
     const sourceGroupKeys = removed.length > 0 ? removed : args.oldGroupKeys;
     const sourcePages = pages.filter((page) =>
@@ -166,6 +135,19 @@ export async function buildOptimisticGroupedPropertyUpdates(
       )
     );
     if (sourcePages.length === 0) continue;
+
+    const sourceItems = sourcePages.flatMap((page) =>
+      page.bins
+        .filter((bin) => sourceGroupKeys.includes(bin.key))
+        .flatMap((bin) => bin.items.filter((item) => item.id === args.entityId))
+    );
+    const entity = sourceItems[0];
+    if (
+      !entity ||
+      sourceItems.some((item) => item.__typename !== entity.__typename)
+    ) {
+      continue;
+    }
 
     const destinationPages = pages.filter(
       (page) =>
@@ -188,7 +170,7 @@ export async function buildOptimisticGroupedPropertyUpdates(
           .field('bins')
           .item('key', key)
           .field('items');
-        updates.push(update(items, remove(itemEntityKey)));
+        updates.push(update(items, remove(entity)));
       }
     }
     for (const page of destinationPages) {
@@ -201,7 +183,7 @@ export async function buildOptimisticGroupedPropertyUpdates(
           .field('bins')
           .item('key', key)
           .field('items');
-        updates.push(update(items, prependUnique(itemEntityKey)));
+        updates.push(update(items, prependUnique(entity)));
       }
     }
   }

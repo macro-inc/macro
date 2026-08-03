@@ -23,6 +23,7 @@ between different chats is unspecified.
 | `chat.restored` | `ChatService::revert_delete` succeeds | `chat_id`, `actor_user_id`, `project_id` |
 | `chat.copied` | `ChatService::copy_chat` succeeds | `chat_id` (the new copy), `source_chat_id`, `owner`, `name` |
 | `chat.message_sent` | `MessageService::create` (user message) or `MessageService::store` (assistant message) persists the message | `chat_id`, `message_id`, `role`, `model`, `actor_user_id`, `attachment_count` |
+| `chat.message_deleted` | `MessageService::delete` permanently deletes the message | `chat_id`, `message_id` |
 
 Optional metadata is serialized as `null`. On `chat.updated`, `name` and
 `project_id` describe the requested PATCH: `null` means the field was omitted,
@@ -36,7 +37,8 @@ callers.
 and distinguishes user messages from assistant messages. `actor_user_id` is
 the sender for user messages and `null` for assistant messages. `chat.copied`
 is keyed by the new chat's id; `chat.message_sent` is keyed by the parent
-chat's id, preserving per-chat ordering.
+chat's id. `chat.message_deleted` is also keyed by the parent chat's id, so
+both message events preserve per-chat ordering.
 
 ## Sanitization
 
@@ -54,10 +56,9 @@ be treated as personal data. This matches identifiers already published on the
 ## Excluded flows and known gaps
 
 Only the successful mutations in the table produce these events. Read/list
-operations and tool-call mutations emit nothing. Message update and delete
-operations and tool events (for example `chat.tool_called` and
-`chat.tool_rejected`) are not yet produced; they can be added later as new
-enum variants.
+operations and tool-call mutations emit nothing. Message update operations
+and tool events (for example `chat.tool_called` and `chat.tool_rejected`) are
+not yet produced; they can be added later as new enum variants.
 
 The AI auto-rename flow
 (`services/document_cognition_service/src/service/chat_renamer.rs`) patches

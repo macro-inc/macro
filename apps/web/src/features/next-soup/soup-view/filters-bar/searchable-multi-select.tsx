@@ -272,14 +272,14 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
         <Layer depth={2}>
           <Combobox.Content
             class={cn(
-              'z-action-menu bg-surface ring ring-edge-muted rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
+              'z-action-menu border border-edge-muted bg-surface rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
               props.contentClass
             )}
           >
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
               <Combobox.Input
-                class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+                class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
                 placeholder={props.placeholder ?? 'Search...'}
               />
             </div>
@@ -404,7 +404,7 @@ export const SearchableMultiSelectInline = (
         <Combobox.Input
           ref={props.inputRef}
           onKeyDown={handleInputKeyDown}
-          class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+          class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
           placeholder={props.placeholder ?? 'Search...'}
         />
       </div>

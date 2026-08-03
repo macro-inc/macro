@@ -35,6 +35,10 @@ import TrashIcon from '@phosphor/trash.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
+import {
+  invalidateOwnUserName,
+  useOwnUserName,
+} from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
 import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
@@ -124,6 +128,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
 /**
  * Save one name field with an optimistic update and rollback on failure.
  * Returns whether the save succeeded, which drives NameInput's status icon.
+ * This panel renders its own value from a local signal, so the invalidation
+ * is for everything else reading the name (see invalidateOwnUserName).
  */
 async function saveUserName(
   value: string,
@@ -140,27 +146,12 @@ async function saveUserName(
       setValue(prev); // rollback on a returned error
       return false;
     }
+    void invalidateOwnUserName();
     return true;
   } catch {
     setValue(prev); // rollback if the call throws before returning a Result
     return false;
   }
-}
-
-function useUserName() {
-  const fetchUserName = async () => {
-    const response = await authServiceClient.getUserName();
-    return response.isOk() ? response.value : null;
-  };
-
-  const [userNameResource] = createResource(fetchUserName);
-
-  const userName = createMemo(() => {
-    if (userNameResource.loading) return undefined;
-    return userNameResource() || undefined;
-  });
-
-  return userName;
 }
 
 function ProfilePictureRow(props: { userId: string }) {
@@ -323,7 +314,10 @@ export function Account() {
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);
 
-  const userName = useUserName();
+  // The shared own-name cache entry (the one saveUserName invalidates), so
+  // this panel and other readers (e.g. the Getting Started checklist) can't
+  // drift.
+  const userName = useOwnUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
   >(undefined);
@@ -593,7 +587,7 @@ function NameInput(props: {
     <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-extra-muted"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-placeholder"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {

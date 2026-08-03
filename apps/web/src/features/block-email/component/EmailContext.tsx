@@ -155,6 +155,9 @@ type EmailContextValues = {
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
   isThreadDone: Accessor<boolean>;
+  /** True when the done state can actually be reversed — see
+   *  `markThreadNotDone`. */
+  canMarkThreadNotDone: Accessor<boolean>;
   /** Unarchives a done thread and restores its notifications. */
   markThreadNotDone: () => boolean;
   /** True when the user marked the open thread unread. Resets to false per
@@ -487,6 +490,18 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return thread ? !thread.inbox_visible : false;
   };
 
+  // Doneness is derived, not stored: `inbox_visible` is recomputed from the
+  // thread's messages as "some message has INBOX and not SENT", and the inbox
+  // view additionally requires an inbound message. A thread with only sent
+  // messages can satisfy neither, so it is permanently done — unarchiving it
+  // reverts on the next recompute and meanwhile labels its sent messages
+  // INBOX, in Gmail too. Only offer the reversal when it can hold.
+  const canMarkThreadNotDone = () => {
+    const thread = threadQuery.data;
+    if (!thread) return false;
+    return !thread.inbox_visible && thread.latest_inbound_message_ts != null;
+  };
+
   // Resolve a thread's soup representation for the mark-done / mark-not-done
   // paths: the live list row when it's rendered, else the normalized
   // soup-cache entity. Shared by markThreadNotDone and archiveThread.
@@ -502,6 +517,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (thread.inbox_visible) return false;
 
+    if (!canMarkThreadNotDone()) return false;
+
     // Mark-not-done issues the /archived request itself (plus notification
     // and soup-cache restore), so the path below skips archiveMutation and
     // only mirrors its thread-cache handling via trackExternalThreadArchive.
@@ -509,7 +526,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     const entity =
       selectedRow?.original ??
-      (cachedItem && cachedItem.tag !== 'channelThread'
+      (cachedItem &&
+      cachedItem.tag !== 'channelThread' &&
+      cachedItem.tag !== 'calendarEvent'
         ? mapApiSoupItemToEntity(cachedItem)
         : undefined);
 
@@ -609,7 +628,11 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           markDoneOpts
         )
       );
-    } else if (cachedItem && cachedItem.tag !== 'channelThread') {
+    } else if (
+      cachedItem &&
+      cachedItem.tag !== 'channelThread' &&
+      cachedItem.tag !== 'calendarEvent'
+    ) {
       // Not rendered inside a soup list (e.g. thread opened in a split): no
       // row to drive the action from, so mark done via the cached soup entity
       // so soup views drop the thread and its notifications settle.
@@ -876,6 +899,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           onRecipientsChange,
           archiveThread,
           isThreadDone,
+          canMarkThreadNotDone,
           markThreadNotDone,
           isThreadMarkedUnread: threadMarkedUnread,
           markThreadUnread,

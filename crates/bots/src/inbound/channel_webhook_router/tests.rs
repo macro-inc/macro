@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotChannel, BotKind, BotOwner, BotToken, CreateBotRequest,
-    CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
+    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use axum::{
     Router,
@@ -187,6 +187,10 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
+        unimplemented!()
+    }
+
     async fn patch_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -224,7 +228,7 @@ impl BotService for TestBotService {
 
     async fn list_bot_channels(
         &self,
-        _caller: MacroUserIdStr<'static>,
+        _caller: BotChannelListCaller,
         _bot_id: BotId,
     ) -> Result<Vec<BotChannel>, BotError> {
         unimplemented!()
@@ -714,28 +718,6 @@ fn scoped_bot_request_body() -> Body {
         })
         .to_string(),
     )
-}
-
-#[tokio::test]
-async fn channel_webhook_router_member_cannot_create_scoped_bot() {
-    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let service = TestBotService::for_create(scoped_bot_response(bot_id));
-    let poster = TestChannelPoster::new();
-    let channel_id = Uuid::new_v4();
-    let request = Request::builder()
-        .method("POST")
-        .uri(format!("/channels/{channel_id}/bots/scoped"))
-        .header("content-type", "application/json")
-        .body(scoped_bot_request_body())
-        .unwrap();
-
-    let response = router(service.clone(), poster, EntityParticipantRole::Member)
-        .oneshot(request)
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(service.create_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

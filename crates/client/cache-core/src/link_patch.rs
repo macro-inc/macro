@@ -29,7 +29,7 @@ pub const MAX_TRAVERSED_LIST: usize = 10_000;
 pub enum LinkPathSegment {
     /// Selects a field on the current embedded object.
     Field {
-        /// Exact cache field key. Nested GroupSoup fields have no arguments.
+        /// Exact cache field key selected by the query path.
         field: FieldKey,
     },
     /// Selects exactly one embedded object in the current list by a scalar field.

@@ -167,7 +167,7 @@ new UserLinkCleanupHandler('user-link-cleanup-handler', {
   envVars: {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
     ENVIRONMENT: stack,
-    RUST_LOG: 'user_link_cleanup_handler=info',
+    RUST_LOG: 'user_link_cleanup_handler=info,macro_http_request=info',
   },
   vpc,
   tags,

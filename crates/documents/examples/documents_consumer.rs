@@ -69,6 +69,9 @@ fn event_type(event: &DocumentTopicEvent) -> &'static str {
         DocumentTopicEvent::Created(_) => "document.created",
         DocumentTopicEvent::Updated(_) => "document.updated",
         DocumentTopicEvent::Deleted(_) => "document.deleted",
+        DocumentTopicEvent::ContentUploaded(_) => "document.content_uploaded",
+        DocumentTopicEvent::SyncContentUpdated(_) => "document.sync_content_updated",
+        DocumentTopicEvent::Purged(_) => "document.purged",
         DocumentTopicEvent::Copied(_) => "document.copied",
         DocumentTopicEvent::Interaction(_) => "document.interaction",
     }

@@ -1,13 +1,5 @@
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { match } from 'ts-pattern';
 import { useCallContext } from './CallContext';
-
-type CallShareWithTeamToggledPayload = {
-  call_id: string;
-  channel_id: string;
-  share_with_team: boolean;
-  toggled_by: string | null;
-};
+import { createCallEventsEffect } from './call-events';
 
 /**
  * Applies connection-gateway events that mutate active-call state held in
@@ -23,17 +15,11 @@ type CallShareWithTeamToggledPayload = {
 export function CallEventSync() {
   const callCtx = useCallContext();
 
-  createConnectionWebsocketEffect((data) => {
-    const payload =
-      typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
-
-    match(data)
-      .with({ type: 'call_share_with_team_toggled' }, () => {
-        const typed = payload as CallShareWithTeamToggledPayload;
-        if (typed.call_id !== callCtx.activeCallId()) return;
-        callCtx.setSharedWithTeam(typed.share_with_team);
-      })
-      .otherwise(() => {});
+  createCallEventsEffect({
+    onShareWithTeamToggled: ({ callId, shareWithTeam }) => {
+      if (callId !== callCtx.activeCallId()) return;
+      callCtx.setSharedWithTeam(shareWithTeam);
+    },
   });
 
   return null;

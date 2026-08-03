@@ -65,9 +65,15 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "interpret": false,
         });
 
+        // Propagate the current trace so the worker's spans join this
+        // service's trace instead of rooting their own.
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+
         let edit_resp = self
             .client
             .post(format!("{}/edit", self.worker_url))
+            .headers(headers)
             .json(&request_body)
             .send()
             .await?;
@@ -112,9 +118,13 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             anyhow::bail!("editing worker client has no internal auth key configured");
         };
 
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+
         let resp = self
             .client
             .delete(format!("{}/traces/{}", self.worker_url, document_id))
+            .headers(headers)
             .header("x-internal-auth-key", internal_auth_key)
             .send()
             .await?;

@@ -1,5 +1,6 @@
 use crate::pubsub::context::{
-    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker,
+    CalendarBackfillServices, CrmServiceType, NotificationIngressType, PubSubContext,
+    PubSubEventBroker,
 };
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
@@ -80,6 +81,8 @@ pub async fn run_worker_with_cancellation(
     retry_worker: bool,
     cancellation_token: CancellationToken,
 ) {
+    let calendar_backfills =
+        CalendarBackfillServices::new(db.clone(), sqs_client.clone(), redis_client.clone());
     let ctx = PubSubContext {
         db,
         sqs_worker: worker.clone(),
@@ -97,6 +100,7 @@ pub async fn run_worker_with_cancellation(
         macro_event_broker,
         notifications_enabled,
         retry_worker,
+        calendar_backfills,
     };
 
     loop {

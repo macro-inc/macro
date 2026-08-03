@@ -37,34 +37,39 @@ describe('canRemoveTeamMember', function () {
     [TeamRole.admin, true],
     [TeamRole.member, false],
     [undefined, false],
-  ])('allows the %s role to remove an ordinary member: %s', function (role, expected) {
-    expect(canRemoveTeamMember(ACTING_USER_ID, role, ordinaryMember)).toBe(
-      expected
-    );
-  });
+  ])(
+    'allows the %s role to remove an ordinary member: %s',
+    function (role, expected) {
+      expect(canRemoveTeamMember(ACTING_USER_ID, role, ordinaryMember)).toBe(
+        expected
+      );
+    }
+  );
 
-  it.each([
-    TeamRole.owner,
-    TeamRole.admin,
-  ])('allows the %s role to remove a peer admin', function (role) {
-    expect(canRemoveTeamMember(ACTING_USER_ID, role, peerAdmin)).toBe(true);
-  });
+  it.each([TeamRole.owner, TeamRole.admin])(
+    'allows the %s role to remove a peer admin',
+    function (role) {
+      expect(canRemoveTeamMember(ACTING_USER_ID, role, peerAdmin)).toBe(true);
+    }
+  );
 
-  it.each([
-    TeamRole.owner,
-    TeamRole.admin,
-  ])('prevents the %s role from removing themselves', function (role) {
-    const actingMember = teamMember(ACTING_USER_ID, role);
+  it.each([TeamRole.owner, TeamRole.admin])(
+    'prevents the %s role from removing themselves',
+    function (role) {
+      const actingMember = teamMember(ACTING_USER_ID, role);
 
-    expect(canRemoveTeamMember(ACTING_USER_ID, role, actingMember)).toBe(false);
-  });
+      expect(canRemoveTeamMember(ACTING_USER_ID, role, actingMember)).toBe(
+        false
+      );
+    }
+  );
 
-  it.each([
-    TeamRole.owner,
-    TeamRole.admin,
-  ])('prevents the %s role from removing the owner', function (role) {
-    expect(canRemoveTeamMember(ACTING_USER_ID, role, owner)).toBe(false);
-  });
+  it.each([TeamRole.owner, TeamRole.admin])(
+    'prevents the %s role from removing the owner',
+    function (role) {
+      expect(canRemoveTeamMember(ACTING_USER_ID, role, owner)).toBe(false);
+    }
+  );
 
   it('prevents removal when the acting user ID is unavailable', function () {
     expect(canRemoveTeamMember(undefined, TeamRole.admin, ordinaryMember)).toBe(

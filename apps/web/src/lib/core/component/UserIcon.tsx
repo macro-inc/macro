@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
-import { isMacroAgentId } from '@core/constant/macroAgent';
+import { isBotPrincipalId, isMacroAgentId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -13,6 +13,7 @@ import {
   useIsConnectedSecondaryInbox,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
+import RobotIcon from '@phosphor/robot.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
@@ -177,6 +178,17 @@ export function UserIcon(props: UserIconProps) {
         >
           <Avatar.Fallback>
             <MacroLogo class="size-[62%]" />
+          </Avatar.Fallback>
+        </Avatar>
+      </Match>
+
+      <Match when={isBotPrincipalId(props.id)}>
+        <Avatar
+          size={size()}
+          class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
+        >
+          <Avatar.Fallback>
+            <RobotIcon class="size-[62%]" />
           </Avatar.Fallback>
         </Avatar>
       </Match>

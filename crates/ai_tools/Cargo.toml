@@ -73,7 +73,7 @@ serde.workspace = true
 serde_json.workspace = true
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
-sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail", "search"] }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 teams = { path = "../teams", default-features = false, features = ["ai_tools", "outbound"] }
 sqlx.workspace = true
 strum.workspace = true

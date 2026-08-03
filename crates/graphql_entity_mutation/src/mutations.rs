@@ -1,14 +1,14 @@
-use std::{borrow::Cow, collections::HashSet, marker::PhantomData, sync::Arc};
+use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
 use async_graphql::{Context, Enum, ErrorExtensions, ID, InputObject, Object, SimpleObject, Union};
-use cowlike::CowLike;
 use entity_mutation::{
-    DuplicateEntityRequest, EntityMutationActor, EntityMutationErrorCode, EntityMutationService,
-    EntityMutationSuccess, MoveEntityRequest, MutateEntitiesResult, RenameEntityRequest,
-    UpdateEntitySharePolicyRequest,
+    DuplicateEntityRequest, EntityMutationActor, EntityMutationEffect, EntityMutationErrorCode,
+    EntityMutationService, EntityMutationSuccess, MoveEntityRequest, MutateEntitiesResult,
+    RenameEntityRequest, UpdateEntitySharePolicyRequest,
 };
-use graphql_common::{GraphqlEntity, GraphqlEntityType};
+use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
+use graphql_soup::{SoupEntityEdges, SoupPatch};
 use model_entity::Entity;
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2,
@@ -65,12 +65,12 @@ fn entity_input_key(entity: &EntityRefInput) -> (GraphqlEntityType, String) {
 }
 
 /// Root GraphQL mutation object for capability-oriented entity mutations.
-pub struct EntityMutationRoot<S> {
-    /// Associates the GraphQL adapter with its domain service.
-    _service: PhantomData<fn() -> S>,
+pub struct EntityMutationRoot<S, E> {
+    /// Associates the GraphQL adapter with its domain service and Soup edges.
+    _service: PhantomData<fn() -> (S, E)>,
 }
 
-impl<S> EntityMutationRoot<S> {
+impl<S, E> EntityMutationRoot<S, E> {
     /// Construct the entity mutation root.
     pub fn new() -> Self {
         Self {
@@ -79,7 +79,7 @@ impl<S> EntityMutationRoot<S> {
     }
 }
 
-impl<S> Default for EntityMutationRoot<S> {
+impl<S, E> Default for EntityMutationRoot<S, E> {
     fn default() -> Self {
         Self::new()
     }
@@ -318,45 +318,28 @@ pub struct GraphqlEntityMutationError {
     pub message: String,
 }
 
-/// Embedded canonical entity reference returned by mutation payloads.
-///
-/// `entityId` is deliberately not named `id`: this object references another
-/// entity and must not itself become a normalized cache record.
-#[derive(Clone, SimpleObject)]
-pub struct GraphqlEntityMutationRef {
-    /// Entity kind.
-    #[graphql(name = "type")]
-    pub entity_type: GraphqlEntityType,
-    /// Canonical entity id.
-    pub entity_id: ID,
-}
-
-impl GraphqlEntityMutationRef {
-    /// Construct a GraphQL mutation reference from a canonical entity.
-    pub fn new(value: Entity<'static>) -> Self {
-        let entity_type = GraphqlEntityType::new(value.entity_type);
-        Self {
-            entity_type,
-            entity_id: ID(value.entity_id.into_owned()),
-        }
-    }
-}
-
 /// Successful result for one requested entity mutation.
-pub struct GraphqlMutationSuccess<'a>(
-    /// Canonical entities changed by the mutation.
-    Cow<'a, [Entity<'a>]>,
-);
+pub struct GraphqlMutationSuccess<E> {
+    /// Ordered domain effects rendered through the shared Soup patch contract.
+    effects: Vec<EntityMutationEffect>,
+    /// Associates the result with the composed Soup edge object.
+    edges: PhantomData<E>,
+}
 
 /// Successful result for one requested entity mutation.
 #[Object]
-impl<'a> GraphqlMutationSuccess<'a> {
-    /// Canonical references to every entity changed by the mutation.
-    async fn affected_entities(&self) -> Vec<GraphqlEntity<'_>> {
-        self.0
+impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
+    /// Ordered normalized-cache effects produced by the mutation.
+    async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
+        let user_id = mutation_actor(ctx)?.user_id;
+        self.effects
             .iter()
-            .map(CowLike::copied)
-            .map(GraphqlEntity)
+            .map(|effect| match effect {
+                EntityMutationEffect::Updated(entity) => {
+                    Ok(SoupPatch::updated(user_id.clone(), entity.clone()))
+                }
+                EntityMutationEffect::Deleted(entity) => SoupPatch::deleted(entity.clone()),
+            })
             .collect()
     }
 }
@@ -394,57 +377,61 @@ impl GraphqlMutationError {
 
 /// Result for one requested entity in a batch.
 #[derive(Union)]
-pub enum GraphqlEntityMutationResult<'a> {
-    /// the request succeeded
-    ///
-    Success(GraphqlMutationSuccess<'a>),
-    /// the request failed
+pub enum GraphqlEntityMutationResult<E: SoupEntityEdges> {
+    /// The request succeeded.
+    Success(GraphqlMutationSuccess<E>),
+    /// The request failed.
     Error(GraphqlMutationError),
 }
 
-impl<'a> GraphqlEntityMutationResult<'a> {
+impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
     /// Convert a borrowed domain mutation outcome into its GraphQL union variant.
-    fn new(x: Result<&'a EntityMutationSuccess<'a>, &'a EntityMutationErrorCode>) -> Self {
+    fn new(x: Result<&EntityMutationSuccess, &EntityMutationErrorCode>) -> Self {
         match x {
-            Ok(r) => GraphqlEntityMutationResult::Success(GraphqlMutationSuccess(Cow::Borrowed(
-                &r.affected_entities,
-            ))),
-            Err(e) => GraphqlEntityMutationResult::Error(GraphqlMutationError(*e)),
+            Ok(result) => Self::Success(GraphqlMutationSuccess {
+                effects: result.effects.clone(),
+                edges: PhantomData,
+            }),
+            Err(error) => Self::Error(GraphqlMutationError(*error)),
         }
     }
-}
 
-impl GraphqlEntityMutationResult<'static> {
     /// Convert an owned domain mutation outcome into its GraphQL union variant.
-    fn new_static(x: Result<EntityMutationSuccess<'static>, EntityMutationErrorCode>) -> Self {
+    fn new_owned(x: MutateEntitiesResult) -> Self {
         match x {
-            Ok(r) => GraphqlEntityMutationResult::Success(GraphqlMutationSuccess(Cow::Owned(
-                r.affected_entities,
-            ))),
-            Err(e) => GraphqlEntityMutationResult::Error(GraphqlMutationError(e)),
+            Ok(result) => Self::Success(GraphqlMutationSuccess {
+                effects: result.effects,
+                edges: PhantomData,
+            }),
+            Err(error) => Self::Error(GraphqlMutationError(error)),
         }
     }
 }
 
 /// Batch mutation payload. Results preserve input order and allow partial
 /// success across independently stored entity kinds.
-pub struct EntityMutationPayload {
+pub struct EntityMutationPayload<E> {
     /// Per-input mutation outcomes.
-    results: Vec<MutateEntitiesResult<'static>>,
+    results: Vec<MutateEntitiesResult>,
+    /// Associates the payload with the composed Soup edge object.
+    edges: PhantomData<E>,
 }
 
-impl EntityMutationPayload {
+impl<E> EntityMutationPayload<E> {
     /// Construct a batch payload from ordered domain mutation outcomes.
-    fn new(results: Vec<MutateEntitiesResult<'static>>) -> Self {
-        EntityMutationPayload { results }
+    fn new(results: Vec<MutateEntitiesResult>) -> Self {
+        EntityMutationPayload {
+            results,
+            edges: PhantomData,
+        }
     }
 }
 
 /// Results for a batch mutation, preserving the input order.
 #[Object]
-impl EntityMutationPayload {
+impl<E: SoupEntityEdges> EntityMutationPayload<E> {
     /// Per-input mutation outcomes.
-    async fn results<'a>(&'a self) -> Vec<GraphqlEntityMutationResult<'a>> {
+    async fn results(&self) -> Vec<GraphqlEntityMutationResult<E>> {
         self.results
             .iter()
             .map(Result::as_ref)
@@ -466,13 +453,13 @@ fn mutation_actor(ctx: &Context<'_>) -> async_graphql::Result<EntityMutationActo
 }
 
 #[Object]
-impl<S: EntityMutationService> EntityMutationRoot<S> {
+impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     /// Rename heterogeneous entities in one request.
     async fn rename_entities(
         &self,
         ctx: &Context<'_>,
         inputs: Vec<RenameEntityInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch(
             "renameEntities",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
@@ -495,7 +482,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         &self,
         ctx: &Context<'_>,
         inputs: Vec<MoveEntityInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch(
             "moveEntities",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
@@ -518,7 +505,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         &self,
         ctx: &Context<'_>,
         inputs: Vec<UpdateEntitySharePolicyInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch(
             "updateEntitySharePolicies",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
@@ -542,7 +529,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         &self,
         ctx: &Context<'_>,
         entities: Vec<EntityRefInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch("trashEntities", entities.iter().map(entity_input_key))?;
         Ok(EntityMutationPayload::new(
             mutation_service::<S>(ctx)?
@@ -562,7 +549,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         &self,
         ctx: &Context<'_>,
         entities: Vec<EntityRefInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch("restoreEntities", entities.iter().map(entity_input_key))?;
         Ok(EntityMutationPayload::new(
             mutation_service::<S>(ctx)?
@@ -582,7 +569,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         &self,
         ctx: &Context<'_>,
         entities: Vec<EntityRefInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch(
             "deleteEntitiesPermanently",
             entities.iter().map(entity_input_key),
@@ -605,7 +592,7 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         &self,
         ctx: &Context<'_>,
         inputs: Vec<DuplicateEntityInput>,
-    ) -> async_graphql::Result<EntityMutationPayload> {
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
         validate_batch(
             "duplicateEntities",
             inputs.iter().map(|input| entity_input_key(&input.entity)),
@@ -629,11 +616,11 @@ impl<S: EntityMutationService> EntityMutationRoot<S> {
         ctx: &Context<'_>,
         entity: EntityRefInput,
         favorite: bool,
-    ) -> async_graphql::Result<GraphqlEntityMutationResult<'static>> {
+    ) -> async_graphql::Result<GraphqlEntityMutationResult<E>> {
         let res = mutation_service::<S>(ctx)?
             .set_favorite(mutation_actor(ctx)?, entity.into_model(), favorite)
             .await;
 
-        Ok(GraphqlEntityMutationResult::new_static(res))
+        Ok(GraphqlEntityMutationResult::new_owned(res))
     }
 }

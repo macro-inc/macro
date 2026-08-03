@@ -16,7 +16,7 @@ fn typed_paths_validate_against_the_repository() {
     repo_glob!("services/**/Cargo.toml")
         .validate_at(&root)
         .unwrap();
-    repo_glob!(".github/actions/setup-cachix/**/*")
+    repo_glob!(".github/actions/setup-nix/**/*")
         .validate_at(&root)
         .unwrap();
     assert_eq!(runtime_path!("artifacts/*").as_str(), "artifacts/*");

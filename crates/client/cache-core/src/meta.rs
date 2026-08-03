@@ -1,5 +1,5 @@
 //! Schema metadata: static tables generated at build time from
-//! `static_assets/schema.graphql` + `key_config.toml` (see `build.rs`).
+//! `static_assets/schema.graphql` (see `build.rs`).
 //!
 //! The cache never parses SDL at runtime — everything type-related is
 //! resolved through these tables.
@@ -47,7 +47,8 @@ pub struct TypeMeta {
     pub name: &'static str,
     pub kind: TypeKind,
     /// `Some(fields)` when the type is a normalized entity; `None` when it is
-    /// embedded inline in its parent record. Policy from `key_config.toml`.
+    /// embedded inline in its parent record. Derived from the schema's
+    /// `id: ID!` convention.
     pub key_fields: Option<&'static [&'static str]>,
     /// Field definitions (objects/interfaces only; empty for unions).
     pub fields: &'static [FieldMeta],
@@ -111,12 +112,22 @@ mod tests {
     }
 
     #[test]
+    fn subscription_root_is_present() {
+        let name = SUBSCRIPTION_ROOT_TYPE.expect("schema has a subscription root");
+        let root = type_meta(name).expect("subscription root type");
+        assert_eq!(root.kind, TypeKind::Object);
+        assert!(root.key_fields.is_none());
+        assert!(root.fields.iter().any(|field| field.name == "soupUpdates"));
+    }
+
+    #[test]
     fn interface_possible_types() {
         let entity = type_meta("GraphqlSoupEntity").expect("entity interface");
         assert_eq!(entity.kind, TypeKind::Interface);
         assert!(entity.possible_types.contains(&"GraphqlSoupDocument"));
         assert!(entity.possible_types.contains(&"GraphqlSoupForeignEntity"));
-        assert_eq!(entity.possible_types.len(), 9);
+        assert!(entity.possible_types.contains(&"GraphqlSoupCalendarEvent"));
+        assert_eq!(entity.possible_types.len(), 10);
         assert!(type_matches("GraphqlSoupDocument", "GraphqlSoupEntity"));
         assert!(!type_matches("GraphqlSoupItem", "GraphqlSoupEntity"));
     }

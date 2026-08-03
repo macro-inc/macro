@@ -1,0 +1,8 @@
+<svg width="100%" height="100%" viewBox="0 -3 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+  <!-- Asset 286 is reduced to 75% here, giving it the sidebar's effective 1.125px stroke. -->
+  <g transform="translate(2.25 -1.03125) scale(.75)">
+    <path d="M.75 9C.75 8.8.83 8.6.98 8.45L8.45.98C8.75.68 9.25.68 9.55.98L17.02 8.45C17.17 8.6 17.25 8.8 17.25 9V18H11.25V12H6.75V18H.75V9Z"/>
+    <rect x="6.75" y="12" width="4.5" height="6.75" fill="currentColor" stroke="none"/>
+    <rect x="7.31" y="5.87" width="3.38" height="3.38" rx="1" fill="currentColor" stroke="none"/>
+  </g>
+</svg>

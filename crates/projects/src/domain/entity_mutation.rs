@@ -7,8 +7,9 @@ use entity_access::domain::models::{
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationErrorCode, MoveEntity, RenameEntity, RestoreEntity,
-    TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest,
+    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
+    RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy,
+    capability::MoveEntityRequest,
 };
 use macro_event_broker::MacroEventBroker;
 use model::project::{BasicProject, request::PatchProjectRequestV2};
@@ -68,6 +69,18 @@ fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'st
         .collect()
 }
 
+/// Deduplicate effects while preserving their domain-defined order.
+fn unique_effects(
+    effects: impl IntoIterator<Item = EntityMutationEffect>,
+) -> Vec<EntityMutationEffect> {
+    effects.into_iter().fold(Vec::new(), |mut unique, effect| {
+        if !unique.contains(&effect) {
+            unique.push(effect);
+        }
+        unique
+    })
+}
+
 /// Fetch project metadata; access is enforced separately via receipts.
 async fn basic_project<S: ProjectService>(
     service: &S,
@@ -96,7 +109,7 @@ where
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let parent_id = project.parent_id.clone();
         self.edit_project(
@@ -109,7 +122,13 @@ where
             },
         )
         .await?;
-        Ok(project_refs([parent_id]))
+        Ok(unique_effects(
+            std::iter::once(EntityMutationEffect::updated(entity)).chain(
+                project_refs([parent_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            ),
+        ))
     }
 }
 
@@ -129,7 +148,7 @@ where
     async fn move_entity(
         &self,
         request: MoveEntityRequest<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let (entity, receipt, project_id) = match request {
             MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
             MoveEntityRequest::MoveToProject {
@@ -158,7 +177,13 @@ where
             },
         )
         .await?;
-        Ok(project_refs([old_parent_id, project_id]))
+        Ok(unique_effects(
+            std::iter::once(EntityMutationEffect::updated(entity)).chain(
+                project_refs([old_parent_id, project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            ),
+        ))
     }
 }
 
@@ -181,7 +206,7 @@ where
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let receipt = receipt
             .try_into_requirement::<EditAccessLevel>()
@@ -196,7 +221,7 @@ where
             },
         )
         .await?;
-        Ok(Vec::new())
+        Ok(vec![EntityMutationEffect::updated(entity)])
     }
 }
 
@@ -217,17 +242,31 @@ where
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
+        let parent_id = project.parent_id.clone();
         let actor = receipt
             .get_authenticated_user()
             .map_err(access_error)?
             .to_string();
         let deleted = self.soft_delete_project(receipt, project, actor).await?;
-        Ok(refs(EntityType::Project, deleted.project_ids)
-            .chain(refs(EntityType::Document, deleted.document_ids))
-            .chain(refs(EntityType::Chat, deleted.chat_ids))
-            .collect())
+        Ok(unique_effects(
+            std::iter::once(EntityMutationEffect::deleted(entity))
+                .chain(
+                    refs(EntityType::Project, deleted.project_ids)
+                        .map(EntityMutationEffect::deleted),
+                )
+                .chain(
+                    refs(EntityType::Document, deleted.document_ids)
+                        .map(EntityMutationEffect::deleted),
+                )
+                .chain(refs(EntityType::Chat, deleted.chat_ids).map(EntityMutationEffect::deleted))
+                .chain(
+                    project_refs([parent_id])
+                        .into_iter()
+                        .map(EntityMutationEffect::updated),
+                ),
+        ))
     }
 }
 
@@ -248,11 +287,27 @@ where
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let parent_id = project.parent_id.clone();
-        self.revert_delete_project(receipt, project).await?;
-        Ok(project_refs([parent_id]))
+        let restored = self.revert_delete_project(receipt, project).await?;
+        Ok(unique_effects(
+            std::iter::once(EntityMutationEffect::updated(entity))
+                .chain(
+                    refs(EntityType::Project, restored.project_ids)
+                        .map(EntityMutationEffect::updated),
+                )
+                .chain(
+                    refs(EntityType::Document, restored.document_ids)
+                        .map(EntityMutationEffect::updated),
+                )
+                .chain(refs(EntityType::Chat, restored.chat_ids).map(EntityMutationEffect::updated))
+                .chain(
+                    project_refs([parent_id])
+                        .into_iter()
+                        .map(EntityMutationEffect::updated),
+                ),
+        ))
     }
 }
 
@@ -274,11 +329,30 @@ where
         &self,
         entity: Entity<'static>,
         receipt: EntityAccessReceipt<Self::Receipt>,
-    ) -> Result<Vec<Entity<'static>>, EntityMutationErrorCode> {
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let project = basic_project(self, &entity).await?;
         let parent_id = project.parent_id.clone();
-        self.permanently_delete_project(receipt, project).await?;
-        Ok(project_refs([parent_id]))
+        let purged = self.permanently_delete_project(receipt, project).await?;
+        Ok(unique_effects(
+            std::iter::once(EntityMutationEffect::deleted(entity))
+                .chain(
+                    refs(EntityType::Project, purged.project_ids)
+                        .map(EntityMutationEffect::deleted),
+                )
+                .chain(
+                    refs(
+                        EntityType::Document,
+                        purged.documents.into_iter().map(|(id, _)| id),
+                    )
+                    .map(EntityMutationEffect::deleted),
+                )
+                .chain(refs(EntityType::Chat, purged.chat_ids).map(EntityMutationEffect::deleted))
+                .chain(
+                    project_refs([parent_id])
+                        .into_iter()
+                        .map(EntityMutationEffect::updated),
+                ),
+        ))
     }
 }
 

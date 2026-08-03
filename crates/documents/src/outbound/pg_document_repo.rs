@@ -39,6 +39,21 @@ impl PgDocumentRepo {
     }
 }
 
+async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE "Document"
+        SET "updatedAt" = NOW()
+        WHERE id = $1
+        "#,
+        document_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 impl DocumentRepo for PgDocumentRepo {
     type Err = sqlx::Error;
 
@@ -579,6 +594,11 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_document_modified(&self, document_id: &str) -> Result<(), Self::Err> {
+        update_document_modified(&self.pool, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]

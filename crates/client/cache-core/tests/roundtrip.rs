@@ -41,7 +41,6 @@ query Soup($input: SoupInput!) {
       }
     }
       nextCursor
-      hasMore
     }
   }
 }
@@ -129,8 +128,7 @@ fn response_data() -> Json {
                         ]
                 }
             ],
-                "nextCursor": "cursor-2",
-                "hasMore": true
+                "nextCursor": "cursor-2"
             }
         }
     })
@@ -240,7 +238,6 @@ fn entity_update_visible_through_other_query() {
                soup(input: $input) {
                  items { __typename id ... on GraphqlSoupDocument { documentName: name } }
                  nextCursor
-                 hasMore
                }
              }
            }"#,
@@ -255,8 +252,7 @@ fn entity_update_visible_through_other_query() {
                 "id": "doc-1",
                 "documentName": "Renamed"
             }],
-            "nextCursor": null,
-            "hasMore": false
+            "nextCursor": null
             }
         }
     });

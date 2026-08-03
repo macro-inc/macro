@@ -7,5 +7,5 @@ pub mod domain;
 /// Inbound adapters (HTTP/axum).
 pub mod inbound;
 
-/// Outbound adapters (Postgres).
+/// Outbound adapters for OAuth, Postgres, and Redis.
 pub mod outbound;

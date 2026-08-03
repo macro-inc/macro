@@ -1,4 +1,18 @@
 """
+Channel activity operation exposed by GraphQL.
+"""
+enum ChannelActivityType {
+	"""
+	Record that the user viewed the channel.
+	"""
+	VIEW
+	"""
+	Record that the user interacted with the channel.
+	"""
+	INTERACT
+}
+
+"""
 Channel-specific entry inside the otherwise common share-policy model.
 """
 input ChannelSharePolicyInput {
@@ -17,8 +31,7 @@ input ChannelSharePolicyInput {
 }
 
 """
-Mutation root combining property-specific and capability-oriented entity
-mutations without coupling either domain adapter to the other.
+Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
 	"""
@@ -57,6 +70,14 @@ type CompleteMutationRoot {
 	Add or remove an entity from the actor's favorites.
 	"""
 	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+	"""
+	Record a view or interaction in the authenticated user's channel activity.
+	"""
+	recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!
+	"""
+	Update authenticated user-owned notifications and return authoritative rows.
+	"""
+	updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!
 }
 
 """
@@ -71,6 +92,16 @@ input DuplicateEntityInput {
 	Optional display name for the new entity.
 	"""
 	displayName: String
+}
+
+"""
+Input for fetching one email thread by its canonical identifier.
+"""
+input EmailThreadInput {
+	"""
+	The canonical email thread identifier.
+	"""
+	threadId: ID!
 }
 
 """
@@ -133,6 +164,86 @@ type GraphqlBooleanPropertyValue {
 	The stored Boolean.
 	"""
 	value: Boolean!
+}
+
+"""
+Marker instructing a normalized GraphQL cache to delete one entity record.
+"""
+type GraphqlCacheDeletion {
+	"""
+	Concrete GraphQL object type used in the normalized cache key.
+	"""
+	graphqlTypeName: String!
+	"""
+	Identifier used in the normalized cache key.
+	"""
+	entityId: ID!
+}
+
+"""
+The two operands of a recursive `CalendarEventFilterExpr` binary expression.
+"""
+input GraphqlCalendarEventBinaryExpr {
+	"""
+	The left-hand expression.
+	"""
+	left: GraphqlCalendarEventExpr!
+	"""
+	The right-hand expression.
+	"""
+	right: GraphqlCalendarEventExpr!
+}
+
+"""
+A recursive `CalendarEventFilterExpr` filter expression.
+"""
+input GraphqlCalendarEventExpr @oneOf {
+	"""
+	Matches when both expressions match.
+	"""
+	and: GraphqlCalendarEventBinaryExpr
+	"""
+	Matches when either expression matches.
+	"""
+	or: GraphqlCalendarEventBinaryExpr
+	"""
+	Negates an expression.
+	"""
+	not: GraphqlCalendarEventExpr
+	"""
+	Matches a domain-specific literal condition.
+	"""
+	literal: GraphqlCalendarEventLiteral
+}
+
+"""
+GraphQL input representing a calendar event literal.
+"""
+input GraphqlCalendarEventLiteral @oneOf {
+	"""
+	Canonical event id.
+	"""
+	id: ID
+	"""
+	Event status.
+	"""
+	status: String
+	"""
+	Master start must be before this RFC3339 instant.
+	"""
+	startsBefore: String
+	"""
+	Master end must be after this RFC3339 instant.
+	"""
+	endsAfter: String
+	"""
+	Attendee email.
+	"""
+	attendee: String
+	"""
+	Organizer email.
+	"""
+	organizer: String
 }
 
 """
@@ -213,6 +324,40 @@ enum GraphqlCallStatus {
 	The unattended option.
 	"""
 	UNATTENDED
+}
+
+"""
+GraphQL fields for authoritative channel activity.
+"""
+type GraphqlChannelActivity {
+	"""
+	Stable activity row identifier.
+	"""
+	id: ID!
+	"""
+	User who owns this activity row.
+	"""
+	userId: String!
+	"""
+	Channel associated with the activity.
+	"""
+	channelId: ID!
+	"""
+	Activity row creation time in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Activity row update time in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Most recent channel view time in RFC 3339 format.
+	"""
+	viewedAt: String
+	"""
+	Most recent channel interaction time in RFC 3339 format.
+	"""
+	interactedAt: String
 }
 
 """
@@ -780,6 +925,74 @@ input GraphqlEmailFilterAst {
 }
 
 """
+Enriched email link accessible to the authenticated user.
+"""
+type GraphqlEmailLink {
+	"""
+	Stable email link identifier.
+	"""
+	id: ID!
+	"""
+	Macro user that owns the inbox.
+	"""
+	macroId: String!
+	"""
+	Provider email address for the inbox.
+	"""
+	emailAddress: String!
+	"""
+	SFS URL of the inbox's self-contact photo, when available.
+	"""
+	photoUrl: String
+	"""
+	Email provider.
+	"""
+	provider: GraphqlEmailProvider!
+	"""
+	Whether ongoing provider synchronization is enabled.
+	"""
+	isSyncActive: Boolean!
+	"""
+	Coarse synchronization state derived by the email domain.
+	"""
+	syncStatus: GraphqlEmailSyncStatus!
+	"""
+	Whether the provider grant must be reauthorized.
+	"""
+	needsReauth: Boolean!
+	"""
+	Inbox signature settings.
+	"""
+	settings: GraphqlEmailLinkSettings!
+	"""
+	Whether this is the owner's primary inbox.
+	"""
+	isPrimary: Boolean!
+	"""
+	Link creation timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Link last-updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+}
+
+"""
+Signature settings embedded in an authenticated user's email link.
+"""
+type GraphqlEmailLinkSettings {
+	"""
+	Whether signatures are included on replies and forwards.
+	"""
+	signatureOnRepliesForwards: Boolean!
+	"""
+	Saved, sanitized signature HTML, when configured.
+	"""
+	signature: String
+}
+
+"""
 GraphQL input representing the email literal.
 """
 input GraphqlEmailLiteral @oneOf {
@@ -839,6 +1052,42 @@ input GraphqlEmailLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+}
+
+"""
+Email provider for an authenticated user's linked inbox.
+"""
+enum GraphqlEmailProvider {
+	"""
+	Google Gmail.
+	"""
+	GMAIL
+}
+
+"""
+Coarse synchronization state for an authenticated user's linked inbox.
+"""
+enum GraphqlEmailSyncStatus {
+	"""
+	Initial synchronization is queued or running.
+	"""
+	SYNCING
+	"""
+	The inbox is active and synchronized.
+	"""
+	UP_TO_DATE
+	"""
+	Initial synchronization failed or was cancelled.
+	"""
+	ERROR
+	"""
+	The provider grant must be reauthorized.
+	"""
+	NEEDS_REAUTH
+	"""
+	Synchronization is disabled.
+	"""
+	INACTIVE
 }
 
 """
@@ -933,6 +1182,10 @@ enum GraphqlEntityAccessLevel {
 GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
+	"""
+	The calendar event filter to apply.
+	"""
+	calendarEventFilter: GraphqlCalendarEventExpr
 	"""
 	The document filter to apply.
 	"""
@@ -1109,6 +1362,10 @@ enum GraphqlEntityType {
 	"""
 	CALL
 	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
 	CRM company entity.
 	"""
 	CRM_COMPANY
@@ -1269,9 +1526,9 @@ Successful result for one requested entity mutation.
 """
 type GraphqlMutationSuccess {
 	"""
-	Canonical references to every entity changed by the mutation.
+	Ordered normalized-cache effects produced by the mutation.
 	"""
-	affectedEntities: [GraphqlEntity!]!
+	effects: [SoupPatch!]!
 }
 
 """
@@ -1519,6 +1776,10 @@ An entity type supported by the properties domain.
 """
 enum GraphqlPropertyEntityType {
 	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
 	Call record entity.
 	"""
 	CALL_RECORD
@@ -1757,6 +2018,88 @@ type GraphqlSoupBin {
 	Items in this bin, ordered by their index within the group.
 	"""
 	items: [GraphqlSoupEntity!]!
+}
+
+"""
+GraphQL representation of a canonical calendar event.
+"""
+type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common calendar event metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The owning Macro user.
+	"""
+	ownerId: String!
+	"""
+	The event title.
+	"""
+	title: String!
+	"""
+	The event description.
+	"""
+	description: String
+	"""
+	The event location.
+	"""
+	location: String
+	"""
+	Canonical event status.
+	"""
+	status: String!
+	"""
+	Timed or all-day event span.
+	"""
+	time: JSON!
+	"""
+	Direct conference join URL.
+	"""
+	conferenceUrl: String
+	"""
+	Whether the canonical source is read-only.
+	"""
+	isReadOnly: Boolean!
+	"""
+	Creation timestamp.
+	"""
+	createdAt: String!
+	"""
+	Update timestamp.
+	"""
+	updatedAt: String!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
 }
 
 """
@@ -2411,39 +2754,40 @@ type GraphqlSoupEmailContact {
 }
 
 """
-GraphQL representation of the soup email label.
+Canonical normalized GraphQL email label used by both email threads and
+the authenticated user's label catalog.
 """
 type GraphqlSoupEmailLabel {
 	"""
-	The unique identifier.
+	Stable database identifier for the label.
 	"""
 	id: ID!
 	"""
-	The identifier of the link.
+	Identifier of the email link that owns the label.
 	"""
 	linkId: ID!
 	"""
-	The identifier of the provider label.
+	Provider-specific label identifier.
 	"""
 	providerLabelId: String!
 	"""
-	The name.
+	User-visible label name.
 	"""
 	name: String!
 	"""
-	The created timestamp in RFC 3339 format.
+	Label creation timestamp in RFC 3339 format.
 	"""
 	createdAt: String!
 	"""
-	The message list visibility.
+	Provider message-list visibility value.
 	"""
 	messageListVisibility: String!
 	"""
-	The label list visibility.
+	Provider label-list visibility value.
 	"""
 	labelListVisibility: String!
 	"""
-	The type.
+	Whether the label is provider-created or user-created.
 	"""
 	type: String!
 }
@@ -2492,6 +2836,10 @@ type GraphqlSoupEmailMessage {
 	Whether the message was sent by the linked account.
 	"""
 	isSent: Boolean!
+	"""
+	Whether the message is a draft.
+	"""
+	isDraft: Boolean!
 	"""
 	Whether the message has attachments.
 	"""
@@ -2715,6 +3063,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	frecencyScore: Float
 	"""
+	A page of messages in this thread, newest first.
+	"""
+	messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!
+	"""
 	The newest non-draft content message in this thread.
 	"""
 	latestContentMessage: GraphqlSoupEmailMessage
@@ -2802,6 +3154,10 @@ enum GraphqlSoupEntityType {
 	Foreign entity.
 	"""
 	FOREIGN_ENTITY
+	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
 }
 
 """
@@ -3055,6 +3411,18 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	Labels across every owned or delegated inbox accessible to the authenticated user.
+	"""
+	emailLabels: [GraphqlSoupEmailLabel!]!
+	"""
+	Enriched owned or delegated email links accessible to the authenticated user.
+	"""
+	emailLinks: [GraphqlEmailLink!]!
+	"""
+	Fetch one accessible email thread by its canonical identifier.
+	"""
+	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
 	Fetch Soup items nested into grouping bins.
 	"""
 	groupSoup(input: GroupedSoupInput!): GroupedSoup!
@@ -3145,6 +3513,38 @@ input MoveEntityInput {
 	Destination project id. Omit or pass null to move to the root.
 	"""
 	projectId: ID
+}
+
+"""
+Explicit notification status operation exposed by GraphQL.
+"""
+enum NotificationUpdateOperation {
+	"""
+	Mark notifications as seen.
+	"""
+	MARK_SEEN
+	"""
+	Mark notifications as done.
+	"""
+	MARK_DONE
+	"""
+	Mark notifications as not done.
+	"""
+	MARK_UNDONE
+}
+
+"""
+Input for recording authenticated channel activity.
+"""
+input RecordChannelActivityInput {
+	"""
+	Channel receiving the activity update.
+	"""
+	channelId: ID!
+	"""
+	Kind of activity to record.
+	"""
+	activityType: ChannelActivityType!
 }
 
 """
@@ -3254,11 +3654,12 @@ type SoupPage {
 	Opaque cursor for the next page, if one exists.
 	"""
 	nextCursor: String
-	"""
-	Whether more items are available after this page.
-	"""
-	hasMore: Boolean!
 }
+
+"""
+Realtime Soup patch represented as exactly one update or cache deletion.
+"""
+union SoupPatch = SoupUpdated | GraphqlCacheDeletion
 
 """
 Root entry point for the complete GraphQL API.
@@ -3277,7 +3678,17 @@ type SoupSubscriptionRoot {
 	"""
 	Subscribe to realtime Soup updates for the authenticated user.
 	"""
-	soupUpdates: GraphqlSoupEntity!
+	soupUpdates: [SoupPatch!]!
+}
+
+"""
+GraphQL representation of a created or updated Soup entity.
+"""
+type SoupUpdated {
+	"""
+	Hydrate the current Soup entity.
+	"""
+	item: GraphqlSoupEntity
 }
 
 """
@@ -3292,6 +3703,20 @@ input UpdateEntitySharePolicyInput {
 	New public/channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
+}
+
+"""
+Input for updating notification statuses.
+"""
+input UpdateNotificationsInput {
+	"""
+	User notification identifiers to update.
+	"""
+	notificationIds: [ID!]!
+	"""
+	Status operation applied to every requested notification.
+	"""
+	operation: NotificationUpdateOperation!
 }
 
 """

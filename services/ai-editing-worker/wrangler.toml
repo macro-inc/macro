@@ -27,6 +27,12 @@ database_name = "ai-editing-traces"
 database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
 
 [vars]
+# Tags exported spans with deployment.environment, matching the Datadog
+# agent's DD_ENV so the env-scoped trace views include them.
+ENVIRONMENT = "local"
+# Local jaeger/datadog-agent OTLP receiver (docker port-mapped to the host).
+# Unset in deployed envs = trace export disabled.
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318/v1/traces"
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage.macro.com"
 SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
@@ -37,6 +43,8 @@ AUTH_SERVICE_BASE = "https://auth-service.macro.com"
 port = 8933
 
 [env.local.vars]
+ENVIRONMENT = "local"
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://otel-collector:4318/v1/traces"
 SYNC_WS_BASE = "ws://sync-service:8787"
 DSS_BASE = "http://document-storage-service:8080"
 SEARCH_SERVICE_BASE = "http://search-processing-service:8080"
@@ -50,6 +58,7 @@ database_name = "ai-editing-traces"
 database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
 
 [env.dev.vars]
+ENVIRONMENT = "development"
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage-dev.macro.com"
 SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
@@ -65,6 +74,7 @@ database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
 name = "ai-editing-worker-playground"
 
 [env.playground.vars]
+ENVIRONMENT = "development"
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage-dev.macro.com"
 SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
@@ -80,6 +90,7 @@ database_id = "28cdeacb-6468-449b-a1c7-a193b220501e"
 name = "ai-editing-worker"
 
 [env.prod.vars]
+ENVIRONMENT = "production"
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage.macro.com"
 SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"

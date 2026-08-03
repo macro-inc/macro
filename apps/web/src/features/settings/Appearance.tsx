@@ -237,7 +237,11 @@ function ThemeSelectorRow(props: {
 
   return (
     <>
-      <SettingsRow label={props.label} description={props.description}>
+      <SettingsRow
+        label={props.label}
+        description={props.description}
+        stackOnNarrow
+      >
         <InterfaceThemeSelect
           value={props.value}
           filter={props.filter}
@@ -406,7 +410,7 @@ function InterfaceThemeSelect(props: {
                 }}
                 placeholder="Filter themes…"
                 spellcheck={false}
-                class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
+                class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
               />
             </div>
 
@@ -609,6 +613,7 @@ function ActiveThemeRow() {
       <SettingsRow
         label="Active theme"
         description="Match your system, or always use light or dark."
+        stackOnNarrow
       >
         <div class="flex items-center gap-1">
           <ActiveThemeSelect
@@ -649,7 +654,9 @@ export function Appearance() {
     <div class="h-full" style={{ '--b4l': 'var(--b3l)' }}>
       <SettingsPage title="Appearance">
         <SettingsSection title="Color Theme">
-          <SettingsCard>
+          {/* Establish a container so the rows can stack (label/description over
+              the picker) when the panel is narrower than 460px. */}
+          <SettingsCard class="@container">
             {/* Active theme: pin a specific theme by name, or follow the OS. */}
             <ActiveThemeRow />
 

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
+use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -14,7 +15,16 @@ mod internal;
 pub(crate) mod context;
 mod swagger;
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub async fn setup_and_serve(
+    state: ApiContext,
+    shutdown_token: CancellationToken,
+) -> anyhow::Result<()> {
+    let server_result = serve(state, shutdown_token.clone()).await;
+    shutdown_token.cancel();
+    server_result
+}
+
+async fn serve(state: ApiContext, shutdown_token: CancellationToken) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 
     let port = state.config.port;
@@ -28,16 +38,16 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .merge(health::router().layer(cors))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
-        .unwrap();
+        .context("failed to bind API listener")?;
     tracing::info!(
         "service is up and running with environment {:?} on port {}",
         env,
         port
     );
     axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(backfill_jobs))
+        .with_graceful_shutdown(shutdown_signal(backfill_jobs, shutdown_token))
         .await
         .context("error starting service")
 }
@@ -47,7 +57,10 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 /// being killed mid-publish when the runtime exits. Only jobs running on
 /// this pod are cancelled — the registry is shared via DynamoDB but
 /// cancellation tokens are per-instance.
-async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
+async fn shutdown_signal(
+    backfill_jobs: crate::domain::jobs::BackfillJobs,
+    shutdown_token: CancellationToken,
+) {
     let ctrl_c = async {
         if let Err(e) = tokio::signal::ctrl_c().await {
             tracing::error!(error=?e, "failed to install ctrl_c handler");
@@ -77,6 +90,7 @@ async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
 
     tracing::info!("shutdown signal received; cancelling in-flight backfills on this pod");
     backfill_jobs.cancel_all_local();
+    shutdown_token.cancel();
 }
 
 fn api_router() -> Router<ApiContext> {

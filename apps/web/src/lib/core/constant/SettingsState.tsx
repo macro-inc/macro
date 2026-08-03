@@ -7,6 +7,10 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
+import {
+  appendSettingsSplitToUrl,
+  stripSettingsSplitFromUrl,
+} from './settingsSplitUrl';
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
 
 /**
@@ -45,36 +49,19 @@ export type SettingsTab =
   | 'Admin';
 
 // Where "Back to app" (and move-to-split) should return to: the layout the user
-// was on when they opened settings. Undefined when settings was deep-linked, in
-// which case we fall back to DEFAULT_ROUTE.
+// was on when they opened settings. A full base-relative URL — path plus query
+// and hash — so layout state carried outside the path (notably the `preview`
+// param encoding Controller/Viewer Preview Pairs) survives the round trip.
+// Undefined when settings was deep-linked, in which case we fall back to
+// DEFAULT_ROUTE.
 const [settingsReturnTo, setSettingsReturnTo] = createSignal<string>();
-
-/**
- * Drop a settings split from a split-layout path, if present. Handles both the
- * URL encoding (`settings/<tab>`) and the legacy internal form
- * (`component/settings`). Only type positions (even indices) are inspected so a
- * block id that happens to be "settings" isn't mistaken for one.
- */
-const stripSettingsSplit = (pathname: string) => {
-  const segments = pathname.split('/').filter(Boolean);
-  for (let i = 0; i + 1 < segments.length; i += 2) {
-    const type = segments[i];
-    if (
-      type === 'settings' ||
-      (type === 'component' && segments[i + 1] === 'settings')
-    ) {
-      segments.splice(i, 2);
-      break;
-    }
-  }
-  return segments.length ? `/${segments.join('/')}` : DEFAULT_ROUTE;
-};
 
 /**
  * Extract the active settings tab from a docked-split path
  * (`.../settings/<slug>`), or undefined if the path has no settings split.
  * Scans type positions (even indices, base stripped) so a block id that happens
- * to be "settings" isn't mistaken for one — mirrors {@link stripSettingsSplit}.
+ * to be "settings" isn't mistaken for one — mirrors
+ * {@link stripSettingsSplitFromUrl}.
  */
 export const settingsTabFromSplitPath = (
   pathname: string
@@ -138,9 +125,15 @@ export const useSettingsState = () => {
   // Capture the current layout (minus any settings split) as where "Back to
   // app"/"Move to split" should return to, then clobber every other split so
   // settings becomes the sole one. Shared by opening settings fresh and by
-  // collapsing a docked-alongside layout back down to solo.
+  // collapsing a docked-alongside layout back down to solo. The query and hash
+  // are captured too: the `preview` param is what links Controller/Viewer
+  // Preview Pairs, so returning to the path alone would sever them.
   const collapseToSoloSettings = (tab: SettingsTab) => {
-    setSettingsReturnTo(stripSettingsSplit(toBaseRelative(location.pathname)));
+    setSettingsReturnTo(
+      stripSettingsSplitFromUrl(
+        `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
+      )
+    );
     setActiveTabId(tab);
     replaceAllSplits({ type: 'component', id: 'settings' });
   };
@@ -216,10 +209,15 @@ export const useSettingsState = () => {
     // Strip any settings split already in the target layout before re-adding
     // one, so repeatedly toggling fullscreen ⇄ split reuses a single settings
     // split (on the current tab) instead of stacking a new one each cycle.
-    const base = stripSettingsSplit(
+    // The return layout's query/hash ride along — appending settings at the
+    // end keeps `preview` indices valid — so its Preview Pairs re-link when
+    // the URL sync rebuilds the layout.
+    const returnTo = stripSettingsSplitFromUrl(
       settingsReturnTo() ?? DEFAULT_ROUTE
-    ).replace(/\/$/, '');
-    navigate(`${base}/settings/${settingsTabToSlug(activeTabId())}`);
+    );
+    navigate(
+      appendSettingsSplitToUrl(returnTo, settingsTabToSlug(activeTabId()))
+    );
   };
 
   // Collapse a docked-alongside layout back down to a lone settings split.

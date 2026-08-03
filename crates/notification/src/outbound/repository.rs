@@ -9,8 +9,7 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationIdAndCollapseKey,
-    NotificationStatusPatch, PatchDelete, SendNotificationRequestBuilder, TaggedContent,
-    UserNotificationRow,
+    SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
 use crate::outbound::device_registration::DeviceRegistrationDbOps;
@@ -61,6 +60,54 @@ struct EntityNotificationListRow {
     notification_metadata: serde_json::Value,
     notification_event_type: String,
     sender_id: Option<String>,
+}
+
+struct UpdatedUserNotificationRow {
+    owner_id: String,
+    notification_id: Uuid,
+    event_item_id: String,
+    event_item_type: String,
+    sent: bool,
+    done: bool,
+    created_at: DateTime<Utc>,
+    viewed_at: Option<DateTime<Utc>>,
+    updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    notification_metadata: serde_json::Value,
+    notification_event_type: String,
+    sender_id: Option<String>,
+}
+
+impl UpdatedUserNotificationRow {
+    fn into_domain(self) -> Result<UserNotificationRow<serde_json::Value>, Report> {
+        let entity = EntityType::from_str(&self.event_item_type)
+            .map_err(|error| rootcause::report!(error))?
+            .with_entity_string(self.event_item_id);
+        let sender_id = self
+            .sender_id
+            .as_deref()
+            .map(|sender| MacroUserIdStr::parse_from_str(sender).map(CowLike::into_owned))
+            .transpose()
+            .map_err(|error| rootcause::report!(error))?;
+        let owner_id = MacroUserIdStr::parse_from_str(&self.owner_id)
+            .map(CowLike::into_owned)
+            .map_err(|error| rootcause::report!(error))?;
+
+        Ok(UserNotificationRow {
+            owner_id,
+            notification_id: self.notification_id,
+            notification_event_type: self.notification_event_type,
+            entity,
+            sent: self.sent,
+            done: self.done,
+            created_at: self.created_at,
+            viewed_at: self.viewed_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
+            notification_metadata: self.notification_metadata,
+            sender_id,
+        })
+    }
 }
 
 struct UserNotificationsQueryArgs<'a> {
@@ -423,23 +470,23 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Mark notifications as seen for a user.
+    /// Mark notifications as seen and return the updated user-owned rows.
     fn mark_notifications_seen(
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl std::future::Future<
-        Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>,
+        Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>,
     > + Send;
 
-    /// Mark notifications as done or undone for a user.
+    /// Mark notifications as done or undone and return the updated user-owned rows.
     fn mark_notifications_done(
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
     ) -> impl std::future::Future<
-        Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>,
+        Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>,
     > + Send;
 
     /// Get basic notification data (collapse keys) for push clearing.
@@ -780,41 +827,50 @@ impl NotificationDbOps for PgPool {
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
-        let user_id_str = user_id.to_string();
-
-        let rows = sqlx::query!(
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        let rows = sqlx::query_as!(
+            UpdatedUserNotificationRow,
             r#"
             WITH updated AS (
                 UPDATE user_notification
                 SET seen_at = NOW()
                 WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL
-                RETURNING notification_id, done, seen_at::timestamptz as viewed_at
+                RETURNING
+                    user_id,
+                    notification_id,
+                    sent,
+                    done,
+                    created_at,
+                    seen_at,
+                    deleted_at
             )
             SELECT
+                updated.user_id as owner_id,
                 updated.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                updated.sent,
                 updated.done,
-                updated.viewed_at,
-                NOW()::timestamptz as "updated_at!"
+                updated.created_at::timestamptz as "created_at!",
+                updated.seen_at::timestamptz as viewed_at,
+                NOW()::timestamptz as "updated_at!",
+                updated.deleted_at::timestamptz,
+                n.metadata as "notification_metadata: serde_json::Value",
+                n.notification_event_type,
+                n.sender_id
             FROM updated
+            JOIN notification n ON n.id = updated.notification_id
+            ORDER BY array_position($2, updated.notification_id)
             "#,
-            user_id_str,
-            notification_ids
+            user_id.as_ref(),
+            notification_ids,
         )
         .fetch_all(self)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| PatchDelete::Patch {
-                id: row.notification_id,
-                diff: NotificationStatusPatch {
-                    done: row.done,
-                    viewed_at: row.viewed_at,
-                    updated_at: row.updated_at,
-                },
-            })
-            .collect())
+        rows.into_iter()
+            .map(UpdatedUserNotificationRow::into_domain)
+            .collect()
     }
 
     async fn mark_notifications_done(
@@ -822,42 +878,51 @@ impl NotificationDbOps for PgPool {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
-        let user_id_str = user_id.to_string();
-
-        let rows = sqlx::query!(
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        let rows = sqlx::query_as!(
+            UpdatedUserNotificationRow,
             r#"
             WITH updated AS (
                 UPDATE user_notification
                 SET done = $3
                 WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL
-                RETURNING notification_id, done, seen_at::timestamptz as viewed_at
+                RETURNING
+                    user_id,
+                    notification_id,
+                    sent,
+                    done,
+                    created_at,
+                    seen_at,
+                    deleted_at
             )
             SELECT
+                updated.user_id as owner_id,
                 updated.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                updated.sent,
                 updated.done,
-                updated.viewed_at,
-                NOW()::timestamptz as "updated_at!"
+                updated.created_at::timestamptz as "created_at!",
+                updated.seen_at::timestamptz as viewed_at,
+                NOW()::timestamptz as "updated_at!",
+                updated.deleted_at::timestamptz,
+                n.metadata as "notification_metadata: serde_json::Value",
+                n.notification_event_type,
+                n.sender_id
             FROM updated
+            JOIN notification n ON n.id = updated.notification_id
+            ORDER BY array_position($2, updated.notification_id)
             "#,
-            user_id_str,
+            user_id.as_ref(),
             notification_ids,
-            done
+            done,
         )
         .fetch_all(self)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| PatchDelete::Patch {
-                id: row.notification_id,
-                diff: NotificationStatusPatch {
-                    done: row.done,
-                    viewed_at: row.viewed_at,
-                    updated_at: row.updated_at,
-                },
-            })
-            .collect())
+        rows.into_iter()
+            .map(UpdatedUserNotificationRow::into_domain)
+            .collect()
     }
 
     async fn get_basic_notifications(
@@ -1524,7 +1589,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.db
             .mark_notifications_seen(&user_id, notification_ids)
             .await
@@ -1535,7 +1600,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.db
             .mark_notifications_done(user_id, notification_ids, done)
             .await
@@ -1637,8 +1702,12 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db.delete_all_user_notifications(user_id).await
     }
 
-    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
-        self.db.get_device_endpoint(device_token).await
+    async fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
+        self.db.get_device_endpoint(device_token, device_type).await
     }
 
     async fn upsert_device(
@@ -1653,12 +1722,26 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
             .await
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        self.db
+            .delete_user_devices_by_token(user_id, device_token, device_type)
+            .await
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> Result<String, Report> {
-        self.db.delete_by_token(device_token, device_type).await
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
+        self.db
+            .delete_stale_devices_by_token(device_token, device_type, active_endpoint)
+            .await
     }
 
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {

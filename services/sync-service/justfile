@@ -46,5 +46,12 @@ deploy-playground-dry:
 deploy-dev-dry:
   npx wrangler deploy --env dev --dry-run
 
-deploy-prod:
+deploy-prod-dry:
+  npx wrangler deploy --env prod --dry-run
+
+migrate-d1-prod:
+  CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --env prod --remote
+
+# CI runs the same two steps (.github/workflows/deploy_sync_service.yml)
+deploy-prod: migrate-d1-prod
   npx wrangler deploy --env prod

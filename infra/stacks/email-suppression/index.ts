@@ -29,7 +29,7 @@ if (stack === 'prod') {
   const emailSuppressionEnvVars: EmailSuppressionLambdaEnvVars = {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
     ENVIRONMENT: stack,
-    RUST_LOG: 'email_suppression_handler=trace',
+    RUST_LOG: 'email_suppression_handler=trace,macro_http_request=info',
   };
 
   emailSuppression = new EmailSuppressionLambda(`email-suppression-${stack}`, {

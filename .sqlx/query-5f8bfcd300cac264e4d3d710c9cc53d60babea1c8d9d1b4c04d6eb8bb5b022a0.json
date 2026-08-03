@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_links\n                SET needs_reauth = true,\n                    last_sync_error_at = now(),\n                    updated_at = now()\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f8bfcd300cac264e4d3d710c9cc53d60babea1c8d9d1b4c04d6eb8bb5b022a0"
+}

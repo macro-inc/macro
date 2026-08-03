@@ -140,6 +140,7 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
+        calendar_events::inbound::axum_router::list_occurrences,
 
         // activity
         activity::get_recent_activity::get_recent_activity_handler,
@@ -156,6 +157,7 @@ use utoipa::OpenApi;
 
         // documents
         documents::get_user_documents::get_user_documents_handler,
+        documents::get_starter_docs::handler,
         documents_hex::inbound::axum_router::get_document::get_document_handler,
         documents_hex::inbound::axum_router::get_document_by_team_slug::get_document_by_team_slug_handler,
         documents::get_document_version::handler,
@@ -211,6 +213,9 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_soup_ast_handler,
         soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
+        // channel list (comms hex)
+        channels::inbound::list_router::get_channels_handler,
+
         // channels
         channels::inbound::axum_router::create_channel_handler,
         channels::inbound::axum_router::get_or_create_dm_handler,
@@ -244,6 +249,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
@@ -262,6 +268,8 @@ use utoipa::OpenApi;
         call::inbound::axum_router::webhook_handler,
         webhook::inbound::axum_router::create_webhook,
         webhook::inbound::axum_router::delete_webhook,
+        webhook::inbound::axum_router::get_webhook,
+        webhook::inbound::axum_router::list_webhooks,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
         call::inbound::axum_router::ring_status_handler,
@@ -379,6 +387,7 @@ use utoipa::OpenApi;
             EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
+            documents::get_starter_docs::StarterDocumentsResponse, // Get starter documents
             GetDocumentProcessingResult,
             GetDocumentProcessingResultResponse, // Document processing result
             GetDocumentKeyResponseData,
@@ -411,6 +420,9 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
+            calendar_events::inbound::axum_router::CalendarOccurrenceItem,
+            calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
             SoupDocument<SoupPropertiesField>,
@@ -444,6 +456,14 @@ use utoipa::OpenApi;
             GroupedSoupInitialPage,
             GroupedSoupGroupPage,
             GroupedSoupPage,
+
+            // Channel list (comms hex)
+            channels::inbound::list_router::ApiChannelListPage,
+            channels::inbound::list_router::ApiChannelWithLatest,
+            channels::inbound::list_router::ApiChannelListMessage,
+            channels::inbound::list_router::ApiChannelListParticipant,
+            channels::inbound::list_router::ApiChannelListType,
+            channels::inbound::list_router::ApiParticipantListRole,
 
             // Channels
             ApiChannelMessagesPage,
@@ -532,13 +552,16 @@ use utoipa::OpenApi;
             SoupCallRecordParticipant,
 
             // Webhooks
+            webhook::domain::events::WebhookEvent,
             webhook::domain::models::CreateWebhookRequest,
             webhook::domain::models::CreateWebhookResponse,
+            webhook::domain::models::ListWebhooksResponse,
             webhook::domain::models::PatchWebhookRequest,
             webhook::domain::models::ValidateWebhookResponse,
             webhook::domain::models::Webhook,
             webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
+            webhook::domain::models::WebhookValidationTestEvent,
 
             DocumentSubType,
 

@@ -36,10 +36,7 @@ jobs:
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -78,6 +75,9 @@ jobs:
         # human-written crates for duplicate dependencies.
         sed -i '/^  "crates\/workspace-hack",$/d' Cargo.toml
         cargo-workspace-dependency-checker
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   hakari-and-dep-closures:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     steps:
@@ -92,10 +92,7 @@ jobs:
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
-      uses: './.github/actions/setup-cachix'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        dev-shell: 'true'
+      uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -127,6 +124,9 @@ jobs:
     - name: generated dependency artifacts are up to date
       run: |
         cargo run -p xtask --locked -- deps --check
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: cargo-workspace-dependency-check-${{ github.ref }}
   cancel-in-progress: true

@@ -19,8 +19,8 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusUpdate, NotificationTypeName, UserNotificationRow,
-    UserNotificationStatusUpdate,
+    NotificationStatusPatch, NotificationStatusUpdate, NotificationTypeName, PatchDelete,
+    UserNotificationRow, UserNotificationStatusUpdate,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -56,11 +56,17 @@ pub trait NotificationIngress: Send + Sync + 'static {
 /// This is separated from [`NotificationIngress`] because these operations
 /// do not require the bulk-digest state machine.
 pub trait NotificationReader: Send + Sync + 'static {
-    /// Mark notifications as seen for a user and enqueue push notification clearing.
+    /// Update notifications for a user and enqueue any required push notification clearing.
     fn update_notifications(
         &self,
         req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Update notifications and return the authoritative active rows owned by the user.
+    fn update_notifications_and_return(
+        &self,
+        req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
     /// Get a user's non-deleted notifications, paginated.
     ///
@@ -124,12 +130,16 @@ pub trait NotificationReader: Send + Sync + 'static {
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Unregister a device from push notifications.
+    /// Unregister the user's device from push notifications.
     ///
-    /// Deletes the device registration from the database (by token + type),
-    /// then deletes the SNS endpoint.
+    /// Deletes the user's device registrations matching the token + type, then
+    /// best-effort deletes the associated SNS endpoints (an SNS failure does
+    /// not fail the call — the DB rows are already gone). Succeeds when
+    /// nothing matched, so logout can call this without checking prior
+    /// registration state.
     fn unregister_device(
         &self,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
@@ -489,7 +499,7 @@ where
     async fn update_notifications_impl(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         let changed = match &req.status {
             NotificationStatus::Seen => {
                 self.repository
@@ -504,9 +514,20 @@ where
         };
 
         if !changed.is_empty() {
+            let updates = changed
+                .iter()
+                .map(|notification| PatchDelete::Patch {
+                    id: notification.notification_id,
+                    diff: NotificationStatusPatch {
+                        done: notification.done,
+                        viewed_at: notification.viewed_at,
+                        updated_at: notification.updated_at,
+                    },
+                })
+                .collect();
             let update = UserNotificationStatusUpdate {
                 user: req.user_id.copied(),
-                update: NotificationStatusUpdate::new(changed),
+                update: NotificationStatusUpdate::new(updates),
             };
             if let Err(err) = self.realtime.publish_updates(&[update]).await {
                 tracing::warn!(error = ?err, "failed to publish notification status realtime update");
@@ -514,7 +535,7 @@ where
         }
 
         if !req.status.should_clear_push_notifs() {
-            return Ok(());
+            return Ok(changed);
         }
 
         let notifications_with_keys = self
@@ -523,7 +544,7 @@ where
             .await?;
 
         if notifications_with_keys.is_empty() {
-            return Ok(());
+            return Ok(changed);
         }
 
         let device_endpoints = self
@@ -556,7 +577,7 @@ where
             .collect();
 
         if ios_endpoints.is_empty() {
-            return Ok(());
+            return Ok(changed);
         }
 
         let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
@@ -594,7 +615,7 @@ where
 
         self.queue.publish(messages).await?;
 
-        Ok(())
+        Ok(changed)
     }
 }
 
@@ -605,11 +626,19 @@ where
     S: SnsEndpointManager,
     R: NotificationRealtimePublisher,
 {
-    fn update_notifications(
+    async fn update_notifications(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> impl Future<Output = Result<(), Report>> + Send {
-        self.update_notifications_impl(req)
+    ) -> Result<(), Report> {
+        self.update_notifications_impl(req).await.map(|_| ())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_notifications_and_return(
+        &self,
+        req: UpdateNotificationsRequest<'_>,
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        self.update_notifications_impl(req).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -722,7 +751,11 @@ where
         };
 
         // Get endpoint if exists, otherwise create new one
-        let endpoint = match self.repository.get_device_endpoint(device_token).await {
+        let endpoint = match self
+            .repository
+            .get_device_endpoint(device_token, device_type)
+            .await
+        {
             Ok(Some(endpoint)) => endpoint,
             _ => {
                 self.sns_endpoint
@@ -762,21 +795,51 @@ where
             .upsert_device(user_id, device_token, &endpoint, device_type)
             .await?;
 
+        // A device token must map to a single registration. When SNS minted a
+        // different endpoint for this token in the past (e.g. under another
+        // user), those rows would keep receiving that user's notifications on
+        // this device — remove them and their SNS endpoints.
+        let stale_endpoints = self
+            .repository
+            .delete_stale_devices_by_token(device_token, device_type, &endpoint)
+            .await?;
+        for stale_endpoint in stale_endpoints {
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&stale_endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %stale_endpoint, "failed to delete stale SNS endpoint");
+                });
+        }
+
         Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn unregister_device(
         &self,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> Result<(), Report> {
-        let endpoint = self
+        let endpoints = self
             .repository
-            .delete_device_by_token(device_token, device_type)
+            .delete_user_devices_by_token(user_id, device_token, device_type)
             .await?;
 
-        self.sns_endpoint.delete_endpoint(&endpoint).await?;
+        // The DB rows are gone, so the unregistration has already succeeded;
+        // SNS endpoint deletion is best-effort cleanup and must not fail the
+        // call or abort the remaining endpoints.
+        for endpoint in endpoints {
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %endpoint, "failed to delete SNS endpoint during unregister");
+                });
+        }
 
         Ok(())
     }
