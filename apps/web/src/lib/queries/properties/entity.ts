@@ -7,7 +7,6 @@ import {
   ENABLE_GRAPHQL_SOUP_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
@@ -20,17 +19,12 @@ import type {
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
 import { useMutation, useMutationState, useQuery } from '@tanstack/solid-query';
-import { type Accessor, batch, createMemo } from 'solid-js';
+import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
-import {
-  EntityPropertiesDocument,
-  type EntityPropertiesQuery,
-  type EntityPropertiesQueryVariables,
-} from '../../service-clients/service-storage/graphql/generated/graphql';
 import {
   type SetEntityPropertyDisposition,
   setEntityProperty,
@@ -39,7 +33,6 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '../../service-clients/service-storage/graphql-soup';
-import { createUrqlQuery } from '../../urql-solid';
 import { queryClient } from '../client';
 import {
   getSoupEntityById,
@@ -52,11 +45,7 @@ import {
   groupedPropertyKeys,
 } from '../soup/grouped/graphql-optimistic';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import {
-  buildEntityPropertiesInput,
-  fetchGraphqlEntityProperties,
-  mapGraphqlEntityProperties,
-} from './graphql/entity';
+import { createGraphqlEntityPropertiesQuery } from './graphql/entity';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
@@ -77,48 +66,14 @@ export function useEntityPropertiesQuery(
 
   // Metadata properties are computed by the REST properties endpoint and are
   // not part of the GraphQL Soup property edge. USER is not represented in
-  // Soup either. An empty id pauses both transports while editor selection is
-  // transitioning.
-  const graphqlInput = createMemo(() => {
-    const id = entityId();
-    if (!graphqlSoupFlag().enabled || includeMetadata || id.length === 0) {
-      return undefined;
-    }
-    return buildEntityPropertiesInput(entityType(), id);
+  // Soup either. The GraphQL adapter owns those eligibility details.
+  const graphqlQuery = createGraphqlEntityPropertiesQuery({
+    entityType,
+    entityId,
+    enabled: () => graphqlSoupFlag().enabled && !includeMetadata,
   });
 
-  const usesGraphql = () => graphqlInput() !== undefined;
-
-  const graphqlQuery = createUrqlQuery<
-    EntityPropertiesQuery,
-    EntityPropertiesQueryVariables,
-    Property[]
-  >(() => {
-    const input = graphqlInput();
-    const id = entityId();
-
-    return {
-      query: EntityPropertiesDocument,
-      client: getGraphqlSoupClient(),
-      variables: { input: input! },
-      enabled: input !== undefined,
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
-      select: (data) =>
-        (mapGraphqlEntityProperties(data, id) ?? []).flatMap((property) => {
-          try {
-            const mapped = soupPropertyToProperty(property);
-            return mapped.isMetadata === true ? [] : [mapped];
-          } catch (error) {
-            console.warn(
-              'Skipping GraphQL property with unsupported type',
-              error
-            );
-            return [];
-          }
-        }),
-    };
-  });
+  const usesGraphql = graphqlQuery.isEnabled;
 
   const restQuery = useQuery(
     () => {
@@ -162,22 +117,24 @@ export function useEntityPropertiesQuery(
 
   return {
     get data() {
-      return usesGraphql() ? graphqlQuery.data : restQuery.data;
+      return usesGraphql() ? graphqlQuery.result.data : restQuery.data;
     },
     get error() {
-      return usesGraphql() ? graphqlQuery.error : restQuery.error;
+      return usesGraphql() ? graphqlQuery.result.error : restQuery.error;
     },
     get isLoading() {
-      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+      return usesGraphql()
+        ? graphqlQuery.result.isLoading
+        : restQuery.isLoading;
     },
     get isFetching() {
-      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+      return usesGraphql()
+        ? graphqlQuery.result.isFetching
+        : restQuery.isFetching;
     },
     refetch() {
       if (entityId().length === 0) return Promise.resolve(undefined);
-      return usesGraphql()
-        ? fetchGraphqlEntityProperties(entityType(), entityId())
-        : restQuery.refetch();
+      return usesGraphql() ? graphqlQuery.refetch() : restQuery.refetch();
     },
   };
 }
@@ -189,31 +146,6 @@ function invalidatePropertiesForEntity(
   return queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
   });
-}
-
-async function refetchGraphqlProperties(
-  entityType: EntityType | PropertyTargetEntityType,
-  entityId: string
-): Promise<void> {
-  if (!ENABLE_GRAPHQL_SOUP()) return;
-  try {
-    await fetchGraphqlEntityProperties(entityType, entityId);
-  } catch (error) {
-    // The durable write already succeeded. The live query still receives the
-    // finite-retry error; log it without turning the write into a mutation
-    // failure.
-    console.warn('Failed to refresh GraphQL entity properties', error);
-  }
-}
-
-async function refreshEntityPropertyReads(
-  entityType: EntityType | PropertyTargetEntityType,
-  entityId: string
-): Promise<void> {
-  await Promise.all([
-    invalidatePropertiesForEntity(entityType, entityId),
-    refetchGraphqlProperties(entityType, entityId),
-  ]);
 }
 
 function getPropertyDefinitionId(
@@ -377,7 +309,10 @@ export function useDeleteEntityPropertyMutation(
     ...withCallbacks<void, Error, DeleteEntityPropertyParams>(
       {
         onSuccess: (_data, variables) =>
-          refreshEntityPropertyReads(variables.entityType, variables.entityId),
+          invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          ),
         onError(error, variables) {
           console.error('Failed to delete property', error);
           toast.failure('Failed to delete property');
@@ -426,10 +361,11 @@ export function useAddEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, AddEntityPropertyParams>(
       {
-        // A new assignment has no stable normalized id until the response, so
-        // refresh its owning entity relationship after the write.
         onSuccess: (_data, variables) =>
-          refreshEntityPropertyReads(variables.entityType, variables.entityId),
+          invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          ),
         onError(error, variables) {
           if (!ENABLE_GRAPHQL_SOUP()) {
             console.error('Failed to add property', error);
@@ -493,7 +429,7 @@ function entityPropertyOptionCallbacks(
       },
       onSuccess: (_data, variables) => {
         invalidateSoupEntity(variables.entityId);
-        return refreshEntityPropertyReads(
+        return invalidatePropertiesForEntity(
           variables.entityType,
           variables.entityId
         );
@@ -756,9 +692,7 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
             })
           );
           invalidateSoupEntity(variables.entityId);
-          // Await successful reconciliation so the in-flight overlay remains
-          // visible until both read owners have observed the durable value.
-          return refreshEntityPropertyReads(
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
           );
@@ -883,12 +817,6 @@ function handleCommittedPropertySave(
     getPropertyDefinitionId(item.property),
     item.apiValues
   );
-  // Existing assignments are normalized records, so their live GraphQL
-  // queries update from the mutation result. New assignments still need a
-  // relationship refresh because their record id was unknown before commit.
-  if (!isInstantiatedProperty(item.property)) {
-    void refetchGraphqlProperties(item.entityType, item.entityId);
-  }
 }
 
 function reportBulkPropertySaveFailure(error: Error): void {

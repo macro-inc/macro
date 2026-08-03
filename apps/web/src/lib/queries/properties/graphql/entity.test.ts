@@ -1,15 +1,14 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { EntityPropertiesDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type Client,
-  CombinedError,
   createClient,
   type Exchange,
   type Operation,
   type OperationResult,
 } from '@urql/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRoot, createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
 
 const graphqlClientState = vi.hoisted(() => ({
@@ -27,7 +26,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 
 import {
   buildEntityPropertiesInput,
-  fetchGraphqlEntityProperties,
+  createGraphqlEntityPropertiesQuery,
   mapGraphqlEntityProperties,
 } from './entity';
 
@@ -167,105 +166,63 @@ describe('mapGraphqlEntityProperties', () => {
   });
 });
 
-describe('fetchGraphqlEntityProperties', () => {
+describe('createGraphqlEntityPropertiesQuery', () => {
+  let dispose: (() => void) | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
     graphqlClientState.current = undefined;
     mapGraphqlPropertiesMock.mockReturnValue([]);
   });
 
-  it('dispatches exactly one network-only request without an active query', async () => {
+  afterEach(() => dispose?.());
+
+  it('owns the live operation and refetches it network-only', async () => {
     const { requests } = makeControlledClient();
-    const fetch = fetchGraphqlEntityProperties('DOCUMENT', 'entity-1');
+    const [entityType] = createSignal<EntityType>('DOCUMENT');
+    const [entityId] = createSignal('entity-1');
+    const [enabled] = createSignal(true);
+    let query!: ReturnType<typeof createGraphqlEntityPropertiesQuery>;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      query = createGraphqlEntityPropertiesQuery({
+        entityType,
+        entityId,
+        enabled,
+      });
+    });
+
     await vi.waitFor(() => expect(requests).toHaveLength(1));
-
-    expect(requests[0]?.operation.context.requestPolicy).toBe('network-only');
+    expect(requests[0]?.operation.context.requestPolicy).toBe(
+      'cache-and-network'
+    );
     requests[0]?.next({ data: EMPTY_DATA });
+    await vi.waitFor(() => expect(query.result.data).toEqual([]));
 
-    await expect(fetch).resolves.toEqual([]);
-    expect(requests).toHaveLength(1);
-  });
-
-  it('waits for an identical active query then dispatches network-only', async () => {
-    const { client, requests } = makeControlledClient();
-    const input = buildEntityPropertiesInput('DOCUMENT', 'entity-1');
-    if (!input) throw new Error('expected GraphQL input');
-    const active = client
-      .query(
-        EntityPropertiesDocument,
-        { input },
-        { requestPolicy: 'cache-and-network' }
-      )
-      .subscribe(() => undefined);
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
-
-    const fetch = fetchGraphqlEntityProperties('DOCUMENT', 'entity-1');
-    expect(requests).toHaveLength(1);
-    requests[0]?.next({ data: EMPTY_DATA });
-
+    const refetch = query.refetch();
     await vi.waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[1]?.operation.context.requestPolicy).toBe('network-only');
     requests[1]?.next({ data: EMPTY_DATA });
-    await expect(fetch).resolves.toEqual([]);
-    active.unsubscribe();
+    await refetch;
   });
 
-  it('allows urql to coalesce simultaneous same-entity fetches', async () => {
+  it('does not start an operation for unsupported entity types', () => {
     const { requests } = makeControlledClient();
-    const first = fetchGraphqlEntityProperties('DOCUMENT', 'entity-1');
-    const second = fetchGraphqlEntityProperties('DOCUMENT', 'entity-1');
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    const [entityType] = createSignal<EntityType>('USER');
+    const [entityId] = createSignal('user-1');
+    const [enabled] = createSignal(true);
 
-    requests[0]?.next({ data: EMPTY_DATA });
-    await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
-    expect(requests).toHaveLength(1);
-  });
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      const query = createGraphqlEntityPropertiesQuery({
+        entityType,
+        entityId,
+        enabled,
+      });
+      expect(query.isEnabled()).toBe(false);
+    });
 
-  it('allows urql to coalesce simultaneous TASK and DOCUMENT aliases', async () => {
-    const { requests } = makeControlledClient();
-    const first = fetchGraphqlEntityProperties('DOCUMENT', 'entity-1');
-    const second = fetchGraphqlEntityProperties('TASK', 'entity-1');
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
-
-    requests[0]?.next({ data: EMPTY_DATA });
-    await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
-    expect(requests).toHaveLength(1);
-  });
-
-  it('does not issue a GraphQL request for USER properties', async () => {
-    const { requests } = makeControlledClient();
-    await expect(
-      fetchGraphqlEntityProperties('USER', 'user-1')
-    ).resolves.toBeUndefined();
     expect(requests).toHaveLength(0);
-  });
-
-  it('retries a network error once, then surfaces it', async () => {
-    const { requests } = makeControlledClient();
-    const fetch = fetchGraphqlEntityProperties('PROJECT', 'entity-1');
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
-    requests[0]?.next({
-      error: new CombinedError({ networkError: new Error('offline') }),
-    });
-
-    await vi.waitFor(() => expect(requests).toHaveLength(2));
-    const finalError = new CombinedError({
-      networkError: new Error('still offline'),
-    });
-    requests[1]?.next({ error: finalError });
-
-    await expect(fetch).rejects.toBe(finalError);
-    expect(requests).toHaveLength(2);
-  });
-
-  it('throws GraphQL application errors without looping', async () => {
-    const { requests } = makeControlledClient();
-    const fetch = fetchGraphqlEntityProperties('PROJECT', 'entity-1');
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
-    const error = new CombinedError({ graphQLErrors: ['query failed'] });
-    requests[0]?.next({ error });
-
-    await expect(fetch).rejects.toBe(error);
-    expect(requests).toHaveLength(1);
   });
 });

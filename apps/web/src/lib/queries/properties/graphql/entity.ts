@@ -1,8 +1,12 @@
+import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
+import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
+import type { Property } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import {
   EntityPropertiesDocument,
   type EntityPropertiesQuery,
+  type EntityPropertiesQueryVariables,
   type GraphqlEntityFilterAst,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
@@ -10,23 +14,10 @@ import {
   getGraphqlSoupClient,
   mapGraphqlProperties,
 } from '@service-storage/graphql-soup';
+import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 
 const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
-const MAX_NETWORK_ONLY_ERROR_ATTEMPTS = 2;
-
-async function retry<T>(
-  operation: () => Promise<T>,
-  shouldRetry: (result: T) => boolean,
-  maxAttempts = Number.POSITIVE_INFINITY
-): Promise<T> {
-  let attempts = 0;
-  while (true) {
-    const result = await operation();
-    attempts += 1;
-    if (!shouldRetry(result) || attempts >= maxAttempts) return result;
-  }
-}
 
 /**
  * Builds an exact-entity Soup query. Every non-target branch is constrained to
@@ -91,6 +82,62 @@ export function buildEntityPropertiesInput(
   };
 }
 
+type GraphqlEntityPropertiesQueryOptions = {
+  entityType: Accessor<EntityType>;
+  entityId: Accessor<string>;
+  enabled: Accessor<boolean>;
+};
+
+/** Creates the live urql query for one Soup-backed entity's properties. */
+export function createGraphqlEntityPropertiesQuery(
+  options: GraphqlEntityPropertiesQueryOptions
+) {
+  const input = createMemo(() => {
+    const entityId = options.entityId();
+    if (!options.enabled() || entityId.length === 0) return undefined;
+    return buildEntityPropertiesInput(options.entityType(), entityId);
+  });
+
+  const result = createUrqlQuery<
+    EntityPropertiesQuery,
+    EntityPropertiesQueryVariables,
+    Property[]
+  >(() => {
+    const currentInput = input();
+    const entityId = options.entityId();
+
+    return {
+      query: EntityPropertiesDocument,
+      client: getGraphqlSoupClient(),
+      variables: { input: currentInput! },
+      enabled: currentInput !== undefined,
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: (data) =>
+        (mapGraphqlEntityProperties(data, entityId) ?? []).flatMap(
+          (property) => {
+            try {
+              const mapped = soupPropertyToProperty(property);
+              return mapped.isMetadata === true ? [] : [mapped];
+            } catch (error) {
+              console.warn(
+                'Skipping GraphQL property with unsupported type',
+                error
+              );
+              return [];
+            }
+          }
+        ),
+    };
+  });
+
+  return {
+    result,
+    isEnabled: () => input() !== undefined,
+    refetch: () => result.refetch({ requestPolicy: 'network-only' }),
+  };
+}
+
 /** Maps one entity's GraphQL query result to the shared Soup property shape. */
 export function mapGraphqlEntityProperties(
   data: EntityPropertiesQuery | undefined,
@@ -101,39 +148,4 @@ export function mapGraphqlEntityProperties(
     (candidate) => candidate.id === entityId
   );
   return mapGraphqlProperties(item?.properties ?? []);
-}
-
-/** Fetches one Soup-backed entity's properties from the network. */
-export async function fetchGraphqlEntityProperties(
-  entityType: EntityType,
-  entityId: string
-): Promise<SoupProperty[] | undefined> {
-  const input = buildEntityPropertiesInput(entityType, entityId);
-  if (!input) return undefined;
-
-  const request = () =>
-    getGraphqlSoupClient()
-      .query(
-        EntityPropertiesDocument,
-        { input },
-        { requestPolicy: 'network-only' }
-      )
-      .toPromise();
-
-  // urql may deduplicate this with an active cache-and-network operation. Once
-  // that operation settles, retry so a genuine network-only request is sent.
-  // Then retry genuine network errors once before surfacing them.
-  const result = await retry(
-    () =>
-      retry(
-        request,
-        (candidate) =>
-          candidate.operation.context.requestPolicy !== 'network-only'
-      ),
-    (candidate) => candidate.error?.networkError != null,
-    MAX_NETWORK_ONLY_ERROR_ATTEMPTS
-  );
-
-  if (result.error) throw result.error;
-  return mapGraphqlEntityProperties(result.data, entityId);
 }
