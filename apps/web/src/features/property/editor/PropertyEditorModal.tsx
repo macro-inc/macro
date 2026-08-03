@@ -533,8 +533,14 @@ function TagAssignmentEditor(props: {
 }) {
   const tagsQuery = useTagsQuery();
   const currentTeamQuery = useCurrentTeamQuery();
+  // Multi-entity tag edits keep their optimistic state in this editor. The
+  // mutation variables still carry each entity id for the API and invalidation.
+  const tagAssignmentMutationScope = `property-editor-tags:${props.entities
+    .map((entity) => entity.id)
+    .sort()
+    .join(':')}`;
   const updateTagOptions = useBulkUpdateEntityPropertyOptionsMutation(
-    props.entities[0]?.id ?? ''
+    tagAssignmentMutationScope
   );
   const [tagEditorMode, setTagEditorMode] =
     createSignal<TagEditorDialogMode | null>(null);

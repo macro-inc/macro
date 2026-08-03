@@ -104,7 +104,10 @@ export function EmojiMenu(props: EmojiMenuProps) {
     );
   };
   const contentHeight = () => {
-    const itemHeight = emojiOptions().length * EMOJI_ITEM_HEIGHT;
+    const itemCount = emojiOptions().length;
+    if (itemCount === 0) return 0;
+    const itemHeight = itemCount * EMOJI_ITEM_HEIGHT;
+    if (contentMaxHeight() < EMOJI_ITEM_HEIGHT) return EMOJI_ITEM_HEIGHT;
     return Math.min(contentMaxHeight(), itemHeight);
   };
 
