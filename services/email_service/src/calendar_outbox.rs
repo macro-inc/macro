@@ -38,11 +38,18 @@ struct EmailCompletionOutboxRow {
 /// before commit can duplicate a message, so every consumer remains
 /// idempotent by calendar job id.
 #[tracing::instrument(skip(db, sqs, scheduler))]
-pub async fn run<R>(db: PgPool, sqs: SQS, scheduler: GoogleCalendarSyncScheduler<R>)
-where
+pub async fn run<R>(
+    db: PgPool,
+    sqs: SQS,
+    scheduler: GoogleCalendarSyncScheduler<R>,
+    cancellation_token: tokio_util::sync::CancellationToken,
+) where
     R: GoogleCalendarSyncRepository,
 {
     loop {
+        if cancellation_token.is_cancelled() {
+            return;
+        }
         scheduler
             .run_once(Utc::now())
             .await
@@ -68,7 +75,10 @@ where
                 tracing::error!(error = ?error, "failed to publish email completion outbox");
             })
             .ok();
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+            _ = cancellation_token.cancelled() => return,
+        }
     }
 }
 
