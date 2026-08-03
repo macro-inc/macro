@@ -30,16 +30,6 @@ const invalidateSoupEntityMock = vi.hoisted(() => vi.fn());
 const graphqlSoupEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
-const settlementCallbacks = vi.hoisted(
-  () =>
-    new Set<
-      (settlement: {
-        transactionId: string;
-        status: 'committed' | 'permanently-failed';
-        error?: string;
-      }) => void
-    >()
-);
 
 vi.mock('@app/lib/analytics', () => ({
   analytics: { track: trackMock },
@@ -81,7 +71,7 @@ vi.mock('../../service-clients/service-properties/client', () => ({
   },
 }));
 
-vi.mock('./graphql/entity-properties', () => ({
+vi.mock('./graphql/entity', () => ({
   buildEntityPropertiesInput: buildEntityPropertiesInputMock,
   mapGraphqlEntityProperties: mapGraphqlEntityPropertiesMock,
   fetchGraphqlEntityProperties: fetchGraphqlEntityPropertiesMock,
@@ -99,18 +89,7 @@ vi.mock('../client', () => ({
 
 vi.mock('../../service-clients/service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(() => ({ executeQuery: graphqlQueryMock })),
-  getGraphqlCacheHost: vi.fn(() => ({
-    onMutationSettled: (
-      callback: (settlement: {
-        transactionId: string;
-        status: 'committed' | 'permanently-failed';
-        error?: string;
-      }) => void
-    ) => {
-      settlementCallbacks.add(callback);
-      return () => settlementCallbacks.delete(callback);
-    },
-  })),
+  getGraphqlCacheHost: vi.fn(() => ({})),
 }));
 
 vi.mock('../soup/cache', () => ({
@@ -487,7 +466,6 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       ok({ properties: [{ property_id: 'status-def', option_ids: ['doing'] }] })
     );
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    settlementCallbacks.clear();
     testQueryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -518,123 +496,23 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(setEntityPropertyMock).toHaveBeenCalledWith(
       expect.objectContaining({ optimisticProperty: { id: 'assignment-1' } })
     );
-
-    for (const callback of settlementCallbacks) {
-      callback({ transactionId: 'txn-offline', status: 'committed' });
-    }
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
+    expect(fetchGraphqlEntityPropertiesMock).not.toHaveBeenCalled();
   });
 
-  it('mirrors queued GraphQL optimism and defers reconciliation', async () => {
-    setEntityPropertyMock
-      .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-1' })
-      .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-2' });
-
-    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
-    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
-
-    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledTimes(2);
-    expect(rollbackMock).not.toHaveBeenCalled();
-    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
-    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
-    expect(toastFailureMock).not.toHaveBeenCalled();
-    expect(setEntityPropertyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ optimisticProperty: { id: 'assignment-1' } })
-    );
-
-    for (const callback of settlementCallbacks) {
-      callback({ transactionId: 'txn-1', status: 'committed' });
-    }
-    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
-
-    for (const callback of settlementCallbacks) {
-      callback({ transactionId: 'txn-2', status: 'committed' });
-    }
-    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
-  });
-
-  it('registers each queued write before awaiting the next save', async () => {
-    let resolveSecond!: (disposition: {
-      kind: 'queued';
-      transactionId: string;
-    }) => void;
-    setEntityPropertyMock
-      .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-race-1' })
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveSecond = resolve;
-          })
-      );
-
-    const pending = mutation.mutateAsync({
-      properties: [variables.properties[0]!, variables.properties[0]!],
-    });
-    await vi.waitFor(() =>
-      expect(setEntityPropertyMock).toHaveBeenCalledTimes(2)
-    );
-
-    for (const callback of settlementCallbacks) {
-      callback({ transactionId: 'txn-race-1', status: 'committed' });
-    }
-    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
-
-    resolveSecond({ kind: 'queued', transactionId: 'txn-race-2' });
-    await pending;
-    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
-
-    for (const callback of settlementCallbacks) {
-      callback({ transactionId: 'txn-race-2', status: 'committed' });
-    }
-    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
-  });
-
-  it('invalidates a queued write that later fails', async () => {
+  it('treats queued GraphQL saves as accepted submissions', async () => {
     setEntityPropertyMock.mockResolvedValue({
       kind: 'queued',
-      transactionId: 'txn-failed',
+      transactionId: 'txn-queued',
     });
-    await mutation.mutateAsync(variables);
 
-    for (const callback of settlementCallbacks) {
-      callback({
-        transactionId: 'txn-failed',
-        status: 'permanently-failed',
-        error: 'invalid property',
-      });
-    }
+    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
 
-    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
     expect(rollbackMock).not.toHaveBeenCalled();
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
-    expect(fetchGraphqlEntityPropertiesMock).toHaveBeenCalledWith(
-      'TASK',
-      'task-1'
-    );
-    expect(toastFailureMock).toHaveBeenCalledWith('Failed to save properties');
-  });
-
-  it('invalidates queued read projections after commit', async () => {
-    setEntityPropertyMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'txn-committed',
-    });
-    await mutation.mutateAsync(variables);
-
-    for (const callback of settlementCallbacks) {
-      callback({
-        transactionId: 'txn-committed',
-        status: 'committed',
-      });
-    }
-
-    expect(rollbackMock).not.toHaveBeenCalled();
-    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
-    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
-    expect(fetchGraphqlEntityPropertiesMock).toHaveBeenCalledWith(
-      'TASK',
-      'task-1'
-    );
+    expect(fetchGraphqlEntityPropertiesMock).not.toHaveBeenCalled();
     expect(toastFailureMock).not.toHaveBeenCalled();
   });
 
@@ -648,10 +526,11 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       'One or more properties permanently failed to save'
     );
 
-    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
     expect(rollbackMock).not.toHaveBeenCalled();
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
+    expect(fetchGraphqlEntityPropertiesMock).not.toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledOnce();
   });
 
@@ -660,7 +539,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
 
     await mutation.mutateAsync(variables);
 
-    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
     expect(rollbackMock).not.toHaveBeenCalled();
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
@@ -697,7 +576,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     }
   );
 
-  it('refetches immediate and queued commits independently', async () => {
+  it('refetches only the new relationship in a mixed batch', async () => {
     isInstantiatedPropertyMock.mockImplementation(
       (value) => value === property
     );
@@ -721,10 +600,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     });
     expect(fetchGraphqlEntityPropertiesMock).toHaveBeenCalledOnce();
 
-    for (const callback of settlementCallbacks) {
-      callback({ transactionId: 'txn-mixed', status: 'committed' });
-    }
-    expect(fetchGraphqlEntityPropertiesMock).toHaveBeenCalledTimes(2);
+    expect(fetchGraphqlEntityPropertiesMock).toHaveBeenCalledOnce();
   });
 
   it('refreshes both read owners for a new GraphQL attachment', async () => {

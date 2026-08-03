@@ -56,7 +56,7 @@ import {
   buildEntityPropertiesInput,
   fetchGraphqlEntityProperties,
   mapGraphqlEntityProperties,
-} from './graphql/entity-properties';
+} from './graphql/entity';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
@@ -206,18 +206,14 @@ async function refetchGraphqlProperties(
   }
 }
 
-async function refetchEntityProperties(
+async function refreshEntityPropertyReads(
   entityType: EntityType | PropertyTargetEntityType,
-  entityId: string,
-  options: { graphql: boolean }
+  entityId: string
 ): Promise<void> {
-  const refetches: Promise<unknown>[] = [
+  await Promise.all([
     invalidatePropertiesForEntity(entityType, entityId),
-  ];
-  if (options.graphql) {
-    refetches.push(refetchGraphqlProperties(entityType, entityId));
-  }
-  await Promise.all(refetches);
+    refetchGraphqlProperties(entityType, entityId),
+  ]);
 }
 
 function getPropertyDefinitionId(
@@ -381,9 +377,7 @@ export function useDeleteEntityPropertyMutation(
     ...withCallbacks<void, Error, DeleteEntityPropertyParams>(
       {
         onSuccess: (_data, variables) =>
-          refetchEntityProperties(variables.entityType, variables.entityId, {
-            graphql: true,
-          }),
+          refreshEntityPropertyReads(variables.entityType, variables.entityId),
         onError(error, variables) {
           console.error('Failed to delete property', error);
           toast.failure('Failed to delete property');
@@ -432,12 +426,10 @@ export function useAddEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, AddEntityPropertyParams>(
       {
+        // A new assignment has no stable normalized id until the response, so
+        // refresh its owning entity relationship after the write.
         onSuccess: (_data, variables) =>
-          refetchEntityProperties(variables.entityType, variables.entityId, {
-            // A new assignment has no stable normalized id until the response,
-            // so refresh its owning entity relationship after the write.
-            graphql: true,
-          }),
+          refreshEntityPropertyReads(variables.entityType, variables.entityId),
         onError(error, variables) {
           if (!ENABLE_GRAPHQL_SOUP()) {
             console.error('Failed to add property', error);
@@ -501,10 +493,9 @@ function entityPropertyOptionCallbacks(
       },
       onSuccess: (_data, variables) => {
         invalidateSoupEntity(variables.entityId);
-        return refetchEntityProperties(
+        return refreshEntityPropertyReads(
           variables.entityType,
-          variables.entityId,
-          { graphql: true }
+          variables.entityId
         );
       },
       onError: (error, variables, context) => {
@@ -767,10 +758,9 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           invalidateSoupEntity(variables.entityId);
           // Await successful reconciliation so the in-flight overlay remains
           // visible until both read owners have observed the durable value.
-          return refetchEntityProperties(
+          return refreshEntityPropertyReads(
             variables.entityType,
-            variables.entityId,
-            { graphql: true }
+            variables.entityId
           );
         },
         onError: (error, variables, context) => {
@@ -875,109 +865,29 @@ class BulkSaveEntityPropertiesError extends Error {
   }
 }
 
-type QueuedPropertySave = {
-  item: BulkSaveEntityPropertiesParams['properties'][number];
-};
-const queuedPropertySaves = new Map<string, QueuedPropertySave>();
-const activeGraphqlPropertySaveCounts = new Map<string, number>();
-let settlementHost:
-  | NonNullable<ReturnType<typeof getGraphqlCacheHost>>
-  | undefined;
-let unsubscribeSettlements: (() => void) | undefined;
-
-function ensurePropertySettlementListener(): void {
-  const host = getGraphqlCacheHost();
-  if (!host || host === settlementHost) return;
-
-  unsubscribeSettlements?.();
-  settlementHost = host;
-  unsubscribeSettlements = host.onMutationSettled((settlement) => {
-    const queued = queuedPropertySaves.get(settlement.transactionId);
-    if (!queued) return;
-    queuedPropertySaves.delete(settlement.transactionId);
-
-    const { item } = queued;
-    if (settlement.status === 'committed') {
-      trackTaskPropertySave(
-        item.entityId,
-        getPropertyDefinitionId(item.property),
-        item.apiValues
-      );
-      reconcilePropertySaveCaches(item, { graphql: true });
-      return;
-    }
-
-    // A SoupTransaction restores a whole cache snapshot, so it is unsafe to
-    // roll one back after a durable write has spent time in the queue. Refetch
-    // once all queued projections for this entity have settled instead.
-    reconcilePropertySaveCaches(item, { graphql: true });
-    const error = new Error(settlement.error);
-    console.error('Queued property save permanently failed', error);
-    toast.failure('Failed to save properties');
-  });
-}
-
 function invalidatePropertySaveCaches(
-  item: BulkSaveEntityPropertiesParams['properties'][number],
-  options: { graphql: boolean }
+  item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
-  void refetchEntityProperties(item.entityType, item.entityId, options);
+  void invalidatePropertiesForEntity(item.entityType, item.entityId);
   invalidateSoupEntity(item.entityId);
 }
 
-function reconcilePropertySaveCaches(
-  item: BulkSaveEntityPropertiesParams['properties'][number],
-  options: { graphql: boolean }
-): void {
-  const hasQueuedSave = [...queuedPropertySaves.values()].some(
-    (queued) => queued.item.entityId === item.entityId
-  );
-  const hasActiveSave =
-    (activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0) > 0;
-  if (hasQueuedSave || hasActiveSave) {
-    if (options.graphql) {
-      void refetchGraphqlProperties(item.entityType, item.entityId);
-    }
-    return;
-  }
-  invalidatePropertySaveCaches(item, options);
-}
-
-function trackActiveGraphqlPropertySaves(
-  variables: BulkSaveEntityPropertiesParams
-): void {
-  for (const item of variables.properties) {
-    const count = activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0;
-    activeGraphqlPropertySaveCounts.set(item.entityId, count + 1);
-  }
-}
-
-function untrackActiveGraphqlPropertySaves(
-  variables: BulkSaveEntityPropertiesParams
-): void {
-  for (const item of variables.properties) {
-    const count = activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0;
-    if (count <= 1) activeGraphqlPropertySaveCounts.delete(item.entityId);
-    else activeGraphqlPropertySaveCounts.set(item.entityId, count - 1);
-  }
-}
-
-function handleAcceptedPropertySave(
+function handleCommittedPropertySave(
   item: BulkSaveEntityPropertiesParams['properties'][number],
   disposition: SetEntityPropertyDisposition
 ): void {
-  if (disposition.kind === 'committed') {
-    trackTaskPropertySave(
-      item.entityId,
-      getPropertyDefinitionId(item.property),
-      item.apiValues
-    );
-    reconcilePropertySaveCaches(item, {
-      graphql: !isInstantiatedProperty(item.property),
-    });
-  } else if (disposition.kind === 'queued') {
-    queuedPropertySaves.set(disposition.transactionId, { item });
-    ensurePropertySettlementListener();
+  if (disposition.kind !== 'committed') return;
+
+  trackTaskPropertySave(
+    item.entityId,
+    getPropertyDefinitionId(item.property),
+    item.apiValues
+  );
+  // Existing assignments are normalized records, so their live GraphQL
+  // queries update from the mutation result. New assignments still need a
+  // relationship refresh because their record id was unknown before commit.
+  if (!isInstantiatedProperty(item.property)) {
+    void refetchGraphqlProperties(item.entityType, item.entityId);
   }
 }
 
@@ -1061,9 +971,9 @@ export function useBulkSaveEntityPropertiesMutation(
           optimisticProperty,
           optimisticCache,
         });
-        // Register durable writes before the sequential GraphQL loop awaits the
-        // next item; settlement events are one-shot and are not replayed.
-        handleAcceptedPropertySave(item, disposition);
+        // The normalized cache owns queued settlement. Only immediate commits
+        // have property-local side effects.
+        handleCommittedPropertySave(item, disposition);
         return disposition;
       };
 
@@ -1113,24 +1023,18 @@ export function useBulkSaveEntityPropertiesMutation(
             );
           }
 
-          if (usesGraphqlSoup) trackActiveGraphqlPropertySaves(vars);
-
           return { usesGraphqlSoup, soupTxns };
         },
         onError: (error, _variables, context) => {
-          // REST errors settle immediately, so preserve its existing rollback.
-          // GraphQL writes may settle much later; restoring their captured
-          // snapshots could erase newer Soup updates, so refetch instead.
+          // The normalized cache owns GraphQL optimistic rollback. Preserve
+          // snapshot rollback only for the REST path.
           if (!context?.usesGraphqlSoup) rollbackBulkSoupTransactions(context);
           reportBulkPropertySaveFailure(error);
         },
-        onSettled: (_data, _error, variables, context) => {
-          if (context?.usesGraphqlSoup) {
-            untrackActiveGraphqlPropertySaves(variables);
-          }
+        onSettled: (_data, _error, variables) => {
           batch(() => {
             for (const item of variables.properties) {
-              reconcilePropertySaveCaches(item, { graphql: false });
+              invalidatePropertySaveCaches(item);
             }
           });
         },

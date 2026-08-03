@@ -29,7 +29,7 @@ import {
   buildEntityPropertiesInput,
   fetchGraphqlEntityProperties,
   mapGraphqlEntityProperties,
-} from './entity-properties';
+} from './entity';
 
 const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
