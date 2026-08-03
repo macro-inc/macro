@@ -48,6 +48,7 @@ function MonthMenu(props: { month: Date; onChange: (month: Date) => void }) {
   const todayMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const todayValue = monthValue(todayMonth);
   const [hasScrolled, setHasScrolled] = createSignal(false);
+  const [isTodayVisible, setIsTodayVisible] = createSignal(false);
   const [todayDirection, setTodayDirection] = createSignal<'up' | 'down'>(
     props.month > todayMonth ? 'up' : 'down'
   );
@@ -128,7 +129,14 @@ function MonthMenu(props: { month: Date; onChange: (month: Date) => void }) {
               if (!initialPositionComplete) return;
 
               const currentTodayIndex = todayIndex();
-              if (currentTodayIndex >= 0) {
+              if (currentTodayIndex >= 0 && virtualizer) {
+                const todayStart = virtualizer.getItemOffset(currentTodayIndex);
+                const todayEnd =
+                  todayStart + virtualizer.getItemSize(currentTodayIndex);
+                setIsTodayVisible(
+                  todayEnd > offset &&
+                    todayStart < offset + virtualizer.viewportSize
+                );
                 setTodayDirection(
                   offset > centeredOffsetFor(currentTodayIndex) ? 'up' : 'down'
                 );
@@ -171,7 +179,7 @@ function MonthMenu(props: { month: Date; onChange: (month: Date) => void }) {
           </Virtualizer>
         </div>
       </Dropdown.RadioGroup>
-      <Show when={hasScrolled()}>
+      <Show when={hasScrolled() && !isTodayVisible()}>
         <div class="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">
           <Dropdown.Item
             class="pointer-events-auto w-auto min-w-16 justify-center rounded-full border border-edge-muted bg-surface px-3 text-xs shadow-menu hover:bg-active data-highlighted:bg-active"
