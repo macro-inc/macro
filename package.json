@@ -68,6 +68,7 @@
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
+			"services/bots/stripe-payment-bot",
 			"services/lexical-service"
 		],
 		"catalog": {
