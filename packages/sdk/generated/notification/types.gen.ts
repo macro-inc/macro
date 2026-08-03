@@ -350,7 +350,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 
 /**
  * A plain old json error response for use with axum.

@@ -12,6 +12,7 @@ export type EntityType = (typeof EntityType)[keyof typeof EntityType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EntityType = {
+  CALENDAR_EVENT: 'CALENDAR_EVENT',
   CALL_RECORD: 'CALL_RECORD',
   CHANNEL: 'CHANNEL',
   CHAT: 'CHAT',

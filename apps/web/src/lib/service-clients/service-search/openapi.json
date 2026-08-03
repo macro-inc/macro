@@ -173,6 +173,50 @@
   },
   "components": {
     "schemas": {
+      "CalendarEventFilters": {
+        "type": "object",
+        "description": "Filters for canonical calendar-event entities.",
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attendee email addresses."
+          },
+          "calendar_event_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Canonical event ids."
+          },
+          "ends_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events ending after this instant."
+          },
+          "organizers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Organizer email addresses."
+          },
+          "starts_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events starting before this instant."
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
+          }
+        }
+      },
       "CallFilters": {
         "type": "object",
         "description": "Filters for call records.",
@@ -1742,6 +1786,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "calendar_event_filters": {
+            "$ref": "#/components/schemas/CalendarEventFilters",
+            "description": "the bundled [CalendarEventFilters]"
+          },
           "call_filters": {
             "$ref": "#/components/schemas/CallFilters",
             "description": "the bundled [CallFilters]"
@@ -1820,6 +1868,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALENDAR_EVENT",
           "CALL_RECORD",
           "CHANNEL",
           "CHAT",

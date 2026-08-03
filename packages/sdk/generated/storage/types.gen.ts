@@ -31,7 +31,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 };
 
 /**
@@ -619,6 +619,10 @@ export type ApiCountedReaction = {
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export type ApiEntityFilterAst = {
+    /**
+     * filters applied to canonical calendar events
+     */
+    calf?: unknown;
     /**
      * the filters that should be applied to the call entity
      */
@@ -1264,6 +1268,36 @@ export type CalendarEvent = {
      * Event visibility.
      */
     visibility: EventVisibility;
+};
+
+/**
+ * Filters for canonical calendar-event entities.
+ */
+export type CalendarEventFilters = {
+    /**
+     * Attendee email addresses.
+     */
+    attendees?: Array<string>;
+    /**
+     * Canonical event ids.
+     */
+    calendar_event_ids?: Array<string>;
+    /**
+     * Include master events ending after this instant.
+     */
+    ends_after?: string | null;
+    /**
+     * Organizer email addresses.
+     */
+    organizers?: Array<string>;
+    /**
+     * Include master events starting before this instant.
+     */
+    starts_before?: string | null;
+    /**
+     * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
+     */
+    statuses?: Array<string>;
 };
 
 /**
@@ -4182,6 +4216,10 @@ export type EmptyResponse = {
  */
 export type EntityFilters = {
     /**
+     * the bundled [CalendarEventFilters]
+     */
+    calendar_event_filters?: CalendarEventFilters;
+    /**
      * the bundled [CallFilters]
      */
     call_filters?: CallFilters;
@@ -4288,7 +4326,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -4406,7 +4444,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4428,7 +4466,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 };
 
 /**
@@ -6290,6 +6328,114 @@ export type SoupAttachment = {
 };
 
 /**
+ * Timed or all-day calendar event span.
+ */
+export type SoupCalendarEventTime = {
+    /**
+     * Exclusive end.
+     */
+    ends_at: string;
+    kind: 'timed';
+    /**
+     * Inclusive start.
+     */
+    starts_at: string;
+    /**
+     * Original IANA time zone.
+     */
+    time_zone?: string | null;
+} | {
+    /**
+     * Exclusive end date.
+     */
+    end_date: string;
+    kind: 'allDay';
+    /**
+     * Inclusive start date.
+     */
+    start_date: string;
+};
+
+/**
+ * A canonical calendar event entity in Soup.
+ */
+export type SoupCalendarEventSoupPropertiesField = {
+    /**
+     * Direct conference join URL.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Entity creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Property fields that can be flattened into property-bearing Soup items.
+     */
+    extra: {
+        /**
+         * Properties attached to the entity.
+         */
+        properties: Array<SoupProperty>;
+    };
+    /**
+     * RFC 5545 UID used for source reconciliation.
+     */
+    icalUid: string;
+    /**
+     * Entity identifier.
+     */
+    id: string;
+    /**
+     * Whether the selected canonical source is read-only.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional location label.
+     */
+    location?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Owning Macro user.
+     */
+    ownerId: string;
+    /**
+     * Canonical status.
+     */
+    status: string;
+    /**
+     * Canonical master time.
+     */
+    time: SoupCalendarEventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability transparency.
+     */
+    transparency: string;
+    /**
+     * Entity update timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Canonical visibility.
+     */
+    visibility: string;
+};
+
+/**
  * A participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
@@ -6880,6 +7026,12 @@ export type SoupItem = {
      */
     data: SoupCallRecordSoupPropertiesField;
     tag: 'call';
+} | {
+    /**
+     * Calendar event item.
+     */
+    data: SoupCalendarEventSoupPropertiesField;
+    tag: 'calendarEvent';
 } | {
     /**
      * CRM company item.
@@ -10755,7 +10907,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
         /**
          * The id of the favorited entity.
          */

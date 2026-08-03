@@ -7815,6 +7815,7 @@
                 "document",
                 "project",
                 "email_thread",
+                "calendar_event",
                 "team",
                 "call",
                 "foreign_entity",
@@ -10593,6 +10594,7 @@
                   "document",
                   "project",
                   "email_thread",
+                  "calendar_event",
                   "team",
                   "call",
                   "foreign_entity",
@@ -11566,6 +11568,9 @@
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
+          "calf": {
+            "description": "filters applied to canonical calendar events"
+          },
           "callf": {
             "description": "the filters that should be applied to the call entity"
           },
@@ -12422,6 +12427,50 @@
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
             "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarEventFilters": {
+        "type": "object",
+        "description": "Filters for canonical calendar-event entities.",
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attendee email addresses."
+          },
+          "calendar_event_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Canonical event ids."
+          },
+          "ends_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events ending after this instant."
+          },
+          "organizers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Organizer email addresses."
+          },
+          "starts_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events starting before this instant."
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
           }
         }
       },
@@ -16752,6 +16801,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "calendar_event_filters": {
+            "$ref": "#/components/schemas/CalendarEventFilters",
+            "description": "the bundled [CalendarEventFilters]"
+          },
           "call_filters": {
             "$ref": "#/components/schemas/CallFilters",
             "description": "the bundled [CallFilters]"
@@ -16919,6 +16972,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALENDAR_EVENT",
           "CALL_RECORD",
           "CHANNEL",
           "CHAT",
@@ -17082,6 +17136,7 @@
                   "document",
                   "project",
                   "email_thread",
+                  "calendar_event",
                   "team",
                   "call",
                   "foreign_entity",
@@ -17126,6 +17181,7 @@
                   "document",
                   "project",
                   "email_thread",
+                  "calendar_event",
                   "team",
                   "call",
                   "foreign_entity",
@@ -20855,6 +20911,158 @@
           }
         }
       },
+      "SoupCalendarEventTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Absolute timed event.",
+            "required": ["starts_at", "ends_at", "kind"],
+            "properties": {
+              "ends_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start."
+              },
+              "time_zone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time zone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "All-day event with an exclusive end date.",
+            "required": ["start_date", "end_date", "kind"],
+            "properties": {
+              "end_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "start_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive start date."
+              }
+            }
+          }
+        ],
+        "description": "Timed or all-day calendar event span."
+      },
+      "SoupCalendarEvent_SoupPropertiesField": {
+        "type": "object",
+        "description": "A canonical calendar event entity in Soup.",
+        "required": [
+          "id",
+          "ownerId",
+          "icalUid",
+          "title",
+          "status",
+          "visibility",
+          "transparency",
+          "time",
+          "isReadOnly",
+          "createdAt",
+          "updatedAt",
+          "extra"
+        ],
+        "properties": {
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct conference join URL."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity creation timestamp."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "extra": {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          "icalUid": {
+            "type": "string",
+            "description": "RFC 5545 UID used for source reconciliation."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Entity identifier."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the selected canonical source is read-only."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional location label."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Owning Macro user."
+          },
+          "status": {
+            "type": "string",
+            "description": "Canonical status."
+          },
+          "time": {
+            "$ref": "#/components/schemas/SoupCalendarEventTime",
+            "description": "Canonical master time."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "type": "string",
+            "description": "Availability transparency."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update timestamp."
+          },
+          "visibility": {
+            "type": "string",
+            "description": "Canonical visibility."
+          }
+        }
+      },
       "SoupCallRecordParticipant": {
         "type": "object",
         "description": "A participant in a call record, as displayed in Soup.",
@@ -21739,6 +21947,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["call"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Calendar event item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCalendarEvent_SoupPropertiesField",
+                "description": "Calendar event item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["calendarEvent"]
               }
             }
           },
