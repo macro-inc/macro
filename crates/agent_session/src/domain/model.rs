@@ -3,6 +3,7 @@ use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use serde::{Deserialize, Serialize};
 
 pub struct UninitializedSession;
 
@@ -56,7 +57,14 @@ pub struct AgentSession<SessionId> {
     pub modified_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+/// One logical protocol message with its direction.
+///
+/// Serializes as `{"direction": "to_server" | "to_runtime", "content": <envelope>}`,
+/// the same vocabulary the Postgres log storage uses for its `direction` and
+/// `content` columns, so recorded fixtures and stored rows share one wire
+/// format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "direction", content = "content", rename_all = "snake_case")]
 pub enum Message {
     ToServer(ToServerMessage),
     ToRuntime(ToRuntimeMessage),
