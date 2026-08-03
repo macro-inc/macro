@@ -29,7 +29,6 @@ export function InlineFollowupMenu(props: {
   selectedIndex?: number;
   onSelectedIndexChange?: (index: number) => void;
   onClose: () => void;
-  debugName?: string;
 }) {
   const selectedIndex = () => props.selectedIndex ?? 0;
 
@@ -71,18 +70,9 @@ export function InlineFollowupMenu(props: {
   const keyDown = (event: KeyboardEvent) => {
     if (!props.open) return;
 
-    console.debug('[InlineFollowupMenu]', props.debugName, 'keydown', {
-      key: event.key,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      optionCount: props.options.length,
-      selectedIndex: boundedIndex(),
-    });
-
     if (event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
-      console.debug('[InlineFollowupMenu]', props.debugName, 'select enter');
       selectCurrent();
       return;
     }
@@ -90,7 +80,6 @@ export function InlineFollowupMenu(props: {
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      console.debug('[InlineFollowupMenu]', props.debugName, 'close escape');
       props.onClose();
       return;
     }
@@ -104,15 +93,9 @@ export function InlineFollowupMenu(props: {
     }
 
     if (!isTypingKey(event)) {
-      console.debug('[InlineFollowupMenu]', props.debugName, 'ignore key', {
-        key: event.key,
-      });
       return;
     }
 
-    console.debug('[InlineFollowupMenu]', props.debugName, 'close typing key', {
-      key: event.key,
-    });
     props.onClose();
   };
 

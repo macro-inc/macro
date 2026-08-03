@@ -70,7 +70,6 @@ const TAG_COLOR_OPTIONS = [
 }[];
 
 const FOLLOWUP_MENU_OPEN_DELAY_MS = 40;
-const TAG_FOLLOWUP_DEBUG_PREFIX = '[TagsMenu:followup]';
 
 function optionLabel(value: unknown): string | undefined {
   if (
@@ -205,7 +204,6 @@ export function TagsMenu(props: {
 
   const closeMenu = () => {
     if (applyPromptOpenTimeout) {
-      console.debug(TAG_FOLLOWUP_DEBUG_PREFIX, 'clear pending open timeout');
       clearTimeout(applyPromptOpenTimeout);
       applyPromptOpenTimeout = undefined;
     }
@@ -227,46 +225,23 @@ export function TagsMenu(props: {
 
     const alreadyApplied = props.isApplied?.(item) ?? false;
     if (props.applyTargetLabel && props.onApplyTag && !alreadyApplied) {
-      console.debug(TAG_FOLLOWUP_DEBUG_PREFIX, 'schedule open', {
-        tagName: item.name,
-        targetLabel: props.applyTargetLabel,
-        selectionRangeCount: document.getSelection()?.rangeCount,
-        delayMs: FOLLOWUP_MENU_OPEN_DELAY_MS,
-      });
       props.menu.setIsOpen(false);
       if (applyPromptOpenTimeout) clearTimeout(applyPromptOpenTimeout);
       applyPromptOpenTimeout = setTimeout(() => {
         applyPromptOpenTimeout = undefined;
-        const selection = document.getSelection();
-        console.debug(TAG_FOLLOWUP_DEBUG_PREFIX, 'open', {
-          tagName: item.name,
-          targetLabel: props.applyTargetLabel,
-          hasSelection: selection !== null,
-          selectionRangeCount: selection?.rangeCount,
-        });
-        setApplyPromptSelection(selection);
+        setApplyPromptSelection(document.getSelection());
         setPendingApplyTag(item);
         setApplyPromptSelectedIndex(0);
       }, FOLLOWUP_MENU_OPEN_DELAY_MS);
       return;
     }
 
-    if (alreadyApplied) {
-      console.debug(TAG_FOLLOWUP_DEBUG_PREFIX, 'skip already applied', {
-        tagName: item.name,
-        targetLabel: props.applyTargetLabel,
-      });
-    }
     props.menu.setIsOpen(false);
   };
 
   const applyPendingTag = () => {
     const tag = pendingApplyTag();
     if (!tag) return;
-    console.debug(TAG_FOLLOWUP_DEBUG_PREFIX, 'apply', {
-      tagName: tag.name,
-      targetLabel: props.applyTargetLabel,
-    });
     props.onApplyTag?.(tag);
     closeMenu();
   };
@@ -409,10 +384,6 @@ export function TagsMenu(props: {
 
   const focusOut = () => {
     if (applyPromptOpenTimeout) {
-      console.debug(
-        TAG_FOLLOWUP_DEBUG_PREFIX,
-        'ignore focusout during handoff'
-      );
       return;
     }
     if (pendingApplyTag()) return;
@@ -512,7 +483,6 @@ export function TagsMenu(props: {
         selectedIndex={applyPromptSelectedIndex()}
         onSelectedIndexChange={setApplyPromptSelectedIndex}
         onClose={closeMenu}
-        debugName="tag-apply"
         options={[
           {
             id: 'apply-tag',
