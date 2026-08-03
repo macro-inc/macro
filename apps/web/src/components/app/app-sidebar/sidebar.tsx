@@ -73,6 +73,7 @@ import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedHomeIcon } from '@icon/wide-home';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
@@ -83,7 +84,6 @@ import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
-import HomeIcon from '@phosphor/house.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -996,7 +996,7 @@ const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
   label: 'Home',
   href: '/home',
-  icon: HomeIcon,
+  icon: AnimatedHomeIcon,
   hotkey: 'h',
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
