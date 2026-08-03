@@ -4,7 +4,7 @@ resolver = "2"
 members = [
   "crates/agent",
   "crates/agent_proxy",
-  "crates/agent_runtime_protocol",
+  "crates/agent_runtime_protocol", "crates/agent_session",
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/bot_id",
