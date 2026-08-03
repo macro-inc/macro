@@ -1,6 +1,12 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { DatesSetArg, EventDropArg } from '@fullcalendar/core';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type {
+  DateSelectArg,
+  DateSpanApi,
+  DatesSetArg,
+  EventDropArg,
+} from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin, {
   type EventResizeDoneArg,
@@ -26,6 +32,7 @@ import { CalendarSettingsDropdown } from './CalendarSettingsDropdown';
 import { CalendarSidePanelSections } from './CalendarSidePanelSections';
 import { CalendarEventContent } from './events/EventContent';
 import { EventDetailsPopover } from './events/EventDetailsPopover';
+import { EventEditorPopover } from './events/EventEditorPopover';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
 import { createCalendarEventFixtures } from './events/fixtures';
 import type {
@@ -69,6 +76,12 @@ const isSameLocalDate = (first: Date, second: Date) =>
   first.getMonth() === second.getMonth() &&
   first.getDate() === second.getDate();
 
+const parseCalendarEventDate = (value: string, allDay: boolean) => {
+  if (!allDay) return new Date(value);
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+};
+
 function CurrentTimeAxisIndicator(props: {
   date: Date;
   timeFormat: CalendarTimeFormat;
@@ -102,12 +115,14 @@ interface ResponsiveCalendarHostProps {
 interface CalendarWorkspaceProps extends ResponsiveCalendarHostProps {
   selectedEvent: CalendarEvent | undefined;
   selectedEventAnchor: HTMLElement | undefined;
+  draftEventId: string | undefined;
   sources: CalendarSource[];
   showWeekends: boolean;
   timeFormat: CalendarTimeFormat;
   weekStartsOn: CalendarWeekStart;
   isSourceVisible: (sourceId: string) => boolean;
   onCloseEvent: () => void;
+  onSaveDraftEvent: (event: CalendarEvent) => void;
   onShowWeekendsChange: (showWeekends: boolean) => void;
   onSourceVisibilityChange: (sourceId: string, visible: boolean) => void;
   onTimeFormatChange: (timeFormat: CalendarTimeFormat) => void;
@@ -230,6 +245,7 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
   return (
     <Layer depth={2}>
       <FullCalendar.Host
+        tabIndex={-1}
         ref={(calendarElement) => {
           setElement(calendarElement);
           props.onNarrowDayHeadersChange(calendarElement.clientWidth < 520);
@@ -246,6 +262,7 @@ export function CalendarView() {
   const [selectedEventId, setSelectedEventId] = createSignal<string>();
   const [selectedEventAnchor, setSelectedEventAnchor] =
     createSignal<HTMLElement>();
+  const [draftEventId, setDraftEventId] = createSignal<string>();
   const [showWeekends, setShowWeekends] = createSignal(true);
   const [weekStartsOn, setWeekStartsOn] = createSignal<CalendarWeekStart>(0);
   const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
@@ -272,15 +289,50 @@ export function CalendarView() {
     )
   );
   const fullCalendarEvents = createMemo(() =>
-    visibleEvents().map(mapCalendarEventToFullCalendar)
+    visibleEvents().map((event) => ({
+      ...mapCalendarEventToFullCalendar(event),
+      editable: event.id !== draftEventId(),
+    }))
   );
+  const canDrawEvent = (selection: DateSpanApi) =>
+    !visibleEvents().some((event) => {
+      if (event.id === draftEventId() || event.allDay !== selection.allDay) {
+        return false;
+      }
+      const eventStart = parseCalendarEventDate(event.start, event.allDay);
+      const eventEnd = parseCalendarEventDate(event.end, event.allDay);
+      return eventStart < selection.end && eventEnd > selection.start;
+    });
   const selectedEvent = () => {
     const eventId = selectedEventId();
     return eventId ? eventsById().get(eventId) : undefined;
   };
-  const closeEventDetails = () => {
+  const clearEventSelection = () => {
     setSelectedEventId(undefined);
     setSelectedEventAnchor(undefined);
+  };
+  const discardDraftEvent = () => {
+    const eventId = draftEventId();
+    if (!eventId) return;
+    setCalendarEvents((current) =>
+      current.filter((event) => event.id !== eventId)
+    );
+    setDraftEventId(undefined);
+  };
+  const closeEventDetails = () => {
+    if (selectedEventId() === draftEventId()) discardDraftEvent();
+    clearEventSelection();
+  };
+  const saveDraftEvent = (event: CalendarEvent) => {
+    if (event.id !== draftEventId()) return;
+    setCalendarEvents((current) =>
+      current.map((currentEvent) =>
+        currentEvent.id === event.id ? event : currentEvent
+      )
+    );
+    setVisibleSourceIds((current) => new Set(current).add(event.calendar.id));
+    setDraftEventId(undefined);
+    clearEventSelection();
   };
   const setSourceVisibility = (sourceId: string, visible: boolean) => {
     setVisibleSourceIds((current) => {
@@ -292,6 +344,30 @@ export function CalendarView() {
     if (!visible && selectedEvent()?.calendar.id === sourceId) {
       closeEventDetails();
     }
+  };
+  const createDraftEvent = (selection: DateSelectArg) => {
+    discardDraftEvent();
+    const defaultSource =
+      calendarSources.find((source) => source.id === 'personal') ??
+      calendarSources[0];
+    if (!defaultSource) return;
+
+    const eventId = `calendar-draft-${crypto.randomUUID()}`;
+    const draftEvent: CalendarEvent = {
+      id: eventId,
+      title: 'New event',
+      start: selection.startStr,
+      end: selection.endStr,
+      allDay: selection.allDay,
+      calendar: defaultSource,
+    };
+
+    selection.view.calendar.unselect();
+    setDraftEventId(eventId);
+    setSelectedEventId(eventId);
+    setSelectedEventAnchor(undefined);
+    setVisibleSourceIds((current) => new Set(current).add(defaultSource.id));
+    setCalendarEvents((current) => [...current, draftEvent]);
   };
   const updateEventDates = ({
     event,
@@ -345,13 +421,31 @@ export function CalendarView() {
       eventStartEditable
       eventDurationEditable
       eventResizableFromStart
+      selectable={!isTouchDevice()}
+      selectMirror
+      selectAllow={canDrawEvent}
+      selectMinDistance={5}
+      snapDuration="00:15:00"
+      select={createDraftEvent}
       events={fullCalendarEvents()}
+      eventDidMount={({ el, event }) => {
+        const currentAnchor = selectedEventAnchor();
+        if (
+          event.id === draftEventId() &&
+          (!currentAnchor || !currentAnchor.isConnected)
+        ) {
+          setSelectedEventAnchor(el);
+        }
+      }}
       eventDragStart={closeEventDetails}
       eventDrop={updateEventDates}
       eventResizeStart={closeEventDetails}
       eventResize={updateEventDates}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
+        if (draftEventId() && event.id !== draftEventId()) {
+          discardDraftEvent();
+        }
         setSelectedEventId(event.id);
         setSelectedEventAnchor(el);
       }}
@@ -432,12 +526,14 @@ export function CalendarView() {
           onNarrowDayHeadersChange={setUseNarrowDayHeaders}
           selectedEvent={selectedEvent()}
           selectedEventAnchor={selectedEventAnchor()}
+          draftEventId={draftEventId()}
           sources={calendarSources}
           showWeekends={showWeekends()}
           timeFormat={timeFormat()}
           weekStartsOn={weekStartsOn()}
           isSourceVisible={(sourceId) => visibleSourceIds().has(sourceId)}
           onCloseEvent={closeEventDetails}
+          onSaveDraftEvent={saveDraftEvent}
           onShowWeekendsChange={setShowWeekends}
           onSourceVisibilityChange={setSourceVisibility}
           onTimeFormatChange={setTimeFormat}
@@ -597,11 +693,13 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
         focusedDay={miniCalendarFocusedDay()}
         highlightedRange={miniCalendarHighlightedRange()}
         selectedEvent={props.selectedEvent}
+        draftEventId={props.draftEventId}
         sources={props.sources}
         timeFormat={props.timeFormat}
         weekStartsOn={props.weekStartsOn}
         isSourceVisible={props.isSourceVisible}
         onCloseEvent={props.onCloseEvent}
+        onSaveDraftEvent={props.onSaveDraftEvent}
         onFocusedDayChange={setMiniCalendarFocusedDay}
         onMonthChange={navigateMiniCalendarMonth}
         onSelectDate={selectMiniCalendarDate}
@@ -609,15 +707,29 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
       />
       <Show when={isNarrow() ? props.selectedEvent : undefined}>
         {(event) => (
-          <EventDetailsPopover
-            anchor={props.selectedEventAnchor}
-            event={event()}
-            open={props.selectedEventAnchor !== undefined}
-            timeFormat={props.timeFormat}
-            onOpenChange={(open) => {
-              if (!open) props.onCloseEvent();
-            }}
-          />
+          <Show
+            when={props.draftEventId === event().id}
+            fallback={
+              <EventDetailsPopover
+                anchor={props.selectedEventAnchor}
+                event={event()}
+                open={props.selectedEventAnchor !== undefined}
+                timeFormat={props.timeFormat}
+                onOpenChange={(open) => {
+                  if (!open) props.onCloseEvent();
+                }}
+              />
+            }
+          >
+            <EventEditorPopover
+              anchor={props.selectedEventAnchor}
+              event={event()}
+              open={props.selectedEventAnchor !== undefined}
+              sources={props.sources}
+              onCancel={props.onCloseEvent}
+              onSave={props.onSaveDraftEvent}
+            />
+          </Show>
         )}
       </Show>
       <main class="calendar-view flex size-full min-h-0 bg-surface">

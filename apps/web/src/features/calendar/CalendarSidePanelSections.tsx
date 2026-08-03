@@ -4,6 +4,7 @@ import { Button, Calendar as MiniCalendar } from '@ui';
 import { createEffect, on, Show } from 'solid-js';
 import { CalendarControls } from './events/CalendarControls';
 import { EventDetails } from './events/EventDetails';
+import { EventEditor } from './events/EventEditor';
 import type {
   CalendarEvent,
   CalendarSource,
@@ -16,11 +17,13 @@ interface CalendarSidePanelSectionsProps {
   focusedDay: Date;
   highlightedRange: { start: Date; end: Date } | undefined;
   selectedEvent: CalendarEvent | undefined;
+  draftEventId: string | undefined;
   sources: CalendarSource[];
   timeFormat: CalendarTimeFormat;
   weekStartsOn: CalendarWeekStart;
   isSourceVisible: (sourceId: string) => boolean;
   onCloseEvent: () => void;
+  onSaveDraftEvent: (event: CalendarEvent) => void;
   onFocusedDayChange: (date: Date) => void;
   onMonthChange: (date: Date) => void;
   onSelectDate: (date: Date | null) => void;
@@ -56,7 +59,7 @@ export function CalendarSidePanelSections(
         {(event) => (
           <SidePanel.Section
             id="calendar-event"
-            title="Event"
+            title={props.draftEventId === event().id ? 'New event' : 'Event'}
             order={0}
             defaultOpen
             actions={
@@ -70,7 +73,19 @@ export function CalendarSidePanelSections(
               </Button>
             }
           >
-            <EventDetails event={event()} timeFormat={props.timeFormat} />
+            <Show
+              when={props.draftEventId === event().id}
+              fallback={
+                <EventDetails event={event()} timeFormat={props.timeFormat} />
+              }
+            >
+              <EventEditor
+                event={event()}
+                sources={props.sources}
+                onCancel={props.onCloseEvent}
+                onSave={props.onSaveDraftEvent}
+              />
+            </Show>
           </SidePanel.Section>
         )}
       </Show>
