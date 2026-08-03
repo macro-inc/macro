@@ -278,6 +278,19 @@ fn timezone_id(value: &CalendarDateTime) -> Option<String> {
     }
 }
 
+/// Whether the VEVENT carries a recurrence rule or date set in either of
+/// `icalendar`'s property maps — repeated properties land in the multi map,
+/// so checking a single map per key silently drops whole series.
+fn declares_recurrence(event: &Event) -> bool {
+    ["RRULE", "RDATE"].iter().any(|key| {
+        event.properties().contains_key(*key)
+            || event
+                .multi_properties()
+                .get(*key)
+                .is_some_and(|properties| !properties.is_empty())
+    })
+}
+
 fn recurrence_lines(event: &Event) -> Vec<String> {
     let mut lines = Vec::new();
     for key in ["RRULE", "RDATE", "EXDATE"] {
@@ -303,8 +316,7 @@ fn materialize_occurrences(
     horizon: &OccurrenceRange,
     is_cancelled: bool,
 ) -> Result<Vec<CalendarOccurrence>, Report> {
-    if event.properties().get("RRULE").is_none() && event.multi_properties().get("RDATE").is_none()
-    {
+    if !declares_recurrence(event) {
         return Ok(event_time
             .overlaps(horizon)
             .then(|| CalendarOccurrence {

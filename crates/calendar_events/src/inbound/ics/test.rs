@@ -126,3 +126,23 @@ fn malformed_event_does_not_discard_valid_events_in_the_same_calendar() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event.ical_uid, "valid@example.com");
 }
+
+#[test]
+fn recurrence_is_detected_in_either_property_map() {
+    let mut single = Event::new();
+    single.add_property("RRULE", "FREQ=DAILY");
+    assert!(declares_recurrence(&single));
+
+    let mut multi = Event::new();
+    multi.append_multi_property(icalendar::Property::new("RRULE", "FREQ=WEEKLY"));
+    assert!(
+        declares_recurrence(&multi),
+        "an RRULE stored in multi_properties must still count as recurring"
+    );
+
+    let mut rdate = Event::new();
+    rdate.append_multi_property(icalendar::Property::new("RDATE", "20260801T120000Z"));
+    assert!(declares_recurrence(&rdate));
+
+    assert!(!declares_recurrence(&Event::new()));
+}
