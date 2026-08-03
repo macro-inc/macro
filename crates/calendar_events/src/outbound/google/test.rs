@@ -350,3 +350,34 @@ fn tail_planning_skips_series_and_singles_the_feed_already_handled() {
         vec!["new-single"]
     );
 }
+
+#[test]
+fn only_the_snapshot_plan_or_a_reset_token_forces_a_full_rebuild() {
+    let tail = GoogleSyncPlan::ExtendTail {
+        from: DateTime::parse_from_rfc3339("2028-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        from_date: NaiveDate::from_ymd_opt(2028, 8, 1).unwrap(),
+    };
+
+    assert!(needs_full_rebuild(
+        &GoogleSyncPlan::FullSnapshot,
+        true,
+        false
+    ));
+    assert!(needs_full_rebuild(
+        &GoogleSyncPlan::Incremental,
+        false,
+        false
+    ));
+    assert!(needs_full_rebuild(&GoogleSyncPlan::Incremental, true, true));
+    assert!(!needs_full_rebuild(
+        &GoogleSyncPlan::Incremental,
+        true,
+        false
+    ));
+    assert!(
+        !needs_full_rebuild(&tail, true, false),
+        "ExtendTail must reach the tail path, not the full rebuild"
+    );
+}

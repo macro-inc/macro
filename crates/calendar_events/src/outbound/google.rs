@@ -413,9 +413,8 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
             }
             Err(error) => return Err(error),
         };
-        let rebuild_snapshot = !matches!(context.plan, GoogleSyncPlan::Incremental)
-            || context.sync_token.is_none()
-            || token_was_reset;
+        let rebuild_snapshot =
+            needs_full_rebuild(&context.plan, context.sync_token.is_some(), token_was_reset);
         if rebuild_snapshot {
             tracing::info!(
                 plan = ?context.plan,
@@ -721,6 +720,13 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 
         Ok(())
     }
+}
+
+/// Whether this run must rebuild the complete bounded snapshot instead of
+/// applying the change feed. ExtendTail deliberately stays out of this set:
+/// it applies the feed and then materializes only the uncovered tail.
+fn needs_full_rebuild(plan: &GoogleSyncPlan, has_sync_token: bool, token_was_reset: bool) -> bool {
+    matches!(plan, GoogleSyncPlan::FullSnapshot) || !has_sync_token || token_was_reset
 }
 
 /// Split a tail sweep into series needing a refresh and standalone events to
