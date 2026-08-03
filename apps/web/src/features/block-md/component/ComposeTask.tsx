@@ -970,6 +970,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   const editorConfig = buildConfig('markdown')
     .withMentions()
     .withTags({
+      applyTargetLabel: 'Task',
+      isApplied: (tag) => composerTags.isApplied(tag.optionId),
       onCreate: (tag) => {
         void composerTags.applyTag(tag.scope, tag.optionId);
       },

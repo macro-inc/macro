@@ -275,6 +275,9 @@ export const MarkdownShell: Component<
               menu={menu()}
               useBlockBoundary={false}
               portalScope={props.portalScope}
+              applyTargetLabel={builderConfig.tags?.applyTargetLabel}
+              isApplied={builderConfig.tags?.isApplied}
+              onApplyTag={builderConfig.tags?.onCreate}
             />
           )}
         </Show>

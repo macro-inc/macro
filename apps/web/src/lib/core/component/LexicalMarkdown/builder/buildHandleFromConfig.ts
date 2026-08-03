@@ -170,7 +170,9 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
         tagsPlugin({
           menu: tagsMenuOps,
           insertTags: config.tags.insertTags,
-          onCreateTag: config.tags.onCreate,
+          onCreateTag: config.tags.applyTargetLabel
+            ? undefined
+            : config.tags.onCreate,
           onRemoveTag: config.tags.onRemove,
           setTags: config.tags.setTags,
         })
