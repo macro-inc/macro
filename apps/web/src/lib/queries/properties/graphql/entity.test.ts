@@ -1,3 +1,4 @@
+import type { Property } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import {
@@ -21,11 +22,14 @@ vi.mock('@service-storage/graphql-soup', () => ({
     if (!graphqlClientState.current) throw new Error('GraphQL client not set');
     return graphqlClientState.current;
   },
+  getGraphqlCacheHost: () => undefined,
   mapGraphqlProperties: mapGraphqlPropertiesMock,
 }));
 
 import {
   buildEntityPropertiesInput,
+  createGraphqlAddEntityPropertyMutation,
+  createGraphqlBulkSaveEntityPropertiesMutation,
   createGraphqlEntityPropertiesQuery,
   mapGraphqlEntityProperties,
 } from './entity';
@@ -163,6 +167,214 @@ describe('mapGraphqlEntityProperties', () => {
   it('retains the not-yet-loaded distinction', () => {
     expect(mapGraphqlEntityProperties(undefined, 'entity-1')).toBeUndefined();
     expect(mapGraphqlPropertiesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('GraphQL entity property mutations', () => {
+  let dispose: (() => void) | undefined;
+
+  afterEach(() => dispose?.());
+
+  it('executes add mutations through the urql-solid adapter', async () => {
+    const property = { id: 'property-1' };
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => ({
+          operation: {
+            kind: 'mutation',
+            context,
+          } as Operation,
+          data: { setEntityProperty: property },
+          stale: false,
+          hasNext: false,
+        }),
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let result!: ReturnType<typeof createGraphqlAddEntityPropertyMutation>;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      result = createGraphqlAddEntityPropertyMutation();
+    });
+
+    await expect(
+      result.mutateAsync({
+        entityType: 'TASK',
+        entityId: 'task-1',
+        propertyDefinitionId: 'definition-1',
+      })
+    ).resolves.toMatchObject({
+      data: { setEntityProperty: property },
+    });
+    expect(mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        input: {
+          entityType: 'DOCUMENT',
+          entityId: 'task-1',
+          propertyDefinitionId: 'definition-1',
+          value: null,
+        },
+      },
+      {}
+    );
+  });
+
+  it('durably queues optimistic saves', async () => {
+    const property = {
+      propertyId: 'assignment-1',
+      propertyDefinitionId: 'definition-1',
+      displayName: 'Status',
+      valueType: 'STRING',
+      isMultiSelect: false,
+      isSystemProperty: false,
+      isMetadata: false,
+    } as Property;
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => ({
+          operation: {
+            kind: 'mutation',
+            context,
+          } as Operation,
+          data: { setEntityProperty: { id: 'assignment-1' } },
+          extensions: {
+            normalizedCacheMutationDisposition: {
+              kind: 'queued',
+              transactionId: 'transaction-1',
+            },
+          },
+          stale: false,
+          hasNext: false,
+        }),
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let result!: ReturnType<
+      typeof createGraphqlBulkSaveEntityPropertiesMutation
+    >;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      result = createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+
+    await expect(
+      result.mutateAsync({
+        properties: [
+          {
+            entityType: 'DOCUMENT',
+            entityId: 'document-1',
+            property,
+            apiValues: { valueType: 'STRING', value: 'doing' },
+          },
+        ],
+      })
+    ).resolves.toMatchObject({
+      extensions: {
+        normalizedCacheMutationDisposition: {
+          kind: 'queued',
+          transactionId: 'transaction-1',
+        },
+      },
+    });
+    expect(mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        input: {
+          entityType: 'DOCUMENT',
+          entityId: 'document-1',
+          propertyDefinitionId: 'definition-1',
+          value: { string: 'doing' },
+        },
+      },
+      expect.objectContaining({
+        normalizedCacheOptimistic: expect.objectContaining({
+          optimisticResponse: {
+            setEntityProperty: expect.objectContaining({ id: 'assignment-1' }),
+          },
+        }),
+      })
+    );
+  });
+});
+
+describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
+  let dispose: (() => void) | undefined;
+
+  afterEach(() => dispose?.());
+
+  it('runs bulk side effects through mutation callbacks', async () => {
+    const events: string[] = [];
+    const property = {
+      propertyId: 'assignment-1',
+      propertyDefinitionId: 'definition-1',
+      displayName: 'Status',
+      valueType: 'STRING',
+      isMultiSelect: false,
+      isSystemProperty: false,
+      isMetadata: false,
+    } as Property;
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => ({
+          operation: { kind: 'mutation', context } as Operation,
+          data: { setEntityProperty: { id: 'assignment-1' } },
+          stale: false,
+          hasNext: false,
+        }),
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let result!: ReturnType<
+      typeof createGraphqlBulkSaveEntityPropertiesMutation<{ source: string }>
+    >;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      result = createGraphqlBulkSaveEntityPropertiesMutation({
+        onMutate: () => {
+          events.push('mutate');
+          return { source: 'test' };
+        },
+        onCommitted: () => events.push('committed'),
+        onSuccess: (_input, context) =>
+          events.push(`success:${context?.source}`),
+        onSettled: (error, _input, context) =>
+          events.push(`settled:${error?.message ?? context?.source}`),
+      });
+    });
+
+    await result.mutateAsync({
+      properties: [
+        {
+          entityType: 'DOCUMENT',
+          entityId: 'document-1',
+          property,
+          apiValues: { valueType: 'STRING', value: 'doing' },
+        },
+      ],
+    });
+
+    expect(events).toEqual([
+      'mutate',
+      'committed',
+      'success:test',
+      'settled:test',
+    ]);
   });
 });
 

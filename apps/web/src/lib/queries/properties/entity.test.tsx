@@ -20,7 +20,11 @@ import { EntityPropertiesDocument } from '../../service-clients/service-storage/
 import { createUrqlQuery } from '../../urql-solid';
 
 const useFeatureFlagMock = vi.hoisted(() => vi.fn());
-const setEntityPropertyMock = vi.hoisted(() => vi.fn());
+const graphqlEntityPropertyMutationMock = vi.hoisted(() => vi.fn());
+const createGraphqlAddEntityPropertyMutationMock = vi.hoisted(() => vi.fn());
+const createGraphqlBulkSaveEntityPropertiesMutationMock = vi.hoisted(() =>
+  vi.fn()
+);
 const buildEntityPropertiesInputMock = vi.hoisted(() => vi.fn());
 const mapGraphqlEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const createGraphqlEntityPropertiesQueryMock = vi.hoisted(() => vi.fn());
@@ -29,8 +33,8 @@ const getRestEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const deleteEntityPropertyMock = vi.hoisted(() => vi.fn());
 const addEntityPropertyOptionMock = vi.hoisted(() => vi.fn());
 const bulkUpdateEntityPropertyOptionsMock = vi.hoisted(() => vi.fn());
+const setRestEntityPropertyMock = vi.hoisted(() => vi.fn());
 const isInstantiatedPropertyMock = vi.hoisted(() => vi.fn());
-const buildOptimisticSetEntityPropertyMock = vi.hoisted(() => vi.fn());
 const entityPropertyFromApiMock = vi.hoisted(() => vi.fn());
 const soupPropertyToPropertyMock = vi.hoisted(() => vi.fn());
 const rollbackMock = vi.hoisted(() => vi.fn());
@@ -74,6 +78,7 @@ vi.mock('@property/utils', () => ({
 vi.mock('../../service-clients/service-properties/client', () => ({
   propertiesServiceClient: {
     getEntityProperties: getRestEntityPropertiesMock,
+    setEntityProperty: setRestEntityPropertyMock,
     deleteEntityProperty: deleteEntityPropertyMock,
     addEntityPropertyOption: addEntityPropertyOptionMock,
     bulkUpdateEntityPropertyOptions: bulkUpdateEntityPropertyOptionsMock,
@@ -82,21 +87,16 @@ vi.mock('../../service-clients/service-properties/client', () => ({
 
 vi.mock('./graphql/entity', () => ({
   createGraphqlEntityPropertiesQuery: createGraphqlEntityPropertiesQueryMock,
-}));
-
-vi.mock('../../service-clients/service-storage/graphql-properties', () => ({
-  setEntityProperty: setEntityPropertyMock,
+  createGraphqlAddEntityPropertyMutation:
+    createGraphqlAddEntityPropertyMutationMock,
+  createGraphqlBulkSaveEntityPropertiesMutation:
+    createGraphqlBulkSaveEntityPropertiesMutationMock,
 }));
 
 vi.mock('../client', () => ({
   get queryClient() {
     return testQueryClient;
   },
-}));
-
-vi.mock('../../service-clients/service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: vi.fn(() => ({ executeQuery: graphqlQueryMock })),
-  getGraphqlCacheHost: vi.fn(() => ({})),
 }));
 
 vi.mock('../soup/cache', () => ({
@@ -118,15 +118,6 @@ vi.mock('../soup/cache', () => ({
   optimisticUpdateSoupEntity: optimisticUpdateSoupEntityMock.mockImplementation(
     () => ({ rollback: rollbackMock })
   ),
-}));
-
-vi.mock('../soup/grouped/graphql-optimistic', () => ({
-  buildOptimisticGroupedPropertyUpdates: vi.fn(async () => undefined),
-  groupedPropertyKeys: vi.fn(() => []),
-}));
-
-vi.mock('./graphql-optimistic', () => ({
-  buildOptimisticSetEntityProperty: buildOptimisticSetEntityPropertyMock,
 }));
 
 import {
@@ -495,9 +486,136 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     vi.clearAllMocks();
     optimisticUpdateSoupEntityMock.mockReturnValue({ rollback: rollbackMock });
     isInstantiatedPropertyMock.mockReturnValue(true);
-    buildOptimisticSetEntityPropertyMock.mockReturnValue({
-      id: 'assignment-1',
-    });
+    graphqlEntityPropertyMutationMock.mockResolvedValue({ kind: 'committed' });
+    createGraphqlAddEntityPropertyMutationMock.mockImplementation(
+      (options: {
+        onMutate?: (input: {
+          entityId: string;
+          entityType: string;
+          propertyDefinitionId: string;
+        }) => unknown;
+        onSuccess?: (input: unknown, context: unknown) => unknown;
+        onError?: (error: Error, input: unknown, context: unknown) => unknown;
+        onSettled?: (
+          error: Error | null,
+          input: unknown,
+          context: unknown
+        ) => unknown;
+      }) => {
+        let isPending = false;
+        let error: Error | null = null;
+        const mutateAsync = async (input: {
+          entityId: string;
+          entityType: string;
+          propertyDefinitionId: string;
+        }) => {
+          isPending = true;
+          const context = await options.onMutate?.(input);
+          let settledError: Error | null = null;
+          try {
+            const disposition = await graphqlEntityPropertyMutationMock({
+              kind: 'add',
+              ...input,
+            });
+            if (disposition.kind === 'permanently-failed') {
+              throw disposition.error;
+            }
+            await options.onSuccess?.(input, context);
+            return { error: null };
+          } catch (cause) {
+            settledError =
+              cause instanceof Error ? cause : new Error(String(cause));
+            error = settledError;
+            await options.onError?.(settledError, input, context);
+            throw settledError;
+          } finally {
+            await options.onSettled?.(settledError, input, context);
+            isPending = false;
+          }
+        };
+        return {
+          get isPending() {
+            return isPending;
+          },
+          get error() {
+            return error;
+          },
+          mutate: (input: {
+            entityId: string;
+            entityType: string;
+            propertyDefinitionId: string;
+          }) => {
+            void mutateAsync(input).catch(() => undefined);
+          },
+          mutateAsync,
+        };
+      }
+    );
+    createGraphqlBulkSaveEntityPropertiesMutationMock.mockImplementation(
+      (options: {
+        onMutate?: (input: typeof variables) => unknown;
+        onCommitted?: (
+          item: (typeof variables)['properties'][number],
+          disposition: { kind: 'committed' }
+        ) => unknown;
+        onSuccess?: (input: typeof variables, context: unknown) => unknown;
+        onError?: (
+          error: Error,
+          input: typeof variables,
+          context: unknown
+        ) => unknown;
+        onSettled?: (
+          error: Error | null,
+          input: typeof variables,
+          context: unknown
+        ) => unknown;
+      }) => {
+        let isPending = false;
+        let error: Error | null = null;
+        const mutateAsync = async (input: typeof variables) => {
+          isPending = true;
+          const context = await options.onMutate?.(input);
+          let settledError: Error | null = null;
+          try {
+            for (const item of input.properties) {
+              const disposition = await graphqlEntityPropertyMutationMock({
+                kind: 'save',
+                ...item,
+              });
+              if (disposition.kind === 'committed') {
+                await options.onCommitted?.(item, disposition);
+              } else if (disposition.kind === 'permanently-failed') {
+                throw disposition.error;
+              }
+            }
+            await options.onSuccess?.(input, context);
+            return { error: null };
+          } catch (cause) {
+            settledError =
+              cause instanceof Error ? cause : new Error(String(cause));
+            error = settledError;
+            await options.onError?.(settledError, input, context);
+            throw settledError;
+          } finally {
+            await options.onSettled?.(settledError, input, context);
+            isPending = false;
+          }
+        };
+        return {
+          get isPending() {
+            return isPending;
+          },
+          get error() {
+            return error;
+          },
+          mutate: (input: typeof variables) => {
+            void mutateAsync(input).catch(() => undefined);
+          },
+          mutateAsync,
+        };
+      }
+    );
+    setRestEntityPropertyMock.mockResolvedValue(ok({ success: true }));
     graphqlSoupEnabledMock.mockReturnValue(true);
     deleteEntityPropertyMock.mockResolvedValue(ok(undefined));
     addEntityPropertyOptionMock.mockResolvedValue(ok(undefined));
@@ -524,22 +642,23 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
 
   it('submits GraphQL optimism while offline for the durable cache queue', async () => {
     onlineManager.setOnline(false);
-    setEntityPropertyMock.mockResolvedValue({
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
       kind: 'queued',
       transactionId: 'txn-offline',
     });
 
     await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
 
-    expect(setEntityPropertyMock).toHaveBeenCalledOnce();
-    expect(setEntityPropertyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ optimisticProperty: { id: 'assignment-1' } })
-    );
+    expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce();
+    expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledWith({
+      kind: 'save',
+      ...variables.properties[0],
+    });
     expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
   });
 
   it('treats queued GraphQL saves as accepted submissions', async () => {
-    setEntityPropertyMock.mockResolvedValue({
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
       kind: 'queued',
       transactionId: 'txn-queued',
     });
@@ -554,13 +673,13 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   });
 
   it('invalidates GraphQL permanent failures without snapshot rollback', async () => {
-    setEntityPropertyMock.mockResolvedValue({
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
       kind: 'permanently-failed',
       error: new Error('invalid property'),
     });
 
     await expect(mutation.mutateAsync(variables)).rejects.toThrow(
-      'One or more properties permanently failed to save'
+      'invalid property'
     );
 
     expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
@@ -570,8 +689,28 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(toastFailureMock).toHaveBeenCalledOnce();
   });
 
+  it('exposes transport-neutral pending state', async () => {
+    let resolve!: (value: { kind: 'committed' }) => void;
+    graphqlEntityPropertyMutationMock.mockImplementation(
+      () =>
+        new Promise((resolveMutation) => {
+          resolve = resolveMutation;
+        })
+    );
+
+    const pending = mutation.mutateAsync(variables);
+    await vi.waitFor(() => expect(mutation.isPending).toBe(true));
+    await vi.waitFor(() =>
+      expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce()
+    );
+
+    resolve({ kind: 'committed' });
+    await pending;
+    expect(mutation.isPending).toBe(false);
+  });
+
   it('invalidates the TanStack projection after an immediate GraphQL commit', async () => {
-    setEntityPropertyMock.mockResolvedValue({ kind: 'committed' });
+    graphqlEntityPropertyMutationMock.mockResolvedValue({ kind: 'committed' });
 
     await mutation.mutateAsync(variables);
 
@@ -583,7 +722,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   });
 
   it('invalidates the REST projection for a new GraphQL attachment', async () => {
-    setEntityPropertyMock.mockResolvedValue({ kind: 'committed' });
+    graphqlEntityPropertyMutationMock.mockResolvedValue({ kind: 'committed' });
 
     await addMutation.mutateAsync({
       entityId: 'task-1',
@@ -591,6 +730,12 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       propertyDefinitionId: 'status-def',
     });
 
+    expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledWith({
+      kind: 'add',
+      entityId: 'task-1',
+      entityType: 'TASK',
+      propertyDefinitionId: 'status-def',
+    });
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).not.toHaveBeenCalled();
   });
@@ -613,7 +758,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   });
 
   it('invalidates REST after a failed attachment write', async () => {
-    setEntityPropertyMock.mockResolvedValue({
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
       kind: 'permanently-failed',
       error: new Error('add failed'),
     });
@@ -676,10 +821,9 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
 
   it('keeps the existing TanStack lifecycle when GraphQL Soup is disabled', async () => {
     graphqlSoupEnabledMock.mockReturnValue(false);
-    setEntityPropertyMock.mockResolvedValue({
-      kind: 'permanently-failed',
-      error: new Error('invalid property'),
-    });
+    setRestEntityPropertyMock.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'invalid property' }])
+    );
 
     await expect(mutation.mutateAsync(variables)).rejects.toThrow(
       'One or more properties permanently failed to save'
