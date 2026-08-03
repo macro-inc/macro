@@ -296,6 +296,7 @@ export const storageBacklog = [
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
   'getRecentActivityHandler',
+  'listOccurrences',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',
