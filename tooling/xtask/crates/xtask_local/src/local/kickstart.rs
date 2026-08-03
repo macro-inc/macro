@@ -324,7 +324,7 @@ pub fn build(
                 "buttonText": "GoogleGmail",
                 "linkingStrategy": "LinkByEmail",
                 "lambdaConfiguration": { "reconcileId": identity::RECONCILE_LAMBDA_ID },
-                "oauth2": oauth2_base("openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic"),
+                "oauth2": oauth2_base("openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/calendar"),
                 "applicationConfiguration": app_config,
             }}
         }));
