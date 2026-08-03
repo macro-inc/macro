@@ -329,7 +329,7 @@ pub async fn complete_backfill_job_and_calendar_extraction(
         .await?;
         tx.commit().await?;
         return Ok(match status.as_deref() {
-            Some("Complete" | "Failed") => BackfillCompletion::AlreadyTerminal,
+            Some("Complete" | "Failed" | "Cancelled") => BackfillCompletion::AlreadyTerminal,
             Some(_) => BackfillCompletion::LeaseLost,
             None => BackfillCompletion::NotFound,
         });

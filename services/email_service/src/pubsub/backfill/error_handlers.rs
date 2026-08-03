@@ -42,7 +42,26 @@ pub async fn handle_non_retryable_error(
             handle_message_failure(ctx, scope).await?;
         }
         BackfillOperation::BackfillAttachment(_) => {}
-        BackfillOperation::FinalizeBackfill(_) => {}
+        BackfillOperation::FinalizeBackfill(scope) => {
+            // The message is about to be deleted; without republishing the
+            // completion-outbox row, the backfill would finish silently
+            // missing attachment fan-out, contacts sync, and the final
+            // refresh event. Deterministic failures resurface via the DLQ.
+            sqlx::query!(
+                r#"
+                UPDATE email_backfill_completion_outbox
+                SET published_at = NULL
+                WHERE backfill_job_id = $1
+                "#,
+                scope.job_id,
+            )
+            .execute(&ctx.db)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, job_id = %scope.job_id, "failed to republish completion outbox after terminal finalize failure");
+            })
+            .ok();
+        }
         BackfillOperation::CalendarGoogleBackfill(scope) => {
             let coordinator_reauth_transitioned = coordinator_reauth_edge(&e.source);
             let prelease_reauth_transitioned = if coordinator_reauth_transitioned.is_none() {

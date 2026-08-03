@@ -210,11 +210,25 @@ async fn finalize_claimed_backfill(
     else {
         return Ok(());
     };
-    if job.status != models_email::service::backfill::BackfillJobStatus::Complete {
-        return Err(ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::anyhow!("backfill completion effects published before job completion"),
-        }));
+    match job.status {
+        models_email::service::backfill::BackfillJobStatus::Complete => {}
+        // A job that failed or was cancelled after its completion message
+        // published will never become Complete; retrying such a delivery
+        // only burns receives, so retire its effects instead.
+        models_email::service::backfill::BackfillJobStatus::Failed
+        | models_email::service::backfill::BackfillJobStatus::Cancelled => {
+            tracing::warn!(%job_id, status = ?job.status, "retiring completion effects for a terminal, non-complete job");
+            return retire_completion_effects(ctx, job_id, lease_token).await;
+        }
+        models_email::service::backfill::BackfillJobStatus::Init
+        | models_email::service::backfill::BackfillJobStatus::InProgress => {
+            return Err(ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::anyhow!(
+                    "backfill completion effects published before job completion"
+                ),
+            }));
+        }
     }
     let Some(canonical_link_id) = job.link_id else {
         return retire_completion_effects(ctx, job_id, lease_token).await;
