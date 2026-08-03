@@ -95,6 +95,7 @@ fn paths_filter() -> Step<Use> {
                   - 'packages/**'
                   - 'rules/**'
                   - 'sgconfig.yml'
+                  - '.github/actions/teardown-nix/**'
                   - '.github/workflows/code_check_conventions.yml'
             "#},
         ))

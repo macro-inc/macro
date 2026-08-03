@@ -149,6 +149,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'flake.lock'
                   - '.github/actions/setup-nix/**'
                   - '.github/actions/setup-nix-dev-shell/**'
+                  - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
                   - '.github/services-config.json'
                   - '.github/scripts/build-cloud-storage-lambdas.sh'

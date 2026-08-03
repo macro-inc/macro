@@ -36,6 +36,7 @@ jobs:
             - 'packages/**'
             - 'rules/**'
             - 'sgconfig.yml'
+            - '.github/actions/teardown-nix/**'
             - '.github/workflows/code_check_conventions.yml'
   ast-grep:
     needs:
