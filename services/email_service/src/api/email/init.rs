@@ -631,6 +631,8 @@ async fn init_user(
 
     if let (Some(scopes), Some(link_id)) = (completed_google_grant.as_deref(), link_id) {
         apply_and_consume_calendar_grant(&ctx, link.id, link_id, scopes).await?;
+    } else if completed_google_grant.is_none() {
+        apply_grant_discovered_from_token(&ctx, &link).await;
     }
 
     // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
@@ -740,6 +742,74 @@ async fn init_user(
         }),
     )
         .into_response())
+}
+
+/// Init runs on every authentication, including first-login SSO where
+/// FusionAuth performs the token exchange and the granted scopes never reach
+/// the link flow. When the link has no recorded grant generation, discover
+/// the scopes from Google's tokeninfo endpoint using the link's own token so
+/// SSO-only users still receive calendar sync. Best-effort: a failure here
+/// must never fail authentication, and the next init retries it.
+async fn apply_grant_discovered_from_token(ctx: &ApiContext, link: &link::Link) {
+    let unrecorded = sqlx::query_scalar!(
+        r#"SELECT google_grant_version = 0 AS "unrecorded!" FROM email_links WHERE id = $1"#,
+        link.id,
+    )
+    .fetch_optional(&ctx.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false);
+    if !unrecorded {
+        return;
+    }
+    let token = match fetch_gmail_token_for_email(
+        ctx,
+        &link.fusionauth_user_id,
+        link.email_address.0.as_ref(),
+    )
+    .await
+    {
+        Ok(token) => token,
+        Err(error) => {
+            tracing::warn!(error = ?error, link_id = %link.id, "skipping grant discovery: no Google token");
+            return;
+        }
+    };
+    match fetch_token_scopes(&token).await {
+        Ok(scopes) => {
+            apply_calendar_grant(ctx.calendar_service.as_ref(), link.id, &scopes)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, link_id = %link.id, "failed to apply discovered Google grant");
+                })
+                .ok();
+        }
+        Err(error) => {
+            tracing::warn!(error = ?error, link_id = %link.id, "failed to discover Google token scopes");
+        }
+    }
+}
+
+/// Ask Google which scopes an access token actually carries.
+async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec<String>> {
+    #[derive(serde::Deserialize)]
+    struct TokenInfo {
+        scope: String,
+    }
+    let info: TokenInfo = reqwest::Client::new()
+        .post("https://www.googleapis.com/oauth2/v3/tokeninfo")
+        .form(&[("access_token", access_token)])
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    Ok(info
+        .scope
+        .split_ascii_whitespace()
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 async fn apply_calendar_grant(
