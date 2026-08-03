@@ -566,12 +566,22 @@ pub fn is_system_calendar(provider_calendar_id: &str) -> bool {
 }
 
 /// Deployment configuration enabling Google push notification channels.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct GoogleWatchConfig {
     /// Public HTTPS address Google delivers notifications to.
     pub address: String,
     /// Shared verification token echoed back on every notification.
     pub token: String,
+}
+
+impl std::fmt::Debug for GoogleWatchConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GoogleWatchConfig")
+            .field("address", &self.address)
+            .field("token", &"<redacted>")
+            .finish()
+    }
 }
 
 /// An active Google push notification channel for one calendar.

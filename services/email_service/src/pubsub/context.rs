@@ -92,8 +92,15 @@ impl CalendarBackfillServices {
 /// variables are configured; without them the 5-minute poll is the sole
 /// freshness mechanism.
 pub fn calendar_watch_config() -> Option<GoogleWatchConfig> {
-    let address = macro_env_var::maybe_read_env("CALENDAR_WATCH_WEBHOOK_URL")?;
-    let token = macro_env_var::maybe_read_env("CALENDAR_WATCH_TOKEN")?;
+    // A variable set to an empty string must count as unset: a blank token
+    // would verify blank-header webhook requests.
+    let read = |name| {
+        macro_env_var::maybe_read_env(name)
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+    };
+    let address = read("CALENDAR_WATCH_WEBHOOK_URL")?;
+    let token = read("CALENDAR_WATCH_TOKEN")?;
     Some(GoogleWatchConfig { address, token })
 }
 
