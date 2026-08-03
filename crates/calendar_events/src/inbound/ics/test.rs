@@ -146,3 +146,32 @@ fn recurrence_is_detected_in_either_property_map() {
 
     assert!(!declares_recurrence(&Event::new()));
 }
+
+#[test]
+fn duration_stands_in_for_a_missing_dtend() {
+    let ics = b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:duration@example.com\r\nDTSTAMP:20260701T120000Z\r\nDTSTART:20260724T140000Z\r\nDURATION:PT1H30M\r\nSUMMARY:Duration event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    let events = parse_email_ics("macro|owner@example.com", source(ics), ics, &range()).unwrap();
+
+    assert_eq!(events.len(), 1);
+    let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = events[0].event.time
+    else {
+        panic!("expected a timed event");
+    };
+    assert_eq!((ends_at - starts_at).num_minutes(), 90);
+}
+
+#[test]
+fn ical_durations_parse_per_rfc_5545() {
+    assert_eq!(parse_ical_duration("PT1H"), Some(Duration::hours(1)));
+    assert_eq!(
+        parse_ical_duration("P1DT2H30M"),
+        Some(Duration::minutes(24 * 60 + 150))
+    );
+    assert_eq!(parse_ical_duration("P2W"), Some(Duration::weeks(2)));
+    assert_eq!(parse_ical_duration("-PT15M"), Some(Duration::minutes(-15)));
+    assert_eq!(parse_ical_duration("nonsense"), None);
+    assert_eq!(parse_ical_duration("P1X"), None);
+}

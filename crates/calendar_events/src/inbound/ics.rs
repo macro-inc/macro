@@ -240,6 +240,29 @@ fn parse_time(event: &Event, uid: &str) -> Result<EventTime, Report> {
             start_date,
             end_date: start_date + Duration::days(1),
         }),
+        // RFC 5545 also allows a timed VEVENT to carry DURATION instead of
+        // DTEND; instants with neither stay rejected since a zero-length
+        // span cannot materialize an occurrence.
+        (DatePerhapsTime::DateTime(start), None) => {
+            let duration = event
+                .properties()
+                .get("DURATION")
+                .and_then(|property| parse_ical_duration(property.value()))
+                .ok_or_else(|| rootcause::report!(IcsParseError::InvalidTime(uid.to_string())))?;
+            let time_zone = timezone_id(&start);
+            let starts_at = start
+                .try_into_utc()
+                .ok_or_else(|| rootcause::report!(IcsParseError::InvalidTime(uid.to_string())))?;
+            let ends_at = starts_at + duration;
+            if ends_at <= starts_at {
+                return Err(rootcause::report!(IcsParseError::InvalidTime(uid.to_string())).into());
+            }
+            Ok(EventTime::Timed {
+                starts_at,
+                ends_at,
+                time_zone,
+            })
+        }
         (DatePerhapsTime::DateTime(start), Some(DatePerhapsTime::DateTime(end))) => {
             let time_zone = timezone_id(&start);
             let starts_at = start
@@ -259,6 +282,57 @@ fn parse_time(event: &Event, uid: &str) -> Result<EventTime, Report> {
         }
         _ => Err(rootcause::report!(IcsParseError::InvalidTime(uid.to_string())).into()),
     }
+}
+
+/// Parse an RFC 5545 DURATION value (`P2W`, `P1DT2H30M`, `PT45M`, ...).
+fn parse_ical_duration(value: &str) -> Option<Duration> {
+    let value = value.trim();
+    let (sign, rest) = match value.strip_prefix('-') {
+        Some(rest) => (-1, rest),
+        None => (1, value.strip_prefix('+').unwrap_or(value)),
+    };
+    let rest = rest.strip_prefix('P')?;
+    if let Some(weeks) = rest.strip_suffix('W') {
+        let weeks: i64 = weeks.parse().ok()?;
+        return Some(Duration::seconds(sign * weeks * 7 * 86_400));
+    }
+    let (date_part, time_part) = match rest.split_once('T') {
+        Some((date_part, time_part)) => (date_part, time_part),
+        None => (rest, ""),
+    };
+    let mut seconds: i64 = 0;
+    let mut digits = String::new();
+    for ch in date_part.chars() {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+        } else if ch == 'D' {
+            seconds += digits.parse::<i64>().ok()? * 86_400;
+            digits.clear();
+        } else {
+            return None;
+        }
+    }
+    if !digits.is_empty() {
+        return None;
+    }
+    for ch in time_part.chars() {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+        } else {
+            let unit: i64 = match ch {
+                'H' => 3_600,
+                'M' => 60,
+                'S' => 1,
+                _ => return None,
+            };
+            seconds += digits.parse::<i64>().ok()? * unit;
+            digits.clear();
+        }
+    }
+    if !digits.is_empty() {
+        return None;
+    }
+    Some(Duration::seconds(sign * seconds))
 }
 
 fn parse_start(value: DatePerhapsTime) -> Result<EventStart, ()> {
