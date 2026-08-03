@@ -32,4 +32,7 @@ pub enum SkillError {
     /// The search backend failed.
     #[error("skill search failed")]
     SearchFailed(#[source] anyhow::Error),
+    /// The listing backend failed.
+    #[error("skill listing failed")]
+    ListFailed(#[source] anyhow::Error),
 }

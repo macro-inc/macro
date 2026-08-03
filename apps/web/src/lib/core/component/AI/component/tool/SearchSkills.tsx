@@ -13,6 +13,8 @@ type SkillSearchResult = NamedTool<
   'response'
 >['data']['results'][number];
 
+type SkillToolName = 'SearchSkills' | 'ListSkills';
+
 function SkillResultRow(props: { result: SkillSearchResult }) {
   const { insertSplit } = useSplitLayout();
 
@@ -50,51 +52,62 @@ function SkillResultRow(props: { result: SkillSearchResult }) {
   );
 }
 
-export const searchSkillsHandler = createToolRenderer({
-  name: 'SearchSkills',
-  render: (ctx) => {
-    const [isExpanded, setIsExpanded] = createSignal(false);
-    const results = () => ctx.response?.data.results ?? [];
-    const hitCount = () => results().length;
-    const hasResults = () => hitCount() > 0;
-    const statusText = () => {
-      if (!ctx.response) return undefined;
-      if (hitCount() === 0) return 'No Results';
-      if (hitCount() === 1) return '1 skill';
-      return `${hitCount()} skills`;
-    };
+const createHandler = (name: SkillToolName) =>
+  createToolRenderer({
+    name,
+    render: (ctx) => {
+      const [isExpanded, setIsExpanded] = createSignal(false);
+      const results = () => ctx.response?.data.results ?? [];
+      const hitCount = () => results().length;
+      const hasResults = () => hitCount() > 0;
+      const statusText = () => {
+        if (!ctx.response) return undefined;
+        if (hitCount() === 0) return 'No Results';
+        if (hitCount() === 1) return '1 skill';
+        return `${hitCount()} skills`;
+      };
 
-    return (
-      <BaseTool
-        icon={MagnifyingGlass}
-        renderContext={ctx.renderContext}
-        type="call"
-        response={
-          hasResults() && isExpanded() ? (
-            <div class="max-h-120 overflow-y-auto">
-              <Tool.List>
-                <For each={results()}>
-                  {(result) => <SkillResultRow result={result} />}
-                </For>
-              </Tool.List>
+      return (
+        <BaseTool
+          icon={MagnifyingGlass}
+          renderContext={ctx.renderContext}
+          type="call"
+          response={
+            hasResults() && isExpanded() ? (
+              <div class="max-h-120 overflow-y-auto">
+                <Tool.List>
+                  <For each={results()}>
+                    {(result) => <SkillResultRow result={result} />}
+                  </For>
+                </Tool.List>
+              </div>
+            ) : undefined
+          }
+        >
+          <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+            <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <Show
+                when={'name' in ctx.tool.data && ctx.tool.data.name}
+                fallback={<span class="min-w-0 truncate">List skills</span>}
+              >
+                {(query) => (
+                  <span class="min-w-0 truncate">
+                    Search skills <span class="text-ink"> {query()} </span>
+                  </span>
+                )}
+              </Show>
             </div>
-          ) : undefined
-        }
-      >
-        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
-          <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <span class="min-w-0 truncate">
-              Search skills <span class="text-ink"> {ctx.tool.data.name} </span>
-            </span>
+            <Tool.ResultToggle
+              expanded={isExpanded()}
+              onToggle={() => setIsExpanded((expanded) => !expanded)}
+              showToggle={hasResults()}
+              status={statusText()}
+            />
           </div>
-          <Tool.ResultToggle
-            expanded={isExpanded()}
-            onToggle={() => setIsExpanded((expanded) => !expanded)}
-            showToggle={hasResults()}
-            status={statusText()}
-          />
-        </div>
-      </BaseTool>
-    );
-  },
-});
+        </BaseTool>
+      );
+    },
+  });
+
+export const searchSkillsHandler = createHandler('SearchSkills');
+export const listSkillsHandler = createHandler('ListSkills');

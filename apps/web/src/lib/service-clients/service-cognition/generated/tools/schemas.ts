@@ -1749,6 +1749,20 @@ export const ListNotificationsResponse = z.object({
   ),
 });
 
+export const ListSkills = z.record(z.any());
+
+export const ListSkillsResponse = z.object({
+  results: z.array(
+    z.object({
+      documentId: z.string().uuid(),
+      name: z.string(),
+      updatedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+    })
+  ),
+});
+
 export const ListTags = z.record(z.any());
 
 export const ListTagsResponse = z.object({

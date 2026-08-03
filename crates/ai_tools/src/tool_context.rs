@@ -239,19 +239,23 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
 /// Type alias for the skill service implementation used by AI tools.
 pub type ToolSkillService = skills::domain::service::SkillServiceImpl<
     skills::outbound::search_service_searcher::SearchServiceSkillSearcher,
+    skills::outbound::soup_skill_lister::SoupSkillLister<ToolSoupService>,
 >;
 
 /// Type alias for the skill AI tool context.
 pub type ToolSkillToolContext = SkillToolContext<ToolSkillService>;
 
-/// Build the skill AI tool context from a search service client.
+/// Build the skill AI tool context from a search service client (skill
+/// search) and the soup service (skill listing).
 pub fn build_skill_tool_context(
     search_service_client: Arc<search_service_client::SearchServiceClient>,
+    soup_service: Arc<ToolSoupService>,
 ) -> ToolSkillToolContext {
     SkillToolContext::new(skills::domain::service::SkillServiceImpl::new(
         skills::outbound::search_service_searcher::SearchServiceSkillSearcher::new(
             search_service_client,
         ),
+        skills::outbound::soup_skill_lister::SoupSkillLister::new(soup_service),
     ))
 }
 

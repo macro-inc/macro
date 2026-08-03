@@ -249,6 +249,22 @@ export function EmptyState(props: {
         />
       </Match>
 
+      <Match
+        when={props.listView === 'agents' && soup.activeTab() === 'skills'}
+      >
+        <EmptyStatePanel
+          graphic={EmptyStateAiGraphic}
+          title="No skills yet"
+          description="Skills are markdown documents with instructions AI follows. Reference one with / in any AI input."
+          primaryAction={{
+            label: 'New skill',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('skill'),
+          }}
+          documentationUrl={`${DOCS_BASE}/product/agents`}
+        />
+      </Match>
+
       <Match when={props.listView === 'agents'}>
         <EmptyStatePanel
           graphic={EmptyStateAiGraphic}

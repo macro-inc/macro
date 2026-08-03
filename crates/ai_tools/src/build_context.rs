@@ -385,6 +385,9 @@ pub async fn build_tool_service_context_from_env(
 
     let anthropic_tool_context = build_anthropic_tool_context();
 
+    let skill_tool_context =
+        crate::tool_context::build_skill_tool_context(search_client.clone(), soup_service.clone());
+
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
@@ -401,7 +404,7 @@ pub async fn build_tool_service_context_from_env(
         project_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
-        skill_tool_context: crate::tool_context::build_skill_tool_context(search_client),
+        skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),

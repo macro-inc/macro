@@ -2404,6 +2404,37 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
+ * List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills.
+ */
+export type ListSkills = {};
+/**
+ * Response for a skill listing.
+ */
+export interface ListSkillsResponse {
+  /**
+   * The user's skills, most recently updated first.
+   */
+  results: SkillSearchResult[];
+}
+/**
+ * A skill matched by a skill search.
+ */
+export interface SkillSearchResult {
+  /**
+   * The document id of the skill. Read the skill's instructions with
+   * ReadContent using this id.
+   */
+  documentId: string;
+  /**
+   * The name of the skill.
+   */
+  name: string;
+  /**
+   * When the skill was last updated, when known.
+   */
+  updatedAt?: string | null;
+}
+/**
  * List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to the tags argument of ListEntities, ContentSearch, or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id in add_option_ids or remove_option_ids — never rewrite the full value to add or remove one tag. Call this before tag operations when you don't already know the user's tags.
  */
 export type ListTags = {};
@@ -3478,24 +3509,6 @@ export interface SearchSkillsResponse {
    * The matched skills, most recently updated first.
    */
   results: SkillSearchResult[];
-}
-/**
- * A skill matched by a skill search.
- */
-export interface SkillSearchResult {
-  /**
-   * The document id of the skill. Read the skill's instructions with
-   * ReadContent using this id.
-   */
-  documentId: string;
-  /**
-   * The name of the skill.
-   */
-  name: string;
-  /**
-   * When the skill was last updated, when known.
-   */
-  updatedAt?: string | null;
 }
 export interface SearchToolResponse {
   results: TaggedSearchResult[];
