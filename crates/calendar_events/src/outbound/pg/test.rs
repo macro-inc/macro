@@ -4,7 +4,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
 use crate::domain::service::GoogleCalendarBackfillFailureService;
-use chrono::{Duration, TimeZone};
+use chrono::{Duration, SubsecRound, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn complete_grant() -> GoogleScopeSet {
@@ -408,7 +408,9 @@ async fn completed_google_job_is_rearmed_and_reuses_calendar_sync_state(pool: Pg
         .await
         .unwrap()
         .id;
-    let range = OccurrenceRange::historical_sync(Utc::now());
+    // Postgres stores timestamptz at microsecond precision, so the
+    // round-tripped range only compares equal from a truncated instant.
+    let range = OccurrenceRange::historical_sync(Utc::now().trunc_subsecs(6));
     repo.commit_google_calendar_sync(
         key,
         lease_token,
