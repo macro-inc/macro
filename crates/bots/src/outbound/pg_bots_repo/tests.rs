@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::{
     models::{
-        BotChannelType, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        PatchBotRequest,
+        BotChannelListCaller, BotChannelType, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, PatchBotRequest,
     },
     ports::{BotError, BotService},
     service::BotServiceImpl,
@@ -475,13 +475,16 @@ async fn list_bot_channels_requires_manageable_bot_and_returns_only_active_chann
         .await?;
 
     let err = service
-        .list_bot_channels(user_id(USER_OTHER), bot.id)
+        .list_bot_channels(BotChannelListCaller::User(user_id(USER_OTHER)), bot.id)
         .await
         .expect_err("non-owner must not list someone else's bot channels");
     assert!(matches!(err, BotError::Unauthorized));
 
     let empty_channels = service
-        .list_bot_channels(user_id(USER_OWNER), empty_bot.id)
+        .list_bot_channels(
+            BotChannelListCaller::User(user_id(USER_OWNER)),
+            empty_bot.id,
+        )
         .await?;
     assert!(empty_channels.is_empty());
 
@@ -496,7 +499,7 @@ async fn list_bot_channels_requires_manageable_bot_and_returns_only_active_chann
         .await?;
 
     let channels = service
-        .list_bot_channels(user_id(USER_OWNER), bot.id)
+        .list_bot_channels(BotChannelListCaller::User(user_id(USER_OWNER)), bot.id)
         .await?;
 
     assert_eq!(channels.len(), 1);
@@ -908,7 +911,7 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
         .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
         .await?;
     service
-        .list_bot_channels(user_id(USER_OWNER), bot.id)
+        .list_bot_channels(BotChannelListCaller::User(user_id(USER_OWNER)), bot.id)
         .await?;
     service
         .remove_bot_from_channel(user_id(USER_OWNER), channel_id, bot.id)

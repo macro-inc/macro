@@ -1,6 +1,7 @@
 //! Bot domain models.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -138,6 +139,17 @@ pub struct BotChannel {
     pub channel_type: BotChannelType,
     /// Timestamp when the bot joined the channel.
     pub joined_at: DateTime<Utc>,
+}
+
+/// Authenticated principal asking to list a bot's channels.
+#[derive(Debug, Clone)]
+pub enum BotChannelListCaller {
+    /// A directly authenticated Macro user.
+    User(MacroUserIdStr<'static>),
+    /// An authenticated bot.
+    Bot(BotId),
+    /// An authenticated internal service, with or without an acting user.
+    Internal,
 }
 
 /// Bot token metadata.

@@ -262,7 +262,6 @@ export const storageExcluded = [
   'joinChannelByCode',
   'jobProcessingResultHandler',
   'leaveOrEndCall',
-  'listBotChannels',
   'patchViewHandler',
   'postChannelBotWebhook',
   'postChannelMessages',
