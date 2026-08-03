@@ -1,4 +1,8 @@
 import './globals';
+import {
+  createWorkerTraceConfig,
+  instrument,
+} from '@macro-inc/observability/worker';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import endpoints from './endpoints';
@@ -53,4 +57,16 @@ app.use(
 );
 app.route('/', endpoints);
 
-export default app;
+// instrument() wraps fetch with a request root span, registers the global
+// tracer provider/context manager (which Telemetry.span resolves through),
+// propagates traceparent, and flushes spans via waitUntil after the response.
+export default instrument({ fetch: app.fetch }, (env: Bindings) =>
+  createWorkerTraceConfig({
+    serviceName: 'ai-editing-worker',
+    environment: env.ENVIRONMENT ?? 'local',
+    tracesUrl: env.OTEL_EXPORTER_OTLP_ENDPOINT,
+    tracesHeaders: env.DD_API_KEY
+      ? { 'dd-api-key': env.DD_API_KEY }
+      : undefined,
+  })
+);

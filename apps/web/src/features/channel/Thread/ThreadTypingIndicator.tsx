@@ -47,7 +47,7 @@ function ThreadTypingIndicatorContent(
 }
 
 function ThreadTypingIndicatorConnector() {
-  return <div class="w-7 border-b border-rail" />;
+  return <div class="w-7 border-b-1 border-rail" />;
 }
 
 function ThreadTypingIndicatorDots() {

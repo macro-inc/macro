@@ -803,14 +803,35 @@ type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
   onMenuOpenChange?: (open: boolean) => void;
+  /**
+   * The Getting Started link, surfaced here only while it's hidden from the
+   * sidebar rows (see `AppSidebar`). Keeps the page reachable from the account
+   * menu once the user removes its dedicated row.
+   */
+  gettingStartedLink?: SidebarItem;
 };
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const email = useEmail();
   const logout = useLogout();
+  const layout = useSplitLayout();
 
   const userName = useOwnUserName();
+
+  const openGettingStarted = () => {
+    const link = props.gettingStartedLink;
+    if (!link) return;
+    navigateToSidebarView({
+      viewId: link.id,
+      params: link.params,
+      shiftKey: false,
+      activeSplit: globalSplitManager()?.activeSplit(),
+      openWithSplit: layout.openWithSplit,
+      referredFrom: 'sidebar',
+    });
+    globalSplitManager()?.returnFocus();
+  };
 
   // Prefer the user's real name (first/last); fall back to their email.
   const displayName = createMemo(() => {
@@ -888,6 +909,28 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             </div>
           </div>
           <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-muted" />
+          <Show when={props.gettingStartedLink}>
+            {(link) => (
+              <Dropdown.Item
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={openGettingStarted}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={link().icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <span class="flex-1 text-ink">{link().label}</span>
+                <Hotkey
+                  // Hardcoding this so that we can include the command scope activation
+                  shortcut="g s"
+                  theme="subtle"
+                  class="ml-6"
+                />
+              </Dropdown.Item>
+            )}
+          </Show>
           <Dropdown.Item
             class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
             onSelect={() => CommandState.open()}
@@ -1225,7 +1268,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 // so this stays true.
                 toast.success('Removed from sidebar', {
                   subtext:
-                    'You can always find Getting Started in the command menu.',
+                    'You can always find Getting Started in the account menu or command menu.',
                 });
               },
             }
@@ -1252,6 +1295,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       )
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
+  );
+
+  // While the Getting Started row is hidden (but still account-gated in via
+  // `findLink`), surface it in the account menu so the page stays reachable.
+  const gettingStartedMenuLink = createMemo(() =>
+    gettingStartedVisibility.hidden() ? findLink('getting-started') : undefined
   );
 
   const sectionItemsFor = (ids: readonly SidebarSectionLinkId[]) =>
@@ -1564,6 +1613,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           isSlim={isSlim}
           onSelect={openSettingsTab}
           onMenuOpenChange={handleOverlayDropdownOpenChange}
+          gettingStartedLink={gettingStartedMenuLink()}
         />
       </div>
       <InviteModal />

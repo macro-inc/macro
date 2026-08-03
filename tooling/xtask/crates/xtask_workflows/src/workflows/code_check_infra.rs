@@ -61,6 +61,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
+        .add_step(steps::teardown_nix())
 }
 
 fn check() -> Job {
@@ -72,6 +73,7 @@ fn check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(bun_install())
         .add_step(bun_check())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -115,6 +117,7 @@ fn paths_filter() -> Step<Use> {
                   - 'flake.nix'
                   - 'flake.lock'
                   - '.github/actions/setup-nix-dev-shell/**'
+                  - '.github/actions/teardown-nix/**'
                   - '.github/workflows/code_check_infra.yml'
             "#},
         ))

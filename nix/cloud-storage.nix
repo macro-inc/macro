@@ -76,7 +76,7 @@
       # manifest plus a crane stub target. A leaf's store hash then only
       # moves when a crate it actually depends on changes — an email-only
       # change leaves the other deploy derivations as pure substitutions
-      # (sticky disk / Cachix) instead of full workspace-subgraph rebuilds.
+      # from Namespace's Nix cache instead of full workspace-subgraph rebuilds.
       # Manifest or Cargo.lock changes still invalidate every leaf (the stub
       # layer embeds them all); those are the rare structural commits.
       #
@@ -188,7 +188,7 @@
         BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
       };
 
-      # Pre-built third-party deps — Cachix caches this; hash is driven by Cargo.lock
+      # Pre-built third-party deps cached by Namespace; hash is driven by Cargo.lock
       # (workspace member sources are stubbed by crane), so it survives most PRs.
       # --all-features matches the test job (cargo nextest --all-features) and clippy
       # so all consumers share the same dep feature unification.
@@ -201,9 +201,10 @@
 
       # Layered atop cargoArtifacts: pre-compile every workspace lib crate so
       # downstream derivations (openApiBins, clippy) inherit a warm target/. The
-      # hash is per-source so cachix only hits when the SHA matches across CI
-      # workflows — but since code-check-cloud-storage and web-app-check-main both
-      # run on the same SHA, whichever finishes first pushes for the other.
+      # hash is per-source so Namespace's Nix cache only hits when the SHA
+      # matches across CI workflows — but since code-check-cloud-storage and
+      # web-app-check-main both run on the same SHA, whichever finishes first
+      # populates the cache for the other.
       # sync_service is checked separately with its supported default feature
       # set because its KV and R2 storage features are mutually exclusive.
       workspaceArtifacts = craneLib.cargoBuild (
@@ -312,7 +313,7 @@
       # Pre-built nextest archive — packages all compiled test binaries plus their
       # metadata into a single tar.zst. CI fetches this archive and runs
       # `cargo nextest run --archive-file` outside the sandbox so tests can hit
-      # postgres/redis services. Built in nix → cached by cachix.
+      # postgres/redis services. Built in Nix and cached by Namespace.
       nextestArchive = craneLib.mkCargoDerivation (
         commonArgs
         // {
@@ -471,7 +472,7 @@
       # ── Lambda builds (crane + cargo-zigbuild) ─────────────────────
       # SPIKE: build a Rust Lambda handler reproducibly under nix/crane so
       # lambdas ride the same content-addressed cache as the service binaries
-      # (nix store + Cachix + sticky disk) instead of a cargo-in-checkout that
+      # (Namespace Nix store volume) instead of a cargo-in-checkout that
       # recompiles the workspace every run. cargo-zigbuild pins the Lambda
       # glibc via a target *suffix* (no toolchain swap; host triple == lambda
       # triple, so no extra rust-std). The binary is renamed `bootstrap` and

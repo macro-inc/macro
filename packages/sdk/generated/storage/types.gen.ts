@@ -1573,6 +1573,46 @@ export type ChannelJoinCodeResponse = {
 };
 
 /**
+ * Metadata for [`ChannelTopicEvent::Mentioned`].
+ */
+export type ChannelMentionedMetadata = {
+    /**
+     * Channel containing the message.
+     */
+    channel_id: string;
+    /**
+     * Type of channel containing the message.
+     */
+    channel_type: ChannelType;
+    /**
+     * Message body.
+     */
+    content: string;
+    /**
+     * Creation timestamp reported by the repository.
+     */
+    created_at: string;
+    /**
+     * The mentioned entity this event is about (`user`, `bot`, `document`, …).
+     *
+     * The message's full mention list travels on `channel.message_posted`.
+     */
+    mentioned: SimpleMention;
+    /**
+     * The id of the message carrying the mention.
+     */
+    message_id: string;
+    /**
+     * Message author; may be a bot.
+     */
+    sender: ChannelSender;
+    /**
+     * Thread parent id when the message is a thread reply.
+     */
+    thread_id?: string | null;
+};
+
+/**
  * Lightweight channel message for soup payloads.
  */
 export type ChannelMessage = {
@@ -1967,6 +2007,12 @@ export type ChannelTopicEvent = {
      * A message was posted.
      */
     metadata: ChannelMessagePostedMetadata;
+} | {
+    event_type: 'channel.mentioned';
+    /**
+     * An entity (user, bot, document, …) was mentioned in a message.
+     */
+    metadata: ChannelMentionedMetadata;
 } | {
     event_type: 'channel.message_patched';
     /**
@@ -7610,6 +7656,28 @@ export type CreateCommentResponses = {
 };
 
 export type CreateCommentResponse2 = CreateCommentResponses[keyof CreateCommentResponses];
+
+export type GetSelfBotData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots/me';
+};
+
+export type GetSelfBotErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSelfBotError = GetSelfBotErrors[keyof GetSelfBotErrors];
+
+export type GetSelfBotResponses = {
+    200: Bot;
+};
+
+export type GetSelfBotResponse = GetSelfBotResponses[keyof GetSelfBotResponses];
 
 export type ListBotChannelsData = {
     body?: never;

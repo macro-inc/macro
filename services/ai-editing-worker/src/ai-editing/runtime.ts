@@ -1,4 +1,5 @@
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import type { Span } from '@macro-inc/observability';
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import type { LexicalSession } from './ai-toolkit/session';
 import type { AwarenessSource } from './awareness';
@@ -59,6 +60,9 @@ export type RunEditorCodeArgs = {
   typingAnimations?: boolean;
   /** Called with the raw ops before they are queued/applied -- use to collect them. */
   onOps?: (ops: DocumentOp[]) => void;
+  /** Annotated (never created/ended here) with sandbox timing, op counts, and
+   *  a failure classification (`error.kind`). */
+  span?: Span;
 };
 
 /**
@@ -67,6 +71,7 @@ export type RunEditorCodeArgs = {
  * and nothing is applied.
  */
 export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
+  const span = args.span;
   let ops: DocumentOp[];
   try {
     // Every key the code references must come with the call — catch a missing
@@ -76,40 +81,52 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
     );
     if (missing.length > 0) {
       const list = missing.map((k) => `"${k}"`).join(', ');
+      span?.setAttr('error.kind', 'snippet_missing');
       throw new Error(
         `snippet${missing.length > 1 ? 's' : ''} ${list} ${missing.length > 1 ? 'are' : 'is'} not defined -- pass their text in the \`snippets\` argument of this runCode call`
       );
     }
-    ops = await args.runner(docIds(args.session), args.code, args.snippets);
+    const sandboxStartedAt = Date.now();
+    try {
+      ops = await args.runner(docIds(args.session), args.code, args.snippets);
+    } catch (e) {
+      span?.setAttr('error.kind', 'sandbox');
+      throw e;
+    } finally {
+      span?.setAttr('sandbox.ms', Date.now() - sandboxStartedAt);
+    }
   } catch (e) {
     if (!(e instanceof Error)) throw new Error(String(e));
     return `error: ${e.message}`;
   }
   args.onOps?.(ops);
+  span?.setAttr('ops.count', ops.length);
+  span?.setAttr('animated', args.typingAnimations !== false);
   if (ops.length === 0) return 'ok';
 
-  if (args.typingAnimations === false) {
-    const results: OpResult[] = ops.map((op) => {
-      try {
-        args.doc.apply(op);
-        return { ok: true, op };
-      } catch (e) {
-        if (!(e instanceof Error)) throw new Error(String(e));
-        return { ok: false, op, error: e.message };
-      }
-    });
-    return summarize(results);
-  }
-
-  const results = await runQueue({
-    ops,
-    params: args.params,
-    randomSource: realRandomSource(),
-    docReader: args.doc,
-    docWriter: args.doc,
-    awarenessSource: args.awarenessSource,
-    resolveNode: (n) => args.doc.resolveRef(n), // point cursors at inserted nodes
-    sleep: args.sleep,
-  });
+  const results: OpResult[] =
+    args.typingAnimations === false
+      ? ops.map((op) => {
+          try {
+            args.doc.apply(op);
+            return { ok: true, op };
+          } catch (e) {
+            if (!(e instanceof Error)) throw new Error(String(e));
+            return { ok: false, op, error: e.message };
+          }
+        })
+      : await runQueue({
+          ops,
+          params: args.params,
+          randomSource: realRandomSource(),
+          docReader: args.doc,
+          docWriter: args.doc,
+          awarenessSource: args.awarenessSource,
+          resolveNode: (n) => args.doc.resolveRef(n), // point cursors at inserted nodes
+          sleep: args.sleep,
+        });
+  const failed = results.filter((r) => !r.ok).length;
+  span?.setAttr('ops.failed', failed);
+  if (failed > 0) span?.setAttr('error.kind', 'apply');
   return summarize(results);
 }

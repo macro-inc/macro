@@ -10,7 +10,7 @@ export function UserHoverTag(props: {
 }) {
   return (
     <div
-      class="pointer-events-none absolute z-30 flex items-center gap-1.5 rounded-md bg-surface px-2 py-1 text-ink text-xs shadow-lg ring ring-edge-muted"
+      class="pointer-events-none absolute z-30 flex items-center gap-1.5 rounded-md border border-edge-muted bg-surface px-2 py-1 text-ink text-xs shadow-lg"
       style={{ left: `${props.left}px`, top: `${props.top}px` }}
     >
       <span

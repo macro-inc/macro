@@ -83,6 +83,9 @@ jobs:
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --sha ${{ github.sha }}
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true

@@ -823,6 +823,48 @@ export const createCommentResponse = zod
   );
 
 /**
+ * @summary Handler for `GET /bots/me`.
+ */
+export const getSelfBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.');
+
+/**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
  */
 export const listBotChannelsParams = zod.object({

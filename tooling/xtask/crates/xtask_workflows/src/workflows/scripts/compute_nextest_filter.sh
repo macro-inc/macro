@@ -5,7 +5,7 @@ set -euo pipefail
 # live Postgres (SQLX_OFFLINE is unset there), so `.sqlx` contents cannot change
 # test outcomes, and a query change always comes with a source change in the
 # owning crate, which the package filter below already maps.
-if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
+if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-nix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
   echo "Workspace-level change detected; running all tests"
   echo "nextest_filter=" >> "$GITHUB_OUTPUT"
   exit 0

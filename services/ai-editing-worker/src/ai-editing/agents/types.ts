@@ -1,3 +1,4 @@
+import type { Span } from '@macro-inc/observability';
 import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
 import type { DocumentOp } from '../editor';
@@ -23,6 +24,8 @@ export type RunTaskDeps = {
   signal?: AbortSignal;
   onOps?: RunCodeToolOptions['onOps'];
   onRunCode?: RunCodeToolOptions['onRunCode'];
+  /** This coder's `edit.dispatch` span; parents its `edit.run_code` children. */
+  span?: Span;
 };
 
 export type RunAgentOptions = {

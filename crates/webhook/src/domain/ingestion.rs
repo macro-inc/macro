@@ -264,6 +264,7 @@ fn normalized_channel_event(
         ChannelTopicEvent::MessagePosted(metadata) => {
             ("channel.message_posted", metadata.channel_id)
         }
+        ChannelTopicEvent::Mentioned(metadata) => ("channel.mentioned", metadata.channel_id),
         ChannelTopicEvent::MessagePatched(metadata) => {
             ("channel.message_patched", metadata.channel_id)
         }

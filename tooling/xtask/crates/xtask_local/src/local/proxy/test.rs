@@ -52,6 +52,8 @@ fn document_content_services_are_available_through_the_proxy() {
     assert!(caddy.contains("reverse_proxy sync-service:8787"));
     assert!(caddy.contains("handle_path /lexical/*"));
     assert!(caddy.contains("reverse_proxy lexical-service:8096"));
+    assert!(caddy.contains("handle_path /ai-editing/*"));
+    assert!(caddy.contains("reverse_proxy ai-editing-worker:8933"));
 }
 
 /// The static-file block is the one route that differs by mode: LocalStack S3

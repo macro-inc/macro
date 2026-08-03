@@ -238,7 +238,7 @@ export function DispatchAgentButton(
         variant="ghost"
         size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
         depth={2}
-        class="rounded-full ring ring-edge-muted"
+        class="rounded-full border border-edge-muted"
       >
         <Button
           onClick={executeLastUsed}

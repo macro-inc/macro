@@ -216,7 +216,7 @@ export function MarkdownOutline(props: {
       <HoverCard
         closeDelay={0}
         content={
-          <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge">
+          <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl border border-edge bg-surface p-2 shadow-menu">
             <For each={props.outline.headings()}>
               {(heading) => (
                 <OutlineItem

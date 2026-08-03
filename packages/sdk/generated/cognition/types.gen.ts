@@ -2324,6 +2324,20 @@ export type McpAuthCallbackResponses = {
     200: unknown;
 };
 
+export type McpOauthClientMetadataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/mcp/servers/auth/client-metadata';
+};
+
+export type McpOauthClientMetadataResponses = {
+    /**
+     * Macro OAuth client metadata document
+     */
+    200: unknown;
+};
+
 export type StartMcpAuthData = {
     body: StartAuthRequest;
     path?: never;

@@ -238,6 +238,15 @@ where
         self.ensure_manageable(caller, bot_id).await
     }
 
+    async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {
+        // A bot may always read itself; no manageability check.
+        self.repo
+            .get_bot(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("bot not found".to_string()))
+    }
+
     async fn patch_bot(
         &self,
         caller: MacroUserIdStr<'static>,

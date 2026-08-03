@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, BotChannel, BotChannelType, CreateChannelScopedBotRequest,
+    AuthenticatedBot, BotChannel, BotChannelType, BotKind, BotOwner, CreateChannelScopedBotRequest,
     CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
@@ -18,8 +18,9 @@ use entity_access::domain::{
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_authorization::{
-    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, NoBotAuthorizer, ValidatedIdentity,
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
+    BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
@@ -45,9 +46,12 @@ enum TestBotMode {
 struct TestBotService {
     mode: TestBotMode,
     bot_channels: Vec<BotChannel>,
+    channel_bots: Vec<Bot>,
+    self_bot: Option<Bot>,
     add_calls: Arc<AtomicUsize>,
     remove_calls: Arc<AtomicUsize>,
     list_bot_channels_calls: Arc<AtomicUsize>,
+    list_channel_bots_calls: Arc<AtomicUsize>,
 }
 
 impl TestBotService {
@@ -55,13 +59,30 @@ impl TestBotService {
         Self::with_bot_channels(mode, Vec::new())
     }
 
+    fn with_self_bot(mode: TestBotMode, self_bot: Bot) -> Self {
+        Self {
+            self_bot: Some(self_bot),
+            ..Self::new(mode)
+        }
+    }
+
+    fn with_channel_bots(mode: TestBotMode, channel_bots: Vec<Bot>) -> Self {
+        Self {
+            channel_bots,
+            ..Self::new(mode)
+        }
+    }
+
     fn with_bot_channels(mode: TestBotMode, bot_channels: Vec<BotChannel>) -> Self {
         Self {
             mode,
             bot_channels,
+            channel_bots: Vec::new(),
+            self_bot: None,
             add_calls: Arc::new(AtomicUsize::new(0)),
             remove_calls: Arc::new(AtomicUsize::new(0)),
             list_bot_channels_calls: Arc::new(AtomicUsize::new(0)),
+            list_channel_bots_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -101,6 +122,13 @@ impl BotService for TestBotService {
         _bot_id: BotId,
     ) -> Result<Bot, BotError> {
         unimplemented!()
+    }
+
+    async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
+        self.result()?;
+        self.self_bot
+            .clone()
+            .ok_or_else(|| BotError::NotFound("bot not found".to_string()))
     }
 
     async fn patch_bot(
@@ -151,7 +179,9 @@ impl BotService for TestBotService {
     }
 
     async fn list_channel_bots(&self, _channel_id: Uuid) -> Result<Vec<Bot>, BotError> {
-        unimplemented!()
+        self.list_channel_bots_calls.fetch_add(1, Ordering::SeqCst);
+        self.result()?;
+        Ok(self.channel_bots.clone())
     }
 
     async fn create_token(
@@ -342,6 +372,48 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
     MacroAuthorizationState::new(Arc::new(service))
 }
 
+const SELF_BOT_TOKEN: &str = "mbot_self_test";
+
+/// Bot authorizer accepting exactly [`SELF_BOT_TOKEN`] for the given bot.
+#[derive(Clone)]
+struct SelfBotAuthorizer {
+    bot_id: BotId,
+}
+
+impl BotAuthorizer for SelfBotAuthorizer {
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: BotScope,
+        _acting_user: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, rootcause::Report<MacroAuthorizationError>> {
+        if bot_token != SELF_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+        Ok(BotAuthentication {
+            bot_id: self.bot_id,
+            token_id: Uuid::new_v4(),
+            bot_scope,
+            team_id: None,
+            acting_user: None,
+        })
+    }
+}
+
+fn authorization_state_with_bot(
+    bot_id: BotId,
+) -> MacroAuthorizationState<TestAuthorizationService> {
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".to_string(),
+            default_user_id: None,
+        },
+        SelfBotAuthorizer { bot_id },
+    );
+    MacroAuthorizationState::new(Arc::new(service))
+}
+
 async fn attach_default_bearer(mut request: Request<Body>) -> Request<Body> {
     request.headers_mut().insert(
         header::AUTHORIZATION,
@@ -470,6 +542,119 @@ async fn read_bot_channels(response: axum::response::Response) -> Vec<BotChannel
         .await
         .unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+fn sample_self_bot(bot_id: BotId) -> Bot {
+    let now = chrono::Utc::now();
+    Bot {
+        id: bot_id,
+        kind: BotKind::Owned,
+        owner: Some(BotOwner::User {
+            user_id: "macro|bot-admin@example.com".to_string(),
+        }),
+        name: "Datadog Alerts".to_string(),
+        handle: "datadog-alerts".to_string(),
+        description: None,
+        avatar_url: None,
+        created_by: Some("macro|bot-admin@example.com".to_string()),
+        created_at: now,
+        updated_at: now,
+        deleted_at: None,
+    }
+}
+
+/// Router whose bot authorizer accepts [`SELF_BOT_TOKEN`] for `bot_id`.
+fn bot_router(service: TestBotService, bot_id: BotId) -> Router {
+    bots_router(BotsRouterState::new(
+        service,
+        TestAccessService::new(EntityParticipantRole::Member),
+        authorization_state_with_bot(bot_id),
+    ))
+}
+
+#[tokio::test]
+async fn bot_reads_itself_via_bots_me() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_self_bot(TestBotMode::Ok, sample_self_bot(bot_id));
+    let request = Request::builder()
+        .method("GET")
+        .uri("/bots/me")
+        .header(BOT_TOKEN_HEADER, SELF_BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "team")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = bot_router(service, bot_id).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let bot: Bot = serde_json::from_slice(&body).unwrap();
+    assert_eq!(bot.id, bot_id);
+    assert_eq!(bot.handle, "datadog-alerts");
+}
+
+#[tokio::test]
+async fn bots_me_rejects_invalid_bot_token() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_self_bot(TestBotMode::Ok, sample_self_bot(bot_id));
+    let request = Request::builder()
+        .method("GET")
+        .uri("/bots/me")
+        .header(BOT_TOKEN_HEADER, "mbot_wrong")
+        .header(BOT_SCOPE_HEADER, "team")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = bot_router(service, bot_id).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn bots_me_rejects_user_bearer_credentials() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_self_bot(TestBotMode::Ok, sample_self_bot(bot_id));
+    let request = Request::builder()
+        .method("GET")
+        .uri("/bots/me")
+        .body(Body::empty())
+        .unwrap();
+
+    // The `router` helper attaches a user Bearer token; BotOnly must reject it.
+    let response = router(service, EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn channel_member_can_list_channel_bots() {
+    let channel_id = Uuid::new_v4();
+    let bot = sample_self_bot(BotId::new_from_uuid(Uuid::new_v4()));
+    let service = TestBotService::with_channel_bots(TestBotMode::Ok, vec![bot.clone()]);
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/channels/{channel_id}/bots"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let bots: Vec<Bot> = serde_json::from_slice(&body).unwrap();
+    assert_eq!(bots.len(), 1);
+    assert_eq!(bots[0].id, bot.id);
+    assert_eq!(service.list_channel_bots_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

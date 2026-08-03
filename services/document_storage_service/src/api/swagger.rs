@@ -248,6 +248,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,

@@ -187,6 +187,10 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
+        unimplemented!()
+    }
+
     async fn patch_bot(
         &self,
         _caller: MacroUserIdStr<'static>,

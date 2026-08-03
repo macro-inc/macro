@@ -168,7 +168,15 @@ function HistorySectionContent() {
     <Show when={!history.loading.sessions()} fallback={<HistorySkeleton />}>
       <Show
         when={totalEdits() > 1 && history.sessions()}
-        fallback={<p class="text-xs text-ink-muted">No history yet</p>}
+        fallback={
+          // Don't claim the document has no edits when we couldn't load them.
+          <p
+            class="text-xs text-ink-muted"
+            title={history.error() ?? undefined}
+          >
+            {history.error() ? "Couldn't load history" : 'No history yet'}
+          </p>
+        }
       >
         {(sessions) => (
           <div class="hidden min-w-0 overflow-hidden md:block">

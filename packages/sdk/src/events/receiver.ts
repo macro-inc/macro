@@ -57,6 +57,32 @@ export class MacroEvents {
   }
 
   /**
+   * Subscribe to @-mentions of the authenticated caller: `channel.mentioned`
+   * deliveries whose mentioned entity is this bot (bot auth) or this user
+   * (user auth).
+   *
+   * `channel.mentioned` deliveries cover every mention in channels the
+   * webhook's workspace can access (its `ids` filter, like all channel
+   * events, holds channel ids); picking out "me" happens here, client-side.
+   * The caller's identity is resolved lazily (once) on the first delivery.
+   * The webhook itself is registered separately and once, e.g.
+   * `macro.webhooks.create({ filters: [{ events: ['channel.mentioned'] }],
+   * … })`.
+   *
+   * @returns An unsubscribe function.
+   */
+  onSelfMention(handler: EventHandler<'channel.mentioned'>): () => void {
+    return this.on('channel.mentioned', async (event) => {
+      // Principals embed emails for users; emails are case-insensitive.
+      const mentioned = event.metadata.mentioned.entity_id.toLowerCase();
+      if (mentioned !== (await this.client.myPrincipalId()).toLowerCase()) {
+        return;
+      }
+      await handler(event);
+    });
+  }
+
+  /**
    * Feed a raw delivery in: verifies the signature, parses, and dispatches to
    * matching handlers.
    *

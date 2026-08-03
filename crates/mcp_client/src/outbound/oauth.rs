@@ -1,12 +1,15 @@
-use crate::domain::models::MCP_CLIENT_NAME;
-use crate::domain::models::{MacroUserIdStr, McpServerRecord};
+//! RMCP-backed OAuth adapter for remote MCP servers.
+
+use crate::domain::models::{
+    MCP_CLIENT_NAME, MacroUserIdStr, McpServerRecord, OAuthClientMetadata,
+};
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
 #[cfg(feature = "providers")]
 use crate::domain::provider_registry::PreRegisteredProviders;
 use macro_user_id::cowlike::CowLike;
 use rmcp::transport::auth::{
-    AuthorizationManager, CredentialStore as _, InMemoryCredentialStore, InMemoryStateStore,
-    OAuthClientConfig, StateStore as _, StoredAuthorizationState,
+    AuthorizationManager, AuthorizationMetadata, CredentialStore as _, InMemoryCredentialStore,
+    InMemoryStateStore, OAuthClientConfig, StateStore as _, StoredAuthorizationState,
 };
 
 /// Drives the OAuth authorization-code flow, storing ephemeral state in an
@@ -14,7 +17,7 @@ use rmcp::transport::auth::{
 pub struct OAuthService<S, R> {
     server_store: S,
     state_store: R,
-    redirect_uri: String,
+    client_metadata: OAuthClientMetadata,
     #[cfg(feature = "providers")]
     pre_registered: PreRegisteredProviders,
 }
@@ -25,24 +28,24 @@ impl<S, R> OAuthService<S, R> {
     pub fn new(
         server_store: S,
         state_store: R,
-        redirect_uri: String,
+        client_metadata: OAuthClientMetadata,
         pre_registered: PreRegisteredProviders,
     ) -> Self {
         Self {
             server_store,
             state_store,
-            redirect_uri,
+            client_metadata,
             pre_registered,
         }
     }
 
-    /// Create a new OAuth service (DCR only, no pre-registered providers).
+    /// Create a new OAuth service without pre-registered providers.
     #[cfg(not(feature = "providers"))]
-    pub fn new(server_store: S, state_store: R, redirect_uri: String) -> Self {
+    pub fn new(server_store: S, state_store: R, client_metadata: OAuthClientMetadata) -> Self {
         Self {
             server_store,
             state_store,
-            redirect_uri,
+            client_metadata,
         }
     }
 }
@@ -54,35 +57,109 @@ struct ResolvedClient {
     scopes: Vec<String>,
 }
 
+fn supports_client_id_metadata(metadata: &AuthorizationMetadata) -> bool {
+    metadata
+        .additional_fields
+        .get("client_id_metadata_document_supported")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn is_valid_client_metadata_url(client_id: &str) -> bool {
+    reqwest::Url::parse(client_id)
+        .ok()
+        .is_some_and(|url| url.scheme() == "https" && url.host_str().is_some() && url.path() != "/")
+}
+
 impl<S, R> OAuthService<S, R> {
+    fn configure_cimd_client(
+        &self,
+        auth_manager: &mut AuthorizationManager,
+        scopes: Vec<String>,
+    ) -> anyhow::Result<ResolvedClient> {
+        let client_id = self.client_metadata.client_id().to_string();
+        let config = OAuthClientConfig::new(client_id.clone(), self.client_metadata.redirect_uri())
+            .with_scopes(scopes.clone());
+        auth_manager.configure_client(config)?;
+
+        tracing::info!(%client_id, "using OAuth Client ID Metadata Document");
+        Ok(ResolvedClient {
+            client_id,
+            client_secret: None,
+            scopes,
+        })
+    }
+
+    async fn register_dcr_client(
+        &self,
+        auth_manager: &mut AuthorizationManager,
+        scopes: Vec<String>,
+    ) -> anyhow::Result<ResolvedClient> {
+        let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
+        let config = auth_manager
+            .register_client(
+                MCP_CLIENT_NAME,
+                self.client_metadata.redirect_uri(),
+                &scope_refs,
+            )
+            .await?;
+
+        Ok(ResolvedClient {
+            client_id: config.client_id,
+            client_secret: config.client_secret,
+            scopes,
+        })
+    }
+
+    async fn resolve_dynamic_client(
+        &self,
+        auth_manager: &mut AuthorizationManager,
+        supports_client_metadata: bool,
+        scopes: Vec<String>,
+    ) -> anyhow::Result<ResolvedClient> {
+        if supports_client_metadata
+            && is_valid_client_metadata_url(self.client_metadata.client_id())
+        {
+            return self.configure_cimd_client(auth_manager, scopes);
+        }
+
+        if supports_client_metadata {
+            tracing::warn!(
+                client_id = self.client_metadata.client_id(),
+                "authorization server supports CIMD but Macro's metadata URL is not a valid public HTTPS URL; falling back to DCR"
+            );
+        }
+
+        self.register_dcr_client(auth_manager, scopes).await
+    }
+
     #[cfg(feature = "providers")]
     async fn resolve_client_config(
         &self,
         server_url: &str,
         auth_manager: &mut AuthorizationManager,
+        supports_client_metadata: bool,
     ) -> anyhow::Result<ResolvedClient> {
         if let Some(creds) = self.pre_registered.get(server_url) {
-            let mut config =
-                OAuthClientConfig::new(creds.client_id.clone(), self.redirect_uri.clone());
-            config = config.with_client_secret(creds.client_secret.clone());
+            let config = OAuthClientConfig::new(
+                creds.client_id.clone(),
+                self.client_metadata.redirect_uri(),
+            )
+            .with_client_secret(creds.client_secret.clone())
+            .with_scopes(creds.scopes.clone());
             auth_manager.configure_client(config)?;
-            Ok(ResolvedClient {
-                client_id: creds.client_id.clone(),
-                client_secret: Some(creds.client_secret.clone()),
-                scopes: creds.scopes.clone(),
-            })
-        } else {
-            let scopes = crate::domain::provider_registry::dcr_default_scopes(server_url);
-            let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
-            let config = auth_manager
-                .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &scope_refs)
-                .await?;
-            Ok(ResolvedClient {
-                client_id: config.client_id,
-                client_secret: config.client_secret,
-                scopes,
-            })
+            return Ok(ResolvedClient {
+                client_id: creds.client_id,
+                client_secret: Some(creds.client_secret),
+                scopes: creds.scopes,
+            });
         }
+
+        let defaults = crate::domain::provider_registry::dcr_default_scopes(server_url);
+        let default_refs: Vec<&str> = defaults.iter().map(String::as_str).collect();
+        let scopes = auth_manager.select_scopes(None, &default_refs);
+        self.resolve_dynamic_client(auth_manager, supports_client_metadata, scopes)
+            .await
     }
 
     #[cfg(not(feature = "providers"))]
@@ -90,15 +167,11 @@ impl<S, R> OAuthService<S, R> {
         &self,
         _server_url: &str,
         auth_manager: &mut AuthorizationManager,
+        supports_client_metadata: bool,
     ) -> anyhow::Result<ResolvedClient> {
-        let config = auth_manager
-            .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
-            .await?;
-        Ok(ResolvedClient {
-            client_id: config.client_id,
-            client_secret: config.client_secret,
-            scopes: vec![],
-        })
+        let scopes = auth_manager.select_scopes(None, &[]);
+        self.resolve_dynamic_client(auth_manager, supports_client_metadata, scopes)
+            .await
     }
 }
 
@@ -117,6 +190,7 @@ where
     ) -> anyhow::Result<String> {
         let mut auth_manager = AuthorizationManager::new(server_url).await?;
         let metadata = auth_manager.discover_metadata().await?;
+        let supports_client_metadata = supports_client_id_metadata(&metadata);
         auth_manager.set_metadata(metadata);
 
         let in_memory_state = InMemoryStateStore::new();
@@ -124,10 +198,10 @@ where
         auth_manager.set_credential_store(InMemoryCredentialStore::new());
 
         let resolved = self
-            .resolve_client_config(server_url, &mut auth_manager)
+            .resolve_client_config(server_url, &mut auth_manager, supports_client_metadata)
             .await?;
 
-        let scope_refs: Vec<&str> = resolved.scopes.iter().map(|s| s.as_str()).collect();
+        let scope_refs: Vec<&str> = resolved.scopes.iter().map(String::as_str).collect();
         let auth_url = auth_manager.get_authorization_url(&scope_refs).await?;
         let csrf_token = extract_state_param(&auth_url)?;
 
@@ -146,7 +220,11 @@ where
         };
         self.state_store.save(&csrf_token, pending).await?;
 
-        tracing::info!(csrf_token, redirect_uri = %self.redirect_uri, "stored pending OAuth state");
+        tracing::info!(
+            csrf_token,
+            redirect_uri = self.client_metadata.redirect_uri(),
+            "stored pending OAuth state"
+        );
         Ok(auth_url)
     }
 
@@ -178,7 +256,7 @@ where
         auth_manager.set_credential_store(credential_store.clone());
 
         let mut client_config =
-            OAuthClientConfig::new(pending.client_id, self.redirect_uri.clone());
+            OAuthClientConfig::new(pending.client_id, self.client_metadata.redirect_uri());
         if let Some(secret) = pending.client_secret {
             client_config = client_config.with_client_secret(secret);
         }
@@ -222,7 +300,10 @@ where
 fn extract_state_param(url: &str) -> anyhow::Result<String> {
     reqwest::Url::parse(url)?
         .query_pairs()
-        .find(|(k, _)| k == "state")
-        .map(|(_, v)| v.into_owned())
+        .find(|(key, _)| key == "state")
+        .map(|(_, value)| value.into_owned())
         .ok_or_else(|| anyhow::anyhow!("missing state parameter in authorization URL"))
 }
+
+#[cfg(test)]
+mod test;

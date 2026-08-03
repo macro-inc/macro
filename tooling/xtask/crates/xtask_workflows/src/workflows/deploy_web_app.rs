@@ -35,8 +35,8 @@ pub fn deploy_web_app() -> Workflow {
 
 /// Fill in the ordered dispatch/call input blocks.
 ///
-/// Relative to the hand-written workflow this drops the `SCCACHE_BUCKET`
-/// secret: the build runs sccache against the web-ci cache volume, not S3.
+/// The build uses the shared Namespace `web-ci` sccache cache, so no sccache
+/// backend secret is needed here.
 pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     let on = root
         .get_mut("on")
@@ -104,6 +104,7 @@ fn build_deploy() -> Job {
         .add_step(pulumi_up())
         .add_step(upload_sourcemaps())
         .add_step(upload_production_build())
+        .add_step(steps::teardown_nix())
 }
 
 fn checkout() -> Step<Use> {

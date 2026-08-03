@@ -70,7 +70,7 @@ export function GeneralizedPopup(props: GeneralizedPopupProps) {
       <div
         ref={mergeRefs(setPopupRef, props.ref)}
         id="generalized-popup"
-        class="absolute bg-surface shadow-xl ring ring-edge rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
+        class="absolute border border-edge bg-surface shadow-xl rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
         style={{
           left: `${position().x}px`,
           top: `${position().y}px`,

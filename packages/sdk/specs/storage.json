@@ -594,6 +594,65 @@
         }
       }
     },
+    "/bots/me": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/me`.",
+        "operationId": "get_self_bot",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -12695,6 +12754,57 @@
           }
         }
       },
+      "ChannelMentionedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::Mentioned`].",
+        "required": [
+          "channel_id",
+          "message_id",
+          "sender",
+          "channel_type",
+          "content",
+          "mentioned",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Type of channel containing the message."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp reported by the repository."
+          },
+          "mentioned": {
+            "$ref": "#/components/schemas/SimpleMention",
+            "description": "The mentioned entity this event is about (`user`, `bot`, `document`, …).\n\nThe message's full mention list travels on `channel.message_posted`."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the message carrying the mention."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Message author; may be a bot."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread parent id when the message is a thread reply."
+          }
+        }
+      },
       "ChannelMessage": {
         "type": "object",
         "description": "Lightweight channel message for soup payloads.",
@@ -13272,6 +13382,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/ChannelMessagePostedMetadata",
                 "description": "A message was posted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An entity (user, bot, document, …) was mentioned in a message.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.mentioned"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMentionedMetadata",
+                "description": "An entity (user, bot, document, …) was mentioned in a message."
               }
             }
           },

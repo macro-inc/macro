@@ -168,6 +168,9 @@ pub trait BotService: Clone + Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
 
+    /// Get the authenticated bot's own record.
+    fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;
+
     /// Patch a manageable bot.
     fn patch_bot(
         &self,
