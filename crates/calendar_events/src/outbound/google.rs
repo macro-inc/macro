@@ -141,6 +141,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         email_link_id: Uuid,
         provider_calendar_id: &str,
         sync_token: Option<&str>,
+        window: &OccurrenceRange,
     ) -> Result<(Vec<GoogleEvent>, String), GoogleProviderError> {
         let calendar = urlencoding::encode(provider_calendar_id);
         let mut page_token: Option<String> = None;
@@ -157,7 +158,16 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     ("showDeleted", "true"),
                 ]);
             if let Some(token) = sync_token {
+                // Google forbids combining a sync token with time bounds; the
+                // token already encodes the ones it was minted with.
                 request = request.query(&[("syncToken", token)]);
+            } else {
+                // The token-earning enumeration otherwise walks the entire
+                // calendar history just to reach the final page. Bound the
+                // past only: a timeMax would be encoded into the token and
+                // silently hide events created beyond it once the maintained
+                // window extends.
+                request = request.query(&[("timeMin", window.starts_at.to_rfc3339())]);
             }
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
@@ -384,6 +394,7 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
                 context.email_link_id,
                 &context.provider_calendar_id,
                 context.sync_token.as_deref(),
+                &context.range,
             )
             .await
         {
@@ -395,6 +406,7 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
                         context.email_link_id,
                         &context.provider_calendar_id,
                         None,
+                        &context.range,
                     )
                     .await?;
                 (changes, next_sync_token, true)
