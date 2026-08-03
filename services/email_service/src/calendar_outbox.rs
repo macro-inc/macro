@@ -172,8 +172,18 @@ async fn drain_calendar(db: &PgPool, sqs: &SQS) -> anyhow::Result<usize> {
             break;
         };
 
-        sqs.enqueue_email_backfill_message(to_queue_message(&row)?)
-            .await?;
+        match to_queue_message(&row) {
+            Ok(message) => {
+                sqs.enqueue_email_backfill_message(message).await?;
+                published += 1;
+            }
+            Err(error) => {
+                // An unmappable row must still be marked published: the drain
+                // always selects the oldest unpublished row, so leaving it
+                // would wedge every calendar row behind it forever.
+                tracing::error!(error = ?error, outbox_id = %row.id, "skipping unmappable calendar outbox row");
+            }
+        }
         sqlx::query!(
             r#"
             UPDATE calendar_sync_outbox
@@ -185,7 +195,6 @@ async fn drain_calendar(db: &PgPool, sqs: &SQS) -> anyhow::Result<usize> {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        published += 1;
     }
     Ok(published)
 }
