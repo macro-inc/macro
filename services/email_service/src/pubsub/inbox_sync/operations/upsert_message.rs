@@ -281,7 +281,9 @@ pub async fn upsert_message(
     crate::calendar_ingest::ingest_calendar_parts(
         &ctx.db,
         &ctx.gmail_client,
+        &ctx.redis_client,
         crate::calendar_ingest::CalendarIngestInput {
+            is_backfill: false,
             access_token: &gmail_access_token,
             owner_id: link.macro_id.as_ref(),
             email_link_id: link.id,

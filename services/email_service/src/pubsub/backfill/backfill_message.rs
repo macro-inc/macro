@@ -100,7 +100,9 @@ pub async fn backfill_message(
     crate::calendar_ingest::ingest_calendar_parts(
         &ctx.db,
         &ctx.gmail_client,
+        &ctx.redis_client,
         crate::calendar_ingest::CalendarIngestInput {
+            is_backfill: true,
             access_token,
             owner_id: link.macro_id.as_ref(),
             email_link_id: link.id,

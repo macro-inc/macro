@@ -27,6 +27,8 @@ struct CalendarPart<'a> {
 pub struct CalendarIngestInput<'a> {
     /// OAuth access token used to fetch non-inline Gmail attachments.
     pub access_token: &'a str,
+    /// Whether the caller is a backfill worker, for quota accounting.
+    pub is_backfill: bool,
     /// Macro owner of the linked inbox.
     pub owner_id: &'a str,
     /// Persisted email link containing the message.
@@ -48,7 +50,7 @@ pub struct CalendarIngestInput<'a> {
 /// cannot block email ingestion. Gmail fetch and database failures are
 /// returned, allowing the surrounding queue operation to retry.
 #[tracing::instrument(
-    skip(db, gmail_client, input),
+    skip(db, gmail_client, redis_client, input),
     fields(
         email_link_id = %input.email_link_id,
         email_message_id = %input.email_message_id
@@ -58,6 +60,7 @@ pub struct CalendarIngestInput<'a> {
 pub async fn ingest_calendar_parts(
     db: &sqlx::PgPool,
     gmail_client: &gmail_client::GmailClient,
+    redis_client: &crate::util::redis::RedisClient,
     input: CalendarIngestInput<'_>,
 ) -> anyhow::Result<usize> {
     let parts = calendar_parts(input.payload);
@@ -88,6 +91,19 @@ pub async fn ingest_calendar_parts(
                 }
             }
         } else if let Some(attachment_id) = calendar_part.attachment_id {
+            // Callers already passed a message-level gate; attachment fetches
+            // are additional Gmail requests and must respect the same quota.
+            if redis_client
+                .is_rate_limited(crate::util::redis::rate_limit::RateLimitArgs {
+                    user_id: input.email_link_id,
+                    operation:
+                        models_email::gmail::operations::GmailApiOperation::MessagesAttachmentsGet,
+                    is_backfill: input.is_backfill,
+                })
+                .await
+            {
+                anyhow::bail!("Gmail rate limit reached while fetching calendar attachments");
+            }
             gmail_client
                 .get_attachment_data(input.access_token, input.provider_message_id, attachment_id)
                 .await?
