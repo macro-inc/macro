@@ -166,7 +166,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(row.try_into()?)
     }
 
-    async fn find_for_thread(&self, bot_id: BotId, thread_id: Uuid) -> Result<ThreadSession> {
+    async fn find_for_thread(
+        &self,
+        bot_id: Option<BotId>,
+        thread_id: Uuid,
+    ) -> Result<ThreadSession> {
+        let bot_id = bot_id.map(BotId::as_uuid);
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -174,9 +179,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 id, created_from_thread_id, thread_id, bot_id, model, harness,
                 repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             FROM agent_session
-            WHERE bot_id = $1 AND (created_from_thread_id = $2 OR thread_id = $2)
+            WHERE
+                (thread_id = $2 AND ($1::uuid IS NULL OR bot_id = $1))
+                OR ($1::uuid IS NOT NULL AND bot_id = $1 AND created_from_thread_id = $2)
+            ORDER BY (thread_id = $2) DESC
+            LIMIT 1
             "#,
-            bot_id.as_uuid(),
+            bot_id,
             thread_id,
         )
         .fetch_optional(&self.pool)

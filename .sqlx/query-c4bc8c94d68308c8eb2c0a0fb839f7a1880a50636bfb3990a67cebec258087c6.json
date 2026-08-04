@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, created_from_thread_id, thread_id, bot_id, model, harness,\n                repo_url, acp_session_id, status, status_event_name, created_at, modified_at\n            FROM agent_session\n            WHERE bot_id = $1 AND (created_from_thread_id = $2 OR thread_id = $2)\n            ",
+  "query": "\n            SELECT\n                id, created_from_thread_id, thread_id, bot_id, model, harness,\n                repo_url, acp_session_id, status, status_event_name, created_at, modified_at\n            FROM agent_session\n            WHERE\n                (thread_id = $2 AND ($1::uuid IS NULL OR bot_id = $1))\n                OR ($1::uuid IS NOT NULL AND bot_id = $1 AND created_from_thread_id = $2)\n            ORDER BY (thread_id = $2) DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -85,5 +85,5 @@
       false
     ]
   },
-  "hash": "b6c830c23af67de62355cadc24d48beec3914ba8dc5016bc4d1819d06bb4a710"
+  "hash": "c4bc8c94d68308c8eb2c0a0fb839f7a1880a50636bfb3990a67cebec258087c6"
 }

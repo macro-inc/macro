@@ -192,7 +192,7 @@ async fn find_for_thread_distinguishes_both_thread_columns(pool: PgPool) {
     create_session(&repo, new_session(bot_a, macro_uuid::generate_uuid_v7())).await;
 
     let found_a = repo
-        .find_for_thread(bot_a, thread)
+        .find_for_thread(Some(bot_a), thread)
         .await
         .expect("find bot A's session for thread");
     let ThreadSession::InSessionThread(session) = found_a else {
@@ -201,24 +201,36 @@ async fn find_for_thread_distinguishes_both_thread_columns(pool: PgPool) {
     assert_eq!(session.id, session_a);
 
     let found_b = repo
-        .find_for_thread(bot_b, thread)
+        .find_for_thread(Some(bot_b), thread)
         .await
         .expect("find bot B's session for thread");
     let ThreadSession::CreatedFromThisThread(session) = found_b else {
         panic!("expected the created-from session, got {found_b:?}");
     };
     assert_eq!(session.id, session_b);
+
+    let found_without_bot = repo
+        .find_for_thread(None, thread)
+        .await
+        .expect("find dedicated session without a bot");
+    let ThreadSession::InSessionThread(session) = found_without_bot else {
+        panic!("expected the dedicated-thread session, got {found_without_bot:?}");
+    };
+    assert_eq!(session.id, session_a);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_for_thread_returns_none_without_a_matching_session(pool: PgPool) {
+async fn find_for_thread_without_bot_ignores_originating_thread(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
-    create_session(&repo, new_session(bot, macro_uuid::generate_uuid_v7())).await;
+    let thread = macro_uuid::generate_uuid_v7();
+    let mut session = new_session(bot, macro_uuid::generate_uuid_v7());
+    session.created_from_thread_id = Some(thread);
+    create_session(&repo, session).await;
 
     let found = repo
-        .find_for_thread(bot, macro_uuid::generate_uuid_v7())
+        .find_for_thread(None, thread)
         .await
-        .expect("find sessions for unknown thread");
+        .expect("find dedicated session without a bot");
     assert!(matches!(found, ThreadSession::None));
 }
