@@ -56,7 +56,11 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-type DisplayableSoupItem = SoupPage['items'][number];
+// Calendar soup rendering lands with the calendar FE; skip those items for now.
+type DisplayableSoupItem = Exclude<
+  SoupPage['items'][number],
+  { tag: 'calendarEvent' }
+>;
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -594,7 +598,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item);
+): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'calendarEvent';
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread

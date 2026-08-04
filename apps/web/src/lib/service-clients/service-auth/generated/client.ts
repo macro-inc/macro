@@ -1370,8 +1370,9 @@ export const verifyMergeRequest = async (
 };
 
 /**
- * @summary Sends a mobile welcome email to the given address, if it hasn't already been sent
-and the email is not blocked.
+ * @summary Enrolls a mobile lead in the Loops nurture sequence, which sends the welcome
+email inviting them to register on desktop. No-ops if the address was already
+enrolled, and rejects blocked addresses.
  */
 export type sendMobileWelcomeEmailResponse200 = {
   data: SendMobileWelcomeEmailResponse;

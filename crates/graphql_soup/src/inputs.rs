@@ -12,6 +12,7 @@ use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
         CrmScope, EmailFilterAst, EntityFilterAst,
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
@@ -366,6 +367,8 @@ impl GraphqlEmailView {
 /// GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 #[derive(async_graphql::InputObject)]
 struct GraphqlEntityFilterAst {
+    /// The calendar event filter to apply.
+    calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
     document_filter: Option<GraphqlDocumentExpr>,
     /// The project filter to apply.
@@ -392,6 +395,7 @@ impl GraphqlEntityFilterAst {
     /// Convert this value into the ast representation.
     fn into_ast(self) -> async_graphql::Result<EntityFilterAst> {
         Ok(EntityFilterAst {
+            calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,
             chat_filter: optional_tree(self.chat_filter)?,
@@ -411,12 +415,58 @@ impl GraphqlEntityFilterAst {
 }
 
 filter_expr_input!(
+    GraphqlCalendarEventExpr,
+    GraphqlCalendarEventBinaryExpr,
+    GraphqlCalendarEventLiteral,
+    CalendarEventLiteral,
+    "CalendarEventFilterExpr"
+);
+filter_expr_input!(
     GraphqlDocumentExpr,
     GraphqlDocumentBinaryExpr,
     GraphqlDocumentLiteral,
     DocumentLiteral,
     "DocumentFilterExpr"
 );
+
+/// GraphQL input representing a calendar event literal.
+#[derive(async_graphql::OneofObject)]
+enum GraphqlCalendarEventLiteral {
+    /// Canonical event id.
+    Id(ID),
+    /// Event status.
+    Status(String),
+    /// Master start must be before this RFC3339 instant.
+    StartsBefore(String),
+    /// Master end must be after this RFC3339 instant.
+    EndsAfter(String),
+    /// Attendee email.
+    Attendee(String),
+    /// Organizer email.
+    Organizer(String),
+}
+
+impl IntoFilterExpr<CalendarEventLiteral> for GraphqlCalendarEventLiteral {
+    fn into_expr(self) -> async_graphql::Result<Expr<CalendarEventLiteral>> {
+        let parse_date = |value: String| {
+            DateTime::parse_from_rfc3339(&value)
+                .map(|date| date.with_timezone(&Utc))
+                .map_err(|error| {
+                    async_graphql::Error::new(format!(
+                        "invalid RFC3339 calendar date `{value}`: {error}"
+                    ))
+                })
+        };
+        Ok(Expr::val(match self {
+            Self::Id(id) => CalendarEventLiteral::Id(parse_id(id, "id")?),
+            Self::Status(status) => CalendarEventLiteral::Status(status.to_ascii_lowercase()),
+            Self::StartsBefore(value) => CalendarEventLiteral::StartsBefore(parse_date(value)?),
+            Self::EndsAfter(value) => CalendarEventLiteral::EndsAfter(parse_date(value)?),
+            Self::Attendee(email) => CalendarEventLiteral::Attendee(email.to_ascii_lowercase()),
+            Self::Organizer(email) => CalendarEventLiteral::Organizer(email.to_ascii_lowercase()),
+        }))
+    }
+}
 filter_expr_input!(
     GraphqlProjectExpr,
     GraphqlProjectBinaryExpr,

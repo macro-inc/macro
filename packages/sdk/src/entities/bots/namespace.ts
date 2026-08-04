@@ -1,4 +1,4 @@
-import type { Bot } from '../../../generated/storage/types.gen';
+import type { Bot, BotChannel } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 
@@ -19,9 +19,22 @@ export class BotsNamespace {
         'bots.me() requires bot auth — a user API key has no bot identity',
       );
     }
+    return unwrap(await this.client.storage.getSelfBot());
+  }
+
+  /**
+   * Channels containing the authenticated bot. Requires bot auth.
+   */
+  async channels(): Promise<BotChannel[]> {
+    if (this.client.authConfig.type !== 'bot') {
+      throw new MacroError(
+        'bots.channels() requires bot auth — a user API key has no bot identity',
+      );
+    }
+    const bot = await this.me();
     return unwrap(
-      await this.client.storage.getSelfBot({
-        headers: { 'x-macro-bot-scope': 'user' },
+      await this.client.storage.listBotChannels({
+        path: { bot_id: bot.id },
       }),
     );
   }

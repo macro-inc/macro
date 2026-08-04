@@ -1,6 +1,9 @@
 import { isListViewID } from '@app/constants/list-views';
 import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  openEntityInSplitFromUnifiedList,
+  restoreSoupFocus,
+} from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { isShareableEntityType } from '@app/features/sharing/global-share-modal/GlobalShareModal';
@@ -139,7 +142,9 @@ export const useEntityActionHotkeys = (
   ) => {
     const entities = getEntitiesForAction();
     if (entities.length > 0) {
-      openPropertyEditor(entities, mode, property);
+      openPropertyEditor(entities, mode, property, {
+        restoreFocus: () => restoreSoupFocus(entities[0]?.id),
+      });
     }
   };
   const canAssignTags = (entity: EntityData) => {
@@ -526,7 +531,9 @@ export const useEntityActionHotkeys = (
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      openPropertyEditor(entities, 'tag');
+      openPropertyEditor(entities, 'tag', undefined, {
+        restoreFocus: () => restoreSoupFocus(entities[0]?.id),
+      });
       return true;
     },
     condition: () => {

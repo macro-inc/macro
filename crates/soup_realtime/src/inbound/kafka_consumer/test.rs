@@ -15,7 +15,9 @@ use documents::domain::events::{
     DocumentUpdatedMetadata, InteractionReason,
 };
 use email::domain::events::{
-    EmailEventOrigin, EmailTopicEvent, ThreadReadMetadata, ThreadTrashedMetadata,
+    EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
+    ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadTrashedMetadata, ThreadsReindexReason,
+    ThreadsReindexRequestedMetadata,
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -376,6 +378,89 @@ fn email_state_events_map_to_updated_or_deleted_patches() {
         patches_from_email_event(&trashed)[0].patch,
         Patch::Deleted(_)
     ));
+}
+
+#[test]
+fn new_email_events_map_to_realtime_thread_patches() {
+    let link_id = Uuid::now_v7();
+    let thread_id = Uuid::now_v7();
+    let second_thread_id = Uuid::now_v7();
+
+    let visible_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id,
+        owner: user(),
+        message_id: Uuid::now_v7(),
+        provider_message_id: "message-id".to_string(),
+        thread_id,
+        provider_thread_id: "thread-id".to_string(),
+        is_spam_or_trash: false,
+    });
+    let hidden_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id,
+        owner: user(),
+        message_id: Uuid::now_v7(),
+        provider_message_id: "hidden-message-id".to_string(),
+        thread_id,
+        provider_thread_id: "thread-id".to_string(),
+        is_spam_or_trash: true,
+    });
+    let marked_spam = EmailTopicEvent::ThreadSpamChanged(ThreadSpamChangedMetadata {
+        link_id,
+        owner: user(),
+        actor: Some(user()),
+        thread_id,
+        spam: true,
+        origin: EmailEventOrigin::UserAction,
+    });
+    let restored_from_spam = EmailTopicEvent::ThreadSpamChanged(ThreadSpamChangedMetadata {
+        link_id,
+        owner: user(),
+        actor: Some(user()),
+        thread_id,
+        spam: false,
+        origin: EmailEventOrigin::UserAction,
+    });
+    let backfilled = EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+        link_id,
+        owner: user(),
+        thread_id,
+    });
+    let reindex_requested =
+        EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+            link_id,
+            owner: user(),
+            thread_ids: vec![thread_id, second_thread_id],
+            reason: ThreadsReindexReason::ContactsChanged,
+        });
+
+    assert!(matches!(
+        patches_from_email_event(&visible_draft)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(patches_from_email_event(&hidden_draft).is_empty());
+    assert!(matches!(
+        patches_from_email_event(&marked_spam)[0].patch,
+        Patch::Deleted(_)
+    ));
+    assert!(matches!(
+        patches_from_email_event(&restored_from_spam)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(matches!(
+        patches_from_email_event(&backfilled)[0].patch,
+        Patch::Updated(_)
+    ));
+
+    let reindex_patches = patches_from_email_event(&reindex_requested);
+    assert_eq!(reindex_patches.len(), 2);
+    assert_eq!(
+        patch_entity(&reindex_patches[0]).entity_id,
+        thread_id.to_string()
+    );
+    assert_eq!(
+        patch_entity(&reindex_patches[1]).entity_id,
+        second_thread_id.to_string()
+    );
 }
 
 #[test]

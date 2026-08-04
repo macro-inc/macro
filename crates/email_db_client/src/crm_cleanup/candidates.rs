@@ -4,7 +4,14 @@ use sqlx::types::Uuid;
 
 /// Upserts one cleanup candidate per email for the link. The unique index on
 /// `(link_id, contact_email)` dedupes repeat deletes into a single pending row.
-/// Returns the number of rows actually inserted.
+///
+/// A repeat delete refreshes `created_at` rather than being ignored: the
+/// lister treats that timestamp as a settling clock for asynchronous CRM
+/// populate, and each new deletion implies a new message that may have its own
+/// populate still in flight. Keeping the original timestamp would let the
+/// clock expire while that populate is pending.
+///
+/// Returns the number of rows recorded (inserted or refreshed).
 #[tracing::instrument(skip(pool, contact_emails), err)]
 pub async fn insert_candidates(
     pool: &PgPool,
@@ -19,7 +26,7 @@ pub async fn insert_candidates(
         r#"
         INSERT INTO crm_cleanup_candidates (link_id, contact_email)
         SELECT $1, unnest($2::text[])
-        ON CONFLICT (link_id, contact_email) DO NOTHING
+        ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at = now()
         "#,
         link_id,
         contact_emails
@@ -43,7 +50,7 @@ pub async fn list_candidates_page(
     let candidates = sqlx::query_as!(
         CrmCleanupCandidate,
         r#"
-        SELECT id, link_id, contact_email
+        SELECT id, link_id, contact_email, created_at
         FROM crm_cleanup_candidates
         WHERE id > $1 AND id <= $2
         ORDER BY id
@@ -57,6 +64,36 @@ pub async fn list_candidates_page(
     .await?;
 
     Ok(candidates)
+}
+
+/// Claims (deletes) a batch of candidate rows in one statement. Used by the
+/// lister to retire pairs that have nothing to tear down, instead of spending
+/// one `ProcessCandidate` message each to reach the same conclusion.
+///
+/// Same semantics as [`claim_candidate`], just set-based: a delete landing
+/// concurrently re-inserts a fresh row that the next run picks up. Returns the
+/// number of rows removed.
+#[tracing::instrument(skip(pool, pairs), fields(pair_count = pairs.len()), err)]
+pub async fn claim_candidates(pool: &PgPool, pairs: &[(Uuid, String)]) -> anyhow::Result<u64> {
+    if pairs.is_empty() {
+        return Ok(0);
+    }
+
+    let (link_ids, contact_emails): (Vec<Uuid>, Vec<String>) = pairs.iter().cloned().unzip();
+
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM crm_cleanup_candidates c
+        USING UNNEST($1::uuid[], $2::text[]) AS p(link_id, contact_email)
+        WHERE c.link_id = p.link_id AND c.contact_email = p.contact_email
+        "#,
+        &link_ids,
+        &contact_emails,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
 }
 
 /// Claims (deletes) the candidate row for a pair. Returns `true` when the row

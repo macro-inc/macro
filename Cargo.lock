@@ -1086,6 +1086,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "base64 0.22.1",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -2514,6 +2515,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar_events"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "futures",
+ "icalendar",
+ "macro_authorization",
+ "macro_db_migrator",
+ "models_pagination",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "call"
 version = "0.1.0"
 dependencies = [
@@ -2844,9 +2871,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.44"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -4397,6 +4424,7 @@ dependencies = [
  "bytes",
  "bzip2",
  "cal",
+ "calendar_events",
  "call",
  "channel_bots",
  "channels",
@@ -5069,6 +5097,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bytes",
+ "calendar_events",
  "chrono",
  "cloudfront_sign",
  "connection_gateway_client",
@@ -5124,6 +5153,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.13.4",
+ "rootcause",
  "s3_client",
  "schemars 1.2.1",
  "scraper",
@@ -6132,6 +6162,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "chrono",
  "document_sub_type",
  "documents",
@@ -6142,6 +6173,7 @@ dependencies = [
  "hmac 0.12.1",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_env",
  "macro_env_var",
@@ -6153,6 +6185,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_notifications",
+ "model_user",
  "models_permissions",
  "notification",
  "redis",
@@ -6168,6 +6201,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "url",
  "urlencoding",
  "utoipa",
  "uuid",
@@ -7140,6 +7174,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "icalendar"
+version = "0.17.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3478c3b7a2411366daf20457373174bff6cfbc1089333038b1f95594d23d985"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "iso8601",
+ "nom 8.0.0",
+ "nom-language",
+ "rrule",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "icu_collections"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7638,6 +7688,15 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
+
+[[package]]
+name = "iso8601"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84d00640a3a46595e984f1b124b21d56506a5844dc799f831dde9b05cb2f6c51"
+dependencies = [
+ "nom 8.0.0",
+]
 
 [[package]]
 name = "item_filters"
@@ -8299,6 +8358,7 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tracing",
  "workspace-hack",
 ]
@@ -9852,6 +9912,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "nom-language"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2de2bc5b451bfedaef92c90b8939a8fff5770bdcc1fafd6239d086aab8fa6b29"
+dependencies = [
+ "nom 8.0.0",
 ]
 
 [[package]]
@@ -12439,6 +12508,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rrule"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "log",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "rs-libreoffice-bindings"
 version = "0.0.7"
 source = "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc"
@@ -12898,6 +12980,7 @@ dependencies = [
  "document_sub_type",
  "documents",
  "doppler-config",
+ "email",
  "email_db_client",
  "ensure_exists",
  "futures",
@@ -16706,6 +16789,7 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
+ "chrono-tz",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
@@ -16771,6 +16855,7 @@ dependencies = [
  "rand 0.8.6",
  "rand 0.9.4",
  "redis",
+ "regex",
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",

@@ -31,6 +31,7 @@ export type EntityTypeItemMap = {
   COMPANY: never;
   // Call records aren't entity-reference targets in quickAccess.
   CALL_RECORD: never;
+  CALENDAR_EVENT: never;
 };
 
 /**
@@ -47,6 +48,7 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
     .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
+    .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
     .exhaustive();
   return buckets;
 }

@@ -45,6 +45,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Get owner or explicitly delegated-inbox access to a calendar event.
+    fn get_calendar_event_access(
+        &self,
+        event_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// Return the requested email threads owned by, or inbox-delegated to, a user.
     fn get_owned_email_thread_ids(
         &self,

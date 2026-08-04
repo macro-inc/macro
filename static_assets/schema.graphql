@@ -181,6 +181,72 @@ type GraphqlCacheDeletion {
 }
 
 """
+The two operands of a recursive `CalendarEventFilterExpr` binary expression.
+"""
+input GraphqlCalendarEventBinaryExpr {
+	"""
+	The left-hand expression.
+	"""
+	left: GraphqlCalendarEventExpr!
+	"""
+	The right-hand expression.
+	"""
+	right: GraphqlCalendarEventExpr!
+}
+
+"""
+A recursive `CalendarEventFilterExpr` filter expression.
+"""
+input GraphqlCalendarEventExpr @oneOf {
+	"""
+	Matches when both expressions match.
+	"""
+	and: GraphqlCalendarEventBinaryExpr
+	"""
+	Matches when either expression matches.
+	"""
+	or: GraphqlCalendarEventBinaryExpr
+	"""
+	Negates an expression.
+	"""
+	not: GraphqlCalendarEventExpr
+	"""
+	Matches a domain-specific literal condition.
+	"""
+	literal: GraphqlCalendarEventLiteral
+}
+
+"""
+GraphQL input representing a calendar event literal.
+"""
+input GraphqlCalendarEventLiteral @oneOf {
+	"""
+	Canonical event id.
+	"""
+	id: ID
+	"""
+	Event status.
+	"""
+	status: String
+	"""
+	Master start must be before this RFC3339 instant.
+	"""
+	startsBefore: String
+	"""
+	Master end must be after this RFC3339 instant.
+	"""
+	endsAfter: String
+	"""
+	Attendee email.
+	"""
+	attendee: String
+	"""
+	Organizer email.
+	"""
+	organizer: String
+}
+
+"""
 The two operands of a recursive `CallFilterExpr` binary expression.
 """
 input GraphqlCallBinaryExpr {
@@ -1117,6 +1183,10 @@ GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
 	"""
+	The calendar event filter to apply.
+	"""
+	calendarEventFilter: GraphqlCalendarEventExpr
+	"""
 	The document filter to apply.
 	"""
 	documentFilter: GraphqlDocumentExpr
@@ -1291,6 +1361,10 @@ enum GraphqlEntityType {
 	Call entity.
 	"""
 	CALL
+	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
 	"""
 	CRM company entity.
 	"""
@@ -1702,6 +1776,10 @@ An entity type supported by the properties domain.
 """
 enum GraphqlPropertyEntityType {
 	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
 	Call record entity.
 	"""
 	CALL_RECORD
@@ -1940,6 +2018,88 @@ type GraphqlSoupBin {
 	Items in this bin, ordered by their index within the group.
 	"""
 	items: [GraphqlSoupEntity!]!
+}
+
+"""
+GraphQL representation of a canonical calendar event.
+"""
+type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common calendar event metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The owning Macro user.
+	"""
+	ownerId: String!
+	"""
+	The event title.
+	"""
+	title: String!
+	"""
+	The event description.
+	"""
+	description: String
+	"""
+	The event location.
+	"""
+	location: String
+	"""
+	Canonical event status.
+	"""
+	status: String!
+	"""
+	Timed or all-day event span.
+	"""
+	time: JSON!
+	"""
+	Direct conference join URL.
+	"""
+	conferenceUrl: String
+	"""
+	Whether the canonical source is read-only.
+	"""
+	isReadOnly: Boolean!
+	"""
+	Creation timestamp.
+	"""
+	createdAt: String!
+	"""
+	Update timestamp.
+	"""
+	updatedAt: String!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
 }
 
 """
@@ -2994,6 +3154,10 @@ enum GraphqlSoupEntityType {
 	Foreign entity.
 	"""
 	FOREIGN_ENTITY
+	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
 }
 
 """

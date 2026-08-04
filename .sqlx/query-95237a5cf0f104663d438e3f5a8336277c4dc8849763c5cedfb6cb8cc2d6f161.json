@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_jobs\n        SET status = 'Complete',\n            initialized_at = COALESCE(initialized_at, now()),\n            init_lease_token = NULL,\n            init_lease_expires_at = NULL,\n            updated_at = now()\n        WHERE id = $1\n          AND (\n              (\n                  status = 'Init'\n                  AND $2::uuid IS NOT NULL\n                  AND init_lease_token = $2\n                  AND init_lease_expires_at > now()\n              )\n              OR (\n                  status = 'InProgress'\n                  AND $2::uuid IS NULL\n              )\n          )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95237a5cf0f104663d438e3f5a8336277c4dc8849763c5cedfb6cb8cc2d6f161"
+}

@@ -75,7 +75,6 @@ async fn main() -> anyhow::Result<()> {
     let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let backfill_queue = macro_queues::EmailBackfillQueue::new();
     let crm_cleanup_queue = macro_queues::EmailCrmCleanupQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
@@ -90,7 +89,6 @@ async fn main() -> anyhow::Result<()> {
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
         .gmail_ops_retry_queue(&gmail_ops_retry_queue)
-        .search_event_queue(&search_event_queue)
         .email_backfill_queue(&backfill_queue)
         .email_crm_cleanup_queue(&crm_cleanup_queue)
         .email_scheduled_queue(&email_scheduled_queue)
@@ -101,6 +99,16 @@ async fn main() -> anyhow::Result<()> {
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
+
+    worker_tracker.spawn(email_service::calendar_outbox::run(
+        db.clone(),
+        sqs_client.clone(),
+        calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+        ),
+        config.calendar_sync_enabled,
+        worker_cancellation_token.clone(),
+    ));
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -351,6 +359,7 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 false,
                 cancellation_token,
             )
@@ -395,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 true,
                 cancellation_token,
             )
@@ -493,6 +503,7 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_backfill,
                 macro_event_broker_backfill,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 cancellation_token,
             )
             .await;

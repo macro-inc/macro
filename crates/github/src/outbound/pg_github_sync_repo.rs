@@ -368,48 +368,6 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn upsert_installation_installer(
-        &self,
-        installation_id: &str,
-        github_user_id: &str,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
-            r#"
-            INSERT INTO github_app_installation_installer (installation_id, github_user_id)
-            VALUES ($1, $2)
-            ON CONFLICT (installation_id)
-                DO UPDATE SET github_user_id = EXCLUDED.github_user_id, updated_at = NOW()
-            "#,
-            installation_id,
-            github_user_id,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_installation_ids_by_installer(
-        &self,
-        github_user_id: &str,
-    ) -> Result<Vec<String>, Self::Err> {
-        let installation_ids = sqlx::query_scalar!(
-            r#"
-            SELECT installation_id
-            FROM github_app_installation_installer
-            WHERE github_user_id = $1
-            ORDER BY installation_id
-            "#,
-            github_user_id,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(installation_ids)
-    }
-
-    #[tracing::instrument(skip(self), err)]
     async fn delete_installation_sources(&self, installation_id: &str) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
@@ -425,13 +383,84 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn delete_installation_installer(&self, installation_id: &str) -> Result<(), Self::Err> {
+    async fn upsert_installation_request(
+        &self,
+        github_user_id: &str,
+        source: &GithubAppInstallationSource,
+    ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            DELETE FROM github_app_installation_installer
-            WHERE installation_id = $1
+            INSERT INTO github_app_installation_request (github_user_id, source_id, source_type)
+            VALUES ($1, $2, $3::github_app_installation_source_type)
+            ON CONFLICT (github_user_id) DO UPDATE
+                SET source_id = EXCLUDED.source_id,
+                    source_type = EXCLUDED.source_type,
+                    updated_at = NOW()
             "#,
-            installation_id,
+            github_user_id,
+            source.source_id(),
+            source.source_type() as &str,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_installation_request(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Option<GithubAppInstallationSource>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT source_id AS "source_id!", source_type::text AS "source_type!"
+            FROM github_app_installation_request
+            WHERE github_user_id = $1
+            "#,
+            github_user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        match row.source_type.as_str() {
+            "team" => match uuid::Uuid::parse_str(&row.source_id) {
+                Ok(team_id) => Ok(Some(GithubAppInstallationSource::Team(team_id))),
+                Err(error) => {
+                    tracing::warn!(
+                        github_user_id,
+                        source_id = row.source_id,
+                        error=?error,
+                        "github_app_installation_request team source_id is not a UUID"
+                    );
+                    Ok(None)
+                }
+            },
+            "user" => Ok(Some(GithubAppInstallationSource::User(row.source_id))),
+            _ => {
+                tracing::warn!(
+                    github_user_id,
+                    source_id = row.source_id,
+                    source_type = row.source_type,
+                    "github_app_installation_request has unknown source_type"
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_installation_request(&self, github_user_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM github_app_installation_request
+            WHERE github_user_id = $1
+            "#,
+            github_user_id,
         )
         .execute(&self.pool)
         .await?;

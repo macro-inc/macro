@@ -9,11 +9,11 @@ afterEach(() => {
 });
 
 describe('BotsNamespace', () => {
-  test('uses user scope for self lookup with default bot auth', async () => {
+  test('uses the configured bot scope for self lookup', async () => {
     const bot: Bot = {
       id: '0198a4cc-e138-7670-a308-a6b766602700',
       kind: 'owned',
-      owner: { type: 'user', user_id: 'macro|owner@example.com' },
+      owner: { type: 'team', team_id: '0198a4cc-e138-7670-a308-a6b766602701' },
       name: 'Mention Bot',
       handle: 'mention-bot',
       description: null,
@@ -32,14 +32,14 @@ describe('BotsNamespace', () => {
       });
     }) as typeof fetch;
     const macro = new Macro({
-      auth: { type: 'bot', token: 'mbot_user_owned' },
+      auth: { type: 'bot', token: 'mbot_team_owned', scope: 'team' },
       hosts: { storage: 'https://storage.example.test' },
     });
 
     await expect(macro.bots.me()).resolves.toEqual(bot);
     expect(request?.url).toBe('https://storage.example.test/bots/me');
-    expect(request?.headers.get('x-macro-bot-token')).toBe('mbot_user_owned');
-    expect(request?.headers.get('x-macro-bot-scope')).toBe('user');
+    expect(request?.headers.get('x-macro-bot-token')).toBe('mbot_team_owned');
+    expect(request?.headers.get('x-macro-bot-scope')).toBe('team');
     expect(request?.headers.has('x-macro-bot-for-macro-user-id')).toBe(false);
   });
 });

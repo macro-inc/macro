@@ -31,7 +31,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 };
 
 /**
@@ -620,6 +620,10 @@ export type ApiCountedReaction = {
  */
 export type ApiEntityFilterAst = {
     /**
+     * filters applied to canonical calendar events
+     */
+    calf?: unknown;
+    /**
      * the filters that should be applied to the call entity
      */
     callf?: unknown;
@@ -891,6 +895,11 @@ export type ApiThreadReply = {
     updated_at: string;
 };
 
+/**
+ * RSVP state for an attendee.
+ */
+export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
+
 export type BTreeMap = {
     [key: string]: string;
 };
@@ -1144,6 +1153,205 @@ export type BulkWakeupRequest = {
 export type BulkWakeupResponse = {
     dispatched: number;
 };
+
+/**
+ * An attendee on a calendar event.
+ */
+export type CalendarAttendee = {
+    /**
+     * Optional attendee comment.
+     */
+    comment?: string | null;
+    /**
+     * Provider display name.
+     */
+    displayName?: string | null;
+    /**
+     * Normalized email address.
+     */
+    email: string;
+    /**
+     * Whether attendance is optional.
+     */
+    isOptional: boolean;
+    /**
+     * Whether this attendee is the organizer.
+     */
+    isOrganizer: boolean;
+    /**
+     * Whether this attendee represents the connected account.
+     */
+    isSelf: boolean;
+    /**
+     * RSVP state.
+     */
+    responseStatus: AttendeeResponseStatus;
+};
+
+/**
+ * A stable, first-class Macro calendar event entity.
+ */
+export type CalendarEvent = {
+    /**
+     * Attendees, keyed by email during persistence.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Direct join URL when known.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Entity creation time.
+     */
+    createdAt: string;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * RFC 5545 UID used to reconcile provider and email sources.
+     */
+    icalUid: string;
+    /**
+     * Macro entity identifier.
+     */
+    id: string;
+    /**
+     * Whether the current user can edit the canonical source.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Macro user who owns this event entity.
+     */
+    ownerId: string;
+    /**
+     * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+     */
+    recurrenceLines: Array<string>;
+    /**
+     * Provider/iCalendar sequence number.
+     */
+    sequence: number;
+    /**
+     * Event status.
+     */
+    status: EventStatus;
+    /**
+     * Timed or all-day shape.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Entity update time.
+     */
+    updatedAt: string;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
+ * Filters for canonical calendar-event entities.
+ */
+export type CalendarEventFilters = {
+    /**
+     * Attendee email addresses.
+     */
+    attendees?: Array<string>;
+    /**
+     * Canonical event ids.
+     */
+    calendar_event_ids?: Array<string>;
+    /**
+     * Include master events ending after this instant.
+     */
+    ends_after?: string | null;
+    /**
+     * Organizer email addresses.
+     */
+    organizers?: Array<string>;
+    /**
+     * Include master events starting before this instant.
+     */
+    starts_before?: string | null;
+    /**
+     * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
+     */
+    statuses?: Array<string>;
+};
+
+/**
+ * A materialized recurrence instance optimized for range queries.
+ */
+export type CalendarOccurrence = {
+    /**
+     * Owning event entity.
+     */
+    eventId: string;
+    /**
+     * Whether the instance was cancelled.
+     */
+    isCancelled: boolean;
+    /**
+     * Stable key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Provider recurrence identifier, when applicable.
+     */
+    recurrenceId?: string | null;
+    /**
+     * Instance time.
+     */
+    time: EventTime;
+};
+
+/**
+ * One materialized occurrence paired with its stable calendar event entity.
+ */
+export type CalendarOccurrenceItem = {
+    event: CalendarEvent;
+    occurrence: CalendarOccurrence;
+};
+
+/**
+ * Paginated calendar occurrence viewport response.
+ */
+export type CalendarOccurrenceResponse = {
+    hasMore: boolean;
+    items: Array<CalendarOccurrenceItem>;
+    nextCursor?: string | null;
+    /**
+     * Aggregate ingestion state; clients render a skeleton while `syncing`.
+     */
+    syncStatus: CalendarSyncStatus;
+};
+
+/**
+ * Aggregate ingestion state across every calendar account visible to a
+ * requester, letting clients render progressively while sources build.
+ */
+export type CalendarSyncStatus = 'syncing' | 'ready';
 
 /**
  * Response indicating whether an active call exists for a channel.
@@ -2738,6 +2946,11 @@ export type CreateWebhookRequest = {
      */
     name: string;
     /**
+     * Caller-chosen namespace, unique among the owning workspace's webhooks.
+     * Set at creation time only; it cannot be changed afterwards.
+     */
+    namespace: string;
+    /**
      * Scope that owns the webhook.
      */
     scope: WebhookScope;
@@ -2783,6 +2996,11 @@ export type CreateWebhookResponse = {
      * Display name.
      */
     name: string;
+    /**
+     * Caller-chosen namespace, unique among the owning workspace's webhooks.
+     * Set at creation time only; it cannot be changed afterwards.
+     */
+    namespace: string;
     /**
      * Signing secret used to verify webhook delivery signatures.
      */
@@ -4008,6 +4226,10 @@ export type EmptyResponse = {
  */
 export type EntityFilters = {
     /**
+     * the bundled [CalendarEventFilters]
+     */
+    calendar_event_filters?: CalendarEventFilters;
+    /**
      * the bundled [CallFilters]
      */
     call_filters?: CallFilters;
@@ -4114,7 +4336,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -4126,6 +4348,54 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * Canonical event status.
+ */
+export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
+
+/**
+ * The mutually exclusive time shape of a calendar event.
+ *
+ * Fields are renamed per variant rather than with `rename_all_fields`
+ * because utoipa only honors variant-level serde renames when it
+ * derives the OpenAPI schema.
+ */
+export type EventTime = {
+    /**
+     * Exclusive end instant.
+     */
+    endsAt: string;
+    kind: 'timed';
+    /**
+     * Inclusive start instant.
+     */
+    startsAt: string;
+    /**
+     * Original IANA time-zone identifier, when supplied.
+     */
+    timeZone?: string | null;
+} | {
+    /**
+     * Exclusive local end date.
+     */
+    endDate: string;
+    kind: 'allDay';
+    /**
+     * Inclusive local start date.
+     */
+    startDate: string;
+};
+
+/**
+ * Whether an event blocks availability.
+ */
+export type EventTransparency = 'opaque' | 'transparent';
+
+/**
+ * Visibility of event details.
+ */
+export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
 
 export type ExcludeDefaultViewRequest = {
     defaultViewId: string;
@@ -4184,7 +4454,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4206,7 +4476,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 };
 
 /**
@@ -5183,7 +5453,8 @@ export type PatchThreadRequestV2 = {
 };
 
 /**
- * Request to patch a webhook.
+ * Request to patch a webhook. The webhook's namespace is fixed at creation
+ * time and is deliberately not patchable.
  */
 export type PatchWebhookRequest = {
     /**
@@ -6068,6 +6339,114 @@ export type SoupAttachment = {
 };
 
 /**
+ * Timed or all-day calendar event span.
+ */
+export type SoupCalendarEventTime = {
+    /**
+     * Exclusive end.
+     */
+    ends_at: string;
+    kind: 'timed';
+    /**
+     * Inclusive start.
+     */
+    starts_at: string;
+    /**
+     * Original IANA time zone.
+     */
+    time_zone?: string | null;
+} | {
+    /**
+     * Exclusive end date.
+     */
+    end_date: string;
+    kind: 'allDay';
+    /**
+     * Inclusive start date.
+     */
+    start_date: string;
+};
+
+/**
+ * A canonical calendar event entity in Soup.
+ */
+export type SoupCalendarEventSoupPropertiesField = {
+    /**
+     * Direct conference join URL.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Entity creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Property fields that can be flattened into property-bearing Soup items.
+     */
+    extra: {
+        /**
+         * Properties attached to the entity.
+         */
+        properties: Array<SoupProperty>;
+    };
+    /**
+     * RFC 5545 UID used for source reconciliation.
+     */
+    icalUid: string;
+    /**
+     * Entity identifier.
+     */
+    id: string;
+    /**
+     * Whether the selected canonical source is read-only.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional location label.
+     */
+    location?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Owning Macro user.
+     */
+    ownerId: string;
+    /**
+     * Canonical status.
+     */
+    status: string;
+    /**
+     * Canonical master time.
+     */
+    time: SoupCalendarEventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability transparency.
+     */
+    transparency: string;
+    /**
+     * Entity update timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Canonical visibility.
+     */
+    visibility: string;
+};
+
+/**
  * A participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
@@ -6658,6 +7037,12 @@ export type SoupItem = {
      */
     data: SoupCallRecordSoupPropertiesField;
     tag: 'call';
+} | {
+    /**
+     * Calendar event item.
+     */
+    data: SoupCalendarEventSoupPropertiesField;
+    tag: 'calendarEvent';
 } | {
     /**
      * CRM company item.
@@ -7334,6 +7719,11 @@ export type Webhook = {
      */
     name: string;
     /**
+     * Caller-chosen namespace, unique among the owning workspace's webhooks.
+     * Set at creation time only; it cannot be changed afterwards.
+     */
+    namespace: string;
+    /**
      * Webhook lifecycle status.
      */
     status: WebhookStatus;
@@ -7734,6 +8124,62 @@ export type RemoveBotFromChannelByBotResponses = {
 };
 
 export type RemoveBotFromChannelByBotResponse = RemoveBotFromChannelByBotResponses[keyof RemoveBotFromChannelByBotResponses];
+
+export type ListOccurrencesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive UTC viewport start.
+         */
+        start: string;
+        /**
+         * Exclusive UTC viewport end.
+         */
+        end: string;
+        /**
+         * Inclusive local date boundary for all-day events.
+         */
+        startDate?: string;
+        /**
+         * Exclusive local date boundary for all-day events.
+         */
+        endDate?: string;
+        /**
+         * Maximum number of occurrences, from 1 through 2,000.
+         */
+        limit?: number;
+        /**
+         * Opaque continuation cursor returned by the previous page.
+         */
+        cursor?: string;
+    };
+    url: '/calendar-events';
+};
+
+export type ListOccurrencesErrors = {
+    /**
+     * Invalid or unsupported calendar viewport
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type ListOccurrencesResponses = {
+    /**
+     * Calendar occurrences in the requested viewport
+     */
+    200: CalendarOccurrenceResponse;
+};
+
+export type ListOccurrencesResponse = ListOccurrencesResponses[keyof ListOccurrencesResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -10477,7 +10923,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
         /**
          * The id of the favorited entity.
          */
@@ -10531,6 +10977,13 @@ export type InstallSyncData = {
     path?: never;
     query?: never;
     url: '/github/install-sync';
+};
+
+export type InstallSyncErrors = {
+    /**
+     * Authentication failed
+     */
+    401: unknown;
 };
 
 export type HealthHandlerData = {
@@ -11601,6 +12054,10 @@ export type CreateWebhookErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * Namespace already used in the workspace
+     */
+    409: ErrorResponse;
     /**
      * Internal server error
      */

@@ -18,8 +18,6 @@ use models_email::service::cache::TokenCacheKey;
 use models_email::service::link::{Link, UserProvider};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailLinkMessage;
 use sqs_worker::cleanup_message;
 use std::time::Duration;
 use tokio_retry::RetryIf;
@@ -204,6 +202,7 @@ async fn handle_refresh(
         &ctx.db,
         &ctx.gmail_client,
         &ctx.sqs_client,
+        &ctx.macro_event_broker,
         gmail_access_token,
     )
     .await
@@ -366,18 +365,6 @@ async fn handle_delete(
         .await
         .inspect_err(|e| {
             tracing::warn!(error=?e, "Failed to remove FusionAuth IdP link");
-        })
-        .ok();
-
-    // inform search of deletion so it can wipe the email records from OS
-    ctx.sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::RemoveEmailLink(EmailLinkMessage {
-            link_id: link.id.to_string(),
-            macro_user_id: link.macro_id.to_string(),
-        }))
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "failed to send message to search extractor queue");
         })
         .ok();
 

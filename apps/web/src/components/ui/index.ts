@@ -11,6 +11,8 @@ export { Avatar, AvatarGroup } from './components/Avatar';
 export type { ButtonProps } from './components/Button';
 export { Button } from './components/Button';
 export { ButtonGroup } from './components/ButtonGroup';
+export type { CalendarProps } from './components/Calendar';
+export { Calendar } from './components/Calendar';
 export type { ChatInputProps, ChatInputRows } from './components/ChatInput';
 export type { CheckboxProps } from './components/Checkbox';
 export {

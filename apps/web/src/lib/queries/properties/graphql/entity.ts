@@ -24,6 +24,7 @@ import {
   type EntityPropertiesQueryVariables,
   type GraphqlEntityFilterAst,
   type GraphqlEntityReferenceInput,
+  type GraphqlPropertyTargetEntityType,
   type GraphqlSetPropertyValue,
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
@@ -79,11 +80,15 @@ export function buildEntityPropertiesInput(
     .with('COMPANY', () => ({
       crmCompanyFilter: { literal: { id: entityId } },
     }))
+    .with('CALENDAR_EVENT', () => ({
+      calendarEventFilter: { literal: { id: entityId } },
+    }))
     .with('USER', () => undefined)
     .exhaustive();
   if (!targetFilter) return undefined;
 
   const filters: GraphqlEntityFilterAst = {
+    calendarEventFilter: { literal: { id: NIL_ENTITY_ID } },
     documentFilter: { literal: { id: NIL_ENTITY_ID } },
     projectFilter: { literal: { projectIdSelf: NIL_ENTITY_ID } },
     chatFilter: { literal: { chatId: NIL_ENTITY_ID } },
@@ -189,7 +194,7 @@ export type EntityPropertyMutationDisposition =
   | { kind: 'permanently-failed'; error: Error };
 
 type SetEntityPropertyArgs = {
-  entityType: PropertyTargetEntityType;
+  entityType: GraphqlPropertyTargetEntityType;
   entityId: string;
   propertyDefinitionId: string;
   value: SetPropertyValue | null;
@@ -233,10 +238,14 @@ function toGraphqlSetPropertyValue(
     .exhaustive();
 }
 
-function toPropertyTargetEntityType(
+function toGraphqlPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
-): PropertyTargetEntityType {
-  return entityType === 'TASK' ? 'DOCUMENT' : entityType;
+): GraphqlPropertyTargetEntityType {
+  if (entityType === 'TASK') return 'DOCUMENT';
+  if (entityType === 'CALENDAR_EVENT') {
+    throw new Error('calendar events do not support properties');
+  }
+  return entityType;
 }
 
 function getPropertyDefinitionId(
@@ -252,7 +261,7 @@ async function prepareMutationArgs(
 ): Promise<SetEntityPropertyArgs> {
   if (input.kind === 'add') {
     return {
-      entityType: toPropertyTargetEntityType(input.entityType),
+      entityType: toGraphqlPropertyTargetEntityType(input.entityType),
       entityId: input.entityId,
       propertyDefinitionId: input.propertyDefinitionId,
       value: null,
@@ -289,7 +298,7 @@ async function prepareMutationArgs(
   }
 
   return {
-    entityType: toPropertyTargetEntityType(input.entityType),
+    entityType: toGraphqlPropertyTargetEntityType(input.entityType),
     entityId: input.entityId,
     propertyDefinitionId: getPropertyDefinitionId(input.property),
     value: propertyValueToApi(input.apiValues, input.property.isMultiSelect),

@@ -140,6 +140,7 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
+        calendar_events::inbound::axum_router::list_occurrences,
 
         // activity
         activity::get_recent_activity::get_recent_activity_handler,
@@ -419,6 +420,9 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
+            calendar_events::inbound::axum_router::CalendarOccurrenceItem,
+            calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
             SoupDocument<SoupPropertiesField>,

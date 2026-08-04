@@ -31,6 +31,8 @@ pub enum FailureReason {
     MessageNotFoundInDatabase,
     LinkNotFound,
     BackfillJobNotFound,
+    EmailBackfillInitBusy,
+    CalendarBackfillBusy,
     GmailApiFailed,
     GmailApiRateLimited,
     OutdatedHistoryId,

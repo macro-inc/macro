@@ -1,6 +1,8 @@
 mod backfill_attachment;
 mod backfill_message;
 mod backfill_thread;
+mod calendar_email_ics_backfill;
+mod calendar_google_backfill;
 mod depopulate_crm_contact;
 mod depopulate_crm_for_user;
 mod error_handlers;

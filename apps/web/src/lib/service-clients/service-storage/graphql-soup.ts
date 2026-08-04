@@ -388,7 +388,7 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
   }));
 }
 
-export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
+export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
@@ -660,6 +660,11 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
           },
         }) as SoupApiItem
     )
+    .with(
+      { __typename: 'GraphqlSoupCalendarEvent' },
+      // Calendar soup rendering lands with the calendar FE; skip for now.
+      () => null
+    )
     .exhaustive();
 }
 
@@ -676,7 +681,9 @@ export type FetchGraphqlSoupOptions = {
  */
 export function mapGraphqlSoupPage(data: SoupQuery): SoupPage {
   return {
-    items: data.user.soup.items.map(mapGraphqlSoupItem),
+    items: data.user.soup.items
+      .map(mapGraphqlSoupItem)
+      .filter((item): item is SoupApiItem => item !== null),
     next_cursor: data.user.soup.nextCursor ?? undefined,
   };
 }
@@ -687,9 +694,13 @@ export function mapGraphqlGroupedSoupPage(
 ): GraphqlGroupedSoupPage {
   const items: Record<string, SoupApiItem> = {};
   const groups = data.user.groupSoup.bins.map((bin) => {
-    const itemIds = bin.items.map((item) => {
-      items[item.id] = mapGraphqlSoupItem(item);
-      return item.id;
+    const itemIds = bin.items.flatMap((item) => {
+      const mapped = mapGraphqlSoupItem(item);
+      if (!mapped) {
+        return [];
+      }
+      items[item.id] = mapped;
+      return [item.id];
     });
 
     return {

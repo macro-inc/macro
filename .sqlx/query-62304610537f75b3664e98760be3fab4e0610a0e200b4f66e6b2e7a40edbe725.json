@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_jobs\n        SET init_lease_expires_at = now() + interval '2 minutes',\n            updated_at = now()\n        WHERE id = $1\n          AND status = 'Init'\n          AND init_lease_token = $2\n          AND init_lease_expires_at > now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62304610537f75b3664e98760be3fab4e0610a0e200b4f66e6b2e7a40edbe725"
+}

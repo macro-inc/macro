@@ -8,8 +8,6 @@ use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailMessage;
 use std::result;
 use uuid::Uuid;
 
@@ -133,20 +131,6 @@ pub async fn delete_message(
         RefreshEmailEvent::DeleteMessage { link_id: link.id },
     )
     .await;
-
-    // send message to search text extractor queue
-    let _ = ctx
-        .sqs_client
-        .bulk_send_message_to_search_event_queue(vec![SearchQueueMessage::RemoveEmailMessage(
-            EmailMessage {
-                message_id: message.db_id.to_string(),
-                macro_user_id: link.macro_id.to_string(),
-            },
-        )])
-        .await
-        .inspect_err(
-            |e| tracing::error!(error = ?e, "failed to send message to search extractor queue"),
-        );
 
     Ok(())
 }

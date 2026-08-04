@@ -2,13 +2,15 @@ use super::*;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup_grouped,
 };
-use item_filters::ast::EntityFilterAst;
+use filter_ast::Expr;
+use item_filters::ast::{EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_grouping::date_bucket_sql_key;
 use models_grouping::{GroupingConfig, date_bucket_order};
 use models_pagination::{Identify, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 
 #[test]
 fn date_bucket_select_contains_all_keys() {
@@ -296,6 +298,196 @@ async fn test_grouped_single_group_filter(pool: Pool<Postgres>) -> anyhow::Resul
             "All items should belong to the filtered group"
         );
     }
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn tagged_calendar_event_participates_in_grouped_property_soup(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|user-1@test.com";
+    const EVENT_ID: uuid::Uuid = uuid::uuid!("ca1e0000-0000-0000-0000-000000000001");
+    const LINK_ID: uuid::Uuid = uuid::uuid!("ca1e0000-0000-0000-0000-000000000002");
+    const STATUS_PROPERTY_ID: uuid::Uuid = uuid::uuid!("00000001-0000-0000-0000-000000000002");
+    const IN_PROGRESS_OPTION_ID: &str = "00000001-0000-0000-0002-000000000002";
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider
+        )
+        VALUES ($1, $2, $2, 'calendar-grouping@example.com', 'GMAIL')
+        "#,
+        LINK_ID,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title,
+            starts_at, ends_at, canonical_source_kind, canonical_source_updated_at
+        )
+        VALUES (
+            $1, $2, $3, 'grouped@example.com', 'Grouped calendar event',
+            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'email_ics',
+            '2026-07-24T12:00:00Z'
+        )
+        "#,
+        EVENT_ID,
+        OWNER_ID,
+        LINK_ID,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties
+            (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            'ca1e0000-0000-0000-0000-000000000003',
+            ($1::uuid)::text,
+            'CALENDAR_EVENT',
+            $2,
+            '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000002"]}'::jsonb
+        )
+        "#,
+        EVENT_ID,
+        STATUS_PROPERTY_ID,
+    )
+    .execute(&pool)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::Property {
+                    property_definition_id: STATUS_PROPERTY_ID,
+                    entity_type: None,
+                },
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .filter(|item| item.item.id() == EVENT_ID)
+    .collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].key, IN_PROGRESS_OPTION_ID);
+    assert!(matches!(
+        items[0].item,
+        models_soup::item::SoupItem::CalendarEvent(_)
+    ));
+
+    Ok(())
+}
+
+/// Regression: when a filter makes an arm of the Combined UNION impossible,
+/// the remaining arms must still type-align. Postgres resolves UNION column
+/// types pairwise left-to-right, and untyped `NULL`s across two arms resolve
+/// to `text`, which then clashed with the calendar-event arm's typed NULLs
+/// ("UNION types text and boolean cannot be matched").
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn grouped_soup_runs_when_chat_arm_excluded(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // Importance(false) never matches a chat, so the chat arm is omitted and
+    // Combined unions document ∪ project ∪ calendar_event.
+    let filter = EntityFilterAst {
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::Importance(false)))),
+        ..EntityFilterAst::mock_empty()
+    };
+
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .collect::<Vec<_>>();
+
+    assert!(!items.is_empty(), "documents and projects should remain");
+    assert!(
+        items.iter().all(|item| item.key != "chat"),
+        "chats must be filtered out"
+    );
+
+    Ok(())
+}
+
+/// Same regression as [`grouped_soup_runs_when_chat_arm_excluded`] for the
+/// document arm: chat ∪ project ∪ calendar_event previously failed with
+/// "UNION types text and bigint cannot be matched".
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn grouped_soup_runs_when_document_arm_excluded(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // A nil document id filter is impossible, so the document arm is omitted.
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(uuid::Uuid::nil())))),
+        ..EntityFilterAst::mock_empty()
+    };
+
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .collect::<Vec<_>>();
+
+    assert!(!items.is_empty(), "chats and projects should remain");
+    assert!(
+        items.iter().all(|item| item.key != "document"),
+        "documents must be filtered out"
+    );
 
     Ok(())
 }

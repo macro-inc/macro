@@ -131,6 +131,50 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_calendar_event_access(
+        &self,
+        event_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let event_id = event_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid calendar event ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        let user_id = user_id.as_ref();
+        let is_owner = sqlx::query_scalar!(
+            r#"
+            SELECT event.owner_id = $2 AS "is_owner!"
+            FROM calendar_events event
+            WHERE event.id = $1
+              AND (
+                  event.owner_id = $2
+                  OR EXISTS (
+                      SELECT 1
+                      FROM macro_user_links link
+                      WHERE link.link_id = event.source_link_id
+                        AND link.primary_macro_id = $2
+                  )
+              )
+            "#,
+            event_id,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AccessError::from)?;
+
+        Ok(is_owner.map(|is_owner| {
+            if is_owner {
+                AccessLevel::Owner
+            } else {
+                AccessLevel::Edit
+            }
+        }))
+    }
+
     #[tracing::instrument(err, skip(self, thread_ids, user_id))]
     async fn get_owned_email_thread_ids(
         &self,
@@ -201,6 +245,7 @@ impl AccessRepository for PgAccessRepository {
             EntityType::User
             | EntityType::Channel
             | EntityType::ChannelMessage
+            | EntityType::CalendarEvent
             | EntityType::Team
             | EntityType::ForeignEntity
             | EntityType::StaticFile

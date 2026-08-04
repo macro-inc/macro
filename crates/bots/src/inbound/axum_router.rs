@@ -5,8 +5,8 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Bot, BotChannel, BotId, BotToken, CreateBotRequest,
-        CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+        AddChannelBotRequest, Bot, BotChannel, BotChannelListCaller, BotId, BotToken,
+        CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
     },
     ports::{BotError, BotService},
 };
@@ -25,8 +25,8 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    BotOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    AnyPrincipal, BotOnly, MacroAuthorization, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -374,14 +374,16 @@ pub async fn list_bot_channels_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<BotPath>,
 ) -> Result<Json<Vec<BotChannel>>, BotsHandlerErr> {
+    let caller = match authorization.authorization {
+        MacroAuthorization::User(user) => BotChannelListCaller::User(user.macro_user_id),
+        MacroAuthorization::Bot(bot) => BotChannelListCaller::Bot(bot.bot_id),
+        MacroAuthorization::Internal(_) => BotChannelListCaller::Internal,
+    };
     Ok(Json(
-        state
-            .service
-            .list_bot_channels(authorization.authorization.user.macro_user_id, path.bot_id)
-            .await?,
+        state.service.list_bot_channels(caller, path.bot_id).await?,
     ))
 }
 

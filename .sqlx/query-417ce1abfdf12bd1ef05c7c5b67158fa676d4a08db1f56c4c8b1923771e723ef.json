@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT google_grant_version = 0 AS \"unrecorded!\" FROM email_links WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unrecorded!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "417ce1abfdf12bd1ef05c7c5b67158fa676d4a08db1f56c4c8b1923771e723ef"
+}

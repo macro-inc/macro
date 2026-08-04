@@ -676,7 +676,8 @@ function notificationEntityTypeToSoupTag(
         'channel_message',
         'static_file',
         'crm_company',
-        'crm_contact'
+        'crm_contact',
+        'calendar_event'
       ),
       () => null
     )

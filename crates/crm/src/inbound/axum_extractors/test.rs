@@ -283,6 +283,13 @@ impl CrmService for FakeCrmService {
         panic!("unexpected depopulate_contact call")
     }
 
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(Uuid, String)],
+    ) -> Result<Vec<(Uuid, String)>, CrmError> {
+        panic!("unexpected link_contact_pairs_with_sources call")
+    }
+
     async fn depopulate_link_in_team(
         &self,
         _team_id: &Uuid,

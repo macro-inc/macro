@@ -234,6 +234,8 @@ export function MarkdownEditor(props: {
     blockId,
     blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
   );
+  const tagApplyTargetLabel = () =>
+    blockName === 'task' ? 'Task' : 'Document';
 
   const mdDocumentName = useBlockDocumentName('');
 
@@ -557,10 +559,6 @@ export function MarkdownEditor(props: {
       tagsPlugin({
         menu: tagsMenuOperations,
         peerIdValidator: peerIdValidator(),
-        onCreateTag: (tag) => {
-          if (!canEdit()) return;
-          void documentTags.applyTag(tag.scope, tag.optionId);
-        },
       })
     )
     .use(
@@ -1096,6 +1094,12 @@ export function MarkdownEditor(props: {
           editor={editor}
           menu={tagsMenuOperations}
           useBlockBoundary={true}
+          applyTargetLabel={tagApplyTargetLabel()}
+          isApplied={(tag) => documentTags.isApplied(tag.optionId)}
+          onApplyTag={(tag) => {
+            if (!canEdit()) return;
+            void documentTags.applyTag(tag.scope, tag.optionId);
+          }}
         />
 
         <SnippetsMenu

@@ -12,6 +12,7 @@
 		"add_alias": "bun run scripts/add_alias.ts",
 		"reindex_with_alias_swap": "bun run scripts/reindex_with_alias_swap.ts",
 		"verify_aliases": "bun run scripts/verify_aliases.ts",
+		"verify_mappings": "bun run scripts/verify_mappings.ts",
     "set_refresh_interval": "bun run set_refresh_interval.ts"
 	},
 	"author": "Will Hutchinson",

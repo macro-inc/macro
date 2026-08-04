@@ -88,6 +88,8 @@ fn items_router(state: ApiContext) -> Router<ApiContext> {
 fn api_router(state: ApiContext) -> Router {
     let github_sync_service_router_state = GithubSyncRouterState {
         service: state.github_sync_service.clone(),
+        entity_access_service: state.entity_access_service.clone(),
+        authorization_state: state.authorization_state.clone(),
     };
 
     // Webhook router is outside auth — LiveKit validates via its own JWT,
@@ -203,6 +205,9 @@ fn api_router(state: ApiContext) -> Router {
             channels::inbound::list_router::channel_list_router(state.channel_list_state.clone()),
         )
         .nest("/entity", entity::router())
+        .merge(calendar_events::inbound::axum_router::calendar_router(
+            state.calendar_state.clone(),
+        ))
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),

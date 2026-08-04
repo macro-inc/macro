@@ -12,6 +12,7 @@ processing = [
   "dep:channels",
   "dep:chat",
   "dep:documents",
+  "dep:email",
   "dep:kafka_util",
   "dep:macro_event_broker",
   "dep:macro_event_topics",
@@ -51,6 +52,7 @@ channels = { path = "../../crates/channels", default-features = false, optional 
 chat = { path = "../../crates/chat", default-features = false, optional = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
+email = { path = "../../crates/email", default-features = false, optional = true }
 email_db_client = { path = "../../crates/email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }

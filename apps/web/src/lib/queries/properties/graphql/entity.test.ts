@@ -75,6 +75,7 @@ const EMPTY_DATA = {
   user: { id: 'user-1', soup: { items: [] } },
 };
 const NIL_FILTERS = {
+  calendarEventFilter: { literal: { id: NIL_ENTITY_ID } },
   documentFilter: { literal: { id: NIL_ENTITY_ID } },
   projectFilter: { literal: { projectIdSelf: NIL_ENTITY_ID } },
   chatFilter: { literal: { chatId: NIL_ENTITY_ID } },
@@ -104,6 +105,7 @@ describe('buildEntityPropertiesInput', () => {
     ['CHANNEL', 'channelFilter', { literal: { channelId: 'entity-1' } }],
     ['CALL_RECORD', 'callFilter', { literal: { callId: 'entity-1' } }],
     ['COMPANY', 'crmCompanyFilter', { literal: { id: 'entity-1' } }],
+    ['CALENDAR_EVENT', 'calendarEventFilter', { literal: { id: 'entity-1' } }],
   ] as const)(
     'targets one %s and excludes the other Soup branches',
     (entityType, filterKey, expectedFilter) => {
@@ -350,11 +352,15 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
           events.push('mutate');
           return { source: 'test' };
         },
-        onCommitted: () => events.push('committed'),
-        onSuccess: (_input, context) =>
-          events.push(`success:${context?.source}`),
-        onSettled: (error, _input, context) =>
-          events.push(`settled:${error?.message ?? context?.source}`),
+        onCommitted: () => {
+          events.push('committed');
+        },
+        onSuccess: (_input, context) => {
+          events.push(`success:${context?.source}`);
+        },
+        onSettled: (error, _input, context) => {
+          events.push(`settled:${error?.message ?? context?.source}`);
+        },
       });
     });
 

@@ -369,6 +369,41 @@ impl IsEmpty for CallFilters {
     }
 }
 
+/// Filters for canonical calendar-event entities.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct CalendarEventFilters {
+    /// Canonical event ids.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calendar_event_ids: Vec<String>,
+    /// Event statuses such as `confirmed`, `tentative`, or `cancelled`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub statuses: Vec<String>,
+    /// Include master events starting before this instant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starts_before: Option<chrono::DateTime<chrono::Utc>>,
+    /// Include master events ending after this instant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ends_after: Option<chrono::DateTime<chrono::Utc>>,
+    /// Attendee email addresses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attendees: Vec<String>,
+    /// Organizer email addresses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub organizers: Vec<String>,
+}
+
+impl IsEmpty for CalendarEventFilters {
+    fn is_empty(&self) -> bool {
+        self.calendar_event_ids.is_empty()
+            && self.statuses.is_empty()
+            && self.starts_before.is_none()
+            && self.ends_after.is_none()
+            && self.attendees.is_empty()
+            && self.organizers.is_empty()
+    }
+}
+
 /// Filters for foreign entity records.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -634,6 +669,9 @@ pub enum TagFilterMode {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
+    /// the bundled [CalendarEventFilters]
+    #[serde(default)]
+    pub calendar_event_filters: CalendarEventFilters,
     /// the bundled [ProjectFilters]
     #[serde(default)]
     pub project_filters: ProjectFilters,
@@ -678,6 +716,7 @@ pub struct EntityFilters {
 impl IsEmpty for EntityFilters {
     fn is_empty(&self) -> bool {
         let EntityFilters {
+            calendar_event_filters,
             project_filters,
             document_filters,
             chat_filters,
@@ -692,7 +731,8 @@ impl IsEmpty for EntityFilters {
             // Mode is a modifier on tag_option_ids, not a filter by itself.
             tag_filter_mode: _,
         } = self;
-        project_filters.is_empty()
+        calendar_event_filters.is_empty()
+            && project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
             && channel_filters.is_empty()

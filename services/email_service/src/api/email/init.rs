@@ -1,5 +1,5 @@
 use crate::api::ApiContext;
-use crate::api::context::AuthorizationService;
+use crate::api::context::{AuthorizationService, CalendarGrantService};
 use crate::utils::extract_email_with_response;
 use anyhow::Context;
 use authentication_service_client::error::AuthServiceClientError;
@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use calendar_events::domain::models::GoogleScopeSet;
 use email::domain::events::{EmailMacroEvent, LinkConnectedMetadata};
 use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
@@ -19,7 +20,7 @@ use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
+    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use models_email::gmail::error::GmailError;
 use models_email::service::link;
@@ -249,6 +250,7 @@ async fn init_user(
 ) -> Result<Response, InitError> {
     let macro_user_id = authorization.authorization.user.macro_user_id.clone();
     let user_context = authorization.authorization.user.user_context.clone();
+    let mut completed_google_grant: Option<Vec<String>> = None;
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());
@@ -258,6 +260,7 @@ async fn init_user(
             macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, &link_id)
                 .await
                 .context("Failed to fetch in_progress_user_link")?;
+        completed_google_grant = Some(in_progress.granted_google_scopes.clone());
 
         if in_progress.macro_user_id.to_string() != user_context.fusion_user_id {
             return Err(InitError::BadRequest(
@@ -307,9 +310,8 @@ async fn init_user(
             if let Some(child_link) = existing_child_link {
                 // Cross-user delegation: the child already connected their own inbox under
                 // their own fusion id. Link primary (caller) → child so primary can read it.
-                // The edge insert and in_progress consumption are a coupled pair, so commit
-                // them atomically: any failure rolls back, leaving the in_progress row for a
-                // retry.
+                // Keep the in-progress grant until the calendar grant and its outbox work
+                // are durable. The edge insert is idempotent if a retry reaches this path.
                 let mut tx = ctx
                     .db
                     .begin()
@@ -325,15 +327,17 @@ async fn init_user(
                 .await
                 .context("Failed to insert macro_user_links edge")?;
 
-                macro_db_client::in_progress_user_link::delete_in_progress_user_link(
-                    &mut *tx, &link_id,
-                )
-                .await
-                .context("Failed to delete in_progress_user_link after graph delegation")?;
-
                 tx.commit()
                     .await
                     .context("Failed to commit graph delegation transaction")?;
+
+                apply_and_consume_calendar_grant(
+                    &ctx,
+                    child_link.id,
+                    link_id,
+                    &in_progress.granted_google_scopes,
+                )
+                .await?;
 
                 return Ok((
                     StatusCode::OK,
@@ -367,8 +371,8 @@ async fn init_user(
                 fetch_gmail_token_for_email(&ctx, &child_fusion_id, &linked_email).await?;
             let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
-            // All writes commit atomically so a partial failure leaves no dangling link,
-            // edge, or consumed in_progress row.
+            // The link and delegation edge commit atomically. The in-progress grant is
+            // consumed only after the calendar grant and outbox work are durable.
             let mut tx = ctx
                 .db
                 .begin()
@@ -393,12 +397,6 @@ async fn init_user(
             .await
             .context("Failed to insert macro_user_links edge")?;
 
-            macro_db_client::in_progress_user_link::delete_in_progress_user_link(
-                &mut *tx, &link_id,
-            )
-            .await
-            .context("Failed to delete in_progress_user_link after self-link bootstrap")?;
-
             tx.commit()
                 .await
                 .context("Failed to commit self-link bootstrap transaction")?;
@@ -408,7 +406,7 @@ async fn init_user(
             (link, linked_email)
         } else {
             // Data-source path (same-user re-link or brand-new email with no prior signup).
-            if pg_repo
+            if let Some(existing_link) = pg_repo
                 .link_by_fusionauth_email_provider(
                     &user_context.fusion_user_id,
                     &linked_email,
@@ -416,9 +414,29 @@ async fn init_user(
                 )
                 .await
                 .context("Failed to check existing link by email")?
-                .is_some()
             {
-                return Err(InitError::AlreadyInitialized);
+                let applied = apply_and_consume_calendar_grant(
+                    &ctx,
+                    existing_link.id,
+                    link_id,
+                    &in_progress.granted_google_scopes,
+                )
+                .await?;
+                tracing::info!(
+                    link_id = %existing_link.id,
+                    grant_version = applied.grant_version,
+                    changed = applied.changed,
+                    calendar_jobs = applied.jobs.len(),
+                    "Applied Google permission upgrade to existing inbox"
+                );
+                return Ok((
+                    StatusCode::OK,
+                    Json(InitResponse {
+                        link_id: existing_link.id,
+                        backfill_job_id: None,
+                    }),
+                )
+                    .into_response());
             }
 
             // The linked email is not itself a macro user, but another macro user may
@@ -469,12 +487,6 @@ async fn init_user(
                 )
                 .await
                 .context("Failed to promote link to shared inbox")?;
-
-                macro_db_client::in_progress_user_link::delete_in_progress_user_link(
-                    &mut *tx, &link_id,
-                )
-                .await
-                .context("Failed to delete in_progress_user_link after shared-inbox promotion")?;
 
                 tx.commit()
                     .await
@@ -529,6 +541,14 @@ async fn init_user(
                     }
                 }
 
+                apply_and_consume_calendar_grant(
+                    &ctx,
+                    promoted.link_id,
+                    link_id,
+                    &in_progress.granted_google_scopes,
+                )
+                .await?;
+
                 return Ok((
                     StatusCode::OK,
                     Json(InitResponse {
@@ -562,13 +582,6 @@ async fn init_user(
             tx.commit()
                 .await
                 .context("Failed to commit link transaction")?;
-
-            macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, &link_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, ?link_id, "Failed to delete in_progress_user_link after init");
-                })
-                .ok();
 
             (link, linked_email)
         }
@@ -615,6 +628,12 @@ async fn init_user(
 
         (link, email)
     };
+
+    if let (Some(scopes), Some(link_id)) = (completed_google_grant.as_deref(), link_id) {
+        apply_and_consume_calendar_grant(&ctx, link.id, link_id, scopes).await?;
+    } else if completed_google_grant.is_none() {
+        apply_grant_discovered_from_token(&ctx, &link).await;
+    }
 
     // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
     // and would each enqueue a backfill. Reuse an in-flight backfill if one already exists
@@ -705,24 +724,12 @@ async fn init_user(
     {
         tracing::error!(error = ?e, backfill_id = %backfill_job.id, "Failed to enqueue backfill message");
 
-        let db_pool = ctx.db.clone();
-        let job_id = backfill_job.id;
-        tokio::spawn(async move {
-            if let Err(update_err) =
-                email_db_client::backfill::job::update::update_backfill_job_status(
-                    &db_pool,
-                    job_id,
-                    BackfillJobStatus::Failed,
-                )
-                .await
-            {
-                tracing::error!(
-                    error = ?update_err,
-                    backfill_id = %job_id,
-                    "Failed to update backfill job status to Failed"
-                );
-            }
-        });
+        email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
+            &ctx.db,
+            backfill_job.id,
+        )
+        .await
+        .context("Failed to persist initial backfill publication failure")?;
 
         return Err(InitError::EnqueueError);
     }
@@ -735,6 +742,118 @@ async fn init_user(
         }),
     )
         .into_response())
+}
+
+/// Init runs on every authentication, including first-login SSO where
+/// FusionAuth performs the token exchange and the granted scopes never reach
+/// the link flow. When the link has no recorded grant generation, discover
+/// the scopes from Google's tokeninfo endpoint using the link's own token so
+/// SSO-only users still receive calendar sync. Best-effort: a failure here
+/// must never fail authentication, and the next init retries it.
+async fn apply_grant_discovered_from_token(ctx: &ApiContext, link: &link::Link) {
+    let unrecorded = sqlx::query_scalar!(
+        r#"SELECT google_grant_version = 0 AS "unrecorded!" FROM email_links WHERE id = $1"#,
+        link.id,
+    )
+    .fetch_optional(&ctx.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false);
+    if !unrecorded {
+        return;
+    }
+    let token = match fetch_gmail_token_for_email(
+        ctx,
+        &link.fusionauth_user_id,
+        link.email_address.0.as_ref(),
+    )
+    .await
+    {
+        Ok(token) => token,
+        Err(error) => {
+            tracing::warn!(error = ?error, link_id = %link.id, "skipping grant discovery: no Google token");
+            return;
+        }
+    };
+    match fetch_token_scopes(&token).await {
+        Ok(scopes) => {
+            apply_calendar_grant(ctx.calendar_service.as_ref(), link.id, &scopes)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, link_id = %link.id, "failed to apply discovered Google grant");
+                })
+                .ok();
+        }
+        Err(error) => {
+            tracing::warn!(error = ?error, link_id = %link.id, "failed to discover Google token scopes");
+        }
+    }
+}
+
+/// Ask Google which scopes an access token actually carries.
+async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec<String>> {
+    #[derive(serde::Deserialize)]
+    struct TokenInfo {
+        scope: String,
+    }
+    // One shared client with a hard timeout: discovery runs on the
+    // authentication path, so a hung Google response must not stall login.
+    static TOKENINFO_CLIENT: std::sync::LazyLock<reqwest::Client> =
+        std::sync::LazyLock::new(|| {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .expect("static reqwest client configuration is valid")
+        });
+    let info: TokenInfo = TOKENINFO_CLIENT
+        .post("https://www.googleapis.com/oauth2/v3/tokeninfo")
+        .form(&[("access_token", access_token)])
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    Ok(info
+        .scope
+        .split_ascii_whitespace()
+        .map(ToOwned::to_owned)
+        .collect())
+}
+
+async fn apply_calendar_grant(
+    calendar_service: &CalendarGrantService,
+    email_link_id: Uuid,
+    granted_scopes: &[String],
+) -> Result<calendar_events::domain::models::AppliedGoogleGrant, InitError> {
+    calendar_service
+        .apply_google_grant(
+            email_link_id,
+            GoogleScopeSet::from_scopes(granted_scopes.iter().cloned()),
+        )
+        .await
+        .map_err(|error| {
+            InitError::DatabaseError(anyhow::anyhow!(
+                "failed to apply Google grant to email link: {error:?}"
+            ))
+        })
+}
+
+async fn apply_and_consume_calendar_grant(
+    ctx: &ApiContext,
+    email_link_id: Uuid,
+    in_progress_link_id: Uuid,
+    granted_scopes: &[String],
+) -> Result<calendar_events::domain::models::AppliedGoogleGrant, InitError> {
+    let applied =
+        apply_calendar_grant(ctx.calendar_service.as_ref(), email_link_id, granted_scopes).await?;
+    macro_db_client::in_progress_user_link::delete_in_progress_user_link(
+        &ctx.db,
+        &in_progress_link_id,
+    )
+    .await
+    .context("Failed to consume applied Google grant")?;
+    Ok(applied)
 }
 
 /// Registers a Gmail watch, recovering from the one-watch-per-mailbox limit. A watch
