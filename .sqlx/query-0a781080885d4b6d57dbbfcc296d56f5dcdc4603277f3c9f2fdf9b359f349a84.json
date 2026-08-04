@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at\n            FROM bots\n            WHERE kind = 'owned'\n              AND deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY created_at ASC, id ASC\n            ",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent\n            FROM bots b\n            JOIN comms_channel_participants cp\n              ON cp.user_id = ('bot|' || b.id::text)\n            WHERE cp.channel_id = $1\n              AND cp.left_at IS NULL\n              AND b.deleted_at IS NULL\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -62,11 +62,16 @@
         "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "has_agent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -81,8 +86,9 @@
       true,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "eed44d491b8b8bce4f111b92565b371093099209a80349d311f45a0aa4b9cca9"
+  "hash": "0a781080885d4b6d57dbbfcc296d56f5dcdc4603277f3c9f2fdf9b359f349a84"
 }

@@ -60,6 +60,20 @@ pub const MACRO_AI_HANDLE: &str = "macro";
 /// Display name for the "Macro" system bot.
 pub const MACRO_AI_NAME: &str = "Macro";
 
+/// Stable [`BotId`] for the "Macro Coder" system bot, our coding-agent harness.
+///
+/// Distinct from [`MACRO_AI_BOT_ID`] on purpose: mentioning Macro AI answers in
+/// chat, while mentioning this one opens a sandboxed agent session, and one id
+/// cannot mean both.
+pub const MACRO_CODER_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a9e7));
+
+/// Stable handle for the "Macro Coder" system bot (used for `@` mentions).
+pub const MACRO_CODER_HANDLE: &str = "coder";
+
+/// Display name for the "Macro Coder" system bot.
+pub const MACRO_CODER_NAME: &str = "Macro Coder";
+
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
