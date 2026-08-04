@@ -17,16 +17,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
-    /// Every bot's session state for the thread a channel message arrived in.
-    ///
-    /// One query rather than one per bot: the caller cannot know which bots to
-    /// ask about, because a message in a session's own thread names no bot at
-    /// all. Bots without a session in this thread simply do not appear; the
-    /// returned [`ThreadSession`] is never [`ThreadSession::None`].
-    fn find_all_for_thread(
+    /// Find how a thread relates to a bot's agent session, if one exists.
+    fn find_for_thread(
         &self,
+        bot_id: BotId,
         thread_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<(BotId, ThreadSession)>>> + Send;
+    ) -> impl Future<Output = Result<ThreadSession>> + Send;
 
     /// Update an existing agent session.
     fn update(&self, session: AgentSession) -> impl Future<Output = Result<()>> + Send;

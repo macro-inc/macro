@@ -174,7 +174,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_all_for_thread_distinguishes_both_thread_columns(pool: PgPool) {
+async fn find_for_thread_distinguishes_both_thread_columns(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
@@ -191,37 +191,34 @@ async fn find_all_for_thread_distinguishes_both_thread_columns(pool: PgPool) {
     // Unrelated session in some other thread never appears.
     create_session(&repo, new_session(bot_a, macro_uuid::generate_uuid_v7())).await;
 
-    let mut found = repo
-        .find_all_for_thread(thread)
+    let found_a = repo
+        .find_for_thread(bot_a, thread)
         .await
-        .expect("find sessions for thread");
-    found.sort_by_key(|(bot, _)| *bot != bot_a);
-
-    assert_eq!(found.len(), 2);
-    let (found_bot_a, in_thread) = &found[0];
-    assert_eq!(*found_bot_a, bot_a);
-    let ThreadSession::InSessionThread(session) = in_thread else {
-        panic!("expected the dedicated-thread session, got {in_thread:?}");
+        .expect("find bot A's session for thread");
+    let ThreadSession::InSessionThread(session) = found_a else {
+        panic!("expected the dedicated-thread session, got {found_a:?}");
     };
     assert_eq!(session.id, session_a);
 
-    let (found_bot_b, from_this_thread) = &found[1];
-    assert_eq!(*found_bot_b, bot_b);
-    let ThreadSession::CreatedFromThisThread(session) = from_this_thread else {
-        panic!("expected the created-from session, got {from_this_thread:?}");
+    let found_b = repo
+        .find_for_thread(bot_b, thread)
+        .await
+        .expect("find bot B's session for thread");
+    let ThreadSession::CreatedFromThisThread(session) = found_b else {
+        panic!("expected the created-from session, got {found_b:?}");
     };
     assert_eq!(session.id, session_b);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_all_for_thread_returns_nothing_for_unknown_thread(pool: PgPool) {
+async fn find_for_thread_returns_none_without_a_matching_session(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     create_session(&repo, new_session(bot, macro_uuid::generate_uuid_v7())).await;
 
     let found = repo
-        .find_all_for_thread(macro_uuid::generate_uuid_v7())
+        .find_for_thread(bot, macro_uuid::generate_uuid_v7())
         .await
         .expect("find sessions for unknown thread");
-    assert!(found.is_empty());
+    assert!(matches!(found, ThreadSession::None));
 }

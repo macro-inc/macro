@@ -166,37 +166,36 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(row.try_into()?)
     }
 
-    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<(BotId, ThreadSession)>> {
-        let rows = sqlx::query_as!(
+    async fn find_for_thread(&self, bot_id: BotId, thread_id: Uuid) -> Result<ThreadSession> {
+        let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
                 id, created_from_thread_id, thread_id, bot_id, model, harness,
                 repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             FROM agent_session
-            WHERE created_from_thread_id = $1 OR thread_id = $1
+            WHERE bot_id = $1 AND (created_from_thread_id = $2 OR thread_id = $2)
             "#,
+            bot_id.as_uuid(),
             thread_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .context("failed to find agent sessions for thread")?;
+        .context("failed to find agent session for thread")?;
 
-        rows.into_iter()
-            .map(|row| {
-                // The session's own thread wins when both columns match: a
-                // message there is always for the agent.
-                let in_session_thread = row.thread_id == thread_id;
-                let session: AgentSession = row.try_into()?;
-                let bot_id = session.bot_id;
-                let thread_session = if in_session_thread {
-                    ThreadSession::InSessionThread(session)
-                } else {
-                    ThreadSession::CreatedFromThisThread(session)
-                };
-                Ok((bot_id, thread_session))
-            })
-            .collect()
+        let Some(row) = row else {
+            return Ok(ThreadSession::None);
+        };
+
+        // The session's own thread wins when both columns match: a message
+        // there is always for the agent.
+        let in_session_thread = row.thread_id == thread_id;
+        let session = row.try_into()?;
+        Ok(if in_session_thread {
+            ThreadSession::InSessionThread(session)
+        } else {
+            ThreadSession::CreatedFromThisThread(session)
+        })
     }
 
     async fn update(&self, session: AgentSession) -> Result<()> {
