@@ -23,7 +23,11 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import { useChannelActivity, useChannelName } from '@core/context/channels';
+import {
+  useChannelActivity,
+  useChannelName,
+  useChannelType,
+} from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateValue } from '@core/util/date';
@@ -46,6 +50,7 @@ import {
   isMissingChannelMessageError,
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
+import { ChannelTypeEnum } from '@service-storage/client';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -338,7 +343,23 @@ export function Channel(props: ChannelProps) {
   });
 
   const channelName = useChannelName(props.channelId);
+  const channelType = useChannelType(props.channelId);
   const { popoverSplit } = useSplitLayout();
+
+  // Placeholder name: a 1:1 DM named "First Last" shortens to the first
+  // name; channels (and group DMs like "A, B") keep their full name.
+  const inputPlaceholderName = () => {
+    const name = channelName();
+    if (!name) return undefined;
+    if (channelType() !== ChannelTypeEnum.DirectMessage) return name;
+    const parts = name.split(' ');
+    return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
+  };
+
+  const inputPlaceholder = () => {
+    const name = inputPlaceholderName();
+    return name ? `Type @ to share with ${name}.` : 'Type @ to share.';
+  };
 
   const buildChannelMessageMention = (message: {
     id: string;
@@ -859,7 +880,7 @@ export function Channel(props: ChannelProps) {
                           input={{
                             mode: 'channel',
                             id: `channel-input-${props.channelId}`,
-                            placeholder: `Message ${channelName() ?? 'channel'}, type @ to share or / for commands`,
+                            placeholder: inputPlaceholder(),
                           }}
                           participants={participants.users}
                           bots={channelBotMentionUsers}
