@@ -55,6 +55,7 @@ struct BotRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     deleted_at: Option<DateTime<Utc>>,
+    has_agent: bool,
 }
 
 impl TryFrom<BotRow> for Bot {
@@ -83,6 +84,7 @@ impl TryFrom<BotRow> for Bot {
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
+            has_agent: row.has_agent,
         })
     }
 }
@@ -220,7 +222,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -274,7 +277,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -348,7 +352,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             FROM bots
             WHERE kind = 'owned'
               AND deleted_at IS NULL
@@ -384,7 +389,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             FROM bots
             WHERE id = $1
               AND deleted_at IS NULL
@@ -496,7 +502,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             "#,
             bot_id.as_uuid(),
             req.name,
@@ -624,7 +631,8 @@ impl BotRepo for PgBotsRepo {
                 b.created_by,
                 b.created_at,
                 b.updated_at,
-                b.deleted_at
+                b.deleted_at,
+                b.has_agent
             FROM bots b
             JOIN comms_channel_participants cp
               ON cp.user_id = ('bot|' || b.id::text)

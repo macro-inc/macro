@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at\n            FROM bots b\n            JOIN comms_channel_participants cp\n              ON cp.user_id = ('bot|' || b.id::text)\n            WHERE cp.channel_id = $1\n              AND cp.left_at IS NULL\n              AND b.deleted_at IS NULL\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
+  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            FROM bots\n            WHERE kind = 'owned'\n              AND deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY created_at ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -62,11 +62,16 @@
         "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "has_agent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -81,8 +86,9 @@
       true,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "67255839adc83c0e1dfba11289811d0e6c269464a8506f0ec29db94b7841a038"
+  "hash": "35a1bfd7631ce44c23b91df23b1e9d753745efc83a94a5a0b5f771d91e07b4f2"
 }

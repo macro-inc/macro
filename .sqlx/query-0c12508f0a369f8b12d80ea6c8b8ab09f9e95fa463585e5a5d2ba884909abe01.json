@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at\n            FROM bots\n            WHERE id = $1\n              AND deleted_at IS NULL\n            ",
+  "query": "\n            INSERT INTO bots (\n                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by\n            )\n            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
   "describe": {
     "columns": [
       {
@@ -62,11 +62,23 @@
         "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "has_agent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -81,8 +93,9 @@
       true,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "1f007b302205e5fb56f1d90b145aa96922a8f97e7a10d91ec7970c0cbf824281"
+  "hash": "0c12508f0a369f8b12d80ea6c8b8ab09f9e95fa463585e5a5d2ba884909abe01"
 }
