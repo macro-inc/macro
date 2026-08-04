@@ -264,9 +264,10 @@ export function TaskComposer(props: {
   );
 
   return (
-    // Compact edges matching the message face (content at px-3/pt-2, footer
-    // mirroring Input.Footer's h-8 p-2 mb-2), with roomier gap-4 spacing
-    // between title, description, and property pills.
+    // Compact edges matching the message face (content at px-3/pt-2), with
+    // roomier gap-4 spacing between title, description, and property pills.
+    // The property pills and footer share the footer's 8px inset so the pills,
+    // the action buttons, and the composer's edges are evenly spaced.
     <div
       class="relative flex flex-col"
       tabIndex={-1}
@@ -315,7 +316,12 @@ export function TaskComposer(props: {
             />
           </Scroll>
         </div>
+      </div>
 
+      {/* Property pills line up with the footer's action row (px-2) rather
+          than the text above it, so the leading pill is flush with the attach
+          button, and pt-4 keeps the gap-4 rhythm of the content above. */}
+      <div class="px-2 pt-4">
         <Suspense fallback={<div class="h-7" />}>
           <PropertiesProvider
             entityType="TASK"
@@ -344,7 +350,10 @@ export function TaskComposer(props: {
         </Suspense>
       </div>
 
-      <div class="shrink-0 flex h-8 w-full flex-row justify-between items-center p-2 mb-2 space-x-2">
+      {/* A plain p-2 box (no fixed height, no extra bottom margin) puts an
+          even 8px between the action row and the composer's bottom-left edges
+          and the property pills above it. */}
+      <div class="shrink-0 flex w-full flex-row justify-between items-center p-2 space-x-2">
         <div class="flex items-center gap-2">
           <input
             ref={(el) => {
