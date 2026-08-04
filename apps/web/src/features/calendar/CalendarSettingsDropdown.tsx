@@ -1,26 +1,11 @@
+import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import { Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
-import type {
-  CalendarSource,
-  CalendarTimeFormat,
-  CalendarWeekStart,
-} from './events/types';
-
-interface CalendarSettingsDropdownProps {
-  sources: CalendarSource[];
-  isSourceVisible: (sourceId: string) => boolean;
-  showCalendarVisibility: boolean;
-  showWeekends: boolean;
-  weekStartsOn: CalendarWeekStart;
-  timeFormat: CalendarTimeFormat;
-  onSourceVisibilityChange: (sourceId: string, visible: boolean) => void;
-  onShowWeekendsChange: (showWeekends: boolean) => void;
-  onWeekStartsOnChange: (weekStartsOn: CalendarWeekStart) => void;
-  onTimeFormatChange: (timeFormat: CalendarTimeFormat) => void;
-}
+import { createMemo, For, Show } from 'solid-js';
+import { useCalendarView } from './CalendarViewContext';
+import type { CalendarTimeFormat, CalendarWeekStart } from './events/types';
 
 const WEEK_START_OPTIONS: Array<{
   value: CalendarWeekStart;
@@ -39,13 +24,44 @@ const TIME_FORMAT_OPTIONS: Array<{
 ];
 
 /** Calendar display settings with source visibility on narrow layouts. */
-export function CalendarSettingsDropdown(props: CalendarSettingsDropdownProps) {
-  const weekStartLabel = () =>
-    WEEK_START_OPTIONS.find((option) => option.value === props.weekStartsOn)
-      ?.label ?? 'Sunday';
-  const timeFormatLabel = () =>
-    TIME_FORMAT_OPTIONS.find((option) => option.value === props.timeFormat)
-      ?.label ?? '12-hour';
+export function CalendarSettingsDropdown() {
+  const calendarView = useCalendarView();
+  const sidePanel = useSidePanel();
+
+  const showCalendarVisibility = () => sidePanel?.isNarrow() ?? false;
+  const weekStartLabel = createMemo(
+    () =>
+      WEEK_START_OPTIONS.find(
+        (option) => option.value === calendarView.displaySettings.weekStartsOn
+      )?.label ?? 'Sunday'
+  );
+
+  const timeFormatLabel = createMemo(
+    () =>
+      TIME_FORMAT_OPTIONS.find(
+        (option) => option.value === calendarView.displaySettings.timeFormat
+      )?.label ?? '12-hour'
+  );
+
+  const changeSourceVisibility = (sourceId: string, visible: boolean) => {
+    calendarView.closeEventDetails();
+    calendarView.setSourceVisibility(sourceId, visible);
+  };
+
+  const changeShowWeekends = (showWeekends: boolean) => {
+    calendarView.closeEventDetails();
+    calendarView.setShowWeekends(showWeekends);
+  };
+
+  const changeWeekStartsOn = (weekStartsOn: CalendarWeekStart) => {
+    calendarView.closeEventDetails();
+    calendarView.setWeekStartsOn(weekStartsOn);
+  };
+
+  const changeTimeFormat = (timeFormat: CalendarTimeFormat) => {
+    calendarView.closeEventDetails();
+    calendarView.setTimeFormat(timeFormat);
+  };
 
   return (
     <Dropdown placement="bottom-end">
@@ -58,16 +74,16 @@ export function CalendarSettingsDropdown(props: CalendarSettingsDropdownProps) {
         <GearIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
-        <Show when={props.showCalendarVisibility}>
+        <Show when={showCalendarVisibility()}>
           <Dropdown.Group>
             <Dropdown.GroupLabel>Calendars</Dropdown.GroupLabel>
-            <For each={props.sources}>
+            <For each={calendarView.sources()}>
               {(source) => (
                 <Dropdown.CheckboxItem
-                  checked={props.isSourceVisible(source.id)}
+                  checked={calendarView.isSourceVisible(source.id)}
                   closeOnSelect={false}
                   onChange={(checked) =>
-                    props.onSourceVisibilityChange(source.id, checked)
+                    changeSourceVisibility(source.id, checked)
                   }
                 >
                   <span
@@ -85,9 +101,9 @@ export function CalendarSettingsDropdown(props: CalendarSettingsDropdownProps) {
         <Dropdown.Group>
           <Dropdown.GroupLabel>Display</Dropdown.GroupLabel>
           <Dropdown.CheckboxItem
-            checked={props.showWeekends}
+            checked={calendarView.displaySettings.showWeekends}
             closeOnSelect={false}
-            onChange={props.onShowWeekendsChange}
+            onChange={changeShowWeekends}
           >
             <span class="flex-1 truncate">Show weekends</span>
           </Dropdown.CheckboxItem>
@@ -105,11 +121,9 @@ export function CalendarSettingsDropdown(props: CalendarSettingsDropdownProps) {
             <Dropdown.SubContent class="min-w-36">
               <Dropdown.Group>
                 <Dropdown.RadioGroup
-                  value={String(props.weekStartsOn)}
+                  value={String(calendarView.displaySettings.weekStartsOn)}
                   onChange={(value) =>
-                    props.onWeekStartsOnChange(
-                      Number(value) as CalendarWeekStart
-                    )
+                    changeWeekStartsOn(Number(value) as CalendarWeekStart)
                   }
                 >
                   <For each={WEEK_START_OPTIONS}>
@@ -143,9 +157,9 @@ export function CalendarSettingsDropdown(props: CalendarSettingsDropdownProps) {
             <Dropdown.SubContent class="min-w-36">
               <Dropdown.Group>
                 <Dropdown.RadioGroup
-                  value={props.timeFormat}
+                  value={calendarView.displaySettings.timeFormat}
                   onChange={(value) =>
-                    props.onTimeFormatChange(value as CalendarTimeFormat)
+                    changeTimeFormat(value as CalendarTimeFormat)
                   }
                 >
                   <For each={TIME_FORMAT_OPTIONS}>

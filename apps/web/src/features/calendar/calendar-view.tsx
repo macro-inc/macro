@@ -5,60 +5,40 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import type {
-  DateSelectArg,
-  DateSpanApi,
-  DatesSetArg,
-  EventDropArg,
-} from '@fullcalendar/core';
+import type { DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin, {
-  type EventResizeDoneArg,
-} from '@fullcalendar/interaction';
+import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import { Button, Dropdown, Layer, Calendar as MiniCalendar } from '@ui';
+import { Button, Layer } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
-  For,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
+import { CalendarPeriodSelector } from './CalendarPeriodSelector';
 import { CalendarSettingsDropdown } from './CalendarSettingsDropdown';
 import { CalendarSidePanelSections } from './CalendarSidePanelSections';
+import {
+  CalendarViewContextProvider,
+  useCalendarView,
+} from './CalendarViewContext';
 import { CalendarEventContent } from './events/EventContent';
 import { EventDetailsPopover } from './events/EventDetailsPopover';
-import { EventEditorPopover } from './events/EventEditorPopover';
-import { mapCalendarEventToFullCalendar } from './events/event-mapper';
-import { createCalendarEventFixtures } from './events/fixtures';
-import type {
-  CalendarEvent,
-  CalendarSource,
-  CalendarTimeFormat,
-  CalendarWeekStart,
-} from './events/types';
+import type { CalendarTimeFormat } from './events/types';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
-  getDefaultCalendarTimeFormat,
 } from './time-format';
+import { useCalendarTimeGridHoverIndicator } from './useCalendarTimeGridHoverIndicator';
 import './calendar.css';
-
-const CALENDAR_VIEW_TABS = [
-  { value: 'dayGridMonth', label: 'Month' },
-  { value: 'timeGridWeek', label: 'Week' },
-  { value: 'timeGridDay', label: 'Day' },
-];
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -73,19 +53,15 @@ const formatWeekdayHeader = {
     weekday: 'short',
   }).format,
 };
+
 const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
+
 const isSameLocalDate = (first: Date, second: Date) =>
   first.getFullYear() === second.getFullYear() &&
   first.getMonth() === second.getMonth() &&
   first.getDate() === second.getDate();
-
-const parseCalendarEventDate = (value: string, allDay: boolean) => {
-  if (!allDay) return new Date(value);
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
-};
 
 function CurrentTimeAxisIndicator(props: {
   date: Date;
@@ -113,30 +89,44 @@ function getLocalScrollTime() {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
 }
 
-interface ResponsiveCalendarHostProps {
-  onNarrowDayHeadersChange: (useNarrowDayHeaders: boolean) => void;
+function useCalendarScrollFades(
+  calendarElement: Accessor<HTMLElement | undefined>
+) {
+  createEffect(
+    on(calendarElement, (element) => {
+      if (!element) return;
+
+      const handleCalendarScroll = (event: Event) => {
+        const scroller = event.target;
+        if (!(scroller instanceof HTMLElement)) return;
+
+        const harness = scroller.closest<HTMLElement>(
+          '.fc-scroller-harness-liquid'
+        );
+        if (!harness || scroller.parentElement !== harness) return;
+
+        harness.toggleAttribute(
+          'data-scrolled-from-top',
+          scroller.scrollTop > 1
+        );
+      };
+
+      element.addEventListener('scroll', handleCalendarScroll, true);
+
+      onCleanup(() => {
+        element.removeEventListener('scroll', handleCalendarScroll, true);
+      });
+    })
+  );
 }
 
-interface CalendarWorkspaceProps extends ResponsiveCalendarHostProps {
-  selectedEvent: CalendarEvent | undefined;
-  selectedEventAnchor: HTMLElement | undefined;
-  draftEventId: string | undefined;
-  sources: CalendarSource[];
-  showWeekends: boolean;
-  timeFormat: CalendarTimeFormat;
-  weekStartsOn: CalendarWeekStart;
-  isSourceVisible: (sourceId: string) => boolean;
-  onCloseEvent: () => void;
-  onSaveDraftEvent: (event: CalendarEvent) => void;
-  onShowWeekendsChange: (showWeekends: boolean) => void;
-  onSourceVisibilityChange: (sourceId: string, visible: boolean) => void;
-  onTimeFormatChange: (timeFormat: CalendarTimeFormat) => void;
-  onWeekStartsOnChange: (weekStartsOn: CalendarWeekStart) => void;
-}
-
-function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
+function ResponsiveCalendarHost() {
   const calendar = useFullCalendar();
+  const calendarView = useCalendarView();
   const [element, setElement] = createSignal<HTMLDivElement>();
+
+  useCalendarTimeGridHoverIndicator(element);
+  useCalendarScrollFades(element);
 
   createEffect(
     on(
@@ -149,98 +139,21 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
         const resizeObserver = new ResizeObserver(([entry]) => {
           observedWidth =
             entry?.contentRect.width ?? calendarElement.clientWidth;
+
           if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+
           resizeFrame = requestAnimationFrame(() => {
             resizeFrame = undefined;
-            props.onNarrowDayHeadersChange(observedWidth < 520);
+            calendarView.setUseNarrowDayHeaders(observedWidth < 520);
             calendarApi.updateSize();
           });
         });
+
         resizeObserver.observe(calendarElement);
-
-        const resetPointerTimeIndicator = () => {
-          for (const frame of calendarElement.querySelectorAll<HTMLElement>(
-            '.fc-timegrid-col-frame'
-          )) {
-            frame.style.removeProperty('--calendar-pointer-time-top');
-            frame.removeAttribute('data-pointer-time');
-          }
-        };
-
-        const handlePointerMove = (event: PointerEvent) => {
-          const frames = calendarElement.querySelectorAll<HTMLElement>(
-            '.fc-timegrid-col-frame'
-          );
-          let targetFrame: HTMLElement | undefined;
-
-          if (event.pointerType === 'mouse') {
-            for (const frame of frames) {
-              const frameBounds = frame.getBoundingClientRect();
-              const scrollerBounds = frame
-                .closest<HTMLElement>('.fc-scroller')
-                ?.getBoundingClientRect();
-              if (
-                scrollerBounds &&
-                event.clientX >= frameBounds.left &&
-                event.clientX <= frameBounds.right &&
-                event.clientY >= scrollerBounds.top &&
-                event.clientY <= scrollerBounds.bottom
-              ) {
-                targetFrame = frame;
-                break;
-              }
-            }
-          }
-
-          for (const frame of frames) {
-            frame.style.removeProperty('--calendar-pointer-time-top');
-            frame.removeAttribute('data-pointer-time');
-          }
-
-          if (targetFrame) {
-            const frameBounds = targetFrame.getBoundingClientRect();
-            targetFrame.style.setProperty(
-              '--calendar-pointer-time-top',
-              `${event.clientY - frameBounds.top}px`
-            );
-            targetFrame.setAttribute('data-pointer-time', '');
-          }
-        };
-
-        const handleCalendarScroll = (event: Event) => {
-          const scroller = event.target;
-          if (!(scroller instanceof HTMLElement)) return;
-
-          const harness = scroller.closest(
-            '.fc-scroller-harness-liquid'
-          ) as HTMLElement | null;
-          if (!harness || scroller.parentElement !== harness) return;
-
-          harness.toggleAttribute(
-            'data-scrolled-from-top',
-            scroller.scrollTop > 1
-          );
-          resetPointerTimeIndicator();
-        };
-        calendarElement.addEventListener('scroll', handleCalendarScroll, true);
-        calendarElement.addEventListener('pointermove', handlePointerMove);
-        calendarElement.addEventListener(
-          'pointerleave',
-          resetPointerTimeIndicator
-        );
 
         onCleanup(() => {
           resizeObserver.disconnect();
-          calendarElement.removeEventListener(
-            'scroll',
-            handleCalendarScroll,
-            true
-          );
-          calendarElement.removeEventListener('pointermove', handlePointerMove);
-          calendarElement.removeEventListener(
-            'pointerleave',
-            resetPointerTimeIndicator
-          );
+
           if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
         });
       }
@@ -253,7 +166,9 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
         tabIndex={-1}
         ref={(calendarElement) => {
           setElement(calendarElement);
-          props.onNarrowDayHeadersChange(calendarElement.clientWidth < 520);
+          calendarView.setUseNarrowDayHeaders(
+            calendarElement.clientWidth < 520
+          );
         }}
         class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl"
       />
@@ -263,145 +178,21 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
 
 /** A calendar-focused workspace view backed by FullCalendar. */
 export function CalendarView() {
-  const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
-  const [selectedEventId, setSelectedEventId] = createSignal<string>();
-  const [selectedEventAnchor, setSelectedEventAnchor] =
-    createSignal<HTMLElement>();
-  const [draftEventId, setDraftEventId] = createSignal<string>();
-  const [showWeekends, setShowWeekends] = createSignal(true);
-  const [weekStartsOn, setWeekStartsOn] = createSignal<CalendarWeekStart>(0);
-  const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
-    getDefaultCalendarTimeFormat()
+  return (
+    <CalendarViewContextProvider>
+      <CalendarViewContent />
+    </CalendarViewContextProvider>
   );
-  const initialCalendarEvents = createCalendarEventFixtures();
-  const [calendarEvents, setCalendarEvents] = createSignal(
-    initialCalendarEvents
-  );
-  const eventsById = createMemo(
-    () => new Map(calendarEvents().map((event) => [event.id, event]))
-  );
-  const calendarSources = Array.from(
-    new Map(
-      initialCalendarEvents.map((event) => [event.calendar.id, event.calendar])
-    ).values()
-  );
-  const [visibleSourceIds, setVisibleSourceIds] = createSignal(
-    new Set(calendarSources.map((source) => source.id))
-  );
-  const visibleEvents = createMemo(() =>
-    calendarEvents().filter((event) =>
-      visibleSourceIds().has(event.calendar.id)
-    )
-  );
-  const fullCalendarEvents = createMemo(() =>
-    visibleEvents().map((event) => ({
-      ...mapCalendarEventToFullCalendar(event),
-      editable: event.id !== draftEventId(),
-    }))
-  );
-  const canDrawEvent = (selection: DateSpanApi) =>
-    !visibleEvents().some((event) => {
-      if (event.id === draftEventId() || event.allDay !== selection.allDay) {
-        return false;
-      }
-      const eventStart = parseCalendarEventDate(event.start, event.allDay);
-      const eventEnd = parseCalendarEventDate(event.end, event.allDay);
-      return eventStart < selection.end && eventEnd > selection.start;
-    });
-  const selectedEvent = () => {
-    const eventId = selectedEventId();
-    return eventId ? eventsById().get(eventId) : undefined;
-  };
-  const clearEventSelection = () => {
-    setSelectedEventId(undefined);
-    setSelectedEventAnchor(undefined);
-  };
-  const discardDraftEvent = () => {
-    const eventId = draftEventId();
-    if (!eventId) return;
-    setCalendarEvents((current) =>
-      current.filter((event) => event.id !== eventId)
-    );
-    setDraftEventId(undefined);
-  };
-  const closeEventDetails = () => {
-    if (selectedEventId() === draftEventId()) discardDraftEvent();
-    clearEventSelection();
-  };
-  const saveDraftEvent = (event: CalendarEvent) => {
-    if (event.id !== draftEventId()) return;
-    setCalendarEvents((current) =>
-      current.map((currentEvent) =>
-        currentEvent.id === event.id ? event : currentEvent
-      )
-    );
-    setVisibleSourceIds((current) => new Set(current).add(event.calendar.id));
-    setDraftEventId(undefined);
-    clearEventSelection();
-  };
-  const setSourceVisibility = (sourceId: string, visible: boolean) => {
-    setVisibleSourceIds((current) => {
-      const next = new Set(current);
-      if (visible) next.add(sourceId);
-      else next.delete(sourceId);
-      return next;
-    });
-    if (!visible && selectedEvent()?.calendar.id === sourceId) {
-      closeEventDetails();
-    }
-  };
-  const createDraftEvent = (selection: DateSelectArg) => {
-    discardDraftEvent();
-    const defaultSource =
-      calendarSources.find((source) => source.id === 'personal') ??
-      calendarSources[0];
-    if (!defaultSource) return;
+}
 
-    const eventId = `calendar-draft-${crypto.randomUUID()}`;
-    const draftEvent: CalendarEvent = {
-      id: eventId,
-      title: 'New event',
-      start: selection.startStr,
-      end: selection.endStr,
-      allDay: selection.allDay,
-      calendar: defaultSource,
-    };
-
-    selection.view.calendar.unselect();
-    setDraftEventId(eventId);
-    setSelectedEventId(eventId);
-    setSelectedEventAnchor(undefined);
-    setVisibleSourceIds((current) => new Set(current).add(defaultSource.id));
-    setCalendarEvents((current) => [...current, draftEvent]);
-  };
-  const updateEventDates = ({
-    event,
-    revert,
-  }: EventDropArg | EventResizeDoneArg) => {
-    if (!eventsById().has(event.id) || !event.startStr || !event.endStr) {
-      revert();
-      return;
-    }
-
-    closeEventDetails();
-    setCalendarEvents((current) =>
-      current.map((calendarEvent) =>
-        calendarEvent.id === event.id
-          ? {
-              ...calendarEvent,
-              start: event.startStr,
-              end: event.endStr,
-              allDay: event.allDay,
-            }
-          : calendarEvent
-      )
-    );
-  };
+function CalendarViewContent() {
+  const calendarView = useCalendarView();
   let visibleRangeKey: string | undefined;
+
   const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
     const nextRangeKey = `${view.type}:${start.toISOString()}:${end.toISOString()}`;
     if (visibleRangeKey !== undefined && visibleRangeKey !== nextRangeKey) {
-      closeEventDetails();
+      calendarView.closeEventDetails();
     }
     visibleRangeKey = nextRangeKey;
   };
@@ -419,44 +210,29 @@ export function CalendarView() {
       headerToolbar={false}
       scrollTime={getLocalScrollTime()}
       scrollTimeReset={false}
-      weekends={showWeekends()}
-      firstDay={weekStartsOn()}
-      slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
-      eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[timeFormat()]}
+      weekends={calendarView.displaySettings.showWeekends}
+      firstDay={calendarView.displaySettings.weekStartsOn}
+      slotLabelFormat={
+        CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
+      }
+      eventTimeFormat={
+        CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
+      }
       eventStartEditable
       eventDurationEditable
       eventResizableFromStart
-      selectable={!isTouchDevice()}
-      selectMirror
-      selectAllow={canDrawEvent}
-      selectMinDistance={5}
-      snapDuration="00:15:00"
-      select={createDraftEvent}
-      events={fullCalendarEvents()}
-      eventDidMount={({ el, event }) => {
-        const currentAnchor = selectedEventAnchor();
-        if (
-          event.id === draftEventId() &&
-          (!currentAnchor || !currentAnchor.isConnected)
-        ) {
-          setSelectedEventAnchor(el);
-        }
-      }}
-      eventDragStart={closeEventDetails}
-      eventDrop={updateEventDates}
-      eventResizeStart={closeEventDetails}
-      eventResize={updateEventDates}
+      events={calendarView.fullCalendarEvents()}
+      eventDragStart={calendarView.closeEventDetails}
+      eventDrop={calendarView.updateEventDates}
+      eventResizeStart={calendarView.closeEventDetails}
+      eventResize={calendarView.updateEventDates}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
-        if (draftEventId() && event.id !== draftEventId()) {
-          discardDraftEvent();
-        }
-        setSelectedEventId(event.id);
-        setSelectedEventAnchor(el);
+        calendarView.selectEvent(event.id, el);
       }}
       datesSet={handleDatesSet}
       dayHeaderFormat={{
-        weekday: useNarrowDayHeaders() ? 'narrow' : 'short',
+        weekday: calendarView.useNarrowDayHeaders() ? 'narrow' : 'short',
       }}
       dayCellClassNames={({ date, view }) =>
         isSameLocalDate(date, view.calendar.getDate())
@@ -471,7 +247,7 @@ export function CalendarView() {
               view.type === 'timeGridDay'
                 ? formatWeekdayHeader.short(date)
                 : formatWeekdayHeader[
-                    useNarrowDayHeaders() ? 'narrow' : 'short'
+                    calendarView.useNarrowDayHeaders() ? 'narrow' : 'short'
                   ](date);
 
             return (
@@ -497,7 +273,7 @@ export function CalendarView() {
 
       <FullCalendar.EventContent>
         {(renderProps) => {
-          const event = eventsById().get(renderProps.event.id);
+          const event = calendarView.eventsById().get(renderProps.event.id);
           if (!event) return null;
 
           return (
@@ -520,241 +296,73 @@ export function CalendarView() {
           return (
             <CurrentTimeAxisIndicator
               date={new Date()}
-              timeFormat={timeFormat()}
+              timeFormat={calendarView.displaySettings.timeFormat}
             />
           );
         }}
       </FullCalendar.NowIndicatorContent>
 
       <SidePanel.Layout>
-        <CalendarWorkspace
-          onNarrowDayHeadersChange={setUseNarrowDayHeaders}
-          selectedEvent={selectedEvent()}
-          selectedEventAnchor={selectedEventAnchor()}
-          draftEventId={draftEventId()}
-          sources={calendarSources}
-          showWeekends={showWeekends()}
-          timeFormat={timeFormat()}
-          weekStartsOn={weekStartsOn()}
-          isSourceVisible={(sourceId) => visibleSourceIds().has(sourceId)}
-          onCloseEvent={closeEventDetails}
-          onSaveDraftEvent={saveDraftEvent}
-          onShowWeekendsChange={setShowWeekends}
-          onSourceVisibilityChange={setSourceVisibility}
-          onTimeFormatChange={setTimeFormat}
-          onWeekStartsOnChange={setWeekStartsOn}
-        />
+        <CalendarWorkspace />
       </SidePanel.Layout>
     </FullCalendar.Root>
   );
 }
 
-function CalendarWorkspace(props: CalendarWorkspaceProps) {
-  const panel = useSplitPanelOrThrow();
-  const sidePanel = useSidePanel();
-  const calendar = useFullCalendar();
-  const [isTodayVisible, setIsTodayVisible] = createSignal(true);
-  const initialDate = new Date();
-  const [miniCalendarFocusedDay, setMiniCalendarFocusedDay] =
-    createSignal(initialDate);
-  const [customDateMonth, setCustomDateMonth] = createSignal(initialDate);
-  const [customDateFocusedDay, setCustomDateFocusedDay] =
-    createSignal(initialDate);
-  const [viewDropdownOpen, setViewDropdownOpen] = createSignal(false);
-  let todayRefreshTimer: number | undefined;
-  const isNarrow = () => sidePanel?.isNarrow() ?? false;
-  const currentDate = () =>
-    calendar.dateInfo()?.view.calendar.getDate() ?? initialDate;
-  const activeView = () => calendar.dateInfo()?.view.type ?? 'dayGridMonth';
-  const dateTitle = () => formatMonthTitle(currentDate());
-  const visibleRange = () => {
-    const dateInfo = calendar.dateInfo();
-    return dateInfo ? { end: dateInfo.end, start: dateInfo.start } : undefined;
-  };
-  const miniCalendarHighlightedRange = () =>
-    activeView() === 'timeGridWeek' ? visibleRange() : undefined;
+function createLocalToday() {
+  const [today, setToday] = createSignal(new Date());
+  let refreshTimer: number | undefined;
 
-  const refreshTodayVisibility = () => {
-    const range = visibleRange();
-    if (!range) return;
-
+  const scheduleRefresh = () => {
     const now = new Date();
-    setIsTodayVisible(now >= range.start && now < range.end);
-
     const nextMidnight = new Date(now);
     nextMidnight.setDate(nextMidnight.getDate() + 1);
     nextMidnight.setHours(0, 0, 0, 0);
-    if (todayRefreshTimer !== undefined) clearTimeout(todayRefreshTimer);
-    todayRefreshTimer = window.setTimeout(
-      refreshTodayVisibility,
+
+    refreshTimer = window.setTimeout(
+      () => {
+        setToday(new Date());
+        scheduleRefresh();
+      },
       nextMidnight.getTime() - now.getTime() + 100
     );
   };
 
-  const changeView = (view: string) => {
-    setViewDropdownOpen(false);
-    const calendarApi = calendar.api();
-    if (calendarApi?.view.type === view) return;
-    calendarApi?.changeView(view);
-  };
+  scheduleRefresh();
 
-  const renderPeriodNavigation = () => (
-    <div class="flex shrink-0 items-center gap-1">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="size-7 rounded-lg [&_svg]:size-4!"
-        label="Previous period"
-        onClick={() => calendar.api()?.prev()}
-      >
-        <CaretLeftIcon class="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="size-7 rounded-lg [&_svg]:size-4!"
-        label="Next period"
-        onClick={() => calendar.api()?.next()}
-      >
-        <CaretRightIcon class="size-4" />
-      </Button>
-    </div>
-  );
-
-  const selectMiniCalendarDate = (date: Date | null) => {
-    if (!date) return;
-    setMiniCalendarFocusedDay(date);
-    calendar.api()?.gotoDate(date);
-  };
-
-  const navigateMiniCalendarMonth = (month: Date) => {
-    const focusedDay = miniCalendarFocusedDay();
-    const targetDate =
-      focusedDay.getFullYear() === month.getFullYear() &&
-      focusedDay.getMonth() === month.getMonth()
-        ? focusedDay
-        : month;
-    setMiniCalendarFocusedDay(targetDate);
-    calendar.api()?.gotoDate(targetDate);
-  };
-
-  const syncCustomDatePicker = () => {
-    const date = currentDate();
-    setCustomDateMonth(date);
-    setCustomDateFocusedDay(date);
-  };
-
-  const navigateCustomDateMonth = (month: Date) => {
-    const focusedDay = customDateFocusedDay();
-    const targetDate =
-      focusedDay.getFullYear() === month.getFullYear() &&
-      focusedDay.getMonth() === month.getMonth()
-        ? focusedDay
-        : month;
-    setCustomDateMonth(month);
-    setCustomDateFocusedDay(targetDate);
-  };
-
-  const selectCustomDate = (date: Date | null) => {
-    if (!date) return;
-    setCustomDateMonth(date);
-    setCustomDateFocusedDay(date);
-    setMiniCalendarFocusedDay(date);
-    calendar.api()?.gotoDate(date);
-    setViewDropdownOpen(false);
-  };
-
-  const renderPeriodSelector = () => (
-    <Dropdown
-      open={viewDropdownOpen()}
-      onOpenChange={setViewDropdownOpen}
-      placement="bottom-end"
-    >
-      <Dropdown.Trigger
-        depth={2}
-        aria-label="Choose calendar view"
-        class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-panel px-2 text-xs font-medium text-ink"
-      >
-        {CALENDAR_VIEW_TABS.find((view) => view.value === activeView())
-          ?.label ?? 'Month'}
-        <CaretDownIcon class="size-3 text-ink-muted" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-36">
-        <Dropdown.Group>
-          <Dropdown.RadioGroup value={activeView()} onChange={changeView}>
-            <For each={CALENDAR_VIEW_TABS}>
-              {(view) => (
-                <Dropdown.RadioItem closeOnSelect value={view.value}>
-                  <span class="flex-1">{view.label}</span>
-                  <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
-                  </Dropdown.ItemIndicator>
-                </Dropdown.RadioItem>
-              )}
-            </For>
-          </Dropdown.RadioGroup>
-        </Dropdown.Group>
-        <Show when={isNarrow()}>
-          <Dropdown.Group>
-            <Dropdown.Sub
-              onOpenChange={(open) => {
-                if (open) syncCustomDatePicker();
-              }}
-            >
-              <Dropdown.SubTrigger>
-                <CalendarIcon class="size-3.5 text-ink-muted" />
-                <span class="flex-1">Custom date…</span>
-                <CaretRightIcon class="size-3 text-ink-muted" />
-              </Dropdown.SubTrigger>
-              <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">
-                <Dropdown.Group class="p-3">
-                  <MiniCalendar
-                    required
-                    fixedWeeks
-                    startOfWeek={props.weekStartsOn}
-                    value={currentDate()}
-                    month={customDateMonth()}
-                    focusedDay={customDateFocusedDay()}
-                    highlightedRange={miniCalendarHighlightedRange()}
-                    onMonthChange={navigateCustomDateMonth}
-                    onFocusedDayChange={setCustomDateFocusedDay}
-                    onValueChange={selectCustomDate}
-                  />
-                </Dropdown.Group>
-              </Dropdown.SubContent>
-            </Dropdown.Sub>
-          </Dropdown.Group>
-        </Show>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-
-  const changeNarrowSourceVisibility = (sourceId: string, visible: boolean) => {
-    props.onCloseEvent();
-    props.onSourceVisibilityChange(sourceId, visible);
-  };
-
-  const changeShowWeekends = (showWeekends: boolean) => {
-    props.onCloseEvent();
-    props.onShowWeekendsChange(showWeekends);
-  };
-
-  const changeWeekStartsOn = (weekStartsOn: CalendarWeekStart) => {
-    props.onCloseEvent();
-    props.onWeekStartsOnChange(weekStartsOn);
-  };
-
-  const changeTimeFormat = (timeFormat: CalendarTimeFormat) => {
-    props.onCloseEvent();
-    props.onTimeFormatChange(timeFormat);
-  };
-
-  createEffect(on(calendar.dateInfo, refreshTodayVisibility));
-  createEffect(on(currentDate, setMiniCalendarFocusedDay));
-  onMount(() => panel.handle.setDisplayName('Calendar'));
   onCleanup(() => {
-    if (todayRefreshTimer !== undefined) clearTimeout(todayRefreshTimer);
+    if (refreshTimer !== undefined) clearTimeout(refreshTimer);
   });
+
+  return today;
+}
+
+function CalendarWorkspace() {
+  const panel = useSplitPanelOrThrow();
+  const sidePanel = useSidePanel();
+  const calendar = useFullCalendar();
+  const calendarView = useCalendarView();
+  const initialDate = new Date();
+  const today = createLocalToday();
+
+  const isNarrow = () => sidePanel?.isNarrow() ?? false;
+  const currentDate = createMemo(
+    () => calendar.dateInfo()?.view.calendar.getDate() ?? initialDate
+  );
+  const dateTitle = createMemo(() => formatMonthTitle(currentDate()));
+  const visibleRange = createMemo(() => {
+    const dateInfo = calendar.dateInfo();
+    return dateInfo ? { end: dateInfo.end, start: dateInfo.start } : undefined;
+  });
+  const isTodayVisible = createMemo(() => {
+    const range = visibleRange();
+    if (!range) return true;
+
+    const currentDay = today();
+    return currentDay >= range.start && currentDay < range.end;
+  });
+
+  onMount(() => panel.handle.setDisplayName('Calendar'));
 
   return (
     <>
@@ -779,75 +387,55 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
           </div>
         </HeaderIsland>
       </SplitHeaderLeft>
+
       <SplitHeaderRight>
         <HeaderIsland class="px-1">
           <div class="flex items-center gap-1">
-            {renderPeriodSelector()}
-            {renderPeriodNavigation()}
-            <CalendarSettingsDropdown
-              sources={props.sources}
-              showCalendarVisibility={isNarrow()}
-              showWeekends={props.showWeekends}
-              timeFormat={props.timeFormat}
-              weekStartsOn={props.weekStartsOn}
-              isSourceVisible={props.isSourceVisible}
-              onShowWeekendsChange={changeShowWeekends}
-              onSourceVisibilityChange={changeNarrowSourceVisibility}
-              onTimeFormatChange={changeTimeFormat}
-              onWeekStartsOnChange={changeWeekStartsOn}
-            />
+            <CalendarPeriodSelector />
+            <div class="flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="size-7 rounded-lg [&_svg]:size-4!"
+                label="Previous period"
+                onClick={() => calendar.api()?.prev()}
+              >
+                <CaretLeftIcon class="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="size-7 rounded-lg [&_svg]:size-4!"
+                label="Next period"
+                onClick={() => calendar.api()?.next()}
+              >
+                <CaretRightIcon class="size-4" />
+              </Button>
+            </div>
+            <CalendarSettingsDropdown />
           </div>
         </HeaderIsland>
       </SplitHeaderRight>
-      <CalendarSidePanelSections
-        currentDate={currentDate()}
-        focusedDay={miniCalendarFocusedDay()}
-        highlightedRange={miniCalendarHighlightedRange()}
-        selectedEvent={props.selectedEvent}
-        draftEventId={props.draftEventId}
-        sources={props.sources}
-        timeFormat={props.timeFormat}
-        weekStartsOn={props.weekStartsOn}
-        isSourceVisible={props.isSourceVisible}
-        onCloseEvent={props.onCloseEvent}
-        onSaveDraftEvent={props.onSaveDraftEvent}
-        onFocusedDayChange={setMiniCalendarFocusedDay}
-        onMonthChange={navigateMiniCalendarMonth}
-        onSelectDate={selectMiniCalendarDate}
-        onSourceVisibilityChange={props.onSourceVisibilityChange}
-      />
-      <Show when={isNarrow() ? props.selectedEvent : undefined}>
+
+      <CalendarSidePanelSections />
+
+      <Show when={isNarrow() ? calendarView.selectedEvent() : undefined}>
         {(event) => (
-          <Show
-            when={props.draftEventId === event().id}
-            fallback={
-              <EventDetailsPopover
-                anchor={props.selectedEventAnchor}
-                event={event()}
-                open={props.selectedEventAnchor !== undefined}
-                timeFormat={props.timeFormat}
-                onOpenChange={(open) => {
-                  if (!open) props.onCloseEvent();
-                }}
-              />
-            }
-          >
-            <EventEditorPopover
-              anchor={props.selectedEventAnchor}
-              event={event()}
-              open={props.selectedEventAnchor !== undefined}
-              sources={props.sources}
-              onCancel={props.onCloseEvent}
-              onSave={props.onSaveDraftEvent}
-            />
-          </Show>
+          <EventDetailsPopover
+            anchor={calendarView.selectedEventAnchor()}
+            event={event()}
+            open={calendarView.selectedEventAnchor() !== undefined}
+            timeFormat={calendarView.displaySettings.timeFormat}
+            onOpenChange={(open) => {
+              if (!open) calendarView.closeEventDetails();
+            }}
+          />
         )}
       </Show>
+
       <main class="calendar-view flex size-full min-h-0">
         <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
-          <ResponsiveCalendarHost
-            onNarrowDayHeadersChange={props.onNarrowDayHeadersChange}
-          />
+          <ResponsiveCalendarHost />
         </div>
       </main>
     </>

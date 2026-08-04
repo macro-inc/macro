@@ -447,9 +447,9 @@
 	transition-delay: 0s;
 }
 
-.calendar-view .fc .fc-timegrid-col-frame[data-pointer-time]::after {
+.calendar-view .fc .fc-timegrid-col-frame[data-time-grid-hover]::after {
 	position: absolute;
-	top: var(--calendar-pointer-time-top);
+	top: var(--calendar-time-grid-hover-top);
 	right: 0;
 	left: 0;
 	z-index: 4;
