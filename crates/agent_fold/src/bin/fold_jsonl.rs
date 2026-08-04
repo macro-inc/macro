@@ -10,14 +10,13 @@
 //! ```
 
 use agent_fold::domain::fold::fold;
+use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
     Author, FoldedMessage, MessagePart, Permission, PermissionOutcome, StopReason, ToolDetail,
     ToolStatus, ToolUse,
 };
 use agent_fold::domain::ports::LogRepo;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
-use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use clap::Parser;
 use serde::Deserialize;
 use std::collections::VecDeque;
@@ -104,7 +103,7 @@ impl LogRepo for JsonlRecording {
     async fn list_by_session(
         &self,
         session: AgentSessionId,
-    ) -> Result<VecDeque<AgentSessionLog>, AgentSessionError> {
+    ) -> Result<VecDeque<AgentSessionLog>, rootcause::Report> {
         Ok(if session == self.session {
             self.entries.clone()
         } else {

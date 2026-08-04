@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { ApiChannelKind } from './apiChannelKind';
 import type { ApiChannelListParticipant } from './apiChannelListParticipant';
 import type { ApiChannelListType } from './apiChannelListType';
 import type { ApiChannelWithLatestFrecencyScore } from './apiChannelWithLatestFrecencyScore';
@@ -34,6 +35,9 @@ export interface ApiChannelWithLatest {
   interacted_at?: ApiChannelWithLatestInteractedAt;
   /** Whether the requesting user is an active participant of the channel. */
   is_participant: boolean;
+  /** Channel kind: `normal`, or `agent` for an agent session's dedicated
+channel whose agent messages are folded placeholders. */
+  kind: ApiChannelKind;
   latest_message?: ApiChannelWithLatestLatestMessage;
   latest_non_thread_message?: ApiChannelWithLatestLatestNonThreadMessage;
   /** Channel name. */

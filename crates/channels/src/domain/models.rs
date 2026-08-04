@@ -148,8 +148,12 @@ pub struct ChannelMessage {
     pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
-    /// Message body.
-    pub content: String,
+    /// Message body. `None` on agent-turn placeholder messages, whose body is
+    /// folded from the agent session log on read instead of being stored.
+    pub content: Option<String>,
+    /// The agent session turn this placeholder renders, as the composite
+    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
+    pub agent_session_message_id: Option<String>,
     /// When the message was created.
     pub created_at: DateTime<Utc>,
     /// When the message was last updated.
@@ -183,8 +187,8 @@ pub struct RecentChannelMessage {
     pub thread_id: Option<Uuid>,
     /// Sender actor id.
     pub sender_id: String,
-    /// Message body.
-    pub content: String,
+    /// Message body. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
     /// Message creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Message update timestamp.
@@ -226,8 +230,11 @@ pub struct ThreadReply {
     pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
-    /// Reply body.
-    pub content: String,
+    /// Reply body. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
+    /// The agent session turn this placeholder renders, as the composite
+    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
+    pub agent_session_message_id: Option<String>,
     /// When the reply was created.
     pub created_at: DateTime<Utc>,
     /// When the reply was last updated.
@@ -367,8 +374,11 @@ pub struct ChannelContextMessage {
     pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
-    /// Message content.
-    pub content: String,
+    /// Message content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
+    /// The agent session turn this placeholder renders, as the composite
+    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
+    pub agent_session_message_id: Option<String>,
     /// When the message was created.
     pub created_at: DateTime<Utc>,
     /// When the message was last updated.
@@ -392,8 +402,9 @@ pub struct AttachmentChannelReference {
     pub thread_id: Option<Uuid>,
     /// Sender of the message.
     pub sender_id: String,
-    /// Full message content (might be used for preview/snippet).
-    pub message_content: String,
+    /// Full message content (might be used for preview/snippet). `None` on
+    /// agent-turn placeholder messages.
+    pub message_content: Option<String>,
     /// When the message itself was created.
     pub message_created_at: DateTime<Utc>,
     /// When the attachment row was created.
@@ -437,8 +448,11 @@ pub struct TopLevelMessageRow {
     pub sender_id: String,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
-    /// Message content.
-    pub content: String,
+    /// Message content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
+    /// The agent session turn this placeholder renders, as the composite
+    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
+    pub agent_session_message_id: Option<String>,
     /// Created timestamp.
     pub created_at: DateTime<Utc>,
     /// Updated timestamp.
@@ -471,8 +485,11 @@ pub struct ThreadReplyRow {
     pub sender_id: String,
     /// For an agent (bot) reply, the id of the user who triggered it.
     pub triggered_by: Option<String>,
-    /// Reply content.
-    pub content: String,
+    /// Reply content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
+    /// The agent session turn this placeholder renders, as the composite
+    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
+    pub agent_session_message_id: Option<String>,
     /// Created timestamp.
     pub created_at: DateTime<Utc>,
     /// Updated timestamp.
@@ -510,6 +527,28 @@ impl std::fmt::Display for ChannelType {
             ChannelType::Team => f.write_str("team"),
         }
     }
+}
+
+/// Kind of channel: an ordinary channel, or an agent session's dedicated
+/// channel whose agent messages are placeholders folded from the session log.
+///
+/// Stored in the TEXT `comms_channels.kind` column - `type_name = "TEXT"`
+/// points the fieldless enum derive at the built-in string type instead of a
+/// Postgres enum.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "TEXT", rename_all = "snake_case")
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelKind {
+    /// An ordinary channel.
+    #[default]
+    Normal,
+    /// An agent session's dedicated channel.
+    Agent,
 }
 
 /// Request to add a user to all organization channels.
@@ -1036,8 +1075,8 @@ pub struct MutatedMessage {
     pub sender_id: ChannelSender<'static>,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
-    /// Message body.
-    pub content: String,
+    /// Message body. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
     /// Created timestamp.
     pub created_at: DateTime<Utc>,
     /// Updated timestamp.
@@ -1300,6 +1339,8 @@ pub struct ChannelListItem {
     pub name: Option<String>,
     /// Channel type.
     pub channel_type: ChannelType,
+    /// Channel kind.
+    pub kind: ChannelKind,
     /// Organization id.
     pub org_id: Option<i64>,
     /// Team id.

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  ConnectAgentRuntimeParams,
   CreateAgentRequest,
   EmptyResponse,
   GetAgentResponse,
@@ -347,6 +348,73 @@ export const agentProxyHealth = async (
     status: res.status,
     headers: res.headers,
   } as agentProxyHealthResponse;
+};
+
+/**
+ * One endpoint serves every session, disambiguated by `?id=` rather than a
+listener per session. `agent_runtime_protocol` deliberately carries no
+session identifier on the wire - a connection hosts exactly one agent
+execution, so the wire protocol has no routing table - which makes this
+handler the place that identifier actually lives: matched against the
+query parameter the runtime dialed with, then handed on the same way for
+every session.
+ * @summary Accept one agent runtime's WebSocket connection.
+ */
+export type connectAgentRuntimeResponse101 = {
+  data: void;
+  status: 101;
+};
+
+export type connectAgentRuntimeResponse400 = {
+  data: void;
+  status: 400;
+};
+export type connectAgentRuntimeResponseError = (
+  | connectAgentRuntimeResponse101
+  | connectAgentRuntimeResponse400
+) & {
+  headers: Headers;
+};
+
+export type connectAgentRuntimeResponse = connectAgentRuntimeResponseError;
+
+export const getConnectAgentRuntimeUrl = (
+  params: ConnectAgentRuntimeParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/runtime?${stringifiedParams}`
+    : `/runtime`;
+};
+
+export const connectAgentRuntime = async (
+  params: ConnectAgentRuntimeParams,
+  options?: RequestInit
+): Promise<connectAgentRuntimeResponse> => {
+  const res = await fetch(getConnectAgentRuntimeUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: connectAgentRuntimeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as connectAgentRuntimeResponse;
 };
 
 /**

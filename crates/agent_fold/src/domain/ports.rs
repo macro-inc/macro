@@ -9,11 +9,10 @@
 //! materialized somewhere, only the implementation moves.
 //!
 //! [`LogRepo`] is the driven port: the one capability folding needs from the
-//! outside, reading a session's raw log. It deliberately does not reuse
-//! [`agent_session::domain::ports::AgentSessionLogRepo`] - this crate names
-//! the contract it depends on, rather than reaching into another domain's
-//! ports module, so whatever stores the log (today, `agent_session`'s
-//! Postgres adapter) is the one that implements it.
+//! outside, reading a session's raw log. This crate sits at the bottom of
+//! the agent session stack, so it names the contract in its own vocabulary
+//! ([`crate::domain::log`]) and whoever stores the log (today,
+//! `agent_session`'s Postgres adapter) implements it.
 //!
 //! [`FoldSession`] sits between the two: "fold this session's log" as its own
 //! capability, blanket-implemented for anything that is a [`LogRepo`] so
@@ -24,22 +23,21 @@
 //! deliberate choice rather than falling out of whatever implements
 //! [`FoldSession`].
 
+use crate::domain::log::{AgentSessionId, AgentSessionLog};
 use crate::domain::model::{FoldedMessage, MessageId};
-use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, AgentSessionLog};
 use std::collections::VecDeque;
 
 /// Read a session's raw protocol log.
 ///
-/// The one capability folding needs from storage, named by this crate rather
-/// than borrowed from `agent_session`'s own ports - see the module docs.
+/// The one capability folding needs from storage, named by this crate in its
+/// own vocabulary - see the module docs.
 pub trait LogRepo {
     /// A session's log rows, oldest first. A session with no log returns an
     /// empty queue.
     fn list_by_session(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<VecDeque<AgentSessionLog>, AgentSessionError>> + Send;
+    ) -> impl Future<Output = Result<VecDeque<AgentSessionLog>, rootcause::Report>> + Send;
 }
 
 /// Fold a session's log into renderable messages.
@@ -69,4 +67,16 @@ pub trait FoldedMessageRepo {
         session: AgentSessionId,
         id: MessageId,
     ) -> impl Future<Output = Result<Option<FoldedMessage>, rootcause::Report>> + Send;
+
+    /// The keys of the messages the session's log derives, oldest first. A
+    /// session with no log derives none.
+    ///
+    /// This is what `agent_session`'s service polls on every append to decide
+    /// which messages still need a comms placeholder. It is keyed per message
+    /// rather than per turn because a turn's prompt and its reply are
+    /// rendered as separate channel messages with different senders.
+    fn message_ids(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<MessageId>, rootcause::Report>> + Send;
 }

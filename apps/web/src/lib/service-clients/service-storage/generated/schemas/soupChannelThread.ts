@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { SoupChannelThreadContent } from './soupChannelThreadContent';
 import type { SoupChannelThreadDeletedAt } from './soupChannelThreadDeletedAt';
 import type { SoupChannelThreadEditedAt } from './soupChannelThreadEditedAt';
 import type { SoupCountedReaction } from './soupCountedReaction';
@@ -23,8 +24,8 @@ export interface SoupChannelThread {
   attachments: SoupMessageAttachment[];
   /** Channel id. */
   channel_id: string;
-  /** Message content. */
-  content: string;
+  /** Message content. `None` on agent-turn placeholder messages. */
+  content?: SoupChannelThreadContent;
   /** Creation timestamp. */
   created_at: string;
   /** Deletion timestamp. */

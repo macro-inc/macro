@@ -32,7 +32,8 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
         channel_id: Uuid::nil(),
         sender_id: "user_1".into(),
         triggered_by: None,
-        content: format!("msg {minutes_ago}"),
+        content: Some(format!("msg {minutes_ago}")),
+        agent_session_message_id: None,
         created_at: now - chrono::Duration::minutes(minutes_ago),
         updated_at: now - chrono::Duration::minutes(minutes_ago),
         edited_at: None,
@@ -102,7 +103,8 @@ async fn returns_messages_with_thread_info() {
         thread_id: parent_id,
         sender_id: "user_2".into(),
         triggered_by: None,
-        content: "reply".into(),
+        content: Some("reply".into()),
+        agent_session_message_id: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         edited_at: None,
@@ -202,7 +204,8 @@ async fn attaches_bot_profiles_to_bot_authored_messages() {
         thread_id: parent_id,
         sender_id: seeded_bot.into_storage_id().to_string(),
         triggered_by: None,
-        content: "reply".into(),
+        content: Some("reply".into()),
+        agent_session_message_id: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         edited_at: None,
@@ -315,7 +318,7 @@ impl FakeMutationRepo {
             thread_id: None,
             sender_id: ChannelSender::parse_from_str(sender).unwrap().into_owned(),
             triggered_by: None,
-            content: "hello".to_string(),
+            content: Some("hello".to_string()),
             created_at: now,
             updated_at: now,
             edited_at: None,
@@ -683,7 +686,7 @@ impl ChannelRepo for FakeMutationRepo {
         state.message.channel_id = channel_id;
         state.message.sender_id = sender_id.into_owned();
         state.message.triggered_by = triggered_by_user_id;
-        state.message.content = content;
+        state.message.content = Some(content);
         state.message.thread_id = thread_id;
         Ok(state.message.clone())
     }
@@ -796,7 +799,7 @@ impl ChannelRepo for FakeMutationRepo {
     ) -> Result<MutatedMessage, Self::Err> {
         let mut state = self.state.lock().unwrap();
         state.patched_content = Some(content.clone());
-        state.message.content = content;
+        state.message.content = Some(content);
         state.message.edited_at = Some(Utc::now());
         Ok(state.message.clone())
     }
@@ -1347,7 +1350,7 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
     };
     assert_eq!(*emitted_channel_id, channel_id);
     assert_eq!(message.id, message_id);
-    assert_eq!(message.content, "edited");
+    assert_eq!(message.content.as_deref(), Some("edited"));
     assert_eq!(nonce.as_deref(), Some("edit-nonce"));
     assert_eq!(recipients.len(), 1);
     assert_eq!(recipients[0].as_ref(), "macro|thread@test.com");
@@ -1546,7 +1549,7 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
     else {
         panic!("expected MessageChanged event, got {:?}", emitted[0]);
     };
-    assert_eq!(message.content, "final answer");
+    assert_eq!(message.content.as_deref(), Some("final answer"));
     let posted_notification = posted_notification
         .as_ref()
         .expect("expected posted notification context");
@@ -1992,7 +1995,8 @@ async fn thread_replies_resolve_and_hydrate() {
         thread_id: parent.id,
         sender_id: "macro|user-a@test.com".into(),
         triggered_by: None,
-        content: "reply 1".into(),
+        content: Some("reply 1".into()),
+        agent_session_message_id: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         edited_at: None,
@@ -2002,7 +2006,8 @@ async fn thread_replies_resolve_and_hydrate() {
         thread_id: parent.id,
         sender_id: "macro|user-b@test.com".into(),
         triggered_by: None,
-        content: "reply 2".into(),
+        content: Some("reply 2".into()),
+        agent_session_message_id: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         edited_at: None,

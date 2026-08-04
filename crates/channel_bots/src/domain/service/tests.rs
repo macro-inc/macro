@@ -288,13 +288,14 @@ fn context_message(
         channel_id,
         thread_id: None,
         sender_id: sender_id.to_string(),
-        content: content.to_string(),
+        content: Some(content.to_string()),
         created_at: now,
         updated_at: now,
         edited_at: None,
         deleted_at: None,
         bot_profile: None,
         triggered_by: None,
+        agent_session_message_id: None,
     }
 }
 
@@ -304,13 +305,14 @@ fn thread_reply(id: Uuid, sender_id: &str, content: &str) -> ThreadReply {
         id,
         sender_id: sender_id.to_string(),
         bot_profile: None,
-        content: content.to_string(),
+        content: Some(content.to_string()),
         created_at: now,
         updated_at: now,
         edited_at: None,
         triggered_by: None,
         reactions: Vec::new(),
         attachments: Vec::new(),
+        agent_session_message_id: None,
     }
 }
 
@@ -329,7 +331,7 @@ fn mention_event(
             channel_id,
             thread_id,
             sender_id: Sender::new_from_user(user_id(sender_email)),
-            content: content.to_string(),
+            content: Some(content.to_string()),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             edited_at: None,

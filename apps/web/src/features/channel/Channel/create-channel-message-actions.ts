@@ -167,7 +167,7 @@ export function createChannelMessageActions(
         !isDeleted && message.content
           ? async () => {
               try {
-                await effects.copyToClipboard(message.content);
+                await effects.copyToClipboard(message.content ?? '');
                 effects.notifyCopyMessageTextSuccess();
               } catch (error) {
                 effects.notifyCopyMessageTextFailure(error);

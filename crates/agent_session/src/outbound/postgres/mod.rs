@@ -1,15 +1,16 @@
 //! Postgres implementation of the agent session and agent session log
-//! repositories.
+//! repositories, the fold's log source, and the comms placeholder writer.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
-    Message, SessionStatus,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
+    CreateAgentSessionParams, Message, MessageId, SessionStatus, composite_message_id,
+    parse_composite_message_id,
 };
-use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
@@ -18,6 +19,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
+use std::collections::HashSet;
 
 /// Postgres implementation of [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 #[derive(Debug, Clone)]
@@ -467,5 +469,105 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .into_iter()
             .map(TryInto::try_into)
             .collect::<anyhow::Result<Vec<_>>>()?)
+    }
+}
+
+/// Folding reads the log through `agent_fold`'s own port; this adapter
+/// already speaks [`AgentSessionLogRepo`], so bridging is one line.
+impl agent_fold::domain::ports::LogRepo for PgAgentSessionRepo {
+    async fn list_by_session(
+        &self,
+        session: AgentSessionId,
+    ) -> std::result::Result<std::collections::VecDeque<AgentSessionLog>, rootcause::Report> {
+        let log = AgentSessionLogRepo::list_by_session(self, session)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(log.into())
+    }
+}
+
+impl Comms for PgAgentSessionRepo {
+    async fn messages_with_placeholders(
+        &self,
+        session: &AgentSession,
+    ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
+        let ids = sqlx::query_scalar!(
+            r#"
+            SELECT agent_session_message_id AS "agent_session_message_id!"
+            FROM comms_messages
+            WHERE channel_id = $1 AND agent_session_message_id IS NOT NULL
+            "#,
+            session.channel_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| rootcause::report!(error))?;
+
+        Ok(ids
+            .iter()
+            .filter_map(|id| parse_composite_message_id(session.id, id))
+            .collect())
+    }
+
+    async fn create_message_placeholder(
+        &self,
+        session: &AgentSession,
+        id: MessageId,
+        author: &Author,
+    ) -> std::result::Result<(), rootcause::Report> {
+        let sender = self.placeholder_sender(session, author).await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_messages (id, channel_id, sender_id, agent_session_message_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (agent_session_message_id) WHERE agent_session_message_id IS NOT NULL
+                DO NOTHING
+            "#,
+            macro_uuid::generate_uuid_v7(),
+            session.channel_id,
+            sender,
+            composite_message_id(session.id, id),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|error| rootcause::report!(error))?;
+
+        Ok(())
+    }
+}
+
+impl PgAgentSessionRepo {
+    /// The `sender_id` a placeholder row carries.
+    ///
+    /// The agent's messages are sent by the session's bot. A user's are sent
+    /// by that user - but the fold only knows who they were when the log row
+    /// carried a `user_id`, which recorded and replayed sessions do not. When
+    /// it does not, the session's channel owner stands in: they are the only
+    /// person the session is known to belong to.
+    async fn placeholder_sender(
+        &self,
+        session: &AgentSession,
+        author: &Author,
+    ) -> std::result::Result<String, rootcause::Report> {
+        let user_id = match author {
+            Author::Agent => return Ok(session.bot_id.into_storage_id().to_string()),
+            Author::User(Some(user_id)) => return Ok(user_id.to_string()),
+            Author::User(None) => sqlx::query_scalar!(
+                r#"
+                SELECT user_id
+                FROM comms_channel_participants
+                WHERE channel_id = $1 AND role = 'owner'
+                LIMIT 1
+                "#,
+                session.channel_id,
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|error| rootcause::report!(error))?,
+        };
+
+        // A channel always has an owner participant - `create` writes one in
+        // the same transaction - but fall back rather than fail a render.
+        Ok(user_id.unwrap_or_else(|| session.bot_id.into_storage_id().to_string()))
     }
 }

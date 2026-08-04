@@ -4,10 +4,14 @@ name = "agent_fold"
 publish = false
 version = "0.1.0"
 
+[features]
+# In-memory port implementations and recorded fixtures, for crates that test
+# against this one.
+test-utils = []
+
 [dependencies]
 agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
-agent_session = { path = "../agent_session" }
 clap = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -19,6 +23,3 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-agent_session = { path = "../agent_session", features = ["test-utils"] }
