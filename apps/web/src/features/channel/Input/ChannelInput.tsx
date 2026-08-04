@@ -30,6 +30,7 @@ import {
   createSignal,
   type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -43,6 +44,8 @@ import { createTypingTracker } from './create-typing-tracker';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
 import { createMentionsTracker } from './mentions-tracker';
+import { TaskComposer, type TaskComposerSendPayload } from './TaskComposer';
+import { TaskModeSwitch } from './TaskModeSwitch';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -77,14 +80,29 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /**
+   * Fires when a task composed in the input's task mode has been created,
+   * so the host can post it into the channel. Providing this enables the
+   * message/task mode switch (desktop only).
+   */
+  onSendTask?: (task: TaskComposerSendPayload) => void;
 };
 
-function WebDefaultActions(props: { input: InputData }) {
+function WebDefaultActions(props: {
+  input: InputData;
+  onEnterTaskMode?: () => void;
+}) {
   return (
     <Input.Actions>
       <Input.Actions.Left>
         <Input.AttachFilesAction />
         <Input.ToggleFormatAction />
+        <Show when={props.onEnterTaskMode}>
+          <TaskModeSwitch
+            checked={false}
+            onChange={() => props.onEnterTaskMode?.()}
+          />
+        </Show>
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
@@ -113,11 +131,19 @@ function IosDefaultActions(props: { input: InputData }) {
   );
 }
 
-function DefaultActions(props: { input: InputData }) {
+function DefaultActions(props: {
+  input: InputData;
+  onEnterTaskMode?: () => void;
+}) {
   return (
     <Show
       when={isPlatform('ios')}
-      fallback={<WebDefaultActions input={props.input} />}
+      fallback={
+        <WebDefaultActions
+          input={props.input}
+          onEnterTaskMode={props.onEnterTaskMode}
+        />
+      }
     >
       <IosDefaultActions input={props.input} />
     </Show>
@@ -179,7 +205,53 @@ export function ChannelInput(props: ChannelInputProps) {
     inputId: () => props.input.id,
     attachFiles: (files) => inputState.commands.attachFiles(files),
   });
-  const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
+
+  // Message/task mode. Task mode swaps the message editor for an embedded
+  // task composer. Desktop only — mobile keeps the plain message input.
+  const canUseTaskMode = () =>
+    !!props.onSendTask && !isPlatform('ios') && !isMobile();
+  const [taskModeRequested, setTaskModeRequested] = createSignal(false);
+  // Mount the composer on first use only, then keep it alive so a draft
+  // survives toggling back and forth.
+  const [taskComposerMounted, setTaskComposerMounted] = createSignal(false);
+  const isTaskMode = () => canUseTaskMode() && taskModeRequested();
+
+  const isCollapsed = () =>
+    !!props.collapsible && collapsedInput.isCollapsed() && !isTaskMode();
+
+  // Height morph between the two input faces: pin the wrapper at its current
+  // height, swap faces, then transition to the new content height. The
+  // wrapper is measured for the start (mid-transition it reflects the
+  // animated height); the inner content for the target.
+  let morphWrapperEl: HTMLDivElement | undefined;
+  let morphContentEl: HTMLDivElement | undefined;
+  const [morphHeight, setMorphHeight] = createSignal<number>();
+  let morphTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(morphTimer));
+
+  const setTaskMode = (task: boolean) => {
+    if (task === taskModeRequested()) return;
+    if (task) setTaskComposerMounted(true);
+    const from = morphWrapperEl?.offsetHeight;
+    setTaskModeRequested(task);
+    if (!task) focusEditor();
+    if (from === undefined) return;
+    setMorphHeight(from);
+    requestAnimationFrame(() => {
+      // Reading offsetHeight forces a layout with the start height committed,
+      // so the height change below actually transitions.
+      const to = morphContentEl?.offsetHeight;
+      if (to === undefined) return;
+      setMorphHeight(to);
+      clearTimeout(morphTimer);
+      morphTimer = setTimeout(() => setMorphHeight(undefined), 350);
+    });
+  };
+
+  const onTaskComposerSend = (task: TaskComposerSendPayload) => {
+    props.onSendTask?.(task);
+    setTaskMode(false);
+  };
 
   let isEditorConnected = false;
   let pendingRestore:
@@ -426,6 +498,7 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
+          if (isTaskMode()) return;
           collapsedInput.collapse();
         }}
         class={cn(
@@ -437,65 +510,121 @@ export function ChannelInput(props: ChannelInputProps) {
         depth={isMobile() ? 3 : 2}
         solid
       >
-        <Input.DropZone
-          onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-          onDragEnd={() => inputState.setIsDraggedOver(false)}
+        <div
+          ref={(el) => {
+            morphWrapperEl = el;
+          }}
+          class={cn(
+            morphHeight() !== undefined &&
+              'overflow-hidden transition-[height] duration-300 ease-in-out'
+          )}
+          style={{
+            height:
+              morphHeight() !== undefined ? `${morphHeight()}px` : undefined,
+          }}
         >
-          <Input.Layout>
-            <Input.DropOverlay />
-            <Input.FormatRibbon>
-              <FormatButtons
-                selectionState={() => markdownEditor.selection}
-                onInlineFormat={(format) =>
-                  applyInlineFormat(markdownEditor.lexical, format)
-                }
-                onNodeFormat={(format) =>
-                  applyNodeFormat(markdownEditor.lexical, format)
-                }
-              />
-            </Input.FormatRibbon>
-            <Input.EditorShell
-              ref={setScrollContainer}
-              onClick={(event) => {
-                if (!isMobile()) {
-                  event.stopPropagation();
-                  markdownEditor.controls.focus();
-                }
-              }}
+          <div
+            ref={(el) => {
+              morphContentEl = el;
+            }}
+          >
+            <div
+              class={cn(
+                isTaskMode() && 'hidden',
+                taskComposerMounted() &&
+                  'animate-[dialog-fullscreen-open_200ms_ease-out]'
+              )}
+              data-input-face="message"
             >
-              <Input.Editor>
-                <MarkdownShell
-                  config={markdownEditor}
-                  placeholder={inputState.view().placeholder}
-                  initialValue={inputState.view().value}
-                  autofocus={!isMobile() && (props.autofocus ?? true)}
-                  class="text-sm"
-                  refFn={attach}
-                  onConnect={() => {
-                    isEditorConnected = true;
-                    flushPendingRestore();
-                    flushPendingFocus();
-                  }}
+              <Input.DropZone
+                onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+                onDragEnd={() => inputState.setIsDraggedOver(false)}
+              >
+                <Input.Layout>
+                  <Input.DropOverlay />
+                  <Input.FormatRibbon>
+                    <FormatButtons
+                      selectionState={() => markdownEditor.selection}
+                      onInlineFormat={(format) =>
+                        applyInlineFormat(markdownEditor.lexical, format)
+                      }
+                      onNodeFormat={(format) =>
+                        applyNodeFormat(markdownEditor.lexical, format)
+                      }
+                    />
+                  </Input.FormatRibbon>
+                  <Input.EditorShell
+                    ref={setScrollContainer}
+                    onClick={(event) => {
+                      if (!isMobile()) {
+                        event.stopPropagation();
+                        markdownEditor.controls.focus();
+                      }
+                    }}
+                  >
+                    <Input.Editor>
+                      <MarkdownShell
+                        config={markdownEditor}
+                        placeholder={inputState.view().placeholder}
+                        initialValue={inputState.view().value}
+                        autofocus={!isMobile() && (props.autofocus ?? true)}
+                        class="text-sm"
+                        refFn={attach}
+                        onConnect={() => {
+                          isEditorConnected = true;
+                          flushPendingRestore();
+                          flushPendingFocus();
+                        }}
+                      />
+                      <DragInsertIndicator
+                        editor={lexicalEditor()}
+                        state={entityDragInsertStore}
+                        active
+                      />
+                    </Input.Editor>
+                  </Input.EditorShell>
+                  <Input.Attachments kind="media" />
+                  <Input.Attachments kind="document" />
+                  <Input.Footer>
+                    <Switch>
+                      <Match when={props.children}>{props.children}</Match>
+                      <Match when>
+                        <DefaultActions
+                          input={inputState.view()}
+                          onEnterTaskMode={
+                            canUseTaskMode()
+                              ? () => setTaskMode(true)
+                              : undefined
+                          }
+                        />
+                      </Match>
+                    </Switch>
+                  </Input.Footer>
+                </Input.Layout>
+              </Input.DropZone>
+            </div>
+            <Show when={taskComposerMounted()}>
+              <div
+                class={cn(
+                  !isTaskMode() && 'hidden',
+                  'animate-[dialog-fullscreen-open_200ms_ease-out]'
+                )}
+                data-input-face="task"
+              >
+                <TaskComposer
+                  active={isTaskMode()}
+                  modeSwitch={
+                    <TaskModeSwitch
+                      checked={true}
+                      onChange={() => setTaskMode(false)}
+                    />
+                  }
+                  onSend={onTaskComposerSend}
                 />
-                <DragInsertIndicator
-                  editor={lexicalEditor()}
-                  state={entityDragInsertStore}
-                  active
-                />
-              </Input.Editor>
-            </Input.EditorShell>
-            <Input.Attachments kind="media" />
-            <Input.Attachments kind="document" />
-            <Input.Footer>
-              <Switch>
-                <Match when={props.children}>{props.children}</Match>
-                <Match when>
-                  <DefaultActions input={inputState.view()} />
-                </Match>
-              </Switch>
-            </Input.Footer>
-          </Input.Layout>
-        </Input.DropZone>
+              </div>
+            </Show>
+          </div>
+        </div>
       </Surface>
     </Input.Root>
   );

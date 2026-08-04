@@ -594,6 +594,29 @@ export function Channel(props: ChannelProps) {
     );
   };
 
+  // Task mode: post the freshly created task into the channel as a message
+  // carrying a task mention.
+  const onSendTask: ChannelInputProps['onSendTask'] = (task) => {
+    const senderId = userId();
+    if (!senderId) return;
+    sendMessageMutation.mutate({
+      channelID: props.channelId,
+      senderId,
+      optimisticId: crypto.randomUUID(),
+      message: {
+        content: buildMentionMarkdownString({
+          type: 'document',
+          documentId: task.documentId,
+          documentName: task.title,
+          blockName: 'task',
+        }),
+        mentions: [{ entity_type: 'document', entity_id: task.documentId }],
+        attachments: [],
+      },
+      optimisticAttachments: [],
+    });
+  };
+
   const isChannelReady = () => {
     return (
       messagesQuery.isFetched &&
@@ -854,6 +877,7 @@ export function Channel(props: ChannelProps) {
                             void setChannelInputSnapshot(snapshot)
                           }
                           onSend={onSend}
+                          onSendTask={onSendTask}
                           onStartTyping={() =>
                             typingMutation.mutate({
                               channelId: props.channelId,
