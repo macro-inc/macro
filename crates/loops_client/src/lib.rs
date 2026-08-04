@@ -10,6 +10,27 @@ const LOOPS_API_BASE_URL: &str = "https://app.loops.so/api";
 
 const REQUEST_TIMEOUT_SECONDS: u64 = 15;
 
+/// Loops suppresses duplicate sends for the same key within 24 hours.
+const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
+
+/// Normalizes an email for use as a Loops contact identifier: lowercased, with
+/// any `+` tag stripped from the local part.
+///
+/// Every Loops call site must use this. A mobile lead captured as
+/// `a+test@x.com` and the account they later register as `a+test@x.com` must
+/// resolve to the same contact, or the nurture sequence never sees the
+/// registration and both sequences run at once.
+pub fn normalize_email(email: &str) -> String {
+    let lowercase = email.to_lowercase();
+    match lowercase.split_once('@') {
+        Some((local, domain)) => {
+            let local = local.split('+').next().unwrap_or(local);
+            format!("{local}@{domain}")
+        }
+        None => lowercase,
+    }
+}
+
 /// Client for the Loops (loops.so) API.
 ///
 /// When no API key is configured the client is a no-op, mirroring the
@@ -80,6 +101,55 @@ impl LoopsClient {
         }
 
         response.error_for_status()?;
+
+        Ok(())
+    }
+
+    /// Sends an event to Loops. Events trigger Loops automations, and upsert
+    /// the contact in the same request — so this both creates the contact (if
+    /// new) and fires the trigger, with no window where a loop can evaluate
+    /// before the contact properties land.
+    ///
+    /// Returns `Ok(())` if Loops is not configured (no-op).
+    ///
+    /// - `email`: the contact's address; pass through [`normalize_email`] first
+    /// - `event_name`: matched against the trigger configured on a Loop
+    /// - `contact_properties`: JSON object of properties to set on the contact.
+    ///   Each must already exist in Loops. Ignored if not an object.
+    /// - `idempotency_key`: suppresses duplicate sends within 24 hours. Loops
+    ///   caps this at 100 characters.
+    #[tracing::instrument(skip(self, contact_properties), err)]
+    pub async fn send_event(
+        &self,
+        email: &str,
+        event_name: &str,
+        contact_properties: &serde_json::Value,
+        idempotency_key: Option<&str>,
+    ) -> Result<(), reqwest::Error> {
+        let Some(inner) = &self.inner else {
+            tracing::debug!("loops not configured");
+            return Ok(());
+        };
+
+        let url = format!("{LOOPS_API_BASE_URL}/v1/events/send");
+
+        // Contact properties sit at the top level of the body, alongside
+        // `email` and `eventName`. Insert them first so the required fields
+        // win if a caller passes a colliding key.
+        let mut payload = serde_json::Map::new();
+        if let Some(properties) = contact_properties.as_object() {
+            payload.extend(properties.clone());
+        }
+        payload.insert("email".to_string(), email.into());
+        payload.insert("eventName".to_string(), event_name.into());
+
+        let mut request = inner.client.post(&url).bearer_auth(&inner.api_key);
+
+        if let Some(key) = idempotency_key {
+            request = request.header(IDEMPOTENCY_KEY_HEADER, key);
+        }
+
+        request.json(&payload).send().await?.error_for_status()?;
 
         Ok(())
     }
