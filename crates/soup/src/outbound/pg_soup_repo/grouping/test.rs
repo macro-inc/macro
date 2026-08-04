@@ -2,13 +2,15 @@ use super::*;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup_grouped,
 };
-use item_filters::ast::EntityFilterAst;
+use filter_ast::Expr;
+use item_filters::ast::{EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_grouping::date_bucket_sql_key;
 use models_grouping::{GroupingConfig, date_bucket_order};
 use models_pagination::{Identify, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 
 #[test]
 fn date_bucket_select_contains_all_keys() {
@@ -395,6 +397,97 @@ async fn tagged_calendar_event_participates_in_grouped_property_soup(
         items[0].item,
         models_soup::item::SoupItem::CalendarEvent(_)
     ));
+
+    Ok(())
+}
+
+/// Regression: when a filter makes an arm of the Combined UNION impossible,
+/// the remaining arms must still type-align. Postgres resolves UNION column
+/// types pairwise left-to-right, and untyped `NULL`s across two arms resolve
+/// to `text`, which then clashed with the calendar-event arm's typed NULLs
+/// ("UNION types text and boolean cannot be matched").
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn grouped_soup_runs_when_chat_arm_excluded(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // Importance(false) never matches a chat, so the chat arm is omitted and
+    // Combined unions document ∪ project ∪ calendar_event.
+    let filter = EntityFilterAst {
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::Importance(false)))),
+        ..EntityFilterAst::mock_empty()
+    };
+
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .collect::<Vec<_>>();
+
+    assert!(!items.is_empty(), "documents and projects should remain");
+    assert!(
+        items.iter().all(|item| item.key != "chat"),
+        "chats must be filtered out"
+    );
+
+    Ok(())
+}
+
+/// Same regression as [`grouped_soup_runs_when_chat_arm_excluded`] for the
+/// document arm: chat ∪ project ∪ calendar_event previously failed with
+/// "UNION types text and bigint cannot be matched".
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn grouped_soup_runs_when_document_arm_excluded(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // A nil document id filter is impossible, so the document arm is omitted.
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(uuid::Uuid::nil())))),
+        ..EntityFilterAst::mock_empty()
+    };
+
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .collect::<Vec<_>>();
+
+    assert!(!items.is_empty(), "chats and projects should remain");
+    assert!(
+        items.iter().all(|item| item.key != "document"),
+        "documents must be filtered out"
+    );
 
     Ok(())
 }
