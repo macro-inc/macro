@@ -23,6 +23,7 @@ import {
   Show,
 } from 'solid-js';
 import { CalendarPeriodSelector } from './CalendarPeriodSelector';
+import { CalendarRangeUnavailableBanner } from './CalendarRangeUnavailableBanner';
 import { CalendarSettingsDropdown } from './CalendarSettingsDropdown';
 import { CalendarSidePanelSections } from './CalendarSidePanelSections';
 import {
@@ -162,16 +163,19 @@ function ResponsiveCalendarHost() {
 
   return (
     <Layer depth={2}>
-      <FullCalendar.Host
-        tabIndex={-1}
-        ref={(calendarElement) => {
-          setElement(calendarElement);
-          calendarView.setUseNarrowDayHeaders(
-            calendarElement.clientWidth < 520
-          );
-        }}
-        class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl"
-      />
+      <div class="flex min-w-0 min-h-0 flex-1 flex-col">
+        <CalendarRangeUnavailableBanner />
+        <FullCalendar.Host
+          tabIndex={-1}
+          ref={(calendarElement) => {
+            setElement(calendarElement);
+            calendarView.setUseNarrowDayHeaders(
+              calendarElement.clientWidth < 520
+            );
+          }}
+          class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl"
+        />
+      </div>
     </Layer>
   );
 }

@@ -7,6 +7,7 @@ import {
 } from '@queries/calendar/occurrences';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { isCalendarRangeSupported } from './calendar-supported-range';
 import {
   DEFAULT_CALENDAR_SOURCE,
   mapCalendarOccurrence,
@@ -49,7 +50,14 @@ export const [CalendarViewContextProvider, useCalendarView] =
       createSignal<HTMLElement>();
     const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
 
-    const occurrencesQuery = useCalendarOccurrencesQuery(userId, visibleRange);
+    const supportedVisibleRange = createMemo(() => {
+      const range = visibleRange();
+      return range && isCalendarRangeSupported(range) ? range : undefined;
+    });
+    const occurrencesQuery = useCalendarOccurrencesQuery(
+      userId,
+      supportedVisibleRange
+    );
     const events = createMemo(() =>
       (occurrencesQuery.data?.items ?? []).map(mapCalendarOccurrence)
     );
@@ -128,6 +136,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
     return {
       eventState,
       displaySettings,
+      visibleRange,
       updateVisibleRange,
       events,
       sources: () => CALENDAR_SOURCES,
