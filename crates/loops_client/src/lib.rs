@@ -3,7 +3,11 @@
 //!
 //! Used to push Macro sign-ups into Loops so they receive our marketing emails.
 
+#[cfg(test)]
+mod test;
+
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 /// Base URL for the Loops API.
 const LOOPS_API_BASE_URL: &str = "https://app.loops.so/api";
@@ -12,6 +16,16 @@ const REQUEST_TIMEOUT_SECONDS: u64 = 15;
 
 /// Loops suppresses duplicate sends for the same key within 24 hours.
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
+
+/// Hashes an idempotency key to a fixed 64 characters.
+///
+/// Loops caps the header at 100 characters, and callers build keys from
+/// unbounded input — an email, or a `MacroUserId`, which embeds one. Hashing
+/// keeps every key in range while staying deterministic across retries, which
+/// is the whole point of the header.
+fn idempotency_digest(key: &str) -> String {
+    format!("{:x}", Sha256::digest(key.as_bytes()))
+}
 
 /// Normalizes an email for use as a Loops contact identifier: lowercased, with
 /// any `+` tag stripped from the local part.
@@ -116,8 +130,8 @@ impl LoopsClient {
     /// - `event_name`: matched against the trigger configured on a Loop
     /// - `contact_properties`: JSON object of properties to set on the contact.
     ///   Each must already exist in Loops. Ignored if not an object.
-    /// - `idempotency_key`: suppresses duplicate sends within 24 hours. Loops
-    ///   caps this at 100 characters.
+    /// - `idempotency_key`: suppresses duplicate sends within 24 hours. Any
+    ///   length is fine; it is hashed before being sent.
     #[tracing::instrument(skip(self, contact_properties), err)]
     pub async fn send_event(
         &self,
@@ -146,7 +160,7 @@ impl LoopsClient {
         let mut request = inner.client.post(&url).bearer_auth(&inner.api_key);
 
         if let Some(key) = idempotency_key {
-            request = request.header(IDEMPOTENCY_KEY_HEADER, key);
+            request = request.header(IDEMPOTENCY_KEY_HEADER, idempotency_digest(key));
         }
 
         request.json(&payload).send().await?.error_for_status()?;

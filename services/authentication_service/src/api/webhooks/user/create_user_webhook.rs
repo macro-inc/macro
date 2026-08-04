@@ -310,7 +310,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 )
                 .await
                 .inspect_err(
-                    |e| tracing::warn!(error=?e, "failed to send Loops user_registered event"),
+                    |e| tracing::error!(error=?e, "failed to send Loops user_registered event"),
                 );
         }
     });
