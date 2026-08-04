@@ -1,7 +1,5 @@
 -- This migration is intentionally irreversible: the legacy grant columns are
 -- removed after their values are copied to the side table.
-LOCK TABLE email_links IN ACCESS EXCLUSIVE MODE;
-
 CREATE TABLE email_link_google_scopes (
     link_id uuid PRIMARY KEY REFERENCES email_links(id) ON DELETE CASCADE,
     granted_scopes text[] NOT NULL DEFAULT '{}',
