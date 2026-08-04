@@ -76,10 +76,10 @@ pub struct AgentSession {
 /// One bot's session, and how the thread of an incoming channel message
 /// relates to it.
 ///
-/// A session is scoped to one bot in one thread, and a message can relate to
-/// it two different ways: posted in the thread the session was *created from*,
-/// or posted inside the session's own thread. Callers act differently on each,
-/// so one lookup answers both rather than making them ask twice.
+/// Multiple bots can each have a session associated with the same thread. For
+/// one bot id and thread id, this identifies the matching session and whether
+/// the thread is the one it was created from or the session's own thread. If
+/// that bot has no session associated with the thread, this is [`Self::None`].
 #[derive(Debug, Clone)]
 pub enum ThreadSession {
     /// No session for this bot in this thread.
