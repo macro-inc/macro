@@ -5,6 +5,7 @@ import {
   createCalendarOccurrenceQueryRange,
   useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
+import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { isCalendarRangeSupported } from './calendar-supported-range';
@@ -76,6 +77,12 @@ export const [CalendarViewContextProvider, useCalendarView] =
     const fullCalendarEvents = createMemo(() =>
       visibleEvents().map(mapCalendarEventToFullCalendar)
     );
+    const isLoading = () =>
+      visibleRange() === undefined ||
+      (supportedVisibleRange() !== undefined && occurrencesQuery.isPending);
+    const isSyncing = () =>
+      occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
+
     const closeEventDetails = () => {
       setEventState('selectedEventId', undefined);
       setSelectedEventAnchor(undefined);
@@ -138,6 +145,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
       displaySettings,
       visibleRange,
       updateVisibleRange,
+      occurrencesQuery,
       events,
       sources: () => CALENDAR_SOURCES,
       isSourceVisible: (sourceId: string) =>
@@ -146,6 +154,8 @@ export const [CalendarViewContextProvider, useCalendarView] =
       eventsById,
       selectedEvent,
       fullCalendarEvents,
+      isLoading,
+      isSyncing,
       selectedEventAnchor,
       useNarrowDayHeaders,
       setUseNarrowDayHeaders,
