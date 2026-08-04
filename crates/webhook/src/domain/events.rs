@@ -22,6 +22,8 @@ pub struct WebhookCreatedMetadata {
     pub webhook_id: String,
     /// Identifier of the workspace that owns the webhook.
     pub workspace_id: String,
+    /// Caller-chosen namespace, unique among the workspace's webhooks.
+    pub namespace: String,
     /// Authenticated user who created the webhook.
     pub created_by_user_id: MacroUserIdStr<'static>,
     /// Display name of the webhook.

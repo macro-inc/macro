@@ -10268,6 +10268,16 @@
               }
             }
           },
+          "409": {
+            "description": "Namespace already used in the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -14804,7 +14814,7 @@
       "CreateWebhookRequest": {
         "type": "object",
         "description": "Request to create a webhook.",
-        "required": ["scope", "name", "endpoint_url", "filters"],
+        "required": ["scope", "namespace", "name", "endpoint_url", "filters"],
         "properties": {
           "endpoint_url": {
             "type": "string",
@@ -14829,6 +14839,10 @@
             "type": "string",
             "description": "Display name."
           },
+          "namespace": {
+            "type": "string",
+            "description": "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
+          },
           "scope": {
             "$ref": "#/components/schemas/WebhookScope",
             "description": "Scope that owns the webhook."
@@ -14841,6 +14855,7 @@
         "required": [
           "id",
           "workspace_id",
+          "namespace",
           "name",
           "endpoint_url",
           "signing_secret",
@@ -14890,6 +14905,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
           },
           "signing_secret": {
             "type": "string",
@@ -19130,7 +19149,7 @@
       },
       "PatchWebhookRequest": {
         "type": "object",
-        "description": "Request to patch a webhook.",
+        "description": "Request to patch a webhook. The webhook's namespace is fixed at creation\ntime and is deliberately not patchable.",
         "properties": {
           "endpoint_url": {
             "type": ["string", "null"],
@@ -22964,6 +22983,7 @@
         "required": [
           "id",
           "workspace_id",
+          "namespace",
           "name",
           "endpoint_url",
           "headers",
@@ -23012,6 +23032,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
           },
           "status": {
             "$ref": "#/components/schemas/WebhookStatus",

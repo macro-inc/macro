@@ -1,8 +1,8 @@
 use super::{
     models::{
-        CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,
-        Webhook, WebhookEndpointSchemePolicy, WebhookFilter, WebhookFilters, WebhookScope,
-        WebhookStatus, WebhookValidationResult,
+        CreateWebhookOutcome, CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest,
+        ValidateWebhookResponse, Webhook, WebhookEndpointSchemePolicy, WebhookFilter,
+        WebhookFilters, WebhookScope, WebhookStatus, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
     service::WebhookServiceImpl,
@@ -23,6 +23,7 @@ struct RepoState {
     webhook: Option<Webhook>,
     validation_updates: Vec<bool>,
     create_fails: bool,
+    create_namespace_conflict: bool,
     patch_fails: bool,
     patch_returns_missing: bool,
     delete_fails: bool,
@@ -50,6 +51,12 @@ impl FakeRepo {
     async fn failing_create() -> Self {
         let repo = Self::default();
         repo.state.lock().await.create_fails = true;
+        repo
+    }
+
+    async fn conflicting_namespace() -> Self {
+        let repo = Self::default();
+        repo.state.lock().await.create_namespace_conflict = true;
         repo
     }
 
@@ -81,14 +88,19 @@ impl WebhookRepo for FakeRepo {
         request: CreateWebhookRequest,
         _signing_secret: String,
         _headers: serde_json::Value,
-    ) -> Result<Webhook, Self::Err> {
-        if self.state.lock().await.create_fails {
+    ) -> Result<CreateWebhookOutcome, Self::Err> {
+        let state = self.state.lock().await;
+        if state.create_fails {
             anyhow::bail!("create failed");
         }
+        if state.create_namespace_conflict {
+            return Ok(CreateWebhookOutcome::NamespaceConflict);
+        }
+        drop(state);
 
         let webhook = webhook_from_create(created_by_user_id, workspace_id, request);
         self.state.lock().await.webhook = Some(webhook.clone());
-        Ok(webhook)
+        Ok(CreateWebhookOutcome::Created(Box::new(webhook)))
     }
 
     async fn get_webhook(&self, webhook_id: String) -> Result<Option<Webhook>, Self::Err> {
@@ -367,6 +379,7 @@ fn valid_filters() -> WebhookFilters {
 fn create_request() -> CreateWebhookRequest {
     CreateWebhookRequest {
         scope: WebhookScope::User,
+        namespace: "files-hook".to_string(),
         name: "Files".to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         headers: Some(BTreeMap::from([(
@@ -396,6 +409,7 @@ fn webhook_from_create(
     Webhook {
         id: "wh_test".to_string(),
         workspace_id,
+        namespace: request.namespace,
         name: request.name,
         endpoint_url: request.endpoint_url,
         signing_secret: "secret".to_string(),
@@ -462,6 +476,7 @@ async fn create_publishes_full_sanitized_snapshot() {
         json!({
             "webhook_id": webhook.id,
             "workspace_id": webhook.workspace_id,
+            "namespace": webhook.namespace,
             "created_by_user_id": caller().as_ref(),
             "name": webhook.name,
             "endpoint_url": webhook.endpoint_url,
@@ -493,6 +508,68 @@ async fn create_request_validation_failure_publishes_nothing() {
 
     assert_bad_request(service.create_webhook(caller(), request).await);
     assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_with_taken_namespace_fails_conflict_and_publishes_nothing() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::conflicting_namespace().await,
+        FakeValidationClient::default(),
+        event_broker,
+    );
+
+    let result = service.create_webhook(caller(), create_request()).await;
+
+    assert!(matches!(
+        result,
+        Err(WebhookError::Conflict(message))
+            if message == "namespace is already used by another webhook in this workspace"
+    ));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_with_blank_namespace_is_rejected() {
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        NoopMacroEventBroker,
+    );
+    let mut request = create_request();
+    request.namespace = " ".to_string();
+
+    assert_bad_request(service.create_webhook(caller(), request).await);
+}
+
+#[tokio::test]
+async fn create_with_oversized_namespace_is_rejected() {
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        NoopMacroEventBroker,
+    );
+    let mut request = create_request();
+    request.namespace = "n".repeat(129);
+
+    assert_bad_request(service.create_webhook(caller(), request).await);
+}
+
+#[tokio::test]
+async fn patch_leaves_namespace_unchanged() {
+    let webhook = existing_webhook();
+    let original_namespace = webhook.namespace.clone();
+    let repo = FakeRepo::with_webhook(webhook, None).await;
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
+
+    let patched = service
+        .patch_webhook(caller(), "wh_test".to_string(), patch_request())
+        .await
+        .expect("webhook should be patched");
+
+    assert_eq!(patched.namespace, original_namespace);
 }
 
 #[tokio::test]

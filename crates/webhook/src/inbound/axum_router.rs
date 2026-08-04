@@ -220,6 +220,7 @@ where
         (status = 201, description = "Webhook created", body = CreateWebhookResponse),
         (status = 400, description = "Bad request", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 409, description = "Namespace already used in the workspace", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
     ),
     tag = "webhook"
@@ -386,6 +387,7 @@ impl IntoResponse for WebhookHandlerError {
     fn into_response(self) -> Response {
         let status = match self.0 {
             WebhookError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            WebhookError::Conflict(_) => StatusCode::CONFLICT,
             WebhookError::Unauthorized => StatusCode::FORBIDDEN,
             WebhookError::NotFound(_) => StatusCode::NOT_FOUND,
             WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,

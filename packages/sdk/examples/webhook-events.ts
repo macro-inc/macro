@@ -60,6 +60,7 @@ console.log(`listening on :${port} — expose it with: ngrok http ${port}`);
 
 const webhook = await macro.webhooks.create({
   url,
+  namespace: `sdk-webhook-demo-${crypto.randomUUID()}`,
   name: 'sdk webhook demo',
   filters: [{ events: [...ALL_EVENTS] }],
 });

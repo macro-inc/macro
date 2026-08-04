@@ -5,7 +5,8 @@ use crate::domain::{
         WebhookValidatedMetadata,
     },
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookEventQueueMessage, WebhookStatus,
+        CreateWebhookOutcome, CreateWebhookRequest, PatchWebhookRequest, Webhook,
+        WebhookEventQueueMessage, WebhookStatus,
     },
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
@@ -247,7 +248,7 @@ impl WebhookRepo for MockRepository {
         _request: CreateWebhookRequest,
         _signing_secret: String,
         _headers: Value,
-    ) -> Result<Webhook, Self::Err> {
+    ) -> Result<CreateWebhookOutcome, Self::Err> {
         unimplemented!("not used by webhook event ingestion")
     }
 
@@ -362,6 +363,7 @@ fn webhook(id: &str, workspace_id: &str) -> Webhook {
     Webhook {
         id: id.to_string(),
         workspace_id: workspace_id.to_string(),
+        namespace: id.to_string(),
         name: id.to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         signing_secret: "not-queued".to_string(),
@@ -758,6 +760,7 @@ fn webhook_event_cases() -> Vec<WebhookEventCase> {
                 WebhookTopicEvent::Created(WebhookCreatedMetadata {
                     webhook_id: "wh_created".to_string(),
                     workspace_id: PERSONAL_WORKSPACE_ID.to_string(),
+                    namespace: "created-webhook".to_string(),
                     created_by_user_id: user_id("macro|creator@example.com"),
                     name: "Created webhook".to_string(),
                     endpoint_url: "https://example.com/created".to_string(),

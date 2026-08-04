@@ -2946,6 +2946,11 @@ export type CreateWebhookRequest = {
      */
     name: string;
     /**
+     * Caller-chosen namespace, unique among the owning workspace's webhooks.
+     * Set at creation time only; it cannot be changed afterwards.
+     */
+    namespace: string;
+    /**
      * Scope that owns the webhook.
      */
     scope: WebhookScope;
@@ -2991,6 +2996,11 @@ export type CreateWebhookResponse = {
      * Display name.
      */
     name: string;
+    /**
+     * Caller-chosen namespace, unique among the owning workspace's webhooks.
+     * Set at creation time only; it cannot be changed afterwards.
+     */
+    namespace: string;
     /**
      * Signing secret used to verify webhook delivery signatures.
      */
@@ -5443,7 +5453,8 @@ export type PatchThreadRequestV2 = {
 };
 
 /**
- * Request to patch a webhook.
+ * Request to patch a webhook. The webhook's namespace is fixed at creation
+ * time and is deliberately not patchable.
  */
 export type PatchWebhookRequest = {
     /**
@@ -7707,6 +7718,11 @@ export type Webhook = {
      * Display name.
      */
     name: string;
+    /**
+     * Caller-chosen namespace, unique among the owning workspace's webhooks.
+     * Set at creation time only; it cannot be changed afterwards.
+     */
+    namespace: string;
     /**
      * Webhook lifecycle status.
      */
@@ -12038,6 +12054,10 @@ export type CreateWebhookErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * Namespace already used in the workspace
+     */
+    409: ErrorResponse;
     /**
      * Internal server error
      */

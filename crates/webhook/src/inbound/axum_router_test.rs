@@ -298,13 +298,41 @@ async fn create_passes_authenticated_user_and_body_to_service() {
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["signing_secret"], "whsec_test");
+    assert_eq!(body["namespace"], "events-hook");
     match &service.calls()[0] {
         ServiceCall::Create(user, request) => {
             assert_eq!(user.as_ref(), user_id());
             assert_eq!(request.name, "Events");
+            assert_eq!(request.namespace, "events-hook");
         }
         other => panic!("unexpected call: {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn namespace_conflict_maps_to_409() {
+    let service = FakeService::default();
+    service.set_response(Err(WebhookError::Conflict(
+        "namespace is already used by another webhook in this workspace".to_string(),
+    )));
+
+    let response = send(
+        service,
+        FakeRateLimiter::default(),
+        "POST",
+        "/webhooks",
+        create_body(),
+    )
+    .await;
+
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        body["message"],
+        "namespace is already used by another webhook in this workspace"
+    );
 }
 
 #[tokio::test]
@@ -607,6 +635,7 @@ async fn response_json(response: axum::response::Response) -> serde_json::Value 
 fn create_body() -> serde_json::Value {
     json!({
         "scope": "user",
+        "namespace": "events-hook",
         "name": "Events",
         "endpoint_url": "https://example.com/webhook",
         "headers": {"x-custom": "value"},
@@ -627,6 +656,7 @@ fn webhook() -> Webhook {
     serde_json::from_value(json!({
         "id": "wh_123",
         "workspace_id": "workspace_1",
+        "namespace": "events-hook",
         "name": "Events",
         "endpoint_url": "https://example.com/webhook",
         "signing_secret": "whsec_test",

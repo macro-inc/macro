@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                w.id,\n                w.workspace_id,\n                w.name,\n                w.endpoint_url,\n                w.signing_secret,\n                w.headers,\n                w.status,\n                w.is_valid,\n                w.created_by_user_id,\n                w.created_at,\n                w.updated_at,\n                w.deleted_at,\n                w.filters\n            FROM webhook w\n            WHERE w.workspace_id = ANY($1)\n              AND w.deleted_at IS NULL\n            ORDER BY w.created_at DESC, w.id DESC\n            ",
+  "query": "\n        SELECT\n            w.id,\n            w.workspace_id,\n            w.namespace,\n            w.name,\n            w.endpoint_url,\n            w.signing_secret,\n            w.headers,\n            w.status,\n            w.is_valid,\n            w.created_by_user_id,\n            w.created_at,\n            w.updated_at,\n            w.deleted_at,\n            w.filters\n        FROM webhook w\n        WHERE w.id = $1\n          AND w.deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -15,66 +15,72 @@
       },
       {
         "ordinal": 2,
-        "name": "name",
+        "name": "namespace",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "endpoint_url",
+        "name": "name",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "signing_secret",
+        "name": "endpoint_url",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
+        "name": "signing_secret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "headers",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "is_valid",
         "type_info": "Bool"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_by_user_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "filters",
         "type_info": "Jsonb"
       }
     ],
     "parameters": {
       "Left": [
-        "TextArray"
+        "Text"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -90,5 +96,5 @@
       false
     ]
   },
-  "hash": "c4eb16cfa4a17d4f2112e65cb449b726fdda45337b2b8a29990e160f97141693"
+  "hash": "55f6bf64d79cd6e8164676f45ef5880a0011b48c83c7d0d469b66a93ce80d75f"
 }

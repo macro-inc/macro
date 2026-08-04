@@ -24315,6 +24315,11 @@ export const listWebhooksResponse = zod
                 'Whether the current endpoint configuration has passed validation.'
               ),
             name: zod.string().describe('Display name.'),
+            namespace: zod
+              .string()
+              .describe(
+                "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
+              ),
             status: zod
               .enum(['active', 'paused', 'disabled'])
               .describe('Webhook lifecycle status.'),
@@ -24360,6 +24365,11 @@ export const createWebhookBody = zod
       .union([zod.null(), zod.record(zod.string(), zod.string())])
       .optional(),
     name: zod.string().describe('Display name.'),
+    namespace: zod
+      .string()
+      .describe(
+        "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
+      ),
     scope: zod
       .enum(['user', 'team'])
       .describe('Scope that owns a newly-created webhook.'),
@@ -24409,6 +24419,11 @@ export const getWebhookResponse = zod
         'Whether the current endpoint configuration has passed validation.'
       ),
     name: zod.string().describe('Display name.'),
+    namespace: zod
+      .string()
+      .describe(
+        "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
+      ),
     status: zod
       .enum(['active', 'paused', 'disabled'])
       .describe('Webhook lifecycle status.'),
@@ -24472,7 +24487,9 @@ export const patchWebhookBody = zod
       ])
       .optional(),
   })
-  .describe('Request to patch a webhook.');
+  .describe(
+    "Request to patch a webhook. The webhook's namespace is fixed at creation\ntime and is deliberately not patchable."
+  );
 
 export const patchWebhookResponse = zod
   .object({
@@ -24510,6 +24527,11 @@ export const patchWebhookResponse = zod
         'Whether the current endpoint configuration has passed validation.'
       ),
     name: zod.string().describe('Display name.'),
+    namespace: zod
+      .string()
+      .describe(
+        "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
+      ),
     status: zod
       .enum(['active', 'paused', 'disabled'])
       .describe('Webhook lifecycle status.'),

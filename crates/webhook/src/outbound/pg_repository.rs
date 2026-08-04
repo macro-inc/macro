@@ -5,8 +5,8 @@ mod pg_repository_test;
 
 use crate::domain::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookFilters, WebhookHeaders,
-        WebhookId, WebhookStatus,
+        CreateWebhookOutcome, CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookFilters,
+        WebhookHeaders, WebhookId, WebhookStatus,
     },
     ports::{WebhookRepo, WebhookWorkspaceResolver},
 };
@@ -32,6 +32,7 @@ impl PgRepository {
 struct WebhookRow {
     id: String,
     workspace_id: String,
+    namespace: String,
     name: String,
     endpoint_url: String,
     signing_secret: String,
@@ -71,6 +72,7 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
     Ok(Webhook {
         id: row.id,
         workspace_id: row.workspace_id,
+        namespace: row.namespace,
         name: row.name,
         endpoint_url: row.endpoint_url,
         signing_secret: row.signing_secret,
@@ -92,6 +94,7 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
         SELECT
             w.id,
             w.workspace_id,
+            w.namespace,
             w.name,
             w.endpoint_url,
             w.signing_secret,
@@ -164,22 +167,24 @@ impl WebhookRepo for PgRepository {
         request: CreateWebhookRequest,
         signing_secret: String,
         headers: Value,
-    ) -> Result<Webhook, Self::Err> {
+    ) -> Result<CreateWebhookOutcome, Self::Err> {
         let webhook_id = new_webhook_id();
         let status = WebhookStatus::Active.as_str();
         let created_by_user_id = created_by_user_id.as_ref();
         let filters = serde_json::to_value(&request.filters)
             .map_err(|err| sqlx::Error::Encode(err.into()))?;
-        sqlx::query!(
+        let inserted = sqlx::query!(
             r#"
             INSERT INTO webhook (
-                id, workspace_id, name, endpoint_url, signing_secret, headers,
+                id, workspace_id, namespace, name, endpoint_url, signing_secret, headers,
                 filters, status, is_valid, created_by_user_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
+            ON CONFLICT (workspace_id, namespace) WHERE deleted_at IS NULL DO NOTHING
             "#,
             webhook_id,
             workspace_id,
+            request.namespace,
             request.name,
             request.endpoint_url,
             signing_secret,
@@ -190,8 +195,14 @@ impl WebhookRepo for PgRepository {
         )
         .execute(&self.pool)
         .await?;
+
+        if inserted.rows_affected() == 0 {
+            return Ok(CreateWebhookOutcome::NamespaceConflict);
+        }
+
         fetch_webhook(&self.pool, &webhook_id)
             .await?
+            .map(|webhook| CreateWebhookOutcome::Created(Box::new(webhook)))
             .ok_or(sqlx::Error::RowNotFound)
     }
 
@@ -211,6 +222,7 @@ impl WebhookRepo for PgRepository {
             SELECT
                 w.id,
                 w.workspace_id,
+                w.namespace,
                 w.name,
                 w.endpoint_url,
                 w.signing_secret,
@@ -248,6 +260,7 @@ impl WebhookRepo for PgRepository {
             SELECT
                 w.id,
                 w.workspace_id,
+                w.namespace,
                 w.name,
                 w.endpoint_url,
                 w.signing_secret,
