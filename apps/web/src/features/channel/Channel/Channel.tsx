@@ -346,19 +346,19 @@ export function Channel(props: ChannelProps) {
   const channelType = useChannelType(props.channelId);
   const { popoverSplit, openWithSplit } = useSplitLayout();
 
-  // Placeholder name: a 1:1 DM named "First Last" shortens to the first
-  // name; channels (and group DMs like "A, B") keep their full name.
+  // Placeholder name: channels render as "#name"; a 1:1 DM named "First Last"
+  // shortens to the first name, and group DMs like "A, B" keep their full name.
   const inputPlaceholderName = () => {
     const name = channelName();
     if (!name) return undefined;
-    if (channelType() !== ChannelTypeEnum.DirectMessage) return name;
+    if (channelType() !== ChannelTypeEnum.DirectMessage) return `#${name}`;
     const parts = name.split(' ');
     return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
   };
 
   const inputPlaceholder = () => {
     const name = inputPlaceholderName();
-    return name ? `Type @ to share with ${name}.` : 'Type @ to share.';
+    return name ? `Type @ to share with ${name}` : 'Type @ to share';
   };
 
   const buildChannelMessageMention = (message: {
