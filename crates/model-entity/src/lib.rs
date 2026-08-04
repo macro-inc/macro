@@ -46,6 +46,8 @@ pub enum EntityType {
     Project,
     /// The entity is an email thread
     EmailThread,
+    /// The entity is a calendar event
+    CalendarEvent,
     /// The entity is a team
     Team,
     /// The entity is a voice/video call
@@ -72,6 +74,9 @@ impl EntityType {
             EntityType::Document => true,
             EntityType::Project => true,
             EntityType::EmailThread => true,
+            // Calendar events use owner or inbox-delegation authorization and
+            // are not represented in entity_access/project membership.
+            EntityType::CalendarEvent => false,
             // Calls are handled by entity_access by resolving through the call's
             // owning channel (access is inherited from channel membership).
             EntityType::Call => true,

@@ -11,6 +11,15 @@ use ::chat::domain::events::{
     ChatMessageRole, ChatMessageSentMetadata, ChatPermanentlyDeletedMetadata, ChatRestoredMetadata,
     ChatTopicEvent, ChatUpdatedMetadata,
 };
+use ::email::domain::events::{
+    EmailEventOrigin, EmailTopicEvent, LinkConnectedMetadata, LinkDisconnectReason,
+    LinkDisconnectedMetadata, LinkReauthRequiredMetadata, MessageDeletedMetadata,
+    MessageDraftSyncedMetadata, MessageReceivedMetadata, MessageSendCancelledMetadata,
+    MessageSendQueuedMetadata, MessageSentMetadata, SendCancelReason, ThreadArchivedMetadata,
+    ThreadBackfilledMetadata, ThreadLabelsUpdatedMetadata, ThreadProjectChangedMetadata,
+    ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
+    ThreadsReindexReason, ThreadsReindexRequestedMetadata,
+};
 use channels::domain::{
     broker_events::{
         ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMessageAttachmentCreatedMetadata,
@@ -30,8 +39,8 @@ use documents::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
-    MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic, MacroProjectsTopic,
-    MacroPropertiesTopic, Topic as _,
+    MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic, MacroEmailTopic,
+    MacroProjectsTopic, MacroPropertiesTopic, Topic as _,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
@@ -57,6 +66,7 @@ use super::{
         DocumentEventDescription, DocumentIndexAction, describe_document_event,
         stored_extractor_message, sync_extractor_message,
     },
+    email::{EmailEventDescription, EmailIndexAction, describe_email_event},
     project::{
         ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
     },
@@ -80,6 +90,9 @@ const PROPERTY_ENTITY_ID: &str = "property-entity-id";
 const PROPERTY_DEFINITION_ID: Uuid = Uuid::from_u128(4);
 const PROPERTY_OPTION_ID: Uuid = Uuid::from_u128(5);
 const ENTITY_PROPERTY_ID: Uuid = Uuid::from_u128(6);
+const EMAIL_LINK_ID: Uuid = Uuid::from_u128(7);
+const EMAIL_THREAD_ID: Uuid = Uuid::from_u128(8);
+const SECOND_EMAIL_THREAD_ID: Uuid = Uuid::from_u128(9);
 
 struct TestMessage {
     topic: &'static str,
@@ -176,6 +189,334 @@ fn encoded_message<E: serde::Serialize>(
         key: Some(key.to_string()),
         payload: Some(serde_json::to_vec(&event).expect("serializable broker event")),
     }
+}
+
+fn received_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
+    EmailTopicEvent::MessageReceived(MessageReceivedMetadata {
+        link_id: EMAIL_LINK_ID,
+        owner: user_id(),
+        message_id: MESSAGE_ID,
+        provider_message_id: "provider-message-id".to_string(),
+        thread_id: EMAIL_THREAD_ID,
+        provider_thread_id: "provider-thread-id".to_string(),
+        is_new_thread: true,
+        subject: Some("Subject".to_string()),
+        from_email: Some("sender@example.com".to_string()),
+        from_name: Some("Sender".to_string()),
+        to_emails: vec!["owner@example.com".to_string()],
+        attachment_count: 1,
+        is_spam_or_trash,
+        received_at: Some(Utc::now()),
+    })
+}
+
+fn draft_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
+    EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id: EMAIL_LINK_ID,
+        owner: user_id(),
+        message_id: MESSAGE_ID,
+        provider_message_id: "provider-message-id".to_string(),
+        thread_id: EMAIL_THREAD_ID,
+        provider_thread_id: "provider-thread-id".to_string(),
+        is_spam_or_trash,
+    })
+}
+
+fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
+    let owner = "macro|owner@example.com".to_string();
+
+    vec![
+        (
+            EmailTopicEvent::LinkConnected(LinkConnectedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                email_address: "owner@example.com".to_string(),
+                provider: "GMAIL".to_string(),
+                is_primary: true,
+                connected_at: Utc::now(),
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::Ignore,
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.link_connected",
+            },
+        ),
+        (
+            EmailTopicEvent::LinkDisconnected(LinkDisconnectedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                email_address: "owner@example.com".to_string(),
+                reason: LinkDisconnectReason::ManuallyDisabled,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::RemoveLink {
+                    link_id: EMAIL_LINK_ID,
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.link_disconnected",
+            },
+        ),
+        (
+            EmailTopicEvent::LinkReauthRequired(LinkReauthRequiredMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                email_address: "owner@example.com".to_string(),
+                observed_at: Utc::now(),
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::Ignore,
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.link_reauth_required",
+            },
+        ),
+        (
+            received_email_event(false),
+            EmailEventDescription {
+                action: EmailIndexAction::UpsertMessage {
+                    message_id: MESSAGE_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_received",
+            },
+        ),
+        (
+            draft_email_event(true),
+            EmailEventDescription {
+                action: EmailIndexAction::RemoveMessage {
+                    message_id: MESSAGE_ID,
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_draft_synced",
+            },
+        ),
+        (
+            EmailTopicEvent::MessageSent(MessageSentMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: Some(user_id()),
+                message_id: MESSAGE_ID,
+                provider_message_id: "provider-message-id".to_string(),
+                thread_id: EMAIL_THREAD_ID,
+                provider_thread_id: "provider-thread-id".to_string(),
+                subject: Some("Subject".to_string()),
+                to_emails: vec!["recipient@example.com".to_string()],
+                cc_emails: vec![],
+                origin: EmailEventOrigin::UserAction,
+                sent_at: Utc::now(),
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::UpsertMessage {
+                    message_id: MESSAGE_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_sent",
+            },
+        ),
+        (
+            EmailTopicEvent::MessageDeleted(MessageDeletedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                message_id: MESSAGE_ID,
+                provider_message_id: "provider-message-id".to_string(),
+                thread_id: EMAIL_THREAD_ID,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::RemoveMessage {
+                    message_id: MESSAGE_ID,
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_deleted",
+            },
+        ),
+        (
+            EmailTopicEvent::MessageSendQueued(MessageSendQueuedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: Some(user_id()),
+                message_id: MESSAGE_ID,
+                thread_id: EMAIL_THREAD_ID,
+                scheduled_send_at: Utc::now(),
+                is_scheduled: false,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::Ignore,
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_send_queued",
+            },
+        ),
+        (
+            EmailTopicEvent::MessageSendCancelled(MessageSendCancelledMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: Some(user_id()),
+                message_id: MESSAGE_ID,
+                thread_id: EMAIL_THREAD_ID,
+                reason: SendCancelReason::Undo,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::Ignore,
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_send_cancelled",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadArchived(ThreadArchivedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: Some(user_id()),
+                thread_id: EMAIL_THREAD_ID,
+                archived: true,
+                origin: EmailEventOrigin::UserAction,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_archived",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadTrashed(ThreadTrashedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                trashed: true,
+                origin: EmailEventOrigin::ProviderSync,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_trashed",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                is_read: true,
+                origin: EmailEventOrigin::ProviderSync,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_read",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadStarred(ThreadStarredMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                starred: true,
+                origin: EmailEventOrigin::ProviderSync,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_starred",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadSpamChanged(ThreadSpamChangedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                spam: true,
+                origin: EmailEventOrigin::ProviderSync,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_spam_changed",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadProjectChanged(ThreadProjectChangedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: user_id(),
+                thread_id: EMAIL_THREAD_ID,
+                previous_project_id: Some("old-project".to_string()),
+                project_id: Some("new-project".to_string()),
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::Ignore,
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_project_changed",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadLabelsUpdated(ThreadLabelsUpdatedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                added: vec![],
+                removed: vec![],
+                origin: EmailEventOrigin::ProviderSync,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_labels_updated",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                thread_id: EMAIL_THREAD_ID,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThread {
+                    thread_id: EMAIL_THREAD_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.thread_backfilled",
+            },
+        ),
+        (
+            EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                thread_ids: vec![EMAIL_THREAD_ID, SECOND_EMAIL_THREAD_ID],
+                reason: ThreadsReindexReason::ContactsChanged,
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::ReindexThreads {
+                    thread_ids: vec![EMAIL_THREAD_ID, SECOND_EMAIL_THREAD_ID],
+                    owner,
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.threads_reindex_requested",
+            },
+        ),
+    ]
 }
 
 fn chat_event_cases() -> Vec<(ChatTopicEvent, ChatEventDescription<'static>)> {
@@ -891,6 +1232,7 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChatsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroDocumentsTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroEmailTopic::TOPIC_STR));
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroPropertiesTopic::TOPIC_STR));
 }
@@ -946,6 +1288,35 @@ fn maps_all_call_lifecycle_events_to_index_actions() {
             action: CallIndexAction::Ignore,
             call_id: CALL_ID,
             event_type: "call.recording_ready",
+        }
+    );
+}
+
+#[test]
+fn maps_all_email_lifecycle_events_to_index_actions() {
+    let cases = email_event_cases();
+    assert_eq!(cases.len(), 18);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable email event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_email_event(&event), expected);
+    }
+}
+
+#[test]
+fn email_message_sync_actions_remove_spam_or_trash_and_upsert_other_messages() {
+    assert_eq!(
+        describe_email_event(&received_email_event(true)).action,
+        EmailIndexAction::RemoveMessage {
+            message_id: MESSAGE_ID,
+        }
+    );
+    assert_eq!(
+        describe_email_event(&draft_email_event(false)).action,
+        EmailIndexAction::UpsertMessage {
+            message_id: MESSAGE_ID,
+            owner: "macro|owner@example.com".to_string(),
         }
     );
 }
@@ -1076,6 +1447,23 @@ fn project_id_collection_is_stable_and_drops_missing_or_empty_ids() {
         ]),
         vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()]
     );
+}
+
+#[test]
+fn email_envelope_decodes_round_trip() {
+    let event = draft_email_event(false);
+    let message = encoded_message(
+        MacroEmailTopic::TOPIC_STR,
+        EMAIL_LINK_ID,
+        Event::new(event.clone()),
+    );
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable email event");
+    let DeclaredMacroEvent::EmailMacroEvent(decoded_event) = decoded else {
+        panic!("expected email event");
+    };
+    assert_eq!(decoded_event.key(), EMAIL_LINK_ID.to_string());
+    assert_eq!(decoded_event.event().event, event);
 }
 
 #[test]
@@ -1241,6 +1629,61 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
         assert_eq!(decoded_event.key(), DOCUMENT_ID);
         assert_eq!(decoded_event.event(), &expected);
     }
+}
+
+#[tokio::test]
+async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() {
+    let malformed = TestMessage {
+        topic: MacroEmailTopic::TOPIC_STR,
+        key: Some(EMAIL_LINK_ID.to_string()),
+        payload: Some(b"not json".to_vec()),
+    };
+    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 7, 60);
+
+    let missing_key = TestMessage {
+        topic: MacroEmailTopic::TOPIC_STR,
+        key: None,
+        payload: encoded_message(
+            MacroEmailTopic::TOPIC_STR,
+            EMAIL_LINK_ID,
+            Event::new(draft_email_event(false)),
+        )
+        .payload,
+    };
+    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 7, 61);
+
+    let unsupported = encoded_message(
+        MacroEmailTopic::TOPIC_STR,
+        EMAIL_LINK_ID,
+        Event::with_schema_version(draft_email_event(false), 2),
+    );
+    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 7, 62);
+    let (sender, mut receiver) = mpsc::channel(1);
+
+    assert!(matches!(
+        handoff_decoded(&sender, malformed).await,
+        HandoffOutcome::MalformedRecord(EventBrokerError::Serialization(_))
+    ));
+    assert!(matches!(
+        handoff_decoded(&sender, missing_key).await,
+        HandoffOutcome::MalformedRecord(EventBrokerError::MissingMessageKey)
+    ));
+    match handoff_decoded(&sender, unsupported).await {
+        HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
+            topic,
+            expected,
+            actual,
+        }) => {
+            assert_eq!(topic, MacroEmailTopic::TOPIC_STR);
+            assert_eq!(expected, 1);
+            assert_eq!(actual, 2);
+        }
+        outcome => panic!("expected malformed email record, got {outcome:?}"),
+    }
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
 }
 
 #[tokio::test]

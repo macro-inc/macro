@@ -219,7 +219,7 @@ export function FloatingEquationMenu() {
   return (
     <Show when={menuOpen()}>
       <div
-        class="p-4 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg w-96 ring ring-edge"
+        class="p-4 fixed border border-edge bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg w-96"
         use:floatWithElement={{ element: getElement }}
         use:floatWithSelection={{
           selection: untrack(getSelection),

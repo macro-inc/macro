@@ -50,7 +50,7 @@ export function MobileAuthWelcome() {
             </Button>
             <Button
               size="lg"
-              class="ring ring-edge-muted"
+              class="border border-edge-muted"
               onClick={() => navigate('/login')}
             >
               Log into existing account

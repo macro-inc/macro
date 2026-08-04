@@ -1,6 +1,7 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
+import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
@@ -429,6 +430,7 @@ function LayoutInner(props: RouteSectionProps) {
           <Show when={!AUTH_URLS.includes(location.pathname)}>
             <GithubReauthenticationPrompt />
             <GmailReauthenticationPrompt />
+            <CalendarPermissionPrompt />
           </Show>
           <GlobalShortcuts />
           <Show when={!isMobile()}>

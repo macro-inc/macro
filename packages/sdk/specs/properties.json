@@ -1324,6 +1324,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALENDAR_EVENT",
           "CALL_RECORD",
           "CHANNEL",
           "CHAT",

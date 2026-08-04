@@ -10,13 +10,14 @@ use crate::{
         ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs,
     },
 };
-use either::Either;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::{Identify, SortOn};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
+mod calendar_event;
 mod expanded;
 pub mod grouping;
 mod unexpanded;
@@ -37,26 +38,28 @@ impl SoupRepo for PgSoupRepo {
     type Err = sqlx::Error;
     type GroupedItems = std::vec::IntoIter<ItemGroupingInfo>;
 
-    fn expanded_generic_cursor_soup<'a>(
+    async fn expanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
-        match req.cursor {
+    ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        let calendar_req = req.clone();
+        let sort = *req.cursor.sort_method();
+        let limit = req.limit;
+        let mut items = match req.cursor {
             SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
                 // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
-                Either::Left(Either::Left(
-                    expanded::dynamic::expanded_dynamic_cursor_soup(
-                        &self.pool.0,
-                        ExpandedDynamicCursorArgs {
-                            user_id: req.user_id,
-                            limit: req.limit,
-                            cursor: query.map_filter(|(_, ast)| ast),
-                            exclude_frecency: true,
-                        },
-                    ),
-                ))
+                expanded::dynamic::expanded_dynamic_cursor_soup(
+                    &self.pool.0,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor: query.map_filter(|(_, ast)| ast),
+                        exclude_frecency: true,
+                    },
+                )
+                .await?
             }
-            SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
+            SimpleSortQuery::ItemsFilter(ast) => {
                 expanded::dynamic::expanded_dynamic_cursor_soup(
                     &self.pool.0,
                     ExpandedDynamicCursorArgs {
@@ -65,67 +68,88 @@ impl SoupRepo for PgSoupRepo {
                         cursor: ast,
                         exclude_frecency: false,
                     },
-                ),
-            )),
-            SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
+                )
+                .await?
+            }
+            SimpleSortQuery::FilterFrecency(f) => {
                 expanded::by_cursor::no_frecency_expanded_generic_soup(
                     &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
-                ),
-            )),
-            SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
+                )
+                .await?
+            }
+            SimpleSortQuery::NoFilter(f) => {
                 expanded::by_cursor::expanded_generic_cursor_soup(
                     &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
-                ),
-            )),
-        }
+                )
+                .await?
+            }
+        };
+        items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req).await?);
+        sort_and_truncate(&mut items, sort, limit);
+        Ok(items)
     }
 
-    fn unexpanded_generic_cursor_soup<'a>(
+    async fn unexpanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
-        match req.cursor {
-            SimpleSortQuery::ItemsFilter(_) => Either::Left(Either::Left(not_implemented(req))),
-            SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
-                Either::Left(Either::Right(not_implemented(req)))
-            }
-            SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
+    ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        let calendar_req = req.clone();
+        let sort = *req.cursor.sort_method();
+        let limit = req.limit;
+        let mut items = match req.cursor {
+            SimpleSortQuery::ItemsFilter(_) => not_implemented(req).await?,
+            SimpleSortQuery::ItemsAndFrecencyFilter(_) => not_implemented(req).await?,
+            SimpleSortQuery::FilterFrecency(f) => {
                 expanded::by_cursor::no_frecency_expanded_generic_soup(
                     &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
-                ),
-            )),
-            SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
+                )
+                .await?
+            }
+            SimpleSortQuery::NoFilter(f) => {
                 unexpanded::by_cursor::unexpanded_generic_cursor_soup(
                     &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
-                ),
-            )),
-        }
+                )
+                .await?
+            }
+        };
+        items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req).await?);
+        sort_and_truncate(&mut items, sort, limit);
+        Ok(items)
     }
 
-    fn expanded_soup_by_ids<'a>(
+    async fn expanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
-        expanded::by_ids::expanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
+    ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        let calendar_req = req.clone();
+        let mut items =
+            expanded::by_ids::expanded_soup_by_ids(&self.pool.0, req.user_id, req.entities).await?;
+        items.extend(calendar_event::by_ids(&self.pool.0, calendar_req).await?);
+        Ok(items)
     }
 
-    fn unexpanded_soup_by_ids<'a>(
+    async fn unexpanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
-        unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
+    ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        let calendar_req = req.clone();
+        let mut items =
+            unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
+                .await?;
+        items.extend(calendar_event::by_ids(&self.pool.0, calendar_req).await?);
+        Ok(items)
     }
 
     fn populate_properties<'a>(
@@ -164,6 +188,21 @@ impl SoupRepo for PgSoupRepo {
         )
         .await
     }
+}
+
+fn sort_and_truncate(
+    items: &mut Vec<SoupItem<()>>,
+    sort: models_pagination::SimpleSortMethod,
+    limit: u16,
+) {
+    let mut sort_on = SoupItem::sort_on(sort);
+    items.sort_by(|left, right| {
+        sort_on(right)
+            .last_val
+            .cmp(&sort_on(left).last_val)
+            .then_with(|| right.id().cmp(&left.id()))
+    });
+    items.truncate(usize::from(limit));
 }
 
 #[tracing::instrument(err)]
@@ -226,6 +265,7 @@ pub(crate) async fn populate_properties(
                 SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
+                SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => {
                     None
                 }

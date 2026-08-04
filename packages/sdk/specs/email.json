@@ -4253,6 +4253,7 @@
           "is_sync_active",
           "sync_status",
           "needs_reauth",
+          "needs_calendar_permission",
           "settings",
           "is_primary",
           "created_at",
@@ -4281,6 +4282,10 @@
           },
           "macro_id": {
             "type": "string"
+          },
+          "needs_calendar_permission": {
+            "type": "boolean",
+            "description": "Whether the link's Google grant is missing the calendar scope. True for\ninboxes connected before the calendar capability existed (and for\ngrants where the user declined it); drives the per-inbox calendar\nupgrade prompt. Re-running the connect flow records the new grant."
           },
           "needs_reauth": {
             "type": "boolean",

@@ -2,10 +2,11 @@
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
 use crate::{
-    CallFilters, ChannelFilters, ChannelThreadFilters, ChatFilters, CrmCompanyFilters,
-    DocumentFilters, EmailFilters, EntityFilters, ForeignEntityFilters, ProjectFilters,
-    PropertyFilter,
+    CalendarEventFilters, CallFilters, ChannelFilters, ChannelThreadFilters, ChatFilters,
+    CrmCompanyFilters, DocumentFilters, EmailFilters, EntityFilters, ForeignEntityFilters,
+    ProjectFilters, PropertyFilter,
     ast::{
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
@@ -23,6 +24,8 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
+/// contains the ast literal value for calendar events
+pub mod calendar_event;
 /// contains the ast literal value for calls
 pub mod call;
 /// contains the ast literal value for channels
@@ -176,6 +179,10 @@ impl IsEmpty for EmailFilterAst {
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EntityFilterAst {
+    /// filters applied to canonical calendar events
+    #[serde(default, rename = "calf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub calendar_event_filter: LiteralTree<CalendarEventLiteral>,
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -235,6 +242,10 @@ impl EntityFilterAst {
         .map(|(_, scope)| scope);
         let email_tree = EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new);
         Ok(Some(EntityFilterAst {
+            calendar_event_filter: CalendarEventFilters::expand_ast(
+                entity_filter.calendar_event_filters,
+            )?
+            .map(Arc::new),
             document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?
                 .map(Arc::new),
             project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?
@@ -284,6 +295,7 @@ impl EntityFilterAst {
     #[cfg(feature = "mock")]
     pub fn mock_empty() -> Self {
         Self {
+            calendar_event_filter: None,
             document_filter: None,
             project_filter: None,
             chat_filter: None,
@@ -316,6 +328,7 @@ fn crm_company_requests_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
 impl IsEmpty for EntityFilterAst {
     fn is_empty(&self) -> bool {
         let EntityFilterAst {
+            calendar_event_filter,
             document_filter,
             project_filter,
             chat_filter,
@@ -327,7 +340,8 @@ impl IsEmpty for EntityFilterAst {
             foreign_entity_filter,
             properties_filter,
         } = self;
-        document_filter.is_none()
+        calendar_event_filter.is_none()
+            && document_filter.is_none()
             && project_filter.is_none()
             && chat_filter.is_none()
             && email_filter.is_empty()

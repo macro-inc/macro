@@ -68,14 +68,6 @@ inputs:
     description: 'Optional service key from .github/services-config.json; builds Lambda artifacts inline when lambda-artifacts is not provided'
     required: false
     default: ''
-  cachix-auth-token:
-    description: 'Cachix auth token used for inline Lambda artifact builds'
-    required: false
-    default: ''
-  sccache-bucket:
-    description: 'Optional S3 bucket for shared sccache storage during inline Lambda artifact builds'
-    required: false
-    default: ''
 
 runs:
   using: composite
@@ -143,13 +135,6 @@ runs:
       run: |
         has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
         echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
-
-    - name: Configure Cachix
-      if: ${{ inputs.lambda-artifacts == '' && inputs.lambda-artifacts-tar == '' && inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true' }}
-      uses: ./.github/actions/setup-cachix
-      with:
-        cachix-auth-token: ${{ inputs.cachix-auth-token }}
-        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Build Lambda artifacts inline
       if: ${{ inputs.lambda-artifacts == '' && inputs.lambda-artifacts-tar == '' && inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true' }}

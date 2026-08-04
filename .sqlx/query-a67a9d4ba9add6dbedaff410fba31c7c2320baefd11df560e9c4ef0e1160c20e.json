@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT job.id\n        FROM calendar_backfill_jobs job\n        WHERE job.id = $1\n          AND job.email_link_id = $2\n          AND job.kind = 'google_calendar'\n          AND job.status = 'running'\n          AND job.lease_token = $3\n          AND job.lease_expires_at > now()\n          AND EXISTS (\n                SELECT 1\n                FROM email_links link\n                WHERE link.id = job.email_link_id\n                  AND link.google_grant_version = job.grant_version\n                  AND link.google_granted_scopes @> $5::text[]\n          )\n          AND EXISTS (\n                SELECT 1\n                FROM calendar_accounts account\n                WHERE account.id = job.account_id\n                  AND account.email_link_id = job.email_link_id\n                  AND account.sync_status <> 'disabled'\n                  AND ($4::uuid IS NULL OR account.id = $4)\n          )\n        FOR UPDATE OF job\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a67a9d4ba9add6dbedaff410fba31c7c2320baefd11df560e9c4ef0e1160c20e"
+}

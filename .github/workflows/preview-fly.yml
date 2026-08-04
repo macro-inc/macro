@@ -743,6 +743,9 @@ jobs:
               body,
             });
           }
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: fly-preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true

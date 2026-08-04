@@ -96,6 +96,7 @@ fn caller_auth(user_id: Option<&MacroUserIdStr<'_>>) -> EntityAccessAuth {
 
 fn storage_entity_type(entity_type: AccessEntityType) -> anyhow::Result<StorageEntityType> {
     Ok(match entity_type {
+        AccessEntityType::CalendarEvent => StorageEntityType::CalendarEvent,
         AccessEntityType::Document => StorageEntityType::Document,
         AccessEntityType::Call => StorageEntityType::CallRecord,
         AccessEntityType::Chat => StorageEntityType::Chat,

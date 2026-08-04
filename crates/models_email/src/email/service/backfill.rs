@@ -21,10 +21,17 @@ pub struct BackfillMessagePayload {
     pub message_provider_id: String,
 }
 
+/// Dispatch payload for a durable calendar backfill job.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct CalendarBackfillPayload {
+    /// Calendar-domain job identifier.
+    pub calendar_job_id: Uuid,
+}
+
 /// Scope envelope for backfill operations that belong to a tracked backfill
 /// job (Init, ListThreads, BackfillThread, BackfillMessage,
-/// UpdateThreadMetadata, BackfillAttachment). Carries the `link_id` and
-/// `job_id` the operation needs alongside its variant-specific payload.
+/// UpdateThreadMetadata, BackfillAttachment, FinalizeBackfill). Carries the
+/// `link_id` and `job_id` the operation needs alongside its variant-specific payload.
 /// The inner payload is `#[serde(flatten)]`-ed so the JSON shape stays the
 /// same as if `link_id`/`job_id` and the payload fields were siblings.
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -50,6 +57,10 @@ pub struct LinkScopedPayload<P> {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
 pub struct InitPayload {}
 
+/// Empty payload for [`BackfillOperation::FinalizeBackfill`].
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
+pub struct FinalizeBackfillPayload {}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum BackfillOperation {
@@ -74,6 +85,14 @@ pub enum BackfillOperation {
     UpdateThreadMetadata(JobScopedPayload<UpdateMetadataPayload>),
     // Uploads the message attachment as a Macro document.
     BackfillAttachment(JobScopedPayload<BackfillAttachmentPayload>),
+    /// Runs durable post-completion attachment, contact, and client-refresh effects.
+    FinalizeBackfill(JobScopedPayload<FinalizeBackfillPayload>),
+    /// Fetch calendars, canonical events, and bounded occurrence projections
+    /// from Google Calendar.
+    CalendarGoogleBackfill(LinkScopedPayload<CalendarBackfillPayload>),
+    /// Start an email re-scan; the normal BackfillMessage path performs the
+    /// same iCalendar extraction used for live ingestion.
+    CalendarEmailIcsBackfill(LinkScopedPayload<CalendarBackfillPayload>),
     // Seeds the contacts service from one recent sent message. Fanned out
     // one-per-message by the priority pass of ListThreads (which lists the
     // user's last 200 sent messages). The consumer fetches the message and
@@ -118,6 +137,9 @@ impl BackfillOperation {
             BackfillOperation::BackfillMessage(s) => Some(s.link_id),
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.link_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.link_id),
+            BackfillOperation::FinalizeBackfill(s) => Some(s.link_id),
+            BackfillOperation::CalendarGoogleBackfill(s) => Some(s.link_id),
+            BackfillOperation::CalendarEmailIcsBackfill(s) => Some(s.link_id),
             BackfillOperation::SeedSentContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::DepopulateCrmContact(s) => Some(s.link_id),
@@ -136,7 +158,10 @@ impl BackfillOperation {
             BackfillOperation::BackfillMessage(s) => Some(s.job_id),
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.job_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.job_id),
+            BackfillOperation::FinalizeBackfill(s) => Some(s.job_id),
             BackfillOperation::SeedSentContact(s) => Some(s.job_id),
+            BackfillOperation::CalendarGoogleBackfill(_)
+            | BackfillOperation::CalendarEmailIcsBackfill(_) => None,
             BackfillOperation::PopulateCrmContact(_)
             | BackfillOperation::DepopulateCrmContact(_)
             | BackfillOperation::PopulateCrmForUser(_)

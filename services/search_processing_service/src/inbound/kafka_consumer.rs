@@ -7,8 +7,8 @@
 //! offsets are already committed.
 //!
 //! Per-entity event mapping and processing live in the [`call`], [`channel`],
-//! [`chat`], [`document`], [`project`], and [`property`] submodules; this module
-//! owns the poll loop, worker, retry policy, and commit semantics.
+//! [`chat`], [`document`], [`email`], [`project`], and [`property`] submodules;
+//! this module owns the poll loop, worker, retry policy, and commit semantics.
 
 #![allow(clippy::enum_variant_names)]
 
@@ -17,6 +17,7 @@ mod channel;
 mod chat;
 mod context;
 mod document;
+mod email;
 mod project;
 mod property;
 #[cfg(test)]
@@ -26,6 +27,7 @@ use std::{future::Future, time::Duration};
 
 use ::call::domain::events::CallMacroEvent;
 use ::chat::domain::events::ChatMacroEvent;
+use ::email::domain::events::EmailMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
@@ -42,7 +44,7 @@ use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use self::{
     call::process_call_event, channel::process_channel_event, chat::process_chat_event,
-    document::process_document_event, project::process_project_event,
+    document::process_document_event, email::process_email_event, project::process_project_event,
     property::process_property_event,
 };
 
@@ -66,6 +68,7 @@ macro_event_broker::declare_topics!(
         ChannelMacroEvent,
         ChatMacroEvent,
         DocumentMacroEvent,
+        EmailMacroEvent,
         ProjectMacroEvent,
         PropertyMacroEvent,
 );
@@ -189,6 +192,9 @@ async fn process_event(
         }
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
             process_document_event(context, event, partition, offset).await
+        }
+        DeclaredMacroEvent::EmailMacroEvent(event) => {
+            process_email_event(db, opensearch_client, event, partition, offset).await
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await

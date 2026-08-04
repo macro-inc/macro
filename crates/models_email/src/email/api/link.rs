@@ -98,6 +98,11 @@ pub struct Link {
     /// Whether the link's Google grant needs to be reconnected. Drives the
     /// per-inbox reconnect prompt independently of the sync-status badge.
     pub needs_reauth: bool,
+    /// Whether the link's Google grant is missing the calendar scope. True for
+    /// inboxes connected before the calendar capability existed (and for
+    /// grants where the user declined it); drives the per-inbox calendar
+    /// upgrade prompt. Re-running the connect flow records the new grant.
+    pub needs_calendar_permission: bool,
     pub settings: Settings,
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
@@ -110,6 +115,7 @@ impl Link {
         settings: Settings,
         sync_status: SyncStatus,
         photo_url: Option<String>,
+        needs_calendar_permission: bool,
     ) -> Self {
         Link {
             id: source.id,
@@ -121,6 +127,7 @@ impl Link {
             is_sync_active: source.is_sync_active,
             sync_status,
             needs_reauth: source.needs_reauth,
+            needs_calendar_permission,
             settings,
             is_primary: source.is_primary,
             created_at: source.created_at,

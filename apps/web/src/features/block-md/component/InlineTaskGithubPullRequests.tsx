@@ -11,7 +11,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 
 const PILL_CLASS = cn(
-  'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+  'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
   'px-2 py-1 leading-tight text-left rounded-full',
   'bg-surface text-ink-muted hover:bg-hover hover:text-ink',
   'focus-visible:outline-none focus-visible:ring-accent/20'

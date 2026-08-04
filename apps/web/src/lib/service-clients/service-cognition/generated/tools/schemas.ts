@@ -1174,6 +1174,7 @@ export const ListEntities = z.object({
       z.array(
         z.any().superRefine((x, ctx) => {
           const schemas = [
+            z.literal('calendar_event'),
             z.literal('document'),
             z.literal('ai_chat'),
             z.literal('project'),
@@ -1292,6 +1293,41 @@ export const ListEntitiesResponse = z.object({
   items: z.array(
     z.any().superRefine((x, ctx) => {
       const schemas = [
+        z.object({
+          conferenceUrl: z.union([z.string(), z.null()]).optional(),
+          id: z.string().uuid(),
+          location: z.union([z.string(), z.null()]).optional(),
+          status: z.string(),
+          tags: z
+            .array(
+              z.object({
+                label: z.string(),
+                scope: z.any().superRefine((x, ctx) => {
+                  const schemas = [z.literal('personal'), z.literal('team')];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+              })
+            )
+            .optional(),
+          time: z.any(),
+          title: z.string(),
+          type: z.literal('calendarEvent'),
+        }),
         z.object({
           fileType: z.union([z.string(), z.null()]).optional(),
           id: z.string().uuid(),

@@ -933,6 +933,8 @@ export const SoupViewContextProvider: FlowComponent<
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
 
+    if (item.tag === 'calendarEvent') return false;
+
     return soup.predicates.test(
       mapApiSoupItemToEntity(item) as SoupEntity,
       getFilterContext()

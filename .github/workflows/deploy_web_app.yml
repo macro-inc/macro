@@ -101,6 +101,9 @@ jobs:
         name: web-app-build
         path: apps/web/dist
         overwrite: 'true'
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
 concurrency:
   group: deploy-web-app-${{ inputs.environment }}
   cancel-in-progress: false

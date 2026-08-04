@@ -23,6 +23,7 @@ struct MockRepo {
     chat_access: Arc<Mutex<Option<AccessLevel>>>,
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
+    calendar_event_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access_calls: Arc<AtomicUsize>,
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -55,6 +56,7 @@ impl MockRepo {
             chat_access: Arc::new(Mutex::new(None)),
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
+            calendar_event_access: Arc::new(Mutex::new(None)),
             thread_access_calls: Arc::new(AtomicUsize::new(0)),
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
@@ -227,6 +229,14 @@ impl AccessRepository for MockRepo {
     ) -> Result<Option<AccessLevel>, AccessError> {
         self.thread_access_calls.fetch_add(1, Ordering::SeqCst);
         Ok(*self.thread_access.lock().await)
+    }
+
+    async fn get_calendar_event_access(
+        &self,
+        _event_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.calendar_event_access.lock().await)
     }
 
     async fn get_owned_email_thread_ids(

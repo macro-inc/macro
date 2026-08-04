@@ -225,12 +225,12 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg overflow-hidden p-4 ring"
+            class="relative rounded-lg overflow-hidden p-4 border"
             style={{ '--user-icon-width': '1rem' }}
             classList={{
-              'bg-accent ring-transparent': props.isTarget,
-              'bg-active/60 ring-edge': !props.isTarget && props.isFocused,
-              'bg-ink-muted/4 ring-transparent':
+              'bg-accent border-transparent': props.isTarget,
+              'bg-active/60 border-edge': !props.isTarget && props.isFocused,
+              'bg-ink-muted/4 border-transparent':
                 !props.isTarget && !props.isFocused,
             }}
             data-message-body-id={props.message.db_id}

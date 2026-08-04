@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_sync_outbox\n            SET published_at = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "77cafa228e78eecc9d143dcb5d700e56b098b0d68887864c1f0f955f8bfbeba8"
+}

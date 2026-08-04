@@ -1,6 +1,9 @@
 #![allow(unused)]
 
 mod api;
+mod backfill_completion_service;
+mod backfill_init_service;
+mod calendar_ingest;
 mod config;
 mod convert;
 mod pubsub;

@@ -534,13 +534,22 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
             let mcp_state_store =
                 mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
-            let mcp_oauth = mcp_client::domain::service::OAuthService::new(
+            let client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
+                "http://localhost/mcp/servers/auth/client-metadata".to_string(),
+                "http://localhost/mcp/servers/auth/callback".to_string(),
+            );
+            let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
                 mcp_repo.clone(),
                 mcp_state_store,
-                "http://localhost/mcp/servers/auth/callback".to_string(),
+                client_metadata.clone(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
-            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth, authorization_state)
+            mcp_client::inbound::McpRouterState::new(
+                mcp_repo,
+                mcp_oauth,
+                authorization_state,
+                client_metadata,
+            )
         },
         import_service: import_service.clone(),
         onboarding_service,

@@ -6,7 +6,7 @@ description: "Track work with priorities, statuses, and linked context."
 
 <iframe src="https://www.youtube.com/embed/gxJquVXRX5A" title="YouTube video player" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
-Macro Tasks start private and lightweight but scale seamlessly onto a team, where tasks you create are auto-shared with members. They're @mentionable anywhere in Macro as live, up-to-date pills, sync bidirectionally with GitHub PRs to move status automatically, and are fully accessible to AI clients like Claude Code and Cursor via Macro's MCP server.
+Macro Tasks start lightweight enough for a single user but scale easily onto a team, where tasks you create are auto-shared with members. They're @mentionable anywhere in Macro as live, up-to-date pills, sync bidirectionally with GitHub PRs to move status automatically, and are fully accessible to AI clients via Macro's MCP server.
 
 > To create a new task use shortcut <kbd>c</kbd> \+ <kbd>t</kbd>
 
@@ -60,10 +60,10 @@ Macro's MCP server lets AI clients like Claude Code, Codex, and Cursor work with
 
 **MCP for tasks uses**
 
-- **Create a task** — `CreateDocument` with `isTask: true`.
-- **Find your tasks** — `ListEntities` returns tasks as documents with subtype `task`; you can filter by status, assignee, or priority. Asking your client for "my tasks," "tasks assigned to me," or "what I completed yesterday" runs against Macro rather than an external tracker.
-- **Read a task** — `ReadContent` / `ReadMetadata` for the body and details.
-- **Update a task** — `SetEntityProperty` sets status, priority, assignees, due date, parent/subtasks, and story points; `GetEntityProperties` shows the current values.
+- **Create a task**
+- **Find your tasks**
+- **Read a task**
+- **Update a task**
 
 ### @mentioning
 

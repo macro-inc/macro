@@ -39,7 +39,7 @@ function capitalize(value: string): string {
 
 /** Pill surface matching the task block's inline property pills. */
 export const PR_PILL_CLASS =
-  'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted px-2 py-1 leading-tight text-left rounded-full bg-surface';
+  'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted px-2 py-1 leading-tight text-left rounded-full bg-surface';
 
 export function PrStatusIcon(props: { status: string; class?: string }) {
   return (

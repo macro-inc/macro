@@ -16,6 +16,7 @@ export type FavoriteEntityRefEntityType =
   | 'document'
   | 'project'
   | 'email_thread'
+  | 'calendar_event'
   | 'team'
   | 'call'
   | 'foreign_entity'

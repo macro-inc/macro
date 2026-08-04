@@ -28,6 +28,7 @@ jobs:
             - 'flake.nix'
             - 'flake.lock'
             - '.github/actions/setup-nix-dev-shell/**'
+            - '.github/actions/teardown-nix/**'
             - '.github/workflows/code_check_infra.yml'
   biome-check:
     needs:
@@ -52,6 +53,9 @@ jobs:
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: infra
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   check:
     needs:
     - path-check
@@ -76,6 +80,9 @@ jobs:
     - name: check
       run: bun run check
       working-directory: infra
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   status-check:
     needs:
     - path-check

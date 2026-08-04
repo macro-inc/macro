@@ -1,5 +1,8 @@
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  openEntityInSplitFromUnifiedList,
+  restoreSoupFocus,
+} from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -77,7 +80,11 @@ export const useBlockEntityCommands = () => {
   ) => {
     const entity = getEntity();
     if (entity) {
-      openPropertyEditor([entity], mode, property);
+      openPropertyEditor([entity], mode, property, {
+        restoreFocus: () => {
+          if (soup) return restoreSoupFocus(entity.id);
+        },
+      });
     }
   };
   const canAssignTags = (entity: EntityData) => {
@@ -355,7 +362,11 @@ export const useBlockEntityCommands = () => {
       keyDownHandler: () => {
         const entity = getEntity();
         if (!entity) return false;
-        openPropertyEditor([entity], 'tag');
+        openPropertyEditor([entity], 'tag', undefined, {
+          restoreFocus: () => {
+            if (soup) return restoreSoupFocus(entity.id);
+          },
+        });
         return true;
       },
       condition: () => {

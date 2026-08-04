@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_jobs\n        SET status = 'Failed',\n            updated_at = now()\n        WHERE id = $1\n          AND status = 'Init'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0f012ba1124fbe7e0a2113e59dc24440b56b43b2b7c27c69401354e29c34eaa"
+}

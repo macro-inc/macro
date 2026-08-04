@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCerebras } from '@ai-sdk/cerebras';
 import { createOpenAI } from '@ai-sdk/openai';
 import { zValidator } from '@hono/zod-validator';
+import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
 import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
@@ -64,7 +65,8 @@ const EditBody = z.object({
  *  chain (multiple, advancing on provider errors/rate limits). */
 function buildModels(
   env: ReturnType<typeof getEnv>,
-  models: EditModels
+  models: EditModels,
+  onFallback?: () => void
 ): ResolvedModels {
   const resolveOne = ({ provider, model }: Model) => {
     const apiKey = env[PROVIDERS[provider].key];
@@ -75,8 +77,10 @@ function buildModels(
     if (resolved.length === 1) return resolved[0];
     return createFallback({
       models: resolved,
-      onError: (error, modelId) =>
-        console.error(`edit model ${modelId} failed, falling back:`, error),
+      onError: (error, modelId) => {
+        onFallback?.();
+        console.error(`edit model ${modelId} failed, falling back:`, error);
+      },
     });
   };
   return {
@@ -131,19 +135,43 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, session, clarification } = await runEditSession({
-      source,
-      documentId,
-      prompt,
-      models: buildModels(env, models),
-      typingAnimations,
-      sleep,
-      interpret,
-      debug,
-      propagate,
-      runner: runInSandbox,
-      signal,
-    }).finally(presence.stop);
+    const { usage, ops, session, clarification } = await Telemetry.span(
+      'edit.session',
+      async (span) => {
+        span.setAttr('document.id', documentId);
+        span.setAttr('edit.interpret', interpret);
+        span.setAttr('edit.propagate', propagate);
+        let modelFallbacks = 0;
+        try {
+          const result = await runEditSession({
+            source,
+            documentId,
+            prompt,
+            models: buildModels(env, models, () => modelFallbacks++),
+            typingAnimations,
+            sleep,
+            interpret,
+            debug,
+            propagate,
+            runner: runInSandbox,
+            signal,
+          }).finally(presence.stop);
+          span.setAttr(
+            'edit.dispatch_count',
+            result.session.dispatchEditTraces?.length ?? 0
+          );
+          span.setAttr('edit.ops_total', result.ops.length);
+          span.setAttr('edit.blocked', result.clarification !== undefined);
+          return result;
+        } catch (err) {
+          span.setAttr('edit.aborted', signal.aborted);
+          span.error(err);
+          throw err;
+        } finally {
+          span.setAttr('model.fallbacks', modelFallbacks);
+        }
+      }
+    );
 
     const db = c.env.TRACES_DB;
     if (db) {

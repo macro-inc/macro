@@ -7,8 +7,8 @@ set -euo pipefail
 # cargo-lambda script produced, so nothing downstream changes.
 #
 # Unlike the cargo-lambda path, this never recompiles unchanged handlers: nix is
-# content-addressed, so an unchanged handler is a pure cache hit (substituted
-# from the warm /nix lambda disk or Cachix). Independent handler derivations
+# content-addressed, so an unchanged handler is a pure cache hit from the
+# Namespace Nix volume. Independent handler derivations
 # also build in parallel within the single `nix build` invocation.
 
 SERVICE="${SERVICE:?SERVICE is required}"
@@ -28,13 +28,6 @@ if [[ ${#LAMBDAS[@]} -eq 0 ]]; then
 fi
 
 echo "Building Lambda artifacts for $SERVICE via nix: ${LAMBDAS[*]}"
-
-cachix_pid=
-if command -v cachix >/dev/null 2>&1 && [[ -n "${CACHIX_CACHE_NAME:-}" ]]; then
-  cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-  cachix_pid=$!
-  trap 'if [[ -n "${cachix_pid:-}" ]]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-fi
 
 # Build every handler for this service in one nix invocation: independent
 # derivations build in parallel, unchanged ones are pure cache hits, and the

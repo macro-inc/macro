@@ -186,6 +186,39 @@ export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       /**
+       * Optional conference join URL.
+       */
+      conferenceUrl?: string | null;
+      /**
+       * Calendar event id.
+       */
+      id: string;
+      /**
+       * Optional location.
+       */
+      location?: string | null;
+      /**
+       * Event status.
+       */
+      status: string;
+      /**
+       * Tags on the event visible to the user.
+       */
+      tags?: AppliedTag[];
+      /**
+       * Canonical timed or all-day span.
+       */
+      time: {
+        [k: string]: unknown;
+      };
+      /**
+       * Event title.
+       */
+      title: string;
+      type: 'calendarEvent';
+    }
+  | {
+      /**
        * The document's file type (e.g. md, pdf, docx), when known.
        */
       fileType?: string | null;
@@ -338,6 +371,7 @@ export type EntityItem =
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
+  | 'calendar_event'
   | 'document'
   | 'ai_chat'
   | 'project'

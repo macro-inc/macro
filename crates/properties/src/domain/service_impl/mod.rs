@@ -245,6 +245,7 @@ where
             .map(|receipt| {
                 let canonical_entity_type = receipt.entity_type();
                 let storage_entity_type = match canonical_entity_type {
+                    AccessEntityType::CalendarEvent => EntityType::CalendarEvent,
                     AccessEntityType::Document => Uuid::parse_str(receipt.entity_id())
                         .ok()
                         .and_then(|document_id| document_sub_types.get(&document_id))

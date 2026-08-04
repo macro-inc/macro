@@ -140,7 +140,7 @@ export function ActionMenu(props: ActionMenuProps) {
       <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
         <Layer depth={2}>
           <div
-            class="flex flex-row bg-surface ring ring-edge p-1 shadow items-center rounded-md"
+            class="flex flex-row bg-surface border border-edge p-1 shadow items-center rounded-md"
             onClick={(e) => e.stopPropagation()}
           >
             <Show when={hasReactAction()}>

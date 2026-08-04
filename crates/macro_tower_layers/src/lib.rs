@@ -47,6 +47,19 @@ impl<B> MakeSpan<B> for MakeSpanWithRemoteParent {
     }
 }
 
+/// Injects the current span's W3C trace context into outbound request headers.
+///
+/// Outbound counterpart of [`MakeSpanWithRemoteParent`]: a downstream service
+/// that adopts `traceparent` joins this service's trace. The global text-map
+/// propagator is registered by `macro_entrypoint`; without one, or outside any
+/// span, this is a no-op.
+pub fn inject_trace_headers(headers: &mut http::HeaderMap) {
+    let context = Span::current().context();
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut opentelemetry_http::HeaderInjector(headers));
+    });
+}
+
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
 pub struct RequestIdBuilder(Arc<AtomicU64>);

@@ -105,17 +105,6 @@ pub fn setup_dev_shell() -> Step<Use> {
     )
 }
 
-/// Configure Cachix and enter the repo's Nix dev shell. This is retained for
-/// workflow families that have not yet migrated to Namespace's Nix cache.
-pub fn setup_cachix_dev_shell() -> Step<Use> {
-    uses_local(
-        "Setup Nix dev shell",
-        xtask_paths::repo_dir!(".github/actions/setup-cachix"),
-    )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
-    .add_with(("dev-shell", "true"))
-}
-
 /// Mount the Namespace profile's persisted cache volume: `cache: rust` persists
 /// the cargo registry/git, and `path:` persists the Nix store. Compiled objects
 /// deliberately use Namespace's official remote sccache instead of this volume.
@@ -296,32 +285,13 @@ pub fn checkout_v4() -> Step<Use> {
         .add_with(("persist-credentials", false))
 }
 
-/// Wrap a shell fragment in the standard Cachix watch-store lifecycle.
-///
-/// The watcher is optional and always cleaned up, so Nix builds still succeed
-/// when Cachix is unavailable while every deploy-family caller shares the same
-/// process and trap semantics.
-pub fn with_cachix_watch(inner: &str) -> String {
-    indoc::formatdoc! {r#"
-        set -euo pipefail
-        cachix_pid=
-        if command -v cachix >/dev/null 2>&1 && [ -n "${{CACHIX_CACHE_NAME:-}}" ]; then
-          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-          cachix_pid=$!
-          trap 'if [ -n "${{cachix_pid:-}}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-        fi
-        {inner}
-    "#}
-}
-
-/// `nix build` wrapped in `cachix watch-store`, so realised store paths are
-/// pushed to Cachix as they build — the consistency backstop when the /nix
-/// volume is cold or evicted.
-pub fn nix_build_watched(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
-    let script = with_cachix_watch(&format!(
-        "nix build --print-build-logs {targets}\necho \"{done_msg}\""
-    ));
-    Step::new(name).run(script).shell("bash")
+/// Build Nix targets using Namespace's mounted `/nix` cache volume.
+pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
+    Step::new(name)
+        .run(format!(
+            "set -euo pipefail\nnix build --print-build-logs {targets}\necho \"{done_msg}\""
+        ))
+        .shell("bash")
 }
 
 /// Upload a build's handoff tarball to Namespace artifact storage: strongly
@@ -381,15 +351,6 @@ pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
 /// desktop builds that delegate entirely to Nix.
 pub fn mount_nix_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount /nix cache volume").add_with(("cache", "nix"))
-}
-
-/// Configure Cachix (without entering a dev shell).
-pub fn setup_cachix() -> Step<Use> {
-    uses_local(
-        "Configure Cachix fallback",
-        xtask_paths::repo_dir!(".github/actions/setup-cachix"),
-    )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
 }
 
 /// Derive a safe tag name from the git ref for use in artifact names.

@@ -8,9 +8,10 @@
 //! account lifecycle events are ordered against the inbox's content events,
 //! and per-thread order is preserved (a thread belongs to exactly one link).
 //!
-//! Payloads carry RFC-822 *header* level data only (subject, from, to/cc
-//! addresses) — never message bodies, snippets, bcc addresses, or attachment
-//! names. Consumers needing content must read back through the API.
+//! When payloads carry message data, it is limited to RFC-822 *header* level
+//! data (subject, from, to/cc addresses) — never message bodies, snippets, bcc
+//! addresses, or attachment names. Consumers needing content, including
+//! consumers of reindex notifications, must read back through the API.
 //!
 //! Each variant documents its owning emission site: a logical change is
 //! published from the point closest to the committed Macro-DB write.
@@ -82,6 +83,14 @@ pub enum SendCancelReason {
     Undo,
     /// The containing thread was trashed while the send was pending.
     ThreadTrashed,
+}
+
+/// Why a set of threads was asked to be reindexed for search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThreadsReindexReason {
+    /// Contact display names changed; sender/recipient names in the index are stale.
+    ContactsChanged,
 }
 
 /// Metadata for [`EmailTopicEvent::LinkConnected`].
@@ -158,6 +167,25 @@ pub struct MessageReceivedMetadata {
     pub is_spam_or_trash: bool,
     /// Provider-reported receive time.
     pub received_at: Option<DateTime<Utc>>,
+}
+
+/// Metadata for [`EmailTopicEvent::MessageDraftSynced`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageDraftSyncedMetadata {
+    /// The link (inbox) containing the draft.
+    pub link_id: Uuid,
+    /// The Macro user who owns the link.
+    pub owner: MacroUserIdStr<'static>,
+    /// Macro's message row id.
+    pub message_id: Uuid,
+    /// Provider (Gmail) message id.
+    pub provider_message_id: String,
+    /// Macro's thread row id.
+    pub thread_id: Uuid,
+    /// Provider (Gmail) thread id.
+    pub provider_thread_id: String,
+    /// Whether the draft is currently spam or trash.
+    pub is_spam_or_trash: bool,
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSent`].
@@ -315,6 +343,24 @@ pub struct ThreadStarredMetadata {
     pub origin: EmailEventOrigin,
 }
 
+/// Metadata for [`EmailTopicEvent::ThreadSpamChanged`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadSpamChangedMetadata {
+    /// The link (inbox) containing the thread.
+    pub link_id: Uuid,
+    /// The Macro user who owns the link.
+    pub owner: MacroUserIdStr<'static>,
+    /// The authenticated user who changed the state; `None` for
+    /// provider-initiated changes.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// Macro's thread row id.
+    pub thread_id: Uuid,
+    /// New state: `true` = marked spam, `false` = unmarked.
+    pub spam: bool,
+    /// Where the change originated.
+    pub origin: EmailEventOrigin,
+}
+
 /// Metadata for [`EmailTopicEvent::ThreadProjectChanged`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadProjectChangedMetadata {
@@ -335,10 +381,10 @@ pub struct ThreadProjectChangedMetadata {
 /// Metadata for [`EmailTopicEvent::ThreadLabelsUpdated`].
 ///
 /// Carries **user label** changes only; system-label changes (INBOX, TRASH,
-/// UNREAD, STARRED) are published as the semantic
+/// UNREAD, STARRED, SPAM) are published as the semantic
 /// [`EmailTopicEvent::ThreadArchived`] / [`EmailTopicEvent::ThreadTrashed`] /
-/// [`EmailTopicEvent::ThreadRead`] / [`EmailTopicEvent::ThreadStarred`]
-/// events instead.
+/// [`EmailTopicEvent::ThreadRead`] / [`EmailTopicEvent::ThreadStarred`] /
+/// [`EmailTopicEvent::ThreadSpamChanged`] events instead.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadLabelsUpdatedMetadata {
     /// The link (inbox) containing the thread.
@@ -356,6 +402,30 @@ pub struct ThreadLabelsUpdatedMetadata {
     pub removed: Vec<LabelRef>,
     /// Where the change originated.
     pub origin: EmailEventOrigin,
+}
+
+/// Metadata for [`EmailTopicEvent::ThreadBackfilled`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadBackfilledMetadata {
+    /// The link (inbox) containing the thread.
+    pub link_id: Uuid,
+    /// The Macro user who owns the link.
+    pub owner: MacroUserIdStr<'static>,
+    /// Macro's thread row id.
+    pub thread_id: Uuid,
+}
+
+/// Metadata for [`EmailTopicEvent::ThreadsReindexRequested`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadsReindexRequestedMetadata {
+    /// The link (inbox) containing the threads.
+    pub link_id: Uuid,
+    /// The Macro user who owns the link.
+    pub owner: MacroUserIdStr<'static>,
+    /// Thread row ids to reindex. Producers must chunk to at most 50 ids.
+    pub thread_ids: Vec<Uuid>,
+    /// Why the reindex was requested.
+    pub reason: ThreadsReindexReason,
 }
 
 /// Events that can be published to [`MacroEmailTopic`].
@@ -381,6 +451,10 @@ pub enum EmailTopicEvent {
     /// siblings are persisted silently (they were not just received).
     #[serde(rename = "email.message_received")]
     MessageReceived(MessageReceivedMetadata),
+    /// A draft was persisted or updated while syncing from the provider.
+    /// Emitted on every synced draft update because draft bodies are mutable.
+    #[serde(rename = "email.message_draft_synced")]
+    MessageDraftSynced(MessageDraftSyncedMetadata),
     /// A message was accepted by the provider. Emitted from the scheduled
     /// send worker after the provider accepts (`origin = user_action`), or
     /// from the inbox-sync worker when a message sent from another client is
@@ -421,6 +495,11 @@ pub enum EmailTopicEvent {
     /// inbox-sync STARRED-label diff (`origin = provider_sync`).
     #[serde(rename = "email.thread_starred")]
     ThreadStarred(ThreadStarredMetadata),
+    /// A thread was marked or unmarked spam. Emitted from the inbox-sync
+    /// SPAM-label diff (`origin = provider_sync`) or the domain label path
+    /// (`origin = user_action`).
+    #[serde(rename = "email.thread_spam_changed")]
+    ThreadSpamChanged(ThreadSpamChangedMetadata),
     /// A thread was assigned to or removed from a project. Emitted from the
     /// email domain service's thread-project update.
     #[serde(rename = "email.thread_project_changed")]
@@ -431,6 +510,15 @@ pub enum EmailTopicEvent {
     /// semantic thread events instead.
     #[serde(rename = "email.thread_labels_updated")]
     ThreadLabelsUpdated(ThreadLabelsUpdatedMetadata),
+    /// All messages of a backfilled thread are persisted and thread metadata
+    /// is final. Emitted from the backfill worker's update-metadata step.
+    #[serde(rename = "email.thread_backfilled")]
+    ThreadBackfilled(ThreadBackfilledMetadata),
+    /// A bounded batch of threads should be re-derived by read-back consumers
+    /// (for example, the search index). Emitted from contact sync when contact
+    /// names change. Producers must include at most 50 thread ids.
+    #[serde(rename = "email.threads_reindex_requested")]
+    ThreadsReindexRequested(ThreadsReindexRequestedMetadata),
 }
 
 impl TopicEvent for EmailTopicEvent {
@@ -475,6 +563,14 @@ impl EmailMacroEvent {
         Self::new(
             metadata.link_id.to_string(),
             EmailTopicEvent::MessageReceived(metadata),
+        )
+    }
+
+    /// Build a message-draft-synced event keyed by the link id.
+    pub fn message_draft_synced(metadata: MessageDraftSyncedMetadata) -> Self {
+        Self::new(
+            metadata.link_id.to_string(),
+            EmailTopicEvent::MessageDraftSynced(metadata),
         )
     }
 
@@ -542,6 +638,14 @@ impl EmailMacroEvent {
         )
     }
 
+    /// Build a thread-spam-changed event keyed by the link id.
+    pub fn thread_spam_changed(metadata: ThreadSpamChangedMetadata) -> Self {
+        Self::new(
+            metadata.link_id.to_string(),
+            EmailTopicEvent::ThreadSpamChanged(metadata),
+        )
+    }
+
     /// Build a thread-project-changed event keyed by the link id.
     pub fn thread_project_changed(metadata: ThreadProjectChangedMetadata) -> Self {
         Self::new(
@@ -558,10 +662,27 @@ impl EmailMacroEvent {
         )
     }
 
+    /// Build a thread-backfilled event keyed by the link id.
+    pub fn thread_backfilled(metadata: ThreadBackfilledMetadata) -> Self {
+        Self::new(
+            metadata.link_id.to_string(),
+            EmailTopicEvent::ThreadBackfilled(metadata),
+        )
+    }
+
+    /// Build a threads-reindex-requested event keyed by the link id.
+    pub fn threads_reindex_requested(metadata: ThreadsReindexRequestedMetadata) -> Self {
+        Self::new(
+            metadata.link_id.to_string(),
+            EmailTopicEvent::ThreadsReindexRequested(metadata),
+        )
+    }
+
     /// Map a thread-scoped label change onto the semantic event for that
-    /// label: INBOX/TRASH/UNREAD/STARRED become the dedicated thread-state
-    /// events, SPAM/IMPORTANT/SENT/DRAFT publish nothing (`None`), and any
-    /// other (user) label becomes a `thread_labels_updated` diff.
+    /// label: INBOX/TRASH/UNREAD/STARRED/SPAM become dedicated thread-state
+    /// events, IMPORTANT/SENT/DRAFT and category labels publish nothing
+    /// (`None`), and any other (user) label becomes a
+    /// `thread_labels_updated` diff.
     pub fn thread_label_change(
         link_id: Uuid,
         owner: MacroUserIdStr<'static>,
@@ -606,10 +727,15 @@ impl EmailMacroEvent {
                 archived: !added,
                 origin,
             }),
-            system_labels::SPAM
-            | system_labels::IMPORTANT
-            | system_labels::SENT
-            | system_labels::DRAFT => return None,
+            system_labels::SPAM => Self::thread_spam_changed(ThreadSpamChangedMetadata {
+                link_id,
+                owner,
+                actor,
+                thread_id,
+                spam: added,
+                origin,
+            }),
+            system_labels::IMPORTANT | system_labels::SENT | system_labels::DRAFT => return None,
             // Gmail category tabs (CATEGORY_PERSONAL/SOCIAL/...) are
             // provider system labels, not user labels.
             l if l.starts_with("CATEGORY_") => return None,

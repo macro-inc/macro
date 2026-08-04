@@ -503,7 +503,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <Layer depth={4}>
       <button
         class={cn(
-          'size-28 shadow-sm shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge transition-transform ease-click duration-200 rounded-sm',
+          'size-28 shadow-sm shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center border border-edge bg-surface transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
             '-translate-y-2 text-ink': props.focused,
@@ -807,10 +807,10 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             />
             <span
               class={cn(
-                'ring text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
+                'border text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
                 shiftHeld()
-                  ? 'ring-accent text-accent bg-accent/10'
-                  : 'ring-edge-muted'
+                  ? 'border-accent text-accent bg-accent/10'
+                  : 'border-edge-muted'
               )}
             >
               {getNormalizedKeyString({ shortcut: 'shift' })}

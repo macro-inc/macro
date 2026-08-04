@@ -31,7 +31,7 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
               edge so it meets the thread rail on the message below. Sits behind
               the avatar (which has a solid bg), so it only shows below it. */}
           <div
-            class="pointer-events-none absolute bottom-0 -z-1 border-l border-rail"
+            class="pointer-events-none absolute bottom-0 -z-1 border-l-1 border-rail"
             style={{
               left: 'var(--left-of-connector)',
               top: 'calc(1rem + var(--user-icon-width) / 2)',

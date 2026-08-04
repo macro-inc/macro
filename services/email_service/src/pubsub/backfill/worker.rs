@@ -1,6 +1,7 @@
 use crate::pubsub::backfill::process;
 use crate::pubsub::context::{
-    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker,
+    CalendarBackfillServices, CrmServiceType, NotificationIngressType, PubSubContext,
+    PubSubEventBroker,
 };
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
@@ -77,6 +78,8 @@ pub async fn run_worker_with_cancellation(
     notifications_enabled: bool,
     cancellation_token: CancellationToken,
 ) {
+    let calendar_backfills =
+        CalendarBackfillServices::new(db.clone(), sqs_client.clone(), redis_client.clone());
     let ctx = PubSubContext {
         db,
         sqs_worker: worker.clone(),
@@ -94,6 +97,7 @@ pub async fn run_worker_with_cancellation(
         macro_event_broker,
         notifications_enabled,
         retry_worker: false,
+        calendar_backfills,
     };
 
     loop {

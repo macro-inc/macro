@@ -300,6 +300,45 @@ fn request_span_without_traceparent_stays_root() {
     });
 }
 
+#[test]
+fn inject_trace_headers_emits_current_span_traceparent() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    with_default(subscriber, || {
+        let span = tracing::info_span!("outbound_call");
+        let _guard = span.enter();
+
+        let mut headers = http::HeaderMap::new();
+        inject_trace_headers(&mut headers);
+
+        let traceparent = headers
+            .get("traceparent")
+            .expect("traceparent header should be injected inside a span")
+            .to_str()
+            .unwrap();
+        let trace_id = span.context().span().span_context().trace_id().to_string();
+        assert!(
+            traceparent.contains(&trace_id),
+            "traceparent {traceparent} should carry the current trace id {trace_id}"
+        );
+    });
+}
+
+#[test]
+fn inject_trace_headers_is_a_noop_outside_a_span() {
+    let mut headers = http::HeaderMap::new();
+    inject_trace_headers(&mut headers);
+    assert!(headers.get("traceparent").is_none());
+}
+
 #[tokio::test]
 async fn starvation_detector_does_not_warn_within_grace_period() {
     tokio::time::pause();

@@ -75,6 +75,7 @@ fn event_type(event: &ChannelTopicEvent) -> &'static str {
         ChannelTopicEvent::MessageAttachmentRemoved(_) => "channel.message_attachment_removed",
         ChannelTopicEvent::ParticipantAdded(_) => "channel.participant_added",
         ChannelTopicEvent::ParticipantRemoved(_) => "channel.participant_removed",
+        ChannelTopicEvent::Mentioned(_) => "channel.mentioned",
     }
 }
 

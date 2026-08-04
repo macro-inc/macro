@@ -61,7 +61,8 @@ export function useRecentlyViewedSoupQuery() {
           if (
             item.tag === 'call' ||
             item.tag === 'foreignEntity' ||
-            item.tag === 'channelThread'
+            item.tag === 'channelThread' ||
+            item.tag === 'calendarEvent'
           ) {
             return [];
           }

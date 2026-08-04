@@ -15,6 +15,7 @@ use uuid::Uuid;
 /// Map an internal properties storage type to its canonical entity type.
 pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {
+        EntityType::CalendarEvent => AccessEntityType::CalendarEvent,
         EntityType::Document | EntityType::Task => AccessEntityType::Document,
         EntityType::CallRecord => AccessEntityType::Call,
         EntityType::Chat => AccessEntityType::Chat,

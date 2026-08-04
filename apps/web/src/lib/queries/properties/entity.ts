@@ -46,7 +46,12 @@ import { propertiesKeys } from './keys';
 function toPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
 ): PropertyTargetEntityType {
-  return entityType === 'TASK' ? 'DOCUMENT' : entityType;
+  if (entityType === 'TASK') return 'DOCUMENT';
+  if (entityType === 'CALENDAR_EVENT') {
+    // Not a property target yet; surface a real error instead of a bad request.
+    throw new Error('calendar events do not support properties');
+  }
+  return entityType;
 }
 
 export function useEntityPropertiesQuery(
@@ -126,6 +131,7 @@ function optimisticUpdateSoupEntityProperties(
     current.tag === 'channel' ||
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
+    current.tag === 'calendarEvent' ||
     !current.data.properties
   ) {
     return undefined;
