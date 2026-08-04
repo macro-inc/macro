@@ -1607,6 +1607,89 @@ interface SidebarLinkProps extends SidebarItem {
   removeAction?: { tooltip: string; onRemove: () => void };
 }
 
+/** Which action of {@link SidebarOpenInSplitMenu} placed the content. */
+type SidebarOpenAction = 'current-split' | 'new-split' | 'fullscreen';
+
+interface SidebarOpenInSplitMenuProps {
+  /** The content the menu's actions open. */
+  content: () => SplitContent;
+  /**
+   * Runs once an action has placed the content in a split — e.g. the Email
+   * account rows scope the freshly opened mail list to their inbox.
+   */
+  onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
+  onOpenChange?: (open: boolean) => void;
+  children: JSX.Element;
+}
+
+/**
+ * The shared sidebar right-click menu: open the row's content in the current
+ * split, in a new split, or fullscreen. Wraps any sidebar row — the top-level
+ * links and the nested Email account rows both use it.
+ */
+const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
+  const analytics = useAnalytics();
+  const layout = useSplitLayout();
+
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? true;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
+
+  const openInCurrentSplit = () => {
+    const split = layout.openWithSplit(props.content(), {
+      allowDuplicate: true,
+      mergeHistory: false,
+      referredFrom: 'sidebar',
+    });
+    if (split) props.onOpened?.(split, 'current-split');
+  };
+
+  const openInNewSplit = () => {
+    const manager = globalSplitManager();
+    if (!manager || !manager.canAppendSplit()) return;
+
+    analytics.track('split_created', { from: 'sidebar' });
+
+    const split = manager.createNewSplit({
+      content: props.content(),
+      activate: true,
+      allowDuplicate: true,
+      referredFrom: 'sidebar',
+    });
+    props.onOpened?.(split, 'new-split');
+  };
+
+  const openFullscreen = () => {
+    const split = layout.replaceAllSplits(props.content(), {
+      referredFrom: 'sidebar',
+    });
+    if (split) props.onOpened?.(split, 'fullscreen');
+    globalSplitManager()?.returnFocus();
+  };
+
+  return (
+    <ContextMenu onOpenChange={props.onOpenChange}>
+      <ContextMenu.Trigger class="w-full h-7">
+        {props.children}
+      </ContextMenu.Trigger>
+
+      <ContextMenu.Portal>
+        <ContextMenuContent class="text-xs text-ink-muted">
+          <MenuItem
+            text="Open in new split"
+            onClick={openInNewSplit}
+            disabled={!canOpenInNewSplit()}
+          />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
+          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
+  );
+};
+
 const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
@@ -1636,214 +1719,173 @@ const SidebarLink = (props: SidebarLinkProps) => {
       id: props.id,
       params: props.params,
     }) as const;
-  const canOpenInNewSplit = () =>
-    globalSplitManager()?.canAppendSplit() ?? true;
-  const canOpenFullscreen = () => layout.getSplitCount() > 1;
-
-  const openInCurrentSplit = () =>
-    layout.openWithSplit(content(), {
-      allowDuplicate: true,
-      mergeHistory: false,
-      referredFrom: 'sidebar',
-    });
-
-  const openInNewSplit = () => {
-    const manager = globalSplitManager();
-    if (!manager || !manager.canAppendSplit()) return;
-
-    analytics.track('split_created', { from: 'sidebar' });
-
-    manager.createNewSplit({
-      content: content(),
-      activate: true,
-      allowDuplicate: true,
-      referredFrom: 'sidebar',
-    });
-  };
-
-  const openFullscreen = () => {
-    const split = layout.replaceAllSplits(content(), {
-      referredFrom: 'sidebar',
-    });
-    if (props.id === 'search' && split) requestSearchFocus(split.id);
-    globalSplitManager()?.returnFocus();
-  };
 
   return (
-    <ContextMenu onOpenChange={props.onContextMenuOpenChange}>
-      <ContextMenu.Trigger class="w-full h-7">
-        <NavRow
-          draggable={false}
-          data-sidebar-link={props.id}
-          data-active={isActive() ? '' : undefined}
-          active={isActive() && !props.suppressActiveStyle}
-          class="h-7"
-          fullWidth
-          tooltipPlacement="right"
-          onMouseEnter={() => setIsHovering(true)}
-          label={`Go to ${props.label}`}
-          hotkey={
-            props.standaloneHotkey
-              ? props.hotkeyToken
-              : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
-          }
-          tooltipDisabled={props.sidebarState !== 'slim'}
-          onMouseLeave={() => setIsHovering(false)}
-          onMouseDown={(e) => {
-            if (e.button !== 0) return;
-            analytics.track('sidebar_click', {
-              view: props.id,
+    <SidebarOpenInSplitMenu
+      content={content}
+      onOpenChange={props.onContextMenuOpenChange}
+      onOpened={(split, action) => {
+        if (action === 'fullscreen' && props.id === 'search')
+          requestSearchFocus(split.id);
+      }}
+    >
+      <NavRow
+        draggable={false}
+        data-sidebar-link={props.id}
+        data-active={isActive() ? '' : undefined}
+        active={isActive() && !props.suppressActiveStyle}
+        class="h-7"
+        fullWidth
+        tooltipPlacement="right"
+        onMouseEnter={() => setIsHovering(true)}
+        label={`Go to ${props.label}`}
+        hotkey={
+          props.standaloneHotkey
+            ? props.hotkeyToken
+            : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+        }
+        tooltipDisabled={props.sidebarState !== 'slim'}
+        onMouseLeave={() => setIsHovering(false)}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          analytics.track('sidebar_click', {
+            view: props.id,
+          });
+
+          e.preventDefault();
+          let currentContentHandle = globalSplitManager()?.activeSplit();
+
+          const currentContent = currentContentHandle?.content();
+          const isSameContent =
+            currentContent?.type === 'component' &&
+            currentContent?.id === props.id;
+
+          if (!isSameContent || e.shiftKey) {
+            currentContentHandle = navigateToSidebarView({
+              viewId: props.id,
+              params: props.params,
+              shiftKey: e.shiftKey,
+              activeSplit: currentContentHandle,
+              openWithSplit: layout.openWithSplit,
+              referredFrom: 'sidebar',
             });
+          } else {
+            props.onActiveClick?.();
+          }
 
-            e.preventDefault();
-            let currentContentHandle = globalSplitManager()?.activeSplit();
+          if (props.id === 'search' && currentContentHandle) {
+            requestSearchFocus(currentContentHandle.id);
+          }
 
-            const currentContent = currentContentHandle?.content();
-            const isSameContent =
-              currentContent?.type === 'component' &&
-              currentContent?.id === props.id;
-
-            if (!isSameContent || e.shiftKey) {
-              currentContentHandle = navigateToSidebarView({
-                viewId: props.id,
-                params: props.params,
-                shiftKey: e.shiftKey,
-                activeSplit: currentContentHandle,
-                openWithSplit: layout.openWithSplit,
-                referredFrom: 'sidebar',
-              });
-            } else {
-              props.onActiveClick?.();
-            }
-
-            if (props.id === 'search' && currentContentHandle) {
-              requestSearchFocus(currentContentHandle.id);
-            }
-
-            globalSplitManager()?.returnFocus();
-          }}
-        >
-          <Show when={props.icon}>
-            <div class="size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-              <Show
-                when={
-                  isHovering() && props.sidebarState !== 'slim'
-                    ? props.removeAction
-                    : undefined
-                }
-                fallback={
-                  <Dynamic
-                    component={props.icon}
-                    triggerAnimation={isHovering()}
-                  />
-                }
-              >
-                {(removeAction) => (
-                  <Tooltip
-                    label={removeAction().tooltip}
-                    as="span"
-                    placement="top"
-                  >
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={removeAction().tooltip}
-                      class="flex items-center justify-center text-ink-muted
-                     rounded-md hover:bg-failure hover:text-surface p-1"
-                      onMouseDown={(e) => {
-                        // The row navigates on mousedown; the X must not.
-                        e.stopPropagation();
+          globalSplitManager()?.returnFocus();
+        }}
+      >
+        <Show when={props.icon}>
+          <div class="size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
+            <Show
+              when={
+                isHovering() && props.sidebarState !== 'slim'
+                  ? props.removeAction
+                  : undefined
+              }
+              fallback={
+                <Dynamic
+                  component={props.icon}
+                  triggerAnimation={isHovering()}
+                />
+              }
+            >
+              {(removeAction) => (
+                <Tooltip
+                  label={removeAction().tooltip}
+                  as="span"
+                  placement="top"
+                >
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={removeAction().tooltip}
+                    class="flex items-center justify-center text-ink-muted
+                   rounded-md hover:bg-failure hover:text-surface p-1"
+                    onMouseDown={(e) => {
+                      // The row navigates on mousedown; the X must not.
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeAction().onRemove();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                      }}
-                      onClick={(e) => {
                         e.stopPropagation();
                         removeAction().onRemove();
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          removeAction().onRemove();
-                        }
-                      }}
-                    >
-                      <XIcon />
-                    </span>
-                  </Tooltip>
-                )}
+                      }
+                    }}
+                  >
+                    <XIcon />
+                  </span>
+                </Tooltip>
+              )}
+            </Show>
+          </div>
+        </Show>
+
+        <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
+          <span class="whitespace-nowrap">{props.label}</span>
+        </div>
+
+        <Show
+          when={
+            isActive() &&
+            props.trailingWhenActive !== undefined &&
+            !props.hotkeyVisible
+          }
+        >
+          <div class="group-data-[slim=true]/sidebar:hidden ml-auto flex items-center text-ink-muted">
+            {props.trailingWhenActive}
+          </div>
+        </Show>
+
+        <Show
+          when={
+            isHovering() &&
+            !props.hotkeyVisible &&
+            !(isActive() && props.trailingWhenActive !== undefined)
+          }
+        >
+          <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
+            <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
+              <Show when={!props.standaloneHotkey}>
+                <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <Hotkey token={TOKENS.sidebar.goToLeader} />
+                </div>
+                <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <Hotkey token={props.hotkeyToken} />
+                </div>
+              </Show>
+              <Show when={props.standaloneHotkey}>
+                <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <Hotkey token={props.hotkeyToken} />
+                </div>
               </Show>
             </div>
-          </Show>
-
-          <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
-            <span class="whitespace-nowrap">{props.label}</span>
           </div>
-
-          <Show
-            when={
-              isActive() &&
-              props.trailingWhenActive !== undefined &&
-              !props.hotkeyVisible
-            }
+        </Show>
+        <Show when={props.hotkeyVisible}>
+          <div
+            class={cn(
+              'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',
+              props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
+              props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
+            )}
           >
-            <div class="group-data-[slim=true]/sidebar:hidden ml-auto flex items-center text-ink-muted">
-              {props.trailingWhenActive}
-            </div>
-          </Show>
-
-          <Show
-            when={
-              isHovering() &&
-              !props.hotkeyVisible &&
-              !(isActive() && props.trailingWhenActive !== undefined)
-            }
-          >
-            <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
-              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
-                <Show when={!props.standaloneHotkey}>
-                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey token={TOKENS.sidebar.goToLeader} />
-                  </div>
-                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey token={props.hotkeyToken} />
-                  </div>
-                </Show>
-                <Show when={props.standaloneHotkey}>
-                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey token={props.hotkeyToken} />
-                  </div>
-                </Show>
-              </div>
-            </div>
-          </Show>
-          <Show when={props.hotkeyVisible}>
-            <div
-              class={cn(
-                'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',
-                props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
-                props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
-              )}
-            >
-              <Hotkey token={props.hotkeyToken} />
-            </div>
-          </Show>
-        </NavRow>
-      </ContextMenu.Trigger>
-
-      <ContextMenu.Portal>
-        <ContextMenuContent class="text-xs text-ink-muted">
-          <MenuItem
-            text="Open in new split"
-            onClick={openInNewSplit}
-            disabled={!canOpenInNewSplit()}
-          />
-          <Show when={canOpenFullscreen()}>
-            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
-          </Show>
-          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
-        </ContextMenuContent>
-      </ContextMenu.Portal>
-    </ContextMenu>
+            <Hotkey token={props.hotkeyToken} />
+          </div>
+        </Show>
+      </NavRow>
+    </SidebarOpenInSplitMenu>
   );
 };
 
@@ -1863,6 +1905,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
  * only when it is the single selected inbox (read from the live mail view, or
  * from the filter its history entry captured when something else is on top),
  * in which case the parent link yields its own.
+ *
+ * Each row carries the same right-click menu as the parent link (open in the
+ * current split, a new split, or fullscreen), scoping whichever split it opens
+ * to that inbox.
  */
 const SidebarMailLink = (props: SidebarLinkProps) => {
   const layout = useSplitLayout();
@@ -1879,6 +1925,14 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
 
   const isMailList = (content: SplitContent | undefined) =>
     content?.type === 'component' && content.id === 'mail';
+
+  /** The mail list content an account row's right-click menu opens. */
+  const mailContent = () =>
+    ({
+      type: 'component',
+      id: props.id,
+      params: props.params,
+    }) as const;
 
   const canShow = () => props.sidebarState === 'expanded' && links().length > 1;
 
@@ -1978,28 +2032,40 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
                       : '0ms',
                   }}
                 >
-                  <NavRow
-                    draggable={false}
-                    disabled={!expanded()}
-                    data-sidebar-mail-account={link.email_address}
-                    data-active={onlySelectedId() === link.id ? '' : undefined}
-                    active={onlySelectedId() === link.id}
-                    class="h-7 pl-6 pr-2"
-                    onMouseDown={(e) => {
-                      if (e.button !== 0) return;
-                      e.preventDefault();
-                      selectOnly(link.id);
-                    }}
+                  <SidebarOpenInSplitMenu
+                    content={mailContent}
+                    // Keeps the hover overlay open over a slim sidebar while
+                    // the menu is up, same as the parent link's menu.
+                    onOpenChange={props.onContextMenuOpenChange}
+                    onOpened={(split) =>
+                      requestInboxFilter(split.id, [link.id])
+                    }
                   >
-                    <UserIcon
-                      {...inboxIconProps(link.email_address)}
-                      photoUrl={link.photo_url ?? undefined}
-                      size="sm"
-                      suppressClick
-                      showTooltip={false}
-                    />
-                    <span class="truncate">{link.email_address}</span>
-                  </NavRow>
+                    <NavRow
+                      draggable={false}
+                      disabled={!expanded()}
+                      data-sidebar-mail-account={link.email_address}
+                      data-active={
+                        onlySelectedId() === link.id ? '' : undefined
+                      }
+                      active={onlySelectedId() === link.id}
+                      class="h-7 pl-6 pr-2"
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        selectOnly(link.id);
+                      }}
+                    >
+                      <UserIcon
+                        {...inboxIconProps(link.email_address)}
+                        photoUrl={link.photo_url ?? undefined}
+                        size="sm"
+                        suppressClick
+                        showTooltip={false}
+                      />
+                      <span class="truncate">{link.email_address}</span>
+                    </NavRow>
+                  </SidebarOpenInSplitMenu>
                 </li>
               )}
             </For>
