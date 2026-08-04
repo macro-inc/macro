@@ -261,6 +261,47 @@ describe('Channel input task mode', () => {
     expect(screen.getByTestId('task-composer')).toBeTruthy();
   });
 
+  it('restores a persisted task mode on remount', async () => {
+    const user = userEvent.setup();
+    const taskPersistence = {
+      draftKey: 'task-composer-draft-channel:c1-persist-v0' as const,
+      modeKey: 'input-task-mode-channel:c1-persist-v0' as const,
+    };
+    localStorage.removeItem(taskPersistence.modeKey);
+
+    const first = render(() => (
+      <ChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        taskPersistence={taskPersistence}
+      />
+    ));
+    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    expect(
+      first.container
+        .querySelector('[data-input-face="task"]')
+        ?.classList.contains('hidden')
+    ).toBe(false);
+    first.unmount();
+
+    const second = render(() => (
+      <ChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        taskPersistence={taskPersistence}
+      />
+    ));
+    const taskFace = second.container.querySelector('[data-input-face="task"]');
+    expect(taskFace).toBeTruthy();
+    expect(taskFace?.classList.contains('hidden')).toBe(false);
+    expect(
+      second.container
+        .querySelector('[data-input-face="message"]')
+        ?.classList.contains('hidden')
+    ).toBe(true);
+    localStorage.removeItem(taskPersistence.modeKey);
+  });
+
   it('forwards the created task and returns to message mode on send', async () => {
     const user = userEvent.setup();
     const onSendTask = vi.fn();

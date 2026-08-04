@@ -23,6 +23,7 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import { isIOS } from '@solid-primitives/platform';
+import { makePersisted } from '@solid-primitives/storage';
 import { CollapsedInput, cn, Surface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
@@ -60,6 +61,7 @@ import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import type { InputTaskPersistence } from './utils/persistence';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
 
@@ -86,6 +88,11 @@ export type ChannelInputProps = InputCallbacks & {
    * message/task mode switch (desktop only).
    */
   onSendTask?: (task: TaskComposerSendPayload) => void;
+  /**
+   * Persists the task draft and the message/task mode flag across visits
+   * (e.g. per channel), the way `persistenceKey` persists the message draft.
+   */
+  taskPersistence?: InputTaskPersistence;
 };
 
 function WebDefaultActions(props: {
@@ -210,10 +217,17 @@ export function ChannelInput(props: ChannelInputProps) {
   // task composer. Desktop only — mobile keeps the plain message input.
   const canUseTaskMode = () =>
     !!props.onSendTask && !isPlatform('ios') && !isMobile();
-  const [taskModeRequested, setTaskModeRequested] = createSignal(false);
+  const taskModeSignal = createSignal(false);
+  const [taskModeRequested, setTaskModeRequested] = props.taskPersistence
+    ? makePersisted(taskModeSignal, { name: props.taskPersistence.modeKey })
+    : taskModeSignal;
+  // True when the input opens directly in task mode (persisted from a prior
+  // visit); it decides who receives the mount-time autofocus.
+  const taskModeRestored = taskModeRequested() === true;
   // Mount the composer on first use only, then keep it alive so a draft
   // survives toggling back and forth.
-  const [taskComposerMounted, setTaskComposerMounted] = createSignal(false);
+  const [taskComposerMounted, setTaskComposerMounted] =
+    createSignal(taskModeRestored);
   const isTaskMode = () => canUseTaskMode() && taskModeRequested();
 
   const isCollapsed = () =>
@@ -567,7 +581,11 @@ export function ChannelInput(props: ChannelInputProps) {
                         config={markdownEditor}
                         placeholder={inputState.view().placeholder}
                         initialValue={inputState.view().value}
-                        autofocus={!isMobile() && (props.autofocus ?? true)}
+                        autofocus={
+                          !isMobile() &&
+                          (props.autofocus ?? true) &&
+                          !isTaskMode()
+                        }
                         class="text-sm"
                         refFn={attach}
                         onConnect={() => {
@@ -613,6 +631,12 @@ export function ChannelInput(props: ChannelInputProps) {
               >
                 <TaskComposer
                   active={isTaskMode()}
+                  autofocus={
+                    taskModeRestored
+                      ? !isMobile() && (props.autofocus ?? true)
+                      : true
+                  }
+                  draftPersistenceKey={props.taskPersistence?.draftKey}
                   modeSwitch={
                     <TaskModeSwitch
                       checked={true}

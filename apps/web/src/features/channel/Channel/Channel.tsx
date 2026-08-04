@@ -6,6 +6,7 @@ import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
+  makeTaskPersistence,
 } from '@channel/Input/utils/persistence';
 import {
   type MessageData,
@@ -878,6 +879,9 @@ export function Channel(props: ChannelProps) {
                           }
                           onSend={onSend}
                           onSendTask={onSendTask}
+                          taskPersistence={makeTaskPersistence({
+                            channelId: props.channelId,
+                          })}
                           onStartTyping={() =>
                             typingMutation.mutate({
                               channelId: props.channelId,

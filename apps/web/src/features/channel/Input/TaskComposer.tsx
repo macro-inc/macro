@@ -5,6 +5,12 @@ import {
   createTaskWithProperties,
   defaultTaskPropertyValues,
 } from '@block-md/util/taskComposerProperties';
+import {
+  loadTaskComposerDraft,
+  saveTaskComposerDraft,
+  type TaskComposerDraft,
+  type TaskComposerDraftStorage,
+} from '@block-md/util/taskComposerStorage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
@@ -16,6 +22,7 @@ import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { InlineTagsPill } from '@property/tags';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
+import { debounce } from '@solid-primitives/scheduled';
 import { Scroll, SendButton } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -24,6 +31,7 @@ import {
   For,
   type JSX,
   on,
+  onCleanup,
   onMount,
   Show,
   Suspense,
@@ -50,10 +58,32 @@ export function TaskComposer(props: {
   onSend: (task: TaskComposerSendPayload) => void;
   /** The message/task mode switch, rendered in the composer footer. */
   modeSwitch?: JSX.Element;
+  /**
+   * Whether to focus the title editor when the composer mounts already
+   * active (e.g. a restored task-mode draft). Later activations always
+   * focus. Defaults to `true`.
+   */
+  autofocus?: boolean;
+  /**
+   * localStorage key to persist the draft under, scoped by the host (e.g.
+   * per channel). Without it the draft only lives as long as the composer.
+   */
+  draftPersistenceKey?: string;
 }) {
   const currentUserId = useUserId();
-  const [title, setTitle] = createSignal('');
-  const [content, setContent] = createSignal('');
+
+  // Per-host drafts follow the message input's persistence semantics (kept
+  // until sent) rather than the compose dialog's short expiry window.
+  const draftStorage: TaskComposerDraftStorage | undefined =
+    props.draftPersistenceKey
+      ? { storageKey: props.draftPersistenceKey, expiryMs: null }
+      : undefined;
+  const restoredDraft = draftStorage
+    ? loadTaskComposerDraft(draftStorage)
+    : null;
+
+  const [title, setTitle] = createSignal(restoredDraft?.title ?? '');
+  const [content, setContent] = createSignal(restoredDraft?.content ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [isCreating, setIsCreating] = createSignal(false);
@@ -76,9 +106,46 @@ export function TaskComposer(props: {
     composerTags,
     clearComposerTags,
     createDefinitions,
-  } = createTaskComposerProperties({ initialValues: defaultPropertyValues() });
+  } = createTaskComposerProperties({
+    initialValues: restoredDraft?.propertyValues ?? defaultPropertyValues(),
+  });
 
   const upsertToHistoryMutation = useUpsertToHistoryMutation();
+
+  if (draftStorage) {
+    const snapshotDraft = (): Omit<TaskComposerDraft, 'timestamp'> => ({
+      title: title(),
+      content: content(),
+      editorState: bodyEditor()?.getEditorState().toJSON(),
+      propertyValues: structuredClone(unwrap(propertyValues)),
+    });
+
+    // Mirrors the compose dialog's draft autosave: skip the first run (it
+    // would just rewrite what was restored), subscribe deeply to property
+    // edits, and debounce the localStorage writes.
+    let hasInitializedFromDraft = restoredDraft !== null;
+    const debouncedSave = debounce(
+      (draft: Omit<TaskComposerDraft, 'timestamp'>) =>
+        saveTaskComposerDraft(draft, draftStorage),
+      300
+    );
+    createEffect(() => {
+      title();
+      content();
+      JSON.stringify(propertyValues);
+      if (hasInitializedFromDraft) {
+        hasInitializedFromDraft = false;
+        return;
+      }
+      debouncedSave(snapshotDraft());
+    });
+    onCleanup(() => {
+      // Flush the latest state so navigating away never drops keystrokes
+      // that were still inside the debounce window.
+      debouncedSave.clear();
+      saveTaskComposerDraft(snapshotDraft(), draftStorage);
+    });
+  }
 
   const deleteTitleTagsAtStart = () => {
     if (tagLayoutMode() !== 'title') return false;
@@ -177,12 +244,20 @@ export function TaskComposer(props: {
   const editor = editorConfig.buildHandle().lexical;
   setBodyEditor(editor);
 
-  // Imperative DOM focus: entering task mode focuses the title editor.
+  // Imperative DOM focus: entering task mode focuses the title editor. The
+  // first activation is the mount itself — a restored task-mode draft — and
+  // only focuses when the host's autofocus allows it.
+  let isFirstActivation = true;
   createEffect(
     on(
       () => props.active,
       (active) => {
         if (!active) return;
+        const shouldFocus = isFirstActivation
+          ? (props.autofocus ?? true)
+          : true;
+        isFirstActivation = false;
+        if (!shouldFocus) return;
         requestAnimationFrame(() => titleEditorRoot?.focus());
       }
     )
@@ -225,6 +300,12 @@ export function TaskComposer(props: {
         <Scroll>
           <MarkdownShell
             config={editorConfig}
+            initialState={restoredDraft?.editorState}
+            initialValue={
+              restoredDraft?.editorState
+                ? undefined
+                : restoredDraft?.content || undefined
+            }
             placeholder="Add description..."
             class="text-sm"
           />
